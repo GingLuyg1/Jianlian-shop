@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Jianlian warm dashboard color palette */
+    --background: 34 62% 97%;
+    --foreground: 220 28% 10%;
+
+    /* Card background: #FFFFFF */
+    --card: 0 0% 100%;
+    --card-foreground: 219 14% 7%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 219 14% 7%;
+
+    --primary: 22 68% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 34 76% 95%;
+    --secondary-foreground: 22 62% 40%;
+
+    --muted: 34 34% 94%;
+    --muted-foreground: 25 16% 43%;
+
+    --accent: 34 76% 95%;
+    --accent-foreground: 22 62% 40%;
+
+    /* Danger red: #EF4444 */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 32 28% 88%;
+    --input: 32 28% 88%;
+    --ring: 22 68% 52%;
+
+    /* Chart colors */
+    --chart-1: 22 68% 52%;
+    --chart-2: 160 84% 39%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 262 83% 58%;
+    --chart-5: 0 84% 60%;
+
+    --radius: 0.5rem;
+
+    /* Success green: #10B981 */
+    --success: 160 84% 39%;
+    /* Warning orange: #F59E0B */
+    --warning: 38 92% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Seamless marquee scrolling animation for announcements */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee-track {
+  animation: marquee-scroll 35s linear infinite;
+}
+
+.support-popover {
+  border: 1px solid hsl(var(--border));
+  inset: 50% auto auto 50%;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  scale: 0.96;
+  transition:
+    opacity 160ms ease,
+    scale 160ms ease;
+}
+
+.support-popover:popover-open {
+  opacity: 1;
+  scale: 1;
+}
+
+.support-popover::backdrop {
+  background: rgb(0 0 0 / 45%);
+  animation: support-backdrop-in 160ms ease;
+}
+
+@keyframes support-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Custom scrollbar for sidebar */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 2px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ultra Mobile">
+  <rect width="512" height="512" fill="#351d56"/>
+  <text x="256" y="294" text-anchor="middle" fill="#ffffff" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="128" font-weight="900" letter-spacing="-10">ultra</text>
+  <text x="256" y="354" text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="800" letter-spacing="18">MOBILE</text>
+  <g transform="translate(305 166)" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 38c10-28 60-28 70 0"/>
+    <path d="M8 38c5-18 25-27 35-27s30 9 35 27"/>
+    <path d="M43 11v51"/>
+    <path d="M18 30h50"/>
+    <path d="M21 49h44"/>
+  </g>
+</svg>
