@@ -54,20 +54,20 @@ export default function PublicSidebar() {
   return (
     <aside className="fixed left-0 top-0 h-screen w-[270px] bg-white/90 border-r border-border z-40 flex flex-col hidden md:flex backdrop-blur">
       {/* Logo and brand section */}
-      <div className="h-[83px] px-6 flex items-center justify-center">
+      <div className="h-[72px] px-6 flex items-center justify-center">
         <Link
           href="/"
           className="flex items-center justify-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
+          <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
             <img
               src="/assets/jianlian-logo.jpg"
               alt="Jianlian"
-              className="h-12 w-12 object-cover"
+              className="h-10 w-10 object-cover"
             />
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-xl text-foreground leading-tight">
+            <div className="font-semibold text-lg text-foreground leading-tight">
               Jianlian
             </div>
             <div className="text-sm text-muted-foreground leading-tight mt-1">

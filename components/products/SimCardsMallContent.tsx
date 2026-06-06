@@ -180,51 +180,53 @@ function ProductPanel({
       <CardContent className="flex h-full min-h-0 flex-col overflow-hidden p-5">
         <ShopNotice />
 
-        <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
-          <div>
-            <h1 className="text-xl font-bold">{"\u9009\u62e9\u5546\u54c1"}</h1>
-            <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-              {"\u5171\u8ba1"}
-              {products.length}
-              {"\u4e2a\u5546\u54c1"}
+        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-white/70 p-4 shadow-sm">
+          <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+              <h1 className="text-xl font-bold">{"\u9009\u62e9\u5546\u54c1"}</h1>
+              <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+                {"\u5171\u8ba1"}
+                {products.length}
+                {"\u4e2a\u5546\u54c1"}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => onSearchChange(event.target.value)}
+                  placeholder={"\u8bf7\u8f93\u5165\u540d\u79f0\u641c\u7d22"}
+                  className="h-10 pl-9 text-sm"
+                />
+              </div>
+              <Button className="h-10 px-7">{"\u641c\u7d22"}</Button>
             </div>
           </div>
-          <div className="flex gap-2">
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder={"\u8bf7\u8f93\u5165\u540d\u79f0\u641c\u7d22"}
-                className="h-10 pl-9 text-sm"
-              />
-            </div>
-            <Button className="h-10 px-7">{"\u641c\u7d22"}</Button>
-          </div>
-        </div>
 
-        {products.length > 0 ? (
-          <div
-            className={cn(
-              "space-y-3",
-              products.length > 4
-                ? "min-h-0 flex-1 overflow-y-auto pr-1 sidebar-scroll"
-                : "shrink-0 overflow-visible"
-            )}
-          >
-            {products.map((product) => (
-              <ProductRow
-                key={product.id}
-                product={product}
-                selected={selectedProductId === product.id}
-                onClick={() => onSelectProduct(product.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <EmptyProductState />
-        )}
+          {products.length > 0 ? (
+            <div
+              className={cn(
+                "space-y-3",
+                products.length > 4
+                  ? "min-h-0 flex-1 overflow-y-auto pr-1 sidebar-scroll"
+                  : "shrink-0 overflow-visible"
+              )}
+            >
+              {products.map((product) => (
+                <ProductRow
+                  key={product.id}
+                  product={product}
+                  selected={selectedProductId === product.id}
+                  onClick={() => onSelectProduct(product.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyProductState />
+          )}
+        </div>
 
         <div className="mt-5 text-sm text-muted-foreground">
           {
