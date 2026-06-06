@@ -75,7 +75,7 @@ export default function GiftCardsMallContent() {
 
   return (
     <PublicLayout contentClassName="max-w-none px-4 md:px-6 py-3 overflow-hidden">
-      <div className="grid h-[calc(100vh-106px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[270px_minmax(0,1fr)]">
+      <div className="grid h-[calc(100dvh-118px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[270px_minmax(0,1fr)]">
         <CategoryPanel
           selectedCategoryId={selectedCategoryId}
           onSelectCategory={(categoryId) => {
