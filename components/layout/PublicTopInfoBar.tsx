@@ -133,11 +133,11 @@ export default function PublicTopInfoBar({
 
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-white/88 backdrop-blur-sm">
-      <div className="grid h-[72px] grid-cols-[minmax(0,1fr)_320px] items-center gap-3 px-4">
+      <div className="grid h-[82px] grid-cols-[minmax(0,1fr)_360px] items-center gap-4 px-4">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
-            <div className="flex h-10 items-center gap-3 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-3 shadow-sm shadow-orange-100/50">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
+            <div className="flex h-11 items-center gap-3 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-4 shadow-sm shadow-orange-100/50">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
                 <Megaphone className="h-4 w-4" />
               </span>
               <span className="shrink-0 text-sm font-semibold text-orange-700">
@@ -161,7 +161,7 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-10 w-[320px] items-center justify-end gap-2">
+        <div className="flex h-11 w-[360px] items-center justify-end gap-2">
           <span className="text-sm text-muted-foreground">
             当前余额：
             <span className="font-medium text-foreground">
