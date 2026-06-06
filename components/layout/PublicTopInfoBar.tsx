@@ -29,6 +29,18 @@ interface PublicTopInfoBarProps {
   announcementText?: string;
 }
 
+type CachedAuthState = {
+  user: User | null;
+  profile: UserProfile | null;
+  ready: boolean;
+};
+
+let cachedAuthState: CachedAuthState = {
+  user: null,
+  profile: null,
+  ready: false,
+};
+
 function getDisplayName(user: User | null) {
   if (!user?.email) return "我的账号";
   return user.email.length > 18 ? `${user.email.slice(0, 15)}...` : user.email;
@@ -38,13 +50,30 @@ export default function PublicTopInfoBar({
   announcementText,
 }: PublicTopInfoBarProps) {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState<User | null>(cachedAuthState.user);
+  const [profile, setProfile] = useState<UserProfile | null>(
+    cachedAuthState.profile
+  );
+  const [authReady, setAuthReady] = useState(cachedAuthState.ready);
+
+  const updateAuthState = (
+    nextUser: User | null,
+    nextProfile: UserProfile | null,
+    nextReady = true
+  ) => {
+    cachedAuthState = {
+      user: nextUser,
+      profile: nextProfile,
+      ready: nextReady,
+    };
+    setUser(nextUser);
+    setProfile(nextProfile);
+    setAuthReady(nextReady);
+  };
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
-      setAuthReady(true);
+      updateAuthState(null, null, true);
       return;
     }
 
@@ -57,19 +86,17 @@ export default function PublicTopInfoBar({
       } = await supabase.auth.getSession();
 
       if (!mounted) return;
-      setUser(session?.user ?? null);
 
       if (session?.user) {
         try {
-          setProfile(await getCurrentProfile());
+          const nextProfile = await getCurrentProfile();
+          if (mounted) updateAuthState(session.user, nextProfile, true);
         } catch {
-          setProfile(null);
+          if (mounted) updateAuthState(session.user, null, true);
         }
       } else {
-        setProfile(null);
+        updateAuthState(null, null, true);
       }
-
-      setAuthReady(true);
     };
 
     loadSession();
@@ -77,16 +104,15 @@ export default function PublicTopInfoBar({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
       if (!session?.user) {
-        setProfile(null);
+        updateAuthState(null, null, true);
       } else {
         getCurrentProfile()
-          .then(setProfile)
-          .catch(() => setProfile(null));
+          .then((nextProfile) =>
+            updateAuthState(session.user, nextProfile, true)
+          )
+          .catch(() => updateAuthState(session.user, null, true));
       }
-      setAuthReady(true);
-      router.refresh();
     });
 
     return () => {
@@ -98,8 +124,7 @@ export default function PublicTopInfoBar({
   const handleSignOut = async () => {
     const supabase = getSupabaseBrowserClient();
     await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
+    updateAuthState(null, null, true);
     router.push("/");
     router.refresh();
   };
@@ -136,7 +161,7 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-11 shrink-0 items-center gap-2">
+        <div className="flex h-11 min-w-[310px] shrink-0 items-center justify-end gap-2">
           <span className="text-sm text-muted-foreground">
             当前余额：
             <span className="font-medium text-foreground">
@@ -144,7 +169,12 @@ export default function PublicTopInfoBar({
             </span>
           </span>
 
-          {authReady && user ? (
+          {!authReady ? (
+            <div className="flex h-9 items-center gap-2" aria-hidden="true">
+              <div className="h-9 w-16 animate-pulse rounded-md bg-orange-100/70" />
+              <div className="h-9 w-24 animate-pulse rounded-md bg-orange-100/70" />
+            </div>
+          ) : user ? (
             <>
               <Button variant="outline" size="sm" className="h-9 text-sm" asChild>
                 <Link href="/products/account-recharge">
