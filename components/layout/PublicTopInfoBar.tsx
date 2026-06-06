@@ -133,24 +133,24 @@ export default function PublicTopInfoBar({
 
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-white/88 backdrop-blur-sm">
-      <div className="grid h-[82px] grid-cols-[minmax(0,1fr)_360px] items-center gap-4 px-4">
+      <div className="grid h-[70px] grid-cols-[minmax(0,1fr)_315px] items-center gap-3 px-4">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
-            <div className="flex h-11 items-center gap-3 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-4 shadow-sm shadow-orange-100/50">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
-                <Megaphone className="h-4 w-4" />
+            <div className="flex h-[38px] items-center gap-2.5 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-3 shadow-sm shadow-orange-100/50">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
+                <Megaphone className="h-3.5 w-3.5" />
               </span>
-              <span className="shrink-0 text-sm font-semibold text-orange-700">
+              <span className="shrink-0 text-[13px] font-semibold text-orange-700">
                 公告
               </span>
-              <span className="h-4 w-px shrink-0 bg-orange-200" />
+              <span className="h-3.5 w-px shrink-0 bg-orange-200" />
               <div className="flex-1 overflow-hidden whitespace-nowrap">
                 <div className="animate-marquee-track inline-flex min-w-max">
-                  <span className="pr-12 text-sm text-orange-700/90">
+                  <span className="pr-10 text-[13px] text-orange-700/90">
                     {announcementText}
                   </span>
                   <span
-                    className="pr-12 text-sm text-orange-700/90"
+                    className="pr-10 text-[13px] text-orange-700/90"
                     aria-hidden="true"
                   >
                     {announcementText}
@@ -161,8 +161,8 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-11 w-[360px] items-center justify-end gap-2">
-          <span className="text-sm text-muted-foreground">
+        <div className="flex h-[38px] w-[315px] items-center justify-end gap-1.5">
+          <span className="text-[13px] text-muted-foreground">
             当前余额：
             <span className="font-medium text-foreground">
               ¥{balance.toFixed(2)}
@@ -176,7 +176,7 @@ export default function PublicTopInfoBar({
             </div>
           ) : user ? (
             <>
-              <Button variant="outline" size="sm" className="h-9 text-sm" asChild>
+              <Button variant="outline" size="sm" className="h-8 px-3 text-[13px]" asChild>
                 <Link href="/products/account-recharge">
                   <CreditCard className="mr-1 h-3 w-3" />
                   充值
@@ -184,7 +184,7 @@ export default function PublicTopInfoBar({
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-9 gap-1 text-sm">
+                  <Button variant="ghost" size="sm" className="h-8 gap-1 px-2 text-[13px]">
                     {getDisplayName(user)}
                     <ChevronDown className="h-3 w-3" />
                   </Button>
@@ -212,13 +212,13 @@ export default function PublicTopInfoBar({
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" className="h-9 text-sm" asChild>
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-[13px]" asChild>
                 <Link href="/login">
                   <LogIn className="mr-1 h-3 w-3" />
                   登录
                 </Link>
               </Button>
-              <Button size="sm" className="h-9 text-sm" asChild>
+              <Button size="sm" className="h-8 px-3 text-[13px]" asChild>
                 <Link href="/register">
                   <UserPlus className="mr-1 h-3 w-3" />
                   注册
