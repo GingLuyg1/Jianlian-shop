@@ -133,12 +133,12 @@ export default function PublicTopInfoBar({
 
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-white/88 backdrop-blur-sm">
-      <div className="grid h-[70px] grid-cols-[minmax(0,1fr)_315px] items-center gap-3 px-4">
+      <div className="grid h-[62px] grid-cols-[minmax(0,980px)_285px] items-center justify-between gap-3 px-4">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
-            <div className="flex h-[38px] items-center gap-2.5 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-3 shadow-sm shadow-orange-100/50">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
-                <Megaphone className="h-3.5 w-3.5" />
+            <div className="flex h-9 items-center gap-2 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-3 shadow-sm shadow-orange-100/50">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
+                <Megaphone className="h-3 w-3" />
               </span>
               <span className="shrink-0 text-[13px] font-semibold text-orange-700">
                 公告
@@ -161,8 +161,8 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-[38px] w-[315px] items-center justify-end gap-1.5">
-          <span className="text-[13px] text-muted-foreground">
+        <div className="flex h-9 w-[285px] items-center justify-end gap-1.5">
+          <span className="whitespace-nowrap text-[13px] text-muted-foreground">
             当前余额：
             <span className="font-medium text-foreground">
               ¥{balance.toFixed(2)}
