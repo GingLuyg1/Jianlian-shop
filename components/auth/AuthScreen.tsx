@@ -34,7 +34,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isRegister = mode === "register";
-  const redirectTo = searchParams.get("redirect") || "/account/orders";
+  const redirectTo = searchParams.get("redirect") || "/";
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -55,7 +55,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
     const email = account.trim().toLowerCase();
     if (!email.includes("@")) {
-      setError("正式版当前使用邮箱登录。手机号登录需要先配置 Supabase Phone Auth。");
+      setError("当前正式版使用邮箱登录，手机号登录需要后续配置 Phone Auth。");
       return;
     }
 
@@ -92,7 +92,13 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           });
         }
 
-        setMessage("注册成功。若 Supabase 开启邮箱验证，请先完成邮箱验证。");
+        if (!data.session) {
+          setMessage("注册成功，请先完成邮箱验证后再登录。");
+          router.push("/login");
+          router.refresh();
+          return;
+        }
+
         router.push("/");
         router.refresh();
         return;
@@ -111,7 +117,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       setError(
         authError instanceof Error
           ? authError.message
-          : "认证失败，请检查账号或 Supabase 配置。"
+          : "认证失败，请检查账号、密码或 Supabase 配置。"
       );
     } finally {
       setLoading(false);
@@ -139,9 +145,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       if (oauthError) throw oauthError;
     } catch (oauthError) {
       setError(
-        oauthError instanceof Error
-          ? oauthError.message
-          : "Google 登录启动失败。"
+        oauthError instanceof Error ? oauthError.message : "Google 登录启动失败。"
       );
     }
   };
@@ -257,7 +261,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   <p className="mt-2 text-sm text-muted-foreground">
                     {isRegister
                       ? "注册完成后默认是普通用户"
-                      : "管理员登录后可进入后台"}
+                      : "登录后可查看订单、余额和账号信息"}
                   </p>
                 </div>
 

@@ -1,27 +1,16 @@
 "use client";
 
-/**
- * PublicTopInfoBar - Compact top information bar for public pages
- *
- * This is NOT a navigation menu. It sits inside the main content area
- * (after the sidebar) and shows:
- * - Left: scrolling announcement
- * - Right: balance, login/register buttons (guest) or account info (logged in)
- *
- * Mock login state: uses a simple React state toggle to demonstrate
- * guest vs logged-in UI. Future authentication logic should replace this
- * with real Supabase auth state.
- */
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  LogIn,
-  UserPlus,
-  CreditCard,
   ChevronDown,
+  CreditCard,
+  LogIn,
   Megaphone,
+  UserPlus,
 } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -29,41 +18,114 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  getCurrentProfile,
+  getSupabaseBrowserClient,
+  hasSupabaseConfig,
+  type UserProfile,
+} from "@/lib/supabase/client";
 
-// Props: allow parent to pass announcement text
 interface PublicTopInfoBarProps {
   announcementText?: string;
+}
+
+function getDisplayName(user: User | null) {
+  if (!user?.email) return "我的账号";
+  return user.email.length > 18 ? `${user.email.slice(0, 15)}...` : user.email;
 }
 
 export default function PublicTopInfoBar({
   announcementText,
 }: PublicTopInfoBarProps) {
-  // Mock login state - toggle between guest and logged-in views
-  // Future Supabase auth integration: replace with useUser() from Supabase
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [balance] = useState(0.0);
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig()) {
+      setAuthReady(true);
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    let mounted = true;
+
+    const loadSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
+        try {
+          setProfile(await getCurrentProfile());
+        } catch {
+          setProfile(null);
+        }
+      } else {
+        setProfile(null);
+      }
+
+      setAuthReady(true);
+    };
+
+    loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (!session?.user) {
+        setProfile(null);
+      } else {
+        getCurrentProfile()
+          .then(setProfile)
+          .catch(() => setProfile(null));
+      }
+      setAuthReady(true);
+      router.refresh();
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const handleSignOut = async () => {
+    const supabase = getSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    setUser(null);
+    setProfile(null);
+    router.push("/");
+    router.refresh();
+  };
+
+  const balance = profile?.balance ?? 0;
 
   return (
-    <div className="sticky top-0 z-30 bg-white/88 backdrop-blur-sm border-b border-border">
-      <div className="h-[82px] flex items-center justify-between px-4 gap-4">
-        {/* Left: scrolling announcement */}
+    <div className="sticky top-0 z-30 border-b border-border bg-white/88 backdrop-blur-sm">
+      <div className="flex h-[82px] items-center justify-between gap-4 px-4">
         {announcementText && (
           <div className="flex-1 overflow-hidden">
-            <div className="h-11 flex items-center gap-3 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-100 rounded-lg px-4 shadow-sm shadow-orange-100/50">
-              <span className="h-7 w-7 rounded-md bg-white text-primary flex items-center justify-center shrink-0 border border-orange-100">
+            <div className="flex h-11 items-center gap-3 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-4 shadow-sm shadow-orange-100/50">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
                 <Megaphone className="h-4 w-4" />
               </span>
-              <span className="text-orange-700 text-sm font-semibold shrink-0">
+              <span className="shrink-0 text-sm font-semibold text-orange-700">
                 公告
               </span>
-              <span className="h-4 w-px bg-orange-200 shrink-0" />
-              <div className="overflow-hidden flex-1 whitespace-nowrap">
+              <span className="h-4 w-px shrink-0 bg-orange-200" />
+              <div className="flex-1 overflow-hidden whitespace-nowrap">
                 <div className="animate-marquee-track inline-flex min-w-max">
-                  <span className="text-sm text-orange-700/90 pr-12">
+                  <span className="pr-12 text-sm text-orange-700/90">
                     {announcementText}
                   </span>
                   <span
-                    className="text-sm text-orange-700/90 pr-12"
+                    className="pr-12 text-sm text-orange-700/90"
                     aria-hidden="true"
                   >
                     {announcementText}
@@ -74,34 +136,43 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        {/* Right: balance and auth buttons */}
-        <div className="flex items-center gap-2 shrink-0 h-11">
+        <div className="flex h-11 shrink-0 items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            当前余额：<span className="font-medium text-foreground">¥{balance.toFixed(2)}</span>
+            当前余额：
+            <span className="font-medium text-foreground">
+              ¥{balance.toFixed(2)}
+            </span>
           </span>
 
-          {isLoggedIn ? (
+          {authReady && user ? (
             <>
-              <Button variant="outline" size="sm" className="h-9 text-sm">
-                <CreditCard className="h-3 w-3 mr-1" />
-                充值
+              <Button variant="outline" size="sm" className="h-9 text-sm" asChild>
+                <Link href="/products/account-recharge">
+                  <CreditCard className="mr-1 h-3 w-3" />
+                  充值
+                </Link>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-9 text-sm gap-1">
-                    138****5678
+                  <Button variant="ghost" size="sm" className="h-9 gap-1 text-sm">
+                    {getDisplayName(user)}
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-36">
+                <DropdownMenuContent align="end" className="w-44">
                   <DropdownMenuItem asChild>
                     <Link href="/account">账号中心</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/account/orders">我的订单</Link>
                   </DropdownMenuItem>
+                  {profile?.role === "admin" ? (
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin">后台管理</Link>
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem
-                    onClick={() => setIsLoggedIn(false)}
+                    onClick={handleSignOut}
                     className="text-red-600"
                   >
                     退出登录
@@ -113,13 +184,13 @@ export default function PublicTopInfoBar({
             <>
               <Button variant="ghost" size="sm" className="h-9 text-sm" asChild>
                 <Link href="/login">
-                  <LogIn className="h-3 w-3 mr-1" />
+                  <LogIn className="mr-1 h-3 w-3" />
                   登录
                 </Link>
               </Button>
               <Button size="sm" className="h-9 text-sm" asChild>
                 <Link href="/register">
-                  <UserPlus className="h-3 w-3 mr-1" />
+                  <UserPlus className="mr-1 h-3 w-3" />
                   注册
                 </Link>
               </Button>
