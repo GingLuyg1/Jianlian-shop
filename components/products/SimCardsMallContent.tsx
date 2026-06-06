@@ -205,7 +205,14 @@ function ProductPanel({
         </div>
 
         {products.length > 0 ? (
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 sidebar-scroll">
+          <div
+            className={cn(
+              "space-y-3",
+              products.length > 4
+                ? "min-h-0 flex-1 overflow-y-auto pr-1 sidebar-scroll"
+                : "shrink-0 overflow-visible"
+            )}
+          >
             {products.map((product) => (
               <ProductRow
                 key={product.id}
