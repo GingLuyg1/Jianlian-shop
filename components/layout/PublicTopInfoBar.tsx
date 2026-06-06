@@ -133,9 +133,9 @@ export default function PublicTopInfoBar({
 
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-white/88 backdrop-blur-sm">
-      <div className="flex h-[82px] items-center justify-between gap-4 px-4">
+      <div className="grid h-[82px] grid-cols-[minmax(0,1fr)_360px] items-center gap-4 px-4">
         {announcementText && (
-          <div className="flex-1 overflow-hidden">
+          <div className="min-w-0 overflow-hidden">
             <div className="flex h-11 items-center gap-3 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-4 shadow-sm shadow-orange-100/50">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
                 <Megaphone className="h-4 w-4" />
@@ -161,7 +161,7 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-11 min-w-[310px] shrink-0 items-center justify-end gap-2">
+        <div className="flex h-11 w-[360px] items-center justify-end gap-2">
           <span className="text-sm text-muted-foreground">
             当前余额：
             <span className="font-medium text-foreground">
