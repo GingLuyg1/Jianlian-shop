@@ -75,7 +75,7 @@ export default function AccountRechargeContent() {
   const reachesMin = amount >= selectedMethod.minAmount;
 
   return (
-    <PublicLayout contentClassName="h-[calc(100vh-86px)] max-w-none overflow-hidden px-4 py-3 md:px-6">
+    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-hidden px-4 py-3 md:px-6">
       <div className="grid h-full min-h-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4">
           <Card className="min-h-0 overflow-hidden">

@@ -119,7 +119,7 @@ export default function PublicTopInfoBar({
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
   const handleSignOut = async () => {
     const supabase = getSupabaseBrowserClient();

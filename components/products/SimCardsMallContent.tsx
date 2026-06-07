@@ -11,7 +11,11 @@ import { Input } from "@/components/ui/input";
 import { products } from "@/lib/mock-data";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { interactiveButtonClass } from "./product-ui";
+import {
+  interactiveButtonClass,
+  mallContentClassName,
+  mallShellClassName,
+} from "./product-ui";
 
 type CountryTab = {
   id: "uk" | "us";
@@ -69,8 +73,8 @@ export default function SimCardsMallContent() {
   }, [searchQuery, selectedCountry]);
 
   return (
-    <PublicLayout contentClassName="max-w-none px-4 md:px-6 py-3 overflow-hidden">
-      <div className="grid h-[calc(100dvh-118px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[270px_minmax(0,1fr)]">
+    <PublicLayout contentClassName={mallContentClassName}>
+      <div className={mallShellClassName}>
         <CountryPanel
           selectedCountry={selectedCountry}
           onSelectCountry={() => setSelectedProductId(null)}

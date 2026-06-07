@@ -8,7 +8,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { products } from "@/lib/mock-data";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { interactiveButtonClass } from "./product-ui";
+import {
+  interactiveButtonClass,
+  mallContentClassName,
+  mallShellClassName,
+} from "./product-ui";
 
 type AiCategoryId = "chatgpt" | "claude" | "gemini" | "grok";
 
@@ -56,9 +60,7 @@ const aiCategories: AiCategory[] = [
 export default function AiMembershipMallContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialCategoryId = getValidAiCategoryId(searchParams.get("category"));
-  const [selectedCategoryId, setSelectedCategoryId] =
-    useState<AiCategoryId>(initialCategoryId);
+  const selectedCategoryId = getValidAiCategoryId(searchParams.get("category"));
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null
   );
@@ -79,12 +81,11 @@ export default function AiMembershipMallContent() {
   );
 
   return (
-    <PublicLayout contentClassName="max-w-none px-4 md:px-6 py-3 overflow-hidden">
-      <div className="grid h-[calc(100dvh-118px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[270px_minmax(0,1fr)]">
+    <PublicLayout contentClassName={mallContentClassName}>
+      <div className={mallShellClassName}>
         <CategoryPanel
           selectedCategoryId={selectedCategoryId}
           onSelectCategory={(categoryId) => {
-            setSelectedCategoryId(categoryId);
             setSelectedProductId(null);
             router.replace(`/products/ai-membership?category=${categoryId}`, {
               scroll: false,

@@ -6,7 +6,11 @@ import { ChevronRight, KeyRound } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { interactiveButtonClass } from "./product-ui";
+import {
+  interactiveButtonClass,
+  mallContentClassName,
+  mallShellClassName,
+} from "./product-ui";
 
 type DigitalCategoryId =
   | "apple-id"
@@ -55,8 +59,8 @@ export default function DigitalAccountsMallContent() {
     digitalCategories[0];
 
   return (
-    <PublicLayout contentClassName="max-w-none px-4 md:px-6 py-3 overflow-hidden">
-      <div className="grid h-[calc(100dvh-118px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[270px_minmax(0,1fr)]">
+    <PublicLayout contentClassName={mallContentClassName}>
+      <div className={mallShellClassName}>
         <CategoryPanel
           selectedCategoryId={selectedCategoryId}
           onSelectCategory={(categoryId) => {
