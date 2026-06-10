@@ -42,7 +42,7 @@ export default function PublicLayout({
         <MobileMenu />
         <div className="flex items-center gap-2">
           <img
-            src="/assets/jianlian-logo.jpg"
+            src="/assets/jianlian-brand-logo.png"
             alt="Jianlian"
             className="h-8 w-8 rounded-md object-cover"
           />

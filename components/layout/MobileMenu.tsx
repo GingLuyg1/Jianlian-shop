@@ -68,7 +68,7 @@ export default function MobileMenu() {
         <div className="px-5 py-5 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
-              src="/assets/jianlian-logo.jpg"
+              src="/assets/jianlian-brand-logo.png"
               alt="Jianlian"
               className="h-12 w-12 rounded-lg object-cover"
             />

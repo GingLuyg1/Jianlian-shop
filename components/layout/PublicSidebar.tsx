@@ -55,7 +55,7 @@ export default function PublicSidebar() {
         >
           <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
             <img
-              src="/assets/jianlian-logo.jpg"
+              src="/assets/jianlian-brand-logo.png"
               alt="Jianlian"
               className="h-12 w-12 object-cover"
             />

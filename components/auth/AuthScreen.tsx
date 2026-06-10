@@ -175,7 +175,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
               <div className="relative">
                 <div className="mb-8 inline-flex items-center gap-3 rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-primary shadow-sm ring-1 ring-orange-100">
                   <img
-                    src="/assets/jianlian-logo.jpg"
+                    src="/assets/jianlian-brand-logo.png"
                     alt="Jianlian"
                     className="h-8 w-8 rounded-xl object-cover"
                   />
@@ -231,7 +231,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
               <div className="rounded-[24px] border border-orange-50 p-6 sm:p-7">
                 <div className="mb-6 flex items-center gap-3">
                   <img
-                    src="/assets/jianlian-logo.jpg"
+                    src="/assets/jianlian-brand-logo.png"
                     alt="Jianlian"
                     className="h-11 w-11 rounded-2xl object-cover shadow-sm ring-1 ring-slate-200"
                   />

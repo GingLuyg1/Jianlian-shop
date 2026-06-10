@@ -5,14 +5,19 @@ import { Inter } from "next/font/google";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Jianlian - 全球数字商品与通信服务商城",
+  title: "Jianlian.Shop 数字商品服务",
   description:
-    "国际电话卡、礼品卡、数字账号服务、AI会员充值、账号充值、社媒电商拓客服务 - www.jianlian.shop",
+    "Jianlian.Shop 数字商品服务，提供数字账号、AI会员充值、礼品卡、国际电话卡等服务。",
+  icons: {
+    icon: "/assets/jianlian-brand-logo.png",
+    shortcut: "/assets/jianlian-brand-logo.png",
+    apple: "/assets/jianlian-brand-logo.png",
+  },
   openGraph: {
-    title: "Jianlian - 全球数字商品与通信服务商城",
+    title: "Jianlian.Shop 数字商品服务",
     description: "一站式数字商品与通信服务平台",
     url: "https://www.jianlian.shop",
-    siteName: "Jianlian",
+    siteName: "Jianlian.Shop",
   },
 };
 

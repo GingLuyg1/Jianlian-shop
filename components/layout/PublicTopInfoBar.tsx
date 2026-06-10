@@ -158,7 +158,7 @@ export default function PublicTopInfoBar({
 
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-white/88 backdrop-blur-sm">
-      <div className="grid h-[62px] grid-cols-[minmax(0,980px)_285px] items-center justify-between gap-3 px-4">
+      <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 md:px-3 xl:grid-cols-[minmax(0,1fr)_380px]">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
             <div className="flex h-9 items-center gap-2 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-3 shadow-sm shadow-orange-100/50">
@@ -186,13 +186,15 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-9 w-[285px] items-center justify-end gap-1.5">
-          <span className="whitespace-nowrap text-[13px] text-muted-foreground">
-            当前余额：
-            <span className="font-medium text-foreground">
-              ¥{balance.toFixed(2)}
+        <div className="flex h-9 w-auto items-center justify-center gap-1.5 xl:w-[380px]">
+          {user ? (
+            <span className="whitespace-nowrap text-[13px] text-muted-foreground">
+              当前余额：
+              <span className="font-medium text-foreground">
+                ¥{balance.toFixed(2)}
+              </span>
             </span>
-          </span>
+          ) : null}
 
           {!authReady ? (
             <div className="flex h-9 items-center gap-2" aria-hidden="true">
