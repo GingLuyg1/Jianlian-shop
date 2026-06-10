@@ -2,13 +2,6 @@
 
 /**
  * PublicSidebar - Fixed left sidebar for all public customer pages
- *
- * This is the main navigation for the public-facing website.
- * Fixed at left-0 top-0, full height, 240px wide.
- * Contains: logo, brand, menu items, and contact links.
- *
- * On mobile (below md breakpoint), the sidebar is hidden and
- * replaced by MobileMenu (a drawer component).
  */
 
 import { usePathname } from "next/navigation";
@@ -18,6 +11,7 @@ import {
   CreditCard,
   Gift,
   KeyRound,
+  MessageCircle,
   Sparkles,
   Wallet,
   Share2,
@@ -29,13 +23,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Sidebar menu items definition
 const menuItems = [
   { label: "首页", href: "/", icon: Home },
   { label: "国际电话卡", href: "/products/sim-cards", icon: CreditCard },
   { label: "礼品卡 / 充值卡", href: "/products/gift-cards", icon: Gift },
   { label: "数字账号服务", href: "/products/digital-accounts", icon: KeyRound },
   { label: "AI会员充值", href: "/products/ai-membership", icon: Sparkles },
+  { label: "接码服务", href: "/products/sms-code", icon: MessageCircle },
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
   { label: "推广赚钱", href: "/promotion", icon: Share2 },
   { label: "我的订单", href: "/account/orders", icon: ClipboardList },
@@ -47,7 +41,6 @@ const menuItems = [
 export default function PublicSidebar() {
   const pathname = usePathname();
 
-  // Check if a menu item is active by matching the current path
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
@@ -55,7 +48,6 @@ export default function PublicSidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-[270px] bg-white/90 border-r border-border z-40 flex flex-col hidden md:flex backdrop-blur">
-      {/* Logo and brand section */}
       <div className="h-[83px] px-6 flex items-center justify-center">
         <Link
           href="/"
@@ -79,7 +71,6 @@ export default function PublicSidebar() {
         </Link>
       </div>
 
-      {/* Scrollable menu section */}
       <nav className="flex-1 overflow-y-auto sidebar-scroll pt-0 pb-4 px-4">
         <ul className="space-y-1.5">
           {menuItems.map((item) => {
@@ -105,7 +96,6 @@ export default function PublicSidebar() {
         </ul>
       </nav>
 
-      {/* Bottom contact section */}
       <div className="px-4 py-4 border-t border-border">
         <button
           type="button"

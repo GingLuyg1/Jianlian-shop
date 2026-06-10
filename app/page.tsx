@@ -10,6 +10,7 @@ import {
   Gift,
   Headphones,
   KeyRound,
+  MessageCircle,
   PackageCheck,
   Search,
   ShieldCheck,
@@ -52,6 +53,12 @@ const categories = [
     desc: "平台余额与账号增值服务",
     href: "/products/account-recharge",
     icon: Wallet,
+  },
+  {
+    title: "接码服务",
+    desc: "注册验证 / 平台接码",
+    href: "/products/sms-code",
+    icon: MessageCircle,
   },
 ];
 

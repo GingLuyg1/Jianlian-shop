@@ -2,12 +2,6 @@
 
 /**
  * MobileMenu - Drawer navigation for mobile devices
- *
- * On mobile (below md breakpoint), the fixed left sidebar is hidden.
- * This component provides a slide-out drawer menu with all the same
- * navigation items as PublicSidebar.
- *
- * Triggered by a hamburger button in the mobile header.
  */
 
 import { useState } from "react";
@@ -19,6 +13,7 @@ import {
   CreditCard,
   Gift,
   KeyRound,
+  MessageCircle,
   Sparkles,
   Wallet,
   Share2,
@@ -43,6 +38,7 @@ const menuItems = [
   { label: "礼品卡 / 充值卡", href: "/products/gift-cards", icon: Gift },
   { label: "数字账号服务", href: "/products/digital-accounts", icon: KeyRound },
   { label: "AI会员充值", href: "/products/ai-membership", icon: Sparkles },
+  { label: "接码服务", href: "/products/sms-code", icon: MessageCircle },
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
   { label: "推广赚钱", href: "/promotion", icon: Share2 },
   { label: "我的订单", href: "/account/orders", icon: ClipboardList },
@@ -69,7 +65,6 @@ export default function MobileMenu() {
       </SheetTrigger>
       <SheetContent side="left" className="w-64 p-0">
         <SheetTitle className="sr-only">导航菜单</SheetTitle>
-        {/* Mobile header */}
         <div className="px-5 py-5 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
@@ -88,7 +83,6 @@ export default function MobileMenu() {
           </div>
         </div>
 
-        {/* Menu items */}
         <nav className="flex-1 overflow-y-auto py-3 px-3">
           <ul className="space-y-1">
             {menuItems.map((item) => {
@@ -115,7 +109,6 @@ export default function MobileMenu() {
           </ul>
         </nav>
 
-        {/* Bottom contact */}
         <div className="px-4 py-4 border-t border-border">
           <button
             type="button"

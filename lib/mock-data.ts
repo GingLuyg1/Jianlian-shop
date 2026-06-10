@@ -54,6 +54,13 @@ export const categories: Category[] = [
     description: "AI平台会员充值服务",
   },
   {
+    id: "sms-code",
+    name: "接码服务",
+    icon: "MessageCircle",
+    href: "/products/sms-code",
+    description: "注册验证与平台接码服务",
+  },
+  {
     id: "account-recharge",
     name: "账号充值",
     icon: "Wallet",
@@ -61,6 +68,20 @@ export const categories: Category[] = [
     description: "各类账号余额充值",
   },
 ];
+
+export const smsCodeServiceSkuStocks = {
+  "US": 86,
+  "UK": 42,
+  "CA": 35,
+  "AU": 28,
+  "JP": 51,
+  "SG": 24,
+  "HK": 62,
+};
+
+export const smsCodeServiceTotalStock = Object.values(
+  smsCodeServiceSkuStocks
+).reduce((total, stock) => total + stock, 0);
 
 // ── Products ───────────────────────────────────────────────
 
@@ -683,6 +704,32 @@ export const products: Product[] = [
     listingStatus: "inactive",
   },
   // AI会员充值
+  {
+    id: "ai-chatgpt-sms-code-service",
+    name: "接码服务",
+    category: "sms-code",
+    categoryLabel: "接码服务",
+    description: "ChatGPT / OpenAI 注册与验证接码服务，按 SKU 地区库存自动汇总。",
+    price: 5.0,
+    currency: "CNY",
+    stockStatus: "in-stock",
+    stockLabel: `库存：${smsCodeServiceTotalStock}`,
+    processingTime: "自动处理",
+    deliveryMethod: "digital",
+    deliveryLabel: "在线交付",
+    productType: "digital",
+    listingStatus: "active",
+    detail:
+      "接码服务按地区 SKU 提供库存，当前商品库存为全部 SKU 库存总和。下单页细节后续按实际业务流程继续优化。",
+    purchaseNotes:
+      "接码类商品请确认使用场景和平台要求后再下单，非商品问题售出后不支持无理由退换。",
+    faq: [
+      {
+        question: "库存如何计算？",
+        answer: "商品库存为所有可选地区 SKU 库存数量的合计。",
+      },
+    ],
+  },
   {
     id: "ai-gpt-cdk-tr-plus-1m",
     name: "ChatGPT Plus 自动充值一个月",

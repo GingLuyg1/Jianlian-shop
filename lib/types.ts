@@ -12,6 +12,7 @@ export type ProductCategory =
   | "gift-cards"      // 礼品卡
   | "digital-accounts" // 数字账号服务
   | "ai-membership"   // AI会员充值
+  | "sms-code"        // 接码服务
   | "account-recharge"; // 账号充值
 
 // Product delivery method
