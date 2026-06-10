@@ -158,7 +158,7 @@ export default function PublicTopInfoBar({
 
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-[#fcf8f3]/90 backdrop-blur-sm">
-      <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 md:px-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 md:px-3 xl:grid-cols-[minmax(0,1fr)_142px_170px]">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
             <div className="flex h-9 items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60">
@@ -186,19 +186,19 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-9 w-auto items-center justify-center gap-1.5 xl:w-[340px]">
-          <div className="flex h-9 min-w-[108px] items-center justify-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-primary">
-              <CreditCard className="h-3.5 w-3.5" />
-            </span>
-            <span className="whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
-              余额
-            </span>
-            <span className="whitespace-nowrap text-[13px] font-bold text-primary">
-              ¥{balance.toFixed(2)}
-            </span>
-          </div>
+        <div className="flex h-9 min-w-[132px] items-center justify-center gap-1.5 justify-self-center rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60 xl:w-[142px]">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-primary">
+            <CreditCard className="h-3.5 w-3.5" />
+          </span>
+          <span className="whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
+            余额
+          </span>
+          <span className="whitespace-nowrap text-[13px] font-bold text-primary">
+            ¥{balance.toFixed(2)}
+          </span>
+        </div>
 
+        <div className="flex h-9 w-auto items-center justify-end gap-1.5 xl:w-[170px]">
           {!authReady ? (
             <div className="flex h-9 items-center gap-2" aria-hidden="true">
               <div className="h-9 w-20 animate-pulse rounded-xl bg-orange-100/70" />

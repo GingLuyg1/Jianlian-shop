@@ -51,7 +51,7 @@ export default function PublicSidebar() {
       <div className="h-[83px] px-6 flex items-center justify-center">
         <Link
           href="/"
-          className="flex items-center justify-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex -translate-x-[5px] items-center justify-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
             <img
