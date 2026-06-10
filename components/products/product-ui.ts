@@ -33,3 +33,6 @@ export const productListFiveRowsClassName =
 
 export const compactProductRowClassName =
   "w-full rounded-xl border border-slate-100 bg-slate-50 px-5 py-3 text-left hover:scale-[1.004] hover:border-primary/25 hover:bg-primary/5 hover:shadow-sm active:scale-[1.008] active:border-primary/35 md:h-[86px] md:py-0";
+
+export const productSupportTextClassName =
+  "mt-3 shrink-0 text-sm text-muted-foreground";
