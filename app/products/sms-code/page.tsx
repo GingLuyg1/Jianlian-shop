@@ -1,5 +1,5 @@
-import CategoryPageContent from "@/components/products/CategoryPageContent";
+import SmsCodeMallContent from "@/components/products/SmsCodeMallContent";
 
 export default function SmsCodePage() {
-  return <CategoryPageContent categoryId="sms-code" title="接码服务" />;
+  return <SmsCodeMallContent />;
 }

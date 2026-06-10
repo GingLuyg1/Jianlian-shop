@@ -876,9 +876,15 @@ function getProductListHref(product: Product) {
   if (product.category === "ai-membership") {
     return `/products/ai-membership?category=${getAiCategoryByProductId(product.id)}`;
   }
-  if (product.category === "sms-code") return "/products/sms-code";
+  if (product.category === "sms-code") {
+    return `/products/sms-code?country=${getSmsCountryByProductId(product.id)}`;
+  }
   if (product.category === "sim-cards") return "/products/sim-cards";
   return `/products/${product.category}`;
+}
+
+function getSmsCountryByProductId(productId: string) {
+  return productId.replace("sms-code-", "") || "us";
 }
 
 function getAiCategoryByProductId(productId: string) {
