@@ -186,14 +186,14 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-9 min-w-[132px] translate-x-[13px] items-center justify-center gap-1.5 justify-self-center rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60 xl:w-[142px]">
+        <div className="flex h-9 min-w-[132px] translate-x-[11px] items-center justify-center gap-1.5 justify-self-center rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60 xl:w-[142px]">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-primary">
             <CreditCard className="h-3.5 w-3.5" />
           </span>
           <span className="whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
             余额
           </span>
-          <span className="whitespace-nowrap text-[13px] font-bold text-primary">
+          <span className="min-w-[52px] whitespace-nowrap text-center text-[13px] font-bold text-primary">
             ¥{balance.toFixed(2)}
           </span>
         </div>
