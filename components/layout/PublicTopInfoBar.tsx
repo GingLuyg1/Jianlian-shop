@@ -157,13 +157,13 @@ export default function PublicTopInfoBar({
   const balance = profile?.balance ?? 0;
 
   return (
-    <div className="sticky top-0 z-30 border-b border-border bg-white/88 backdrop-blur-sm">
-      <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 md:px-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="sticky top-0 z-30 border-b border-border bg-[#fcf8f3]/90 backdrop-blur-sm">
+      <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 md:px-3 xl:grid-cols-[minmax(0,1fr)_340px]">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
-            <div className="flex h-9 items-center gap-2 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-3 shadow-sm shadow-orange-100/50">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-orange-100 bg-white text-primary">
-                <Megaphone className="h-3 w-3" />
+            <div className="flex h-9 items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-primary">
+                <Megaphone className="h-3.5 w-3.5" />
               </span>
               <span className="shrink-0 text-[13px] font-semibold text-orange-700">
                 公告
@@ -186,24 +186,32 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-9 w-auto items-center justify-center gap-1.5 xl:w-[380px]">
-          {user ? (
-            <span className="whitespace-nowrap text-[13px] text-muted-foreground">
-              当前余额：
-              <span className="font-medium text-foreground">
-                ¥{balance.toFixed(2)}
-              </span>
+        <div className="flex h-9 w-auto items-center justify-center gap-1.5 xl:w-[340px]">
+          <div className="flex h-9 min-w-[108px] items-center justify-center gap-1.5 rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-primary">
+              <CreditCard className="h-3.5 w-3.5" />
             </span>
-          ) : null}
+            <span className="whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
+              余额
+            </span>
+            <span className="whitespace-nowrap text-[13px] font-bold text-primary">
+              ¥{balance.toFixed(2)}
+            </span>
+          </div>
 
           {!authReady ? (
             <div className="flex h-9 items-center gap-2" aria-hidden="true">
-              <div className="h-9 w-16 animate-pulse rounded-md bg-orange-100/70" />
-              <div className="h-9 w-24 animate-pulse rounded-md bg-orange-100/70" />
+              <div className="h-9 w-20 animate-pulse rounded-xl bg-orange-100/70" />
+              <div className="h-9 w-20 animate-pulse rounded-xl bg-orange-100/70" />
             </div>
           ) : user ? (
             <>
-              <Button variant="outline" size="sm" className="h-8 px-3 text-[13px]" asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-xl border-orange-100 bg-white px-4 text-[13px] font-semibold text-orange-700 shadow-sm shadow-orange-100/60 hover:bg-orange-50"
+                asChild
+              >
                 <Link href="/products/account-recharge">
                   <CreditCard className="mr-1 h-3 w-3" />
                   充值
@@ -211,7 +219,11 @@ export default function PublicTopInfoBar({
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 gap-1 px-2 text-[13px]">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 max-w-[138px] rounded-xl border-orange-100 bg-white px-3 text-[13px] font-semibold shadow-sm shadow-orange-100/60 hover:bg-orange-50"
+                  >
                     {getDisplayName(user)}
                     <ChevronDown className="h-3 w-3" />
                   </Button>
@@ -239,13 +251,22 @@ export default function PublicTopInfoBar({
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" className="h-8 px-2 text-[13px]" asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 min-w-[72px] rounded-xl border-orange-100 bg-white px-3 text-[13px] font-semibold shadow-sm shadow-orange-100/60 hover:bg-orange-50"
+                asChild
+              >
                 <Link href="/login">
                   <LogIn className="mr-1 h-3 w-3" />
                   登录
                 </Link>
               </Button>
-              <Button size="sm" className="h-8 px-3 text-[13px]" asChild>
+              <Button
+                size="sm"
+                className="h-9 min-w-[72px] rounded-xl px-3 text-[13px] font-semibold shadow-sm shadow-orange-200/70"
+                asChild
+              >
                 <Link href="/register">
                   <UserPlus className="mr-1 h-3 w-3" />
                   注册
