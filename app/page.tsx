@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 const categories = [
   {
-    title: "数字账号服务",
+    title: "数字账号",
     desc: "Apple ID / Steam / Gmail / Telegram",
     href: "/products/digital-accounts",
     icon: KeyRound,

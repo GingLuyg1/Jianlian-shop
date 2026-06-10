@@ -328,7 +328,7 @@ function CategoryNotice() {
     <div className="mb-4 shrink-0 rounded-lg border border-primary/15 bg-primary/5 px-5 py-4 text-[15px] text-primary">
       <div className="flex items-center gap-2 font-semibold">
         <KeyRound className="h-4 w-4" />
-        <span>数字账号服务</span>
+        <span>数字账号</span>
       </div>
       <div className="mt-1 text-primary/80">
         当前仅展示一级类目，二级类目和商品信息稍后补充。

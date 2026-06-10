@@ -389,6 +389,8 @@ function ProductDetailCard({
           <GptRechargeDetails />
         ) : product.id === GROK_RECHARGE_PRODUCT_ID ? (
           <GrokRechargeDetails />
+        ) : product.id.startsWith("dig-apple-id-") ? (
+          <AppleIdDetails product={product} />
         ) : (
           <div className="mt-8 max-w-3xl">
             <h2 className="mb-3 text-base font-semibold">商品详情</h2>
@@ -404,6 +406,203 @@ function ProductDetailCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function AppleIdDetails({ product }: { product: Product }) {
+  const highlights = [
+    {
+      icon: ShieldCheck,
+      title: "独享成品账号",
+      text: "账号独立交付，适合 App Store 海外区应用和游戏下载使用。",
+    },
+    {
+      icon: RefreshCcw,
+      title: "带密保可改密",
+      text: "交付后可通过密保信息验证身份，建议第一时间修改密码。",
+    },
+    {
+      icon: Smartphone,
+      title: "App Store 使用",
+      text: "仅建议在 App Store 登录下载，不要登录 iCloud 或设备设置。",
+    },
+    {
+      icon: CheckCircle2,
+      title: "账号信息齐全",
+      text: "按商品交付账号、密码、密保答案等必要登录信息。",
+    },
+    {
+      icon: Clock3,
+      title: "24 小时售后",
+      text: "收到账号后请第一时间检查，售后期为商品发货后 24 小时内。",
+    },
+    {
+      icon: Target,
+      title: "合规用途",
+      text: "仅限合法电商拓客和正常应用下载场景，不提供违法用途支持。",
+    },
+  ];
+
+  const rules = [
+    ["商品内容", `${product.name}，带密保可改密，独享账号。`],
+    ["适用场景", "用于 App Store 下载对应地区上架的海外 App 或游戏。"],
+    ["交付信息", "发货后请核对账号、密码、密保答案、生日等信息是否完整可用。"],
+    ["重要限制", "不要在“设置 / iCloud / 查找”中登录，避免触发设备锁或账号异常。"],
+    ["售后期限", "账号类商品售后期为商品发货后 24 小时内，超时请按页面说明处理。"],
+  ];
+
+  const steps = [
+    ["第一步：下单并接收账号", "选择对应地区 Apple ID 商品，完成下单后获取账号交付信息。"],
+    ["第二步：先检查账号信息", "收到后第一时间核对账号、密码、密保答案和生日信息，确认能正常验证。"],
+    [
+      "第三步：建议先修改密码",
+      <>
+        打开{" "}
+        <a
+          href="https://appleid.apple.com/"
+          target="_blank"
+          rel="noreferrer"
+          className="font-semibold text-sky-700 underline underline-offset-4 hover:text-sky-600"
+        >
+          appleid.apple.com
+        </a>
+        ，使用密保问题、答案和生日验证后修改为自己的新密码。
+      </>,
+    ],
+    ["第四步：只在 App Store 登录", "打开 App Store，点击右上角头像登录账号；不要在系统设置或 iCloud 登录。"],
+    ["第五步：下载目标 App", "搜索并下载需要的海外 App 或游戏。付费或订阅类 App 需自行充值或绑定支付方式。"],
+  ];
+
+  const notices = [
+    "登录时如出现“升级账号安全性”等提示，请选择其他选项或暂不升级，避免绑定到非本人设备。",
+    "已安装 App 若提示需要原 ID 更新，可卸载后使用当前账号重新下载。",
+    "搜索不到 App 时，请先确认该 App 是否在当前账号地区上架。",
+    "账号或密码错误时，请确认是在 App Store 内登录，并检查复制内容是否包含空格。",
+    "用户登录 iCloud、频繁切换地区/设备、批量改密或违规使用导致的异常，不在售后范围内。",
+  ];
+
+  const faqs = [
+    ["可以登录 iCloud 吗？", "不可以。该商品仅建议用于 App Store 下载，登录 iCloud 或“查找”可能导致设备锁或账号异常。"],
+    ["可以修改密码吗？", "可以，建议收到账号后第一时间通过 appleid.apple.com 使用密保信息修改密码。"],
+    ["是否独享？", "Apple ID 商品为独享账号，交付后请尽快检查并按说明修改密码。"],
+    ["为什么老 App 要原 ID 更新？", "App 会绑定首次下载时使用的 Apple ID，遇到这种情况可卸载后用当前账号重新下载。"],
+  ];
+
+  return (
+    <div className="mt-8 max-w-4xl space-y-5">
+      <section className="overflow-hidden rounded-2xl border border-sky-200 bg-white">
+        <div className="relative bg-gradient-to-br from-sky-500 via-blue-600 to-blue-900 px-6 py-8 text-white">
+          <div className="inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold">
+            海外 App Store | 即买即用
+          </div>
+          <h2 className="mt-4 text-3xl font-black tracking-tight">
+            Apple ID 独享成品账号
+          </h2>
+          <p className="mt-2 text-base font-semibold text-sky-100">
+            带密保可改密，适合海外 App / 游戏下载
+          </p>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-sky-50/90">
+            本商品面向 App Store 下载使用场景。下单前请确认目标 App 在对应地区上架，收到账号后请第一时间检查并按说明使用。
+          </p>
+        </div>
+
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          {highlights.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.title}
+                className="rounded-xl border border-sky-100 bg-sky-50/50 p-4 text-center"
+              >
+                <Icon className="mx-auto h-7 w-7 text-sky-700" />
+                <div className="mt-2 text-sm font-semibold text-slate-950">
+                  {item.title}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {item.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-sky-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <ShieldCheck className="h-5 w-5 text-sky-700" />
+          商品说明与交付规则
+        </h3>
+        <div className="mt-4 space-y-3">
+          {rules.map(([label, text]) => (
+            <div
+              key={String(label)}
+              className="rounded-xl border border-sky-100 bg-sky-50/30 px-4 py-3 text-sm leading-6"
+            >
+              <span className="font-semibold text-slate-950">{label}：</span>
+              <span className="text-slate-600">{text}</span>
+            </div>
+          ))}
+          <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-800">
+            温馨提示：请勿用于共享账号、二次转售、违规注册或任何违法用途。
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-sky-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <CheckCircle2 className="h-5 w-5 text-sky-700" />
+          使用方法
+        </h3>
+        <div className="mt-4 space-y-3">
+          {steps.map(([title, text]) => (
+            <div
+              key={String(title)}
+              className="rounded-xl border border-sky-100 bg-sky-50/30 px-4 py-3"
+            >
+              <div className="text-sm font-semibold text-slate-950">
+                {title}
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-rose-700">
+          <Clock3 className="h-5 w-5" />
+          售后与风险提示
+        </h3>
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+          {notices.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="rounded-2xl border border-sky-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <Target className="h-5 w-5 text-sky-700" />
+          快速 FAQ
+        </h3>
+        <div className="mt-4 space-y-3">
+          {faqs.map(([question, answer]) => (
+            <details
+              key={question}
+              className="rounded-xl border border-sky-100 bg-sky-50/30 px-4 py-3"
+            >
+              <summary className="cursor-pointer text-sm font-semibold text-slate-950">
+                {question}
+              </summary>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{answer}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 

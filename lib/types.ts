@@ -10,7 +10,7 @@
 export type ProductCategory =
   | "sim-cards"       // 国际电话卡
   | "gift-cards"      // 礼品卡
-  | "digital-accounts" // 数字账号服务
+  | "digital-accounts" // 数字账号
   | "ai-membership"   // AI会员充值
   | "sms-code"        // 接码服务
   | "account-recharge"; // 账号充值

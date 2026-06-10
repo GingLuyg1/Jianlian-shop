@@ -41,7 +41,7 @@ export const categories: Category[] = [
   },
   {
     id: "digital-accounts",
-    name: "数字账号服务",
+    name: "数字账号",
     icon: "KeyRound",
     href: "/products/digital-accounts",
     description: "数字账号开通与续费服务",
@@ -307,7 +307,7 @@ export const products: Product[] = [
     productType: "digital",
     listingStatus: "active",
   },
-  // 数字账号服务
+  // 数字账号
   {
     id: "dig-apple-id-ng",
     name: "尼日利亚Apple id | 带密保可改密 | 独享",
@@ -654,7 +654,7 @@ export const products: Product[] = [
     id: "dig-001",
     name: "ChatGPT Plus 账号开通",
     category: "digital-accounts",
-    categoryLabel: "数字账号服务",
+    categoryLabel: "数字账号",
     description: "ChatGPT Plus会员账号开通服务",
     price: 158.0,
     currency: "CNY",
@@ -675,7 +675,7 @@ export const products: Product[] = [
     id: "dig-002",
     name: "Netflix Premium 账号",
     category: "digital-accounts",
-    categoryLabel: "数字账号服务",
+    categoryLabel: "数字账号",
     description: "Netflix Premium会员账号，4K超清",
     price: 98.0,
     currency: "CNY",
@@ -691,7 +691,7 @@ export const products: Product[] = [
     id: "dig-003",
     name: "Spotify Premium 账号",
     category: "digital-accounts",
-    categoryLabel: "数字账号服务",
+    categoryLabel: "数字账号",
     description: "Spotify Premium会员，无损音乐畅听",
     price: 68.0,
     currency: "CNY",

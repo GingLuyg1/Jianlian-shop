@@ -36,7 +36,7 @@ const menuItems = [
   { label: "首页", href: "/", icon: Home },
   { label: "国际电话卡", href: "/products/sim-cards", icon: CreditCard },
   { label: "礼品卡 / 充值卡", href: "/products/gift-cards", icon: Gift },
-  { label: "数字账号服务", href: "/products/digital-accounts", icon: KeyRound },
+  { label: "数字账号", href: "/products/digital-accounts", icon: KeyRound },
   { label: "AI会员充值", href: "/products/ai-membership", icon: Sparkles },
   { label: "接码服务", href: "/products/sms-code", icon: MessageCircle },
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
