@@ -41,6 +41,31 @@ let cachedAuthState: CachedAuthState = {
   ready: false,
 };
 
+const highlightedAnnouncementParts = [
+  "24小时内",
+  "拿到账号第一时间检查账号",
+  "本站产品拒绝任何违法行为，不提供任何教程（仅限登录），不为任何非法行业提供任何支持，仅提供电商拓客服务。",
+];
+
+function renderAnnouncementText(text: string) {
+  const pattern = new RegExp(
+    `(${highlightedAnnouncementParts
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|")})`,
+    "g"
+  );
+
+  return text.split(pattern).map((part, index) =>
+    highlightedAnnouncementParts.includes(part) ? (
+      <span key={`${part}-${index}`} className="font-semibold text-red-600">
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  );
+}
+
 function getDisplayName(user: User | null) {
   if (!user?.email) return "我的账号";
   return user.email.length > 18 ? `${user.email.slice(0, 15)}...` : user.email;
@@ -147,13 +172,13 @@ export default function PublicTopInfoBar({
               <div className="flex-1 overflow-hidden whitespace-nowrap">
                 <div className="animate-marquee-track inline-flex min-w-max">
                   <span className="pr-10 text-[13px] text-orange-700/90">
-                    {announcementText}
+                    {renderAnnouncementText(announcementText)}
                   </span>
                   <span
                     className="pr-10 text-[13px] text-orange-700/90"
                     aria-hidden="true"
                   >
-                    {announcementText}
+                    {renderAnnouncementText(announcementText)}
                   </span>
                 </div>
               </div>

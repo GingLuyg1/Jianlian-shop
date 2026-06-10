@@ -2,16 +2,28 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { products } from "@/lib/mock-data";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
+  categoryPanelInnerClassName,
+  categoryListScrollClassName,
+  compactProductRowClassName,
+  compactSearchButtonClassName,
+  compactSearchInputClassName,
+  compactSearchWrapperClassName,
   interactiveButtonClass,
   mallContentClassName,
   mallShellClassName,
+  productPanelContentClassName,
+  productListFiveRowsClassName,
+  productSupportTextClassName,
+  shopNoticeClassName,
 } from "./product-ui";
 
 type AiCategoryId = "chatgpt" | "claude" | "gemini" | "grok";
@@ -64,21 +76,30 @@ export default function AiMembershipMallContent() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null
   );
+  const [searchQuery, setSearchQuery] = useState("");
 
   const selectedCategory =
     aiCategories.find((category) => category.id === selectedCategoryId) ??
     aiCategories[0];
 
-  const aiProducts = useMemo(
-    () =>
-      products.filter(
+  const aiProducts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return products
+      .filter(
         (product) =>
           product.category === "ai-membership" &&
           product.listingStatus === "active" &&
           selectedCategory.productIds.includes(product.id)
-      ),
-    [selectedCategory]
-  );
+      )
+      .filter((product) => {
+        if (!query) return true;
+        return (
+          product.name.toLowerCase().includes(query) ||
+          product.description.toLowerCase().includes(query)
+        );
+      });
+  }, [searchQuery, selectedCategory]);
 
   return (
     <PublicLayout contentClassName={mallContentClassName}>
@@ -95,7 +116,9 @@ export default function AiMembershipMallContent() {
         <ProductPanel
           selectedCategory={selectedCategory}
           products={aiProducts}
+          searchQuery={searchQuery}
           selectedProductId={selectedProductId}
+          onSearchChange={setSearchQuery}
           onSelectProduct={(productId) => {
             setSelectedProductId(productId);
             router.push(`/checkout?product=${productId}`);
@@ -122,8 +145,8 @@ function CategoryPanel({
   return (
     <Card className="h-full min-h-0 overflow-hidden">
       <CardContent className="h-full min-h-0 p-4">
-        <div className="flex h-full min-h-0 flex-col rounded-xl bg-slate-50/70 p-3">
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 sidebar-scroll">
+        <div className={categoryPanelInnerClassName}>
+          <div className={categoryListScrollClassName}>
             {aiCategories.map((category) => (
               <CategoryButton
                 key={category.id}
@@ -154,7 +177,7 @@ function CategoryButton({
       onClick={onClick}
       className={cn(
         interactiveButtonClass,
-        "w-full rounded-lg px-4 py-4 flex items-center justify-between text-left",
+        "w-full rounded-xl px-3.5 py-3 flex items-center justify-between text-left",
         active
           ? "scale-[1.015] border border-primary/25 bg-primary/10 text-primary shadow-sm"
           : "bg-white text-foreground border border-slate-100 hover:scale-[1.01] hover:border-primary/25 hover:bg-primary/5 hover:shadow-sm active:scale-[1.015]"
@@ -165,11 +188,11 @@ function CategoryButton({
           src={category.image}
           alt={category.name}
           className={cn(
-            "h-10 w-10 shrink-0 rounded-xl object-cover",
+            "h-11 w-11 shrink-0 rounded-xl object-cover bg-white",
             active ? "ring-2 ring-primary/25" : "ring-1 ring-slate-200"
           )}
         />
-        <div className="min-w-0 truncate text-base font-semibold">
+        <div className="max-w-[130px] truncate whitespace-nowrap text-base font-semibold">
           {category.name}
         </div>
       </div>
@@ -181,39 +204,47 @@ function CategoryButton({
 function ProductPanel({
   selectedCategory,
   products,
+  searchQuery,
   selectedProductId,
+  onSearchChange,
   onSelectProduct,
 }: {
   selectedCategory: AiCategory;
   products: Product[];
+  searchQuery: string;
   selectedProductId: string | null;
+  onSearchChange: (query: string) => void;
   onSelectProduct: (productId: string) => void;
 }) {
   return (
     <Card className="h-full min-h-0 overflow-hidden">
-      <CardContent className="flex h-full min-h-0 flex-col overflow-hidden p-5">
-        <div className="mb-5 rounded-lg border border-primary/15 bg-primary/5 px-5 py-4 text-[15px] text-primary">
-          <div className="flex items-center gap-2 font-semibold">
-            <Sparkles className="h-4 w-4" />
-            <span>AI会员充值</span>
-          </div>
-          <div className="mt-1 text-primary/80">
-            CDK 类商品属于一次性商品，售出后不支持无理由退换。
-          </div>
-        </div>
+      <CardContent className={productPanelContentClassName}>
+        <ShopNotice />
 
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-col justify-between gap-3 md:flex-row md:items-center">
           <div>
-            <h1 className="text-xl font-bold">选择商品</h1>
+            <h1 className="truncate text-xl font-bold">{selectedCategory.name}</h1>
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
               <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
               共计{products.length}个商品
             </div>
           </div>
+          <div className={compactSearchWrapperClassName}>
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7d6355]" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder="请输入名称搜索"
+                className={compactSearchInputClassName}
+              />
+            </div>
+            <Button className={compactSearchButtonClassName}>搜索</Button>
+          </div>
         </div>
 
         {products.length > 0 ? (
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 sidebar-scroll">
+          <div className={productListFiveRowsClassName}>
             {products.map((product) => (
               <ProductRow
                 key={product.id}
@@ -228,9 +259,52 @@ function ProductPanel({
           <EmptyProductState category={selectedCategory} />
         )}
 
-        <div className="flex-1" />
+        <div className={productSupportTextClassName}>
+          如需补货或批量购买，请先联系在线客服确认库存。
+          <button
+            type="button"
+            className="ml-1 text-primary underline-offset-4 hover:underline"
+            {...({ popovertarget: "support-popover" } as Record<string, string>)}
+          >
+            联系客服
+          </button>
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+function ShopNotice() {
+  return (
+    <div className={shopNoticeClassName}>
+      <div className="leading-relaxed">
+        <div className="mb-1 font-semibold">选购请注意</div>
+        <ol className="m-0 list-none space-y-1 p-0 text-left text-primary/90">
+          <li>
+            1. 下单之前请一定一定要看清商品说明，非商品问题一经售出不退不换~
+          </li>
+          <li>
+            2. 本店在技术范围内会尽力保障商品的可用性，所有商品如无单独标注，售后期均为商品发货
+            <span className="font-semibold text-red-600">24小时内</span>。
+          </li>
+          <li>
+            3. 切记，
+            <span className="font-semibold text-red-600">
+              拿到账号第一时间检查账号
+            </span>
+            。售后期限为
+            <span className="font-semibold text-red-600">24小时</span>
+            ，请勿扯皮！
+          </li>
+          <li>
+            4.{" "}
+            <span className="font-semibold text-red-600">
+              本站产品拒绝任何违法行为，不提供任何教程（仅限登录），不为任何非法行业提供任何支持，仅提供电商拓客服务。
+            </span>
+          </li>
+        </ol>
+      </div>
+    </div>
   );
 }
 
@@ -251,10 +325,11 @@ function ProductRow({
       onClick={onClick}
       className={cn(
         interactiveButtonClass,
-        "w-full text-left rounded-xl border px-5 py-4 flex flex-col md:flex-row md:items-center gap-4",
+        compactProductRowClassName,
+        "flex flex-col gap-4 md:flex-row md:items-center",
         selected
           ? "scale-[1.012] bg-primary/10 border-primary/35 shadow-md"
-          : "bg-slate-50 border-slate-100 hover:scale-[1.01] hover:bg-primary/5 hover:border-primary/20 hover:shadow-sm active:scale-[1.015]"
+          : ""
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -295,7 +370,8 @@ function ProductRow({
 
 function EmptyProductState({ category }: { category: AiCategory }) {
   return (
-    <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center">
+    <div className="h-[470px] min-h-0 w-[calc(100%-18px)] shrink-0 overflow-y-auto rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center sidebar-scroll">
+      <div className="flex min-h-full items-center justify-center">
       <div>
         <img
           src={category.image}
@@ -306,6 +382,7 @@ function EmptyProductState({ category }: { category: AiCategory }) {
         <div className="mt-1 text-sm text-muted-foreground">
           二级类目和商品信息稍后补充。
         </div>
+      </div>
       </div>
     </div>
   );
