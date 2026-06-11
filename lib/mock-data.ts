@@ -846,7 +846,7 @@ export const products: Product[] = [
   // AI会员充值
   {
     id: "ai-gpt-cdk-tr-plus-1m",
-    name: "ChatGPT Plus 自动充值一个月",
+    name: "Chat GPT Plus 一个月充值 CDK【安卓/IOS通用】",
     category: "ai-membership",
     categoryLabel: "AI会员充值",
     description: "ChatGPT Plus 月费订阅自动充值，安卓、iOS、网页端通用，下单后自助兑换。",
@@ -882,7 +882,7 @@ export const products: Product[] = [
   },
   {
     id: "ai-claude-cdk-ng-pro-1m",
-    name: "CDK【安卓IOS通用】尼区IOS claude pro 一个月充值",
+    name: "Claude pro 一个月充值 CDK【安卓/IOS通用】",
     category: "ai-membership",
     categoryLabel: "AI会员充值",
     description: "尼区 IOS Claude Pro 一个月充值 CDK，安卓 iOS 通用。",
@@ -900,7 +900,7 @@ export const products: Product[] = [
   },
   {
     id: "ai-claude-cdk-ng-max-5x-1m",
-    name: "CDK【安卓IOS通用】尼区IOS claude MAX 5X 一个月充值CDK",
+    name: "Claude Max X5 一个月充值 CDK【安卓/IOS通用】",
     category: "ai-membership",
     categoryLabel: "AI会员充值",
     description: "尼区 IOS Claude MAX 5X 一个月充值 CDK，安卓 iOS 通用。",
@@ -918,7 +918,7 @@ export const products: Product[] = [
   },
   {
     id: "ai-claude-cdk-ng-max-20x-1m",
-    name: "CDK【安卓IOS通用】尼区IOS claude MAX 20X 一个月充值",
+    name: "Claude Max X20 一个月充值 CDK【安卓/IOS通用】",
     category: "ai-membership",
     categoryLabel: "AI会员充值",
     description: "尼区 IOS Claude MAX 20X 一个月充值 CDK，安卓 iOS 通用。",
@@ -936,7 +936,7 @@ export const products: Product[] = [
   },
   {
     id: "ai-grok-cdk-in-super-1m",
-    name: "CDK【安卓IOS通用】印度区IOS Grok Super 一个月充值",
+    name: "Grok Super一个月充值 CDK【安卓/IOS通用】",
     category: "ai-membership",
     categoryLabel: "AI会员充值",
     description: "Grok Super 印度区 iOS 自动充值 30 刀，安卓、iOS、网页端通用。",
