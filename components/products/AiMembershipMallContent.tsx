@@ -340,9 +340,6 @@ function ProductRow({
         />
         <div className="min-w-0">
           <div className="truncate text-base font-medium">{product.name}</div>
-          <div className="mt-1 truncate text-xs text-muted-foreground">
-            {product.description}
-          </div>
         </div>
       </div>
 

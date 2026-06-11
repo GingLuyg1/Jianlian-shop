@@ -936,7 +936,7 @@ export const products: Product[] = [
   },
   {
     id: "ai-grok-cdk-in-super-1m",
-    name: "Grok Super 自动充值 30 刀",
+    name: "CDK【安卓IOS通用】印度区IOS Grok Super 一个月充值",
     category: "ai-membership",
     categoryLabel: "AI会员充值",
     description: "Grok Super 印度区 iOS 自动充值 30 刀，安卓、iOS、网页端通用。",
