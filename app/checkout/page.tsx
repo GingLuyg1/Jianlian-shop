@@ -58,6 +58,11 @@ const SKU_OPTIONS_BY_PRODUCT_ID: Record<string, SkuOption[]> = {
 
 const GPT_RECHARGE_PRODUCT_ID = "ai-gpt-cdk-tr-plus-1m";
 const GROK_RECHARGE_PRODUCT_ID = "ai-grok-cdk-in-super-1m";
+const CLAUDE_RECHARGE_PRODUCT_IDS = [
+  "ai-claude-cdk-ng-pro-1m",
+  "ai-claude-cdk-ng-max-5x-1m",
+  "ai-claude-cdk-ng-max-20x-1m",
+];
 
 export default function CheckoutPage() {
   const searchParams = useSearchParams();
@@ -386,9 +391,11 @@ function ProductDetailCard({
         </div>
 
         {product.id === GPT_RECHARGE_PRODUCT_ID ? (
-          <GptRechargeDetails />
+          <GptRechargeDetails product={product} />
         ) : product.id === GROK_RECHARGE_PRODUCT_ID ? (
-          <GrokRechargeDetails />
+          <GrokRechargeDetails product={product} />
+        ) : CLAUDE_RECHARGE_PRODUCT_IDS.includes(product.id) ? (
+          <ClaudeRechargeDetails product={product} />
         ) : product.id.startsWith("dig-apple-id-") ? (
           <AppleIdDetails product={product} />
         ) : (
@@ -606,7 +613,7 @@ function AppleIdDetails({ product }: { product: Product }) {
   );
 }
 
-function GptRechargeDetails() {
+function GptRechargeDetails({ product }: { product: Product }) {
   const highlights = [
     {
       icon: Zap,
@@ -641,7 +648,7 @@ function GptRechargeDetails() {
   ];
 
   const rules = [
-    ["商品内容", "ChatGPT Plus 自动充值一个月，支持 ChatGPT Plus 月费订阅。"],
+    ["商品内容", `${product.name}，支持 ChatGPT Plus 月费订阅。`],
     [
       "充值地址",
       <RechargeLink key="gpt-recharge-link" href="https://6661231.xyz/" />,
@@ -651,7 +658,7 @@ function GptRechargeDetails() {
   ];
 
   const steps = [
-    ["第一步：下单购买", "选择 ChatGPT Plus 自动充值一个月商品并完成下单。"],
+    ["第一步：下单购买", `选择 ${product.name} 商品并完成下单。`],
     [
       "第二步：打开充值页面",
       <>
@@ -673,10 +680,10 @@ function GptRechargeDetails() {
     <div className="mt-8 max-w-4xl space-y-5">
       <section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
         <div className="inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700">
-          ChatGPT Plus | 自动充值一个月
+          ChatGPT Plus | CDK 自动充值
         </div>
         <h2 className="mt-3 text-2xl font-bold text-slate-950">
-          ChatGPT Plus 自动充值一个月
+          {product.name}
         </h2>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
           面向已有账号的 ChatGPT Plus 月费订阅自动充值服务。下单后在充值页面自助兑换即可自动到账，支持安卓、iOS 和网页端使用。
@@ -770,7 +777,7 @@ function GptRechargeDetails() {
   );
 }
 
-function GrokRechargeDetails() {
+function GrokRechargeDetails({ product }: { product: Product }) {
   const highlights = [
     {
       icon: Zap,
@@ -805,7 +812,7 @@ function GrokRechargeDetails() {
   ];
 
   const rules = [
-    ["商品内容", "Grok Super 自动充值 30 刀，印度区 iOS 充值，安卓 / iOS 通用。"],
+    ["商品内容", `${product.name}，印度区 iOS 充值，安卓 / iOS 通用。`],
     [
       "充值地址",
       <RechargeLink key="grok-recharge-link" href="https://6661231.xyz/#/grok" />,
@@ -815,7 +822,7 @@ function GrokRechargeDetails() {
   ];
 
   const steps = [
-    ["第一步：下单购买", "选择 Grok Super 自动充值 30 刀商品并完成下单。"],
+    ["第一步：下单购买", `选择 ${product.name} 商品并完成下单。`],
     [
       "第二步：打开充值页面",
       <>
@@ -837,10 +844,10 @@ function GrokRechargeDetails() {
     <div className="mt-8 max-w-4xl space-y-5">
       <section className="rounded-2xl border border-sky-200 bg-sky-50/70 p-5">
         <div className="inline-flex rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
-          Grok Super | 自动充值 30 刀
+          Grok Super | CDK 自动充值
         </div>
         <h2 className="mt-3 text-2xl font-bold text-slate-950">
-          Grok Super 自动充值 30 刀
+          {product.name}
         </h2>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
           面向已有账号的 Grok Super 自动充值服务。下单后在 Grok 充值页面自助兑换即可自动到账，支持安卓、iOS 和网页端使用。
@@ -906,6 +913,181 @@ function GrokRechargeDetails() {
             <div
               key={String(title)}
               className="rounded-xl border border-sky-100 bg-sky-50/30 px-4 py-3"
+            >
+              <div className="text-sm font-semibold text-slate-950">
+                {title}
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-rose-700">
+          <Clock3 className="h-5 w-5" />
+          售后与注意事项
+        </h3>
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+          {troubleshooting.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+function ClaudeRechargeDetails({ product }: { product: Product }) {
+  const isMaxPlan = product.id.includes("max");
+  const planLabel = product.id.includes("20x")
+    ? "Claude Max X20"
+    : product.id.includes("5x")
+      ? "Claude Max X5"
+      : "Claude Pro";
+
+  const highlights = [
+    {
+      icon: Zap,
+      title: "CDK 自助兑换",
+      text: "下单后获得充值卡密，进入 Claude 充值页面按提示自助兑换。",
+    },
+    {
+      icon: Sparkles,
+      title: `${planLabel} 套餐`,
+      text: isMaxPlan
+        ? "适合高频使用和更高额度需求，按所选 Max 套餐开通。"
+        : "适合日常 Claude Pro 使用，支持常规对话、写作和办公场景。",
+    },
+    {
+      icon: Smartphone,
+      title: "安卓 / iOS 通用",
+      text: "安卓、iOS、网页端账号均可使用，兑换成功后登录账号查看会员状态。",
+    },
+    {
+      icon: CheckCircle2,
+      title: "卡密永久有效",
+      text: "未使用卡密永久有效，不会过期；兑换成功后按会员周期生效。",
+    },
+    {
+      icon: RefreshCcw,
+      title: "支持提前续费",
+      text: "无需等会员到期，可提前续费，剩余时间按平台规则覆盖或累计。",
+    },
+    {
+      icon: Target,
+      title: "30 天保障",
+      text: "质保 30 天不掉订阅，掉订阅按天退差价。",
+    },
+  ];
+
+  const rules = [
+    ["商品内容", `${product.name}，适用于 Claude 会员充值。`],
+    [
+      "充值地址",
+      <RechargeLink key="claude-recharge-link" href="https://6661231.xyz/#/claude" />,
+    ],
+    ["发货模式", "购买后获得充值卡密，未使用卡密永久有效，不会过期。"],
+    ["到账说明", "兑换提交后通常会自动处理到账；如长时间未到账，请先核对账号信息，再联系在线客服。"],
+    ["适用说明", `${planLabel} 为一次性 CDK 充值商品，售出后不支持无理由退换。`],
+  ];
+
+  const steps = [
+    ["第一步：下单购买", `选择 ${product.name} 商品并完成下单。`],
+    [
+      "第二步：打开充值页面",
+      <>
+        访问充值地址{" "}
+        <RechargeLink href="https://6661231.xyz/#/claude" /> 进入 Claude 兑换页面。
+      </>,
+    ],
+    ["第三步：自助兑换", "在兑换页面填写卡密和 Claude 账号充值信息，确认无误后提交。"],
+    ["第四步：等待到账", `提交后系统自动处理充值，到 Claude 官网或 App 查看 ${planLabel} 状态。`],
+  ];
+
+  const troubleshooting = [
+    "如未到账，请先核对 Claude 账号信息是否填写正确。",
+    "必要时退出账号后重新登录，再查看 Claude 会员状态。",
+    "账号共享、频繁更换 IP、敏感问题、异常注册或违规使用导致的账号限制，通常不属于充值本身问题。",
+  ];
+
+  return (
+    <div className="mt-8 max-w-4xl space-y-5">
+      <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-5">
+        <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-orange-700">
+          Claude | CDK 自动充值
+        </div>
+        <h2 className="mt-3 text-2xl font-bold text-slate-950">
+          {product.name}
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+          面向已有账号的 Claude 会员 CDK 充值服务。下单后在充值页面自助兑换，支持安卓、iOS 和网页端使用。
+          请按页面提示填写账号信息，提交前仔细核对。
+        </p>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-orange-200 bg-white">
+        <div className="bg-orange-600 px-5 py-4 text-center text-white">
+          <div className="text-xs font-semibold uppercase tracking-wide text-orange-100">
+            Service Highlights
+          </div>
+          <div className="mt-1 text-lg font-bold">自助兑换，稳定到账</div>
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          {highlights.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.title}
+                className="rounded-xl border border-orange-100 bg-orange-50/40 p-4 text-center"
+              >
+                <Icon className="mx-auto h-7 w-7 text-orange-700" />
+                <div className="mt-2 text-sm font-semibold text-slate-950">
+                  {item.title}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {item.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-orange-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <ShieldCheck className="h-5 w-5 text-orange-700" />
+          商品说明与交付规则
+        </h3>
+        <div className="mt-4 space-y-3">
+          {rules.map(([label, text]) => (
+            <div
+              key={String(label)}
+              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3 text-sm leading-6"
+            >
+              <span className="font-semibold text-slate-950">{label}：</span>
+              <span className="text-slate-600">{text}</span>
+            </div>
+          ))}
+          <div className="rounded-xl bg-orange-50 px-4 py-3 text-sm font-medium leading-6 text-orange-800">
+            温馨提示：充值成功后请及时登录账号查看 Claude 会员状态和订阅到期时间。
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-orange-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <CheckCircle2 className="h-5 w-5 text-orange-700" />
+          使用方法
+        </h3>
+        <div className="mt-4 space-y-3">
+          {steps.map(([title, text]) => (
+            <div
+              key={String(title)}
+              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3"
             >
               <div className="text-sm font-semibold text-slate-950">
                 {title}
