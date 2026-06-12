@@ -8,7 +8,7 @@ export const mallShellClassName =
   "grid h-[calc(100dvh-87px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[270px_minmax(0,1fr)]";
 
 export const categoryListScrollClassName =
-  "min-h-0 flex-1 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll";
+  "scroll-fade-y min-h-0 flex-1 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll";
 
 export const categoryPanelInnerClassName =
   "flex h-full min-h-0 flex-col rounded-xl bg-gradient-to-b from-orange-50/55 to-white p-3";
@@ -29,7 +29,7 @@ export const compactSearchButtonClassName =
   "h-11 w-[104px] rounded-lg bg-[#df7334] text-base font-medium hover:bg-[#d7672a]";
 
 export const productListFiveRowsClassName =
-  "h-[470px] min-h-0 w-[calc(100%-18px)] shrink-0 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll";
+  "scroll-fade-y h-[470px] min-h-0 w-[calc(100%-18px)] shrink-0 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll";
 
 export const compactProductRowClassName =
   "w-full rounded-xl border border-slate-100 bg-slate-50 px-5 py-3 text-left hover:scale-[1.004] hover:border-primary/25 hover:bg-primary/5 hover:shadow-sm active:scale-[1.008] active:border-primary/35 md:h-[86px] md:py-0";

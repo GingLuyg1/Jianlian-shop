@@ -123,3 +123,21 @@
 .sidebar-scroll::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
 }
+
+.scroll-fade-y {
+  --scroll-fade-size: 28px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--scroll-fade-size),
+    #000 calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--scroll-fade-size),
+    #000 calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+}

@@ -10,7 +10,6 @@ import {
   EyeOff,
   LockKeyhole,
   Mail,
-  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +27,7 @@ type AuthScreenProps = {
   mode: AuthMode;
 };
 
-const features = ["Secure account", "Fast checkout", "Order tracking"];
+const features = ["安全账号", "快捷下单", "订单查询"];
 
 export default function AuthScreen({ mode }: AuthScreenProps) {
   const router = useRouter();
@@ -49,13 +48,13 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     setMessage("");
 
     if (!hasSupabaseConfig()) {
-      setError("Supabase 尚未配置，无法使用正式账号系统。");
+      setError("账号系统尚未配置，暂时无法登录。");
       return;
     }
 
     const email = account.trim().toLowerCase();
     if (!email.includes("@")) {
-      setError("当前正式版使用邮箱登录，手机号登录需要后续配置 Phone Auth。");
+      setError("当前版本请使用邮箱登录。");
       return;
     }
 
@@ -93,7 +92,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         }
 
         if (!data.session) {
-          setMessage("注册成功，请先完成邮箱验证后再登录。");
+          setMessage("注册成功，请完成邮箱验证后再登录。");
           router.push("/login");
           router.refresh();
           return;
@@ -117,7 +116,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       setError(
         authError instanceof Error
           ? authError.message
-          : "认证失败，请检查账号、密码或 Supabase 配置。"
+          : "登录失败，请检查账号或密码。"
       );
     } finally {
       setLoading(false);
@@ -129,7 +128,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     setMessage("");
 
     if (!hasSupabaseConfig()) {
-      setError("Supabase 尚未配置，无法使用 Google 登录。");
+      setError("账号系统尚未配置，暂时无法使用 Google 登录。");
       return;
     }
 
@@ -179,22 +178,17 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                     alt="Jianlian"
                     className="h-8 w-8 rounded-xl object-cover"
                   />
-                  Jianlian Account
-                </div>
-
-                <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-[#fff8ef] px-4 py-2 text-sm font-semibold text-primary ring-1 ring-orange-100">
-                  <ShieldCheck className="h-4 w-4" />
-                  Supabase Auth
+                  Jianlian 账号
                 </div>
 
                 <h1 className="max-w-lg text-[52px] font-black leading-[1.08] tracking-tight text-[#121827]">
                   欢迎加入 Jianlian
                 </h1>
                 <p className="mt-5 max-w-md text-xl font-semibold leading-9 text-slate-800">
-                  使用正式账号系统管理订单、余额和后台权限。
+                  登录后可查看订单、余额和账号信息。
                 </p>
                 <p className="mt-3 max-w-md text-base leading-7 text-slate-600">
-                  普通用户和管理员角色通过 Supabase profiles 表区分，后台只允许 admin 角色访问。
+                  使用 Jianlian 账号可以更方便地查询历史订单、接收商品交付信息，并管理站内余额。
                 </p>
 
                 <div className="mt-8 flex items-center gap-4 rounded-3xl bg-white/80 p-5 shadow-sm ring-1 ring-orange-100">
@@ -203,10 +197,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   </div>
                   <div>
                     <div className="text-lg font-bold text-slate-950">
-                      真实登录与后台权限
+                      账号信息统一管理
                     </div>
                     <div className="mt-1 text-sm text-slate-600">
-                      后续订单、充值、支付都可以关联真实用户 ID。
+                      下单、充值、查询订单都可以关联到同一个账号。
                     </div>
                   </div>
                 </div>
@@ -240,7 +234,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                       Jianlian
                     </div>
                     <div className="mt-0.5 text-xs font-medium text-muted-foreground">
-                      Digital Goods Service
+                      数字商品服务
                     </div>
                   </div>
                 </div>
@@ -260,8 +254,8 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {isRegister
-                      ? "注册完成后默认是普通用户"
-                      : "登录后可查看订单、余额和账号信息"}
+                      ? "填写邮箱和密码，创建你的 Jianlian 账号。"
+                      : "登录后可查看订单、余额和账号信息。"}
                   </p>
                 </div>
 
@@ -364,11 +358,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                     className="h-12 w-full rounded-xl"
                     disabled={loading}
                   >
-                    {loading
-                      ? "处理中..."
-                      : isRegister
-                        ? "注册并进入首页"
-                        : "登录"}
+                    {loading ? "处理中..." : isRegister ? "注册并进入首页" : "登录"}
                   </Button>
                 </form>
 
