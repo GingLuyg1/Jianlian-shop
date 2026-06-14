@@ -11,6 +11,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
+
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -47,7 +48,7 @@ let fallbackAnnouncementStart = Date.now();
 
 const highlightedAnnouncementParts = [
   "24小时内",
-  "拿到账号第一时间检查账号",
+  "拿到账户第一时间检查账号",
   "本站产品拒绝任何违法行为，不提供任何教程（仅限登录），不为任何非法行业提供任何支持，仅提供电商拓客服务。",
 ];
 
@@ -92,7 +93,8 @@ function getAnnouncementAnimationDelay() {
     const elapsed = (Date.now() - start) % ANNOUNCEMENT_DURATION_MS;
     return -(elapsed / 1000);
   } catch {
-    const elapsed = (Date.now() - fallbackAnnouncementStart) % ANNOUNCEMENT_DURATION_MS;
+    const elapsed =
+      (Date.now() - fallbackAnnouncementStart) % ANNOUNCEMENT_DURATION_MS;
     return -(elapsed / 1000);
   }
 }

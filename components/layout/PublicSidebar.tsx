@@ -1,25 +1,22 @@
 "use client";
 
-/**
- * PublicSidebar - Fixed left sidebar for all public customer pages
- */
-
-import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
-  Home,
+  BookOpen,
+  ClipboardList,
   CreditCard,
   Gift,
+  Headphones,
+  HelpCircle,
+  Home,
   KeyRound,
   MessageCircle,
+  Share2,
   Sparkles,
   Wallet,
-  Share2,
-  ClipboardList,
-  BookOpen,
-  HelpCircle,
-  Headphones,
 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 const menuItems = [
@@ -47,85 +44,67 @@ export default function PublicSidebar() {
     return pathname.startsWith(href);
   };
 
+  const renderLink = (item: (typeof menuItems)[number]) => {
+    const Icon = item.icon;
+    const active = isActive(item.href);
+
+    return (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          className={cn(
+            "flex items-center gap-3 rounded-md px-4 py-2.5 text-[15px] transition-all duration-150 hover:scale-[1.015] active:scale-[1.03]",
+            active
+              ? "scale-[1.01] border border-primary/20 bg-primary/10 font-medium text-primary shadow-sm"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          )}
+        >
+          <Icon className="h-[18px] w-[18px] shrink-0" />
+          <span>{item.label}</span>
+        </Link>
+      </li>
+    );
+  };
+
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[270px] bg-white/90 border-r border-border z-40 flex flex-col hidden md:flex backdrop-blur">
-      <div className="h-[83px] px-6 flex items-center justify-center">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[270px] flex-col border-r border-border bg-white/90 backdrop-blur md:flex">
+      <div className="flex h-[83px] items-center justify-center px-6">
         <Link
           href="/"
           className="flex -translate-x-[5px] items-center justify-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
             <img
               src="/assets/jianlian-brand-logo.png"
               alt="Jianlian"
+              width={48}
+              height={48}
               className="h-12 w-12 object-cover"
             />
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-xl text-foreground leading-tight">
+            <div className="text-xl font-semibold leading-tight text-foreground">
               Jianlian
             </div>
-            <div className="text-sm text-muted-foreground leading-tight mt-1">
+            <div className="mt-1 text-sm leading-tight text-muted-foreground">
               数字商品服务
             </div>
           </div>
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto sidebar-scroll pt-0 pb-4 px-4">
-        <ul className="space-y-1.5">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.href);
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 rounded-md text-[15px] transition-all duration-150 hover:scale-[1.015] active:scale-[1.03]",
-                    active
-                      ? "scale-[1.01] border border-primary/20 bg-primary/10 text-primary font-medium shadow-sm"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-[18px] w-[18px] shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      <nav className="sidebar-scroll flex-1 overflow-y-auto px-4 pb-4 pt-0">
+        <ul className="space-y-1.5">{menuItems.map(renderLink)}</ul>
       </nav>
 
       <div className="px-4 pb-3">
-        <ul className="space-y-1.5">
-          {helpItems.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.href);
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 rounded-md text-[15px] transition-all duration-150 hover:scale-[1.015] active:scale-[1.03]",
-                    active
-                      ? "scale-[1.01] border border-primary/20 bg-primary/10 text-primary font-medium shadow-sm"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-[18px] w-[18px] shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="space-y-1.5">{helpItems.map(renderLink)}</ul>
       </div>
 
-      <div className="px-4 py-4 border-t border-border">
+      <div className="border-t border-border px-4 py-4">
         <button
           type="button"
-          className="w-full flex items-center justify-start gap-3 px-4 py-2.5 rounded-md text-[15px] bg-primary/90 text-primary-foreground font-medium hover:bg-primary hover:scale-[1.015] active:scale-[1.03] transition-all duration-150 select-none shadow-sm"
+          className="flex w-full select-none items-center justify-start gap-3 rounded-md bg-primary/90 px-4 py-2.5 text-[15px] font-medium text-primary-foreground shadow-sm transition-all duration-150 hover:scale-[1.015] hover:bg-primary active:scale-[1.03]"
           {...({ popovertarget: "support-popover" } as Record<string, string>)}
         >
           <Headphones className="h-[18px] w-[18px] shrink-0" />

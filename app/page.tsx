@@ -71,13 +71,13 @@ const hotLinks = [
 const highlights = [
   { title: "安全合规", desc: "下单前请核对说明", icon: ShieldCheck },
   { title: "快速交付", desc: "按商品说明处理发货", icon: Timer },
-  { title: "售后核验", desc: "拿到账号后及时检查", icon: CheckCircle2 },
+  { title: "售后核验", desc: "拿到账户后及时检查", icon: CheckCircle2 },
 ];
 
 const heroSlides = [
   {
     title: "全球数字商品与通信服务商城",
-    desc: "提供数字账号、AI会员充值、礼品卡、国际电话卡等商品。下单前请核对商品说明，拿到账号和卡密后请第一时间检查。",
+    desc: "提供数字账号、AI会员充值、礼品卡、国际电话卡等商品。下单前请核对商品说明，拿到账户和卡密后请第一时间检查。",
     visual: "globe",
   },
   {
@@ -115,28 +115,34 @@ function HeroCarousel() {
         )}
         style={{ transform: isMoving ? "translateX(-50%)" : "translateX(0)" }}
       >
-      {orderedSlides.map((slide) => (
-        <div
-          key={slide.title}
-          className="relative h-full w-1/2 shrink-0 overflow-hidden px-8 py-7"
-        >
-          <div className="relative z-10 flex h-full max-w-4xl flex-col justify-center">
-            <h1 className="max-w-3xl text-4xl font-bold leading-tight tracking-tight text-slate-950 md:text-5xl">
-              {slide.title}
-            </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-              {slide.desc}
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3 text-sm font-medium text-primary">
-              <span className="rounded-full bg-white px-4 py-2 shadow-sm">安全合规</span>
-              <span className="rounded-full bg-white px-4 py-2 shadow-sm">快速交付</span>
-              <span className="rounded-full bg-white px-4 py-2 shadow-sm">专业售后</span>
+        {orderedSlides.map((slide) => (
+          <div
+            key={slide.title}
+            className="relative h-full w-1/2 shrink-0 overflow-hidden px-8 py-7"
+          >
+            <div className="relative z-10 flex h-full max-w-4xl flex-col justify-center">
+              <h1 className="max-w-3xl text-4xl font-bold leading-tight tracking-tight text-slate-950 md:text-5xl">
+                {slide.title}
+              </h1>
+              <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+                {slide.desc}
+              </p>
+              <div className="mt-7 flex flex-wrap gap-3 text-sm font-medium text-primary">
+                <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+                  安全合规
+                </span>
+                <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+                  快速交付
+                </span>
+                <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+                  专业售后
+                </span>
+              </div>
             </div>
-          </div>
 
-          <HeroVisual type={slide.visual} />
-        </div>
-      ))}
+            <HeroVisual type={slide.visual} />
+          </div>
+        ))}
       </div>
 
       <div className="absolute bottom-5 left-8 z-20 flex gap-2">
@@ -162,36 +168,46 @@ function HeroCarousel() {
 
 function HeroVisual({ type }: { type: string }) {
   if (type === "service") {
+    const steps = [
+      { title: "选择类目", desc: "按类目进入商品列表" },
+      { title: "核对说明", desc: "查看地区、库存和售后" },
+      { title: "提交订单", desc: "填写接收信息并提交" },
+      { title: "检查交付", desc: "发货后及时核验内容" },
+    ];
+
     return (
       <div className="absolute inset-y-0 right-0 hidden w-[48%] md:block">
-        <div className="absolute right-14 top-1/2 w-[390px] -translate-y-1/2 rounded-2xl border border-orange-100 bg-white/86 p-4 shadow-[0_28px_80px_rgba(214,106,44,0.16)] backdrop-blur">
+        <div className="absolute right-14 top-1/2 w-[390px] -translate-y-1/2 rounded-2xl border border-orange-100 bg-white/85 p-4 shadow-[0_28px_80px_rgba(214,106,44,0.16)] backdrop-blur">
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <PackageCheck className="h-6 w-6" />
             </span>
             <div>
-              <div className="text-lg font-bold text-slate-950">商品交付流程</div>
-              <div className="text-sm text-muted-foreground">先确认说明，再提交订单</div>
+              <div className="text-lg font-bold text-slate-950">
+                商品交付流程
+              </div>
+              <div className="text-sm text-muted-foreground">
+                先确认说明，再提交订单
+              </div>
             </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2.5">
-            {["选择类目", "核对说明", "提交订单", "检查交付"].map((item, index) => (
+            {steps.map((item, index) => (
               <div
-                key={item}
+                key={item.title}
                 className="rounded-xl bg-orange-50 px-3 py-3 shadow-[inset_0_0_0_1px_rgba(221,113,47,0.06)]"
               >
                 <div className="flex items-center gap-2">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold text-primary">
                     {index + 1}
                   </span>
-                  <span className="font-semibold text-slate-900">{item}</span>
+                  <span className="font-semibold text-slate-900">
+                    {item.title}
+                  </span>
                 </div>
                 <div className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {index === 0 && "按类目进入商品列表"}
-                  {index === 1 && "查看地区、库存和售后"}
-                  {index === 2 && "填写接收信息并提交"}
-                  {index === 3 && "发货后及时核验内容"}
+                  {item.desc}
                 </div>
               </div>
             ))}
@@ -243,7 +259,9 @@ export default function HomePage() {
             <div className="mb-4 flex items-end justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold text-slate-950">商品分类</h2>
-                <p className="mt-1 text-sm text-muted-foreground">选择类目后进入商品列表</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  选择类目后进入商品列表
+                </p>
               </div>
               <span className="hidden text-sm text-muted-foreground md:block">
                 库存和价格以详情页为准
@@ -258,7 +276,9 @@ export default function HomePage() {
                     href={category.href}
                     className={cn(
                       "group flex min-h-[92px] items-center gap-4 rounded-xl border p-4 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm",
-                      category.active ? "border-primary/25 bg-primary/[0.04]" : "border-border bg-white"
+                      category.active
+                        ? "border-primary/25 bg-primary/[0.04]"
+                        : "border-border bg-white"
                     )}
                   >
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -309,8 +329,12 @@ export default function HomePage() {
                     <Icon className="h-4 w-4" />
                   </span>
                   <span>
-                    <span className="block font-semibold text-slate-950">{item.title}</span>
-                    <span className="block text-xs text-muted-foreground">{item.desc}</span>
+                    <span className="block font-semibold text-slate-950">
+                      {item.title}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {item.desc}
+                    </span>
                   </span>
                 </div>
               );

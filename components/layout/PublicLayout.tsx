@@ -1,28 +1,13 @@
 "use client";
 
-/**
- * PublicLayout - Main layout for all public customer pages
- *
- * Layout structure:
- * - Fixed left sidebar (PublicSidebar): 240px wide, hidden on mobile
- * - Mobile menu (MobileMenu): drawer menu, visible only on mobile
- * - Main content area: starts after sidebar (ml-60 on desktop),
- *   full width on mobile, with warm dashboard background
- *
- * The main content area contains:
- * - PublicTopInfoBar (sticky top info bar)
- * - Page content (children)
- *
- * No footer. No shopping cart.
- */
-
 import { ReactNode } from "react";
+import { X } from "lucide-react";
+
+import { announcementText } from "@/lib/mock-data";
+import MobileMenu from "./MobileMenu";
 import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
-import MobileMenu from "./MobileMenu";
 import RouteLoadingIndicator from "./RouteLoadingIndicator";
-import { announcementText } from "@/lib/mock-data";
-import { X } from "lucide-react";
 
 interface PublicLayoutProps {
   children: ReactNode;
@@ -36,36 +21,29 @@ export default function PublicLayout({
   return (
     <div className="min-h-screen bg-background">
       <RouteLoadingIndicator />
-
-      {/* Fixed left sidebar - hidden on mobile */}
       <PublicSidebar />
 
-      {/* Mobile menu trigger - visible only on mobile */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-border px-3 py-2 flex items-center gap-3">
+      <div className="fixed left-0 right-0 top-0 z-40 flex items-center gap-3 border-b border-border bg-white px-3 py-2 md:hidden">
         <MobileMenu />
         <div className="flex items-center gap-2">
           <img
             src="/assets/jianlian-brand-logo.png"
             alt="Jianlian"
+            width={32}
+            height={32}
             className="h-8 w-8 rounded-md object-cover"
           />
           <div>
-            <div className="font-semibold text-sm leading-tight">
-              Jianlian
-            </div>
-            <div className="text-[10px] text-muted-foreground leading-tight">
+            <div className="text-sm font-semibold leading-tight">Jianlian</div>
+            <div className="text-[10px] leading-tight text-muted-foreground">
               数字商品服务
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main content area - offset by sidebar width on desktop */}
-      <main className="md:ml-[270px] min-w-0 min-h-screen">
-        {/* Top info bar with announcement */}
+      <main className="min-h-screen min-w-0 md:ml-[270px]">
         <PublicTopInfoBar announcementText={announcementText} />
-
-        {/* Page content */}
         <div className={contentClassName}>{children}</div>
       </main>
 
@@ -91,7 +69,7 @@ export default function PublicLayout({
             <div>Telegram：</div>
             <div>WhatsApp：</div>
             <div>Email：</div>
-            <div>上班时间：（ 12:00 AM - 24:00 PM GMT+8）</div>
+            <div>上班时间：（12:00 AM - 24:00 PM GMT+8）</div>
             <div className="text-muted-foreground">有问题均可留言</div>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { Inter } from "next/font/google";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.jianlian.shop"),
   title: "Jianlian.Shop 数字商品服务",
   description:
     "Jianlian.Shop 数字商品服务，提供数字账号、AI会员充值、礼品卡、国际电话卡等服务。",
