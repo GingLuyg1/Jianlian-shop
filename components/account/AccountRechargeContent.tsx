@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { BadgeDollarSign, CreditCard, type LucideIcon } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-type RechargeMethodId = "alipay" | "wxpay" | "binance" | "manual";
+type RechargeMethodId = "alipay" | "wxpay" | "binance";
 type RechargeCurrency = "CNY" | "USDT";
 type RecordTab = "recharge" | "funds";
 
@@ -17,18 +16,19 @@ type RechargeMethod = {
   name: string;
   note: string;
   minAmount: number;
+  maxAmount?: number;
   currency: RechargeCurrency;
   feeRate: number;
-  icon?: LucideIcon;
-  iconSrc?: string;
+  iconSrc: string;
 };
 
 const rechargeMethods: RechargeMethod[] = [
   {
     id: "alipay",
     name: "Alipay",
-    note: "最低充值金额：¥20",
-    minAmount: 20,
+    note: "最低充值金额：¥10",
+    minAmount: 10,
+    maxAmount: 1000,
     currency: "CNY",
     feeRate: 0.03,
     iconSrc: "/assets/alipay-icon.jpg",
@@ -36,8 +36,9 @@ const rechargeMethods: RechargeMethod[] = [
   {
     id: "wxpay",
     name: "Wxpay",
-    note: "最低充值金额：¥20",
-    minAmount: 20,
+    note: "最低充值金额：¥10",
+    minAmount: 10,
+    maxAmount: 1000,
     currency: "CNY",
     feeRate: 0.03,
     iconSrc: "/assets/wechat-pay-icon.jpg",
@@ -45,90 +46,92 @@ const rechargeMethods: RechargeMethod[] = [
   {
     id: "binance",
     name: "币安转账",
-    note: "最低充值金额：3 USDT",
-    minAmount: 3,
+    note: "最低充值金额：1 USDT",
+    minAmount: 1,
     currency: "USDT",
     feeRate: 0,
     iconSrc: "/assets/binance-pay-icon.jpg",
   },
-  {
-    id: "manual",
-    name: "人工充值",
-    note: "最低充值金额：¥1000",
-    minAmount: 1000,
-    currency: "CNY",
-    feeRate: 0,
-    icon: BadgeDollarSign,
-  },
 ];
 
+const reservedRechargeChannels = ["渠道预留", "渠道预留", "渠道预留"];
+
 export default function AccountRechargeContent() {
-  const [selectedMethodId, setSelectedMethodId] = useState<RechargeMethodId>("alipay");
+  const [selectedMethodId, setSelectedMethodId] =
+    useState<RechargeMethodId>("alipay");
   const [amountText, setAmountText] = useState("");
-  const [activeRecordTab, setActiveRecordTab] = useState<RecordTab>("recharge");
+  const [activeRecordTab, setActiveRecordTab] =
+    useState<RecordTab>("recharge");
+
   const selectedMethod =
-    rechargeMethods.find((method) => method.id === selectedMethodId) ?? rechargeMethods[0];
+    rechargeMethods.find((method) => method.id === selectedMethodId) ??
+    rechargeMethods[0];
   const amount = Number(amountText) || 0;
   const fee = amount * selectedMethod.feeRate;
   const total = amount + fee;
   const symbol = selectedMethod.currency === "USDT" ? "USDT" : "¥";
   const reachesMin = amount >= selectedMethod.minAmount;
+  const withinMax =
+    !selectedMethod.maxAmount || amount <= selectedMethod.maxAmount;
+  const canPay = amount > 0 && reachesMin && withinMax;
+
+  const updateAmount = (value: string) => {
+    const normalized = normalizeAmount(value);
+    if (!normalized) {
+      setAmountText("");
+      return;
+    }
+
+    const numeric = Number(normalized);
+    if (selectedMethod.maxAmount && numeric > selectedMethod.maxAmount) {
+      setAmountText(String(selectedMethod.maxAmount));
+      return;
+    }
+
+    setAmountText(normalized);
+  };
 
   return (
-    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-hidden px-4 py-3 md:px-6">
-      <div className="grid h-full min-h-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4">
-          <Card className="min-h-0 overflow-hidden">
-            <CardContent className="h-full min-h-0 p-4">
-              <div className="h-full space-y-3 overflow-y-auto pr-2 text-sm leading-6">
-                <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-                  <h1 className="text-xl font-bold text-red-500">
-                    充值金额区间20~1000RMB之间
-                  </h1>
-                  <p className="text-sm font-semibold text-foreground">
-                    超出1000元请联系客服进行人工充值
-                  </p>
-                </div>
-                <div className="grid gap-1.5 rounded-xl border border-red-100 bg-red-50/60 p-3 text-sm">
-                  <p>请足额支付，否则无法到账</p>
-                  <p className="font-semibold text-red-500">
-                    充值属于虚拟金额，仅可在本站消费
-                  </p>
-                  <p className="font-semibold text-red-500">
-                    无法提现，充值代表您同意此声明
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-border bg-slate-50 p-3 text-sm">
-                  <p className="font-semibold text-foreground">付款说明请仔细阅读！</p>
-                  <ol className="mt-1.5 space-y-1 text-xs leading-5 text-muted-foreground">
-                    <li>1. 如果无法刷出收款页面请关闭代理软件重试下！</li>
-                    <li>2. 如果二维码收款上限无法支付，请关闭支付页面重新获取新的二维码！</li>
-                    <li>3. 扫码支付成功后，等待1分钟，刷新网站页面，如果没有到账发送付款截图及用户名给在线客服</li>
-                    <li className="font-semibold text-red-500">
-                      4. 恶意退款者，会导致购买的商品出现问题，微信风控，概不负责
-                    </li>
-                    <li className="font-semibold text-primary">
-                      5. 如遇到充值没到账，失败等情况请联系左下角联系客服
-                    </li>
-                  </ol>
-                </div>
-
-                <div className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-sm">
-                  <p className="text-muted-foreground">
-                    支持 Alipay、Wxpay、币安转账、人工充值；Alipay / Wxpay 收取 3% 手续费，币安转账和人工充值无手续费。
-                  </p>
+    <PublicLayout contentClassName="max-w-none overflow-hidden px-4 py-3 md:px-6">
+      <div className="mx-auto grid h-[calc(100dvh-87px)] max-w-[1500px] grid-cols-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4">
+          <Card className="shrink-0">
+            <CardContent className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
+              <div className="rounded-xl border border-primary/15 bg-primary/5 p-4">
+                <h2 className="text-lg font-bold">付款说明</h2>
+                <ol className="mt-2 grid gap-1.5 text-sm leading-6 text-muted-foreground">
+                  <li>1. 请足额支付，否则可能无法自动到账。</li>
+                  <li>2. 二维码无法支付时，请刷新页面重新获取。</li>
+                  <li>3. 支付成功后等待 1 分钟，再刷新页面查看余额。</li>
+                  <li className="font-semibold text-primary">
+                    4. 未到账、失败或金额异常时，请联系左下角在线客服。
+                  </li>
+                </ol>
+              </div>
+              <div className="rounded-xl border border-border bg-slate-50 p-4">
+                <h3 className="font-semibold">支持方式</h3>
+                <div className="mt-3 grid gap-2 text-sm text-muted-foreground">
+                  <p>Alipay / Wxpay 收取 3% 手续费。</p>
+                  <p>币安转账最低 1 USDT，免手续费。</p>
+                  <p>充值成功后余额可用于站内商品下单。</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="shrink-0">
-            <CardContent className="p-4">
-              <h2 className="text-lg font-bold">账号充值</h2>
-              <div className="mt-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="min-h-0 overflow-hidden">
+            <CardContent className="flex h-full min-h-0 flex-col p-4">
+              <div className="flex shrink-0 items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold">账号充值</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    选择充值方式并填写金额，支付后余额自动更新。
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
                 {rechargeMethods.map((method) => {
-                  const Icon = method.icon;
                   const selected = selectedMethod.id === method.id;
 
                   return (
@@ -140,34 +143,54 @@ export default function AccountRechargeContent() {
                         setAmountText("");
                       }}
                       className={cn(
-                        "rounded-lg border bg-slate-50 p-2.5 text-left transition-all duration-150 hover:scale-[1.015] hover:border-primary/35 hover:shadow-sm",
-                        selected && "scale-[1.015] border-primary bg-primary/5 shadow-sm"
+                        "rounded-xl border bg-slate-50 p-2.5 text-left transition-all duration-150 hover:scale-[1.01] hover:border-primary/35 hover:shadow-sm",
+                        selected &&
+                          "scale-[1.01] border-primary bg-primary/5 shadow-sm"
                       )}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white p-0.5 shadow-sm ring-1 ring-border">
-                          {method.iconSrc ? (
-                            <img
-                              src={method.iconSrc}
-                              alt={method.name}
-                              className="h-full w-full rounded-lg object-cover"
-                            />
-                          ) : Icon ? (
-                            <Icon className="h-4 w-4 text-primary" />
-                          ) : null}
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-sm ring-1 ring-border">
+                          <img
+                            src={method.iconSrc}
+                            alt={method.name}
+                            className="h-full w-full rounded-lg object-cover"
+                          />
                         </span>
-                        <span className="text-sm font-semibold">{method.name}</span>
+                        <span className="font-semibold">{method.name}</span>
                       </div>
-                      <p className="mt-3 text-xs text-muted-foreground">{method.note}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {method.note}
+                      </p>
                       <p className="mt-1 text-xs font-medium text-primary">
                         手续费：{formatFeeRate(method.feeRate)}
                       </p>
                     </button>
                   );
                 })}
+                {reservedRechargeChannels.map((label, index) => (
+                  <div
+                    key={`${label}-${index}`}
+                    className="rounded-xl border border-dashed border-primary/20 bg-primary/5 p-2.5 text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-semibold text-primary/45 shadow-sm ring-1 ring-border">
+                        +
+                      </span>
+                      <span className="font-semibold text-muted-foreground">
+                        {label}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      后续新增支付方式
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-primary/70">
+                      待接入
+                    </p>
+                  </div>
+                ))}
               </div>
 
-              <div className="mt-4">
+              <div className="mt-3">
                 <label className="mb-1.5 block text-sm font-medium">
                   <span className="text-red-500">*</span>金额
                 </label>
@@ -177,30 +200,36 @@ export default function AccountRechargeContent() {
                   </span>
                   <Input
                     value={amountText}
-                    onChange={(event) => setAmountText(event.target.value.replace(/[^\d.]/g, ""))}
+                    inputMode="decimal"
+                    onChange={(event) => updateAmount(event.target.value)}
                     placeholder={`请输入金额，最低 ${selectedMethod.minAmount} ${selectedMethod.currency}`}
-                    className="h-10 pl-14"
+                    className="h-11 pl-16"
                   />
                 </div>
                 {amount > 0 && !reachesMin ? (
                   <p className="mt-2 text-xs text-red-500">
-                    当前方式最低充值金额为 {formatMoney(selectedMethod.minAmount, selectedMethod.currency)}。
+                    当前方式最低充值金额为{" "}
+                    {formatMoney(
+                      selectedMethod.minAmount,
+                      selectedMethod.currency
+                    )}
+                    。
                   </p>
                 ) : null}
               </div>
 
-              <div className="mt-4 flex flex-col gap-3 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs text-muted-foreground">
+              <div className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-muted-foreground">
                   <div>充值金额：{formatMoney(amount, selectedMethod.currency)}</div>
                   <div>
                     手续费 {formatFeeRate(selectedMethod.feeRate)}：
                     {formatMoney(fee, selectedMethod.currency)}
                   </div>
-                  <div className="mt-1 text-base font-bold text-primary">
+                  <div className="mt-1 text-lg font-bold text-primary">
                     总金额：{formatMoney(total, selectedMethod.currency)}
                   </div>
                 </div>
-                <Button className="h-10 min-w-36 rounded-lg text-sm" disabled={!reachesMin}>
+                <Button className="h-11 min-w-40 rounded-lg" disabled={!canPay}>
                   支付
                 </Button>
               </div>
@@ -208,7 +237,7 @@ export default function AccountRechargeContent() {
           </Card>
         </div>
 
-        <Card className="h-full min-h-0 xl:sticky xl:top-[94px]">
+        <Card className="h-full min-h-0">
           <CardContent className="flex h-full min-h-0 flex-col p-5">
             <div className="flex shrink-0 gap-3">
               <Button
@@ -227,8 +256,12 @@ export default function AccountRechargeContent() {
               </Button>
             </div>
 
-            <div className="mt-5 flex min-h-0 flex-1 flex-col gap-4">
-              {activeRecordTab === "recharge" ? <RechargeRecordExample /> : <FundsRecordExample />}
+            <div className="mt-5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+              {activeRecordTab === "recharge" ? (
+                <RechargeRecordExample />
+              ) : (
+                <FundsRecordExample />
+              )}
 
               <div className="mt-auto rounded-xl bg-primary/5 p-4 text-xs leading-5 text-muted-foreground">
                 后续接入登录后，这里的账号、充值订单号、到账状态和余额变动会跟随当前登录账号自动关联。
@@ -289,6 +322,14 @@ function FundsRecordExample() {
       </div>
     </div>
   );
+}
+
+function normalizeAmount(value: string) {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const [integerPart, ...decimalParts] = cleaned.split(".");
+  const decimal = decimalParts.join("").slice(0, 2);
+  if (cleaned.includes(".")) return `${integerPart || "0"}.${decimal}`;
+  return integerPart;
 }
 
 function formatMoney(value: number, currency: RechargeCurrency) {

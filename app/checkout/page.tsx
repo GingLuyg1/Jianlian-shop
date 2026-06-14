@@ -7,7 +7,10 @@ import {
   Gift,
   CheckCircle2,
   Clock3,
+  KeyRound,
+  MessageCircle,
   Minus,
+  Bot,
   Plus,
   RefreshCcw,
   ShieldCheck,
@@ -58,10 +61,15 @@ const SKU_OPTIONS_BY_PRODUCT_ID: Record<string, SkuOption[]> = {
 
 const GPT_RECHARGE_PRODUCT_ID = "ai-gpt-cdk-tr-plus-1m";
 const GROK_RECHARGE_PRODUCT_ID = "ai-grok-cdk-in-super-1m";
+const GIFFGAFF_TOPUP_PRODUCT_ID = "gift-giffgaff-topup";
 const CLAUDE_RECHARGE_PRODUCT_IDS = [
   "ai-claude-cdk-ng-pro-1m",
   "ai-claude-cdk-ng-max-5x-1m",
   "ai-claude-cdk-ng-max-20x-1m",
+];
+const GEMINI_RECHARGE_PRODUCT_IDS = [
+  "ai-gemini-google-one-pro-pixel",
+  "ai-gemini-google-one-pro-pixel-1y",
 ];
 
 export default function CheckoutPage() {
@@ -396,6 +404,10 @@ function ProductDetailCard({
           <GrokRechargeDetails product={product} />
         ) : CLAUDE_RECHARGE_PRODUCT_IDS.includes(product.id) ? (
           <ClaudeRechargeDetails product={product} />
+        ) : GEMINI_RECHARGE_PRODUCT_IDS.includes(product.id) ? (
+          <GeminiRechargeDetails product={product} />
+        ) : product.id === GIFFGAFF_TOPUP_PRODUCT_ID ? (
+          <GiffgaffTopupDetails product={product} />
         ) : product.id.startsWith("dig-apple-id-") ? (
           <AppleIdDetails product={product} />
         ) : (
@@ -413,6 +425,173 @@ function ProductDetailCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function GiffgaffTopupDetails({ product }: { product: Product }) {
+  const highlights = [
+    {
+      icon: CreditCard,
+      title: "16位充值卡密",
+      text: "下单后按商品面额交付 Giffgaff 充值卡密，发货方式为 16 位卡密。",
+    },
+    {
+      icon: Gift,
+      title: "支持多档面额",
+      text: "支持 10 英镑、15 英镑、20 英镑等充值档位，具体以页面 SKU 选择为准。",
+    },
+    {
+      icon: Smartphone,
+      title: "自助充值",
+      text: "收到卡密后进入 Giffgaff 官网或 App 的 Voucher / Top-up 页面自助兑换。",
+    },
+    {
+      icon: CheckCircle2,
+      title: "即时核验",
+      text: "兑换完成后请第一时间检查号码余额或套餐状态，确认充值是否到账。",
+    },
+    {
+      icon: Clock3,
+      title: "售后时效",
+      text: "卡密类商品请在发货后 24 小时内完成核验，有问题及时联系客服。",
+    },
+    {
+      icon: ShieldCheck,
+      title: "一次性商品",
+      text: "卡密一经发出不支持无理由退换，使用前请确认充值号码和面额。",
+    },
+  ];
+
+  const rules = [
+    ["商品内容", `${product.name}，支持 Giffgaff 号码余额充值。`],
+    ["发货方式", "16 位充值卡密，按下单选择的面额交付。"],
+    [
+      "充值方式",
+      "进入 Giffgaff 官网或 App，选择 Top-up / Redeem a voucher，输入 16 位卡密完成充值。",
+    ],
+    [
+      "使用前确认",
+      "请确认 Giffgaff 手机号、充值面额和账号状态正常，避免卡密兑换到错误号码。",
+    ],
+    [
+      "售后说明",
+      "卡密类商品属于一次性数字商品，非商品问题售出后不支持无理由退换。",
+    ],
+  ];
+
+  const steps = [
+    ["第一步：选择面额", "在下单页选择需要的 10 英镑、15 英镑或 20 英镑充值档位。"],
+    ["第二步：提交订单", "填写接收邮箱并提交订单，等待系统或客服交付 16 位充值卡密。"],
+    [
+      "第三步：打开充值页面",
+      "进入 Giffgaff 官网或 App 的 Top-up / Voucher 兑换入口。",
+    ],
+    [
+      "第四步：输入卡密",
+      "输入收到的 16 位充值卡密并确认兑换，完成后检查余额或套餐状态。",
+    ],
+  ];
+
+  return (
+    <div className="mt-8 max-w-4xl space-y-5">
+      <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-5">
+        <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-orange-700">
+          Giffgaff | 16位卡密充值
+        </div>
+        <h2 className="mt-3 text-2xl font-bold text-slate-950">
+          {product.name}
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+          Giffgaff 充值商品采用 16 位卡密交付。下单前请确认需要的充值面额，
+          收到卡密后前往 Giffgaff 官网或 App 自助兑换，并第一时间检查到账状态。
+        </p>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-orange-200 bg-white">
+        <div className="bg-orange-600 px-5 py-4 text-center text-white">
+          <div className="text-xs font-semibold uppercase tracking-wide text-orange-100">
+            Top-up Highlights
+          </div>
+          <div className="mt-1 text-lg font-bold">卡密发货，自助充值</div>
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          {highlights.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.title}
+                className="rounded-xl border border-orange-100 bg-orange-50/40 p-4 text-center"
+              >
+                <Icon className="mx-auto h-7 w-7 text-orange-700" />
+                <div className="mt-2 text-sm font-semibold text-slate-950">
+                  {item.title}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {item.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-orange-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <ShieldCheck className="h-5 w-5 text-orange-700" />
+          商品说明与充值方式
+        </h3>
+        <div className="mt-4 space-y-3">
+          {rules.map(([label, text]) => (
+            <div
+              key={String(label)}
+              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3 text-sm leading-6"
+            >
+              <span className="font-semibold text-slate-950">{label}：</span>
+              <span className="text-slate-600">{text}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-orange-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <CheckCircle2 className="h-5 w-5 text-orange-700" />
+          使用步骤
+        </h3>
+        <div className="mt-4 space-y-3">
+          {steps.map(([title, text]) => (
+            <div
+              key={String(title)}
+              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3"
+            >
+              <div className="text-sm font-semibold text-slate-950">
+                {title}
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-rose-700">
+          <Clock3 className="h-5 w-5" />
+          售后与注意事项
+        </h3>
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+          {[
+            "收到 16 位卡密后请尽快兑换并核验余额或套餐状态。",
+            "请勿将卡密泄露给他人，卡密一经兑换即无法撤回。",
+            "如果充值失败，请保留页面提示和卡密信息，在售后期内联系在线客服处理。",
+          ].map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
   );
 }
 
@@ -1116,6 +1295,196 @@ function ClaudeRechargeDetails({ product }: { product: Product }) {
   );
 }
 
+function GeminiRechargeDetails({ product }: { product: Product }) {
+  const isYearAccount = product.id.includes("1y");
+  const planLabel = isYearAccount
+    ? "Google One Pro 一年高权重成品号"
+    : "Google One Pro Pixel 开通";
+
+  const highlights = [
+    {
+      icon: Zap,
+      title: "自助激活",
+      text: "下单后按商品交付信息进入激活网站，自助完成 Google One Pro 激活。",
+    },
+    {
+      icon: Sparkles,
+      title: planLabel,
+      text: isYearAccount
+        ? "适合需要一年期账号权益的用户，按成品号信息交付使用。"
+        : "适合 Google One Pro / Gemini 相关权益使用，按 Pixel 开通规则处理。",
+    },
+    {
+      icon: Smartphone,
+      title: "多端使用",
+      text: "激活后按 Google 账号规则在网页端、安卓和 iOS 端查看对应权益。",
+    },
+    {
+      icon: CheckCircle2,
+      title: "按库存发货",
+      text: "库存以页面显示为准，库存为 0 或不确定时请先联系在线客服确认。",
+    },
+    {
+      icon: RefreshCcw,
+      title: "下单前核对",
+      text: "购买前请确认商品类型、账号要求和使用地区，避免买错规格。",
+    },
+    {
+      icon: Target,
+      title: "售后核验",
+      text: "收到交付信息后请第一时间检查，售后期按商品说明处理。",
+    },
+  ];
+
+  const rules = [
+    ["商品内容", `${product.name}，适用于 Gemini / Google One Pro 相关权益。`],
+    [
+      "激活网站",
+      <RechargeLink key="gemini-recharge-link" href="https://www.ai1k.xyz/" />,
+    ],
+    [
+      "发货模式",
+      isYearAccount
+        ? "购买后按成品号信息交付，请收到后第一时间核验账号状态。"
+        : "购买后按商品说明交付激活信息，请进入激活网站自助处理。",
+    ],
+    [
+      "使用说明",
+      "激活前请仔细核对 Google 账号、地区和商品规格；提交错误信息可能影响到账或使用。",
+    ],
+    [
+      "售后说明",
+      "数字权益/账号类商品属于一次性商品，非商品问题售出后不支持无理由退换。",
+    ],
+  ];
+
+  const steps = [
+    ["第一步：下单购买", `选择 ${product.name} 商品并完成下单。`],
+    [
+      "第二步：打开激活网站",
+      <>
+        访问激活网站{" "}
+        <RechargeLink href="https://www.ai1k.xyz/" /> 进入自助激活页面。
+      </>,
+    ],
+    [
+      "第三步：填写信息",
+      "按页面提示填写交付信息、账号信息或卡密信息，提交前确认无误。",
+    ],
+    [
+      "第四步：核验权益",
+      "激活完成后登录对应 Google / Gemini 页面查看 Google One Pro 或 Gemini 权益状态。",
+    ],
+  ];
+
+  const troubleshooting = [
+    "如未生效，请先核对账号、地区和提交信息是否正确。",
+    "必要时退出账号后重新登录，再查看 Google One Pro / Gemini 权益状态。",
+    "账号异常、频繁更换 IP、地区不匹配、共享账号或违规使用导致的限制，通常不属于商品本身问题。",
+  ];
+
+  return (
+    <div className="mt-8 max-w-4xl space-y-5">
+      <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-5">
+        <div className="inline-flex rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-semibold text-indigo-700">
+          Gemini | Google One Pro 自助激活
+        </div>
+        <h2 className="mt-3 text-2xl font-bold text-slate-950">
+          {product.name}
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+          面向 Gemini / Google One Pro 相关权益的自助激活商品。下单后根据交付信息进入激活网站处理，
+          请在提交前仔细核对账号、地区和商品规格。
+        </p>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-indigo-200 bg-white">
+        <div className="bg-indigo-700 px-5 py-4 text-center text-white">
+          <div className="text-xs font-semibold uppercase tracking-wide text-indigo-100">
+            Service Highlights
+          </div>
+          <div className="mt-1 text-lg font-bold">自助激活，按说明交付</div>
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          {highlights.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.title}
+                className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 text-center"
+              >
+                <Icon className="mx-auto h-7 w-7 text-indigo-700" />
+                <div className="mt-2 text-sm font-semibold text-slate-950">
+                  {item.title}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {item.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-indigo-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <ShieldCheck className="h-5 w-5 text-indigo-700" />
+          商品说明与交付规则
+        </h3>
+        <div className="mt-4 space-y-3">
+          {rules.map(([label, text]) => (
+            <div
+              key={String(label)}
+              className="rounded-xl border border-indigo-100 bg-indigo-50/30 px-4 py-3 text-sm leading-6"
+            >
+              <span className="font-semibold text-slate-950">{label}：</span>
+              <span className="text-slate-600">{text}</span>
+            </div>
+          ))}
+          <div className="rounded-xl bg-indigo-50 px-4 py-3 text-sm font-medium leading-6 text-indigo-800">
+            温馨提示：激活完成后请及时登录账号查看 Gemini / Google One Pro 权益状态。
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-indigo-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <CheckCircle2 className="h-5 w-5 text-indigo-700" />
+          使用方法
+        </h3>
+        <div className="mt-4 space-y-3">
+          {steps.map(([title, text]) => (
+            <div
+              key={String(title)}
+              className="rounded-xl border border-indigo-100 bg-indigo-50/30 px-4 py-3"
+            >
+              <div className="text-sm font-semibold text-slate-950">
+                {title}
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-rose-700">
+          <Clock3 className="h-5 w-5" />
+          售后与注意事项
+        </h3>
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+          {troubleshooting.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
 function RechargeLink({ href }: { href: string }) {
   return (
     <a
@@ -1183,7 +1552,7 @@ function ProductArtwork({ product }: { product: Product }) {
     );
   }
 
-  const Icon = product.category === "gift-cards" ? Gift : CreditCard;
+  const Icon = getProductFallbackIcon(product);
   return (
     <div className="flex h-40 w-40 items-center justify-center rounded-2xl bg-primary/10">
       <Icon className="h-16 w-16 text-primary" />
@@ -1232,13 +1601,68 @@ function ReminderItem({ text }: { text: string }) {
 
 function getProductImage(product: Product) {
   const name = product.name.toLowerCase();
-  if (product.id === GPT_RECHARGE_PRODUCT_ID) return "/assets/ai-chatgpt-icon.jpg";
-  if (product.id === GROK_RECHARGE_PRODUCT_ID) return "/assets/ai-grok-icon.jpg";
+  if (
+    product.id === GPT_RECHARGE_PRODUCT_ID ||
+    product.id === "ai-001" ||
+    name.includes("chatgpt")
+  ) {
+    return "/assets/ai-chatgpt-icon.jpg";
+  }
+  if (CLAUDE_RECHARGE_PRODUCT_IDS.includes(product.id) || name.includes("claude")) {
+    return "/assets/ai-claude-icon.jpg";
+  }
+  if (GEMINI_RECHARGE_PRODUCT_IDS.includes(product.id) || name.includes("gemini")) {
+    return "/assets/ai-gemini-icon.jpg";
+  }
+  if (product.id === GROK_RECHARGE_PRODUCT_ID || name.includes("grok")) {
+    return "/assets/ai-grok-icon.jpg";
+  }
   if (name.includes("giffgaff")) return "/assets/giffgaff-icon.svg";
   if (product.id.startsWith("dig-apple-id-")) return "/assets/digital-apple-id.svg";
+  if (product.id.startsWith("dig-steam-") || name.includes("steam")) {
+    return "/assets/digital-steam.jpg";
+  }
+  if (product.id.startsWith("dig-gmail-") || name.includes("gmail")) {
+    return "/assets/digital-gmail.svg";
+  }
+  if (product.id.startsWith("dig-outlook-") || name.includes("outlook")) {
+    return "/assets/digital-outlook.svg";
+  }
+  if (product.id.startsWith("dig-telegram-") || name.includes("telegram")) {
+    return "/assets/digital-telegram.svg";
+  }
+  if (product.id.startsWith("dig-whatsapp-") || name.includes("whatsapp")) {
+    return "/assets/digital-whatsapp.svg";
+  }
+  if (product.id.startsWith("dig-tiktok-") || name.includes("tiktok")) {
+    return "/assets/digital-tiktok.svg";
+  }
+  if (product.id.startsWith("dig-x-") || name === "x") return "/assets/digital-x.svg";
+  if (product.id.startsWith("dig-instagram-") || name.includes("instagram")) {
+    return "/assets/digital-instagram.svg";
+  }
+  if (product.id.startsWith("dig-facebook-") || name.includes("facebook")) {
+    return "/assets/digital-facebook.svg";
+  }
+  if (product.id.startsWith("dig-youtube-") || name.includes("youtube")) {
+    return "/assets/digital-youtube.svg";
+  }
+  if (product.id.startsWith("dig-twitch-") || name.includes("twitch")) {
+    return "/assets/digital-twitch.svg";
+  }
   if (product.category === "gift-cards") return "/assets/apple-gift-card-icon.jpg";
   if (name.includes("ultra")) return "/assets/ultra-mobile-icon.svg";
+  if (product.category === "sim-cards") return "/assets/sim-uk-icon.png";
   return null;
+}
+
+function getProductFallbackIcon(product: Product) {
+  if (product.category === "gift-cards") return Gift;
+  if (product.category === "digital-accounts") return KeyRound;
+  if (product.category === "ai-membership") return Bot;
+  if (product.category === "sms-code") return MessageCircle;
+  if (product.category === "account-recharge") return Wallet;
+  return CreditCard;
 }
 
 function getPriceLabel(product: Product, selectedSku?: SkuOption) {

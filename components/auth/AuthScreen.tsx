@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  KeyRound,
   LockKeyhole,
   Mail,
   Sparkles,
@@ -34,9 +35,12 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const searchParams = useSearchParams();
   const isRegister = mode === "register";
   const redirectTo = searchParams.get("redirect") || "/";
+  const inviteFromUrl =
+    searchParams.get("invite") || searchParams.get("salt") || "";
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState(inviteFromUrl);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -54,7 +58,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
     const email = account.trim().toLowerCase();
     if (!email.includes("@")) {
-      setError("当前版本请使用邮箱登录。");
+      setError("当前版本账号请使用邮箱格式。");
       return;
     }
 
@@ -77,7 +81,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           email,
           password,
           options: {
-            data: { role: "user" },
+            data: {
+              role: "user",
+              inviteCode: inviteCode.trim() || null,
+            },
           },
         });
 
@@ -120,32 +127,6 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       );
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleOAuthLogin = async () => {
-    setError("");
-    setMessage("");
-
-    if (!hasSupabaseConfig()) {
-      setError("账号系统尚未配置，暂时无法使用 Google 登录。");
-      return;
-    }
-
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}${redirectTo}`,
-        },
-      });
-
-      if (oauthError) throw oauthError;
-    } catch (oauthError) {
-      setError(
-        oauthError instanceof Error ? oauthError.message : "Google 登录启动失败。"
-      );
     }
   };
 
@@ -254,31 +235,14 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {isRegister
-                      ? "填写邮箱和密码，创建你的 Jianlian 账号。"
+                      ? "填写账号和密码，创建你的 Jianlian 账号。"
                       : "登录后可查看订单、余额和账号信息。"}
                   </p>
                 </div>
 
-                <div className="mb-5 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={handleOAuthLogin}
-                    className="h-11 rounded-xl bg-slate-50 text-sm font-semibold text-slate-500 ring-1 ring-slate-200 transition-all hover:scale-[1.02] hover:bg-white hover:text-primary"
-                  >
-                    Google
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    className="h-11 rounded-xl bg-slate-50 text-sm font-semibold text-slate-400 ring-1 ring-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    Telegram
-                  </button>
-                </div>
-
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="account">邮箱</Label>
+                    <Label htmlFor="account">账号</Label>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
@@ -286,7 +250,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                         type="email"
                         value={account}
                         onChange={(event) => setAccount(event.target.value)}
-                        placeholder="请输入邮箱"
+                        placeholder="请输入账号"
                         className="h-12 rounded-xl bg-slate-50 pl-10"
                         required
                       />
@@ -322,23 +286,40 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   </div>
 
                   {isRegister ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">确认密码</Label>
-                      <div className="relative">
-                        <LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="confirmPassword"
-                          type={showPassword ? "text" : "password"}
-                          value={confirmPassword}
-                          onChange={(event) =>
-                            setConfirmPassword(event.target.value)
-                          }
-                          placeholder="请再次输入密码"
-                          className="h-12 rounded-xl bg-slate-50 pl-10"
-                          required
-                        />
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">确认密码</Label>
+                        <div className="relative">
+                          <LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            id="confirmPassword"
+                            type={showPassword ? "text" : "password"}
+                            value={confirmPassword}
+                            onChange={(event) =>
+                              setConfirmPassword(event.target.value)
+                            }
+                            placeholder="请再次输入密码"
+                            className="h-12 rounded-xl bg-slate-50 pl-10"
+                            required
+                          />
+                        </div>
                       </div>
-                    </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="inviteCode">邀请码（选填）</Label>
+                        <div className="relative">
+                          <KeyRound className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            id="inviteCode"
+                            value={inviteCode}
+                            onChange={(event) =>
+                              setInviteCode(event.target.value)
+                            }
+                            placeholder="请输入邀请码"
+                            className="h-12 rounded-xl bg-slate-50 pl-10"
+                          />
+                        </div>
+                      </div>
+                    </>
                   ) : null}
 
                   {error ? (

@@ -108,7 +108,7 @@ export default function OrderTable({
               {showDetails && (
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                    <Link href={`/order-tracking?id=${order.orderNo}`}>
+                    <Link href={`/account/orders?id=${order.orderNo}`}>
                       查看详情
                     </Link>
                   </Button>

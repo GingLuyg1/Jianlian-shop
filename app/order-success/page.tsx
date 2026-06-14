@@ -76,7 +76,7 @@ export default function OrderSuccessPage() {
             {/* Action buttons */}
             <div className="flex items-center gap-3 justify-center">
               <Button variant="outline" asChild>
-                <Link href={`/order-tracking?id=${orderNo}`}>
+                <Link href={`/account/orders?id=${orderNo}`}>
                   <ClipboardList className="h-4 w-4 mr-2" />
                   查询订单
                 </Link>

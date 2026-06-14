@@ -20,6 +20,7 @@ import { ReactNode } from "react";
 import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
 import MobileMenu from "./MobileMenu";
+import RouteLoadingIndicator from "./RouteLoadingIndicator";
 import { announcementText } from "@/lib/mock-data";
 import { X } from "lucide-react";
 
@@ -34,6 +35,8 @@ export default function PublicLayout({
 }: PublicLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
+      <RouteLoadingIndicator />
+
       {/* Fixed left sidebar - hidden on mobile */}
       <PublicSidebar />
 

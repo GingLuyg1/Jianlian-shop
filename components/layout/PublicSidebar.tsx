@@ -16,7 +16,6 @@ import {
   Wallet,
   Share2,
   ClipboardList,
-  Search,
   BookOpen,
   HelpCircle,
   Headphones,
@@ -33,7 +32,9 @@ const menuItems = [
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
   { label: "推广赚钱", href: "/promotion", icon: Share2 },
   { label: "我的订单", href: "/account/orders", icon: ClipboardList },
-  { label: "订单查询", href: "/order-tracking", icon: Search },
+];
+
+const helpItems = [
   { label: "使用教程", href: "/tutorials", icon: BookOpen },
   { label: "常见问题", href: "/faq", icon: HelpCircle },
 ];
@@ -95,6 +96,31 @@ export default function PublicSidebar() {
           })}
         </ul>
       </nav>
+
+      <div className="px-4 pb-3">
+        <ul className="space-y-1.5">
+          {helpItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-2.5 rounded-md text-[15px] transition-all duration-150 hover:scale-[1.015] active:scale-[1.03]",
+                    active
+                      ? "scale-[1.01] border border-primary/20 bg-primary/10 text-primary font-medium shadow-sm"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-[18px] w-[18px] shrink-0" />
+                  <span>{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       <div className="px-4 py-4 border-t border-border">
         <button

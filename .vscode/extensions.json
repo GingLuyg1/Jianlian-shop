@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "bradlc.vscode-tailwindcss",
+    "ms-playwright.playwright",
+    "storybook.storybook-vscode"
+  ]
+}

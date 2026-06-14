@@ -231,11 +231,25 @@ export const products: Product[] = [
     stockLabel: "库存：0",
     processingTime: "补货中",
     deliveryMethod: "digital",
-    deliveryLabel: "在线交付",
+    deliveryLabel: "16位卡密",
     productType: "digital",
     listingStatus: "active",
-    detail: "GiffGaff 充值，库存为0，仅展示SKU档位和价格信息。",
-    purchaseNotes: "库存为0时暂不可购买。如需补货或批量购买，请联系客服确认。",
+    detail: "GiffGaff 充值，支持10英镑、15英镑、20英镑档位。发货方式为16位充值卡密，收到后可前往 Giffgaff 官网或 App 的 Top-up / Voucher 页面自助兑换。",
+    purchaseNotes: "16位卡密属于一次性数字商品，非商品问题售出后不支持无理由退换。库存为0时暂不可购买，如需补货或批量购买，请联系客服确认。",
+    faq: [
+      {
+        question: "发货方式是什么？",
+        answer: "发货方式为16位 Giffgaff 充值卡密，按下单选择的面额交付。",
+      },
+      {
+        question: "如何充值？",
+        answer: "进入 Giffgaff 官网或 App 的 Top-up / Redeem a voucher 页面，输入16位卡密完成兑换。",
+      },
+      {
+        question: "充值后需要检查什么？",
+        answer: "兑换完成后请第一时间检查号码余额或套餐状态，如有异常请在售后期内联系客服。",
+      },
+    ],
   },
   {
     id: "gift-001",
@@ -975,7 +989,7 @@ export const products: Product[] = [
     name: "Google One Pro (Pixel开通）",
     category: "ai-membership",
     categoryLabel: "AI会员充值",
-    description: "Google One Pro，Pixel 开通。",
+    description: "Google One Pro Pixel 开通，自助激活网站处理。",
     price: 18.9,
     currency: "CNY",
     stockStatus: "in-stock",
@@ -985,15 +999,29 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Google One Pro (Pixel开通）。库存937。",
-    purchaseNotes: "数字商品属于一次性商品，售出后不支持无理由退换。",
+    detail: "Google One Pro (Pixel开通）。下单后按交付信息进入 https://www.ai1k.xyz/ 自助激活，请核对 Google 账号、地区和商品规格后再提交。库存937。",
+    purchaseNotes: "数字权益类商品属于一次性商品，售出后不支持无理由退换。激活前请确认账号、地区和商品规格，提交错误信息可能影响到账或使用。",
+    faq: [
+      {
+        question: "在哪里自助激活？",
+        answer: "激活网站为 https://www.ai1k.xyz/，下单获得交付信息后进入该网站自助处理。",
+      },
+      {
+        question: "下单前需要注意什么？",
+        answer: "请先确认 Google 账号、地区和商品规格，提交前仔细核对信息。",
+      },
+      {
+        question: "支持哪些设备？",
+        answer: "激活后按 Google 账号规则在网页端、安卓和 iOS 端查看对应权益。",
+      },
+    ],
   },
   {
     id: "ai-gemini-google-one-pro-pixel-1y",
     name: "Google One Pro (Pixel开通） 一年高权重成品号",
     category: "ai-membership",
     categoryLabel: "AI会员充值",
-    description: "Google One Pro，Pixel 开通，一年高权重成品号。",
+    description: "Google One Pro Pixel 开通，一年高权重成品号。",
     price: 26.4,
     currency: "CNY",
     stockStatus: "in-stock",
@@ -1003,8 +1031,22 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Google One Pro (Pixel开通） 一年高权重成品号。库存3。",
-    purchaseNotes: "数字商品属于一次性商品，售出后不支持无理由退换。",
+    detail: "Google One Pro (Pixel开通） 一年高权重成品号。下单后按成品号信息交付，也可进入 https://www.ai1k.xyz/ 按说明自助激活或核验权益。库存3。",
+    purchaseNotes: "账号/数字权益类商品属于一次性商品，售出后不支持无理由退换。收到账号或交付信息后请第一时间检查权益状态。",
+    faq: [
+      {
+        question: "在哪里自助激活或核验？",
+        answer: "自助网站为 https://www.ai1k.xyz/，按页面提示处理或核验权益。",
+      },
+      {
+        question: "收到后需要做什么？",
+        answer: "请第一时间登录并检查 Google One Pro / Gemini 相关权益状态。",
+      },
+      {
+        question: "可以退换吗？",
+        answer: "账号/数字权益类商品属于一次性商品，非商品问题售出后不支持无理由退换。",
+      },
+    ],
   },
   {
     id: "ai-001",

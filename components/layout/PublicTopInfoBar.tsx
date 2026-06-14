@@ -41,6 +41,10 @@ let cachedAuthState: CachedAuthState = {
   ready: false,
 };
 
+const ANNOUNCEMENT_DURATION_MS = 35000;
+const ANNOUNCEMENT_START_KEY = "jianlian_announcement_started_at";
+let fallbackAnnouncementStart = Date.now();
+
 const highlightedAnnouncementParts = [
   "24小时内",
   "拿到账号第一时间检查账号",
@@ -71,6 +75,28 @@ function getDisplayName(user: User | null) {
   return user.email.length > 18 ? `${user.email.slice(0, 15)}...` : user.email;
 }
 
+function getAnnouncementAnimationDelay() {
+  if (typeof window === "undefined") return 0;
+
+  try {
+    const storedStart = Number(
+      window.localStorage.getItem(ANNOUNCEMENT_START_KEY)
+    );
+    const start =
+      Number.isFinite(storedStart) && storedStart > 0 ? storedStart : Date.now();
+
+    if (!storedStart) {
+      window.localStorage.setItem(ANNOUNCEMENT_START_KEY, String(start));
+    }
+
+    const elapsed = (Date.now() - start) % ANNOUNCEMENT_DURATION_MS;
+    return -(elapsed / 1000);
+  } catch {
+    const elapsed = (Date.now() - fallbackAnnouncementStart) % ANNOUNCEMENT_DURATION_MS;
+    return -(elapsed / 1000);
+  }
+}
+
 export default function PublicTopInfoBar({
   announcementText,
 }: PublicTopInfoBarProps) {
@@ -80,6 +106,7 @@ export default function PublicTopInfoBar({
     cachedAuthState.profile
   );
   const [authReady, setAuthReady] = useState(cachedAuthState.ready);
+  const [announcementDelay, setAnnouncementDelay] = useState(0);
 
   const updateAuthState = (
     nextUser: User | null,
@@ -95,6 +122,10 @@ export default function PublicTopInfoBar({
     setProfile(nextProfile);
     setAuthReady(nextReady);
   };
+
+  useEffect(() => {
+    setAnnouncementDelay(getAnnouncementAnimationDelay());
+  }, []);
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
@@ -170,7 +201,10 @@ export default function PublicTopInfoBar({
               </span>
               <span className="h-3.5 w-px shrink-0 bg-orange-200" />
               <div className="flex-1 overflow-hidden whitespace-nowrap">
-                <div className="animate-marquee-track inline-flex min-w-max">
+                <div
+                  className="animate-marquee-track inline-flex min-w-max"
+                  style={{ animationDelay: `${announcementDelay}s` }}
+                >
                   <span className="pr-10 text-[13px] text-orange-700/90">
                     {renderAnnouncementText(announcementText)}
                   </span>
