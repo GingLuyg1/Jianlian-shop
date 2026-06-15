@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -29,15 +29,42 @@ type AuthScreenProps = {
   mode: AuthMode;
 };
 
-const features = ["安全账号", "快捷下单", "订单查询"];
+const features = ["安全账号", "快速下单", "订单查询"];
+
+function getSafeErrorMessage(error: unknown, fallback: string) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message || fallback;
+  }
+
+  return fallback;
+}
+
+function getSafeInternalRedirect(value: string | null) {
+  if (value && value.startsWith("/") && !value.startsWith("//")) {
+    return value;
+  }
+
+  return "/account";
+}
 
 export default function AuthScreen({ mode }: AuthScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isRegister = mode === "register";
-  const redirectTo = searchParams.get("redirect") || "/account";
-  const inviteFromUrl =
-    searchParams.get("invite") || searchParams.get("salt") || "";
+  const redirectTo = useMemo(
+    () => getSafeInternalRedirect(searchParams?.get("redirect") ?? null),
+    [searchParams]
+  );
+  const inviteFromUrl = useMemo(
+    () => searchParams?.get("invite") || searchParams?.get("salt") || "",
+    [searchParams]
+  );
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -53,7 +80,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     setMessage("");
 
     if (!hasSupabaseConfig()) {
-      setError("账号系统尚未配置 Supabase 环境变量，暂时无法登录或注册。");
+      setError("账号系统暂未配置 Supabase 环境变量，暂时无法登录或注册。");
       return;
     }
 
@@ -89,16 +116,21 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           },
         });
 
-        if (signUpError) throw signUpError;
+        if (signUpError) {
+          setError(getSafeErrorMessage(signUpError, "注册失败，请稍后重试。"));
+          return;
+        }
 
-        if (data.session) {
+        if (data?.session) {
           setMessage("注册成功，正在进入账户中心。");
           router.push("/account");
           router.refresh();
           return;
         }
 
-        setMessage("注册成功。如 Supabase 开启了邮箱验证，请完成验证后再登录。");
+        setMessage(
+          "注册成功。如 Supabase 开启了邮箱验证，请完成验证后再登录。"
+        );
         return;
       }
 
@@ -107,18 +139,24 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         password,
       });
 
-      if (signInError) throw signInError;
+      if (signInError) {
+        setError(
+          getSafeErrorMessage(signInError, "登录失败，请检查邮箱或密码。")
+        );
+        return;
+      }
 
       setMessage("登录成功，正在进入账户中心。");
       router.push(redirectTo);
       router.refresh();
     } catch (authError) {
       setError(
-        authError instanceof Error
-          ? authError.message
-          : isRegister
+        getSafeErrorMessage(
+          authError,
+          isRegister
             ? "注册失败，请稍后重试。"
             : "登录失败，请检查邮箱或密码。"
+        )
       );
     } finally {
       setLoading(false);
@@ -166,7 +204,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   使用邮箱和密码登录，刷新页面后也会保持登录状态。
                 </p>
                 <p className="mt-3 max-w-md text-base leading-7 text-slate-600">
-                  登录后可以查看账户信息、余额占位和订单入口。当前仅接入身份验证，不接支付和真实订单数据库。
+                  登录后可查看账户信息、余额占位和订单入口。当前仅接入身份验证，不接支付和真实订单数据库。
                 </p>
 
                 <div className="mt-8 flex items-center gap-4 rounded-3xl bg-white/80 p-5 shadow-sm ring-1 ring-orange-100">
