@@ -19,8 +19,24 @@ type AdminProfile = {
 type GuardState =
   | { status: "loading" }
   | { status: "missing-config" }
+  | { status: "auth-error"; message: string }
   | { status: "forbidden"; profile: AdminProfile | null }
   | { status: "allowed"; profile: AdminProfile };
+
+const ADMIN_CHECK_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`${label} 请求超时，请检查网络或 Supabase 配置。`));
+    }, ADMIN_CHECK_TIMEOUT_MS);
+
+    Promise.resolve(promise)
+      .then(resolve)
+      .catch(reject)
+      .finally(() => window.clearTimeout(timer));
+  });
+}
 
 export default function AdminGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -40,7 +56,7 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
         const supabase = getSupabaseBrowserClient();
         const {
           data: { user },
-        } = await supabase.auth.getUser();
+        } = await withTimeout(supabase.auth.getUser(), "登录状态校验");
 
         if (!user) {
           router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
@@ -50,11 +66,10 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
         const normalizedEmail = user.email?.toLowerCase() ?? "";
         const isConfiguredAdmin = normalizedEmail === ADMIN_EMAIL;
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
+        const { data: profile, error: profileError } = await withTimeout(
+          supabase.from("profiles").select("role").eq("id", user.id).single(),
+          "管理员资料查询"
+        );
 
         if (profile?.role === "admin") {
           if (!active) return;
@@ -70,11 +85,14 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
             balance: 0,
           };
 
-          const { data: adminProfile, error: upsertError } = await supabase
-            .from("profiles")
-            .upsert(payload, { onConflict: "id" })
-            .select("role")
-            .single();
+          const { data: adminProfile, error: upsertError } = await withTimeout(
+            supabase
+              .from("profiles")
+              .upsert(payload, { onConflict: "id" })
+              .select("role")
+              .single(),
+            "管理员资料同步"
+          );
 
           if (!upsertError && adminProfile?.role === "admin") {
             if (!active) return;
@@ -93,8 +111,16 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
         if (!active) return;
 
         setState({ status: "forbidden", profile: profile ?? null });
-      } catch {
-        if (active) setState({ status: "forbidden", profile: null });
+      } catch (error) {
+        console.error("[AdminGuard] Admin access check failed", error);
+        if (!active) return;
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "后台权限校验失败，请检查网络或 Supabase 配置。";
+
+        setState({ status: "auth-error", message });
       }
     }
 
@@ -127,6 +153,18 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
         icon={<ShieldAlert className="h-6 w-6" />}
         title="无后台访问权限"
         description="当前账号不是管理员。请在 Supabase 的 profiles 表中把该账号 role 设置为 admin。"
+        actionLabel="返回首页"
+        actionHref="/"
+      />
+    );
+  }
+
+  if (state.status === "auth-error") {
+    return (
+      <AdminAccessMessage
+        icon={<ShieldAlert className="h-6 w-6" />}
+        title="后台权限校验失败"
+        description={state.message}
         actionLabel="返回首页"
         actionHref="/"
       />
