@@ -6,17 +6,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  getCurrentProfile,
   getSupabaseBrowserClient,
   hasSupabaseConfig,
-  UserProfile,
 } from "@/lib/supabase/client";
+
+const ADMIN_EMAIL = "gac000189@gmail.com";
+
+type AdminProfile = {
+  role: string | null;
+};
 
 type GuardState =
   | { status: "loading" }
   | { status: "missing-config" }
-  | { status: "forbidden"; profile: UserProfile | null }
-  | { status: "allowed"; profile: UserProfile };
+  | { status: "forbidden"; profile: AdminProfile | null }
+  | { status: "allowed"; profile: AdminProfile };
 
 export default function AdminGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -35,22 +39,60 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
       try {
         const supabase = getSupabaseBrowserClient();
         const {
-          data: { session },
-        } = await supabase.auth.getSession();
+          data: { user },
+        } = await supabase.auth.getUser();
 
-        if (!session) {
+        if (!user) {
           router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
           return;
         }
 
-        const profile = await getCurrentProfile();
-        if (!active) return;
+        const normalizedEmail = user.email?.toLowerCase() ?? "";
+        const isConfiguredAdmin = normalizedEmail === ADMIN_EMAIL;
+
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
 
         if (profile?.role === "admin") {
+          if (!active) return;
           setState({ status: "allowed", profile });
-        } else {
-          setState({ status: "forbidden", profile });
+          return;
         }
+
+        if (isConfiguredAdmin) {
+          const payload = {
+            id: user.id,
+            email: normalizedEmail,
+            role: "admin",
+            balance: 0,
+          };
+
+          const { data: adminProfile, error: upsertError } = await supabase
+            .from("profiles")
+            .upsert(payload, { onConflict: "id" })
+            .select("role")
+            .single();
+
+          if (!upsertError && adminProfile?.role === "admin") {
+            if (!active) return;
+            setState({ status: "allowed", profile: adminProfile });
+            return;
+          }
+
+          console.error("[AdminGuard] Failed to ensure admin profile", {
+            profileError,
+            upsertError,
+          });
+        } else if (profileError) {
+          console.error("[AdminGuard] Failed to load profile role", profileError);
+        }
+
+        if (!active) return;
+
+        setState({ status: "forbidden", profile: profile ?? null });
       } catch {
         if (active) setState({ status: "forbidden", profile: null });
       }
