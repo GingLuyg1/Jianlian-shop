@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 const MIN_VISIBLE_MS = 520;
-const MAX_VISIBLE_MS = 8000;
+const SHOW_DELAY_MS = 140;
+const MAX_VISIBLE_MS = 6500;
+const NAVIGATION_STALL_MS = 2600;
 const DOM_SETTLE_MS = 160;
-const IMAGE_WAIT_TIMEOUT_MS = 5200;
+const IMAGE_WAIT_TIMEOUT_MS = 4200;
 
 function isModifiedClick(event: MouseEvent) {
   return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
@@ -102,12 +104,19 @@ export default function RouteLoadingIndicator() {
   );
   const [visible, setVisible] = useState(false);
   const startedAtRef = useRef(0);
+  const showTimerRef = useRef<number | null>(null);
   const maxTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
+  const stallTimerRef = useRef<number | null>(null);
   const loadIdRef = useRef(0);
   const visibleRef = useRef(false);
+  const routeKeyRef = useRef(routeKey);
 
   const clearTimers = () => {
+    if (showTimerRef.current) {
+      window.clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
     if (maxTimerRef.current) {
       window.clearTimeout(maxTimerRef.current);
       maxTimerRef.current = null;
@@ -116,10 +125,18 @@ export default function RouteLoadingIndicator() {
       window.clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
     }
+    if (stallTimerRef.current) {
+      window.clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
   };
 
   const hideWhenReady = async (loadId: number) => {
-    await waitForPageReady();
+    try {
+      await waitForPageReady();
+    } catch (error) {
+      console.error("[RouteLoadingIndicator] Failed to wait for page ready", error);
+    }
 
     if (loadId !== loadIdRef.current || !visibleRef.current) return;
 
@@ -139,13 +156,34 @@ export default function RouteLoadingIndicator() {
     }, delay);
   };
 
+  const finishLoading = (loadId: number) => {
+    if (loadId !== loadIdRef.current) return;
+
+    if (showTimerRef.current) {
+      window.clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
+
+    if (!visibleRef.current) {
+      setVisible(false);
+      return;
+    }
+
+    void hideWhenReady(loadId);
+  };
+
   const startLoading = (waitForCurrentPage = false) => {
     clearTimers();
     startedAtRef.current = Date.now();
-    visibleRef.current = true;
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
-    setVisible(true);
+
+    showTimerRef.current = window.setTimeout(() => {
+      if (loadId !== loadIdRef.current) return;
+      visibleRef.current = true;
+      setVisible(true);
+      showTimerRef.current = null;
+    }, SHOW_DELAY_MS);
 
     maxTimerRef.current = window.setTimeout(() => {
       if (loadId === loadIdRef.current) {
@@ -155,9 +193,14 @@ export default function RouteLoadingIndicator() {
       maxTimerRef.current = null;
     }, MAX_VISIBLE_MS);
 
+    stallTimerRef.current = window.setTimeout(() => {
+      finishLoading(loadId);
+      stallTimerRef.current = null;
+    }, NAVIGATION_STALL_MS);
+
     if (waitForCurrentPage) {
       window.setTimeout(() => {
-        void hideWhenReady(loadId);
+        finishLoading(loadId);
       }, 0);
     }
   };
@@ -193,7 +236,7 @@ export default function RouteLoadingIndicator() {
       const shouldHintButtonRoute =
         button &&
         !button.disabled &&
-        button.type !== "submit" &&
+        button.hasAttribute("data-route-loading") &&
         !button.hasAttribute("popovertarget") &&
         Boolean(button.closest("main"));
 
@@ -215,20 +258,29 @@ export default function RouteLoadingIndicator() {
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
-    void hideWhenReady(loadIdRef.current);
+    if (routeKeyRef.current === routeKey) return;
+
+    routeKeyRef.current = routeKey;
+
+    if (!visibleRef.current && !showTimerRef.current) {
+      startLoading(true);
+      return;
+    }
+
+    finishLoading(loadIdRef.current);
   }, [routeKey, visible]);
 
   if (!visible) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[80]">
+    <div className="route-loading-shell pointer-events-none fixed inset-0 z-[80]">
+      <div className="absolute inset-0 bg-background/35 backdrop-blur-[1px]" />
       <div className="h-1 w-full overflow-hidden bg-primary/10">
         <div className="route-loading-bar h-full w-1/2 rounded-r-full bg-primary" />
       </div>
-      <div className="route-loading-toast absolute left-1/2 top-[82px] flex -translate-x-1/2 items-center gap-2 rounded-full border border-primary/15 bg-white/90 px-4 py-2 text-sm font-medium text-primary shadow-lg backdrop-blur">
+      <div className="route-loading-toast absolute left-1/2 top-[82px] flex -translate-x-1/2 items-center gap-2 rounded-full border border-primary/15 bg-white/95 px-4 py-2 text-sm font-medium text-primary shadow-lg backdrop-blur">
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
-        页面加载中
+        正在加载页面
       </div>
     </div>
   );
