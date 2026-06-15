@@ -128,11 +128,6 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: {
-            data: {
-              inviteCode: inviteCode.trim() || null,
-            },
-          },
         });
 
         if (signUpError) {
