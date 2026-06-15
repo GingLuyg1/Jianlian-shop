@@ -7,7 +7,7 @@
  * Never shown in public navigation. Admin pages should not
  * use PublicSidebar or PublicTopInfoBar.
  *
- * Menu: 控制台, 商品管理, 订单管理, 支付记录, 客户信息, 系统设置
+ * Menu: 控制台, 商品管理, 订单管理, 用户管理, 系统设置
  */
 
 import { usePathname } from "next/navigation";
@@ -16,7 +16,6 @@ import {
   LayoutDashboard,
   Package,
   ClipboardList,
-  CreditCard,
   Users,
   Settings,
 } from "lucide-react";
@@ -26,8 +25,7 @@ const adminMenuItems = [
   { label: "控制台", href: "/admin", icon: LayoutDashboard },
   { label: "商品管理", href: "/admin/products", icon: Package },
   { label: "订单管理", href: "/admin/orders", icon: ClipboardList },
-  { label: "支付记录", href: "/admin/payments", icon: CreditCard },
-  { label: "客户信息", href: "/admin/customers", icon: Users },
+  { label: "用户管理", href: "/admin/users", icon: Users },
   { label: "系统设置", href: "/admin/settings", icon: Settings },
 ];
 

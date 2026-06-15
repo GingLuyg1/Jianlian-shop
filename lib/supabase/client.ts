@@ -1,17 +1,14 @@
 import { createBrowserClient } from "@supabase/ssr";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  getOrCreateProfile,
+  userToProfile,
+  type UserProfile,
+  type UserRole,
+} from "./profiles";
 
-export type UserRole = "user" | "admin" | "support" | "finance";
-
-export type UserProfile = {
-  id: string;
-  email: string | null;
-  phone: string | null;
-  role: UserRole;
-  balance: number;
-  created_at: string;
-  updated_at: string;
-};
+export { getOrCreateProfile, userToProfile };
+export type { UserProfile, UserRole };
 
 type SupabaseConfigStatus = {
   ok: boolean;
@@ -78,20 +75,6 @@ export function getSupabaseBrowserClient() {
   return browserClient;
 }
 
-export function userToProfile(user: User): UserProfile {
-  const timestamp = user.created_at || new Date().toISOString();
-
-  return {
-    id: user.id,
-    email: user.email ?? null,
-    phone: user.phone ?? null,
-    role: "user",
-    balance: 0,
-    created_at: timestamp,
-    updated_at: timestamp,
-  };
-}
-
 export async function getCurrentProfile() {
   const supabase = getSupabaseBrowserClient();
   const {
@@ -103,5 +86,5 @@ export async function getCurrentProfile() {
     return null;
   }
 
-  return userToProfile(user);
+  return getOrCreateProfile(supabase, user);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   CheckCircle2,
@@ -14,14 +14,26 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import Link from "next/link";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-
-const promotionLink = "https://www.jianlian.shop/register?invite=JL8XCP";
-const shortLinkBase = "https://jianlian.shop/r/JL8XCP";
-const minWithdrawAmount = 10;
+import {
+  getCurrentProfile,
+  getSupabaseBrowserClient,
+  hasSupabaseConfig,
+  type UserProfile,
+} from "@/lib/supabase/client";
+import {
+  createInviteCodeFromUserId,
+  formatDateTime,
+  formatMoney,
+  maskUserLabel,
+  PROMOTION_COMMISSION_RATE,
+  PROMOTION_MIN_WITHDRAW_AMOUNT,
+  PROMOTION_RECORDS_PER_PAGE,
+} from "@/lib/promotion";
 
 type PromotionStat = {
   label: string;
@@ -30,40 +42,50 @@ type PromotionStat = {
   highlight?: boolean;
 };
 
-const basePromotionStats: PromotionStat[] = [
-  { label: "访问量", value: "26", icon: BarChart3 },
-  { label: "注册", value: "8", icon: Users },
-  { label: "推荐人", value: "8", icon: Users },
-  { label: "注册率", value: "30.77%", icon: Percent },
-];
-
-const promotionRecords = [
-  ["136****6514", "2025-11-26 00:31:37", "¥ 20.00", "¥ 0.60", "已确认"],
-  ["177****4453", "2026-04-25 15:39:45", "¥ 20.00", "¥ 0.60", "已确认"],
-  ["177****4453", "2025-12-14 22:21:03", "¥ 20.00", "¥ 0.60", "已确认"],
-  ["177****4453", "2025-11-25 15:47:34", "¥ 20.00", "¥ 0.60", "已确认"],
-  ["188****0927", "2025-10-18 18:22:09", "¥ 50.00", "¥ 1.50", "已确认"],
-  ["155****7318", "2025-09-30 09:12:44", "¥ 30.00", "¥ 0.90", "已确认"],
-  ["166****2841", "2025-09-12 21:08:16", "¥ 20.00", "¥ 0.60", "已确认"],
-  ["139****6042", "2025-08-28 13:36:51", "¥ 100.00", "¥ 3.00", "已确认"],
-];
+type PromotionRecord = {
+  id: string;
+  userLabel: string;
+  paidAt: string;
+  rechargeAmount: number;
+  commissionAmount: number;
+  status: string;
+};
 
 const tableHeaders = ["用户名", "支付时间", "充值金额", "佣金变动", "付款状态"];
-const RECORDS_PER_PAGE = 7;
 
 export default function PromotionPage() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [records, setRecords] = useState<PromotionRecord[]>([]);
+  const [visitCount, setVisitCount] = useState(0);
+  const [registerCount, setRegisterCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [shortLink, setShortLink] = useState("");
   const [notice, setNotice] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const totalIncome = promotionRecords.reduce(
-    (sum, record) => sum + parseMoney(record[3]),
+  const [loading, setLoading] = useState(true);
+
+  const inviteCode = profile?.invite_code || "";
+  const promotionLink = inviteCode
+    ? `https://www.jianlian.shop/register?invite=${encodeURIComponent(
+        inviteCode
+      )}`
+    : "";
+  const shortLinkBase = inviteCode
+    ? `https://jianlian.shop/r/${encodeURIComponent(inviteCode)}`
+    : "";
+
+  const totalIncome = records.reduce(
+    (sum, record) => sum + record.commissionAmount,
     0
   );
-  const usedIncome = 0;
-  const availableIncome = Math.max(0, totalIncome - usedIncome);
+  const availableIncome = profile?.promotion_balance ?? totalIncome;
+  const registerRate = visitCount > 0 ? (registerCount / visitCount) * 100 : 0;
+
   const promotionStats: PromotionStat[] = [
-    ...basePromotionStats,
+    { label: "访问量", value: String(visitCount), icon: BarChart3 },
+    { label: "注册", value: String(registerCount), icon: Users },
+    { label: "推荐人", value: String(registerCount), icon: Users },
+    { label: "注册率", value: `${registerRate.toFixed(2)}%`, icon: Percent },
     { label: "总收入", value: formatMoney(totalIncome), icon: DollarSign },
     {
       label: "可用金额",
@@ -72,30 +94,133 @@ export default function PromotionPage() {
       highlight: true,
     },
   ];
+
   const totalPages = Math.max(
     1,
-    Math.ceil(promotionRecords.length / RECORDS_PER_PAGE)
+    Math.ceil(records.length / PROMOTION_RECORDS_PER_PAGE)
   );
-  const pageRecords = promotionRecords.slice(
-    (currentPage - 1) * RECORDS_PER_PAGE,
-    currentPage * RECORDS_PER_PAGE
+  const pageRecords = records.slice(
+    (currentPage - 1) * PROMOTION_RECORDS_PER_PAGE,
+    currentPage * PROMOTION_RECORDS_PER_PAGE
   );
   const visibleRecordRows = [
     ...pageRecords.map((record) => ({ type: "record" as const, record })),
     ...Array.from(
-      { length: RECORDS_PER_PAGE - pageRecords.length },
+      { length: PROMOTION_RECORDS_PER_PAGE - pageRecords.length },
       (_, index) => ({ type: "empty" as const, index })
     ),
   ];
-  const pageStart = promotionRecords.length
-    ? (currentPage - 1) * RECORDS_PER_PAGE + 1
+  const pageStart = records.length
+    ? (currentPage - 1) * PROMOTION_RECORDS_PER_PAGE + 1
     : 0;
   const pageEnd = Math.min(
-    currentPage * RECORDS_PER_PAGE,
-    promotionRecords.length
+    currentPage * PROMOTION_RECORDS_PER_PAGE,
+    records.length
   );
 
+  useEffect(() => {
+    async function loadPromotionData() {
+      setRecords([]);
+      setVisitCount(0);
+      setRegisterCount(0);
+      setCurrentPage(1);
+
+      if (!hasSupabaseConfig()) {
+        setNotice("Supabase 未配置，暂时无法读取推广数据");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
+        const currentProfile = await getCurrentProfile();
+        if (!currentProfile) {
+          setLoading(false);
+          return;
+        }
+
+        let nextProfile = currentProfile;
+        if (!nextProfile.invite_code) {
+          const generatedCode = createInviteCodeFromUserId(user.id);
+          const { data: updatedProfile, error: updateError } = await supabase
+            .from("profiles")
+            .update({ invite_code: generatedCode })
+            .eq("id", user.id)
+            .select(
+              "id,email,phone,role,balance,promotion_balance,invite_code,referred_by,created_at,updated_at"
+            )
+            .maybeSingle();
+
+          if (updateError) {
+            console.error("[Promotion] Failed to prepare invite code", updateError);
+            nextProfile = { ...currentProfile, invite_code: generatedCode };
+          } else if (updatedProfile) {
+            nextProfile = {
+              ...currentProfile,
+              ...updatedProfile,
+              balance: Number(updatedProfile.balance ?? 0),
+              promotion_balance: Number(updatedProfile.promotion_balance ?? 0),
+            };
+          }
+        }
+
+        setProfile(nextProfile);
+
+        const [{ count: visits }, { count: registrations }, { data: commissions }] =
+          await Promise.all([
+            supabase
+              .from("promotion_visits")
+              .select("id", { count: "exact", head: true })
+              .eq("inviter_id", user.id),
+            supabase
+              .from("profiles")
+              .select("id", { count: "exact", head: true })
+              .eq("referred_by", user.id),
+            supabase
+              .from("promotion_commissions")
+              .select(
+                "id,referred_user_label,paid_at,recharge_amount,commission_amount,status"
+              )
+              .eq("inviter_id", user.id)
+              .order("paid_at", { ascending: false }),
+          ]);
+
+        setVisitCount(visits ?? 0);
+        setRegisterCount(registrations ?? 0);
+        setRecords(
+          (commissions ?? []).map((record: any) => ({
+            id: String(record.id),
+            userLabel: maskUserLabel(record.referred_user_label),
+            paidAt: record.paid_at,
+            rechargeAmount: Number(record.recharge_amount ?? 0),
+            commissionAmount: Number(record.commission_amount ?? 0),
+            status: record.status === "pending" ? "待确认" : "已确认",
+          }))
+        );
+      } catch (error) {
+        console.error("[Promotion] Failed to load promotion data", error);
+        setNotice("推广数据读取失败，请稍后刷新重试");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadPromotionData();
+  }, []);
+
   const handleCopy = async () => {
+    if (!promotionLink) return;
+
     await navigator.clipboard.writeText(shortLink || promotionLink);
     setCopied(true);
     setNotice(shortLink ? "短链接已复制" : "推广链接已复制");
@@ -104,6 +229,8 @@ export default function PromotionPage() {
   };
 
   const handleGenerateShortLink = async () => {
+    if (!shortLinkBase) return;
+
     setShortLink(shortLinkBase);
     await navigator.clipboard.writeText(shortLinkBase);
     setCopied(true);
@@ -112,16 +239,68 @@ export default function PromotionPage() {
     window.setTimeout(() => setNotice(""), 2200);
   };
 
-  const handleWithdraw = () => {
-    if (availableIncome < minWithdrawAmount) {
-      setNotice(`可用金额满 ${formatMoney(minWithdrawAmount)} 后可提现`);
+  const handleWithdraw = async () => {
+    if (!profile) {
+      setNotice("请先登录后再提现");
       window.setTimeout(() => setNotice(""), 2400);
       return;
     }
 
-    setNotice("提现申请已提交，到账后会同步到账户余额");
+    if (availableIncome < PROMOTION_MIN_WITHDRAW_AMOUNT) {
+      setNotice(`可用金额满 ${formatMoney(PROMOTION_MIN_WITHDRAW_AMOUNT)} 后可提现`);
+      window.setTimeout(() => setNotice(""), 2400);
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.from("promotion_withdrawals").insert({
+        user_id: profile.id,
+        amount: availableIncome,
+        status: "pending",
+      });
+
+      if (error) throw error;
+      setNotice("提现申请已提交，处理后会同步到账户余额");
+    } catch (error) {
+      console.error("[Promotion] Failed to submit withdrawal", error);
+      setNotice("提现申请提交失败，请稍后重试");
+    }
+
     window.setTimeout(() => setNotice(""), 2400);
   };
+
+  const content = useMemo(() => {
+    if (loading) return null;
+
+    if (!profile) {
+      return (
+        <Card className="border-border bg-white">
+          <CardContent className="flex h-[calc(100dvh-120px)] flex-col items-center justify-center text-center">
+            <h1 className="text-2xl font-semibold text-slate-950">
+              登录后查看推广数据
+            </h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              推广链接、注册统计、佣金记录会和当前登录账号绑定。
+            </p>
+            <Button className="mt-6" asChild>
+              <Link href="/login?redirect=/promotion">去登录</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return null;
+  }, [loading, profile]);
+
+  if (content) {
+    return (
+      <PublicLayout contentClassName="max-w-none overflow-hidden px-4 py-3 md:px-6">
+        <div className="mx-auto max-w-[1500px]">{content}</div>
+      </PublicLayout>
+    );
+  }
 
   return (
     <PublicLayout contentClassName="max-w-none overflow-hidden px-4 py-3 md:px-6">
@@ -143,12 +322,13 @@ export default function PromotionPage() {
 
               <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-4 py-2.5">
                 <div className="min-w-0 flex-1 truncate text-sm text-slate-700">
-                  {shortLink || promotionLink}
+                  {loading ? "正在加载推广链接..." : shortLink || promotionLink}
                 </div>
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90"
+                  disabled={!promotionLink}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="复制推广链接"
                 >
                   {copied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -158,15 +338,20 @@ export default function PromotionPage() {
               <div className="mt-2.5 grid gap-3 sm:grid-cols-[1fr_1fr_170px]">
                 <div className="rounded-lg bg-orange-50 px-4 py-2">
                   <div className="text-xs text-muted-foreground">充值提佣倍率</div>
-                  <div className="mt-1 text-lg font-semibold text-slate-950">3%</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-950">
+                    {(PROMOTION_COMMISSION_RATE * 100).toFixed(0)}%
+                  </div>
                 </div>
                 <div className="rounded-lg bg-orange-50 px-4 py-2">
                   <div className="text-xs text-muted-foreground">最低提现额</div>
-                  <div className="mt-1 text-lg font-semibold text-slate-950">¥ 10</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-950">
+                    {formatMoney(PROMOTION_MIN_WITHDRAW_AMOUNT)}
+                  </div>
                 </div>
                 <Button
                   className="h-full min-h-0 rounded-lg text-sm"
                   onClick={handleGenerateShortLink}
+                  disabled={!shortLinkBase}
                 >
                   {shortLink ? "重新复制短链接" : "生成短链接"}
                 </Button>
@@ -204,7 +389,7 @@ export default function PromotionPage() {
                   return (
                     <div
                       key={item.label}
-                    className="rounded-lg border border-border bg-slate-50/70 px-4 py-2"
+                      className="rounded-lg border border-border bg-slate-50/70 px-4 py-2"
                     >
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Icon className="h-3.5 w-3.5 text-primary" />
@@ -217,7 +402,7 @@ export default function PromotionPage() {
                             : "mt-2 text-lg font-semibold text-slate-950"
                         }
                       >
-                        {item.value}
+                        {loading ? "-" : item.value}
                       </div>
                     </div>
                   );
@@ -251,7 +436,21 @@ export default function PromotionPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRecordRows.map((row, index) => {
+                  {!loading && records.length === 0 ? (
+                    <tr className="bg-slate-50/30">
+                      <td
+                        colSpan={tableHeaders.length}
+                        className="border-t border-border px-4 py-8 text-center text-muted-foreground"
+                      >
+                        暂无真实推广记录
+                      </td>
+                    </tr>
+                  ) : null}
+
+                  {(records.length === 0 && !loading
+                    ? visibleRecordRows.slice(1)
+                    : visibleRecordRows
+                  ).map((row, index) => {
                     if (row.type === "empty") {
                       return (
                         <tr
@@ -271,15 +470,22 @@ export default function PromotionPage() {
                     }
 
                     const record = row.record;
+                    const cells = [
+                      record.userLabel,
+                      formatDateTime(record.paidAt),
+                      formatMoney(record.rechargeAmount),
+                      formatMoney(record.commissionAmount),
+                      record.status,
+                    ];
 
                     return (
                       <tr
-                        key={`${record[0]}-${record[1]}`}
+                        key={record.id}
                         className={index % 2 ? "bg-white" : "bg-slate-50/30"}
                       >
-                        {record.map((cell, cellIndex) => (
+                        {cells.map((cell, cellIndex) => (
                           <td
-                            key={`${record[1]}-${cellIndex}`}
+                            key={`${record.id}-${cellIndex}`}
                             className={
                               cellIndex === 4
                                 ? "border-t border-border px-4 py-2 text-center font-medium text-blue-600"
@@ -299,7 +505,7 @@ export default function PromotionPage() {
             <PromotionPagination
               currentPage={currentPage}
               totalPages={totalPages}
-              totalCount={promotionRecords.length}
+              totalCount={records.length}
               pageStart={pageStart}
               pageEnd={pageEnd}
               onPageChange={setCurrentPage}
@@ -309,15 +515,6 @@ export default function PromotionPage() {
       </div>
     </PublicLayout>
   );
-}
-
-function parseMoney(value: string) {
-  const amount = value.match(/\d+(?:\.\d+)?/);
-  return amount ? Number(amount[0]) : 0;
-}
-
-function formatMoney(value: number) {
-  return `¥ ${value.toFixed(2)}`;
 }
 
 function PromotionPagination({

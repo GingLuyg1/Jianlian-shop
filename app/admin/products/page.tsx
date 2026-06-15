@@ -6,8 +6,7 @@
  * Shows mock product list with status badges, edit/delist buttons,
  * and add new product button.
  *
- * Fields: name, category, price, stock status, product type,
- * listing status, edit button, delist button.
+ * Fields: name, category, price, status, stock/delivery, actions.
  */
 
 import { Button } from "@/components/ui/button";
@@ -64,9 +63,8 @@ export default function AdminProductsPage() {
                   <TableHead className="text-xs">商品名称</TableHead>
                   <TableHead className="text-xs">商品分类</TableHead>
                   <TableHead className="text-xs">商品价格</TableHead>
-                  <TableHead className="text-xs">库存状态</TableHead>
-                  <TableHead className="text-xs">商品类型</TableHead>
                   <TableHead className="text-xs">上架状态</TableHead>
+                  <TableHead className="text-xs">库存/交付方式</TableHead>
                   <TableHead className="text-xs text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -87,25 +85,25 @@ export default function AdminProductsPage() {
                         variant="outline"
                         className={cn(
                           "text-[10px] px-1.5 py-0",
-                          stockColorMap[product.stockStatus] || ""
+                          listingColorMap[product.listingStatus] || ""
                         )}
                       >
-                        {product.stockLabel}
+                        {product.listingStatus === "active" ? "已上架" : "已下架"}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {product.productType === "physical" ? "实物" : "数字"}
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
                         className={cn(
                           "text-[10px] px-1.5 py-0",
-                          listingColorMap[product.listingStatus] || ""
+                          stockColorMap[product.stockStatus] || ""
                         )}
                       >
-                        {product.listingStatus === "active" ? "已上架" : "已下架"}
+                        {product.stockLabel}
                       </Badge>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {product.productType === "physical" ? "实物交付" : "自动/卡密交付"}
+                      </span>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">

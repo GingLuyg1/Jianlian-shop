@@ -25,10 +25,14 @@ export default function AdminSettingsPage() {
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">顶部公告</div>
               <Textarea
-                value="平台订单均为 mock 演示数据，真实支付和自动发货将在后续版本接入。"
+                value="请牢记域名 www.jianlian.shop，本站不提供任何中国大陆业务。账号类商品售后期为商品发货 24 小时内。"
                 readOnly
                 rows={3}
               />
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground">客服联系方式</div>
+              <Input value="在线客服 / Telegram 占位" readOnly className="h-9" />
             </div>
             <div className="flex items-center justify-between rounded-md border p-3">
               <div>
@@ -48,10 +52,10 @@ export default function AdminSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {[
-              ["Supabase 数据库", "第二阶段接入"],
-              ["真实登录鉴权", "第二阶段接入"],
-              ["支付宝 / 微信支付", "第三阶段接入"],
-              ["订单状态自动更新", "第三阶段接入"],
+              ["Supabase Auth", "已接入"],
+              ["profiles 角色权限", "已接入"],
+              ["订单管理", "占位数据"],
+              ["商品管理", "占位数据"],
             ].map(([name, status]) => (
               <div
                 key={name}

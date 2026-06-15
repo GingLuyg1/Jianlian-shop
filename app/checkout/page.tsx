@@ -408,6 +408,8 @@ function ProductDetailCard({
           <GeminiRechargeDetails product={product} />
         ) : product.id === GIFFGAFF_TOPUP_PRODUCT_ID ? (
           <GiffgaffTopupDetails product={product} />
+        ) : product.id.startsWith("gift-apple-") ? (
+          <AppleGiftCardDetails product={product} />
         ) : product.id.startsWith("dig-apple-id-") ? (
           <AppleIdDetails product={product} />
         ) : (
@@ -425,6 +427,163 @@ function ProductDetailCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function AppleGiftCardDetails({ product }: { product: Product }) {
+  const isTurkeyCard = product.id === "gift-apple-tr-500";
+  const regionLabel = isTurkeyCard ? "土耳其区" : "美国区";
+  const faceValue = isTurkeyCard ? "500 土耳其里拉" : "按下单选择的美元面额";
+
+  const highlights = [
+    {
+      icon: Gift,
+      title: "App Store 礼品卡",
+      text: `适用于 Apple ${regionLabel} App Store、iTunes、Apple Music 等 Apple 数字内容消费。`,
+    },
+    {
+      icon: KeyRound,
+      title: "卡密交付",
+      text: "下单后交付兑换码/卡密，收到后请第一时间核对并尽快完成兑换。",
+    },
+    {
+      icon: Smartphone,
+      title: "同区账号兑换",
+      text: `需要使用 ${regionLabel} Apple ID 兑换，不同国家或地区账号通常无法跨区兑换。`,
+    },
+    {
+      icon: CheckCircle2,
+      title: "一次性商品",
+      text: "兑换码属于一次性数字商品，发出后不支持无理由退换。",
+    },
+    {
+      icon: ShieldCheck,
+      title: "兑换前核对",
+      text: "兑换前请确认账号地区、商品面额和使用场景，避免兑换到错误账号。",
+    },
+    {
+      icon: Clock3,
+      title: "24小时内检查",
+      text: "收到卡密后请在售后期内完成核验，异常及时联系在线客服。",
+    },
+  ];
+
+  const rules = [
+    ["商品内容", `${product.name}，面额为 ${faceValue}。`],
+    ["适用范围", `${regionLabel} Apple ID，可用于 App Store、iTunes、Apple Music、iCloud 等 Apple 服务余额充值。`],
+    ["发货方式", "数字卡密/兑换码交付，请在订单页或客服交付信息中复制使用。"],
+    ["兑换限制", `仅建议使用 ${regionLabel} Apple ID 兑换；账号地区不一致时，可能提示无法兑换。`],
+    ["售后说明", "卡密类商品发出后不支持无理由退换。若无法兑换，请保留完整报错截图和卡密信息，在售后期内联系客服。"],
+  ];
+
+  const steps = [
+    ["第一步：确认账号地区", `打开 Apple ID 账户信息，确认账号国家或地区为${regionLabel.replace("区", "")}。`],
+    ["第二步：下单接收卡密", "选择商品并提交订单，等待系统或客服交付礼品卡兑换码。"],
+    ["第三步：打开兑换入口", "进入 App Store，点击右上角头像，选择“兑换礼品卡或代码”。"],
+    ["第四步：输入卡密兑换", "复制卡密并粘贴到兑换框，确认后余额会进入当前 Apple ID。"],
+    ["第五步：检查余额", "兑换完成后请检查 Apple ID 余额或订阅服务状态，确认是否到账。"],
+  ];
+
+  const notices = [
+    "兑换前请确认 Apple ID 地区与礼品卡地区一致，跨区兑换失败不属于商品质量问题。",
+    "卡密一经发出，请勿泄露给他人；被他人兑换后无法追回。",
+    "不要频繁切换 Apple ID 地区或在异常网络环境下反复兑换，避免触发账号风控。",
+    "如果 App Store 提示代码无效、地区不匹配或已兑换，请截图保留完整提示并联系在线客服。",
+  ];
+
+  return (
+    <div className="mt-8 max-w-4xl space-y-5">
+      <section className="overflow-hidden rounded-2xl border border-orange-200 bg-white">
+        <div className="relative bg-gradient-to-br from-orange-500 via-orange-600 to-amber-700 px-6 py-8 text-white">
+          <div className="inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold">
+            Apple Gift Card | {regionLabel}
+          </div>
+          <h2 className="mt-4 text-3xl font-black tracking-tight">
+            {product.name}
+          </h2>
+          <p className="mt-2 text-base font-semibold text-orange-50">
+            数字卡密交付，同区 Apple ID 兑换使用
+          </p>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-orange-50/90">
+            本商品为 Apple {regionLabel} App Store & iTunes 礼品卡。下单前请确认自己的 Apple ID 地区、
+            兑换用途和面额是否匹配；收到卡密后请第一时间兑换并检查余额。
+          </p>
+        </div>
+
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          {highlights.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.title}
+                className="rounded-xl border border-orange-100 bg-orange-50/40 p-4 text-center"
+              >
+                <Icon className="mx-auto h-7 w-7 text-orange-700" />
+                <div className="mt-2 text-sm font-semibold text-slate-950">
+                  {item.title}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {item.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-orange-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <ShieldCheck className="h-5 w-5 text-orange-700" />
+          商品说明与兑换规则
+        </h3>
+        <div className="mt-4 space-y-3">
+          {rules.map(([label, text]) => (
+            <div
+              key={String(label)}
+              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3 text-sm leading-6"
+            >
+              <span className="font-semibold text-slate-950">{label}：</span>
+              <span className="text-slate-600">{text}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-orange-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <CheckCircle2 className="h-5 w-5 text-orange-700" />
+          使用方法
+        </h3>
+        <div className="mt-4 space-y-3">
+          {steps.map(([title, text]) => (
+            <div
+              key={String(title)}
+              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3"
+            >
+              <div className="text-sm font-semibold text-slate-950">
+                {title}
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-rose-700">
+          <Clock3 className="h-5 w-5" />
+          售后与注意事项
+        </h3>
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+          {notices.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
   );
 }
 

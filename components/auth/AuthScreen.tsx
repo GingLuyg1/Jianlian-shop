@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -19,8 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
+  getOrCreateProfile,
   getSupabaseBrowserClient,
   getSupabaseConfigStatus,
+  hasSupabaseConfig,
 } from "@/lib/supabase/client";
 
 type AuthMode = "login" | "register";
@@ -66,7 +68,7 @@ function getSafeInternalRedirect(value: string | null) {
     return value;
   }
 
-  return "/account";
+  return "/";
 }
 
 export default function AuthScreen({ mode }: AuthScreenProps) {
@@ -90,6 +92,36 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const inviteCode = inviteFromUrl.trim();
+    if (!inviteCode || !hasSupabaseConfig()) return;
+
+    async function recordPromotionVisit() {
+      const visitorKey =
+        window.localStorage.getItem("jianlian_visitor_key") ||
+        window.crypto.randomUUID();
+      window.localStorage.setItem("jianlian_visitor_key", visitorKey);
+
+      try {
+        const { error } = await getSupabaseBrowserClient().rpc(
+          "record_promotion_visit",
+          {
+            input_invite_code: inviteCode,
+            input_visitor_key: visitorKey,
+          }
+        );
+
+        if (error) {
+          console.error("[Promotion] Failed to record visit", error);
+        }
+      } catch (visitError) {
+        console.error("[Promotion] Failed to record visit", visitError);
+      }
+    }
+
+    recordPromotionVisit();
+  }, [inviteFromUrl]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -127,9 +159,13 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       const supabase = getSupabaseBrowserClient();
 
       if (isRegister) {
+        const normalizedInviteCode = inviteCode.trim();
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
+          options: normalizedInviteCode
+            ? { data: { invite_code: normalizedInviteCode } }
+            : undefined,
         });
 
         if (signUpError) {
@@ -140,6 +176,13 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         }
 
         if (data?.session) {
+          await getOrCreateProfile(supabase, data.session.user).catch(
+            (profileError) =>
+              console.error(
+                "[Supabase Auth] Failed to prepare profile",
+                profileError
+              )
+          );
           setMessage("注册成功，正在进入账户中心。");
           router.push("/account");
           router.refresh();
@@ -152,10 +195,11 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         return;
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
+      const { data: signInData, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
 
       if (signInError) {
         setError(
@@ -165,6 +209,16 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       }
 
       setMessage("登录成功，正在进入账户中心。");
+      if (signInData?.user) {
+        await getOrCreateProfile(supabase, signInData.user).catch(
+          (profileError) =>
+            console.error(
+              "[Supabase Auth] Failed to prepare profile",
+              profileError
+            )
+        );
+      }
+
       router.push(redirectTo);
       router.refresh();
     } catch (authException) {

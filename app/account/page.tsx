@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardList, Mail, Wallet } from "lucide-react";
+import { ClipboardList, Mail, ShieldCheck, Wallet } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import {
   getSupabaseServerClient,
   hasSupabaseServerConfig,
 } from "@/lib/supabase/server";
+import { getOrCreateProfile } from "@/lib/supabase/profiles";
 
 export default async function AccountPage() {
   if (!hasSupabaseServerConfig()) {
@@ -24,6 +25,8 @@ export default async function AccountPage() {
     redirect("/login?redirect=/account");
   }
 
+  const profile = await getOrCreateProfile(supabase, user);
+
   return (
     <PublicLayout contentClassName="max-w-none overflow-hidden px-4 py-3 md:px-6">
       <div className="mx-auto grid h-[calc(100dvh-87px)] max-w-[1500px] gap-4 overflow-hidden">
@@ -31,10 +34,10 @@ export default async function AccountPage() {
           <CardHeader className="shrink-0 pb-3">
             <CardTitle className="text-xl">账户中心</CardTitle>
             <p className="text-sm text-muted-foreground">
-              当前已接入 Supabase Auth，登录会话通过 cookie 保存。
+              当前账号信息来自 Supabase Auth 和 profiles 表。
             </p>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
+          <CardContent className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardContent className="flex items-center gap-4 p-5">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -43,8 +46,20 @@ export default async function AccountPage() {
                 <div className="min-w-0">
                   <div className="text-sm text-muted-foreground">登录邮箱</div>
                   <div className="truncate font-semibold">
-                    {user.email || "未设置邮箱"}
+                    {profile.email || user.email || "未设置邮箱"}
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="flex items-center gap-4 p-5">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <ShieldCheck className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-sm text-muted-foreground">角色</div>
+                  <div className="font-semibold">{profile.role}</div>
                 </div>
               </CardContent>
             </Card>
@@ -56,7 +71,9 @@ export default async function AccountPage() {
                 </span>
                 <div>
                   <div className="text-sm text-muted-foreground">账户余额</div>
-                  <div className="font-semibold">¥0.00</div>
+                  <div className="font-semibold">
+                    ¥{profile.balance.toFixed(2)}
+                  </div>
                 </div>
               </CardContent>
             </Card>
