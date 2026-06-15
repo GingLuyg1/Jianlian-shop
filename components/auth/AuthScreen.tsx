@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   getSupabaseBrowserClient,
-  hasSupabaseConfig,
+  getSupabaseConfigStatus,
 } from "@/lib/supabase/client";
 
 type AuthMode = "login" | "register";
@@ -42,6 +42,21 @@ function getSafeErrorMessage(error: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+function getNetworkErrorMessage(error: unknown) {
+  const rawMessage = getSafeErrorMessage(error, "");
+  const lowerMessage = rawMessage.toLowerCase();
+
+  if (
+    lowerMessage.includes("failed to fetch") ||
+    lowerMessage.includes("networkerror") ||
+    lowerMessage.includes("load failed")
+  ) {
+    return "无法连接 Supabase Auth 服务，请检查 Supabase URL、Anon Key、服务器网络或域名 CORS 配置。";
+  }
+
+  return rawMessage || "网络请求失败，请稍后重试。";
 }
 
 function getSafeInternalRedirect(value: string | null) {
@@ -79,8 +94,12 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     setError("");
     setMessage("");
 
-    if (!hasSupabaseConfig()) {
-      setError("账号系统暂未配置 Supabase 环境变量，暂时无法登录或注册。");
+    const config = getSupabaseConfigStatus();
+    if (!config.ok) {
+      const configMessage =
+        config.message ?? "Supabase URL 或 Key 未配置，请检查环境变量。";
+      console.error("[Supabase Auth]", configMessage);
+      setError(configMessage);
       return;
     }
 
@@ -117,7 +136,9 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         });
 
         if (signUpError) {
-          setError(getSafeErrorMessage(signUpError, "注册失败，请稍后重试。"));
+          setError(
+            signUpError?.message || "Supabase Auth 注册失败，请稍后重试。"
+          );
           return;
         }
 
@@ -141,7 +162,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
       if (signInError) {
         setError(
-          getSafeErrorMessage(signInError, "登录失败，请检查邮箱或密码。")
+          signInError?.message || "Supabase Auth 登录失败，请检查邮箱或密码。"
         );
         return;
       }
@@ -149,15 +170,9 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       setMessage("登录成功，正在进入账户中心。");
       router.push(redirectTo);
       router.refresh();
-    } catch (authError) {
-      setError(
-        getSafeErrorMessage(
-          authError,
-          isRegister
-            ? "注册失败，请稍后重试。"
-            : "登录失败，请检查邮箱或密码。"
-        )
-      );
+    } catch (authException) {
+      console.error("[Supabase Auth] Network or runtime exception", authException);
+      setError(getNetworkErrorMessage(authException));
     } finally {
       setLoading(false);
     }
