@@ -1,4 +1,5 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type UserRole = "user" | "admin" | "support" | "finance";
 
@@ -29,42 +30,39 @@ export function getSupabaseBrowserClient() {
   }
 
   if (!browserClient) {
-    browserClient = createClient(
+    browserClient = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
-        },
-      }
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
   }
 
   return browserClient;
 }
 
+export function userToProfile(user: User): UserProfile {
+  const timestamp = user.created_at || new Date().toISOString();
+
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    phone: user.phone ?? null,
+    role: "user",
+    balance: 0,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+}
+
 export async function getCurrentProfile() {
   const supabase = getSupabaseBrowserClient();
   const {
     data: { user },
-    error: userError,
+    error,
   } = await supabase.auth.getUser();
 
-  if (userError || !user) {
+  if (error || !user) {
     return null;
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id,email,phone,role,balance,created_at,updated_at")
-    .eq("id", user.id)
-    .single<UserProfile>();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
+  return userToProfile(user);
 }

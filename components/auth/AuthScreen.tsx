@@ -13,6 +13,7 @@ import {
   Mail,
   Sparkles,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,10 +35,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isRegister = mode === "register";
-  const redirectTo = searchParams.get("redirect") || "/";
+  const redirectTo = searchParams.get("redirect") || "/account";
   const inviteFromUrl =
     searchParams.get("invite") || searchParams.get("salt") || "";
-  const [account, setAccount] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [inviteCode, setInviteCode] = useState(inviteFromUrl);
@@ -52,13 +53,13 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     setMessage("");
 
     if (!hasSupabaseConfig()) {
-      setError("账号系统尚未配置，暂时无法登录。");
+      setError("账号系统尚未配置 Supabase 环境变量，暂时无法登录或注册。");
       return;
     }
 
-    const email = account.trim().toLowerCase();
-    if (!email.includes("@")) {
-      setError("当前版本账号请使用邮箱格式。");
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.includes("@")) {
+      setError("请输入正确的邮箱地址。");
       return;
     }
 
@@ -73,16 +74,16 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     }
 
     setLoading(true);
+
     try {
       const supabase = getSupabaseBrowserClient();
 
       if (isRegister) {
         const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
           options: {
             data: {
-              role: "user",
               inviteCode: inviteCode.trim() || null,
             },
           },
@@ -90,40 +91,34 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
         if (signUpError) throw signUpError;
 
-        if (data.user) {
-          await supabase.from("profiles").upsert({
-            id: data.user.id,
-            email,
-            role: "user",
-          });
-        }
-
-        if (!data.session) {
-          setMessage("注册成功，请完成邮箱验证后再登录。");
-          router.push("/login");
+        if (data.session) {
+          setMessage("注册成功，正在进入账户中心。");
+          router.push("/account");
           router.refresh();
           return;
         }
 
-        router.push("/");
-        router.refresh();
+        setMessage("注册成功。如 Supabase 开启了邮箱验证，请完成验证后再登录。");
         return;
       }
 
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
+        email: normalizedEmail,
         password,
       });
 
       if (signInError) throw signInError;
 
+      setMessage("登录成功，正在进入账户中心。");
       router.push(redirectTo);
       router.refresh();
     } catch (authError) {
       setError(
         authError instanceof Error
           ? authError.message
-          : "登录失败，请检查账号或密码。"
+          : isRegister
+            ? "注册失败，请稍后重试。"
+            : "登录失败，请检查邮箱或密码。"
       );
     } finally {
       setLoading(false);
@@ -157,6 +152,8 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   <img
                     src="/assets/jianlian-brand-logo.png"
                     alt="Jianlian"
+                    width={32}
+                    height={32}
                     className="h-8 w-8 rounded-xl object-cover"
                   />
                   Jianlian 账号
@@ -166,10 +163,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   欢迎加入 Jianlian
                 </h1>
                 <p className="mt-5 max-w-md text-xl font-semibold leading-9 text-slate-800">
-                  登录后可查看订单、余额和账号信息。
+                  使用邮箱和密码登录，刷新页面后也会保持登录状态。
                 </p>
                 <p className="mt-3 max-w-md text-base leading-7 text-slate-600">
-                  使用 Jianlian 账号可以更方便地查询历史订单、接收商品交付信息，并管理站内余额。
+                  登录后可以查看账户信息、余额占位和订单入口。当前仅接入身份验证，不接支付和真实订单数据库。
                 </p>
 
                 <div className="mt-8 flex items-center gap-4 rounded-3xl bg-white/80 p-5 shadow-sm ring-1 ring-orange-100">
@@ -178,10 +175,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   </div>
                   <div>
                     <div className="text-lg font-bold text-slate-950">
-                      账号信息统一管理
+                      Supabase Auth 登录
                     </div>
                     <div className="mt-1 text-sm text-slate-600">
-                      下单、充值、查询订单都可以关联到同一个账号。
+                      会话写入浏览器 cookie，适配 Next.js App Router。
                     </div>
                   </div>
                 </div>
@@ -208,6 +205,8 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   <img
                     src="/assets/jianlian-brand-logo.png"
                     alt="Jianlian"
+                    width={44}
+                    height={44}
                     className="h-11 w-11 rounded-2xl object-cover shadow-sm ring-1 ring-slate-200"
                   />
                   <div>
@@ -235,23 +234,24 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {isRegister
-                      ? "填写账号和密码，创建你的 Jianlian 账号。"
-                      : "登录后可查看订单、余额和账号信息。"}
+                      ? "填写邮箱和密码，创建你的 Jianlian 账号。"
+                      : "登录成功后将进入账户中心。"}
                   </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="account">账号</Label>
+                    <Label htmlFor="email">邮箱</Label>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
-                        id="account"
+                        id="email"
                         type="email"
-                        value={account}
-                        onChange={(event) => setAccount(event.target.value)}
-                        placeholder="请输入账号"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="请输入邮箱"
                         className="h-12 rounded-xl bg-slate-50 pl-10"
+                        autoComplete="email"
                         required
                       />
                     </div>
@@ -268,6 +268,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                         onChange={(event) => setPassword(event.target.value)}
                         placeholder="请输入密码"
                         className="h-12 rounded-xl bg-slate-50 pl-10 pr-11"
+                        autoComplete={isRegister ? "new-password" : "current-password"}
                         required
                       />
                       <button
@@ -300,6 +301,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                             }
                             placeholder="请再次输入密码"
                             className="h-12 rounded-xl bg-slate-50 pl-10"
+                            autoComplete="new-password"
                             required
                           />
                         </div>
@@ -339,7 +341,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                     className="h-12 w-full rounded-xl"
                     disabled={loading}
                   >
-                    {loading ? "处理中..." : isRegister ? "注册并进入首页" : "登录"}
+                    {loading ? "处理中..." : isRegister ? "注册" : "登录"}
                   </Button>
                 </form>
 
@@ -350,14 +352,6 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   >
                     {isRegister ? "已有账号，去登录" : "没有账号，立即注册"}
                   </Link>
-                  {!isRegister ? (
-                    <button
-                      type="button"
-                      className="text-muted-foreground transition-colors hover:text-primary"
-                    >
-                      忘记密码
-                    </button>
-                  ) : null}
                 </div>
               </div>
             </div>

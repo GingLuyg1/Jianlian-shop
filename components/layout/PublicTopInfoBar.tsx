@@ -48,7 +48,7 @@ let fallbackAnnouncementStart = Date.now();
 
 const highlightedAnnouncementParts = [
   "24小时内",
-  "拿到账户第一时间检查账号",
+  "拿到账号第一时间检查账号",
   "本站产品拒绝任何违法行为，不提供任何教程（仅限登录），不为任何非法行业提供任何支持，仅提供电商拓客服务。",
 ];
 
@@ -146,12 +146,8 @@ export default function PublicTopInfoBar({
       if (!mounted) return;
 
       if (session?.user) {
-        try {
-          const nextProfile = await getCurrentProfile();
-          if (mounted) updateAuthState(session.user, nextProfile, true);
-        } catch {
-          if (mounted) updateAuthState(session.user, null, true);
-        }
+        const nextProfile = await getCurrentProfile().catch(() => null);
+        updateAuthState(session.user, nextProfile, true);
       } else {
         updateAuthState(null, null, true);
       }
@@ -242,17 +238,6 @@ export default function PublicTopInfoBar({
             </div>
           ) : user ? (
             <>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 rounded-xl border-orange-100 bg-white px-4 text-[13px] font-semibold text-orange-700 shadow-sm shadow-orange-100/60 hover:bg-orange-50"
-                asChild
-              >
-                <Link href="/products/account-recharge">
-                  <CreditCard className="mr-1 h-3 w-3" />
-                  充值
-                </Link>
-              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -271,11 +256,6 @@ export default function PublicTopInfoBar({
                   <DropdownMenuItem asChild>
                     <Link href="/account/orders">我的订单</Link>
                   </DropdownMenuItem>
-                  {profile?.role === "admin" ? (
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin">后台管理</Link>
-                    </DropdownMenuItem>
-                  ) : null}
                   <DropdownMenuItem
                     onClick={handleSignOut}
                     className="text-red-600"

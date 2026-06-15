@@ -1,144 +1,82 @@
-"use client";
-
-/**
- * Account Center Page - User profile and account overview
- *
- * Shows: user profile card, balance card, order count card,
- * recent orders card, recharge button placeholder, contact support button.
- *
- * Mock data only. Uses PublicLayout. No footer. No cart.
- */
-
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { ClipboardList, Mail, Wallet } from "lucide-react";
+
+import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
-  User,
-  Wallet,
-  ClipboardList,
-  CreditCard,
-  Headphones,
-} from "lucide-react";
-import PublicLayout from "@/components/layout/PublicLayout";
-import OrderTable from "@/components/orders/OrderTable";
-import { mockUser, orders } from "@/lib/mock-data";
-import { Order } from "@/lib/types";
+  getSupabaseServerClient,
+  hasSupabaseServerConfig,
+} from "@/lib/supabase/server";
 
-export default function AccountPage() {
-  const user = mockUser;
-  const [localOrders, setLocalOrders] = useState<Order[]>([]);
+export default async function AccountPage() {
+  if (!hasSupabaseServerConfig()) {
+    redirect("/login?redirect=/account");
+  }
 
-  useEffect(() => {
-    try {
-      const savedOrders = JSON.parse(
-        localStorage.getItem("jianlian_mock_orders") || "[]"
-      );
-      if (Array.isArray(savedOrders)) {
-        setLocalOrders(savedOrders);
-      }
-    } catch {
-      setLocalOrders([]);
-    }
-  }, []);
+  const supabase = getSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const allOrders = useMemo(
-    () => [...localOrders, ...orders],
-    [localOrders]
-  );
+  if (!user) {
+    redirect("/login?redirect=/account");
+  }
 
   return (
-    <PublicLayout>
-      <h1 className="text-xl font-bold text-foreground mb-4">账号中心</h1>
-
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        {/* User profile card */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <div className="font-medium text-sm">{user.phone || user.email}</div>
-                <Badge variant="outline" className="text-xs mt-0.5">
-                  {user.roleLabel}
-                </Badge>
-              </div>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              <div>手机：{user.phone || "未设置"}</div>
-              <div>邮箱：{user.email || "未设置"}</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Balance card */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
-                <Wallet className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">当前余额</div>
-                <div className="text-lg font-bold text-foreground">
-                  ¥{user.balance.toFixed(2)}
+    <PublicLayout contentClassName="max-w-none overflow-hidden px-4 py-3 md:px-6">
+      <div className="mx-auto grid h-[calc(100dvh-87px)] max-w-[1500px] gap-4 overflow-hidden">
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          <CardHeader className="shrink-0 pb-3">
+            <CardTitle className="text-xl">账户中心</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              当前已接入 Supabase Auth，登录会话通过 cookie 保存。
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardContent className="flex items-center gap-4 p-5">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Mail className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-sm text-muted-foreground">登录邮箱</div>
+                  <div className="truncate font-semibold">
+                    {user.email || "未设置邮箱"}
+                  </div>
                 </div>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="w-full h-7 text-xs" disabled>
-              <CreditCard className="h-3 w-3 mr-1" />
-              充值
-            </Button>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Order count card */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <ClipboardList className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">订单数量</div>
-                <div className="text-lg font-bold text-foreground">
-                  {user.orderCount + localOrders.length}
+            <Card>
+              <CardContent className="flex items-center gap-4 p-5">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600">
+                  <Wallet className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-sm text-muted-foreground">账户余额</div>
+                  <div className="font-semibold">¥0.00</div>
                 </div>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="w-full h-7 text-xs" asChild>
-              <Link href="/account/orders">查看订单</Link>
-            </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="flex items-center gap-4 p-5">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <ClipboardList className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-sm text-muted-foreground">我的订单</div>
+                  <Button variant="link" className="h-auto p-0" asChild>
+                    <Link href="/account/orders">进入订单页</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </CardContent>
         </Card>
       </div>
-
-      {/* Recent orders */}
-      <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">最近订单</CardTitle>
-            <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
-              <Link href="/account/orders">查看全部</Link>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <OrderTable orders={allOrders.slice(0, 5)} />
-        </CardContent>
-      </Card>
-
-      {/* Contact support */}
-      <Button variant="outline" className="w-full h-10" asChild>
-        <a href="mailto:support@jianlian.shop">
-          <Headphones className="h-4 w-4 mr-2" />
-          联系客服
-        </a>
-      </Button>
     </PublicLayout>
   );
 }

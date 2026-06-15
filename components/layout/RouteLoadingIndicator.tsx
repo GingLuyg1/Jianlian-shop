@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-const MIN_VISIBLE_MS = 420;
-const FALLBACK_HIDE_MS = 1800;
+const MIN_VISIBLE_MS = 520;
+const MAX_VISIBLE_MS = 8000;
+const DOM_SETTLE_MS = 160;
+const IMAGE_WAIT_TIMEOUT_MS = 5200;
 
 function isModifiedClick(event: MouseEvent) {
   return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
@@ -18,6 +20,79 @@ function isSamePageUrl(url: URL) {
   );
 }
 
+function waitForFrame() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function waitForDomToSettle(container: ParentNode) {
+  return new Promise<void>((resolve) => {
+    let settledTimer: number | null = null;
+
+    const finish = () => {
+      if (settledTimer) window.clearTimeout(settledTimer);
+      observer.disconnect();
+      resolve();
+    };
+
+    const armTimer = () => {
+      if (settledTimer) window.clearTimeout(settledTimer);
+      settledTimer = window.setTimeout(finish, DOM_SETTLE_MS);
+    };
+
+    const observer = new MutationObserver(armTimer);
+    observer.observe(container, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+
+    armTimer();
+  });
+}
+
+function waitForImage(image: HTMLImageElement) {
+  if (image.complete && image.naturalWidth > 0) {
+    return image.decode?.().catch(() => undefined) ?? Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const cleanup = () => {
+      image.removeEventListener("load", onDone);
+      image.removeEventListener("error", onDone);
+      resolve();
+    };
+    const onDone = () => cleanup();
+
+    image.addEventListener("load", onDone, { once: true });
+    image.addEventListener("error", onDone, { once: true });
+  }).then(() => image.decode?.().catch(() => undefined));
+}
+
+async function waitForImages(container: ParentNode) {
+  const images = Array.from(container.querySelectorAll("img"));
+  if (!images.length) return;
+
+  await Promise.race([
+    Promise.all(images.map(waitForImage)),
+    new Promise<void>((resolve) =>
+      window.setTimeout(resolve, IMAGE_WAIT_TIMEOUT_MS)
+    ),
+  ]);
+}
+
+async function waitForPageReady() {
+  const container = document.querySelector("main") ?? document.body;
+
+  await waitForFrame();
+  await waitForDomToSettle(container);
+  await waitForImages(container);
+  await waitForFrame();
+}
+
 export default function RouteLoadingIndicator() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -27,13 +102,15 @@ export default function RouteLoadingIndicator() {
   );
   const [visible, setVisible] = useState(false);
   const startedAtRef = useRef(0);
-  const fallbackTimerRef = useRef<number | null>(null);
+  const maxTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
+  const loadIdRef = useRef(0);
+  const visibleRef = useRef(false);
 
   const clearTimers = () => {
-    if (fallbackTimerRef.current) {
-      window.clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
+    if (maxTimerRef.current) {
+      window.clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
     }
     if (hideTimerRef.current) {
       window.clearTimeout(hideTimerRef.current);
@@ -41,15 +118,53 @@ export default function RouteLoadingIndicator() {
     }
   };
 
-  const startLoading = () => {
+  const hideWhenReady = async (loadId: number) => {
+    await waitForPageReady();
+
+    if (loadId !== loadIdRef.current || !visibleRef.current) return;
+
+    const elapsed = Date.now() - startedAtRef.current;
+    const delay = Math.max(120, MIN_VISIBLE_MS - elapsed);
+
+    if (hideTimerRef.current) {
+      window.clearTimeout(hideTimerRef.current);
+    }
+
+    hideTimerRef.current = window.setTimeout(() => {
+      if (loadId === loadIdRef.current) {
+        visibleRef.current = false;
+        setVisible(false);
+      }
+      hideTimerRef.current = null;
+    }, delay);
+  };
+
+  const startLoading = (waitForCurrentPage = false) => {
     clearTimers();
     startedAtRef.current = Date.now();
+    visibleRef.current = true;
+    const loadId = loadIdRef.current + 1;
+    loadIdRef.current = loadId;
     setVisible(true);
-    fallbackTimerRef.current = window.setTimeout(() => {
-      setVisible(false);
-      fallbackTimerRef.current = null;
-    }, FALLBACK_HIDE_MS);
+
+    maxTimerRef.current = window.setTimeout(() => {
+      if (loadId === loadIdRef.current) {
+        visibleRef.current = false;
+        setVisible(false);
+      }
+      maxTimerRef.current = null;
+    }, MAX_VISIBLE_MS);
+
+    if (waitForCurrentPage) {
+      window.setTimeout(() => {
+        void hideWhenReady(loadId);
+      }, 0);
+    }
   };
+
+  useEffect(() => {
+    visibleRef.current = visible;
+  }, [visible]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -69,7 +184,7 @@ export default function RouteLoadingIndicator() {
           !isSamePageUrl(url);
 
         if (isInternalRoute) {
-          startLoading();
+          startLoading(false);
         }
         return;
       }
@@ -83,11 +198,11 @@ export default function RouteLoadingIndicator() {
         Boolean(button.closest("main"));
 
       if (shouldHintButtonRoute) {
-        startLoading();
+        startLoading(true);
       }
     };
 
-    const handlePopState = () => startLoading();
+    const handlePopState = () => startLoading(false);
 
     document.addEventListener("click", handleClick, true);
     window.addEventListener("popstate", handlePopState);
@@ -101,20 +216,8 @@ export default function RouteLoadingIndicator() {
 
   useEffect(() => {
     if (!visible) return;
-
-    const elapsed = Date.now() - startedAtRef.current;
-    const delay = Math.max(120, MIN_VISIBLE_MS - elapsed);
-
-    if (fallbackTimerRef.current) {
-      window.clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
-    }
-
-    hideTimerRef.current = window.setTimeout(() => {
-      setVisible(false);
-      hideTimerRef.current = null;
-    }, delay);
-  }, [routeKey]);
+    void hideWhenReady(loadIdRef.current);
+  }, [routeKey, visible]);
 
   if (!visible) return null;
 
