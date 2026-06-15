@@ -45,6 +45,8 @@ function getSafeErrorMessage(error: unknown, fallback: string) {
 }
 
 function getNetworkErrorMessage(error: unknown) {
+  return "无法连接 Supabase 服务，请检查网络、代理或 Supabase 项目配置。";
+
   const rawMessage = getSafeErrorMessage(error, "");
   const lowerMessage = rawMessage.toLowerCase();
 
