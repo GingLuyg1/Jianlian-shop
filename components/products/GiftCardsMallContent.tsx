@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, Gift, Phone, Search } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -19,12 +19,14 @@ import {
   compactSearchWrapperClassName,
   interactiveButtonClass,
   mallContentClassName,
-  mallShellClassName,
   productPanelContentClassName,
   productListFiveRowsClassName,
   productSupportTextClassName,
+  setProductImageFallback,
   shopNoticeClassName,
 } from "./product-ui";
+import CategoryContentBoundary from "./CategoryContentBoundary";
+import { useCategorySwitch } from "./useCategorySwitch";
 
 type GiftCategoryId = "apple" | "giffgaff";
 
@@ -56,14 +58,34 @@ const PRICE_LABELS: Record<string, string> = {
 export default function GiftCardsMallContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const selectedCategoryId =
+  const initialCategoryId: GiftCategoryId =
     searchParams.get("category") === "giffgaff" ? "giffgaff" : "apple";
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null
   );
+  const getImageSources = useCallback((categoryId: GiftCategoryId) => {
+    const category =
+      giftCategories.find((item) => item.id === categoryId) ??
+      giftCategories[0];
+
+    return category.productIds.map((productId) => {
+      if (productId === "gift-giffgaff-topup") return "/assets/giffgaff-icon.svg";
+      return "/assets/apple-gift-card-icon.jpg";
+    });
+  }, []);
+  const {
+    activeId: activeCategoryId,
+    selectedId: selectedCategoryId,
+    isSwitching,
+    switchTo,
+  } = useCategorySwitch({
+    initialId: initialCategoryId,
+    getImageSources,
+    onSwitchStart: () => setSelectedProductId(null),
+  });
   const selectedCategory =
-    giftCategories.find((category) => category.id === selectedCategoryId) ??
+    giftCategories.find((category) => category.id === activeCategoryId) ??
     giftCategories[0];
 
   const giftProducts = useMemo(() => {
@@ -86,11 +108,12 @@ export default function GiftCardsMallContent() {
 
   return (
     <PublicLayout contentClassName={mallContentClassName}>
-      <div className={mallShellClassName}>
+      <CategoryContentBoundary isLoading={isSwitching}>
         <CategoryPanel
           selectedCategoryId={selectedCategoryId}
+          disabled={isSwitching}
           onSelectCategory={(categoryId) => {
-            setSelectedProductId(null);
+            switchTo(categoryId);
             router.replace(`/products/gift-cards?category=${categoryId}`, {
               scroll: false,
             });
@@ -107,16 +130,18 @@ export default function GiftCardsMallContent() {
             router.push(`/checkout?product=${productId}`);
           }}
         />
-      </div>
+      </CategoryContentBoundary>
     </PublicLayout>
   );
 }
 
 function CategoryPanel({
   selectedCategoryId,
+  disabled,
   onSelectCategory,
 }: {
   selectedCategoryId: GiftCategoryId;
+  disabled: boolean;
   onSelectCategory: (categoryId: GiftCategoryId) => void;
 }) {
   return (
@@ -132,6 +157,7 @@ function CategoryPanel({
                 <button
                   key={category.id}
                   type="button"
+                  disabled={disabled}
                   onClick={() => onSelectCategory(category.id)}
                   className={cn(
                     interactiveButtonClass,
@@ -300,6 +326,7 @@ function ProductRow({
         <img
           src={getGiftProductImage(product)}
           alt={product.categoryLabel}
+          onError={(event) => setProductImageFallback(event.currentTarget)}
           className="h-12 w-12 shrink-0 rounded-xl object-cover"
         />
         <div className="min-w-0">

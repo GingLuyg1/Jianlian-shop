@@ -36,3 +36,11 @@ export const compactProductRowClassName =
 
 export const productSupportTextClassName =
   "mt-3 shrink-0 text-sm text-muted-foreground";
+
+export const productImageFallbackSrc = "/assets/jianlian-brand-logo.png";
+
+export function setProductImageFallback(image: HTMLImageElement) {
+  if (image.dataset.fallbackApplied === "true") return;
+  image.dataset.fallbackApplied = "true";
+  image.src = productImageFallbackSrc;
+}

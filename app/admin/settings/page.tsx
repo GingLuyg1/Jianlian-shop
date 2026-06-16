@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 export default function AdminSettingsPage() {
   return (
-    <AdminLayout>
+    <>
       <h1 className="text-xl font-bold text-foreground mb-4">系统设置</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -70,6 +70,6 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
       </div>
-    </AdminLayout>
+    </>
   );
 }

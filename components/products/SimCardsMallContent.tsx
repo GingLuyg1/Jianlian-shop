@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, CreditCard, Search } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -20,12 +19,14 @@ import {
   compactSearchWrapperClassName,
   interactiveButtonClass,
   mallContentClassName,
-  mallShellClassName,
   productPanelContentClassName,
   productListFiveRowsClassName,
   productSupportTextClassName,
+  setProductImageFallback,
   shopNoticeClassName,
 } from "./product-ui";
+import CategoryContentBoundary from "./CategoryContentBoundary";
+import { useCategorySwitch } from "./useCategorySwitch";
 
 type CountryTab = {
   id: "uk" | "us";
@@ -58,11 +59,36 @@ export default function SimCardsMallContent() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const countryParam = searchParams.get("country");
-  const selectedCountry: CountryTab["id"] =
+  const initialCountry: CountryTab["id"] =
     countryParam === "us" || countryParam === "uk" ? countryParam : "uk";
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null
   );
+  const getImageSources = useCallback((countryId: CountryTab["id"]) => {
+    const country =
+      COUNTRY_TABS.find((item) => item.id === countryId) ?? COUNTRY_TABS[0];
+    return [
+      country.image,
+      ...products
+        .filter((product) => PRODUCT_COUNTRY[product.id] === countryId)
+        .map((product) => {
+          const productName = product.name.toLowerCase();
+          if (productName.includes("giffgaff")) return "/assets/giffgaff-icon.svg";
+          if (productName.includes("ultra")) return "/assets/ultra-mobile-icon.svg";
+          return country.image;
+        }),
+    ];
+  }, []);
+  const {
+    activeId: activeCountry,
+    selectedId: selectedCountry,
+    isSwitching,
+    switchTo,
+  } = useCategorySwitch({
+    initialId: initialCountry,
+    getImageSources,
+    onSwitchStart: () => setSelectedProductId(null),
+  });
 
   const simProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -71,7 +97,7 @@ export default function SimCardsMallContent() {
         (product) =>
           product.category === "sim-cards" &&
           product.listingStatus === "active" &&
-          PRODUCT_COUNTRY[product.id] === selectedCountry
+          PRODUCT_COUNTRY[product.id] === activeCountry
       )
       .filter((product) => {
         if (!q) return true;
@@ -80,18 +106,24 @@ export default function SimCardsMallContent() {
           product.description.toLowerCase().includes(q)
         );
       });
-  }, [searchQuery, selectedCountry]);
+  }, [activeCountry, searchQuery]);
 
   return (
     <PublicLayout contentClassName={mallContentClassName}>
-      <div className={mallShellClassName}>
+      <CategoryContentBoundary isLoading={isSwitching}>
         <CountryPanel
           selectedCountry={selectedCountry}
-          onSelectCountry={() => setSelectedProductId(null)}
+          disabled={isSwitching}
+          onSelectCountry={(countryId) => {
+            switchTo(countryId);
+            router.replace(`/products/sim-cards?country=${countryId}`, {
+              scroll: false,
+            });
+          }}
         />
 
         <ProductPanel
-          selectedCountry={COUNTRY_TABS.find((country) => country.id === selectedCountry)?.name ?? ""}
+          selectedCountry={COUNTRY_TABS.find((country) => country.id === activeCountry)?.name ?? ""}
           products={simProducts}
           searchQuery={searchQuery}
           selectedProductId={selectedProductId}
@@ -101,17 +133,19 @@ export default function SimCardsMallContent() {
             router.push(`/checkout?product=${productId}`);
           }}
         />
-      </div>
+      </CategoryContentBoundary>
     </PublicLayout>
   );
 }
 
 function CountryPanel({
   selectedCountry,
+  disabled,
   onSelectCountry,
 }: {
   selectedCountry: CountryTab["id"];
-  onSelectCountry: () => void;
+  disabled: boolean;
+  onSelectCountry: (countryId: CountryTab["id"]) => void;
 }) {
   return (
     <Card className="h-full min-h-0 overflow-hidden">
@@ -123,7 +157,8 @@ function CountryPanel({
                 key={country.id}
                 country={country}
                 active={selectedCountry === country.id}
-                onClick={onSelectCountry}
+                disabled={disabled}
+                onClick={() => onSelectCountry(country.id)}
               />
             ))}
           </div>
@@ -136,16 +171,19 @@ function CountryPanel({
 function CountryButton({
   country,
   active,
+  disabled,
   onClick,
 }: {
   country: CountryTab;
   active: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
-    <Link
-      href={`/products/sim-cards?country=${country.id}`}
+    <button
+      type="button"
       data-testid={`country-${country.id}`}
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         interactiveButtonClass,
@@ -165,6 +203,7 @@ function CountryButton({
           <img
             src={country.image}
             alt={country.name}
+            onError={(event) => setProductImageFallback(event.currentTarget)}
             className="h-full w-full object-cover"
           />
         </div>
@@ -175,7 +214,7 @@ function CountryButton({
         </div>
       </div>
       <ChevronRight className="h-5 w-5 shrink-0" />
-    </Link>
+    </button>
   );
 }
 
@@ -323,6 +362,7 @@ function ProductRow({
           <img
             src={iconSrc}
             alt={product.name}
+            onError={(event) => setProductImageFallback(event.currentTarget)}
             className="h-12 w-12 shrink-0 rounded-xl object-cover"
           />
         ) : (

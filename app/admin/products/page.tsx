@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * Admin Product Management Page
@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus } from "lucide-react";
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import { products, categories } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +42,7 @@ export default function AdminProductsPage() {
   );
 
   return (
-    <AdminLayout>
+    <>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-foreground">商品管理</h1>
         <Button size="sm">
@@ -126,6 +126,6 @@ export default function AdminProductsPage() {
           </div>
         </CardContent>
       </Card>
-    </AdminLayout>
+    </>
   );
 }

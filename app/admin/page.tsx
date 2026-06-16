@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import AdminStatsCard from "@/components/admin/AdminStatsCard";
 import {
   BarChart3,
@@ -48,7 +48,7 @@ const productMetricRows = [
 
 export default function AdminDashboardPage() {
   return (
-    <AdminLayout>
+    <>
       <div className="mb-4">
         <h1 className="text-xl font-bold text-foreground">后台概览</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -133,6 +133,6 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
-    </AdminLayout>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, KeyRound, Search } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -19,12 +19,14 @@ import {
   compactSearchWrapperClassName,
   interactiveButtonClass,
   mallContentClassName,
-  mallShellClassName,
   productPanelContentClassName,
   productListFiveRowsClassName,
   productSupportTextClassName,
+  setProductImageFallback,
   shopNoticeClassName,
 } from "./product-ui";
+import CategoryContentBoundary from "./CategoryContentBoundary";
+import { useCategorySwitch } from "./useCategorySwitch";
 
 type DigitalCategoryId =
   | "apple-id"
@@ -119,27 +121,49 @@ export default function DigitalAccountsMallContent() {
   const initialCategoryId = getValidDigitalCategoryId(
     searchParams.get("category")
   );
-  const [selectedCategoryId, setSelectedCategoryId] =
-    useState<DigitalCategoryId>(initialCategoryId);
+  const getImageSources = useCallback((categoryId: DigitalCategoryId) => {
+    const category =
+      digitalCategories.find((item) => item.id === categoryId) ??
+      digitalCategories[0];
+    const productIds = productIdsByDigitalCategory[categoryId] ?? [];
+
+    return [
+      category.image,
+      ...products
+        .filter((product) => productIds.includes(product.id))
+        .map(() => category.image),
+    ];
+  }, []);
+
+  const {
+    activeId: activeCategoryId,
+    selectedId: selectedCategoryId,
+    isSwitching,
+    switchTo,
+  } = useCategorySwitch({
+    initialId: initialCategoryId,
+    getImageSources,
+  });
 
   const selectedCategory =
-    digitalCategories.find((category) => category.id === selectedCategoryId) ??
+    digitalCategories.find((category) => category.id === activeCategoryId) ??
     digitalCategories[0];
 
   return (
     <PublicLayout contentClassName={mallContentClassName}>
-      <div className={mallShellClassName}>
+      <CategoryContentBoundary isLoading={isSwitching}>
         <CategoryPanel
           selectedCategoryId={selectedCategoryId}
+          disabled={isSwitching}
           onSelectCategory={(categoryId) => {
-            setSelectedCategoryId(categoryId);
+            switchTo(categoryId);
             router.replace(`/products/digital-accounts?category=${categoryId}`, {
               scroll: false,
             });
           }}
         />
         <ProductPanel selectedCategory={selectedCategory} />
-      </div>
+      </CategoryContentBoundary>
     </PublicLayout>
   );
 }
@@ -154,9 +178,11 @@ function getValidDigitalCategoryId(
 
 function CategoryPanel({
   selectedCategoryId,
+  disabled,
   onSelectCategory,
 }: {
   selectedCategoryId: DigitalCategoryId;
+  disabled: boolean;
   onSelectCategory: (categoryId: DigitalCategoryId) => void;
 }) {
   return (
@@ -169,6 +195,7 @@ function CategoryPanel({
                 key={category.id}
                 category={category}
                 active={selectedCategoryId === category.id}
+                disabled={disabled}
                 onClick={() => onSelectCategory(category.id)}
               />
             ))}
@@ -182,15 +209,18 @@ function CategoryPanel({
 function CategoryButton({
   category,
   active,
+  disabled,
   onClick,
 }: {
   category: DigitalCategory;
   active: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         interactiveButtonClass,
@@ -204,6 +234,7 @@ function CategoryButton({
         <img
           src={category.image}
           alt={category.name}
+          onError={(event) => setProductImageFallback(event.currentTarget)}
           className={cn(
             "h-11 w-11 shrink-0 rounded-xl object-cover bg-white",
             active ? "ring-2 ring-primary/25" : "ring-1 ring-slate-200"
@@ -399,6 +430,7 @@ function DigitalProductRow({
         <img
           src={iconSrc}
           alt={iconAlt}
+          onError={(event) => setProductImageFallback(event.currentTarget)}
           className="h-9 w-9 shrink-0 rounded-full object-cover"
         />
         <div className="min-w-0 flex-1 truncate text-base font-medium text-slate-600">
@@ -453,6 +485,7 @@ function EmptyCategoryState({
           <img
             src={selectedCategory.image}
             alt={selectedCategory.name}
+            onError={(event) => setProductImageFallback(event.currentTarget)}
             className="mx-auto mb-4 h-16 w-16 rounded-2xl object-cover ring-1 ring-slate-200"
           />
           <div className="text-base font-semibold">

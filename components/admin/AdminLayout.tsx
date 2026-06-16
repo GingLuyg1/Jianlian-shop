@@ -1,37 +1,52 @@
 "use client";
 
-/**
- * AdminLayout - Separate layout for admin dashboard pages
- *
- * Uses AdminSidebar and AdminTopBar instead of public layout components.
- * Main content uses ml-60 offset. Clean SaaS admin dashboard style.
- *
- * Important: Admin should NOT use PublicSidebar, PublicTopInfoBar,
- * or any public layout components.
- */
-
 import { ReactNode } from "react";
+import AdminGuard from "@/components/auth/AdminGuard";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopBar from "./AdminTopBar";
-import AdminGuard from "@/components/auth/AdminGuard";
 
 interface AdminLayoutProps {
   children: ReactNode;
 }
 
+function AdminShell({ children }: AdminLayoutProps) {
+  return (
+    <div className="min-h-screen bg-slate-100 text-slate-950">
+      <AdminSidebar />
+      <main className="min-h-screen min-w-0 md:ml-64">
+        <AdminTopBar />
+        <div className="mx-auto max-w-7xl p-4 md:p-6">{children}</div>
+      </main>
+    </div>
+  );
+}
+
+function AdminLayoutSkeleton() {
+  return (
+    <AdminShell>
+      <div className="space-y-5">
+        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+          <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
+          <div className="mt-3 h-3 w-72 animate-pulse rounded bg-slate-100" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-28 animate-pulse rounded-2xl bg-white shadow-sm ring-1 ring-slate-200"
+            />
+          ))}
+        </div>
+        <div className="h-80 animate-pulse rounded-2xl bg-white shadow-sm ring-1 ring-slate-200" />
+      </div>
+    </AdminShell>
+  );
+}
+
 export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
-    <AdminGuard>
-      <div className="min-h-screen bg-slate-50">
-        {/* Fixed left admin sidebar */}
-        <AdminSidebar />
-
-        {/* Main admin content area */}
-        <main className="md:ml-60 min-w-0 min-h-screen">
-          <AdminTopBar />
-          <div className="p-4 md:p-6 max-w-7xl mx-auto">{children}</div>
-        </main>
-      </div>
+    <AdminGuard loadingFallback={<AdminLayoutSkeleton />}>
+      <AdminShell>{children}</AdminShell>
     </AdminGuard>
   );
 }

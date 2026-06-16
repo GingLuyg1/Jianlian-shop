@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * Admin Order Management Page
@@ -8,13 +8,13 @@
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import AdminOrderTable from "@/components/admin/AdminOrderTable";
 import { adminOrders } from "@/lib/mock-data";
 
 export default function AdminOrdersPage() {
   return (
-    <AdminLayout>
+    <>
       <h1 className="text-xl font-bold text-foreground mb-4">订单管理</h1>
 
       <Card>
@@ -25,6 +25,6 @@ export default function AdminOrdersPage() {
           <AdminOrderTable orders={adminOrders} />
         </CardContent>
       </Card>
-    </AdminLayout>
+    </>
   );
 }

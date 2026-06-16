@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -78,7 +78,7 @@ export default function AdminUsersPage() {
   }, []);
 
   return (
-    <AdminLayout>
+    <>
       <h1 className="mb-4 text-xl font-bold text-foreground">用户管理</h1>
 
       <Card>
@@ -145,6 +145,6 @@ export default function AdminUsersPage() {
           )}
         </CardContent>
       </Card>
-    </AdminLayout>
+    </>
   );
 }

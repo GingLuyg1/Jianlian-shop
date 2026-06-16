@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, Search } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -19,12 +19,14 @@ import {
   compactSearchWrapperClassName,
   interactiveButtonClass,
   mallContentClassName,
-  mallShellClassName,
   productPanelContentClassName,
   productListFiveRowsClassName,
   productSupportTextClassName,
+  setProductImageFallback,
   shopNoticeClassName,
 } from "./product-ui";
+import CategoryContentBoundary from "./CategoryContentBoundary";
+import { useCategorySwitch } from "./useCategorySwitch";
 
 type AiCategoryId = "chatgpt" | "claude" | "gemini" | "grok";
 
@@ -72,14 +74,29 @@ const aiCategories: AiCategory[] = [
 export default function AiMembershipMallContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const selectedCategoryId = getValidAiCategoryId(searchParams.get("category"));
+  const initialCategoryId = getValidAiCategoryId(searchParams.get("category"));
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const getImageSources = useCallback((categoryId: AiCategoryId) => {
+    const category =
+      aiCategories.find((item) => item.id === categoryId) ?? aiCategories[0];
+    return [category.image, ...category.productIds.map(() => category.image)];
+  }, []);
+  const {
+    activeId: activeCategoryId,
+    selectedId: selectedCategoryId,
+    isSwitching,
+    switchTo,
+  } = useCategorySwitch({
+    initialId: initialCategoryId,
+    getImageSources,
+    onSwitchStart: () => setSelectedProductId(null),
+  });
 
   const selectedCategory =
-    aiCategories.find((category) => category.id === selectedCategoryId) ??
+    aiCategories.find((category) => category.id === activeCategoryId) ??
     aiCategories[0];
 
   const aiProducts = useMemo(() => {
@@ -103,11 +120,12 @@ export default function AiMembershipMallContent() {
 
   return (
     <PublicLayout contentClassName={mallContentClassName}>
-      <div className={mallShellClassName}>
+      <CategoryContentBoundary isLoading={isSwitching}>
         <CategoryPanel
           selectedCategoryId={selectedCategoryId}
+          disabled={isSwitching}
           onSelectCategory={(categoryId) => {
-            setSelectedProductId(null);
+            switchTo(categoryId);
             router.replace(`/products/ai-membership?category=${categoryId}`, {
               scroll: false,
             });
@@ -124,7 +142,7 @@ export default function AiMembershipMallContent() {
             router.push(`/checkout?product=${productId}`);
           }}
         />
-      </div>
+      </CategoryContentBoundary>
     </PublicLayout>
   );
 }
@@ -137,9 +155,11 @@ function getValidAiCategoryId(categoryId: string | null): AiCategoryId {
 
 function CategoryPanel({
   selectedCategoryId,
+  disabled,
   onSelectCategory,
 }: {
   selectedCategoryId: AiCategoryId;
+  disabled: boolean;
   onSelectCategory: (categoryId: AiCategoryId) => void;
 }) {
   return (
@@ -152,6 +172,7 @@ function CategoryPanel({
                 key={category.id}
                 category={category}
                 active={selectedCategoryId === category.id}
+                disabled={disabled}
                 onClick={() => onSelectCategory(category.id)}
               />
             ))}
@@ -165,15 +186,18 @@ function CategoryPanel({
 function CategoryButton({
   category,
   active,
+  disabled,
   onClick,
 }: {
   category: AiCategory;
   active: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         interactiveButtonClass,
@@ -187,6 +211,7 @@ function CategoryButton({
         <img
           src={category.image}
           alt={category.name}
+          onError={(event) => setProductImageFallback(event.currentTarget)}
           className={cn(
             "h-11 w-11 shrink-0 rounded-xl object-cover bg-white",
             active ? "ring-2 ring-primary/25" : "ring-1 ring-slate-200"
@@ -336,6 +361,7 @@ function ProductRow({
         <img
           src={image}
           alt={product.categoryLabel}
+          onError={(event) => setProductImageFallback(event.currentTarget)}
           className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-slate-200"
         />
         <div className="min-w-0">
@@ -373,6 +399,7 @@ function EmptyProductState({ category }: { category: AiCategory }) {
         <img
           src={category.image}
           alt={category.name}
+          onError={(event) => setProductImageFallback(event.currentTarget)}
           className="mx-auto mb-4 h-16 w-16 rounded-2xl object-cover ring-1 ring-slate-200"
         />
         <div className="text-base font-semibold">{category.name}</div>

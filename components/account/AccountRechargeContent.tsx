@@ -258,9 +258,9 @@ export default function AccountRechargeContent() {
 
             <div className="mt-5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
               {activeRecordTab === "recharge" ? (
-                <RechargeRecordExample />
+                <RechargeRecordPanel />
               ) : (
-                <FundsRecordExample />
+                <FundsRecordPanel />
               )}
 
               <div className="mt-auto rounded-xl bg-primary/5 p-4 text-xs leading-5 text-muted-foreground">
@@ -274,51 +274,69 @@ export default function AccountRechargeContent() {
   );
 }
 
-function RechargeRecordExample() {
+function RechargeRecordPanel() {
+  return (
+    <RecordEmptyCard
+      title="暂无充值记录"
+      description="接入支付后，充值订单号、支付方式、到账状态和实付金额会显示在这里。"
+      statusLabel="待接入"
+      rows={[
+        ["充值时间", "等待支付数据"],
+        ["充值金额", "等待支付数据"],
+        ["手续费", "等待支付数据"],
+        ["实付金额", "等待支付数据"],
+      ]}
+    />
+  );
+}
+
+function FundsRecordPanel() {
+  return (
+    <RecordEmptyCard
+      title="暂无资金变动记录"
+      description="接入支付后，余额充值、消费扣款、退款或人工调整会统一显示在这里。"
+      statusLabel="待接入"
+      rows={[
+        ["变动类型", "等待资金流水"],
+        ["变动金额", "等待资金流水"],
+        ["变动后余额", "等待资金流水"],
+        ["记录时间", "等待资金流水"],
+      ]}
+    />
+  );
+}
+
+function RecordEmptyCard({
+  title,
+  description,
+  statusLabel,
+  rows,
+}: {
+  title: string;
+  description: string;
+  statusLabel: string;
+  rows: Array<[string, string]>;
+}) {
   return (
     <div className="rounded-xl bg-slate-50 p-4 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-semibold text-primary">
-            Alipay（人民币自动充值）
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            订单号：RC202605210001
+          <div className="font-semibold text-primary">{title}</div>
+          <div className="mt-1 text-xs leading-5 text-muted-foreground">
+            {description}
           </div>
         </div>
-        <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-600">
-          已到账
+        <span className="shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-primary">
+          {statusLabel}
         </span>
       </div>
       <div className="mt-4 grid gap-2 text-muted-foreground">
-        <div>充值时间：2026-05-21 16:01:25</div>
-        <div>
-          充值金额：<span className="font-semibold text-primary">¥20.00</span>
-        </div>
-        <div>
-          手续费：<span className="font-semibold text-primary">¥0.60</span>
-        </div>
-        <div>
-          实付金额：<span className="font-semibold text-primary">¥20.60</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FundsRecordExample() {
-  return (
-    <div className="rounded-xl border border-dashed border-border bg-white p-4 text-sm">
-      <div className="font-semibold text-foreground">资金变动示例</div>
-      <div className="mt-3 space-y-2 text-muted-foreground">
-        <div>类型：账号余额充值</div>
-        <div>
-          变动：<span className="font-semibold text-green-600">+¥20.00</span>
-        </div>
-        <div>
-          余额：<span className="font-semibold text-primary">¥20.00</span>
-        </div>
-        <div>记录时间：2026-05-21 16:01:28</div>
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between gap-3">
+            <span>{label}：</span>
+            <span className="text-right text-slate-400">{value}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

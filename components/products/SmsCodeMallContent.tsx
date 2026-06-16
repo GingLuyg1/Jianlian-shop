@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, MessageCircle, Search } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -19,12 +19,13 @@ import {
   compactSearchWrapperClassName,
   interactiveButtonClass,
   mallContentClassName,
-  mallShellClassName,
   productListFiveRowsClassName,
   productPanelContentClassName,
   productSupportTextClassName,
   shopNoticeClassName,
 } from "./product-ui";
+import CategoryContentBoundary from "./CategoryContentBoundary";
+import { useCategorySwitch } from "./useCategorySwitch";
 
 type SmsCountryId = "us" | "uk" | "ca" | "au" | "jp" | "sg" | "hk";
 
@@ -49,27 +50,40 @@ export default function SmsCodeMallContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialCountryId = getValidSmsCountryId(searchParams.get("country"));
-  const [selectedCountryId, setSelectedCountryId] =
-    useState<SmsCountryId>(initialCountryId);
+  const getImageSources = useCallback((countryId: SmsCountryId) => {
+    const country =
+      smsCountries.find((item) => item.id === countryId) ?? smsCountries[0];
+    return country.productIds.map(() => "");
+  }, []);
+  const {
+    activeId: activeCountryId,
+    selectedId: selectedCountryId,
+    isSwitching,
+    switchTo,
+  } = useCategorySwitch({
+    initialId: initialCountryId,
+    getImageSources,
+  });
 
   const selectedCountry =
-    smsCountries.find((country) => country.id === selectedCountryId) ??
+    smsCountries.find((country) => country.id === activeCountryId) ??
     smsCountries[0];
 
   return (
     <PublicLayout contentClassName={mallContentClassName}>
-      <div className={mallShellClassName}>
+      <CategoryContentBoundary isLoading={isSwitching}>
         <CategoryPanel
           selectedCountryId={selectedCountryId}
+          disabled={isSwitching}
           onSelectCountry={(countryId) => {
-            setSelectedCountryId(countryId);
+            switchTo(countryId);
             router.replace(`/products/sms-code?country=${countryId}`, {
               scroll: false,
             });
           }}
         />
         <ProductPanel selectedCountry={selectedCountry} />
-      </div>
+      </CategoryContentBoundary>
     </PublicLayout>
   );
 }
@@ -82,9 +96,11 @@ function getValidSmsCountryId(countryId: string | null): SmsCountryId {
 
 function CategoryPanel({
   selectedCountryId,
+  disabled,
   onSelectCountry,
 }: {
   selectedCountryId: SmsCountryId;
+  disabled: boolean;
   onSelectCountry: (countryId: SmsCountryId) => void;
 }) {
   return (
@@ -97,6 +113,7 @@ function CategoryPanel({
                 key={country.id}
                 country={country}
                 active={selectedCountryId === country.id}
+                disabled={disabled}
                 onClick={() => onSelectCountry(country.id)}
               />
             ))}
@@ -110,15 +127,18 @@ function CategoryPanel({
 function CountryButton({
   country,
   active,
+  disabled,
   onClick,
 }: {
   country: SmsCountry;
   active: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         interactiveButtonClass,
