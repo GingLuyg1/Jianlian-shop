@@ -123,9 +123,8 @@ export default function AdminGuard({
         if (!active) return;
 
         const message =
-          error instanceof Error
-            ? error.message
-            : "后台权限校验失败，请检查网络或 Supabase 配置。";
+          (error as { message?: string } | null | undefined)?.message ??
+          "无法验证后台权限，请重新登录。";
 
         setState({ status: "auth-error", message });
       }

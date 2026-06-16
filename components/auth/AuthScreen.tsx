@@ -40,7 +40,8 @@ function getSafeErrorMessage(error: unknown, fallback: string) {
     "message" in error &&
     typeof (error as { message?: unknown }).message === "string"
   ) {
-    return (error as { message: string }).message || fallback;
+    const message = (error as { message?: string }).message;
+    return message && message.trim() ? message : fallback;
   }
 
   return fallback;
@@ -170,7 +171,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
         if (signUpError) {
           setError(
-            signUpError?.message || "Supabase Auth 注册失败，请稍后重试。"
+            signUpError?.message ?? "Supabase Auth 注册失败，请稍后重试。"
           );
           return;
         }
@@ -203,7 +204,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
       if (signInError) {
         setError(
-          signInError?.message || "Supabase Auth 登录失败，请检查邮箱或密码。"
+          signInError?.message ?? "Supabase Auth 登录失败，请检查邮箱或密码。"
         );
         return;
       }
