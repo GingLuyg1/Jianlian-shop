@@ -34,21 +34,17 @@ type AuthScreenProps = {
 const features = ["安全账号", "快速下单", "订单查询"];
 
 function getSafeErrorMessage(error: unknown, fallback: string) {
-  if (
-    error &&
-    typeof error === "object" &&
-    "message" in error &&
-    typeof (error as { message?: unknown }).message === "string"
-  ) {
-    return (error as { message: string }).message || fallback;
+  if (error && typeof error === "object" && "message" in error) {
+    const value = (error as { message?: unknown })["message"];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
   }
 
   return fallback;
 }
 
 function getNetworkErrorMessage(error: unknown) {
-  return "无法连接 Supabase 服务，请检查网络、代理或 Supabase 项目配置。";
-
   const rawMessage = getSafeErrorMessage(error, "");
   const lowerMessage = rawMessage.toLowerCase();
 
@@ -57,7 +53,7 @@ function getNetworkErrorMessage(error: unknown) {
     lowerMessage.includes("networkerror") ||
     lowerMessage.includes("load failed")
   ) {
-    return "无法连接 Supabase Auth 服务，请检查 Supabase URL、Anon Key、服务器网络或域名 CORS 配置。";
+    return "无法连接 Supabase 服务，请检查网络、代理或 Supabase 项目配置。";
   }
 
   return rawMessage || "网络请求失败，请稍后重试。";
@@ -94,8 +90,8 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const inviteCode = inviteFromUrl.trim();
-    if (!inviteCode || !hasSupabaseConfig()) return;
+    const currentInviteCode = inviteFromUrl.trim();
+    if (!currentInviteCode || !hasSupabaseConfig()) return;
 
     async function recordPromotionVisit() {
       const visitorKey =
@@ -104,19 +100,19 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       window.localStorage.setItem("jianlian_visitor_key", visitorKey);
 
       try {
-        const { error } = await getSupabaseBrowserClient().rpc(
+        const { error: visitError } = await getSupabaseBrowserClient().rpc(
           "record_promotion_visit",
           {
-            input_invite_code: inviteCode,
+            input_invite_code: currentInviteCode,
             input_visitor_key: visitorKey,
           }
         );
 
-        if (error) {
-          console.error("[Promotion] Failed to record visit", error);
+        if (visitError) {
+          console.error("[Promotion] Failed to record visit", visitError);
         }
-      } catch (visitError) {
-        console.error("[Promotion] Failed to record visit", visitError);
+      } catch (visitException) {
+        console.error("[Promotion] Failed to record visit", visitException);
       }
     }
 
@@ -170,7 +166,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
         if (signUpError) {
           setError(
-            signUpError?.message || "Supabase Auth 注册失败，请稍后重试。"
+            signUpError?.message ?? "Supabase Auth 注册失败，请稍后重试。"
           );
           return;
         }
@@ -203,7 +199,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
       if (signInError) {
         setError(
-          signInError?.message || "Supabase Auth 登录失败，请检查邮箱或密码。"
+          signInError?.message ?? "Supabase Auth 登录失败，请检查邮箱或密码。"
         );
         return;
       }
@@ -372,7 +368,9 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                         onChange={(event) => setPassword(event.target.value)}
                         placeholder="请输入密码"
                         className="h-12 rounded-xl bg-slate-50 pl-10 pr-11"
-                        autoComplete={isRegister ? "new-password" : "current-password"}
+                        autoComplete={
+                          isRegister ? "new-password" : "current-password"
+                        }
                         required
                       />
                       <button
