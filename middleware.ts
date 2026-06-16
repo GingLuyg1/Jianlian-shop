@@ -6,6 +6,7 @@ function isStaticAssetPath(pathname: string) {
     pathname.startsWith("/_next/image") ||
     pathname.startsWith("/images") ||
     pathname.startsWith("/public") ||
+    pathname.startsWith("/assets") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
