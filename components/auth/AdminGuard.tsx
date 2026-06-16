@@ -24,21 +24,10 @@ type GuardState =
   | { status: "forbidden"; profile: AdminProfile | null }
   | { status: "allowed"; profile: AdminProfile };
 
-function getSafeErrorMessage(error: unknown, fallback: string) {
-  if (error && typeof error === "object" && "message" in error) {
-    const value = (error as { message?: unknown })["message"];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
-  return fallback;
-}
-
 function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {
-      reject(new Error(`${label}请求超时，请检查网络或 Supabase 配置。`));
+      reject(new Error(`${label} 请求超时，请检查网络或 Supabase 配置。`));
     }, ADMIN_CHECK_TIMEOUT_MS);
 
     Promise.resolve(promise)
@@ -73,12 +62,7 @@ export default function AdminGuard({
         const supabase = getSupabaseBrowserClient();
         const {
           data: { user },
-          error: userError,
         } = await withTimeout(supabase.auth.getUser(), "登录状态校验");
-
-        if (userError) {
-          throw userError;
-        }
 
         if (!user) {
           router.replace(
@@ -138,10 +122,12 @@ export default function AdminGuard({
         console.error("[AdminGuard] Admin access check failed", error);
         if (!active) return;
 
-        setState({
-          status: "auth-error",
-          message: getSafeErrorMessage(error, "无法验证权限，请稍后重试。"),
-        });
+        const message =
+          error instanceof Error
+            ? error.message
+            : "后台权限校验失败，请检查网络或 Supabase 配置。";
+
+        setState({ status: "auth-error", message });
       }
     }
 
