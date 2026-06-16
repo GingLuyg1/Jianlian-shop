@@ -26,7 +26,7 @@ type GuardState =
 
 function getSafeErrorMessage(error: unknown, fallback: string) {
   if (error && typeof error === "object" && "message" in error) {
-    const value = (error as { message?: unknown }).message;
+    const value = (error as { message?: unknown })["message"];
     if (typeof value === "string" && value.trim()) {
       return value;
     }
@@ -38,7 +38,7 @@ function getSafeErrorMessage(error: unknown, fallback: string) {
 function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {
-      reject(new Error(`${label}请求超时，请重新登录后再试。`));
+      reject(new Error(`${label}请求超时，请检查网络或 Supabase 配置。`));
     }, ADMIN_CHECK_TIMEOUT_MS);
 
     Promise.resolve(promise)
@@ -65,12 +65,7 @@ export default function AdminGuard({
 
     async function checkAdminAccess() {
       if (!hasSupabaseConfig()) {
-        if (active) {
-          setState({
-            status: "auth-error",
-            message: "Supabase 尚未配置，无法验证后台权限。",
-          });
-        }
+        if (active) setState({ status: "missing-config" });
         return;
       }
 
@@ -145,10 +140,7 @@ export default function AdminGuard({
 
         setState({
           status: "auth-error",
-          message: getSafeErrorMessage(
-            error,
-            "无法验证后台权限，请重新登录。"
-          ),
+          message: getSafeErrorMessage(error, "无法验证权限，请稍后重试。"),
         });
       }
     }
@@ -168,6 +160,15 @@ export default function AdminGuard({
     return loadingFallback ?? <AdminLoadingMessage />;
   }
 
+  if (state.status === "missing-config") {
+    return (
+      <AdminAccessMessage
+        title="Supabase 尚未配置"
+        description="正式后台账号需要先配置 Supabase 项目地址和匿名公钥。配置完成后，后台会按 profiles.role 校验管理员权限。"
+      />
+    );
+  }
+
   if (state.status === "forbidden") {
     return (
       <AdminAccessMessage
@@ -177,18 +178,9 @@ export default function AdminGuard({
     );
   }
 
-  if (state.status === "missing-config") {
-    return (
-      <AdminAccessMessage
-        title="无法验证后台权限"
-        description="Supabase 尚未配置，无法验证后台权限。"
-      />
-    );
-  }
-
   return (
     <AdminAccessMessage
-      title="无法验证后台权限"
+      title="后台权限校验失败"
       description={state.message}
     />
   );
