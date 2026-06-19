@@ -38,11 +38,11 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 bg-white border-r border-border z-40 hidden md:flex flex-col">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[var(--admin-sidebar-width)] flex-col border-r border-border bg-white md:flex">
       {/* Admin logo */}
-      <div className="px-5 py-5 border-b border-border">
+      <div className="flex h-[var(--admin-header-height)] items-center border-b border-border px-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-white font-bold text-lg">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800 text-base font-bold text-white">
             JL
           </div>
           <div>

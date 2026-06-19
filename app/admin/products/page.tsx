@@ -617,8 +617,8 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1680px] space-y-5 px-4 py-5 md:px-8">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="w-full max-w-none space-y-5">
+      <div className="mb-5 flex w-full flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">商品与分类管理</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -672,7 +672,7 @@ export default function AdminProductsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1fr)_180px_200px_150px_150px_auto]">
+              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1fr)_180px_180px_150px_170px_80px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
@@ -894,22 +894,22 @@ function ProductTable({
   onStatusChange: (id: string, status: ProductStatus) => void;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <Table className="min-w-[1450px]">
+    <div className="w-full overflow-x-auto">
+      <Table className="min-w-[1560px]">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[64px]">图片</TableHead>
-            <TableHead className="min-w-[240px]">商品名称</TableHead>
-            <TableHead className="min-w-[170px]">slug</TableHead>
-            <TableHead className="min-w-[240px]">分类路径</TableHead>
-            <TableHead className="w-[110px]">售价</TableHead>
-            <TableHead className="w-[110px]">原价</TableHead>
-            <TableHead className="w-[90px]">库存</TableHead>
+            <TableHead className="w-[56px]">图片</TableHead>
+            <TableHead className="min-w-[260px]">商品名称</TableHead>
+            <TableHead className="min-w-[160px]">slug</TableHead>
+            <TableHead className="min-w-[220px]">分类路径</TableHead>
+            <TableHead className="w-[100px]">售价</TableHead>
+            <TableHead className="w-[90px]">原价</TableHead>
+            <TableHead className="w-[80px]">库存</TableHead>
             <TableHead className="w-[130px]">交付方式</TableHead>
-            <TableHead className="w-[110px]">状态</TableHead>
-            <TableHead className="w-[80px]">排序</TableHead>
-            <TableHead className="w-[170px]">更新时间</TableHead>
-            <TableHead className="w-[240px] text-right">操作</TableHead>
+            <TableHead className="w-[100px]">状态</TableHead>
+            <TableHead className="w-[70px]">排序</TableHead>
+            <TableHead className="w-[160px]">更新时间</TableHead>
+            <TableHead className="w-[220px] text-right">操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -940,8 +940,8 @@ function ProductTable({
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="text-slate-500">{product.slug}</TableCell>
-                <TableCell>{getCategoryPath(product.category_id, categoryMap)}</TableCell>
+                <TableCell className="whitespace-nowrap text-slate-500">{product.slug}</TableCell>
+                <TableCell className="whitespace-nowrap">{getCategoryPath(product.category_id, categoryMap)}</TableCell>
                 <TableCell>¥{product.price.toFixed(2)}</TableCell>
                 <TableCell>
                   {product.original_price ? `¥${product.original_price.toFixed(2)}` : "-"}
@@ -949,7 +949,7 @@ function ProductTable({
                 <TableCell className={product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600"}>
                   {product.stock}
                 </TableCell>
-                <TableCell>{deliveryLabel[product.delivery_type]}</TableCell>
+                <TableCell className="whitespace-nowrap">{deliveryLabel[product.delivery_type]}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className={cn(productStatusClass[product.status])}>
                     {productStatusLabel[product.status]}
@@ -960,7 +960,7 @@ function ProductTable({
                   {product.updated_at ? new Date(product.updated_at).toLocaleString() : "-"}
                 </TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-1">
+                  <div className="flex justify-end gap-1 whitespace-nowrap">
                     <Button variant="ghost" size="sm" onClick={() => onEdit(product)}>
                       编辑
                     </Button>
