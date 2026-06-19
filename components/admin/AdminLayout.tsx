@@ -15,7 +15,7 @@ function AdminShell({ children }: AdminLayoutProps) {
       <AdminSidebar />
       <main className="min-h-screen min-w-0 md:ml-[var(--admin-sidebar-width)]">
         <AdminTopBar />
-        <div className="w-full px-4 py-5 md:px-7 md:py-6">{children}</div>
+        <div className="w-full px-4 py-5 md:px-6 md:py-6">{children}</div>
       </main>
     </div>
   );

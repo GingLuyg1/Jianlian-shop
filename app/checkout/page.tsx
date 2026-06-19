@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CreditCard,
@@ -31,8 +31,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { products } from "@/lib/mock-data";
-import { Order, Product } from "@/lib/types";
+import {
+  getActiveProductByIdOrSlug,
+  getErrorText,
+  type PublicProductRow,
+} from "@/lib/supabase/public-catalog";
+import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const PRICE_LABELS: Record<string, string> = {
@@ -72,17 +76,91 @@ const GEMINI_RECHARGE_PRODUCT_IDS = [
   "ai-gemini-google-one-pro-pixel-1y",
 ];
 
+function mapCheckoutProduct(row: PublicProductRow): Product {
+  const stock = Number(row.stock ?? 0);
+
+  return {
+    id: row.slug || row.id,
+    name: row.name,
+    category: "digital-accounts",
+    categoryLabel: "商品详情",
+    description: row.short_description ?? row.description ?? "",
+    price: Number(row.price ?? 0),
+    imageUrl: row.image_url,
+    originalPrice: row.original_price,
+    stock,
+    sortOrder: row.sort_order,
+    metadata: row.metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    currency: "CNY",
+    stockStatus: stock <= 0 ? "out-of-stock" : stock <= 10 ? "low-stock" : "in-stock",
+    stockLabel: `库存：${stock}`,
+    processingTime: row.delivery_type === "automatic" ? "自动发货" : "联系客服确认",
+    deliveryMethod:
+      row.delivery_type === "shipping"
+        ? "physical"
+        : row.delivery_type === "manual"
+          ? "hybrid"
+          : "digital",
+    deliveryLabel:
+      row.delivery_type === "automatic"
+        ? "自动发货"
+        : row.delivery_type === "shipping"
+          ? "物流发货"
+          : "人工处理",
+    productType: row.delivery_type === "shipping" ? "physical" : "digital",
+    listingStatus: "active",
+    detail: row.description ?? row.short_description ?? "",
+  };
+}
+
 export default function CheckoutPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const productId = searchParams.get("product") || "gift-apple-tr-500";
-  const product = products.find((item) => item.id === productId);
 
   const [email, setEmail] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [confirmed, setConfirmed] = useState(true);
   const [termsOpen, setTermsOpen] = useState(false);
   const [selectedSkuId, setSelectedSkuId] = useState("");
+  const [productRow, setProductRow] = useState<PublicProductRow | null>(null);
+  const [productLoading, setProductLoading] = useState(true);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProduct() {
+      setProductLoading(true);
+      setError("");
+
+      try {
+        const nextProduct = await getActiveProductByIdOrSlug(productId);
+        if (!active) return;
+        setProductRow(nextProduct);
+      } catch (loadError) {
+        if (!active) return;
+        setError(getErrorText(loadError, "商品读取失败，请返回商品列表重试"));
+        setProductRow(null);
+      } finally {
+        if (active) setProductLoading(false);
+      }
+    }
+
+    loadProduct();
+
+    return () => {
+      active = false;
+    };
+  }, [productId]);
+
+  const product = useMemo(
+    () => (productRow ? mapCheckoutProduct(productRow) : null),
+    [productRow]
+  );
 
   const skuOptions = product ? SKU_OPTIONS_BY_PRODUCT_ID[product.id] ?? [] : [];
   const selectedSku =
@@ -95,14 +173,26 @@ export default function CheckoutPage() {
     return `¥${(unitPrice * quantity).toFixed(2)}`;
   }, [product, quantity, unitPrice]);
 
-  if (!product) {
+  if (productLoading) {
+    return (
+      <PublicLayout contentClassName="max-w-none px-4 md:px-6 py-5">
+        <Card>
+          <CardContent className="py-20 text-center text-sm text-muted-foreground">
+            正在加载商品...
+          </CardContent>
+        </Card>
+      </PublicLayout>
+    );
+  }
+
+  if (!product || !productRow) {
     return (
       <PublicLayout contentClassName="max-w-none px-4 md:px-6 py-5">
         <Card>
           <CardContent className="py-20 text-center">
             <h2 className="text-lg font-semibold">商品未找到</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              请返回商品页重新选择。
+              {error || "请返回商品页重新选择。"}
             </p>
           </CardContent>
         </Card>
@@ -110,40 +200,47 @@ export default function CheckoutPage() {
     );
   }
 
-  const handleSubmit = () => {
-    const orderNo = `JL${Date.now()}`;
-    const mockOrder: Order = {
-      id: orderNo,
-      orderNo,
-      productName: product.name,
-      productId: product.id,
-      amount: unitPrice * quantity,
-      paymentStatus: "pending",
-      paymentStatusLabel: "待付款",
-      processingStatus: "processing",
-      processingStatusLabel: "处理中",
-      createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-      contactInfo: email,
-      shippingInfo: hasSku
-        ? `SKU：${selectedSku.label}；数量：${quantity}`
-        : `数量：${quantity}`,
-      productType: product.productType,
-    };
+  const handleSubmit = async () => {
+    if (!productRow || submitLoading) return;
+    setError("");
+    setSubmitLoading(true);
 
     try {
-      const storageKey = "jianlian_mock_orders";
-      const existing = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      const nextOrders = Array.isArray(existing)
-        ? [mockOrder, ...existing].slice(0, 20)
-        : [mockOrder];
-      localStorage.setItem(storageKey, JSON.stringify(nextOrders));
-    } catch {
-      // Mock-only checkout; ignore local storage failures.
-    }
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          product_id: productRow.id,
+          quantity,
+          customer_email: email,
+          customer_note: hasSku ? `SKU：${selectedSku.label}` : "",
+        }),
+      });
 
-    router.push(
-      `/order-success?orderNo=${orderNo}&product=${encodeURIComponent(product.name)}&amount=${unitPrice * quantity}`
-    );
+      const result = (await response.json().catch(() => null)) as
+        | { order?: { order_no?: string }; error?: string }
+        | null;
+
+      if (!response.ok) {
+        const message = result?.error ?? "订单创建失败，请稍后重试";
+        if (response.status === 401) {
+          router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`);
+          return;
+        }
+        throw new Error(message);
+      }
+
+      const orderNo = result?.order?.order_no;
+      if (!orderNo) throw new Error("订单创建失败，请稍后重试");
+
+      router.push(`/order-success?order_no=${encodeURIComponent(orderNo)}`);
+    } catch (submitError) {
+      setError(getErrorText(submitError, "订单创建失败，请稍后重试"));
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   return (
@@ -166,6 +263,12 @@ export default function CheckoutPage() {
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               <div className="space-y-5">
+              {error ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              ) : null}
+
               {hasSku ? (
                 <SkuSelector
                   options={skuOptions}
@@ -224,7 +327,11 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-                      onClick={() => setQuantity((value) => value + 1)}
+                      onClick={() =>
+                        setQuantity((value) =>
+                          Math.min(Math.max(product.stock ?? 1, 1), value + 1)
+                        )
+                      }
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -233,9 +340,9 @@ export default function CheckoutPage() {
                   <Button
                     className="h-11 rounded-full px-7 text-sm"
                     onClick={handleSubmit}
-                    disabled={!confirmed}
+                    disabled={!confirmed || submitLoading || (product.stock ?? 0) <= 0}
                   >
-                    提交订单
+                    {submitLoading ? "正在提交订单..." : "提交订单"}
                     <span className="mx-3 h-4 w-px bg-white/50" />
                     {amountLabel}
                   </Button>

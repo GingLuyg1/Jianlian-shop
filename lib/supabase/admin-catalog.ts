@@ -45,6 +45,7 @@ export type ProductFilters = {
   categoryIds?: string[];
   status?: ProductStatus | "all";
   deliveryType?: DeliveryType | "all";
+  sortBy?: "sort_order" | "updated_at";
   page?: number;
   pageSize?: number;
 };
@@ -229,6 +230,7 @@ export async function listProducts({
   categoryIds,
   status = "all",
   deliveryType = "all",
+  sortBy = "sort_order",
   page = 1,
   pageSize = 10,
 }: ProductFilters): Promise<ProductListResult> {
@@ -257,10 +259,16 @@ export async function listProducts({
     query = query.eq("delivery_type", deliveryType);
   }
 
-  const { data, error, count } = await query
-    .order("sort_order", { ascending: true })
-    .order("updated_at", { ascending: false })
-    .range(from, to);
+  const sortedQuery =
+    sortBy === "updated_at"
+      ? query.order("updated_at", { ascending: false }).order("sort_order", {
+          ascending: true,
+        })
+      : query.order("sort_order", { ascending: true }).order("updated_at", {
+          ascending: false,
+        });
+
+  const { data, error, count } = await sortedQuery.range(from, to);
 
   if (error) {
     throw new Error(getErrorMessage(error, "商品读取失败，请检查权限或筛选条件"));

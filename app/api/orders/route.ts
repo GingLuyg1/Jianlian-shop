@@ -1,0 +1,106 @@
+import { NextResponse } from "next/server";
+import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  try {
+    if (!hasSupabaseServerConfig()) {
+      return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 500 });
+    }
+
+    const supabase = getSupabaseServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "请先登录" }, { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const page = Number(url.searchParams.get("page") ?? 1);
+    const pageSize = Number(url.searchParams.get("pageSize") ?? 20);
+    const status = url.searchParams.get("status") ?? "all";
+    const search = url.searchParams.get("search") ?? "";
+
+    const result = await listUserOrders(supabase, user.id, {
+      page,
+      pageSize,
+      status: status as never,
+      search,
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("[Orders] list failed", error);
+    return NextResponse.json(
+      { error: getOrderErrorMessage(error, "订单读取失败，请稍后重试") },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    if (!hasSupabaseServerConfig()) {
+      return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 500 });
+    }
+
+    const supabase = getSupabaseServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "请先登录后再下单" }, { status: 401 });
+    }
+
+    const body = (await request.json().catch(() => null)) as
+      | {
+          product_id?: string;
+          productId?: string;
+          quantity?: number;
+          customer_email?: string;
+          customer_name?: string;
+          customer_phone?: string;
+          customer_note?: string;
+        }
+      | null;
+
+    const productId = body?.product_id ?? body?.productId;
+    const quantity = Math.max(1, Math.floor(Number(body?.quantity ?? 1)));
+
+    if (!productId) {
+      return NextResponse.json({ error: "请选择商品" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase.rpc("create_order_with_item", {
+      p_product_id: productId,
+      p_quantity: quantity,
+      p_customer_email: body?.customer_email ?? user.email ?? null,
+      p_customer_name: body?.customer_name ?? null,
+      p_customer_phone: body?.customer_phone ?? null,
+      p_customer_note: body?.customer_note ?? null,
+    });
+
+    if (error) {
+      return NextResponse.json(
+        { error: getOrderErrorMessage(error, "订单创建失败，请稍后重试") },
+        { status: 400 }
+      );
+    }
+
+    const created = Array.isArray(data) ? data[0] : data;
+    return NextResponse.json({ order: created });
+  } catch (error) {
+    console.error("[Orders] create failed", error);
+    return NextResponse.json(
+      { error: getOrderErrorMessage(error, "订单创建失败，请稍后重试") },
+      { status: 500 }
+    );
+  }
+}

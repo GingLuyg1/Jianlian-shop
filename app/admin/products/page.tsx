@@ -48,8 +48,10 @@ import {
 } from "@/lib/supabase/admin-catalog";
 import { cn } from "@/lib/utils";
 
-const PRODUCT_PAGE_SIZE = 10;
+const DEFAULT_PRODUCT_PAGE_SIZE = 20;
+const PRODUCT_PAGE_SIZE_OPTIONS = [20, 50, 100];
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
+const PRODUCT_FALLBACK_IMAGE = "/assets/jianlian-brand-logo.png";
 
 const productStatusLabel: Record<ProductStatus, string> = {
   draft: "草稿",
@@ -108,6 +110,8 @@ type ConfirmAction =
   | { type: "delete-product"; id: string }
   | { type: "delete-category"; category: AdminCategory }
   | null;
+
+type ProductSortBy = "sort_order" | "updated_at";
 
 function emptyProductForm(): ProductFormState {
   return {
@@ -198,10 +202,13 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [productCount, setProductCount] = useState(0);
   const [productSearch, setProductSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [primaryFilter, setPrimaryFilter] = useState("all");
   const [secondaryFilter, setSecondaryFilter] = useState("all");
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatus | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryType | "all">("all");
+  const [sortBy, setSortBy] = useState<ProductSortBy>("sort_order");
+  const [productPageSize, setProductPageSize] = useState(DEFAULT_PRODUCT_PAGE_SIZE);
   const [productPage, setProductPage] = useState(1);
   const [isProductLoading, setIsProductLoading] = useState(false);
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
@@ -236,7 +243,7 @@ export default function AdminProductsPage() {
     }
     return undefined;
   }, [categories, primaryFilter, secondaryFilter]);
-  const totalProductPages = Math.max(1, Math.ceil(productCount / PRODUCT_PAGE_SIZE));
+  const totalProductPages = Math.max(1, Math.ceil(productCount / productPageSize));
 
   const loadCategories = useCallback(async () => {
     setIsCategoryLoading(true);
@@ -256,13 +263,14 @@ export default function AdminProductsPage() {
     setError("");
     try {
       const result = await listProducts({
-        search: productSearch,
+        search: debouncedSearch,
         categoryId: productCategoryIds && productCategoryIds.length === 1 ? productCategoryIds[0] : "all",
         categoryIds: productCategoryIds && productCategoryIds.length > 1 ? productCategoryIds : undefined,
         status: productStatusFilter,
         deliveryType: deliveryFilter,
+        sortBy,
         page: productPage,
-        pageSize: PRODUCT_PAGE_SIZE,
+        pageSize: productPageSize,
       });
       setProducts(result.products);
       setProductCount(result.count);
@@ -271,7 +279,7 @@ export default function AdminProductsPage() {
     } finally {
       setIsProductLoading(false);
     }
-  }, [deliveryFilter, productCategoryIds, productPage, productSearch, productStatusFilter]);
+  }, [debouncedSearch, deliveryFilter, productCategoryIds, productPage, productPageSize, productStatusFilter, sortBy]);
 
   useEffect(() => {
     loadCategories();
@@ -280,6 +288,14 @@ export default function AdminProductsPage() {
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(productSearch);
+      setProductPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [productSearch]);
 
   function clearNotice() {
     setMessage("");
@@ -599,11 +615,25 @@ export default function AdminProductsPage() {
 
   function resetProductFilters() {
     setProductSearch("");
+    setDebouncedSearch("");
     setPrimaryFilter("all");
     setSecondaryFilter("all");
     setProductStatusFilter("all");
     setDeliveryFilter("all");
+    setSortBy("sort_order");
+    setProductPageSize(DEFAULT_PRODUCT_PAGE_SIZE);
     setProductPage(1);
+  }
+
+  async function copyText(value: string, successText: string) {
+    if (!value.trim()) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage(successText);
+      setError("");
+    } catch {
+      setError("复制失败，请手动复制");
+    }
   }
 
   async function handleConfirmAction() {
@@ -672,7 +702,7 @@ export default function AdminProductsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1fr)_180px_180px_150px_170px_80px]">
+              <div className="grid gap-3 xl:grid-cols-[minmax(320px,1fr)_200px_200px_160px_180px_150px_80px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
@@ -743,6 +773,16 @@ export default function AdminProductsPage() {
                     </option>
                   ))}
                 </NativeSelect>
+                <NativeSelect
+                  value={sortBy}
+                  onChange={(value) => {
+                    setSortBy(value as ProductSortBy);
+                    setProductPage(1);
+                  }}
+                >
+                  <option value="sort_order">按排序</option>
+                  <option value="updated_at">按更新时间</option>
+                </NativeSelect>
                 <Button variant="outline" onClick={resetProductFilters}>
                   重置
                 </Button>
@@ -757,15 +797,31 @@ export default function AdminProductsPage() {
                   onCopy={openCopyProduct}
                   onDelete={(id) => setConfirmAction({ type: "delete-product", id })}
                   onEdit={openEditProduct}
+                  onCopyText={copyText}
                   onStatusChange={handleProductStatus}
                 />
               )}
 
-              <div className="flex flex-col gap-2 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
                 <span>
-                  共 {productCount} 条记录，当前第 {productPage} / {totalProductPages} 页
+                  共 {productCount} 条，第 {productPage} / {totalProductPages} 页
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>每页</span>
+                  <NativeSelect
+                    value={String(productPageSize)}
+                    onChange={(value) => {
+                      setProductPageSize(Number(value));
+                      setProductPage(1);
+                    }}
+                    className="h-9 w-24"
+                  >
+                    {PRODUCT_PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </NativeSelect>
                   <Button
                     variant="outline"
                     size="sm"
@@ -777,7 +833,7 @@ export default function AdminProductsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={productPage >= totalProductPages || products.length < PRODUCT_PAGE_SIZE}
+                    disabled={productPage >= totalProductPages || products.length < productPageSize}
                     onClick={() => setProductPage(Math.min(totalProductPages, productPage + 1))}
                   >
                     下一页
@@ -884,6 +940,7 @@ function ProductTable({
   onCopy,
   onDelete,
   onEdit,
+  onCopyText,
   onStatusChange,
 }: {
   categoryMap: Map<string, AdminCategory>;
@@ -891,6 +948,7 @@ function ProductTable({
   onCopy: (product: AdminProduct) => void;
   onDelete: (id: string) => void;
   onEdit: (product: AdminProduct) => void;
+  onCopyText: (value: string, successText: string) => void | Promise<void>;
   onStatusChange: (id: string, status: ProductStatus) => void;
 }) {
   return (
@@ -933,14 +991,26 @@ function ProductTable({
                   />
                 </TableCell>
                 <TableCell className="font-medium">
-                  <div className="line-clamp-2">{product.name}</div>
+                  <div
+                    className="truncate"
+                    title={product.name}
+                    onDoubleClick={() => onCopyText(product.name, "商品名称已复制")}
+                  >
+                    {product.name}
+                  </div>
                   {product.short_description && (
-                    <div className="mt-1 truncate text-xs text-slate-500">
+                    <div className="mt-1 truncate text-xs text-slate-500" title={product.short_description}>
                       {product.short_description}
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-slate-500">{product.slug}</TableCell>
+                <TableCell
+                  className="max-w-[170px] cursor-copy truncate whitespace-nowrap text-slate-500"
+                  title={product.slug}
+                  onDoubleClick={() => onCopyText(product.slug, "Slug 已复制")}
+                >
+                  {product.slug}
+                </TableCell>
                 <TableCell className="whitespace-nowrap">{getCategoryPath(product.category_id, categoryMap)}</TableCell>
                 <TableCell>¥{product.price.toFixed(2)}</TableCell>
                 <TableCell>
@@ -1476,18 +1546,23 @@ function FormSection({
 
 function NativeSelect({
   children,
+  className,
   disabled,
   onChange,
   value,
 }: {
   children: ReactNode;
+  className?: string;
   disabled?: boolean;
   onChange: (value: string) => void;
   value: string;
 }) {
   return (
     <select
-      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+      className={cn(
+        "h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
       disabled={disabled}
       value={value}
       onChange={(event) => onChange(event.target.value)}
