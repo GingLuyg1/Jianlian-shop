@@ -11,12 +11,12 @@ interface AdminLayoutProps {
 
 function AdminShell({ children }: AdminLayoutProps) {
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:235px]">
+    <div className="flex h-dvh overflow-hidden bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:235px]">
       <AdminSidebar />
-      <main className="min-h-screen min-w-0 md:ml-[var(--admin-sidebar-width)]">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:ml-[var(--admin-sidebar-width)]">
         <AdminTopBar />
-        <div className="w-full px-5 py-5 xl:px-7 2xl:px-8">{children}</div>
-      </main>
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+      </div>
     </div>
   );
 }

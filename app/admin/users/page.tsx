@@ -78,14 +78,17 @@ export default function AdminUsersPage() {
   }, []);
 
   return (
-    <>
-      <h1 className="mb-4 text-xl font-bold text-foreground">用户管理</h1>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4 xl:px-7 2xl:px-8">
+      <div className="mb-3 shrink-0">
+        <h1 className="text-xl font-bold text-foreground">用户管理</h1>
+        <p className="mt-1 text-sm text-slate-500">查看用户资料、角色和账户余额占位数据。</p>
+      </div>
 
-      <Card>
-        <CardHeader className="pb-3">
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CardHeader className="shrink-0 pb-3">
           <CardTitle className="text-base">用户列表</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {loading ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
               正在读取用户数据...
@@ -99,24 +102,24 @@ export default function AdminUsersPage() {
               暂无用户数据
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
+            <div className="min-h-0 flex-1 overflow-hidden [&>div]:h-full [&>div]:overflow-auto">
+              <Table className="min-w-[900px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">用户邮箱</TableHead>
-                    <TableHead className="text-xs">角色</TableHead>
-                    <TableHead className="text-xs">余额</TableHead>
-                    <TableHead className="text-xs">注册时间</TableHead>
-                    <TableHead className="text-xs text-right">操作</TableHead>
+                    <TableHead className="h-10 whitespace-nowrap px-3 text-xs">用户邮箱</TableHead>
+                    <TableHead className="h-10 whitespace-nowrap px-3 text-xs">角色</TableHead>
+                    <TableHead className="h-10 whitespace-nowrap px-3 text-xs">余额</TableHead>
+                    <TableHead className="h-10 whitespace-nowrap px-3 text-xs">注册时间</TableHead>
+                    <TableHead className="h-10 whitespace-nowrap px-3 text-right text-xs">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="text-xs font-medium">
+                      <TableCell className="whitespace-nowrap px-3 py-2.5 text-xs font-medium">
                         {user.email || "未设置邮箱"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-3 py-2.5">
                         <Badge
                           variant="outline"
                           className={
@@ -128,13 +131,13 @@ export default function AdminUsersPage() {
                           {user.role || "user"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className="whitespace-nowrap px-3 py-2.5 text-xs">
                         ¥{Number(user.balance ?? 0).toFixed(2)}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="whitespace-nowrap px-3 py-2.5 text-xs text-muted-foreground">
                         {formatDate(user.created_at)}
                       </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">
+                      <TableCell className="whitespace-nowrap px-3 py-2.5 text-right text-xs text-muted-foreground">
                         查看
                       </TableCell>
                     </TableRow>
@@ -145,6 +148,6 @@ export default function AdminUsersPage() {
           )}
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }

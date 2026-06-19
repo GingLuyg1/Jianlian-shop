@@ -113,8 +113,8 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="w-full max-w-none space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4 xl:px-7 2xl:px-8">
+      <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">订单管理</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -128,18 +128,18 @@ export default function AdminOrdersPage() {
       </div>
 
       {message ? (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        <div className="mb-3 shrink-0 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
           {message}
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-3 shrink-0 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
-      <Card className="w-full max-w-none">
-        <CardHeader className="space-y-4 pb-4">
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CardHeader className="shrink-0 space-y-3 pb-3">
           <CardTitle className="text-base">订单列表</CardTitle>
           <div className="grid gap-3 xl:grid-cols-[minmax(280px,1fr)_170px_170px_130px]">
             <div className="relative">
@@ -200,7 +200,7 @@ export default function AdminOrdersPage() {
             </select>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 6 }).map((_, index) => (
@@ -217,19 +217,19 @@ export default function AdminOrdersPage() {
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="min-h-0 flex-1 overflow-auto">
               <table className="w-full min-w-[1300px] text-sm">
                 <thead className="sticky top-0 bg-slate-50 text-xs text-slate-500">
                   <tr className="border-b">
-                    <th className="whitespace-nowrap px-3 py-3 text-left">订单编号</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">用户邮箱</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">商品摘要</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">金额</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">订单状态</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">支付状态</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">交付方式</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">创建时间</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-right">操作</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left">订单编号</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left">用户邮箱</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left">商品摘要</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left">金额</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left">订单状态</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left">支付状态</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left">交付方式</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left">创建时间</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -241,19 +241,19 @@ export default function AdminOrdersPage() {
 
                     return (
                       <tr key={order.id} className="border-b hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-3 py-4 font-mono text-xs">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs">
                           {order.order_no}
                         </td>
-                        <td className="max-w-[210px] truncate px-3 py-4">
+                        <td className="max-w-[210px] truncate px-3 py-2.5">
                           {order.customer_email || "未填写"}
                         </td>
-                        <td className="max-w-[260px] truncate px-3 py-4 font-medium">
+                        <td className="max-w-[260px] truncate px-3 py-2.5 font-medium">
                           {item?.product_name ?? "订单商品"}
                         </td>
-                        <td className="whitespace-nowrap px-3 py-4 font-semibold text-primary">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-primary">
                           ¥{Number(order.total_amount).toFixed(2)}
                         </td>
-                        <td className="px-3 py-4">
+                        <td className="px-3 py-2.5">
                           <Badge
                             variant="outline"
                             className={cn("whitespace-nowrap text-xs", ORDER_STATUS_STYLES[orderStatus])}
@@ -261,7 +261,7 @@ export default function AdminOrdersPage() {
                             {getOrderStatusLabel(order.status)}
                           </Badge>
                         </td>
-                        <td className="px-3 py-4">
+                        <td className="px-3 py-2.5">
                           <Badge
                             variant="outline"
                             className={cn("whitespace-nowrap text-xs", PAYMENT_STATUS_STYLES[payment])}
@@ -269,15 +269,15 @@ export default function AdminOrdersPage() {
                             {getPaymentStatusLabel(order.payment_status)}
                           </Badge>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-4">
+                        <td className="whitespace-nowrap px-3 py-2.5">
                           {order.delivery_type || item?.delivery_type || "未记录"}
                         </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-slate-500">
+                        <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">
                           {new Date(order.created_at).toLocaleString("zh-CN", {
                             hour12: false,
                           })}
                         </td>
-                        <td className="px-3 py-4 text-right">
+                        <td className="px-3 py-2.5 text-right">
                           <div className="flex justify-end gap-2">
                             {transitions.length === 0 ? (
                               <span className="text-xs text-slate-400">无可用操作</span>
@@ -313,7 +313,7 @@ export default function AdminOrdersPage() {
             </div>
           )}
 
-          <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+          <div className="mt-3 flex shrink-0 items-center justify-between border-t pt-3 text-sm text-slate-500">
             <span>共 {count} 条订单</span>
             <div className="flex items-center gap-2">
               <Button
