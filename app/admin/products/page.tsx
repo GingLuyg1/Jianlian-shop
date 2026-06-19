@@ -52,6 +52,8 @@ const DEFAULT_PRODUCT_PAGE_SIZE = 20;
 const PRODUCT_PAGE_SIZE_OPTIONS = [20, 50, 100];
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 const PRODUCT_FALLBACK_IMAGE = "/assets/jianlian-brand-logo.png";
+const HORIZONTAL_TEXT_CLASS =
+  "whitespace-nowrap break-keep [writing-mode:horizontal-tb] [word-orientation:mixed]";
 
 const productStatusLabel: Record<ProductStatus, string> = {
   draft: "草稿",
@@ -648,14 +650,14 @@ export default function AdminProductsPage() {
 
   return (
     <div className="w-full max-w-none space-y-5">
-      <div className="mb-5 flex w-full flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
+      <div className="mb-4 flex w-full flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-950">商品与分类管理</h1>
           <p className="mt-1 text-sm text-slate-500">
             管理 Supabase categories 和 products 数据，商品绑定到二级或最末级分类。
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -694,7 +696,7 @@ export default function AdminProductsPage() {
         </TabsList>
 
         <TabsContent value="products" className="mt-4">
-          <Card>
+          <Card className="w-full max-w-none">
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <CardTitle className="text-base">商品列表</CardTitle>
@@ -702,7 +704,7 @@ export default function AdminProductsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3 xl:grid-cols-[minmax(320px,1fr)_200px_200px_160px_180px_150px_80px]">
+              <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_190px_190px_155px_175px_145px_80px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
@@ -793,6 +795,7 @@ export default function AdminProductsPage() {
               ) : (
                 <ProductTable
                   categoryMap={categoryMap}
+                  categories={categories}
                   products={products}
                   onCopy={openCopyProduct}
                   onDelete={(id) => setConfirmAction({ type: "delete-product", id })}
@@ -845,7 +848,7 @@ export default function AdminProductsPage() {
         </TabsContent>
 
         <TabsContent value="categories" className="mt-4">
-          <Card>
+          <Card className="w-full max-w-none">
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <CardTitle className="text-base">分类树</CardTitle>
@@ -936,6 +939,7 @@ export default function AdminProductsPage() {
 
 function ProductTable({
   categoryMap,
+  categories,
   products,
   onCopy,
   onDelete,
@@ -944,6 +948,7 @@ function ProductTable({
   onStatusChange,
 }: {
   categoryMap: Map<string, AdminCategory>;
+  categories: AdminCategory[];
   products: AdminProduct[];
   onCopy: (product: AdminProduct) => void;
   onDelete: (id: string) => void;
@@ -952,22 +957,36 @@ function ProductTable({
   onStatusChange: (id: string, status: ProductStatus) => void;
 }) {
   return (
-    <div className="w-full overflow-x-auto">
-      <Table className="min-w-[1560px]">
-        <TableHeader>
+    <div className="w-full min-w-0 overflow-x-auto">
+      <Table className="min-w-[1580px] table-fixed">
+        <colgroup>
+          <col className="w-[72px]" />
+          <col className="w-[310px]" />
+          <col className="w-[180px]" />
+          <col className="w-[240px]" />
+          <col className="w-[105px]" />
+          <col className="w-[95px]" />
+          <col className="w-[85px]" />
+          <col className="w-[135px]" />
+          <col className="w-[110px]" />
+          <col className="w-[80px]" />
+          <col className="w-[175px]" />
+          <col className="w-[230px]" />
+        </colgroup>
+        <TableHeader className="sticky top-0 z-10 bg-slate-50">
           <TableRow>
-            <TableHead className="w-[56px]">图片</TableHead>
-            <TableHead className="min-w-[260px]">商品名称</TableHead>
-            <TableHead className="min-w-[160px]">slug</TableHead>
-            <TableHead className="min-w-[220px]">分类路径</TableHead>
-            <TableHead className="w-[100px]">售价</TableHead>
-            <TableHead className="w-[90px]">原价</TableHead>
-            <TableHead className="w-[80px]">库存</TableHead>
-            <TableHead className="w-[130px]">交付方式</TableHead>
-            <TableHead className="w-[100px]">状态</TableHead>
-            <TableHead className="w-[70px]">排序</TableHead>
-            <TableHead className="w-[160px]">更新时间</TableHead>
-            <TableHead className="w-[220px] text-right">操作</TableHead>
+            <TableHead className={cn("text-center", HORIZONTAL_TEXT_CLASS)}>图片</TableHead>
+            <TableHead className={HORIZONTAL_TEXT_CLASS}>商品名称</TableHead>
+            <TableHead className={HORIZONTAL_TEXT_CLASS}>Slug</TableHead>
+            <TableHead className={HORIZONTAL_TEXT_CLASS}>分类路径</TableHead>
+            <TableHead className={cn("text-center", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
+            <TableHead className={cn("text-center", HORIZONTAL_TEXT_CLASS)}>原价</TableHead>
+            <TableHead className={cn("text-center", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
+            <TableHead className={HORIZONTAL_TEXT_CLASS}>交付方式</TableHead>
+            <TableHead className={cn("text-center", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
+            <TableHead className={cn("text-center", HORIZONTAL_TEXT_CLASS)}>排序</TableHead>
+            <TableHead className={HORIZONTAL_TEXT_CLASS}>更新时间</TableHead>
+            <TableHead className={cn("text-right", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -978,85 +997,127 @@ function ProductTable({
               </TableCell>
             </TableRow>
           ) : (
-            products.map((product) => (
-              <TableRow key={product.id}>
-                <TableCell>
-                  <img
-                    src={product.image_url || "/assets/jianlian-brand-logo.png"}
-                    alt=""
-                    className="h-10 w-10 rounded-lg border object-cover"
-                    onError={(event) => {
-                      event.currentTarget.src = "/assets/jianlian-brand-logo.png";
-                    }}
-                  />
+            products.map((product) => {
+              const categoryPath = getCategoryPath(product.category_id, categoryMap);
+              const category = product.category_id ? categoryMap.get(product.category_id) : null;
+              const hasCategoryIssue = Boolean(!category || hasChildren(categories, product.category_id ?? ""));
+
+              return (
+              <TableRow key={product.id} className={cn("h-[72px]", hasCategoryIssue && "bg-orange-50/40")}>
+                <TableCell className="text-center">
+                  <div className="group relative mx-auto h-12 w-12 shrink-0 overflow-visible">
+                    <div className="h-12 w-12 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      <img
+                        src={product.image_url || PRODUCT_FALLBACK_IMAGE}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                        onError={(event) => {
+                          event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
+                        }}
+                      />
+                    </div>
+                    <div className="pointer-events-none absolute left-14 top-0 z-20 hidden h-40 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg group-hover:block">
+                      <img
+                        src={product.image_url || PRODUCT_FALLBACK_IMAGE}
+                        alt=""
+                        className="h-full w-full rounded-lg object-cover"
+                        onError={(event) => {
+                          event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
+                        }}
+                      />
+                    </div>
+                  </div>
                 </TableCell>
-                <TableCell className="font-medium">
+                <TableCell className="min-w-0 font-medium">
                   <div
-                    className="truncate"
+                    className="truncate text-sm font-semibold leading-5 text-slate-900"
                     title={product.name}
                     onDoubleClick={() => onCopyText(product.name, "商品名称已复制")}
                   >
                     {product.name}
                   </div>
                   {product.short_description && (
-                    <div className="mt-1 truncate text-xs text-slate-500" title={product.short_description}>
+                    <div className="mt-1 truncate text-xs leading-[18px] text-slate-500" title={product.short_description}>
                       {product.short_description}
                     </div>
                   )}
                 </TableCell>
                 <TableCell
-                  className="max-w-[170px] cursor-copy truncate whitespace-nowrap text-slate-500"
+                  className={cn("cursor-copy truncate text-slate-500", HORIZONTAL_TEXT_CLASS)}
                   title={product.slug}
                   onDoubleClick={() => onCopyText(product.slug, "Slug 已复制")}
                 >
                   {product.slug}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">{getCategoryPath(product.category_id, categoryMap)}</TableCell>
-                <TableCell>¥{product.price.toFixed(2)}</TableCell>
-                <TableCell>
+                <TableCell
+                  className={cn("truncate", hasCategoryIssue ? "text-orange-700" : "text-slate-600", HORIZONTAL_TEXT_CLASS)}
+                  title={hasCategoryIssue ? "分类层级异常" : categoryPath}
+                >
+                  {hasCategoryIssue ? "分类层级异常" : categoryPath}
+                </TableCell>
+                <TableCell className={cn("text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
+                  ¥{product.price.toFixed(2)}
+                </TableCell>
+                <TableCell className={cn("text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
                   {product.original_price ? `¥${product.original_price.toFixed(2)}` : "-"}
                 </TableCell>
-                <TableCell className={product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600"}>
+                <TableCell className={cn("text-center tabular-nums", HORIZONTAL_TEXT_CLASS, product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600")}>
                   {product.stock}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">{deliveryLabel[product.delivery_type]}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn(productStatusClass[product.status])}>
-                    {productStatusLabel[product.status]}
-                  </Badge>
+                <TableCell className={cn("text-slate-600", HORIZONTAL_TEXT_CLASS)}>
+                  {deliveryLabel[product.delivery_type]}
                 </TableCell>
-                <TableCell>{product.sort_order}</TableCell>
-                <TableCell className="whitespace-nowrap text-slate-500">
+                <TableCell className="text-center">
+                  <div className="flex w-full justify-center">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "inline-flex min-w-[72px] justify-center rounded-full px-3 py-1 text-xs font-medium",
+                        HORIZONTAL_TEXT_CLASS,
+                        productStatusClass[product.status]
+                      )}
+                    >
+                      {productStatusLabel[product.status]}
+                    </Badge>
+                  </div>
+                </TableCell>
+                <TableCell className={cn("text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
+                  {product.sort_order}
+                </TableCell>
+                <TableCell className={cn("text-slate-500", HORIZONTAL_TEXT_CLASS)}>
                   {product.updated_at ? new Date(product.updated_at).toLocaleString() : "-"}
                 </TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-1 whitespace-nowrap">
-                    <Button variant="ghost" size="sm" onClick={() => onEdit(product)}>
+                  <div className={cn("flex justify-end gap-1", HORIZONTAL_TEXT_CLASS)}>
+                    <Button variant="ghost" size="sm" className={HORIZONTAL_TEXT_CLASS} onClick={() => onEdit(product)}>
                       编辑
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
+                      className={cn(HORIZONTAL_TEXT_CLASS, product.status === "active" ? "text-orange-600" : "text-green-700")}
                       onClick={() =>
                         onStatusChange(product.id, product.status === "active" ? "inactive" : "active")
                       }
                     >
                       {product.status === "active" ? "下架" : "上架"}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onStatusChange(product.id, "sold_out")}>
+                    <Button variant="ghost" size="sm" className={HORIZONTAL_TEXT_CLASS} onClick={() => onStatusChange(product.id, "sold_out")}>
                       售罄
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onCopy(product)}>
+                    <Button variant="ghost" size="sm" className={HORIZONTAL_TEXT_CLASS} onClick={() => onCopy(product)}>
                       <Copy className="mr-1 h-3.5 w-3.5" />
                       复制
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-red-600" onClick={() => onDelete(product.id)}>
+                    <Button variant="ghost" size="sm" className={cn("text-red-600", HORIZONTAL_TEXT_CLASS)} onClick={() => onDelete(product.id)}>
                       删除
                     </Button>
                   </div>
                 </TableCell>
               </TableRow>
-            ))
+              );
+            })
           )}
         </TableBody>
       </Table>
@@ -1604,9 +1665,15 @@ function getCategoryPath(categoryId: string | null, categoryMap: Map<string, Adm
   if (!categoryId) return "未设置";
   const category = categoryMap.get(categoryId);
   if (!category) return "未匹配分类";
-  const parent = category.parent_id ? categoryMap.get(category.parent_id) : null;
-  const grandParent = parent?.parent_id ? categoryMap.get(parent.parent_id) : null;
-  return [grandParent?.name, parent?.name, category.name].filter(Boolean).join(" / ");
+  const names: string[] = [];
+  const visited = new Set<string>();
+  let current: AdminCategory | undefined = category;
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    names.unshift(current.name);
+    current = current.parent_id ? categoryMap.get(current.parent_id) : undefined;
+  }
+  return names.join(" / ");
 }
 
 function toProductForm(

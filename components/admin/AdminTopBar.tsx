@@ -47,7 +47,7 @@ export default function AdminTopBar() {
   };
 
   return (
-    <div className="sticky top-0 z-30 flex h-[var(--admin-header-height)] items-center border-b border-border bg-white px-4 md:px-7">
+    <div className="sticky top-0 z-30 flex h-[var(--admin-header-height)] items-center border-b border-border bg-white px-5 xl:px-7 2xl:px-8">
       <div className="flex w-full items-center justify-between gap-4">
         {/* Search */}
         <div className="flex items-center gap-2 flex-1">
@@ -102,7 +102,7 @@ export default function AdminTopBar() {
           </Sheet>
           <div className="relative max-w-md flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="搜索订单、商品..." className="h-10 pl-9 text-sm" />
+          <Input placeholder="搜索订单、商品..." className="h-9 pl-9 text-sm" />
           </div>
         </div>
 

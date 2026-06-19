@@ -134,7 +134,11 @@ export default function MyOrdersPage() {
               </div>
             ) : error ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-                {error}
+                <div>{error}</div>
+                <Button variant="outline" size="sm" className="mt-4" onClick={loadOrders}>
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  重新加载
+                </Button>
               </div>
             ) : rows.length === 0 ? (
               <div className="flex h-full items-center justify-center">
@@ -144,8 +148,11 @@ export default function MyOrdersPage() {
                   </div>
                   <h2 className="mt-5 text-xl font-semibold">暂无订单</h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    下单成功后，订单会显示在这里。
+                    您还没有创建任何订单。
                   </p>
+                  <Button asChild className="mt-5">
+                    <Link href="/">返回商城</Link>
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -153,13 +160,13 @@ export default function MyOrdersPage() {
                 <table className="w-full min-w-[900px] text-sm">
                   <thead className="sticky top-0 bg-white text-xs text-muted-foreground">
                     <tr className="border-b">
-                      <th className="px-3 py-3 text-left">订单编号</th>
-                      <th className="px-3 py-3 text-left">商品摘要</th>
-                      <th className="px-3 py-3 text-left">订单金额</th>
-                      <th className="px-3 py-3 text-left">订单状态</th>
-                      <th className="px-3 py-3 text-left">支付状态</th>
-                      <th className="px-3 py-3 text-left">创建时间</th>
-                      <th className="px-3 py-3 text-right">操作</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-left">订单编号</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-left">商品摘要</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-left">订单金额</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-left">订单状态</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-left">支付状态</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-left">创建时间</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-right">操作</th>
                     </tr>
                   </thead>
                   <tbody>

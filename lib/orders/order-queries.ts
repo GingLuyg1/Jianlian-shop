@@ -19,7 +19,18 @@ export function getOrderErrorMessage(
   error: unknown,
   fallback = "操作失败，请稍后重试"
 ) {
-  return (error as { message?: string } | null | undefined)?.message ?? fallback;
+  const message =
+    (error as { message?: string } | null | undefined)?.message ??
+    (typeof error === "string" ? error : "");
+  if (
+    message.includes("Could not find the table") ||
+    message.includes("schema cache") ||
+    message.includes("PGRST205") ||
+    message.includes("42P01")
+  ) {
+    return "订单数据表已创建但接口缓存可能尚未刷新，请稍后重试或重新加载。";
+  }
+  return message || fallback;
 }
 
 function normalizeNumber(value: unknown, fallback = 0) {

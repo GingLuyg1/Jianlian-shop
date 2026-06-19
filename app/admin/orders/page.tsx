@@ -109,7 +109,7 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="w-full max-w-none space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">订单管理</h1>
@@ -134,7 +134,7 @@ export default function AdminOrdersPage() {
         </div>
       ) : null}
 
-      <Card>
+      <Card className="w-full max-w-none">
         <CardHeader className="space-y-4 pb-4">
           <CardTitle className="text-base">订单列表</CardTitle>
           <div className="grid gap-3 xl:grid-cols-[minmax(280px,1fr)_170px_170px_130px]">
@@ -205,22 +205,27 @@ export default function AdminOrdersPage() {
             </div>
           ) : orders.length === 0 ? (
             <div className="rounded-xl border border-dashed p-12 text-center text-sm text-slate-500">
-              暂无订单数据
+              <div className="text-base font-semibold text-slate-900">暂无订单数据</div>
+              <p className="mt-2">当前数据库中还没有订单。</p>
+              <Button variant="outline" size="sm" className="mt-5" onClick={loadOrders}>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                刷新
+              </Button>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1300px] text-sm">
                 <thead className="sticky top-0 bg-slate-50 text-xs text-slate-500">
                   <tr className="border-b">
-                    <th className="px-3 py-3 text-left">订单编号</th>
-                    <th className="px-3 py-3 text-left">用户邮箱</th>
-                    <th className="px-3 py-3 text-left">商品摘要</th>
-                    <th className="px-3 py-3 text-left">金额</th>
-                    <th className="px-3 py-3 text-left">订单状态</th>
-                    <th className="px-3 py-3 text-left">支付状态</th>
-                    <th className="px-3 py-3 text-left">交付方式</th>
-                    <th className="px-3 py-3 text-left">创建时间</th>
-                    <th className="px-3 py-3 text-right">操作</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">订单编号</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">用户邮箱</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">商品摘要</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">金额</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">订单状态</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">支付状态</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">交付方式</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">创建时间</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody>
