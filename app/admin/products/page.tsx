@@ -949,7 +949,7 @@ function ProductTable({
   onStatusChange: (id: string, status: ProductStatus) => void;
 }) {
   return (
-    <div className="min-h-0 flex-1 overflow-hidden [&>div]:h-full [&>div]:overflow-auto">
+    <div className="min-h-0 flex-1 overflow-auto">
       <Table className="min-w-[1580px] table-fixed">
         <colgroup>
           <col className="w-[72px]" />

@@ -41,8 +41,8 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[var(--admin-sidebar-width)] flex-col border-r border-border bg-white md:flex">
-      <div className="flex h-[var(--admin-header-height)] items-center border-b border-border px-5">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[var(--admin-sidebar-width)] flex-col border-r border-border bg-white md:flex">
+      <div className="flex h-[var(--admin-header-height)] shrink-0 items-center border-b border-border px-5">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800 text-base font-bold text-white">
             JL
@@ -51,14 +51,12 @@ export default function AdminSidebar() {
             <div className="text-base font-semibold leading-tight text-foreground">
               Jianlian Admin
             </div>
-            <div className="mt-0.5 text-xs leading-tight text-muted-foreground">
-              管理后台
-            </div>
+            <div className="mt-0.5 text-xs leading-tight text-muted-foreground">管理后台</div>
           </div>
         </div>
       </div>
 
-      <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-3">
+      <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
         <ul className="space-y-1">
           <li>
             <button
@@ -100,7 +98,7 @@ export default function AdminSidebar() {
                     商品列表
                   </Link>
                   <Link
-                    href="/admin/products?view=categories"
+                    href="/admin/categories"
                     className={cn(
                       "block rounded-md px-3 py-2 text-sm transition-colors",
                       isCategoryView
@@ -138,7 +136,7 @@ export default function AdminSidebar() {
         </ul>
       </nav>
 
-      <div className="border-t border-border px-4 py-4">
+      <div className="shrink-0 border-t border-border px-4 py-4">
         <Link
           href="/"
           className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCcw, Search, X } from "lucide-react";
 
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminErrorState from "@/components/admin/AdminErrorState";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -132,12 +135,6 @@ export default function AdminOrdersPage() {
           {message}
         </div>
       ) : null}
-      {error ? (
-        <div className="mb-3 shrink-0 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <CardHeader className="shrink-0 space-y-3 pb-3">
           <CardTitle className="text-base">订单列表</CardTitle>
@@ -202,13 +199,11 @@ export default function AdminOrdersPage() {
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="h-14 rounded-xl bg-slate-100" />
-              ))}
-            </div>
+            <AdminTableSkeleton rows={8} />
+          ) : error ? (
+            <AdminErrorState onRetry={loadOrders} />
           ) : orders.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-12 text-center text-sm text-slate-500">
+            <div className="flex min-h-[220px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center text-sm text-slate-500">
               <div className="text-base font-semibold text-slate-900">暂无订单数据</div>
               <p className="mt-2">当前数据库中还没有订单。</p>
               <Button variant="outline" size="sm" className="mt-5" onClick={loadOrders}>
@@ -368,6 +363,15 @@ function AdminOrderDrawer({
   onClose: () => void;
   onUpdateStatus: (order: OrderRecord, nextStatus: OrderStatus) => void;
 }) {
+  useEffect(() => {
+    if (!order) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, order]);
+
   if (!order) return null;
 
   const orderStatus = normalizeOrderStatus(order.status);
