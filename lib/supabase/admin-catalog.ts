@@ -34,6 +34,7 @@ export type AdminProduct = {
   delivery_type: DeliveryType;
   status: ProductStatus;
   sort_order: number;
+  metadata?: Record<string, unknown> | null;
   updated_at: string | null;
   created_at?: string | null;
 };
@@ -41,7 +42,9 @@ export type AdminProduct = {
 export type ProductFilters = {
   search?: string;
   categoryId?: string;
+  categoryIds?: string[];
   status?: ProductStatus | "all";
+  deliveryType?: DeliveryType | "all";
   page?: number;
   pageSize?: number;
 };
@@ -64,6 +67,7 @@ export type ProductPayload = {
   delivery_type: DeliveryType;
   status: ProductStatus;
   sort_order: number;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type CategoryPayload = {
@@ -74,6 +78,7 @@ export type CategoryPayload = {
   icon: string | null;
   description: string | null;
   sort_order: number;
+  is_active?: boolean;
 };
 
 function getClient(client?: SupabaseClient) {
@@ -109,6 +114,10 @@ function normalizeProduct(row: Record<string, unknown>): AdminProduct {
     delivery_type: (row.delivery_type as DeliveryType) ?? "manual",
     status: (row.status as ProductStatus) ?? "draft",
     sort_order: normalizeNumber(row.sort_order),
+    metadata:
+      row.metadata && typeof row.metadata === "object"
+        ? (row.metadata as Record<string, unknown>)
+        : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
     created_at: row.created_at ? String(row.created_at) : null,
   };
@@ -217,7 +226,9 @@ export async function setCategoryStatus(
 export async function listProducts({
   search = "",
   categoryId = "all",
+  categoryIds,
   status = "all",
+  deliveryType = "all",
   page = 1,
   pageSize = 10,
 }: ProductFilters): Promise<ProductListResult> {
@@ -227,16 +238,23 @@ export async function listProducts({
     .from("products")
     .select("*", { count: "exact" });
 
-  if (search.trim()) {
-    query = query.ilike("name", `%${search.trim()}%`);
+  const searchTerm = search.trim();
+  if (searchTerm) {
+    query = query.or(`name.ilike.%${searchTerm}%,slug.ilike.%${searchTerm}%`);
   }
 
   if (categoryId !== "all") {
     query = query.eq("category_id", categoryId);
+  } else if (categoryIds && categoryIds.length > 0) {
+    query = query.in("category_id", categoryIds);
   }
 
   if (status !== "all") {
     query = query.eq("status", status);
+  }
+
+  if (deliveryType !== "all") {
+    query = query.eq("delivery_type", deliveryType);
   }
 
   const { data, error, count } = await query

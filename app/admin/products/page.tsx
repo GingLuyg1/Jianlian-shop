@@ -1,6 +1,17 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { X, Copy, Loader2, Plus, RefreshCw, Search } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,9 +47,9 @@ import {
   type ProductStatus,
 } from "@/lib/supabase/admin-catalog";
 import { cn } from "@/lib/utils";
-import { Plus, RefreshCw, Search } from "lucide-react";
 
 const PRODUCT_PAGE_SIZE = 10;
+const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 const productStatusLabel: Record<ProductStatus, string> = {
   draft: "草稿",
@@ -50,8 +61,8 @@ const productStatusLabel: Record<ProductStatus, string> = {
 const productStatusClass: Record<ProductStatus, string> = {
   draft: "border-slate-200 bg-slate-50 text-slate-600",
   active: "border-green-200 bg-green-50 text-green-700",
-  inactive: "border-amber-200 bg-amber-50 text-amber-700",
-  sold_out: "border-red-200 bg-red-50 text-red-600",
+  inactive: "border-slate-200 bg-slate-50 text-slate-500",
+  sold_out: "border-orange-200 bg-orange-50 text-orange-700",
 };
 
 const deliveryLabel: Record<DeliveryType, string> = {
@@ -64,6 +75,7 @@ type ProductFormState = {
   id?: string;
   name: string;
   slug: string;
+  primaryCategoryId: string;
   category_id: string;
   short_description: string;
   image_url: string;
@@ -73,23 +85,35 @@ type ProductFormState = {
   delivery_type: DeliveryType;
   status: ProductStatus;
   sort_order: string;
+  metadata_note: string;
 };
 
 type CategoryFormState = {
   id?: string;
   parent_id: string;
-  level: "1" | "2" | "3";
+  level: "1" | "2";
   name: string;
   slug: string;
   icon: string;
   description: string;
   sort_order: string;
+  is_active: boolean;
 };
+
+type FieldErrors = Record<string, string>;
+
+type ConfirmAction =
+  | { type: "close-product" }
+  | { type: "close-category" }
+  | { type: "delete-product"; id: string }
+  | { type: "delete-category"; category: AdminCategory }
+  | null;
 
 function emptyProductForm(): ProductFormState {
   return {
     name: "",
     slug: "",
+    primaryCategoryId: "",
     category_id: "",
     short_description: "",
     image_url: "",
@@ -99,6 +123,7 @@ function emptyProductForm(): ProductFormState {
     delivery_type: "manual",
     status: "draft",
     sort_order: "0",
+    metadata_note: "",
   };
 }
 
@@ -111,6 +136,7 @@ function emptyCategoryForm(): CategoryFormState {
     icon: "",
     description: "",
     sort_order: "0",
+    is_active: true,
   };
 }
 
@@ -123,47 +149,34 @@ function parseNumber(value: string, fallback = 0) {
   return Number.isFinite(next) ? next : fallback;
 }
 
-function toProductForm(product: AdminProduct): ProductFormState {
-  return {
-    id: product.id,
-    name: product.name,
-    slug: product.slug,
-    category_id: product.category_id ?? "",
-    short_description: product.short_description ?? "",
-    image_url: product.image_url ?? "",
-    price: String(product.price ?? ""),
-    original_price:
-      product.original_price === null || product.original_price === undefined
-        ? ""
-        : String(product.original_price),
-    stock: String(product.stock ?? 0),
-    delivery_type: product.delivery_type,
-    status: product.status,
-    sort_order: String(product.sort_order ?? 0),
-  };
+function isIntegerText(value: string) {
+  return /^-?\d+$/.test(value.trim());
 }
 
-function toCategoryForm(category: AdminCategory): CategoryFormState {
-  return {
-    id: category.id,
-    parent_id: category.parent_id ?? "",
-    level: String(category.level) as "1" | "2" | "3",
-    name: category.name,
-    slug: category.slug,
-    icon: category.icon ?? "",
-    description: category.description ?? "",
-    sort_order: String(category.sort_order ?? 0),
-  };
+function slugify(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function isValidImagePath(value: string) {
+  if (!value.trim()) return true;
+  if (value.startsWith("/")) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function ProductTableSkeleton() {
   return (
     <div className="space-y-2">
-      {Array.from({ length: 6 }).map((_, index) => (
-        <div
-          key={index}
-          className="h-12 animate-pulse rounded-lg bg-slate-100"
-        />
+      {Array.from({ length: 8 }).map((_, index) => (
+        <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />
       ))}
     </div>
   );
@@ -173,10 +186,7 @@ function CategoryTreeSkeleton() {
   return (
     <div className="space-y-3">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div
-          key={index}
-          className="h-16 animate-pulse rounded-xl bg-slate-100"
-        />
+        <div key={index} className="h-16 animate-pulse rounded-xl bg-slate-100" />
       ))}
     </div>
   );
@@ -188,9 +198,10 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [productCount, setProductCount] = useState(0);
   const [productSearch, setProductSearch] = useState("");
-  const [productCategoryFilter, setProductCategoryFilter] = useState("all");
-  const [productStatusFilter, setProductStatusFilter] =
-    useState<ProductStatus | "all">("all");
+  const [primaryFilter, setPrimaryFilter] = useState("all");
+  const [secondaryFilter, setSecondaryFilter] = useState("all");
+  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatus | "all">("all");
+  const [deliveryFilter, setDeliveryFilter] = useState<DeliveryType | "all">("all");
   const [productPage, setProductPage] = useState(1);
   const [isProductLoading, setIsProductLoading] = useState(false);
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
@@ -198,24 +209,38 @@ export default function AdminProductsPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [productForm, setProductForm] = useState<ProductFormState | null>(null);
-  const [categoryForm, setCategoryForm] = useState<CategoryFormState | null>(
-    null
-  );
+  const [categoryForm, setCategoryForm] = useState<CategoryFormState | null>(null);
+  const [productErrors, setProductErrors] = useState<FieldErrors>({});
+  const [categoryErrors, setCategoryErrors] = useState<FieldErrors>({});
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories]
   );
-
-  const totalProductPages = Math.max(
-    1,
-    Math.ceil(productCount / PRODUCT_PAGE_SIZE)
+  const enabledRoots = useMemo(
+    () =>
+      categories
+        .filter((category) => category.level === 1 && isCategoryEnabled(category))
+        .sort(sortCategories),
+    [categories]
   );
+  const filterSecondaries = useMemo(() => {
+    if (primaryFilter === "all") return [];
+    return getEnabledChildren(categories, primaryFilter);
+  }, [categories, primaryFilter]);
+  const productCategoryIds = useMemo(() => {
+    if (secondaryFilter !== "all") return [secondaryFilter];
+    if (primaryFilter !== "all") {
+      return getLeafCategoryIds(categories, primaryFilter);
+    }
+    return undefined;
+  }, [categories, primaryFilter, secondaryFilter]);
+  const totalProductPages = Math.max(1, Math.ceil(productCount / PRODUCT_PAGE_SIZE));
 
   const loadCategories = useCallback(async () => {
     setIsCategoryLoading(true);
     setError("");
-
     try {
       const rows = await listCategories();
       setCategories(rows);
@@ -229,12 +254,13 @@ export default function AdminProductsPage() {
   const loadProducts = useCallback(async () => {
     setIsProductLoading(true);
     setError("");
-
     try {
       const result = await listProducts({
         search: productSearch,
-        categoryId: productCategoryFilter,
+        categoryId: productCategoryIds && productCategoryIds.length === 1 ? productCategoryIds[0] : "all",
+        categoryIds: productCategoryIds && productCategoryIds.length > 1 ? productCategoryIds : undefined,
         status: productStatusFilter,
+        deliveryType: deliveryFilter,
         page: productPage,
         pageSize: PRODUCT_PAGE_SIZE,
       });
@@ -245,12 +271,7 @@ export default function AdminProductsPage() {
     } finally {
       setIsProductLoading(false);
     }
-  }, [
-    productCategoryFilter,
-    productPage,
-    productSearch,
-    productStatusFilter,
-  ]);
+  }, [deliveryFilter, productCategoryIds, productPage, productSearch, productStatusFilter]);
 
   useEffect(() => {
     loadCategories();
@@ -265,18 +286,133 @@ export default function AdminProductsPage() {
     setError("");
   }
 
+  function openNewProduct() {
+    clearNotice();
+    setProductErrors({});
+    setProductForm(emptyProductForm());
+  }
+
+  function openEditProduct(product: AdminProduct) {
+    clearNotice();
+    setProductErrors({});
+    setProductForm(toProductForm(product, categoryMap, categories));
+  }
+
+  function openCopyProduct(product: AdminProduct) {
+    clearNotice();
+    setProductErrors({});
+    const form = toProductForm(product, categoryMap, categories);
+    setProductForm({
+      ...form,
+      id: undefined,
+      name: `${form.name} 副本`,
+      slug: `${form.slug}-copy`,
+      status: "draft",
+    });
+  }
+
+  function requestCloseProduct() {
+    if (!productForm || isSaving) return;
+    if (isProductDirty(productForm)) {
+      setConfirmAction({ type: "close-product" });
+      return;
+    }
+    closeProductDialog();
+  }
+
+  function closeProductDialog() {
+    setProductForm(null);
+    setProductErrors({});
+    setError("");
+  }
+
+  function openNewCategory() {
+    clearNotice();
+    setCategoryErrors({});
+    setCategoryForm(emptyCategoryForm());
+  }
+
+  function openEditCategory(category: AdminCategory) {
+    clearNotice();
+    setCategoryErrors({});
+    setCategoryForm(toCategoryForm(category));
+  }
+
+  function requestCloseCategory() {
+    if (!categoryForm || isSaving) return;
+    if (isCategoryDirty(categoryForm)) {
+      setConfirmAction({ type: "close-category" });
+      return;
+    }
+    closeCategoryDialog();
+  }
+
+  function closeCategoryDialog() {
+    setCategoryForm(null);
+    setCategoryErrors({});
+    setError("");
+  }
+
+  function validateProductForm(form: ProductFormState) {
+    const nextErrors: FieldErrors = {};
+    const name = form.name.trim();
+    const slug = form.slug.trim();
+    const price = Number(form.price);
+    const originalPrice = form.original_price.trim() ? Number(form.original_price) : null;
+    const stock = Number(form.stock);
+    const sortOrder = Number(form.sort_order);
+    const primary = categoryMap.get(form.primaryCategoryId);
+    const category = categoryMap.get(form.category_id);
+
+    if (!name) nextErrors.name = "商品名称必填";
+    if (!slug) nextErrors.slug = "slug 必填";
+    else if (!SLUG_PATTERN.test(slug)) nextErrors.slug = "只允许小写字母、数字和短横线";
+    if (!form.primaryCategoryId) nextErrors.primaryCategoryId = "请选择一级分类";
+    if (!form.category_id) nextErrors.category_id = "请选择二级分类";
+    if (category && primary && category.parent_id !== primary.id) {
+      nextErrors.category_id = "二级分类必须属于已选择的一级分类";
+    }
+    if (category && category.level === 1) {
+      nextErrors.category_id = "当前商品绑定的是一级分类，请重新选择二级分类";
+    }
+    if (category && !isCategoryEnabled(category)) {
+      nextErrors.category_id = "请选择启用状态的分类";
+    }
+    if (category && hasChildren(categories, category.id)) {
+      nextErrors.category_id = "商品只能绑定没有子分类的末级分类";
+    }
+    if (!form.price.trim() || !Number.isFinite(price) || price < 0) {
+      nextErrors.price = "售价必填，且不得小于 0";
+    }
+    if (
+      form.original_price.trim() &&
+      (!Number.isFinite(originalPrice) || originalPrice === null || originalPrice < price)
+    ) {
+      nextErrors.original_price = "原价不得小于售价";
+    }
+    if (!isIntegerText(form.stock) || !Number.isFinite(stock) || stock < 0) {
+      nextErrors.stock = "库存必须为大于等于 0 的整数";
+    }
+    if (!isIntegerText(form.sort_order) || !Number.isFinite(sortOrder)) {
+      nextErrors.sort_order = "排序必须为整数";
+    }
+    if (!isValidImagePath(form.image_url)) {
+      nextErrors.image_url = "请输入合法 URL 或 /assets/... 静态资源路径";
+    }
+
+    return nextErrors;
+  }
+
   function buildProductPayload(): ProductPayload | null {
     if (!productForm) return null;
-
-    if (!productForm.name.trim() || !productForm.slug.trim()) {
-      setError("商品名称和 slug 必填");
-      return null;
-    }
+    const nextErrors = validateProductForm(productForm);
+    setProductErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return null;
 
     return {
       name: productForm.name.trim(),
       slug: productForm.slug.trim(),
-      category_id: productForm.category_id || null,
+      category_id: productForm.category_id,
       short_description: productForm.short_description.trim() || null,
       description: null,
       image_url: productForm.image_url.trim() || null,
@@ -288,33 +424,9 @@ export default function AdminProductsPage() {
       delivery_type: productForm.delivery_type,
       status: productForm.status,
       sort_order: parseNumber(productForm.sort_order),
-    };
-  }
-
-  function buildCategoryPayload(): CategoryPayload | null {
-    if (!categoryForm) return null;
-
-    if (!categoryForm.name.trim() || !categoryForm.slug.trim()) {
-      setError("分类名称和 slug 必填");
-      return null;
-    }
-
-    const level = Number(categoryForm.level) as 1 | 2 | 3;
-    const parentId = level === 1 ? null : categoryForm.parent_id || null;
-
-    if (level > 1 && !parentId) {
-      setError(level === 2 ? "二级分类必须选择一级父分类" : "三级分类必须选择二级父分类");
-      return null;
-    }
-
-    return {
-      parent_id: parentId,
-      level,
-      name: categoryForm.name.trim(),
-      slug: categoryForm.slug.trim(),
-      icon: categoryForm.icon.trim() || null,
-      description: categoryForm.description.trim() || null,
-      sort_order: parseNumber(categoryForm.sort_order),
+      metadata: productForm.metadata_note.trim()
+        ? { note: productForm.metadata_note.trim() }
+        : null,
     };
   }
 
@@ -328,19 +440,65 @@ export default function AdminProductsPage() {
     try {
       if (productForm.id) {
         await updateProduct(productForm.id, payload);
-        setMessage("商品已保存");
+        setMessage("商品更新成功");
       } else {
         await createProduct(payload);
-        setMessage("商品已新增");
+        setMessage("商品创建成功");
       }
-
-      setProductForm(null);
+      closeProductDialog();
       await loadProducts();
     } catch (saveError) {
-      setError(getErrorText(saveError, "商品保存失败"));
+      const text = getErrorText(saveError, "商品保存失败");
+      if (text.toLowerCase().includes("duplicate") || text.includes("slug")) {
+        setProductErrors((current) => ({
+          ...current,
+          slug: "该商品标识已存在，请更换 slug",
+        }));
+      }
+      setError(text);
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function validateCategoryForm(form: CategoryFormState) {
+    const nextErrors: FieldErrors = {};
+    const name = form.name.trim();
+    const slug = form.slug.trim();
+    const parent = form.parent_id ? categoryMap.get(form.parent_id) : null;
+
+    if (!name) nextErrors.name = "分类名称必填";
+    if (!slug) nextErrors.slug = "slug 必填";
+    else if (!SLUG_PATTERN.test(slug)) nextErrors.slug = "只允许小写字母、数字和短横线";
+    if (form.level === "2" && !form.parent_id) {
+      nextErrors.parent_id = "二级分类必须选择所属一级分类";
+    }
+    if (form.level === "2" && parent?.level !== 1) {
+      nextErrors.parent_id = "父级分类必须是真实一级分类";
+    }
+    if (form.id && form.parent_id === form.id) {
+      nextErrors.parent_id = "分类不能把自己设置为父分类";
+    }
+    if (!isIntegerText(form.sort_order)) nextErrors.sort_order = "排序必须为整数";
+    return nextErrors;
+  }
+
+  function buildCategoryPayload(): CategoryPayload | null {
+    if (!categoryForm) return null;
+    const nextErrors = validateCategoryForm(categoryForm);
+    setCategoryErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return null;
+
+    return {
+      parent_id: categoryForm.level === "1" ? null : categoryForm.parent_id,
+      level: Number(categoryForm.level) as 1 | 2,
+      name: categoryForm.name.trim(),
+      slug: categoryForm.slug.trim(),
+      icon: categoryForm.icon.trim() || null,
+      description: categoryForm.description.trim() || null,
+      sort_order: parseNumber(categoryForm.sort_order),
+      is_active: categoryForm.is_active,
+    };
   }
 
   async function handleCategorySubmit(event: FormEvent<HTMLFormElement>) {
@@ -353,16 +511,22 @@ export default function AdminProductsPage() {
     try {
       if (categoryForm.id) {
         await updateCategory(categoryForm.id, payload);
-        setMessage("分类已保存");
+        setMessage("分类更新成功");
       } else {
         await createCategory(payload);
-        setMessage("分类已新增");
+        setMessage("分类创建成功");
       }
-
-      setCategoryForm(null);
+      closeCategoryDialog();
       await loadCategories();
     } catch (saveError) {
-      setError(getErrorText(saveError, "分类保存失败"));
+      const text = getErrorText(saveError, "分类保存失败");
+      if (text.toLowerCase().includes("duplicate") || text.includes("slug")) {
+        setCategoryErrors((current) => ({
+          ...current,
+          slug: "该分类标识已存在，请更换 slug",
+        }));
+      }
+      setError(text);
     } finally {
       setIsSaving(false);
     }
@@ -382,9 +546,7 @@ export default function AdminProductsPage() {
     }
   }
 
-  async function handleDeleteProduct(id: string) {
-    if (!window.confirm("确认删除该商品吗？")) return;
-
+  async function performDeleteProduct(id: string) {
     clearNotice();
     setIsProductLoading(true);
     try {
@@ -412,15 +574,20 @@ export default function AdminProductsPage() {
     }
   }
 
-  async function handleDeleteCategory(id: string) {
-    if (!window.confirm("确认删除该分类吗？存在子分类或商品时可能会删除失败。")) {
+  async function performDeleteCategory(category: AdminCategory) {
+    if (hasChildren(categories, category.id)) {
+      setError("该分类下还有子分类，请先删除或调整子分类");
+      return;
+    }
+    if (products.some((product) => product.category_id === category.id)) {
+      setError("该分类已关联当前列表商品，不能直接删除");
       return;
     }
 
     clearNotice();
     setIsCategoryLoading(true);
     try {
-      await deleteCategory(id);
+      await deleteCategory(category.id);
       setMessage("分类已删除");
       await loadCategories();
     } catch (deleteError) {
@@ -432,31 +599,49 @@ export default function AdminProductsPage() {
 
   function resetProductFilters() {
     setProductSearch("");
-    setProductCategoryFilter("all");
+    setPrimaryFilter("all");
+    setSecondaryFilter("all");
     setProductStatusFilter("all");
+    setDeliveryFilter("all");
     setProductPage(1);
   }
 
+  async function handleConfirmAction() {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (!action) return;
+    if (action.type === "close-product") closeProductDialog();
+    if (action.type === "close-category") closeCategoryDialog();
+    if (action.type === "delete-product") await performDeleteProduct(action.id);
+    if (action.type === "delete-category") await performDeleteCategory(action.category);
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-[1680px] space-y-5 px-4 py-5 md:px-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-950">商品与分类管理</h1>
+          <h1 className="text-2xl font-bold text-slate-950">商品与分类管理</h1>
           <p className="mt-1 text-sm text-slate-500">
-            使用 Supabase categories 和 products 表管理后台商品数据。
+            管理 Supabase categories 和 products 数据，商品绑定到二级或最末级分类。
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            loadCategories();
-            loadProducts();
-          }}
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          刷新
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              loadCategories();
+              loadProducts();
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            刷新
+          </Button>
+          <Button size="sm" onClick={openNewProduct}>
+            <Plus className="mr-2 h-4 w-4" />
+            新增商品
+          </Button>
+        </div>
       </div>
 
       {(message || error) && (
@@ -478,574 +663,696 @@ export default function AdminProductsPage() {
           <TabsTrigger value="categories">分类管理</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="products" className="mt-4 space-y-4">
-          <ProductManager
-            categories={categories}
-            categoryMap={categoryMap}
-            form={productForm}
-            isLoading={isProductLoading}
-            isSaving={isSaving}
-            page={productPage}
-            pageSize={PRODUCT_PAGE_SIZE}
-            products={products}
-            search={productSearch}
-            statusFilter={productStatusFilter}
-            categoryFilter={productCategoryFilter}
-            totalPages={totalProductPages}
-            totalCount={productCount}
-            onCancelForm={() => setProductForm(null)}
-            onDelete={handleDeleteProduct}
-            onEdit={(product) => {
-              clearNotice();
-              setProductForm(toProductForm(product));
-            }}
-            onFilterCategory={(value) => {
-              setProductCategoryFilter(value);
-              setProductPage(1);
-            }}
-            onFilterStatus={(value) => {
-              setProductStatusFilter(value as ProductStatus | "all");
-              setProductPage(1);
-            }}
-            onNew={() => {
-              clearNotice();
-              setProductForm(emptyProductForm());
-            }}
-            onPageChange={setProductPage}
-            onResetFilters={resetProductFilters}
-            onSearch={(value) => {
-              setProductSearch(value);
-              setProductPage(1);
-            }}
-            onStatusChange={handleProductStatus}
-            onSubmit={handleProductSubmit}
-            onUpdateForm={setProductForm}
-          />
+        <TabsContent value="products" className="mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <CardTitle className="text-base">商品列表</CardTitle>
+                <span className="text-sm text-slate-500">当前结果 {productCount} 条</span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1fr)_180px_200px_150px_150px_auto]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <Input
+                    className="pl-9"
+                    placeholder="搜索商品名称或 slug"
+                    value={productSearch}
+                    onChange={(event) => {
+                      setProductSearch(event.target.value);
+                      setProductPage(1);
+                    }}
+                  />
+                </div>
+                <NativeSelect
+                  value={primaryFilter}
+                  onChange={(value) => {
+                    setPrimaryFilter(value);
+                    setSecondaryFilter("all");
+                    setProductPage(1);
+                  }}
+                >
+                  <option value="all">全部一级分类</option>
+                  {enabledRoots.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <NativeSelect
+                  value={secondaryFilter}
+                  disabled={primaryFilter === "all"}
+                  onChange={(value) => {
+                    setSecondaryFilter(value);
+                    setProductPage(1);
+                  }}
+                >
+                  <option value="all">全部二级分类</option>
+                  {filterSecondaries.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <NativeSelect
+                  value={productStatusFilter}
+                  onChange={(value) => {
+                    setProductStatusFilter(value as ProductStatus | "all");
+                    setProductPage(1);
+                  }}
+                >
+                  <option value="all">全部状态</option>
+                  {Object.entries(productStatusLabel).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <NativeSelect
+                  value={deliveryFilter}
+                  onChange={(value) => {
+                    setDeliveryFilter(value as DeliveryType | "all");
+                    setProductPage(1);
+                  }}
+                >
+                  <option value="all">全部交付方式</option>
+                  {Object.entries(deliveryLabel).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <Button variant="outline" onClick={resetProductFilters}>
+                  重置
+                </Button>
+              </div>
+
+              {isProductLoading ? (
+                <ProductTableSkeleton />
+              ) : (
+                <ProductTable
+                  categoryMap={categoryMap}
+                  products={products}
+                  onCopy={openCopyProduct}
+                  onDelete={(id) => setConfirmAction({ type: "delete-product", id })}
+                  onEdit={openEditProduct}
+                  onStatusChange={handleProductStatus}
+                />
+              )}
+
+              <div className="flex flex-col gap-2 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+                <span>
+                  共 {productCount} 条记录，当前第 {productPage} / {totalProductPages} 页
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={productPage <= 1}
+                    onClick={() => setProductPage(Math.max(1, productPage - 1))}
+                  >
+                    上一页
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={productPage >= totalProductPages || products.length < PRODUCT_PAGE_SIZE}
+                    onClick={() => setProductPage(Math.min(totalProductPages, productPage + 1))}
+                  >
+                    下一页
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="categories" className="mt-4 space-y-4">
-          <CategoryManager
-            categories={categories}
-            form={categoryForm}
-            isLoading={isCategoryLoading}
-            isSaving={isSaving}
-            onCancelForm={() => setCategoryForm(null)}
-            onDelete={handleDeleteCategory}
-            onEdit={(category) => {
-              clearNotice();
-              setCategoryForm(toCategoryForm(category));
-            }}
-            onNew={() => {
-              clearNotice();
-              setCategoryForm(emptyCategoryForm());
-            }}
-            onSubmit={handleCategorySubmit}
-            onToggleStatus={handleToggleCategory}
-            onUpdateForm={setCategoryForm}
-          />
+        <TabsContent value="categories" className="mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <CardTitle className="text-base">分类树</CardTitle>
+                <Button size="sm" onClick={openNewCategory}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  新增分类
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isCategoryLoading ? (
+                <CategoryTreeSkeleton />
+              ) : enabledRoots.length === 0 ? (
+                <EmptyState text="暂无分类数据" />
+              ) : (
+                <div className="space-y-3">
+                  {categories
+                    .filter((category) => category.level === 1)
+                    .sort(sortCategories)
+                    .map((category) => (
+                      <CategoryTreeNode
+                        key={category.id}
+                        category={category}
+                        categories={categories}
+                        depth={0}
+                        onDelete={(nextCategory) =>
+                          setConfirmAction({ type: "delete-category", category: nextCategory })
+                        }
+                        onEdit={openEditCategory}
+                        onToggleStatus={handleToggleCategory}
+                      />
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
+
+      <ProductFormDialog
+        categories={categories}
+        errors={productErrors}
+        form={productForm}
+        isSaving={isSaving}
+        onClose={requestCloseProduct}
+        onSubmit={handleProductSubmit}
+        onUpdate={(form) => {
+          setProductForm(form);
+          if (Object.keys(productErrors).length > 0) setProductErrors({});
+        }}
+      />
+
+      <CategoryFormDialog
+        categories={categories}
+        errors={categoryErrors}
+        form={categoryForm}
+        isSaving={isSaving}
+        onClose={requestCloseCategory}
+        onSubmit={handleCategorySubmit}
+        onUpdate={(form) => {
+          setCategoryForm(form);
+          if (Object.keys(categoryErrors).length > 0) setCategoryErrors({});
+        }}
+      />
+
+      <AlertDialog open={Boolean(confirmAction)} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认操作</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type === "delete-product" && "确定删除该商品吗？该操作不可撤销。"}
+              {confirmAction?.type === "delete-category" && "确定删除该分类吗？存在子分类或关联商品时会被阻止。"}
+              {(confirmAction?.type === "close-product" || confirmAction?.type === "close-category") &&
+                "当前内容尚未保存，确定关闭吗？"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSaving}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmAction} disabled={isSaving}>
+              确定
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-function ProductManager({
-  categories,
+function ProductTable({
   categoryMap,
-  form,
-  isLoading,
-  isSaving,
-  page,
-  pageSize,
   products,
-  search,
-  statusFilter,
-  categoryFilter,
-  totalPages,
-  totalCount,
-  onCancelForm,
+  onCopy,
   onDelete,
   onEdit,
-  onFilterCategory,
-  onFilterStatus,
-  onNew,
-  onPageChange,
-  onResetFilters,
-  onSearch,
   onStatusChange,
-  onSubmit,
-  onUpdateForm,
 }: {
-  categories: AdminCategory[];
   categoryMap: Map<string, AdminCategory>;
-  form: ProductFormState | null;
-  isLoading: boolean;
-  isSaving: boolean;
-  page: number;
-  pageSize: number;
   products: AdminProduct[];
-  search: string;
-  statusFilter: ProductStatus | "all";
-  categoryFilter: string;
-  totalPages: number;
-  totalCount: number;
-  onCancelForm: () => void;
+  onCopy: (product: AdminProduct) => void;
   onDelete: (id: string) => void;
   onEdit: (product: AdminProduct) => void;
-  onFilterCategory: (value: string) => void;
-  onFilterStatus: (value: string) => void;
-  onNew: () => void;
-  onPageChange: (page: number) => void;
-  onResetFilters: () => void;
-  onSearch: (value: string) => void;
   onStatusChange: (id: string, status: ProductStatus) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onUpdateForm: (form: ProductFormState) => void;
 }) {
   return (
-    <>
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="text-base">商品列表</CardTitle>
-            <Button size="sm" onClick={onNew}>
-              <Plus className="mr-2 h-4 w-4" />
-              新增商品
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_220px_160px_auto]">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <Input
-                className="pl-9"
-                placeholder="搜索商品名称"
-                value={search}
-                onChange={(event) => onSearch(event.target.value)}
-              />
-            </div>
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              value={categoryFilter}
-              onChange={(event) => onFilterCategory(event.target.value)}
-            >
-              <option value="all">全部分类</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {"　".repeat(category.level - 1)}
-                  {category.name}
-                </option>
-              ))}
-            </select>
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              value={statusFilter}
-              onChange={(event) => onFilterStatus(event.target.value)}
-            >
-              <option value="all">全部状态</option>
-              {Object.entries(productStatusLabel).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <Button variant="outline" onClick={onResetFilters}>
-              重置
-            </Button>
-          </div>
-
-          {isLoading ? (
-            <ProductTableSkeleton />
+    <div className="overflow-x-auto">
+      <Table className="min-w-[1450px]">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[64px]">图片</TableHead>
+            <TableHead className="min-w-[240px]">商品名称</TableHead>
+            <TableHead className="min-w-[170px]">slug</TableHead>
+            <TableHead className="min-w-[240px]">分类路径</TableHead>
+            <TableHead className="w-[110px]">售价</TableHead>
+            <TableHead className="w-[110px]">原价</TableHead>
+            <TableHead className="w-[90px]">库存</TableHead>
+            <TableHead className="w-[130px]">交付方式</TableHead>
+            <TableHead className="w-[110px]">状态</TableHead>
+            <TableHead className="w-[80px]">排序</TableHead>
+            <TableHead className="w-[170px]">更新时间</TableHead>
+            <TableHead className="w-[240px] text-right">操作</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {products.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={12} className="h-28 text-center text-sm text-slate-500">
+                暂无商品数据
+              </TableCell>
+            </TableRow>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>商品名称</TableHead>
-                    <TableHead>slug</TableHead>
-                    <TableHead>所属分类</TableHead>
-                    <TableHead>售价</TableHead>
-                    <TableHead>原价</TableHead>
-                    <TableHead>库存</TableHead>
-                    <TableHead>交付方式</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>排序</TableHead>
-                    <TableHead>更新时间</TableHead>
-                    <TableHead className="text-right">操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={11}
-                        className="h-28 text-center text-sm text-slate-500"
-                      >
-                        暂无商品数据
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    products.map((product) => (
-                      <TableRow key={product.id}>
-                        <TableCell className="max-w-[220px] truncate font-medium">
-                          {product.name}
-                        </TableCell>
-                        <TableCell className="text-slate-500">
-                          {product.slug}
-                        </TableCell>
-                        <TableCell>
-                          {product.category_id
-                            ? categoryMap.get(product.category_id)?.name ??
-                              "未匹配分类"
-                            : "未设置"}
-                        </TableCell>
-                        <TableCell>¥{product.price.toFixed(2)}</TableCell>
-                        <TableCell>
-                          {product.original_price
-                            ? `¥${product.original_price.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell
-                          className={
-                            product.stock > 0 ? "text-green-600" : "text-slate-400"
-                          }
-                        >
-                          {product.stock}
-                        </TableCell>
-                        <TableCell>{deliveryLabel[product.delivery_type]}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn(productStatusClass[product.status])}
-                          >
-                            {productStatusLabel[product.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{product.sort_order}</TableCell>
-                        <TableCell className="whitespace-nowrap text-slate-500">
-                          {product.updated_at
-                            ? new Date(product.updated_at).toLocaleString()
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onEdit(product)}
-                            >
-                              编辑
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                onStatusChange(
-                                  product.id,
-                                  product.status === "active"
-                                    ? "inactive"
-                                    : "active"
-                                )
-                              }
-                            >
-                              {product.status === "active" ? "下架" : "上架"}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onStatusChange(product.id, "sold_out")}
-                            >
-                              售罄
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600"
-                              onClick={() => onDelete(product.id)}
-                            >
-                              删除
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
+            products.map((product) => (
+              <TableRow key={product.id}>
+                <TableCell>
+                  <img
+                    src={product.image_url || "/assets/jianlian-brand-logo.png"}
+                    alt=""
+                    className="h-10 w-10 rounded-lg border object-cover"
+                    onError={(event) => {
+                      event.currentTarget.src = "/assets/jianlian-brand-logo.png";
+                    }}
+                  />
+                </TableCell>
+                <TableCell className="font-medium">
+                  <div className="line-clamp-2">{product.name}</div>
+                  {product.short_description && (
+                    <div className="mt-1 truncate text-xs text-slate-500">
+                      {product.short_description}
+                    </div>
                   )}
-                </TableBody>
-              </Table>
-            </div>
+                </TableCell>
+                <TableCell className="text-slate-500">{product.slug}</TableCell>
+                <TableCell>{getCategoryPath(product.category_id, categoryMap)}</TableCell>
+                <TableCell>¥{product.price.toFixed(2)}</TableCell>
+                <TableCell>
+                  {product.original_price ? `¥${product.original_price.toFixed(2)}` : "-"}
+                </TableCell>
+                <TableCell className={product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600"}>
+                  {product.stock}
+                </TableCell>
+                <TableCell>{deliveryLabel[product.delivery_type]}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={cn(productStatusClass[product.status])}>
+                    {productStatusLabel[product.status]}
+                  </Badge>
+                </TableCell>
+                <TableCell>{product.sort_order}</TableCell>
+                <TableCell className="whitespace-nowrap text-slate-500">
+                  {product.updated_at ? new Date(product.updated_at).toLocaleString() : "-"}
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => onEdit(product)}>
+                      编辑
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        onStatusChange(product.id, product.status === "active" ? "inactive" : "active")
+                      }
+                    >
+                      {product.status === "active" ? "下架" : "上架"}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onStatusChange(product.id, "sold_out")}>
+                      售罄
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onCopy(product)}>
+                      <Copy className="mr-1 h-3.5 w-3.5" />
+                      复制
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-red-600" onClick={() => onDelete(product.id)}>
+                      删除
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))
           )}
-
-          <div className="flex flex-col gap-2 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
-            <span>
-              共 {totalCount} 条记录，当前第 {page} / {totalPages} 页
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => onPageChange(Math.max(1, page - 1))}
-              >
-                上一页
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages || products.length < pageSize}
-                onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-              >
-                下一页
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {form && (
-        <ProductFormCard
-          categories={categories}
-          form={form}
-          isSaving={isSaving}
-          onCancel={onCancelForm}
-          onSubmit={onSubmit}
-          onUpdate={onUpdateForm}
-        />
-      )}
-    </>
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
-function ProductFormCard({
+function ProductFormDialog({
   categories,
+  errors,
   form,
   isSaving,
-  onCancel,
+  onClose,
   onSubmit,
   onUpdate,
 }: {
   categories: AdminCategory[];
-  form: ProductFormState;
+  errors: FieldErrors;
+  form: ProductFormState | null;
   isSaving: boolean;
-  onCancel: () => void;
+  onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdate: (form: ProductFormState) => void;
 }) {
+  const rootCategories = categories.filter((category) => category.level === 1 && isCategoryEnabled(category)).sort(sortCategories);
+  const secondaryCategories = form?.primaryCategoryId
+    ? getEnabledChildren(categories, form.primaryCategoryId)
+    : [];
+  const selectedImage = form?.image_url.trim();
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">
-          {form.id ? "编辑商品" : "新增商品"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={onSubmit}>
-          <Field label="商品名称">
-            <Input
-              value={form.name}
-              onChange={(event) => onUpdate({ ...form, name: event.target.value })}
-            />
-          </Field>
-          <Field label="slug">
-            <Input
-              value={form.slug}
-              onChange={(event) => onUpdate({ ...form, slug: event.target.value })}
-            />
-          </Field>
-          <Field label="所属分类">
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              value={form.category_id}
-              onChange={(event) =>
-                onUpdate({ ...form, category_id: event.target.value })
-              }
-            >
-              <option value="">未设置</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {"　".repeat(category.level - 1)}
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="图片 URL">
-            <Input
-              value={form.image_url}
-              onChange={(event) =>
-                onUpdate({ ...form, image_url: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="售价">
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.price}
-              onChange={(event) => onUpdate({ ...form, price: event.target.value })}
-            />
-          </Field>
-          <Field label="原价">
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.original_price}
-              onChange={(event) =>
-                onUpdate({ ...form, original_price: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="库存">
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              value={form.stock}
-              onChange={(event) => onUpdate({ ...form, stock: event.target.value })}
-            />
-          </Field>
-          <Field label="排序">
-            <Input
-              type="number"
-              step="1"
-              value={form.sort_order}
-              onChange={(event) =>
-                onUpdate({ ...form, sort_order: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="交付方式">
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              value={form.delivery_type}
-              onChange={(event) =>
-                onUpdate({
-                  ...form,
-                  delivery_type: event.target.value as DeliveryType,
-                })
-              }
-            >
-              {Object.entries(deliveryLabel).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="状态">
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              value={form.status}
-              onChange={(event) =>
-                onUpdate({ ...form, status: event.target.value as ProductStatus })
-              }
-            >
-              {Object.entries(productStatusLabel).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="短描述" className="md:col-span-2">
-            <Input
-              value={form.short_description}
-              onChange={(event) =>
-                onUpdate({ ...form, short_description: event.target.value })
-              }
-            />
-          </Field>
-          <div className="flex justify-end gap-2 md:col-span-2">
-            <Button type="button" variant="outline" onClick={onCancel}>
-              取消
-            </Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? "保存中..." : "保存商品"}
-            </Button>
+    <ModalFrame
+      open={Boolean(form)}
+      title={form?.id ? "编辑商品" : "新增商品"}
+      isSaving={isSaving}
+      onClose={onClose}
+    >
+      {form && (
+        <form onSubmit={onSubmit} className="flex max-h-[calc(100vh-48px)] flex-col">
+          {Object.keys(errors).length > 0 && (
+            <div className="mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              请检查表单中标红的内容后再保存。
+            </div>
+          )}
+          <div className="grid gap-5 overflow-y-auto px-6 py-5 md:grid-cols-2">
+            <FormSection title="基础信息" className="md:col-span-2">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="商品名称" required error={errors.name}>
+                  <Input
+                    value={form.name}
+                    onChange={(event) => {
+                      const name = event.target.value;
+                      onUpdate({
+                        ...form,
+                        name,
+                        slug: form.slug || slugify(name),
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label="slug" required error={errors.slug}>
+                  <Input
+                    value={form.slug}
+                    onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })}
+                    placeholder="lowercase-slug"
+                  />
+                </Field>
+                <Field label="简短说明" className="md:col-span-2" error={errors.short_description}>
+                  <Input
+                    value={form.short_description}
+                    onChange={(event) => onUpdate({ ...form, short_description: event.target.value })}
+                  />
+                </Field>
+                <Field label="商品图片" className="md:col-span-2" error={errors.image_url}>
+                  <div className="flex gap-3">
+                    <Input
+                      value={form.image_url}
+                      onChange={(event) => onUpdate({ ...form, image_url: event.target.value })}
+                      placeholder="/assets/example.png 或 https://..."
+                    />
+                    <img
+                      src={selectedImage || "/assets/jianlian-brand-logo.png"}
+                      alt=""
+                      className="h-10 w-10 rounded-lg border object-cover"
+                      onError={(event) => {
+                        event.currentTarget.src = "/assets/jianlian-brand-logo.png";
+                      }}
+                    />
+                  </div>
+                  {selectedImage && !errors.image_url && (
+                    <p className="text-xs text-slate-500">图片加载失败不会阻止保存，会使用默认占位图。</p>
+                  )}
+                </Field>
+              </div>
+            </FormSection>
+
+            <FormSection title="商品分类">
+              <Field label="一级分类" required error={errors.primaryCategoryId}>
+                <NativeSelect
+                  value={form.primaryCategoryId}
+                  onChange={(value) => onUpdate({ ...form, primaryCategoryId: value, category_id: "" })}
+                >
+                  <option value="">请选择一级分类</option>
+                  {rootCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            </FormSection>
+            <FormSection title="二级分类">
+              <Field label="二级分类" required error={errors.category_id}>
+                <NativeSelect
+                  value={form.category_id}
+                  disabled={!form.primaryCategoryId || secondaryCategories.length === 0}
+                  onChange={(value) => onUpdate({ ...form, category_id: value })}
+                >
+                  <option value="">
+                    {!form.primaryCategoryId
+                      ? "请先选择一级分类"
+                      : secondaryCategories.length === 0
+                        ? "该一级分类暂无可用二级分类，请先在分类管理中添加。"
+                        : "请选择二级分类"}
+                  </option>
+                  {secondaryCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            </FormSection>
+
+            <FormSection title="价格与库存" className="md:col-span-2">
+              <div className="grid gap-4 md:grid-cols-4">
+                <Field label="售价" required error={errors.price}>
+                  <Input type="number" min="0" step="0.01" value={form.price} onChange={(event) => onUpdate({ ...form, price: event.target.value })} />
+                </Field>
+                <Field label="原价" error={errors.original_price}>
+                  <Input type="number" min="0" step="0.01" value={form.original_price} onChange={(event) => onUpdate({ ...form, original_price: event.target.value })} />
+                </Field>
+                <Field label="库存" required error={errors.stock}>
+                  <Input type="number" min="0" step="1" value={form.stock} onChange={(event) => onUpdate({ ...form, stock: event.target.value })} />
+                </Field>
+                <Field label="排序" required error={errors.sort_order}>
+                  <Input type="number" step="1" value={form.sort_order} onChange={(event) => onUpdate({ ...form, sort_order: event.target.value })} />
+                </Field>
+              </div>
+            </FormSection>
+
+            <FormSection title="交付与状态">
+              <Field label="交付方式" required>
+                <NativeSelect value={form.delivery_type} onChange={(value) => onUpdate({ ...form, delivery_type: value as DeliveryType })}>
+                  {Object.entries(deliveryLabel).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            </FormSection>
+            <FormSection title="商品状态">
+              <Field label="状态" required>
+                <NativeSelect value={form.status} onChange={(value) => onUpdate({ ...form, status: value as ProductStatus })}>
+                  {Object.entries(productStatusLabel).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            </FormSection>
+
+            <FormSection title="可选扩展信息" className="md:col-span-2">
+              <Field label="metadata.note">
+                <Input
+                  value={form.metadata_note}
+                  onChange={(event) => onUpdate({ ...form, metadata_note: event.target.value })}
+                  placeholder="内部备注，可选"
+                />
+              </Field>
+            </FormSection>
           </div>
+          <DialogActions isSaving={isSaving} saveLabel="保存商品" onCancel={onClose} />
         </form>
-      </CardContent>
-    </Card>
+      )}
+    </ModalFrame>
   );
 }
 
-function CategoryManager({
+function CategoryFormDialog({
   categories,
+  errors,
   form,
-  isLoading,
   isSaving,
-  onCancelForm,
-  onDelete,
-  onEdit,
-  onNew,
+  onClose,
   onSubmit,
-  onToggleStatus,
-  onUpdateForm,
+  onUpdate,
 }: {
   categories: AdminCategory[];
+  errors: FieldErrors;
   form: CategoryFormState | null;
-  isLoading: boolean;
   isSaving: boolean;
-  onCancelForm: () => void;
-  onDelete: (id: string) => void;
-  onEdit: (category: AdminCategory) => void;
-  onNew: () => void;
+  onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onToggleStatus: (category: AdminCategory) => void;
-  onUpdateForm: (form: CategoryFormState) => void;
+  onUpdate: (form: CategoryFormState) => void;
 }) {
-  const rootCategories = categories.filter((category) => category.level === 1);
+  const rootCategories = categories
+    .filter((category) => category.level === 1 && category.id !== form?.id)
+    .sort(sortCategories);
 
   return (
-    <>
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="text-base">分类树</CardTitle>
-            <Button size="sm" onClick={onNew}>
-              <Plus className="mr-2 h-4 w-4" />
-              新增分类
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <CategoryTreeSkeleton />
-          ) : rootCategories.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-10 text-center text-sm text-slate-500">
-              暂无分类数据
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {rootCategories.map((category) => (
-                <CategoryTreeNode
-                  key={category.id}
-                  category={category}
-                  categories={categories}
-                  depth={0}
-                  onDelete={onDelete}
-                  onEdit={onEdit}
-                  onToggleStatus={onToggleStatus}
-                />
-              ))}
+    <ModalFrame
+      open={Boolean(form)}
+      title={form?.id ? "编辑分类" : "新增分类"}
+      isSaving={isSaving}
+      onClose={onClose}
+      size="max-w-3xl"
+    >
+      {form && (
+        <form onSubmit={onSubmit} className="flex max-h-[calc(100vh-48px)] flex-col">
+          {Object.keys(errors).length > 0 && (
+            <div className="mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              请检查分类表单中标红的内容。
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {form && (
-        <CategoryFormCard
-          categories={categories}
-          form={form}
-          isSaving={isSaving}
-          onCancel={onCancelForm}
-          onSubmit={onSubmit}
-          onUpdate={onUpdateForm}
-        />
+          <div className="grid gap-5 overflow-y-auto px-6 py-5 md:grid-cols-2">
+            <Field label="分类名称" required error={errors.name}>
+              <Input
+                value={form.name}
+                onChange={(event) => {
+                  const name = event.target.value;
+                  onUpdate({ ...form, name, slug: form.slug || slugify(name) });
+                }}
+              />
+            </Field>
+            <Field label="slug" required error={errors.slug}>
+              <Input
+                value={form.slug}
+                onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })}
+              />
+            </Field>
+            <Field label="分类级别" required>
+              <NativeSelect
+                value={form.level}
+                onChange={(value) =>
+                  onUpdate({
+                    ...form,
+                    level: value as "1" | "2",
+                    parent_id: "",
+                  })
+                }
+              >
+                <option value="1">一级分类</option>
+                <option value="2">二级分类</option>
+              </NativeSelect>
+            </Field>
+            {form.level === "2" && (
+              <Field label="所属一级分类" required error={errors.parent_id}>
+                <NativeSelect value={form.parent_id} onChange={(value) => onUpdate({ ...form, parent_id: value })}>
+                  <option value="">请选择一级分类</option>
+                  {rootCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            )}
+            <Field label="图标">
+              <Input value={form.icon} onChange={(event) => onUpdate({ ...form, icon: event.target.value })} />
+            </Field>
+            <Field label="排序" required error={errors.sort_order}>
+              <Input type="number" step="1" value={form.sort_order} onChange={(event) => onUpdate({ ...form, sort_order: event.target.value })} />
+            </Field>
+            <Field label="启用状态">
+              <NativeSelect
+                value={form.is_active ? "true" : "false"}
+                onChange={(value) => onUpdate({ ...form, is_active: value === "true" })}
+              >
+                <option value="true">启用</option>
+                <option value="false">停用</option>
+              </NativeSelect>
+            </Field>
+            <Field label="描述" className="md:col-span-2">
+              <Textarea rows={3} value={form.description} onChange={(event) => onUpdate({ ...form, description: event.target.value })} />
+            </Field>
+          </div>
+          <DialogActions isSaving={isSaving} saveLabel="保存分类" onCancel={onClose} />
+        </form>
       )}
-    </>
+    </ModalFrame>
+  );
+}
+
+function ModalFrame({
+  children,
+  isSaving,
+  onClose,
+  open,
+  size = "max-w-5xl",
+  title,
+}: {
+  children: ReactNode;
+  isSaving: boolean;
+  onClose: () => void;
+  open: boolean;
+  size?: string;
+  title: string;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-6 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isSaving) onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !isSaving) onClose();
+      }}
+      tabIndex={-1}
+    >
+      <div
+        className={cn(
+          "relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl",
+          size
+        )}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-50"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DialogActions({
+  isSaving,
+  onCancel,
+  saveLabel,
+}: {
+  isSaving: boolean;
+  onCancel: () => void;
+  saveLabel: string;
+}) {
+  return (
+    <div className="flex justify-end gap-2 border-t bg-white px-6 py-4">
+      <Button type="button" variant="outline" disabled={isSaving} onClick={onCancel}>
+        取消
+      </Button>
+      <Button type="submit" disabled={isSaving}>
+        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        {isSaving ? "保存中..." : saveLabel}
+      </Button>
+    </div>
   );
 }
 
@@ -1060,13 +1367,13 @@ function CategoryTreeNode({
   category: AdminCategory;
   categories: AdminCategory[];
   depth: number;
-  onDelete: (id: string) => void;
+  onDelete: (category: AdminCategory) => void;
   onEdit: (category: AdminCategory) => void;
   onToggleStatus: (category: AdminCategory) => void;
 }) {
-  const children = categories.filter(
-    (candidate) => candidate.parent_id === category.id
-  );
+  const children = categories
+    .filter((candidate) => candidate.parent_id === category.id)
+    .sort(sortCategories);
   const enabled = isCategoryEnabled(category);
 
   return (
@@ -1086,37 +1393,22 @@ function CategoryTreeNode({
             >
               {enabled ? "启用" : "停用"}
             </Badge>
-            <span className="text-xs text-slate-400">
-              sort_order: {category.sort_order}
-            </span>
+            <span className="text-xs text-slate-400">sort_order: {category.sort_order}</span>
           </div>
           <p className="mt-1 truncate text-sm text-slate-500">
             slug: {category.slug}
-            {category.icon ? ` ｜ icon: ${category.icon}` : ""}
+            {category.icon ? ` · icon: ${category.icon}` : ""}
           </p>
-          {category.description && (
-            <p className="mt-1 text-sm text-slate-500">
-              {category.description}
-            </p>
-          )}
+          {category.description && <p className="mt-1 text-sm text-slate-500">{category.description}</p>}
         </div>
         <div className="flex shrink-0 gap-1">
           <Button variant="ghost" size="sm" onClick={() => onEdit(category)}>
             编辑
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onToggleStatus(category)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onToggleStatus(category)}>
             {enabled ? "停用" : "启用"}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-red-600"
-            onClick={() => onDelete(category.id)}
-          >
+          <Button variant="ghost" size="sm" className="text-red-600" onClick={() => onDelete(category)}>
             删除
           </Button>
         </div>
@@ -1140,136 +1432,170 @@ function CategoryTreeNode({
   );
 }
 
-function CategoryFormCard({
-  categories,
-  form,
-  isSaving,
-  onCancel,
-  onSubmit,
-  onUpdate,
-}: {
-  categories: AdminCategory[];
-  form: CategoryFormState;
-  isSaving: boolean;
-  onCancel: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onUpdate: (form: CategoryFormState) => void;
-}) {
-  const parentOptions = categories.filter((category) => {
-    if (form.level === "2") return category.level === 1;
-    if (form.level === "3") return category.level === 2;
-    return false;
-  });
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">
-          {form.id ? "编辑分类" : "新增分类"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={onSubmit}>
-          <Field label="分类名称">
-            <Input
-              value={form.name}
-              onChange={(event) => onUpdate({ ...form, name: event.target.value })}
-            />
-          </Field>
-          <Field label="slug">
-            <Input
-              value={form.slug}
-              onChange={(event) => onUpdate({ ...form, slug: event.target.value })}
-            />
-          </Field>
-          <Field label="level">
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              value={form.level}
-              onChange={(event) =>
-                onUpdate({
-                  ...form,
-                  level: event.target.value as "1" | "2" | "3",
-                  parent_id: "",
-                })
-              }
-            >
-              <option value="1">一级分类</option>
-              <option value="2">二级分类</option>
-              <option value="3">三级分类</option>
-            </select>
-          </Field>
-          <Field label="parent_id">
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
-              disabled={form.level === "1"}
-              value={form.level === "1" ? "" : form.parent_id}
-              onChange={(event) =>
-                onUpdate({ ...form, parent_id: event.target.value })
-              }
-            >
-              <option value="">
-                {form.level === "1" ? "一级分类不需要父级" : "请选择父分类"}
-              </option>
-              {parentOptions.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="icon">
-            <Input
-              value={form.icon}
-              onChange={(event) => onUpdate({ ...form, icon: event.target.value })}
-            />
-          </Field>
-          <Field label="sort_order">
-            <Input
-              type="number"
-              step="1"
-              value={form.sort_order}
-              onChange={(event) =>
-                onUpdate({ ...form, sort_order: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="description" className="md:col-span-2">
-            <Textarea
-              rows={3}
-              value={form.description}
-              onChange={(event) =>
-                onUpdate({ ...form, description: event.target.value })
-              }
-            />
-          </Field>
-          <div className="flex justify-end gap-2 md:col-span-2">
-            <Button type="button" variant="outline" onClick={onCancel}>
-              取消
-            </Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? "保存中..." : "保存分类"}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
-
 function Field({
   children,
   className,
+  error,
   label,
+  required,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
+  error?: string;
   label: string;
+  required?: boolean;
 }) {
   return (
     <div className={cn("space-y-2", className)}>
-      <Label className="text-xs text-slate-500">{label}</Label>
+      <Label className="text-xs font-medium text-slate-600">
+        {label}
+        {required && <span className="ml-1 text-red-500">*</span>}
+      </Label>
       {children}
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
+}
+
+function FormSection({
+  children,
+  className,
+  title,
+}: {
+  children: ReactNode;
+  className?: string;
+  title: string;
+}) {
+  return (
+    <section className={cn("rounded-xl border border-slate-200 bg-slate-50/40 p-4", className)}>
+      <h3 className="mb-4 text-sm font-semibold text-slate-900">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function NativeSelect({
+  children,
+  disabled,
+  onChange,
+  value,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <select
+      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+      disabled={disabled}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {children}
+    </select>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-dashed p-10 text-center text-sm text-slate-500">
+      {text}
+    </div>
+  );
+}
+
+function sortCategories(a: AdminCategory, b: AdminCategory) {
+  return a.sort_order - b.sort_order || a.name.localeCompare(b.name);
+}
+
+function getEnabledChildren(categories: AdminCategory[], parentId: string) {
+  return categories
+    .filter((category) => category.parent_id === parentId && isCategoryEnabled(category))
+    .sort(sortCategories);
+}
+
+function hasChildren(categories: AdminCategory[], id: string) {
+  return categories.some((category) => category.parent_id === id);
+}
+
+function getLeafCategoryIds(categories: AdminCategory[], parentId: string): string[] {
+  const children = getEnabledChildren(categories, parentId);
+  if (children.length === 0) return [parentId];
+  return children.flatMap((child) => getLeafCategoryIds(categories, child.id));
+}
+
+function getCategoryPath(categoryId: string | null, categoryMap: Map<string, AdminCategory>) {
+  if (!categoryId) return "未设置";
+  const category = categoryMap.get(categoryId);
+  if (!category) return "未匹配分类";
+  const parent = category.parent_id ? categoryMap.get(category.parent_id) : null;
+  const grandParent = parent?.parent_id ? categoryMap.get(parent.parent_id) : null;
+  return [grandParent?.name, parent?.name, category.name].filter(Boolean).join(" / ");
+}
+
+function toProductForm(
+  product: AdminProduct,
+  categoryMap: Map<string, AdminCategory>,
+  categories: AdminCategory[]
+): ProductFormState {
+  const category = product.category_id ? categoryMap.get(product.category_id) : null;
+  const parent = category?.parent_id ? categoryMap.get(category.parent_id) : null;
+  const primaryCategoryId =
+    category?.level === 1 ? category.id : parent?.level === 1 ? parent.id : "";
+
+  return {
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    primaryCategoryId,
+    category_id: category?.level === 1 ? "" : product.category_id ?? "",
+    short_description: product.short_description ?? "",
+    image_url: product.image_url ?? "",
+    price: String(product.price ?? ""),
+    original_price:
+      product.original_price === null || product.original_price === undefined
+        ? ""
+        : String(product.original_price),
+    stock: String(product.stock ?? 0),
+    delivery_type: product.delivery_type,
+    status: product.status,
+    sort_order: String(product.sort_order ?? 0),
+    metadata_note:
+      product.metadata && typeof product.metadata.note === "string"
+        ? product.metadata.note
+        : "",
+  };
+}
+
+function toCategoryForm(category: AdminCategory): CategoryFormState {
+  return {
+    id: category.id,
+    parent_id: category.parent_id ?? "",
+    level: category.level === 1 ? "1" : "2",
+    name: category.name,
+    slug: category.slug,
+    icon: category.icon ?? "",
+    description: category.description ?? "",
+    sort_order: String(category.sort_order ?? 0),
+    is_active: isCategoryEnabled(category),
+  };
+}
+
+function isProductDirty(form: ProductFormState) {
+  if (form.id) return true;
+  const empty = emptyProductForm();
+  return Object.keys(empty).some((key) => {
+    const field = key as keyof ProductFormState;
+    return form[field] !== empty[field];
+  });
+}
+
+function isCategoryDirty(form: CategoryFormState) {
+  if (form.id) return true;
+  const empty = emptyCategoryForm();
+  return Object.keys(empty).some((key) => {
+    const field = key as keyof CategoryFormState;
+    return form[field] !== empty[field];
+  });
 }
