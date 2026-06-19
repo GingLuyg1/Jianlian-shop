@@ -24,12 +24,14 @@ export async function GET(request: Request) {
     const page = Number(url.searchParams.get("page") ?? 1);
     const pageSize = Number(url.searchParams.get("pageSize") ?? 20);
     const status = url.searchParams.get("status") ?? "all";
+    const paymentStatus = url.searchParams.get("paymentStatus") ?? "all";
     const search = url.searchParams.get("search") ?? "";
 
     const result = await listUserOrders(supabase, user.id, {
       page,
       pageSize,
       status: status as never,
+      paymentStatus: paymentStatus as never,
       search,
     });
 
@@ -94,6 +96,7 @@ export async function POST(request: Request) {
       p_customer_name: customerName,
       p_customer_phone: customerPhone,
       p_customer_note: customerNote,
+      p_shipping_address: body?.shipping_address ?? null,
     });
 
     if (error) {
@@ -104,17 +107,6 @@ export async function POST(request: Request) {
     }
 
     const created = Array.isArray(data) ? data[0] : data;
-    if (created?.order_id && body?.shipping_address) {
-      const { error: shippingError } = await supabase
-        .from("orders")
-        .update({ shipping_address: body.shipping_address })
-        .eq("id", created.order_id)
-        .eq("user_id", user.id);
-
-      if (shippingError) {
-        console.error("[Orders] shipping address update failed", shippingError);
-      }
-    }
 
     return NextResponse.json({ order: created });
   } catch (error) {

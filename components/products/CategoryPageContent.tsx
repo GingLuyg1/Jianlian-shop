@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/select";
 import { Search } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
-import ProductGrid from "@/components/products/ProductGrid";
 import { products, categories } from "@/lib/mock-data";
 import { ProductCategory } from "@/lib/types";
 
@@ -108,10 +107,38 @@ export default function CategoryPageContent({
       </Tabs>
 
       {/* Product grid */}
-      <ProductGrid
-        products={filteredProducts}
-        emptyMessage={`${title}暂无商品`}
-      />
+      {filteredProducts.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filteredProducts.map((product) => (
+            <div
+              key={product.id}
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
+            >
+              <div className="mb-2 text-xs font-medium text-primary">
+                {product.categoryLabel}
+              </div>
+              <h2 className="text-base font-semibold text-foreground">
+                {product.name}
+              </h2>
+              <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                {product.description}
+              </p>
+              <div className="mt-5 flex items-center justify-between">
+                <span className="text-xl font-bold text-primary">
+                  ¥{product.price.toFixed(2)}
+                </span>
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  {product.stockLabel}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border bg-card/70 p-10 text-center text-sm text-muted-foreground">
+          {`${title}暂无商品`}
+        </div>
+      )}
     </PublicLayout>
   );
 }

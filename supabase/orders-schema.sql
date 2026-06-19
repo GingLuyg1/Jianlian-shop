@@ -218,7 +218,8 @@ create or replace function public.create_order_with_item(
   p_customer_email text default null,
   p_customer_name text default null,
   p_customer_phone text default null,
-  p_customer_note text default null
+  p_customer_note text default null,
+  p_shipping_address jsonb default null
 )
 returns table (
   order_id uuid,
@@ -275,18 +276,23 @@ begin
 
   loop
     v_try := v_try + 1;
-    v_order_no := 'JL' || to_char(now(), 'YYYYMMDDHH24MISS') ||
-      upper(substr(md5(random()::text || clock_timestamp()::text), 1, 6));
+    v_order_no := 'JL' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISS') ||
+      lpad(floor(random() * 10000)::text, 4, '0');
 
     begin
       insert into public.orders (
         order_no,user_id,status,payment_status,subtotal,discount_amount,total_amount,currency,
-        customer_email,customer_name,customer_phone,customer_note,delivery_type
+        customer_email,customer_name,customer_phone,shipping_address,customer_note,delivery_type
       )
       values (
         v_order_no,v_user_id,'pending_payment','unpaid',v_line_total,0,v_line_total,'CNY',
         nullif(trim(p_customer_email), ''),nullif(trim(p_customer_name), ''),
-        nullif(trim(p_customer_phone), ''),nullif(trim(p_customer_note), ''),
+        nullif(trim(p_customer_phone), ''),
+        case
+          when p_shipping_address is null or p_shipping_address = '{}'::jsonb then null
+          else p_shipping_address
+        end,
+        nullif(trim(p_customer_note), ''),
         v_product.delivery_type
       )
       returning id into v_order_id;
@@ -409,5 +415,67 @@ begin
   );
 
   return v_order;
+end;
+$$;
+
+create or replace function public.admin_upsert_order_delivery(
+  p_order_id uuid,
+  p_order_item_id uuid default null,
+  p_delivery_type text default null,
+  p_delivery_content text default null,
+  p_delivery_status text default 'delivered',
+  p_delivered_at timestamptz default null
+)
+returns public.order_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.orders;
+  v_delivery public.order_deliveries;
+begin
+  if not public.is_admin() then
+    raise exception '无后台访问权限';
+  end if;
+
+  select * into v_order from public.orders where id = p_order_id for update;
+  if not found then
+    raise exception '订单不存在';
+  end if;
+
+  if v_order.status = 'cancelled' then
+    raise exception '订单已取消，不能继续提交交付信息';
+  end if;
+
+  select * into v_delivery
+  from public.order_deliveries
+  where order_id = p_order_id
+  order by created_at asc
+  limit 1
+  for update;
+
+  if found then
+    update public.order_deliveries
+      set order_item_id = p_order_item_id,
+          delivery_type = coalesce(nullif(trim(p_delivery_type), ''), v_order.delivery_type),
+          delivery_content = nullif(trim(p_delivery_content), ''),
+          delivery_status = coalesce(nullif(trim(p_delivery_status), ''), 'delivered'),
+          delivered_at = coalesce(p_delivered_at, now())
+    where id = v_delivery.id
+    returning * into v_delivery;
+  else
+    insert into public.order_deliveries (
+      order_id,order_item_id,delivery_type,delivery_content,delivery_status,delivered_at
+    )
+    values (
+      p_order_id,p_order_item_id,coalesce(nullif(trim(p_delivery_type), ''), v_order.delivery_type),
+      nullif(trim(p_delivery_content), ''),coalesce(nullif(trim(p_delivery_status), ''), 'delivered'),
+      coalesce(p_delivered_at, now())
+    )
+    returning * into v_delivery;
+  end if;
+
+  return v_delivery;
 end;
 $$;

@@ -27,6 +27,18 @@ export type OrderLogRecord = {
   created_at: string;
 };
 
+export type OrderDeliveryRecord = {
+  id: string;
+  order_id: string;
+  order_item_id: string | null;
+  delivery_type: string | null;
+  delivery_content: string | null;
+  delivery_status: string;
+  delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OrderRecord = {
   id: string;
   order_no: string;
@@ -53,6 +65,7 @@ export type OrderRecord = {
   updated_at: string;
   order_items?: OrderItemRecord[];
   order_status_logs?: OrderLogRecord[];
+  order_deliveries?: OrderDeliveryRecord[];
 };
 
 export type OrderListResult = {

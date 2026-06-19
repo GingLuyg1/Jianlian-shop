@@ -64,3 +64,50 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 }
+
+export async function POST(request: Request, context: RouteContext) {
+  try {
+    const admin = await getServerAdminContext();
+    if (!admin.ok) {
+      return NextResponse.json({ error: admin.message }, { status: admin.status });
+    }
+
+    const body = (await request.json().catch(() => null)) as
+      | {
+          delivery_type?: string;
+          delivery_content?: string;
+          delivery_status?: string;
+          order_item_id?: string | null;
+        }
+      | null;
+
+    const deliveryContent = body?.delivery_content?.trim();
+    if (!deliveryContent) {
+      return NextResponse.json({ error: "请填写交付信息" }, { status: 400 });
+    }
+
+    const { data, error } = await admin.supabase.rpc("admin_upsert_order_delivery", {
+      p_order_id: context.params.orderId,
+      p_order_item_id: body?.order_item_id ?? null,
+      p_delivery_type: body?.delivery_type ?? null,
+      p_delivery_content: deliveryContent,
+      p_delivery_status: body?.delivery_status ?? "delivered",
+      p_delivered_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      return NextResponse.json(
+        { error: getOrderErrorMessage(error, "交付信息保存失败") },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ delivery: data });
+  } catch (error) {
+    console.error("[Admin Orders] delivery update failed", error);
+    return NextResponse.json(
+      { error: getOrderErrorMessage(error, "交付信息保存失败") },
+      { status: 500 }
+    );
+  }
+}

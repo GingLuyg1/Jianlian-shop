@@ -16,6 +16,11 @@ export async function GET(request: Request) {
     const pageSize = Number(url.searchParams.get("pageSize") ?? 20);
     const status = url.searchParams.get("status") ?? "all";
     const paymentStatus = url.searchParams.get("paymentStatus") ?? "all";
+    const deliveryType = url.searchParams.get("deliveryType") ?? "all";
+    const startDate = url.searchParams.get("startDate") ?? "";
+    const endDate = url.searchParams.get("endDate") ?? "";
+    const sortBy = url.searchParams.get("sortBy") ?? "created_at";
+    const sortDirection = url.searchParams.get("sortDirection") ?? "desc";
     const search = url.searchParams.get("search") ?? "";
 
     const result = await listAdminOrders(admin.supabase, {
@@ -23,6 +28,11 @@ export async function GET(request: Request) {
       pageSize,
       status: status as never,
       paymentStatus: paymentStatus as never,
+      deliveryType,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      sortBy: sortBy as never,
+      sortDirection: sortDirection as never,
       search,
     });
 

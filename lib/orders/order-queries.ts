@@ -5,14 +5,21 @@ import {
   type OrderStatus,
   type PaymentStatus,
 } from "./order-status";
-import type { OrderItemRecord, OrderListResult, OrderLogRecord, OrderRecord } from "./order-types";
+import type {
+  OrderDeliveryRecord,
+  OrderItemRecord,
+  OrderListResult,
+  OrderLogRecord,
+  OrderRecord,
+} from "./order-types";
 
 const orderSelect = `
   id,order_no,user_id,status,payment_status,payment_method,subtotal,discount_amount,total_amount,currency,
   customer_email,customer_name,customer_phone,shipping_address,customer_note,admin_note,delivery_type,
   paid_at,processed_at,completed_at,cancelled_at,created_at,updated_at,
   order_items(*),
-  order_status_logs(*)
+  order_status_logs(*),
+  order_deliveries(*)
 `;
 
 export function getOrderErrorMessage(
@@ -72,12 +79,29 @@ function normalizeLog(row: Record<string, unknown>): OrderLogRecord {
   };
 }
 
+function normalizeDelivery(row: Record<string, unknown>): OrderDeliveryRecord {
+  return {
+    id: String(row.id),
+    order_id: String(row.order_id),
+    order_item_id: row.order_item_id ? String(row.order_item_id) : null,
+    delivery_type: row.delivery_type ? String(row.delivery_type) : null,
+    delivery_content: row.delivery_content ? String(row.delivery_content) : null,
+    delivery_status: String(row.delivery_status ?? "pending"),
+    delivered_at: row.delivered_at ? String(row.delivered_at) : null,
+    created_at: String(row.created_at ?? ""),
+    updated_at: String(row.updated_at ?? ""),
+  };
+}
+
 export function normalizeOrder(row: Record<string, unknown>): OrderRecord {
   const items = Array.isArray(row.order_items)
     ? (row.order_items as Array<Record<string, unknown>>).map(normalizeItem)
     : [];
   const logs = Array.isArray(row.order_status_logs)
     ? (row.order_status_logs as Array<Record<string, unknown>>).map(normalizeLog)
+    : [];
+  const deliveries = Array.isArray(row.order_deliveries)
+    ? (row.order_deliveries as Array<Record<string, unknown>>).map(normalizeDelivery)
     : [];
 
   return {
@@ -108,7 +132,15 @@ export function normalizeOrder(row: Record<string, unknown>): OrderRecord {
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),
     order_items: items,
-    order_status_logs: logs,
+    order_status_logs: logs.sort(
+      (first, second) =>
+        new Date(second.created_at).getTime() - new Date(first.created_at).getTime()
+    ),
+    order_deliveries: deliveries.sort(
+      (first, second) =>
+        new Date(second.updated_at || second.created_at).getTime() -
+        new Date(first.updated_at || first.created_at).getTime()
+    ),
   };
 }
 
@@ -119,6 +151,7 @@ export async function listUserOrders(
     page?: number;
     pageSize?: number;
     status?: OrderStatus | "all";
+    paymentStatus?: PaymentStatus | "all";
     search?: string;
   } = {}
 ): Promise<OrderListResult> {
@@ -134,6 +167,10 @@ export async function listUserOrders(
 
   if (options.status && options.status !== "all") {
     query = query.eq("status", options.status);
+  }
+
+  if (options.paymentStatus && options.paymentStatus !== "all") {
+    query = query.eq("payment_status", options.paymentStatus);
   }
 
   const search = options.search?.trim();
@@ -176,6 +213,11 @@ export async function listAdminOrders(
     pageSize?: number;
     status?: OrderStatus | "all";
     paymentStatus?: PaymentStatus | "all";
+    deliveryType?: string;
+    startDate?: string;
+    endDate?: string;
+    sortBy?: "created_at" | "updated_at" | "total_amount";
+    sortDirection?: "asc" | "desc";
     search?: string;
   } = {}
 ): Promise<OrderListResult> {
@@ -194,13 +236,27 @@ export async function listAdminOrders(
     query = query.eq("payment_status", options.paymentStatus);
   }
 
+  if (options.deliveryType && options.deliveryType !== "all") {
+    query = query.eq("delivery_type", options.deliveryType);
+  }
+
+  if (options.startDate) {
+    query = query.gte("created_at", options.startDate);
+  }
+
+  if (options.endDate) {
+    query = query.lte("created_at", options.endDate);
+  }
+
   const search = options.search?.trim();
   if (search) {
     query = query.or(`order_no.ilike.%${search}%,customer_email.ilike.%${search}%`);
   }
 
+  const sortBy = options.sortBy ?? "created_at";
+  const sortDirection = options.sortDirection ?? "desc";
   const { data, error, count } = await query
-    .order("created_at", { ascending: false })
+    .order(sortBy, { ascending: sortDirection === "asc" })
     .range(from, to);
 
   if (error) throw new Error(getOrderErrorMessage(error, "订单读取失败"));
