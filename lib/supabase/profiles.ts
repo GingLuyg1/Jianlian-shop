@@ -6,6 +6,11 @@ export type UserProfile = {
   id: string;
   email: string | null;
   phone: string | null;
+  display_name: string | null;
+  country: string | null;
+  recipient_name: string | null;
+  shipping_address: Record<string, unknown> | null;
+  avatar_url: string | null;
   role: UserRole;
   balance: number;
   promotion_balance: number;
@@ -28,6 +33,11 @@ function normalizeProfile(row: Partial<UserProfile>, user: User): UserProfile {
     id: row.id ?? user.id,
     email: row.email ?? user.email ?? null,
     phone: row.phone ?? user.phone ?? null,
+    display_name: row.display_name ?? null,
+    country: row.country ?? null,
+    recipient_name: row.recipient_name ?? null,
+    shipping_address: row.shipping_address ?? null,
+    avatar_url: row.avatar_url ?? null,
     role: row.role ?? getRoleForEmail(user.email),
     balance: Number(row.balance ?? 0),
     promotion_balance: Number(row.promotion_balance ?? 0),
@@ -49,7 +59,7 @@ export async function getOrCreateProfile(
   const { data: existingProfile, error: selectError } = await supabase
     .from("profiles")
     .select(
-      "id,email,phone,role,balance,promotion_balance,invite_code,referred_by,created_at,updated_at"
+      "id,email,phone,display_name,country,recipient_name,shipping_address,avatar_url,role,balance,promotion_balance,invite_code,referred_by,created_at,updated_at"
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -74,7 +84,7 @@ export async function getOrCreateProfile(
     .from("profiles")
     .insert(profilePayload)
     .select(
-      "id,email,phone,role,balance,promotion_balance,invite_code,referred_by,created_at,updated_at"
+      "id,email,phone,display_name,country,recipient_name,shipping_address,avatar_url,role,balance,promotion_balance,invite_code,referred_by,created_at,updated_at"
     )
     .single();
 

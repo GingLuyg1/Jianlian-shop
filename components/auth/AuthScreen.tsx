@@ -72,6 +72,14 @@ function getSafeInternalRedirect(value: string | null) {
   return "/";
 }
 
+function getAuthRedirectUrl(path: string) {
+  if (typeof window === "undefined") return `https://www.jianlian.shop${path}`;
+  const origin = window.location.origin.includes("localhost")
+    ? "http://localhost:3000"
+    : "https://www.jianlian.shop";
+  return `${origin}${path}`;
+}
+
 export default function AuthScreen({ mode }: AuthScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -164,9 +172,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: normalizedInviteCode
-            ? { data: { invite_code: normalizedInviteCode } }
-            : undefined,
+          options: {
+            emailRedirectTo: getAuthRedirectUrl("/account"),
+            data: normalizedInviteCode ? { invite_code: normalizedInviteCode } : undefined,
+          },
         });
 
         if (signUpError) {
@@ -457,6 +466,14 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   >
                     {isRegister ? "已有账号，去登录" : "没有账号，立即注册"}
                   </Link>
+                  {!isRegister ? (
+                    <Link
+                      href="/forgot-password"
+                      className="font-medium text-slate-500 transition-colors hover:text-primary"
+                    >
+                      忘记密码
+                    </Link>
+                  ) : null}
                 </div>
               </div>
             </div>
