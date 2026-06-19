@@ -41,6 +41,13 @@ export interface Product {
   categoryLabel: string;                 // 分类中文名
   description: string;                   // 简短说明
   price: number;                         // 价格
+  imageUrl?: string | null;
+  originalPrice?: number | null;
+  stock?: number;
+  sortOrder?: number;
+  metadata?: Record<string, unknown> | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   currency: string;                      // 货币单位
   stockStatus: StockStatus;              // 库存状态
   stockLabel: string;                    // 库存状态中文名

@@ -66,7 +66,6 @@ type ProductFormState = {
   slug: string;
   category_id: string;
   short_description: string;
-  description: string;
   image_url: string;
   price: string;
   original_price: string;
@@ -93,7 +92,6 @@ function emptyProductForm(): ProductFormState {
     slug: "",
     category_id: "",
     short_description: "",
-    description: "",
     image_url: "",
     price: "",
     original_price: "",
@@ -132,7 +130,6 @@ function toProductForm(product: AdminProduct): ProductFormState {
     slug: product.slug,
     category_id: product.category_id ?? "",
     short_description: product.short_description ?? "",
-    description: product.description ?? "",
     image_url: product.image_url ?? "",
     price: String(product.price ?? ""),
     original_price:
@@ -281,7 +278,7 @@ export default function AdminProductsPage() {
       slug: productForm.slug.trim(),
       category_id: productForm.category_id || null,
       short_description: productForm.short_description.trim() || null,
-      description: productForm.description.trim() || null,
+      description: null,
       image_url: productForm.image_url.trim() || null,
       price: parseNumber(productForm.price),
       original_price: productForm.original_price.trim()
@@ -957,15 +954,6 @@ function ProductFormCard({
               value={form.short_description}
               onChange={(event) =>
                 onUpdate({ ...form, short_description: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="详情描述" className="md:col-span-2">
-            <Textarea
-              rows={4}
-              value={form.description}
-              onChange={(event) =>
-                onUpdate({ ...form, description: event.target.value })
               }
             />
           </Field>
