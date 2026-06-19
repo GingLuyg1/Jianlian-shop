@@ -17,7 +17,7 @@ export default function SimCardsMallContent() {
       primaryNames={["国际电话卡", "电话卡"]}
       primarySlugs={["sim-cards", "phone-cards", "international-phone-cards"]}
       productCategory="sim-cards"
-      queryParam="country"
+      legacyQueryParams={["country"]}
     />
   );
 }

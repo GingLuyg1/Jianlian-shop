@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
@@ -11,13 +11,24 @@ import {
   PackageCheck,
   RefreshCw,
   ShieldCheck,
+  type LucideIcon,
 } from "lucide-react";
 
-import PublicLayout from "@/components/layout/PublicLayout";
 import SupportCard from "@/components/common/SupportCard";
+import PublicLayout from "@/components/layout/PublicLayout";
+import CategoryBreadcrumb from "@/components/products/CategoryBreadcrumb";
+import ProductImage from "@/components/products/ProductImage";
+import ProductStatusBadge from "@/components/products/ProductStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCategoryPath } from "@/lib/catalog/category-tree";
+import {
+  getDeliveryLabel,
+  getProductUnavailableReason,
+  isPurchasableProduct,
+  normalizeProductStatus,
+} from "@/lib/catalog/product-status";
 import {
   getErrorText,
   getProductByIdOrSlug,
@@ -26,43 +37,19 @@ import {
   type PublicProductRow,
 } from "@/lib/supabase/public-catalog";
 import { cn } from "@/lib/utils";
-import {
-  productImageFallbackSrc,
-  setProductImageFallback,
-} from "@/components/products/product-ui";
 
-function getCategoryPath(categories: PublicCategory[], categoryId: string | null) {
-  if (!categoryId) return "";
+const PRIMARY_ROUTE_FALLBACK: Record<string, string> = {
+  "sim-cards": "sim-cards",
+  "gift-cards": "gift-cards",
+  "digital-accounts": "digital-accounts",
+  "ai-membership": "ai-membership",
+  "sms-code": "sms-code",
+};
 
-  const byId = new Map(categories.map((category) => [category.id, category]));
-  const path: string[] = [];
-  const seen = new Set<string>();
-  let current = byId.get(categoryId) ?? null;
-
-  while (current && !seen.has(current.id)) {
-    seen.add(current.id);
-    path.unshift(current.name);
-    current = current.parent_id ? byId.get(current.parent_id) ?? null : null;
-  }
-
-  return path.join(" / ");
-}
-
-function getDeliveryLabel(deliveryType: string | null | undefined) {
-  if (deliveryType === "automatic") return "自动发货";
-  if (deliveryType === "shipping") return "物流发货";
-  if (deliveryType === "card") return "卡密交付";
-  if (deliveryType === "account") return "账号交付";
-  return "人工处理";
-}
-
-function getUnavailableMessage(product: PublicProductRow | null) {
-  if (!product) return "";
-  if (product.status === "sold_out" || Number(product.stock ?? 0) <= 0) {
-    return "该商品已售罄";
-  }
-  if (product.status !== "active") return "该商品目前不可购买";
-  return "";
+function getPrimaryRoute(path: PublicCategory[]) {
+  const primary = path[0];
+  if (!primary) return "/";
+  return `/products/${PRIMARY_ROUTE_FALLBACK[primary.slug] ?? primary.slug}`;
 }
 
 export default function ProductDetailPage() {
@@ -70,14 +57,16 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const routeId = params?.id;
   const productIdentifier = Array.isArray(routeId) ? routeId[0] : routeId;
+
   const [product, setProduct] = useState<PublicProductRow | null>(null);
   const [categories, setCategories] = useState<PublicCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [buying, setBuying] = useState(false);
   const [error, setError] = useState("");
 
   const loadProduct = async () => {
     if (!productIdentifier) {
-      setError("缺少商品标识");
+      setError("缺少商品标识。");
       setLoading(false);
       return;
     }
@@ -87,13 +76,19 @@ export default function ProductDetailPage() {
 
     try {
       const [productRow, categoryRows] = await Promise.all([
-        getProductByIdOrSlug(productIdentifier),
+        getProductByIdOrSlug(productIdentifier, { activeOnly: true }),
         listPublicCategories(),
       ]);
-      setProduct(productRow);
+
+      const productCategoryIsVisible = productRow?.category_id
+        ? categoryRows.some((category) => category.id === productRow.category_id)
+        : true;
+
+      setProduct(productCategoryIsVisible ? productRow : null);
       setCategories(categoryRows);
     } catch (loadError) {
-      setError(getErrorText(loadError, "商品详情读取失败，请稍后重试"));
+      setError(getErrorText(loadError, "商品详情读取失败，请稍后重试。"));
+      setProduct(null);
     } finally {
       setLoading(false);
     }
@@ -108,12 +103,19 @@ export default function ProductDetailPage() {
     () => getCategoryPath(categories, product?.category_id ?? null),
     [categories, product?.category_id]
   );
-  const unavailableMessage = getUnavailableMessage(product);
-  const canBuy = Boolean(product && !unavailableMessage);
+  const unavailableMessage = getProductUnavailableReason(product);
+  const canBuy = isPurchasableProduct(product);
+  const status = normalizeProductStatus(product?.status);
+
+  const handleBuy = () => {
+    if (!product || !canBuy || buying) return;
+    setBuying(true);
+    router.push(`/checkout?product=${product.id}`);
+  };
 
   return (
     <PublicLayout>
-      <div className="max-w-5xl">
+      <div className="max-w-6xl">
         <button
           type="button"
           onClick={() => router.back()}
@@ -127,7 +129,7 @@ export default function ProductDetailPage() {
           <Card>
             <CardContent className="p-8">
               <div className="h-6 w-48 animate-pulse rounded bg-slate-100" />
-              <div className="mt-4 h-32 animate-pulse rounded-xl bg-slate-100" />
+              <div className="mt-4 h-44 animate-pulse rounded-xl bg-slate-100" />
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
                 <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
@@ -161,27 +163,26 @@ export default function ProductDetailPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-5">
               <Card>
-                <CardContent className="grid gap-5 p-5 sm:grid-cols-[160px_minmax(0,1fr)]">
-                  <div className="aspect-square overflow-hidden rounded-2xl border bg-white">
-                    <img
-                      src={product.image_url || productImageFallbackSrc}
+                <CardContent className="grid gap-5 p-5 sm:grid-cols-[220px_minmax(0,1fr)]">
+                  <div className="overflow-hidden rounded-2xl border bg-white">
+                    <ProductImage
+                      src={product.image_url}
                       alt={product.name}
-                      className="h-full w-full object-cover"
-                      onError={(event) =>
-                        setProductImageFallback(event.currentTarget)
-                      }
+                      className="aspect-square"
                     />
                   </div>
                   <div className="min-w-0">
-                    {categoryPath ? (
-                      <div className="mb-2 text-xs text-muted-foreground">
-                        {categoryPath}
-                      </div>
-                    ) : null}
-                    <h1 className="text-2xl font-black leading-tight text-slate-950">
+                    <CategoryBreadcrumb
+                      items={categoryPath}
+                      onSelect={(category) => {
+                        const route = getPrimaryRoute(categoryPath);
+                        router.push(`${route}?category=${encodeURIComponent(category.slug)}`);
+                      }}
+                    />
+                    <h1 className="mt-3 text-2xl font-black leading-tight text-slate-950">
                       {product.name}
                     </h1>
                     {product.short_description ? (
@@ -198,16 +199,18 @@ export default function ProductDetailPage() {
                           ¥{Number(product.original_price).toFixed(2)}
                         </span>
                       ) : null}
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          Number(product.stock) > 0
-                            ? "border-green-200 bg-green-50 text-green-700"
-                            : "border-slate-200 bg-slate-50 text-slate-500"
-                        )}
-                      >
-                        库存：{Number(product.stock ?? 0)}
-                      </Badge>
+                      <ProductStatusBadge
+                        status={product.status}
+                        stock={Number(product.stock ?? 0)}
+                      />
+                      {status === "sold_out" ? (
+                        <Badge
+                          variant="outline"
+                          className="border-orange-200 bg-orange-50 text-orange-700"
+                        >
+                          已售罄
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>
@@ -215,14 +218,16 @@ export default function ProductDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">商品说明</CardTitle>
+                  <CardTitle className="text-base">购买前说明</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm leading-7 text-muted-foreground">
+                <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
                   <p>
-                    {product.description ||
-                      product.short_description ||
-                      "请下单前核对商品说明、地区、库存和售后规则。"}
+                    {product.short_description ||
+                      "请在下单前核对商品说明、地区、库存和售后规则。"}
                   </p>
+                  <div className="rounded-xl bg-primary/5 p-4 text-primary">
+                    如需补货、批量购买或不确定商品是否适合，请先联系在线客服确认。
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <InfoItem icon={ShieldCheck} title="安全合规" desc="下单前请核对用途" />
                     <InfoItem icon={PackageCheck} title="交付方式" desc={getDeliveryLabel(product.delivery_type)} />
@@ -252,9 +257,7 @@ export default function ProductDetailPage() {
                     <span
                       className={cn(
                         "font-bold",
-                        Number(product.stock) > 0
-                          ? "text-green-600"
-                          : "text-slate-400"
+                        Number(product.stock) > 0 ? "text-green-600" : "text-slate-400"
                       )}
                     >
                       {Number(product.stock ?? 0)}
@@ -269,16 +272,10 @@ export default function ProductDetailPage() {
 
                   <Button
                     className="w-full"
-                    disabled={!canBuy}
-                    asChild={canBuy}
+                    disabled={!canBuy || buying}
+                    onClick={handleBuy}
                   >
-                    {canBuy ? (
-                      <Link href={`/checkout?product=${product.id}`}>
-                        立即购买
-                      </Link>
-                    ) : (
-                      "不可购买"
-                    )}
+                    {buying ? "正在进入结算..." : canBuy ? "立即购买" : "不可购买"}
                   </Button>
                 </CardContent>
               </Card>
@@ -300,7 +297,7 @@ function InfoItem({
   title,
   desc,
 }: {
-  icon: typeof CheckCircle2;
+  icon: LucideIcon;
   title: string;
   desc: string;
 }) {
