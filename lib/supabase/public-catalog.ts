@@ -228,7 +228,7 @@ export function mapPublicProductToProduct(
     row.delivery_type === "shipping" ? "physical" : "digital";
 
   return {
-    id: row.id,
+    id: row.slug || row.id,
     name: row.name,
     category: productCategory,
     categoryLabel,
