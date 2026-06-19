@@ -1,225 +1,314 @@
 "use client";
 
-/**
- * Product Detail Page - Shows full product information
- *
- * Displays: title, category, price, stock status, processing time,
- * delivery method, description, purchase notes, FAQ, support card,
- * and 立即购买 button.
- *
- * No cart. No footer. Uses PublicLayout.
- */
-
-import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Headphones,
+  PackageCheck,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
+
+import PublicLayout from "@/components/layout/PublicLayout";
+import SupportCard from "@/components/common/SupportCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import PublicLayout from "@/components/layout/PublicLayout";
-import SupportCard from "@/components/common/SupportCard";
-import { products } from "@/lib/mock-data";
+  getErrorText,
+  getProductByIdOrSlug,
+  listPublicCategories,
+  type PublicCategory,
+  type PublicProductRow,
+} from "@/lib/supabase/public-catalog";
 import { cn } from "@/lib/utils";
+import {
+  productImageFallbackSrc,
+  setProductImageFallback,
+} from "@/components/products/product-ui";
 
-const stockColorMap: Record<string, string> = {
-  "in-stock": "bg-green-50 text-green-700 border-green-200",
-  "low-stock": "bg-amber-50 text-amber-700 border-amber-200",
-  "out-of-stock": "bg-red-50 text-red-600 border-red-200",
-};
+function getCategoryPath(categories: PublicCategory[], categoryId: string | null) {
+  if (!categoryId) return "";
+
+  const byId = new Map(categories.map((category) => [category.id, category]));
+  const path: string[] = [];
+  const seen = new Set<string>();
+  let current = byId.get(categoryId) ?? null;
+
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.unshift(current.name);
+    current = current.parent_id ? byId.get(current.parent_id) ?? null : null;
+  }
+
+  return path.join(" / ");
+}
+
+function getDeliveryLabel(deliveryType: string | null | undefined) {
+  if (deliveryType === "automatic") return "自动发货";
+  if (deliveryType === "shipping") return "物流发货";
+  if (deliveryType === "card") return "卡密交付";
+  if (deliveryType === "account") return "账号交付";
+  return "人工处理";
+}
+
+function getUnavailableMessage(product: PublicProductRow | null) {
+  if (!product) return "";
+  if (product.status === "sold_out" || Number(product.stock ?? 0) <= 0) {
+    return "该商品已售罄";
+  }
+  if (product.status !== "active") return "该商品目前不可购买";
+  return "";
+}
 
 export default function ProductDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const routeId = params?.id;
-  const productId = Array.isArray(routeId) ? routeId[0] : routeId;
+  const productIdentifier = Array.isArray(routeId) ? routeId[0] : routeId;
+  const [product, setProduct] = useState<PublicProductRow | null>(null);
+  const [categories, setCategories] = useState<PublicCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const product = products.find((p) => p.id === productId);
+  const loadProduct = async () => {
+    if (!productIdentifier) {
+      setError("缺少商品标识");
+      setLoading(false);
+      return;
+    }
 
-  if (!product) {
-    return (
-      <PublicLayout>
-        <div className="text-center py-20">
-          <h2 className="text-lg font-semibold mb-2">商品未找到</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            该商品不存在或已下架
-          </p>
-          <Button asChild>
-            <Link href="/">返回首页</Link>
-          </Button>
-        </div>
-      </PublicLayout>
-    );
-  }
+    setLoading(true);
+    setError("");
 
-  const isDisabled = product.stockStatus === "out-of-stock";
+    try {
+      const [productRow, categoryRows] = await Promise.all([
+        getProductByIdOrSlug(productIdentifier),
+        listPublicCategories(),
+      ]);
+      setProduct(productRow);
+      setCategories(categoryRows);
+    } catch (loadError) {
+      setError(getErrorText(loadError, "商品详情读取失败，请稍后重试"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProduct();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productIdentifier]);
+
+  const categoryPath = useMemo(
+    () => getCategoryPath(categories, product?.category_id ?? null),
+    [categories, product?.category_id]
+  );
+  const unavailableMessage = getUnavailableMessage(product);
+  const canBuy = Boolean(product && !unavailableMessage);
 
   return (
     <PublicLayout>
-      <div className="max-w-4xl">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-          <Link href="/" className="hover:text-foreground">
-            首页
-          </Link>
-          <span>/</span>
-          <Link
-            href={`/products/${product.category}`}
-            className="hover:text-foreground"
-          >
-            {product.categoryLabel}
-          </Link>
-          <span>/</span>
-          <span className="text-foreground">{product.name}</span>
-        </div>
+      <div className="max-w-5xl">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          返回上一页
+        </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main product info - takes 2 columns */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Product header card */}
-            <Card>
-              <CardContent className="p-5">
-                <Badge variant="secondary" className="text-xs mb-2">
-                  {product.categoryLabel}
-                </Badge>
-                <h1 className="text-lg font-bold text-foreground mb-3">
-                  {product.name}
-                </h1>
-
-                {/* Price */}
-                <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-2xl font-bold text-primary">
-                    ¥{product.price.toFixed(2)}
-                  </span>
-                </div>
-
-                {/* Info grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="bg-muted/50 rounded-md p-3">
-                    <div className="text-xs text-muted-foreground mb-1">
-                      库存状态
+        {loading ? (
+          <Card>
+            <CardContent className="p-8">
+              <div className="h-6 w-48 animate-pulse rounded bg-slate-100" />
+              <div className="mt-4 h-32 animate-pulse rounded-xl bg-slate-100" />
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
+              </div>
+            </CardContent>
+          </Card>
+        ) : error ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="mx-auto h-10 w-10 text-red-500" />
+              <h1 className="mt-4 text-lg font-bold">商品读取失败</h1>
+              <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+              <Button className="mt-5" onClick={loadProduct}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                重新加载
+              </Button>
+            </CardContent>
+          </Card>
+        ) : !product ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="mx-auto h-10 w-10 text-amber-500" />
+              <h1 className="mt-4 text-lg font-bold">商品不存在或已被删除</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                请返回商品列表重新选择。
+              </p>
+              <Button className="mt-5" asChild>
+                <Link href="/">返回商城</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="space-y-5">
+              <Card>
+                <CardContent className="grid gap-5 p-5 sm:grid-cols-[160px_minmax(0,1fr)]">
+                  <div className="aspect-square overflow-hidden rounded-2xl border bg-white">
+                    <img
+                      src={product.image_url || productImageFallbackSrc}
+                      alt={product.name}
+                      className="h-full w-full object-cover"
+                      onError={(event) =>
+                        setProductImageFallback(event.currentTarget)
+                      }
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    {categoryPath ? (
+                      <div className="mb-2 text-xs text-muted-foreground">
+                        {categoryPath}
+                      </div>
+                    ) : null}
+                    <h1 className="text-2xl font-black leading-tight text-slate-950">
+                      {product.name}
+                    </h1>
+                    {product.short_description ? (
+                      <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                        {product.short_description}
+                      </p>
+                    ) : null}
+                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                      <span className="text-3xl font-black text-primary">
+                        ¥{Number(product.price).toFixed(2)}
+                      </span>
+                      {product.original_price ? (
+                        <span className="text-sm text-muted-foreground line-through">
+                          ¥{Number(product.original_price).toFixed(2)}
+                        </span>
+                      ) : null}
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          Number(product.stock) > 0
+                            ? "border-green-200 bg-green-50 text-green-700"
+                            : "border-slate-200 bg-slate-50 text-slate-500"
+                        )}
+                      >
+                        库存：{Number(product.stock ?? 0)}
+                      </Badge>
                     </div>
-                    <Badge
-                      variant="outline"
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">商品说明</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm leading-7 text-muted-foreground">
+                  <p>
+                    {product.description ||
+                      product.short_description ||
+                      "请下单前核对商品说明、地区、库存和售后规则。"}
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <InfoItem icon={ShieldCheck} title="安全合规" desc="下单前请核对用途" />
+                    <InfoItem icon={PackageCheck} title="交付方式" desc={getDeliveryLabel(product.delivery_type)} />
+                    <InfoItem icon={Headphones} title="售后支持" desc="有疑问请联系客服" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="space-y-4">
+              <Card className="sticky top-20">
+                <CardContent className="space-y-4 p-5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">商品价格</span>
+                    <span className="text-2xl font-black text-primary">
+                      ¥{Number(product.price).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">交付方式</span>
+                    <span className="font-medium">
+                      {getDeliveryLabel(product.delivery_type)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">当前库存</span>
+                    <span
                       className={cn(
-                        "text-xs",
-                        stockColorMap[product.stockStatus]
+                        "font-bold",
+                        Number(product.stock) > 0
+                          ? "text-green-600"
+                          : "text-slate-400"
                       )}
                     >
-                      {product.stockLabel}
-                    </Badge>
-                  </div>
-                  <div className="bg-muted/50 rounded-md p-3">
-                    <div className="text-xs text-muted-foreground mb-1">
-                      处理时效
-                    </div>
-                    <span className="text-sm font-medium">
-                      {product.processingTime}
+                      {Number(product.stock ?? 0)}
                     </span>
                   </div>
-                  <div className="bg-muted/50 rounded-md p-3">
-                    <div className="text-xs text-muted-foreground mb-1">
-                      交付方式
+
+                  {unavailableMessage ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                      {unavailableMessage}
                     </div>
-                    <span className="text-sm font-medium">
-                      {product.deliveryLabel}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  ) : null}
 
-            {/* Product description */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">商品说明</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {product.detail || product.description}
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Purchase notes */}
-            {product.purchaseNotes && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">购买须知</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {product.purchaseNotes}
-                  </p>
+                  <Button
+                    className="w-full"
+                    disabled={!canBuy}
+                    asChild={canBuy}
+                  >
+                    {canBuy ? (
+                      <Link href={`/checkout?product=${product.id}`}>
+                        立即购买
+                      </Link>
+                    ) : (
+                      "不可购买"
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
-            )}
 
-            {/* FAQ */}
-            {product.faq && product.faq.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">常见问题</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Accordion type="single" collapsible>
-                    {product.faq.map((item, index) => (
-                      <AccordionItem
-                        key={index}
-                        value={`faq-${index}`}
-                      >
-                        <AccordionTrigger className="text-sm text-left">
-                          {item.question}
-                        </AccordionTrigger>
-                        <AccordionContent className="text-sm text-muted-foreground">
-                          {item.answer}
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                </CardContent>
-              </Card>
-            )}
+              <SupportCard
+                title="在线客服"
+                description="购买前如需确认库存、地区或交付方式，请先联系客服。"
+              />
+            </div>
           </div>
-
-          {/* Right sidebar: buy button and support */}
-          <div className="space-y-4">
-            {/* Buy card */}
-            <Card className="sticky top-20">
-              <CardContent className="p-4">
-                <div className="flex items-baseline justify-between mb-4">
-                  <span className="text-muted-foreground text-sm">价格</span>
-                  <span className="text-xl font-bold text-primary">
-                    ¥{product.price.toFixed(2)}
-                  </span>
-                </div>
-                <Button
-                  className="w-full"
-                  disabled={isDisabled}
-                  asChild={!isDisabled}
-                >
-                  {isDisabled ? (
-                    "暂时缺货"
-                  ) : (
-                    <Link href={`/checkout?product=${product.id}`}>
-                      立即购买
-                    </Link>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Support card */}
-            <SupportCard
-              title="在线客服"
-              description="购买前如有疑问，请联系客服咨询"
-            />
-          </div>
-        </div>
+        )}
       </div>
     </PublicLayout>
+  );
+}
+
+function InfoItem({
+  icon: Icon,
+  title,
+  desc,
+}: {
+  icon: typeof CheckCircle2;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="rounded-xl bg-slate-50 p-3">
+      <Icon className="mb-2 h-5 w-5 text-primary" />
+      <div className="font-semibold text-slate-900">{title}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{desc}</div>
+    </div>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, ClipboardList, Home } from "lucide-react";
+import { CheckCircle2, ClipboardList, Home, RefreshCw } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,18 @@ import {
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
 
+function formatMoney(value: number | string | null | undefined) {
+  return `¥${Number(value ?? 0).toFixed(2)}`;
+}
+
+function getDeliveryLabel(deliveryType: string | null | undefined) {
+  if (deliveryType === "automatic") return "自动发货";
+  if (deliveryType === "shipping") return "物流发货";
+  if (deliveryType === "card") return "卡密交付";
+  if (deliveryType === "account") return "账号交付";
+  return "人工处理";
+}
+
 export default function OrderSuccessPage() {
   const searchParams = useSearchParams();
   const orderNo =
@@ -29,10 +41,41 @@ export default function OrderSuccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const loadOrder = useCallback(
+    async (options: { silent?: boolean } = {}) => {
+      if (!orderNo) {
+        setError("缺少订单编号");
+        setLoading(false);
+        return;
+      }
 
-    async function loadOrder() {
+      if (!options.silent) setLoading(true);
+      setError("");
+
+      try {
+        const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`);
+        const result = (await response.json().catch(() => null)) as
+          | { order?: OrderRecord; error?: string }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(result?.error ?? "订单读取失败");
+        }
+
+        setOrder(result?.order ?? null);
+      } catch (loadError) {
+        setError(getOrderErrorMessage(loadError, "订单读取失败"));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [orderNo]
+  );
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function run() {
       if (!orderNo) {
         setError("缺少订单编号");
         setLoading(false);
@@ -52,27 +95,29 @@ export default function OrderSuccessPage() {
           throw new Error(result?.error ?? "订单读取失败");
         }
 
-        if (active) setOrder(result?.order ?? null);
+        if (!ignore) setOrder(result?.order ?? null);
       } catch (loadError) {
-        if (active) setError(getOrderErrorMessage(loadError, "订单读取失败"));
+        if (!ignore) setError(getOrderErrorMessage(loadError, "订单读取失败"));
       } finally {
-        if (active) setLoading(false);
+        if (!ignore) setLoading(false);
       }
     }
 
-    loadOrder();
+    run();
     return () => {
-      active = false;
+      ignore = true;
     };
   }, [orderNo]);
 
-  const productName = order?.order_items?.[0]?.product_name ?? "订单商品";
+  const firstItem = order?.order_items?.[0] ?? null;
+  const productName = firstItem?.product_name ?? "订单商品";
+  const quantity = firstItem?.quantity ?? 1;
   const orderStatus = normalizeOrderStatus(order?.status);
   const paymentStatus = normalizePaymentStatus(order?.payment_status);
 
   return (
     <PublicLayout>
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-xl">
         <Card>
           <CardContent className="p-6 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
@@ -83,7 +128,7 @@ export default function OrderSuccessPage() {
               订单创建成功
             </h1>
             <p className="mb-6 text-sm leading-6 text-muted-foreground">
-              订单已创建，请按照页面说明完成付款或等待客服处理。
+              订单已创建，请根据页面说明完成后续处理。当前暂未接入真实支付，不显示支付成功。
             </p>
 
             {loading ? (
@@ -91,17 +136,33 @@ export default function OrderSuccessPage() {
                 正在读取订单...
               </div>
             ) : error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {error}
+              <div className="space-y-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <div>{error}</div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadOrder()}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  重新加载
+                </Button>
               </div>
             ) : order ? (
               <div className="mb-6 space-y-3 text-left">
-                <InfoRow label="订单号" value={order.order_no} mono />
+                <InfoRow label="订单编号" value={order.order_no} mono />
                 <InfoRow label="商品名称" value={productName} />
+                <InfoRow label="商品数量" value={String(quantity)} />
                 <InfoRow
                   label="应付金额"
-                  value={`¥${Number(order.total_amount).toFixed(2)}`}
+                  value={formatMoney(order.total_amount)}
                   primary
+                />
+                <InfoRow
+                  label="交付方式"
+                  value={getDeliveryLabel(
+                    order.delivery_type ?? firstItem?.delivery_type
+                  )}
                 />
                 <div className="flex justify-between gap-4 text-sm">
                   <span className="text-muted-foreground">订单状态</span>
@@ -116,7 +177,10 @@ export default function OrderSuccessPage() {
                   <span className="text-muted-foreground">支付状态</span>
                   <Badge
                     variant="outline"
-                    className={cn("text-xs", PAYMENT_STATUS_STYLES[paymentStatus])}
+                    className={cn(
+                      "text-xs",
+                      PAYMENT_STATUS_STYLES[paymentStatus]
+                    )}
                   >
                     {getPaymentStatusLabel(order.payment_status)}
                   </Badge>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCcw, Search } from "lucide-react";
+import { RefreshCcw, Search, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ export default function AdminOrdersPage() {
   const [paymentStatus, setPaymentStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -87,7 +88,7 @@ export default function AdminOrdersPage() {
         },
         body: JSON.stringify({
           status: nextStatus,
-          payment_status: nextStatus === "paid" ? "paid" : undefined,
+          payment_status: getNextPaymentStatus(nextStatus),
           admin_note: `管理员更新状态为：${getOrderStatusLabel(nextStatus)}`,
         }),
       });
@@ -101,6 +102,9 @@ export default function AdminOrdersPage() {
 
       setMessage("订单状态已更新");
       await loadOrders();
+      setSelectedOrder((current) =>
+        current?.id === order.id ? { ...current, status: nextStatus } : current
+      );
     } catch (updateError) {
       setError(getOrderErrorMessage(updateError, "订单状态更新失败"));
     } finally {
@@ -278,7 +282,15 @@ export default function AdminOrdersPage() {
                             {transitions.length === 0 ? (
                               <span className="text-xs text-slate-400">无可用操作</span>
                             ) : (
-                              transitions.map((nextStatus) => (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setSelectedOrder(order)}
+                                >
+                                  查看
+                                </Button>
+                                {transitions.map((nextStatus) => (
                                 <Button
                                   key={nextStatus}
                                   variant="outline"
@@ -288,7 +300,8 @@ export default function AdminOrdersPage() {
                                 >
                                   {getOrderStatusLabel(nextStatus)}
                                 </Button>
-                              ))
+                                ))}
+                              </>
                             )}
                           </div>
                         </td>
@@ -326,6 +339,212 @@ export default function AdminOrdersPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AdminOrderDrawer
+        order={selectedOrder}
+        updating={updatingId === selectedOrder?.id}
+        onClose={() => setSelectedOrder(null)}
+        onUpdateStatus={updateOrderStatus}
+      />
     </div>
   );
+}
+
+function getNextPaymentStatus(nextStatus: OrderStatus) {
+  if (nextStatus === "paid") return "paid";
+  if (nextStatus === "refunded") return "refunded";
+  if (nextStatus === "failed") return "failed";
+  return undefined;
+}
+
+function AdminOrderDrawer({
+  order,
+  updating,
+  onClose,
+  onUpdateStatus,
+}: {
+  order: OrderRecord | null;
+  updating: boolean;
+  onClose: () => void;
+  onUpdateStatus: (order: OrderRecord, nextStatus: OrderStatus) => void;
+}) {
+  if (!order) return null;
+
+  const orderStatus = normalizeOrderStatus(order.status);
+  const payment = normalizePaymentStatus(order.payment_status);
+  const transitions = ORDER_STATUS_TRANSITIONS[orderStatus];
+  const item = order.order_items?.[0];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={onClose}>
+      <aside
+        className="ml-auto flex h-full w-full max-w-[860px] flex-col bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b px-6 py-4">
+          <div>
+            <div className="text-lg font-bold text-slate-950">订单详情</div>
+            <div className="mt-1 font-mono text-xs text-slate-500">
+              {order.order_no}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            aria-label="关闭订单详情"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <section className="grid gap-3 md:grid-cols-3">
+            <InfoBlock label="订单金额" value={`¥${Number(order.total_amount).toFixed(2)}`} primary />
+            <div className="rounded-xl border bg-slate-50 p-4">
+              <div className="text-xs text-slate-500">订单状态</div>
+              <Badge
+                variant="outline"
+                className={cn("mt-2 whitespace-nowrap text-xs", ORDER_STATUS_STYLES[orderStatus])}
+              >
+                {getOrderStatusLabel(order.status)}
+              </Badge>
+            </div>
+            <div className="rounded-xl border bg-slate-50 p-4">
+              <div className="text-xs text-slate-500">支付状态</div>
+              <Badge
+                variant="outline"
+                className={cn("mt-2 whitespace-nowrap text-xs", PAYMENT_STATUS_STYLES[payment])}
+              >
+                {getPaymentStatusLabel(order.payment_status)}
+              </Badge>
+            </div>
+          </section>
+
+          <section className="rounded-xl border">
+            <div className="border-b px-4 py-3 font-semibold">用户与交付信息</div>
+            <div className="grid gap-3 p-4 text-sm md:grid-cols-2">
+              <InfoLine label="用户邮箱" value={order.customer_email || "未填写"} />
+              <InfoLine label="用户姓名" value={order.customer_name || "未填写"} />
+              <InfoLine label="联系电话" value={order.customer_phone || "未填写"} />
+              <InfoLine label="交付方式" value={order.delivery_type || item?.delivery_type || "未记录"} />
+              <InfoLine
+                label="收货地址"
+                value={formatShippingAddress(order.shipping_address)}
+                wide
+              />
+              <InfoLine label="用户备注" value={order.customer_note || "无"} wide />
+              <InfoLine label="管理员备注" value={order.admin_note || "无"} wide />
+            </div>
+          </section>
+
+          <section className="rounded-xl border">
+            <div className="border-b px-4 py-3 font-semibold">商品明细</div>
+            <div className="divide-y">
+              {(order.order_items ?? []).map((orderItem) => (
+                <div key={orderItem.id} className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1fr_110px_80px_120px]">
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-slate-950">
+                      {orderItem.product_name}
+                    </div>
+                    <div className="mt-1 truncate text-xs text-slate-500">
+                      {orderItem.category_name || "未记录分类"} · {orderItem.product_slug || "未记录 slug"}
+                    </div>
+                  </div>
+                  <div className="whitespace-nowrap">¥{Number(orderItem.unit_price).toFixed(2)}</div>
+                  <div className="whitespace-nowrap">x {orderItem.quantity}</div>
+                  <div className="whitespace-nowrap font-semibold text-primary">
+                    ¥{Number(orderItem.line_total).toFixed(2)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border">
+            <div className="border-b px-4 py-3 font-semibold">状态时间线</div>
+            <div className="space-y-2 p-4">
+              {(order.order_status_logs ?? []).length === 0 ? (
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                  暂无状态日志
+                </div>
+              ) : (
+                (order.order_status_logs ?? []).map((log) => (
+                  <div key={log.id} className="flex justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                    <span>
+                      {getOrderStatusLabel(log.to_status)}
+                      {log.note ? ` · ${log.note}` : ""}
+                    </span>
+                    <span className="shrink-0 text-slate-500">
+                      {new Date(log.created_at).toLocaleString("zh-CN", { hour12: false })}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-slate-50 px-6 py-4">
+          {transitions.length === 0 ? (
+            <span className="text-sm text-slate-400">当前状态无可用操作</span>
+          ) : (
+            transitions.map((nextStatus) => (
+              <Button
+                key={nextStatus}
+                variant="outline"
+                disabled={updating}
+                onClick={() => onUpdateStatus(order, nextStatus)}
+              >
+                {getOrderStatusLabel(nextStatus)}
+              </Button>
+            ))
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function InfoBlock({
+  label,
+  value,
+  primary,
+}: {
+  label: string;
+  value: string;
+  primary?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border bg-slate-50 p-4">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className={cn("mt-2 font-semibold", primary && "text-primary")}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function InfoLine({
+  label,
+  value,
+  wide,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className={cn(wide && "md:col-span-2")}>
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 break-words font-medium text-slate-800">{value}</div>
+    </div>
+  );
+}
+
+function formatShippingAddress(value: Record<string, unknown> | null) {
+  if (!value) return "未填写";
+  const region = typeof value.region === "string" ? value.region : "";
+  const address = typeof value.address === "string" ? value.address : "";
+  return [region, address].filter(Boolean).join(" ") || "未填写";
 }

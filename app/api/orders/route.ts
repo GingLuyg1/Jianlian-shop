@@ -67,24 +67,33 @@ export async function POST(request: Request) {
           customer_email?: string;
           customer_name?: string;
           customer_phone?: string;
+          shipping_address?: Record<string, unknown> | null;
           customer_note?: string;
         }
       | null;
 
     const productId = body?.product_id ?? body?.productId;
     const quantity = Math.max(1, Math.floor(Number(body?.quantity ?? 1)));
+    const customerEmail = body?.customer_email?.trim() || user.email || null;
+    const customerName = body?.customer_name?.trim() || null;
+    const customerPhone = body?.customer_phone?.trim() || null;
+    const customerNote = body?.customer_note?.trim() || null;
 
     if (!productId) {
       return NextResponse.json({ error: "请选择商品" }, { status: 400 });
     }
 
+    if (!customerEmail) {
+      return NextResponse.json({ error: "请填写联系邮箱" }, { status: 400 });
+    }
+
     const { data, error } = await supabase.rpc("create_order_with_item", {
       p_product_id: productId,
       p_quantity: quantity,
-      p_customer_email: body?.customer_email ?? user.email ?? null,
-      p_customer_name: body?.customer_name ?? null,
-      p_customer_phone: body?.customer_phone ?? null,
-      p_customer_note: body?.customer_note ?? null,
+      p_customer_email: customerEmail,
+      p_customer_name: customerName,
+      p_customer_phone: customerPhone,
+      p_customer_note: customerNote,
     });
 
     if (error) {
@@ -95,6 +104,18 @@ export async function POST(request: Request) {
     }
 
     const created = Array.isArray(data) ? data[0] : data;
+    if (created?.order_id && body?.shipping_address) {
+      const { error: shippingError } = await supabase
+        .from("orders")
+        .update({ shipping_address: body.shipping_address })
+        .eq("id", created.order_id)
+        .eq("user_id", user.id);
+
+      if (shippingError) {
+        console.error("[Orders] shipping address update failed", shippingError);
+      }
+    }
+
     return NextResponse.json({ order: created });
   } catch (error) {
     console.error("[Orders] create failed", error);

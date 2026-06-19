@@ -152,17 +152,27 @@ export async function listActiveProductsByCategory(categoryId: string) {
 }
 
 export async function getActiveProductByIdOrSlug(identifier: string) {
+  return getProductByIdOrSlug(identifier, { activeOnly: true });
+}
+
+export async function getProductByIdOrSlug(
+  identifier: string,
+  options: { activeOnly?: boolean } = {}
+) {
   const supabase = getSupabaseBrowserClient();
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       identifier
     );
 
-  const baseQuery = supabase
+  let baseQuery = supabase
     .from("products")
     .select(productSelect)
-    .eq("status", FRONTEND_ACTIVE_PRODUCT_STATUS)
     .limit(1);
+
+  if (options.activeOnly) {
+    baseQuery = baseQuery.eq("status", FRONTEND_ACTIVE_PRODUCT_STATUS);
+  }
 
   const { data, error } = isUuid
     ? await baseQuery.eq("id", identifier).maybeSingle()
@@ -228,7 +238,7 @@ export function mapPublicProductToProduct(
     row.delivery_type === "shipping" ? "physical" : "digital";
 
   return {
-    id: row.slug || row.id,
+    id: row.id,
     name: row.name,
     category: productCategory,
     categoryLabel,

@@ -27,7 +27,9 @@ const stockColorMap: Record<string, string> = {
 };
 
 export default function ProductCard({ product }: ProductCardProps) {
-  const isDisabled = product.stockStatus === "out-of-stock";
+  const isDisabled =
+    product.stockStatus === "out-of-stock" ||
+    product.listingStatus !== "active";
 
   return (
     <Card className="hover:scale-[1.01] active:scale-[1.02] hover:shadow-md transition-all duration-150 border-border">
@@ -86,7 +88,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             asChild={!isDisabled}
           >
             {isDisabled ? (
-              "缺货"
+              product.listingStatus !== "active" ? "不可购买" : "已售罄"
             ) : (
               <Link href={`/checkout?product=${product.id}`}>立即购买</Link>
             )}

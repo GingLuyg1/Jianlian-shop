@@ -465,14 +465,19 @@ function ProductRow({
 }) {
   const stock = product.stock ?? 0;
   const imageSrc = product.imageUrl || productImageFallbackSrc;
+  const canBuy = stock > 0;
 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        if (canBuy) onClick();
+      }}
+      disabled={!canBuy}
       className={cn(
         compactProductRowClassName,
-        selected && "border-primary/30 bg-primary/5"
+        selected && "border-primary/30 bg-primary/5",
+        !canBuy && "cursor-not-allowed opacity-70"
       )}
     >
       <div className="flex h-full min-w-0 items-center gap-5">
@@ -499,7 +504,7 @@ function ProductRow({
           </span>
         </div>
         <div className="shrink-0 text-lg font-bold text-blue-600">
-          ¥{product.price.toFixed(2)}
+          {canBuy ? `¥${product.price.toFixed(2)}` : "已售罄"}
         </div>
       </div>
     </button>

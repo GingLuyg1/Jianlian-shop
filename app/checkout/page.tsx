@@ -32,8 +32,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  getActiveProductByIdOrSlug,
   getErrorText,
+  getProductByIdOrSlug,
   type PublicProductRow,
 } from "@/lib/supabase/public-catalog";
 import { Product } from "@/lib/types";
@@ -121,6 +121,11 @@ export default function CheckoutPage() {
   const productId = searchParams.get("product") || "gift-apple-tr-500";
 
   const [email, setEmail] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [shippingRegion, setShippingRegion] = useState("");
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [customerNote, setCustomerNote] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [confirmed, setConfirmed] = useState(true);
   const [termsOpen, setTermsOpen] = useState(false);
@@ -138,7 +143,7 @@ export default function CheckoutPage() {
       setError("");
 
       try {
-        const nextProduct = await getActiveProductByIdOrSlug(productId);
+        const nextProduct = await getProductByIdOrSlug(productId);
         if (!active) return;
         setProductRow(nextProduct);
       } catch (loadError) {
@@ -166,6 +171,14 @@ export default function CheckoutPage() {
   const selectedSku =
     skuOptions.find((sku) => sku.id === selectedSkuId) ?? skuOptions[0];
   const hasSku = skuOptions.length > 0;
+  const isShippingProduct = productRow?.delivery_type === "shipping";
+  const isPurchasable = productRow?.status === "active" && Number(productRow.stock ?? 0) > 0;
+  const unavailableMessage =
+    productRow?.status === "sold_out" || Number(productRow?.stock ?? 0) <= 0
+      ? "该商品已售罄"
+      : productRow?.status && productRow.status !== "active"
+        ? "该商品目前不可购买"
+        : "";
   const unitPrice = product ? (hasSku ? selectedSku.rmb : product.price) : 0;
   const priceLabel = product ? getPriceLabel(product, selectedSku) : "";
   const amountLabel = useMemo(() => {
@@ -203,6 +216,22 @@ export default function CheckoutPage() {
   const handleSubmit = async () => {
     if (!productRow || submitLoading) return;
     setError("");
+
+    if (!isPurchasable) {
+      setError(unavailableMessage || "该商品目前不可购买");
+      return;
+    }
+
+    if (!email.trim()) {
+      setError("请填写联系邮箱");
+      return;
+    }
+
+    if (isShippingProduct && (!customerName.trim() || !customerPhone.trim() || !shippingRegion.trim() || !shippingAddress.trim())) {
+      setError("请完整填写收件人、手机号、省市区和详细地址");
+      return;
+    }
+
     setSubmitLoading(true);
 
     try {
@@ -215,7 +244,23 @@ export default function CheckoutPage() {
           product_id: productRow.id,
           quantity,
           customer_email: email,
-          customer_note: hasSku ? `SKU：${selectedSku.label}` : "",
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          shipping_address: isShippingProduct
+            ? {
+                region: shippingRegion,
+                address: shippingAddress,
+              }
+            : null,
+          customer_note: [
+            hasSku ? `SKU：${selectedSku.label}` : "",
+            isShippingProduct
+              ? `收货地址：${shippingRegion.trim()} ${shippingAddress.trim()}`
+              : "",
+            customerNote,
+          ]
+            .filter(Boolean)
+            .join("\n"),
         }),
       });
 
@@ -300,6 +345,79 @@ export default function CheckoutPage() {
                 />
               </div>
 
+              {isShippingProduct ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium">
+                      <span className="text-red-500">*</span>收件人姓名
+                    </label>
+                    <Input
+                      value={customerName}
+                      onChange={(event) => setCustomerName(event.target.value)}
+                      placeholder="请输入收件人姓名"
+                      className="h-10 bg-slate-50 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium">
+                      <span className="text-red-500">*</span>手机号
+                    </label>
+                    <Input
+                      value={customerPhone}
+                      onChange={(event) => setCustomerPhone(event.target.value)}
+                      placeholder="请输入手机号"
+                      className="h-10 bg-slate-50 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium">
+                      <span className="text-red-500">*</span>省市区
+                    </label>
+                    <Input
+                      value={shippingRegion}
+                      onChange={(event) => setShippingRegion(event.target.value)}
+                      placeholder="例如：广东省 深圳市 南山区"
+                      className="h-10 bg-slate-50 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium">
+                      <span className="text-red-500">*</span>详细地址
+                    </label>
+                    <Input
+                      value={shippingAddress}
+                      onChange={(event) => setShippingAddress(event.target.value)}
+                      placeholder="街道、门牌号等"
+                      className="h-10 bg-slate-50 text-sm"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium">
+                    联系电话（可选）
+                  </label>
+                  <Input
+                    value={customerPhone}
+                    onChange={(event) => setCustomerPhone(event.target.value)}
+                    placeholder="便于客服核对订单，可选"
+                    className="h-10 bg-slate-50 text-sm"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1.5 block text-xs font-medium">
+                  提交信息或备注
+                </label>
+                <Input
+                  value={customerNote}
+                  onChange={(event) => setCustomerNote(event.target.value)}
+                  placeholder="如有账号、地区或补充说明，请填写在这里"
+                  className="h-10 bg-slate-50 text-sm"
+                />
+              </div>
+
               <div>
                 <div className="mb-1.5 text-xs font-medium text-muted-foreground">
                   支付方式
@@ -332,6 +450,7 @@ export default function CheckoutPage() {
                           Math.min(Math.max(product.stock ?? 1, 1), value + 1)
                         )
                       }
+                      disabled={(product.stock ?? 0) <= quantity}
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -340,9 +459,13 @@ export default function CheckoutPage() {
                   <Button
                     className="h-11 rounded-full px-7 text-sm"
                     onClick={handleSubmit}
-                    disabled={!confirmed || submitLoading || (product.stock ?? 0) <= 0}
+                    disabled={!confirmed || submitLoading || !isPurchasable}
                   >
-                    {submitLoading ? "正在提交订单..." : "提交订单"}
+                    {submitLoading
+                      ? "正在提交订单..."
+                      : !isPurchasable
+                        ? "不可购买"
+                        : "提交订单"}
                     <span className="mx-3 h-4 w-px bg-white/50" />
                     {amountLabel}
                   </Button>
