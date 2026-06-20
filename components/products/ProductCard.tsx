@@ -1,94 +1,100 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  getDeliveryLabel,
-  isPurchasableProduct,
-  normalizeProductStatus,
-} from "@/lib/catalog/product-status";
-import type { PublicProductRow } from "@/lib/supabase/public-catalog";
-import { cn } from "@/lib/utils";
-import ProductImage from "./ProductImage";
-import ProductStatusBadge from "./ProductStatusBadge";
+/**
+ * ProductCard - Displays a single product in the mall
+ *
+ * Shows: name, category badge, description, price, stock status,
+ * processing time, delivery method, and 立即购买 button.
+ * Does NOT show add-to-cart button (no cart system).
+ */
 
-export default function ProductCard({
-  categoryPath,
-  product,
-}: {
-  categoryPath?: string;
-  product: PublicProductRow;
-}) {
-  const status = normalizeProductStatus(product.status);
-  const canBuy = isPurchasableProduct(product);
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Product } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+interface ProductCardProps {
+  product: Product;
+}
+
+// Stock status color mapping
+const stockColorMap: Record<string, string> = {
+  "in-stock": "bg-green-50 text-green-700 border-green-200",
+  "low-stock": "bg-amber-50 text-amber-700 border-amber-200",
+  "out-of-stock": "bg-red-50 text-red-600 border-red-200",
+};
+
+export default function ProductCard({ product }: ProductCardProps) {
+  const isDisabled =
+    product.stockStatus === "out-of-stock" ||
+    product.listingStatus !== "active";
 
   return (
-    <Link href={`/products/${product.id}`} className="group block h-full">
-      <Card className="h-full overflow-hidden border-slate-100 bg-white transition hover:border-primary/25 hover:shadow-sm">
-        <CardContent className="flex h-full flex-col p-4">
-          <div className="overflow-hidden rounded-xl border bg-white">
-            <ProductImage
-              src={product.image_url}
-              alt={product.name}
-              className="transition duration-150 group-hover:scale-[1.02]"
-            />
+    <Card className="hover:scale-[1.01] active:scale-[1.02] hover:shadow-md transition-all duration-150 border-border">
+      <CardContent className="p-4">
+        {/* Category badge */}
+        <Badge variant="secondary" className="text-xs mb-2">
+          {product.categoryLabel}
+        </Badge>
+
+        {/* Product name */}
+        <h3 className="font-semibold text-sm text-foreground mb-1.5 line-clamp-2">
+          {product.name}
+        </h3>
+
+        {/* Description */}
+        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+          {product.description}
+        </p>
+
+        {/* Price */}
+        <div className="flex items-baseline gap-1 mb-3">
+          <span className="text-lg font-bold text-primary">
+            ¥{product.price.toFixed(2)}
+          </span>
+        </div>
+
+        {/* Info row: stock, processing time, delivery */}
+        <div className="space-y-1.5 mb-4">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">库存状态</span>
+            <Badge
+              variant="outline"
+              className={cn("text-[10px] px-1.5 py-0", stockColorMap[product.stockStatus])}
+            >
+              {product.stockLabel}
+            </Badge>
           </div>
-
-          <div className="mt-3 flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center gap-2">
-              {categoryPath ? (
-                <Badge variant="secondary" className="max-w-full truncate text-[11px] font-normal">
-                  {categoryPath}
-                </Badge>
-              ) : null}
-              {status === "sold_out" ? (
-                <Badge
-                  variant="outline"
-                  className="border-orange-200 bg-orange-50 text-[11px] text-orange-700"
-                >
-                  已售罄
-                </Badge>
-              ) : null}
-            </div>
-
-            <h3 className="mt-2 line-clamp-2 min-h-[44px] text-sm font-semibold leading-[22px] text-slate-900">
-              {product.name}
-            </h3>
-            <p className="mt-1 line-clamp-2 min-h-[38px] text-xs leading-[19px] text-muted-foreground">
-              {product.short_description || "下单前请核对商品说明、地区、库存与售后规则。"}
-            </p>
-
-            <div className="mt-3 flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-lg font-black text-primary">
-                  ¥{Number(product.price).toFixed(2)}
-                </div>
-                {product.original_price ? (
-                  <div className="text-xs text-muted-foreground line-through">
-                    ¥{Number(product.original_price).toFixed(2)}
-                  </div>
-                ) : null}
-              </div>
-              <ProductStatusBadge status={product.status} stock={Number(product.stock ?? 0)} />
-            </div>
-
-            <div className="mt-3 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
-              <span className="truncate">{getDeliveryLabel(product.delivery_type)}</span>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 font-medium",
-                  canBuy ? "text-primary" : "text-slate-400"
-                )}
-              >
-                {canBuy ? "查看购买" : "不可购买"}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </span>
-            </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">处理时效</span>
+            <span className="text-foreground">{product.processingTime}</span>
           </div>
-        </CardContent>
-      </Card>
-    </Link>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">交付方式</span>
+            <span className="text-foreground">{product.deliveryLabel}</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" className="h-8 text-xs" asChild>
+            <Link href={`/products/${product.id}`}>查看详情</Link>
+          </Button>
+          <Button
+            className="h-8 text-xs"
+            disabled={isDisabled}
+            asChild={!isDisabled}
+          >
+            {isDisabled ? (
+              product.listingStatus !== "active" ? "不可购买" : "已售罄"
+            ) : (
+              <Link href={`/checkout?product=${product.id}`}>立即购买</Link>
+            )}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

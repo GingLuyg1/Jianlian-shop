@@ -64,20 +64,20 @@ const categoryCards = [
 const hotLinks = [
   { title: "Apple ID", href: "/products/digital-accounts?category=apple-id" },
   { title: "Steam 账号", href: "/products/digital-accounts?category=steam" },
-  { title: "ChatGPT Plus", href: "/products/ai-membership?category=chat-gpt" },
-  { title: "Grok Super", href: "/products/ai-membership?category=grok" },
+  { title: "ChatGPT Plus", href: "/checkout?product=ai-gpt-cdk-tr-plus-1m" },
+  { title: "Grok Super", href: "/checkout?product=ai-grok-cdk-in-super-1m" },
 ];
 
 const highlights = [
   { title: "安全合规", desc: "下单前请核对说明", icon: ShieldCheck },
   { title: "快速交付", desc: "按商品说明处理发货", icon: Timer },
-  { title: "售后核验", desc: "拿到账号后及时检查", icon: CheckCircle2 },
+  { title: "售后核验", desc: "拿到账户后及时检查", icon: CheckCircle2 },
 ];
 
 const heroSlides = [
   {
     title: "全球数字商品与通信服务商城",
-    desc: "提供数字账号、AI会员充值、礼品卡、国际电话卡等商品。下单前请核对商品说明，拿到账号和卡密后请第一时间检查。",
+    desc: "提供数字账号、AI会员充值、礼品卡、国际电话卡等商品。下单前请核对商品说明，拿到账户和卡密后请第一时间检查。",
     visual: "globe",
   },
   {
@@ -183,7 +183,9 @@ function HeroVisual({ type }: { type: string }) {
               <PackageCheck className="h-6 w-6" />
             </span>
             <div>
-              <div className="text-lg font-bold text-slate-950">商品交付流程</div>
+              <div className="text-lg font-bold text-slate-950">
+                商品交付流程
+              </div>
               <div className="text-sm text-muted-foreground">
                 先确认说明，再提交订单
               </div>
@@ -200,7 +202,9 @@ function HeroVisual({ type }: { type: string }) {
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold text-primary">
                     {index + 1}
                   </span>
-                  <span className="font-semibold text-slate-900">{item.title}</span>
+                  <span className="font-semibold text-slate-900">
+                    {item.title}
+                  </span>
                 </div>
                 <div className="mt-2 text-xs leading-5 text-muted-foreground">
                   {item.desc}

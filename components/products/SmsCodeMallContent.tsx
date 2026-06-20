@@ -20,7 +20,7 @@ export default function SmsCodeMallContent() {
       primaryNames={["接码服务", "接码"]}
       primarySlugs={["sms-code", "sms-codes"]}
       productCategory="sms-code"
-      legacyQueryParams={["country"]}
+      queryParam="country"
     />
   );
 }

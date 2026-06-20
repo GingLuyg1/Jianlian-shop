@@ -7,7 +7,7 @@ const fallbackCategories = [
     slug: "apple-gift-card",
     name: "Apple 礼品卡",
     image: "/assets/apple-gift-card-icon.jpg",
-    aliases: ["apple", "app-store", "itunes", "apple gift card"],
+    aliases: ["apple", "app-store", "itunes"],
   },
   {
     slug: "giffgaff",

@@ -11,7 +11,7 @@ const fallbackCategories = [
   { slug: "whatsapp", name: "Whats App", image: "/assets/digital-whatsapp.svg" },
   { slug: "tiktok", name: "Tiktok", image: "/assets/digital-tiktok.svg" },
   { slug: "x", name: "X", image: "/assets/digital-x.svg" },
-  { slug: "instagram", name: "Instagram", image: "/assets/digital-instagram.svg" },
+  { slug: "instagram", name: "instagram", image: "/assets/digital-instagram.svg" },
   { slug: "facebook", name: "Facebook", image: "/assets/digital-facebook.svg" },
   { slug: "youtube", name: "YouTube", image: "/assets/digital-youtube.svg" },
   { slug: "twitch", name: "Twitch", image: "/assets/digital-twitch.svg" },
@@ -22,7 +22,7 @@ export default function DigitalAccountsMallContent() {
     <SupabaseMallContent
       fallbackCategories={fallbackCategories}
       fallbackTitle="数字账号"
-      primaryNames={["数字账号", "数字账号服务"]}
+      primaryNames={["数字账号"]}
       primarySlugs={["digital-accounts", "digital-account"]}
       productCategory="digital-accounts"
     />

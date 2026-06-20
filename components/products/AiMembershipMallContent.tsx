@@ -18,8 +18,8 @@ export default function AiMembershipMallContent() {
   return (
     <SupabaseMallContent
       fallbackCategories={fallbackCategories}
-      fallbackTitle="AI 会员充值"
-      primaryNames={["AI", "会员充值", "AI 会员充值"]}
+      fallbackTitle="AI会员充值"
+      primaryNames={["AI", "会员"]}
       primarySlugs={["ai-membership", "ai-member", "ai-recharge"]}
       productCategory="ai-membership"
     />
