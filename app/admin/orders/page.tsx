@@ -201,7 +201,7 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4 xl:px-7 2xl:px-8">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
       <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">订单管理</h1>
@@ -276,7 +276,7 @@ export default function AdminOrdersPage() {
               ))}
             </div>
           ) : rows.length === 0 ? (
-            <div className="flex h-full items-center justify-center rounded-xl border border-dashed p-12 text-center text-sm text-slate-500">
+            <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed p-12 text-center text-sm text-slate-500">
               <div>
                 <div className="text-base font-semibold text-slate-900">暂无订单数据</div>
                 <p className="mt-2">当前筛选条件下没有订单。</p>
