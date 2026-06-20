@@ -112,8 +112,8 @@ export default function MyOrdersPage() {
   }
 
   return (
-    <div className="grid min-h-[640px] gap-4 overflow-hidden">
-      <Card className="flex min-h-0 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <CardHeader className="shrink-0 space-y-4 pb-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -174,10 +174,10 @@ export default function MyOrdersPage() {
             </div>
           </CardHeader>
 
-          <CardContent className="min-h-0 flex-1 overflow-hidden">
+          <CardContent className="flex min-h-[660px] flex-1 overflow-hidden">
             {loading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 5 }).map((_, index) => (
+              <div className="w-full space-y-3">
+                {Array.from({ length: PAGE_SIZE }).map((_, index) => (
                   <div key={index} className="h-16 rounded-xl bg-slate-100" />
                 ))}
               </div>

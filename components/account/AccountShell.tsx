@@ -141,8 +141,8 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
   if (pathname === "/account/orders") {
     return (
-      <PublicLayout contentClassName="px-4 py-5 md:px-6">
-        <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4">
+      <PublicLayout contentClassName="flex min-h-[calc(100vh-73px)] px-4 py-3 md:px-6">
+        <div className="mx-auto flex w-full max-w-[1500px] flex-1 flex-col gap-4">
           {emailNotice}
           {children}
         </div>
