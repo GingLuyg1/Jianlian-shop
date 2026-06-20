@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 7;
+const PAGE_SIZE = 10;
 
 type ReferralStatus = "pending" | "available" | "withdrawn" | "cancelled";
 
@@ -279,8 +279,8 @@ export default function PromotionPage() {
   }
 
   return (
-    <PublicLayout contentClassName="mx-auto mt-3 max-w-none px-4 py-3 md:px-5">
-      <div className="grid w-full gap-3">
+    <PublicLayout contentClassName="mx-auto flex min-h-[calc(100vh-62px)] max-w-none px-4 py-3 md:px-5">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-3">
         {error && (
           <div className="flex min-h-10 items-center rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
             <span className="min-w-0 flex-1 truncate">{error}</span>
@@ -296,8 +296,8 @@ export default function PromotionPage() {
           </div>
         )}
 
-        <div className="grid gap-3 xl:grid-cols-[1.05fr_1fr]">
-          <section className="flex h-auto min-h-[220px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:h-[224px]">
+        <div className="grid gap-3 xl:grid-cols-[1.08fr_1fr]">
+          <section className="flex h-auto min-h-[208px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:h-[216px]">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold leading-tight text-slate-950">推广链接</h1>
@@ -337,14 +337,13 @@ export default function PromotionPage() {
             </div>
           </section>
 
-          <section className="flex h-auto min-h-[220px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:h-[224px]">
+          <section className="flex h-auto min-h-[208px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:h-[216px]">
             <div className="mb-3 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold leading-tight text-slate-950">推广数据</h2>
                 <p className="mt-1 text-sm text-slate-500">推广访问、注册和佣金收益统计。</p>
               </div>
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="max-w-[220px] truncate text-sm font-semibold text-red-500">只可提现到账户余额进行使用</span>
+              <div className="flex shrink-0 items-center gap-3">
                 <button
                   type="button"
                   disabled
@@ -364,7 +363,7 @@ export default function PromotionPage() {
           </section>
         </div>
 
-        <section className="flex h-[450px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:h-[468px]">
+        <section className="flex min-h-[560px] flex-1 flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:min-h-0">
           <div className="mb-3">
             <h2 className="text-2xl font-bold leading-tight text-slate-950">推广记录</h2>
             <p className="mt-1 text-sm text-slate-500">推广用户后，用户每一次充值提成记录都会在这里展示。</p>
@@ -407,7 +406,7 @@ export default function PromotionPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="h-[240px] px-4 py-10 text-center">
+                      <td colSpan={5} className="h-[380px] px-4 py-10 text-center">
                         <div className="mx-auto flex max-w-sm flex-col items-center justify-center">
                           <div className="rounded-full bg-orange-50 p-3 text-orange-400">
                             <Users className="h-6 w-6" />
