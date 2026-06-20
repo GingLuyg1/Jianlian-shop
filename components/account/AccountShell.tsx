@@ -127,20 +127,33 @@ export default function AccountShell({ children }: { children: ReactNode }) {
     );
   }
 
+  const emailNotice = !emailVerified ? (
+    <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-start gap-2">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>你的邮箱尚未验证。完成验证后可提升账号安全性。</span>
+      </div>
+      <Button variant="outline" size="sm" disabled={resendSeconds > 0} onClick={resendVerification}>
+        {resendSeconds > 0 ? `${resendSeconds}s 后重发` : "重新发送验证邮件"}
+      </Button>
+    </div>
+  ) : null;
+
+  if (pathname === "/account/orders") {
+    return (
+      <PublicLayout contentClassName="px-4 py-5 md:px-6">
+        <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4">
+          {emailNotice}
+          {children}
+        </div>
+      </PublicLayout>
+    );
+  }
+
   return (
     <PublicLayout contentClassName="px-4 py-5 md:px-6">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        {!emailVerified ? (
-          <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>你的邮箱尚未验证。完成验证后可提升账号安全性。</span>
-            </div>
-            <Button variant="outline" size="sm" disabled={resendSeconds > 0} onClick={resendVerification}>
-              {resendSeconds > 0 ? `${resendSeconds}s 后重发` : "重新发送验证邮件"}
-            </Button>
-          </div>
-        ) : null}
+        {emailNotice}
 
         <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="hidden rounded-xl border bg-white p-2 shadow-sm md:block">

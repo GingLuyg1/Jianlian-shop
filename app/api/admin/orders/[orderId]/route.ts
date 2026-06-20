@@ -55,6 +55,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
+    const { error: commissionError } = await admin.supabase.rpc(
+      "sync_referral_commission_for_order",
+      {
+        p_order_id: context.params.orderId,
+        p_commission_rate: 0.03,
+      }
+    );
+
+    if (commissionError) {
+      console.warn("[Admin Orders] referral commission sync skipped", commissionError);
+    }
+
     return NextResponse.json({ order: data });
   } catch (error) {
     console.error("[Admin Orders] update failed", error);

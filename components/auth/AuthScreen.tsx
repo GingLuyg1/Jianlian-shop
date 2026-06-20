@@ -193,6 +193,18 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                 profileError
               )
           );
+          if (normalizedInviteCode) {
+            try {
+              const { error } = await supabase.rpc("bind_referrer_by_code", {
+                input_invite_code: normalizedInviteCode,
+              });
+              if (error) {
+                console.error("[Promotion] Failed to bind invite code", error);
+              }
+            } catch (bindError) {
+              console.error("[Promotion] Failed to bind invite code", bindError);
+            }
+          }
           setMessage("注册成功，正在进入账户中心。");
           router.push("/account");
           router.refresh();

@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
+  ClipboardList,
   CreditCard,
   LogIn,
+  LogOut,
   Megaphone,
+  Shield,
+  UserCircle,
   UserPlus,
+  WalletCards,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
@@ -76,6 +81,13 @@ function getDisplayName(user: User | null) {
   return user.email;
 }
 
+const accountMenuItems = [
+  { label: "账户概览", href: "/account", icon: WalletCards },
+  { label: "个人资料", href: "/account/profile", icon: UserCircle },
+  { label: "账号安全", href: "/account/security", icon: Shield },
+  { label: "我的订单", href: "/account/orders", icon: ClipboardList },
+];
+
 function getAnnouncementAnimationDelay() {
   if (typeof window === "undefined") return 0;
 
@@ -103,6 +115,7 @@ export default function PublicTopInfoBar({
   announcementText,
 }: PublicTopInfoBarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(cachedAuthState.user);
   const [profile, setProfile] = useState<UserProfile | null>(
     cachedAuthState.profile
@@ -252,16 +265,34 @@ export default function PublicTopInfoBar({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem asChild>
-                    <Link href="/account">账号中心</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/account/orders">我的订单</Link>
-                  </DropdownMenuItem>
+                  {accountMenuItems.map((item) => {
+                    const Icon = item.icon;
+                    const active =
+                      item.href === "/account"
+                        ? pathname === "/account"
+                        : Boolean(pathname?.startsWith(item.href));
+
+                    return (
+                      <DropdownMenuItem key={item.href} asChild>
+                        <Link
+                          href={item.href}
+                          className={
+                            active
+                              ? "bg-orange-50 font-medium text-primary"
+                              : undefined
+                          }
+                        >
+                          <Icon className="mr-2 h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      </DropdownMenuItem>
+                    );
+                  })}
                   <DropdownMenuItem
                     onClick={handleSignOut}
-                    className="text-red-600"
+                    className="mt-1 border-t border-border pt-2 text-red-600 focus:text-red-600"
                   >
+                    <LogOut className="mr-2 h-4 w-4" />
                     退出登录
                   </DropdownMenuItem>
                 </DropdownMenuContent>
