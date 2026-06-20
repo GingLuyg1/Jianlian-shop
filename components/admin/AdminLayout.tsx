@@ -11,7 +11,7 @@ interface AdminLayoutProps {
 
 function AdminShell({ children }: AdminLayoutProps) {
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:235px]">
+    <div className="flex h-dvh overflow-hidden bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:235px]">
       <AdminSidebar />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:ml-[var(--admin-sidebar-width)]">
         <AdminTopBar />
@@ -24,7 +24,7 @@ function AdminShell({ children }: AdminLayoutProps) {
 function AdminLayoutSkeleton() {
   return (
     <AdminShell>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4 xl:px-6 2xl:px-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
         <div className="mb-3 shrink-0">
           <div className="h-6 w-40 animate-pulse rounded bg-slate-200" />
           <div className="mt-2 h-3 w-72 animate-pulse rounded bg-slate-200" />

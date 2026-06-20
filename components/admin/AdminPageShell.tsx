@@ -18,7 +18,7 @@ export default function AdminPageShell({
   className,
 }: AdminPageShellProps) {
   return (
-    <section className={cn("flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4 xl:px-6 2xl:px-7", className)}>
+    <section className={cn("flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4", className)}>
       <header className="mb-3 flex shrink-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-semibold text-slate-950">{title}</h1>

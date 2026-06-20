@@ -41,7 +41,7 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[var(--admin-sidebar-width)] flex-col border-r border-border bg-white md:flex">
+    <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[var(--admin-sidebar-width)] flex-col border-r border-border bg-white md:flex">
       <div className="flex h-[var(--admin-header-height)] shrink-0 items-center border-b border-border px-5">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800 text-base font-bold text-white">
@@ -58,6 +58,21 @@ export default function AdminSidebar() {
 
       <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
         <ul className="space-y-1">
+          <li>
+            <Link
+              href="/admin"
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                pathname === "/admin"
+                  ? "bg-slate-800 font-medium text-white"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <LayoutDashboard className="h-4 w-4 shrink-0" />
+              <span>控制台</span>
+            </Link>
+          </li>
+
           <li>
             <button
               type="button"
@@ -113,7 +128,7 @@ export default function AdminSidebar() {
             </div>
           </li>
 
-          {adminMenuItems.map((item) => {
+          {adminMenuItems.slice(1).map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
             return (

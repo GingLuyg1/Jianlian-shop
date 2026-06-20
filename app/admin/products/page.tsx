@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { X, Copy, Loader2, Plus, RefreshCw, Search } from "lucide-react";
+import { MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
   AlertDialog,
@@ -19,6 +19,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -180,7 +186,7 @@ function isValidImagePath(value: string) {
 
 function ProductTableSkeleton() {
   return (
-    <div className="space-y-2">
+    <div className="min-h-0 flex-1 space-y-2 overflow-hidden">
       {Array.from({ length: 8 }).map((_, index) => (
         <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />
       ))}
@@ -650,8 +656,8 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4 xl:px-7 2xl:px-8">
-      <div className="mb-3 flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
+      <div className="mb-2 flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-950">商品与分类管理</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -680,7 +686,7 @@ export default function AdminProductsPage() {
       {(message || error) && (
         <div
           className={cn(
-            "mb-3 shrink-0 rounded-xl border px-4 py-3 text-sm",
+            "mb-2 shrink-0 rounded-xl border px-4 py-2 text-sm",
             error
               ? "border-red-200 bg-red-50 text-red-700"
               : "border-green-200 bg-green-50 text-green-700"
@@ -692,13 +698,13 @@ export default function AdminProductsPage() {
 
       {activeView === "products" ? (
           <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <CardHeader className="shrink-0 pb-3">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <CardHeader className="shrink-0 px-4 py-3">
+              <div className="flex min-h-10 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                 <CardTitle className="text-base">商品列表</CardTitle>
                 <span className="text-sm text-slate-500">当前结果 {productCount} 条</span>
               </div>
             </CardHeader>
-            <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pb-0 pt-0">
               <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_190px_190px_155px_175px_145px_80px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -800,7 +806,7 @@ export default function AdminProductsPage() {
                 />
               )}
 
-              <div className="flex shrink-0 flex-col gap-3 border-t pt-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-h-12 shrink-0 flex-col gap-2 border-t py-2 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
                 <span>
                   共 {productCount} 条，第 {productPage} / {totalProductPages} 页
                 </span>
@@ -929,6 +935,16 @@ export default function AdminProductsPage() {
   );
 }
 
+function formatAdminDate(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const pad = (next: number) => String(next).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
 function ProductTable({
   categoryMap,
   categories,
@@ -950,41 +966,39 @@ function ProductTable({
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      <Table className="min-w-[1580px] table-fixed">
+      <Table className="w-full min-w-[1520px] table-fixed">
         <colgroup>
-          <col className="w-[72px]" />
-          <col className="w-[310px]" />
-          <col className="w-[180px]" />
-          <col className="w-[240px]" />
-          <col className="w-[105px]" />
-          <col className="w-[95px]" />
-          <col className="w-[85px]" />
-          <col className="w-[135px]" />
-          <col className="w-[110px]" />
+          <col className="w-[260px]" />
+          <col className="w-[140px]" />
+          <col className="w-[210px]" />
+          <col className="w-[90px]" />
           <col className="w-[80px]" />
-          <col className="w-[175px]" />
-          <col className="w-[230px]" />
+          <col className="w-[75px]" />
+          <col className="w-[105px]" />
+          <col className="w-[90px]" />
+          <col className="w-[65px]" />
+          <col className="w-[165px]" />
+          <col className="w-[240px]" />
         </colgroup>
         <TableHeader className="sticky top-0 z-10 bg-slate-50">
           <TableRow>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>图片</TableHead>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品名称</TableHead>
+            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
             <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>Slug</TableHead>
             <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>原价</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>交付方式</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>交付方式</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>排序</TableHead>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
-            <TableHead className={cn("h-10 px-3 text-right text-xs", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
+            <TableHead className={cn("sticky right-0 h-10 bg-slate-50 px-3 text-right text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12} className="h-28 text-center text-sm text-slate-500">
+              <TableCell colSpan={11} className="h-28 text-center text-sm text-slate-500">
                 暂无商品数据
               </TableCell>
             </TableRow>
@@ -995,10 +1009,11 @@ function ProductTable({
               const hasCategoryIssue = Boolean(!category || hasChildren(categories, product.category_id ?? ""));
 
               return (
-              <TableRow key={product.id} className={cn("h-14", hasCategoryIssue && "bg-orange-50/40")}>
-                <TableCell className="px-3 py-2 text-center">
-                  <div className="group relative mx-auto h-10 w-10 shrink-0 overflow-visible">
-                    <div className="h-10 w-10 overflow-hidden rounded-md border border-slate-200 bg-white">
+              <TableRow key={product.id} className={cn("h-14 hover:bg-slate-50/70", hasCategoryIssue && "bg-orange-50/40")}>
+                <TableCell className="min-w-0 px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="group relative h-9 w-9 shrink-0 overflow-visible">
+                      <div className="h-9 w-9 overflow-hidden rounded-md border border-slate-200 bg-white">
                       <img
                         src={product.image_url || PRODUCT_FALLBACK_IMAGE}
                         alt=""
@@ -1008,8 +1023,8 @@ function ProductTable({
                           event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
                         }}
                       />
-                    </div>
-                    <div className="pointer-events-none absolute left-14 top-0 z-20 hidden h-40 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg group-hover:block">
+                      </div>
+                      <div className="pointer-events-none absolute left-12 top-0 z-20 hidden h-40 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg group-hover:block">
                       <img
                         src={product.image_url || PRODUCT_FALLBACK_IMAGE}
                         alt=""
@@ -1018,22 +1033,23 @@ function ProductTable({
                           event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
                         }}
                       />
+                      </div>
+                    </div>
+                    <div className="min-w-0 leading-tight">
+                      <div
+                        className="truncate text-sm font-semibold text-slate-900"
+                        title={product.name}
+                        onDoubleClick={() => onCopyText(product.name, "商品名称已复制")}
+                      >
+                        {product.name}
+                      </div>
+                      {product.short_description && (
+                        <div className="mt-0.5 truncate text-xs text-slate-500" title={product.short_description}>
+                          {product.short_description}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </TableCell>
-                <TableCell className="min-w-0 px-3 py-2 font-medium">
-                  <div
-                    className="truncate text-sm font-semibold leading-5 text-slate-900"
-                    title={product.name}
-                    onDoubleClick={() => onCopyText(product.name, "商品名称已复制")}
-                  >
-                    {product.name}
-                  </div>
-                  {product.short_description && (
-                    <div className="mt-1 truncate text-xs leading-[18px] text-slate-500" title={product.short_description}>
-                      {product.short_description}
-                    </div>
-                  )}
                 </TableCell>
                 <TableCell
                   className={cn("cursor-copy truncate px-3 py-2 text-slate-500", HORIZONTAL_TEXT_CLASS)}
@@ -1057,7 +1073,7 @@ function ProductTable({
                 <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS, product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600")}>
                   {product.stock}
                 </TableCell>
-                <TableCell className={cn("px-3 py-2 text-slate-600", HORIZONTAL_TEXT_CLASS)}>
+                <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>
                   {deliveryLabel[product.delivery_type]}
                 </TableCell>
                 <TableCell className="px-3 py-2 text-center">
@@ -1077,34 +1093,48 @@ function ProductTable({
                 <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
                   {product.sort_order}
                 </TableCell>
-                <TableCell className={cn("px-3 py-2 text-slate-500", HORIZONTAL_TEXT_CLASS)}>
-                  {product.updated_at ? new Date(product.updated_at).toLocaleString() : "-"}
+                <TableCell className="px-3 py-2 text-center">
+                  <time className="block whitespace-nowrap text-xs tabular-nums text-slate-500">
+                    {formatAdminDate(product.updated_at)}
+                  </time>
                 </TableCell>
-                <TableCell className="px-3 py-2">
-                  <div className={cn("flex justify-end gap-1", HORIZONTAL_TEXT_CLASS)}>
-                    <Button variant="ghost" size="sm" className={HORIZONTAL_TEXT_CLASS} onClick={() => onEdit(product)}>
+                <TableCell className="sticky right-0 bg-white px-3 py-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
+                  <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                    <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onEdit(product)}>
                       编辑
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className={cn(HORIZONTAL_TEXT_CLASS, product.status === "active" ? "text-orange-600" : "text-green-700")}
+                      className={cn("h-8 px-2", product.status === "active" ? "text-orange-600" : "text-green-700")}
                       onClick={() =>
                         onStatusChange(product.id, product.status === "active" ? "inactive" : "active")
                       }
                     >
                       {product.status === "active" ? "下架" : "上架"}
                     </Button>
-                    <Button variant="ghost" size="sm" className={HORIZONTAL_TEXT_CLASS} onClick={() => onStatusChange(product.id, "sold_out")}>
-                      售罄
-                    </Button>
-                    <Button variant="ghost" size="sm" className={HORIZONTAL_TEXT_CLASS} onClick={() => onCopy(product)}>
-                      <Copy className="mr-1 h-3.5 w-3.5" />
-                      复制
-                    </Button>
-                    <Button variant="ghost" size="sm" className={cn("text-red-600", HORIZONTAL_TEXT_CLASS)} onClick={() => onDelete(product.id)}>
-                      删除
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 px-2">
+                          更多
+                          <MoreHorizontal className="ml-1 h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-32">
+                        <DropdownMenuItem
+                          className="text-orange-600"
+                          onClick={() => onStatusChange(product.id, "sold_out")}
+                        >
+                          标记售罄
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onCopy(product)}>
+                          复制商品
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-red-600" onClick={() => onDelete(product.id)}>
+                          删除商品
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </TableCell>
               </TableRow>

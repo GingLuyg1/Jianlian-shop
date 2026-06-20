@@ -80,7 +80,7 @@ export default function AdminSettingsPage() {
 
 function BasicSettings({ onSave }: { onSave: () => void }) {
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="w-full max-w-none space-y-5">
       <Field label="站点名称">
         <Input value="Jianlian 简联" readOnly />
       </Field>
@@ -101,7 +101,7 @@ function BasicSettings({ onSave }: { onSave: () => void }) {
 
 function ShopSettings({ onSave }: { onSave: () => void }) {
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="w-full max-w-none space-y-4">
       <ReadonlySwitch title="前台下单入口" description="真实订单流程已接入，支付仍未接入真实渠道。" checked />
       <StatusRow name="Supabase Auth" status="已接入" />
       <StatusRow name="profiles 角色权限" status="已接入" />
@@ -114,7 +114,7 @@ function ShopSettings({ onSave }: { onSave: () => void }) {
 
 function OrderSettings({ onSave }: { onSave: () => void }) {
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="w-full max-w-none space-y-4">
       <StatusRow name="真实订单表" status="已接入" />
       <StatusRow name="用户订单页" status="已接入" />
       <StatusRow name="管理员订单页" status="已接入" />
@@ -127,7 +127,7 @@ function OrderSettings({ onSave }: { onSave: () => void }) {
 
 function SecuritySettings() {
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="w-full max-w-none space-y-4">
       <StatusRow name="管理员权限" status="profiles.role = admin" />
       <StatusRow name="管理员邮箱" status="gac000189@gmail.com" />
       <StatusRow name="Service Role Key" status="不在浏览器展示" />
