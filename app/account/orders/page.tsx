@@ -509,6 +509,14 @@ function UserOrderDrawer({
   const firstItem = order.order_items?.[0];
   const delivery = order.order_deliveries?.[0];
   const deliveryContent = delivery?.delivery_content ?? "";
+  const cancelled = orderStatus === "cancelled";
+  const failed = orderStatus === "failed" || delivery?.delivery_status === "failed";
+
+  async function copyDeliveryContent() {
+    if (!deliveryContent) return;
+    await navigator.clipboard.writeText(deliveryContent);
+    toast.success("交付内容已复制");
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={onClose}>
@@ -579,13 +587,27 @@ function UserOrderDrawer({
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="font-semibold">交付信息</div>
               {deliveryContent ? (
-                <Button variant="outline" size="sm" onClick={() => setShowDelivery((value) => !value)}>
-                  {showDelivery ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                  {showDelivery ? "隐藏完整内容" : "显示完整内容"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowDelivery((value) => !value)}>
+                    {showDelivery ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+                    {showDelivery ? "隐藏完整内容" : "显示完整内容"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={copyDeliveryContent}>
+                    <Clipboard className="mr-2 h-4 w-4" />
+                    复制
+                  </Button>
+                </div>
               ) : null}
             </div>
-            {deliveryContent ? (
+            {cancelled ? (
+              <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">
+                订单已取消，不显示交付内容。
+              </div>
+            ) : failed ? (
+              <div className="rounded-lg bg-amber-50 p-3 text-amber-700">
+                交付处理中，请联系管理员。
+              </div>
+            ) : deliveryContent ? (
               <div className="rounded-lg bg-slate-50 p-3 leading-6">
                 <div className="whitespace-pre-wrap break-words">
                   {showDelivery ? deliveryContent : maskSecret(deliveryContent)}
@@ -596,7 +618,7 @@ function UserOrderDrawer({
               </div>
             ) : (
               <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">
-                暂无交付信息。
+                等待交付。
               </div>
             )}
           </section>

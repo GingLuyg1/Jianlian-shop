@@ -65,6 +65,21 @@ export async function PATCH(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "订单不存在或无权查看" }, { status: 404 });
     }
 
+    const { data: allowCancelSetting } = await supabase.rpc(
+      "get_site_setting_boolean",
+      {
+        p_setting_key: "allow_user_cancel_pending_order",
+        p_default: true,
+      }
+    );
+
+    if (allowCancelSetting === false) {
+      return NextResponse.json(
+        { error: "当前不允许用户自行取消订单，请联系客服处理" },
+        { status: 400 }
+      );
+    }
+
     if (!canUserCancelOrder(order.status)) {
       return NextResponse.json(
         { error: "当前订单状态不允许取消" },
@@ -96,6 +111,10 @@ export async function PATCH(_request: Request, context: RouteContext) {
       operator_id: user.id,
       operator_type: "user",
       note: "用户取消订单",
+    });
+
+    await supabase.rpc("release_order_inventory", {
+      p_order_id: order.id,
     });
 
     return NextResponse.json({ ok: true });

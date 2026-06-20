@@ -456,11 +456,15 @@ function AdminOrderDrawer({
   const [deliveryContent, setDeliveryContent] = useState("");
   const [deliverySaving, setDeliverySaving] = useState(false);
   const [showDelivery, setShowDelivery] = useState(false);
+  const [availableInventory, setAvailableInventory] = useState<Array<{ id: string; masked_content: string }>>([]);
+  const [selectedInventoryId, setSelectedInventoryId] = useState("");
 
   useEffect(() => {
     if (!order) return;
     setDeliveryContent(order.order_deliveries?.[0]?.delivery_content ?? "");
     setShowDelivery(false);
+    setAvailableInventory([]);
+    setSelectedInventoryId("");
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -504,6 +508,107 @@ function AdminOrderDrawer({
       await onReload();
     } catch (saveError) {
       toast.error(getOrderErrorMessage(saveError, "交付信息保存失败"));
+    } finally {
+      setDeliverySaving(false);
+    }
+  }
+
+  async function loadAvailableInventory() {
+    if (!item?.product_id) {
+      toast.error("当前订单商品缺少商品 ID");
+      return;
+    }
+    setDeliverySaving(true);
+    try {
+      const params = new URLSearchParams({
+        mode: "items",
+        productId: item.product_id,
+        status: "available",
+        page: "1",
+        pageSize: "100",
+      });
+      const response = await fetch(`/api/admin/inventory?${params.toString()}`);
+      const result = (await response.json().catch(() => null)) as
+        | { items?: Array<{ id: string; masked_content: string }>; error?: string }
+        | null;
+      if (!response.ok) throw new Error(result?.error ?? "可用库存读取失败");
+      setAvailableInventory(result?.items ?? []);
+      toast.success("可用库存已加载");
+    } catch (loadError) {
+      toast.error(getOrderErrorMessage(loadError, "可用库存读取失败"));
+    } finally {
+      setDeliverySaving(false);
+    }
+  }
+
+  async function deliverSelectedInventory() {
+    if (!order || !item?.id || !selectedInventoryId) {
+      toast.error("请选择可用库存");
+      return;
+    }
+    if (!window.confirm("确认使用选中的库存发货？该库存会立即标记为已交付。")) return;
+    setDeliverySaving(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "manual_inventory",
+          order_item_id: item.id,
+          inventory_id: selectedInventoryId,
+          note: "管理员手动选择库存发货",
+        }),
+      });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error ?? "手动选择库存发货失败");
+      toast.success("库存已交付");
+      await onReload();
+    } catch (deliverError) {
+      toast.error(getOrderErrorMessage(deliverError, "手动选择库存发货失败"));
+    } finally {
+      setDeliverySaving(false);
+    }
+  }
+
+  async function retryAutoDelivery() {
+    if (!order) return;
+    if (!window.confirm("确认重新尝试自动发货？系统只会处理尚未交付的预留库存。")) return;
+    setDeliverySaving(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry_auto_delivery" }),
+      });
+      const result = (await response.json().catch(() => null)) as
+        | { deliveredCount?: number; error?: string }
+        | null;
+      if (!response.ok) throw new Error(result?.error ?? "自动发货重试失败");
+      toast.success(`自动发货完成：${result?.deliveredCount ?? 0} 条`);
+      await onReload();
+    } catch (retryError) {
+      toast.error(getOrderErrorMessage(retryError, "自动发货重试失败"));
+    } finally {
+      setDeliverySaving(false);
+    }
+  }
+
+  async function markDeliveryFailed() {
+    if (!order) return;
+    if (!window.confirm("确认标记交付失败？该操作会写入订单状态日志。")) return;
+    setDeliverySaving(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark_failed", note: "管理员标记交付失败" }),
+      });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error ?? "交付失败标记失败");
+      toast.success("已标记交付失败");
+      await onReload();
+    } catch (markError) {
+      toast.error(getOrderErrorMessage(markError, "交付失败标记失败"));
     } finally {
       setDeliverySaving(false);
     }
@@ -612,7 +717,47 @@ function AdminOrderDrawer({
                 />
                 <div className="flex justify-end">
                   <Button onClick={saveDelivery} disabled={deliverySaving || cancelled}>
-                    {cancelled ? "已取消订单不可交付" : deliverySaving ? "正在保存..." : "保存交付信息"}
+                    {cancelled ? "已取消订单不可交付" : deliverySaving ? "处理中..." : "手动填写/补发"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-slate-50 p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-medium">自动发货与库存交付</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={retryAutoDelivery} disabled={deliverySaving || cancelled}>
+                      重新尝试自动发货
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={loadAvailableInventory} disabled={deliverySaving || cancelled}>
+                      加载可用库存
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={markDeliveryFailed} disabled={deliverySaving || cancelled}>
+                      标记交付失败
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <select
+                    value={selectedInventoryId}
+                    onChange={(event) => setSelectedInventoryId(event.target.value)}
+                    disabled={deliverySaving || cancelled}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">选择 available 库存</option>
+                    {availableInventory.map((inventory) => (
+                      <option key={inventory.id} value={inventory.id}>
+                        {inventory.masked_content}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={deliverSelectedInventory}
+                    disabled={deliverySaving || cancelled || !selectedInventoryId}
+                  >
+                    选择库存发货
                   </Button>
                 </div>
               </div>

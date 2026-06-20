@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, RefreshCcw } from "lucide-react";
+import { ArrowLeft, Clipboard, Eye, EyeOff, RefreshCcw } from "lucide-react";
+import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,11 @@ import {
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
 
+function maskSecret(value: string) {
+  if (value.length <= 8) return "••••••";
+  return `${value.slice(0, 4)}••••••${value.slice(-4)}`;
+}
+
 export default function UserOrderDetailPage({
   params,
 }: {
@@ -32,6 +38,7 @@ export default function UserOrderDetailPage({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [showDelivery, setShowDelivery] = useState(false);
 
   const loadOrder = useCallback(async () => {
     setLoading(true);
@@ -53,6 +60,7 @@ export default function UserOrderDetailPage({
       }
 
       setOrder(result?.order ?? null);
+      setShowDelivery(false);
     } catch (loadError) {
       setError(getOrderErrorMessage(loadError, "订单读取失败"));
     } finally {
@@ -91,6 +99,16 @@ export default function UserOrderDetailPage({
 
   const orderStatus = normalizeOrderStatus(order?.status);
   const paymentStatus = normalizePaymentStatus(order?.payment_status);
+  const delivery = order?.order_deliveries?.[0];
+  const deliveryContent = delivery?.delivery_content ?? "";
+  const deliveryFailed = orderStatus === "failed" || delivery?.delivery_status === "failed";
+  const cancelled = orderStatus === "cancelled";
+
+  async function copyDeliveryContent() {
+    if (!deliveryContent) return;
+    await navigator.clipboard.writeText(deliveryContent);
+    toast.success("交付内容已复制");
+  }
 
   return (
     <PublicLayout contentClassName="max-w-none px-4 py-4 md:px-6">
@@ -169,6 +187,48 @@ export default function UserOrderDetailPage({
                         </div>
                       </div>
                     ))}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="font-semibold">交付信息</h3>
+                    {deliveryContent ? (
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setShowDelivery((value) => !value)}>
+                          {showDelivery ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+                          {showDelivery ? "隐藏完整内容" : "查看完整内容"}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={copyDeliveryContent}>
+                          <Clipboard className="mr-2 h-4 w-4" />
+                          复制
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="mt-3">
+                    {cancelled ? (
+                      <div className="rounded-lg bg-slate-50 p-3 text-sm text-muted-foreground">
+                        订单已取消，不显示交付内容。
+                      </div>
+                    ) : deliveryFailed ? (
+                      <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
+                        交付处理中，请联系管理员。
+                      </div>
+                    ) : deliveryContent ? (
+                      <div className="rounded-lg bg-slate-50 p-3 text-sm leading-6">
+                        <div className="whitespace-pre-wrap break-words">
+                          {showDelivery ? deliveryContent : maskSecret(deliveryContent)}
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          交付时间：{delivery?.delivered_at ? new Date(delivery.delivered_at).toLocaleString("zh-CN", { hour12: false }) : "未记录"}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg bg-slate-50 p-3 text-sm text-muted-foreground">
+                        等待交付。
+                      </div>
+                    )}
                   </div>
                 </section>
 

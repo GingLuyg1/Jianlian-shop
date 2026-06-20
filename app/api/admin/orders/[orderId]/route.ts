@@ -87,25 +87,81 @@ export async function POST(request: Request, context: RouteContext) {
 
     const body = (await request.json().catch(() => null)) as
       | {
+          action?: "retry_auto_delivery" | "manual_inventory" | "manual_content" | "mark_failed";
           delivery_type?: string;
           delivery_content?: string;
           delivery_status?: string;
           order_item_id?: string | null;
+          inventory_id?: string | null;
+          note?: string | null;
         }
       | null;
+
+    if (body?.action === "retry_auto_delivery") {
+      const { data, error } = await admin.supabase.rpc("admin_retry_auto_delivery", {
+        p_order_id: context.params.orderId,
+      });
+
+      if (error) {
+        return NextResponse.json(
+          { error: getOrderErrorMessage(error, "自动发货重试失败") },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({ deliveredCount: data ?? 0 });
+    }
+
+    if (body?.action === "manual_inventory") {
+      if (!body.inventory_id || !body.order_item_id) {
+        return NextResponse.json({ error: "请选择库存和订单商品" }, { status: 400 });
+      }
+
+      const { data, error } = await admin.supabase.rpc("admin_deliver_inventory_item", {
+        p_order_id: context.params.orderId,
+        p_order_item_id: body.order_item_id,
+        p_inventory_id: body.inventory_id,
+        p_note: body.note ?? null,
+      });
+
+      if (error) {
+        return NextResponse.json(
+          { error: getOrderErrorMessage(error, "手动选择库存发货失败") },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({ delivery: data });
+    }
+
+    if (body?.action === "mark_failed") {
+      const { error } = await admin.supabase.rpc("admin_mark_delivery_failed", {
+        p_order_id: context.params.orderId,
+        p_note: body.note ?? null,
+      });
+
+      if (error) {
+        return NextResponse.json(
+          { error: getOrderErrorMessage(error, "交付失败标记失败") },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({ ok: true });
+    }
 
     const deliveryContent = body?.delivery_content?.trim();
     if (!deliveryContent) {
       return NextResponse.json({ error: "请填写交付信息" }, { status: 400 });
     }
 
-    const { data, error } = await admin.supabase.rpc("admin_upsert_order_delivery", {
+    const { data, error } = await admin.supabase.rpc("admin_append_manual_delivery", {
       p_order_id: context.params.orderId,
       p_order_item_id: body?.order_item_id ?? null,
       p_delivery_type: body?.delivery_type ?? null,
       p_delivery_content: deliveryContent,
       p_delivery_status: body?.delivery_status ?? "delivered",
-      p_delivered_at: new Date().toISOString(),
+      p_note: body?.note ?? null,
     });
 
     if (error) {
