@@ -108,7 +108,7 @@ function formatDateTime(value: string | null | undefined) {
 function getPromotionOrigin() {
   if (typeof window === "undefined") return "https://www.jianlian.shop";
   return window.location.hostname.includes("localhost")
-    ? window.location.origin
+    ? "http://localhost:3000"
     : "https://www.jianlian.shop";
 }
 

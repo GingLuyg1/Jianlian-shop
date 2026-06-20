@@ -18,6 +18,55 @@ where invite_code is not null;
 create index if not exists profiles_referred_by_idx
 on public.profiles(referred_by);
 
+create table if not exists public.referrals (
+  id uuid primary key default gen_random_uuid(),
+  referrer_id uuid not null references public.profiles(id) on delete cascade,
+  referred_user_id uuid not null references public.profiles(id) on delete cascade,
+  referral_code text not null,
+  created_at timestamptz not null default now(),
+  unique(referred_user_id)
+);
+
+create unique index if not exists referrals_referred_user_unique_idx
+on public.referrals(referred_user_id);
+
+create index if not exists referrals_referrer_idx
+on public.referrals(referrer_id, created_at desc);
+
+create index if not exists referrals_referral_code_idx
+on public.referrals(referral_code);
+
+alter table public.referrals enable row level security;
+
+drop policy if exists "Users can view own referral relations" on public.referrals;
+create policy "Users can view own referral relations"
+on public.referrals for select
+to authenticated
+using (auth.uid() = referrer_id or auth.uid() = referred_user_id);
+
+drop policy if exists "Admins can view all referral relations" on public.referrals;
+create policy "Admins can view all referral relations"
+on public.referrals for select
+to authenticated
+using (public.is_admin(auth.uid()));
+
+insert into public.referrals (
+  referrer_id,
+  referred_user_id,
+  referral_code
+)
+select
+  referred_by,
+  id,
+  coalesce((
+    select p2.invite_code
+    from public.profiles p2
+    where p2.id = public.profiles.referred_by
+  ), 'LEGACY')
+from public.profiles
+where referred_by is not null
+on conflict (referred_user_id) do nothing;
+
 drop policy if exists "Users can view profiles they referred" on public.profiles;
 create policy "Users can view profiles they referred"
 on public.profiles for select
@@ -133,6 +182,18 @@ begin
   where id = v_user_id
     and referred_by is null;
 
+  insert into public.referrals (
+    referrer_id,
+    referred_user_id,
+    referral_code
+  )
+  values (
+    v_inviter_id,
+    v_user_id,
+    trim(input_invite_code)
+  )
+  on conflict (referred_user_id) do nothing;
+
   return found;
 end;
 $$;
@@ -179,6 +240,20 @@ begin
   )
   on conflict (id) do nothing;
 
+  if inviter_profile_id is not null then
+    insert into public.referrals (
+      referrer_id,
+      referred_user_id,
+      referral_code
+    )
+    values (
+      inviter_profile_id,
+      new.id,
+      submitted_invite_code
+    )
+    on conflict (referred_user_id) do nothing;
+  end if;
+
   return new;
 exception when unique_violation then
   insert into public.profiles (
@@ -189,6 +264,19 @@ exception when unique_violation then
     public.make_referral_code(),inviter_profile_id
   )
   on conflict (id) do nothing;
+  if inviter_profile_id is not null then
+    insert into public.referrals (
+      referrer_id,
+      referred_user_id,
+      referral_code
+    )
+    values (
+      inviter_profile_id,
+      new.id,
+      submitted_invite_code
+    )
+    on conflict (referred_user_id) do nothing;
+  end if;
   return new;
 end;
 $$;

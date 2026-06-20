@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { PROMOTION_COMMISSION_RATE } from "@/lib/promotion";
 import {
   ORDER_STATUS_VALUES,
   PAYMENT_STATUS_VALUES,
@@ -59,7 +60,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       "sync_referral_commission_for_order",
       {
         p_order_id: context.params.orderId,
-        p_commission_rate: 0.03,
+        p_commission_rate: PROMOTION_COMMISSION_RATE,
       }
     );
 

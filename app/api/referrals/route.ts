@@ -1,14 +1,29 @@
 import { NextResponse } from "next/server";
 
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import {
+  PROMOTION_COMMISSION_RATE,
+  PROMOTION_MIN_WITHDRAW_AMOUNT,
+} from "@/lib/promotion";
 
 export const dynamic = "force-dynamic";
 
-const COMMISSION_RATE = 0.03;
-const MIN_WITHDRAW_AMOUNT = 100;
+const COMMISSION_RATE = PROMOTION_COMMISSION_RATE;
+const MIN_WITHDRAW_AMOUNT = PROMOTION_MIN_WITHDRAW_AMOUNT;
 const COMMISSION_STATUSES = ["all", "pending", "available", "withdrawn", "cancelled"] as const;
+const REFERRAL_SCHEMA_NOT_READY =
+  "推广功能尚未完成数据库初始化，请管理员执行推广系统 migration。";
 
 type CommissionStatus = (typeof COMMISSION_STATUSES)[number];
+
+function normalizeCommissionStatus(value: unknown): Exclude<CommissionStatus, "all"> {
+  return value === "available" ||
+    value === "withdrawn" ||
+    value === "cancelled" ||
+    value === "pending"
+    ? value
+    : "pending";
+}
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (
@@ -21,6 +36,23 @@ function getErrorMessage(error: unknown, fallback: string) {
     if (message) return message;
   }
 
+  return fallback;
+}
+
+function isMissingReferralSchemaError(error: unknown) {
+  const message = getErrorMessage(error, "").toLowerCase();
+  return (
+    message.includes("referral_commissions") ||
+    message.includes("referrals") ||
+    message.includes("ensure_my_referral_code") ||
+    message.includes("bind_referrer_by_code") ||
+    message.includes("could not find the table") ||
+    message.includes("schema cache")
+  );
+}
+
+function getReferralErrorMessage(error: unknown, fallback: string) {
+  if (isMissingReferralSchemaError(error)) return REFERRAL_SCHEMA_NOT_READY;
   return fallback;
 }
 
@@ -43,10 +75,10 @@ async function safeCount<T>(
 ) {
   try {
     const { count, error } = await run();
-    if (error) return { value: null, error: getErrorMessage(error, "统计读取失败") };
+    if (error) return { value: null, error: getReferralErrorMessage(error, "读取失败") };
     return { value: count ?? 0, error: "" };
   } catch (error) {
-    return { value: null, error: getErrorMessage(error, "统计读取失败") };
+    return { value: null, error: getReferralErrorMessage(error, "读取失败") };
   }
 }
 
@@ -99,9 +131,9 @@ export async function GET(request: Request) {
 
     const registrations = await safeCount(() =>
       supabase
-        .from("profiles")
+        .from("referrals")
         .select("id", { count: "exact", head: true })
-        .eq("referred_by", user.id)
+        .eq("referrer_id", user.id)
     );
 
     let commissionQuery = supabase
@@ -126,10 +158,13 @@ export async function GET(request: Request) {
       .eq("referrer_id", user.id);
 
     const commissionStats = statsError
-      ? { total: null, available: null, error: getErrorMessage(statsError, "佣金统计读取失败") }
+      ? { total: null, available: null, error: getReferralErrorMessage(statsError, "读取失败") }
       : {
           total: (allCommissions ?? []).reduce(
-            (sum, item) => sum + Number(item.commission_amount ?? 0),
+            (sum, item) =>
+              item.status === "cancelled"
+                ? sum
+                : sum + Number(item.commission_amount ?? 0),
             0
           ),
           available: (allCommissions ?? [])
@@ -172,10 +207,10 @@ export async function GET(request: Request) {
             orderAmount: Number(row.order_amount ?? 0),
             commissionRate: Number(row.commission_rate ?? COMMISSION_RATE),
             commissionAmount: Number(row.commission_amount ?? 0),
-            status: row.status ?? "pending",
+            status: normalizeCommissionStatus(row.status),
           })),
       recordError: commissionError
-        ? getErrorMessage(commissionError, "推广记录读取失败")
+        ? getReferralErrorMessage(commissionError, "读取失败")
         : "",
       count: commissionError ? 0 : commissionCount ?? 0,
       page,
@@ -183,7 +218,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: getErrorMessage(error, "推广数据读取失败，请稍后重试") },
+      { error: getReferralErrorMessage(error, "推广数据读取失败，请稍后重试") },
       { status: 500 }
     );
   }

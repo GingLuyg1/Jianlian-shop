@@ -1,5 +1,5 @@
 export const PROMOTION_COMMISSION_RATE = 0.03;
-export const PROMOTION_MIN_WITHDRAW_AMOUNT = 10;
+export const PROMOTION_MIN_WITHDRAW_AMOUNT = 100;
 export const PROMOTION_RECORDS_PER_PAGE = 7;
 
 export function createInviteCodeFromUserId(userId: string) {
