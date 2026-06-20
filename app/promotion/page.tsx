@@ -4,14 +4,12 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import Link from "next/link";
 import {
   BarChart3,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Copy,
   DollarSign,
   Link2,
   Percent,
-  RefreshCcw,
   Users,
   Wallet,
   type LucideIcon,
@@ -19,10 +17,9 @@ import {
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 7;
 
 type ReferralStatus = "pending" | "available" | "withdrawn" | "cancelled";
 
@@ -65,14 +62,6 @@ type ReferralResponse = {
   error?: string;
 };
 
-const statusOptions: Array<{ value: "all" | ReferralStatus; label: string }> = [
-  { value: "all", label: "全部状态" },
-  { value: "pending", label: "待确认" },
-  { value: "available", label: "可用" },
-  { value: "withdrawn", label: "已提现" },
-  { value: "cancelled", label: "已取消" },
-];
-
 const statusLabels: Record<ReferralStatus, string> = {
   pending: "待确认",
   available: "已确认",
@@ -93,9 +82,9 @@ function formatMoney(value: number | null | undefined) {
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) return "--";
+  if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--";
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("zh-CN", {
     year: "numeric",
     month: "2-digit",
@@ -118,7 +107,17 @@ function getErrorMessage(error: unknown, fallback = "推广数据读取失败，
   return fallback;
 }
 
-function StatCard({ label, value, icon: Icon, highlight }: { label: string; value: string | number; icon: LucideIcon; highlight?: boolean }) {
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  highlight,
+}: {
+  label: string;
+  value: string | number;
+  icon: LucideIcon;
+  highlight?: boolean;
+}) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
       <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -139,48 +138,46 @@ function InfoTile({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function ReferralPagination({ page, totalPages, total, onPageChange }: { page: number; totalPages: number; total: number; onPageChange: (page: number) => void }) {
-  if (totalPages <= 1) {
-    return <div className="text-sm text-slate-500">共 {total} 条记录</div>;
-  }
+function ReferralPagination({
+  page,
+  totalPages,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const resolvedTotalPages = Math.max(1, totalPages);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
-      <div>
-        共 {total} 条记录，当前第 {page} / {totalPages} 页
-      </div>
+      <div>共 {total} 条记录</div>
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => onPageChange(Math.max(1, page - 1))}
           disabled={page <= 1}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-400 transition hover:bg-orange-50 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-400 transition hover:bg-orange-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        {Array.from({ length: totalPages }, (_, index) => index + 1).map((item) => (
-          <button
-            type="button"
-            key={item}
-            onClick={() => onPageChange(item)}
-            className={cn(
-              "h-9 min-w-9 rounded-lg px-3 font-semibold transition",
-              item === page ? "bg-orange-500 text-white" : "bg-orange-50 text-orange-700 hover:bg-orange-100",
-            )}
-          >
-            {item}
-          </button>
-        ))}
+        <button type="button" className="h-9 min-w-9 rounded-lg bg-orange-500 px-3 font-semibold text-white">
+          {page}
+        </button>
         <button
           type="button"
-          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-400 transition hover:bg-orange-50 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => onPageChange(Math.min(resolvedTotalPages, page + 1))}
+          disabled={page >= resolvedTotalPages}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-400 transition hover:bg-orange-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
         <span className="ml-4 text-slate-500">前往</span>
-        <span className="inline-flex h-9 min-w-12 items-center justify-center rounded-full border border-orange-100 bg-white px-4 text-slate-700">{page}</span>
+        <span className="inline-flex h-9 min-w-12 items-center justify-center rounded-full border border-orange-100 bg-white px-4 text-slate-700">
+          {page}
+        </span>
         <span>页</span>
       </div>
     </div>
@@ -189,7 +186,6 @@ function ReferralPagination({ page, totalPages, total, onPageChange }: { page: n
 
 export default function PromotionPage() {
   const [data, setData] = useState<ReferralResponse | null>(null);
-  const [status, setStatus] = useState<"all" | ReferralStatus>("all");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -202,7 +198,7 @@ export default function PromotionPage() {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(PAGE_SIZE),
-        status,
+        status: "all",
       });
       const response = await fetch(`/api/referrals?${params.toString()}`, { cache: "no-store" });
       const result = (await response.json().catch(() => null)) as ReferralResponse | null;
@@ -224,7 +220,7 @@ export default function PromotionPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, status]);
+  }, [page]);
 
   useEffect(() => {
     void loadReferralData();
@@ -239,12 +235,12 @@ export default function PromotionPage() {
 
   const stats = useMemo(
     () => [
-      { label: "访问量", value: data?.stats.visits.value ?? "未接入", icon: BarChart3 },
-      { label: "注册", value: data?.stats.registrations.value ?? 0, icon: Users },
-      { label: "推荐人", value: data?.stats.referrals.value ?? 0, icon: Users },
-      { label: "注册率", value: data?.stats.registrationRate.value ?? "未接入", icon: Percent },
-      { label: "总收入", value: formatMoney(data?.stats.totalCommission), icon: DollarSign },
-      { label: "可用金额", value: formatMoney(data?.stats.availableCommission), icon: Wallet, highlight: true },
+      { label: "访问量", value: data?.stats.visits.value ?? "-", icon: BarChart3 },
+      { label: "注册", value: data?.stats.registrations.value ?? "-", icon: Users },
+      { label: "推荐人", value: data?.stats.referrals.value ?? "-", icon: Users },
+      { label: "注册率", value: data?.stats.registrationRate.value ?? "-", icon: Percent },
+      { label: "总收入", value: data ? formatMoney(data.stats.totalCommission) : "-", icon: DollarSign },
+      { label: "可用金额", value: data ? formatMoney(data.stats.availableCommission) : "-", icon: Wallet, highlight: true },
     ],
     [data],
   );
@@ -312,7 +308,7 @@ export default function PromotionPage() {
 
             <div className="mt-4 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
               <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "推广链接生成中"}>
-                {loading && !promotionLink ? "推广链接生成中..." : promotionLink || "暂无推广链接"}
+                {loading && !promotionLink ? "正在加载推广链接..." : promotionLink || "暂无推广链接"}
               </div>
               <button
                 type="button"
@@ -326,14 +322,14 @@ export default function PromotionPage() {
 
             <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1fr]">
               <InfoTile label="充值提佣倍率" value={`${Math.round((data?.commissionRate ?? 0.03) * 100)}%`} />
-              <InfoTile label="最低提现额" value={formatMoney(data?.minWithdrawAmount ?? 100)} />
+              <InfoTile label="最低提现额" value={formatMoney(data?.minWithdrawAmount ?? 10)} />
               <button
                 type="button"
                 onClick={() => void loadReferralData()}
                 className="inline-flex h-full min-h-[78px] items-center justify-center rounded-xl bg-orange-500 px-5 text-base font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={loading}
               >
-                {loading ? "刷新中..." : "生成短链接"}
+                生成短链接
               </button>
             </div>
           </section>
@@ -366,39 +362,9 @@ export default function PromotionPage() {
         </div>
 
         <section className="flex min-h-0 flex-col rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-950">推广记录</h2>
-              <p className="mt-1 text-sm text-slate-500">推广用户后，用户每一次充值提成记录都会在这里展示。</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select
-                value={status}
-                onValueChange={(value) => {
-                  setStatus(value as "all" | ReferralStatus);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="h-10 w-[140px] rounded-xl border-orange-100 bg-white text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusOptions.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <button
-                type="button"
-                onClick={() => void loadReferralData()}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-50"
-              >
-                <RefreshCcw className="h-4 w-4" />
-                刷新
-              </button>
-            </div>
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold text-slate-950">推广记录</h2>
+            <p className="mt-1 text-sm text-slate-500">推广用户后，用户每一次充值提成记录都会在这里展示。</p>
           </div>
 
           {data?.recordError && (
@@ -407,9 +373,9 @@ export default function PromotionPage() {
             </div>
           )}
 
-          <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-orange-100">
-            <table className="w-full min-w-[920px] border-collapse text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+          <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-orange-100">
+            <table className="h-full w-full min-w-[920px] border-collapse text-sm">
+              <thead className="bg-slate-50 text-slate-500">
                 <tr>
                   <th className="border-b border-orange-100 px-4 py-3 text-center font-semibold">用户名</th>
                   <th className="border-b border-orange-100 px-4 py-3 text-center font-semibold">支付时间</th>
@@ -419,39 +385,31 @@ export default function PromotionPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading && !data ? (
-                  Array.from({ length: 6 }).map((_, index) => (
-                    <tr key={index}>
-                      <td className="border-b border-orange-50 px-4 py-4" colSpan={5}>
-                        <div className="h-5 animate-pulse rounded bg-slate-100" />
-                      </td>
-                    </tr>
-                  ))
-                ) : data?.records.length ? (
-                  data.records.map((record) => (
-                    <tr key={record.id} className="text-slate-700 transition hover:bg-orange-50/40">
-                      <td className="border-b border-orange-50 px-4 py-3 text-center font-medium text-slate-900">{record.referredUser}</td>
-                      <td className="border-b border-orange-50 px-4 py-3 text-center tabular-nums">{formatDateTime(record.paidAt)}</td>
-                      <td className="border-b border-orange-50 px-4 py-3 text-center tabular-nums">{formatMoney(record.orderAmount)}</td>
-                      <td className="border-b border-orange-50 px-4 py-3 text-center font-semibold tabular-nums text-orange-600">
-                        {formatMoney(record.commissionAmount)}
-                      </td>
-                      <td className="border-b border-orange-50 px-4 py-3 text-center">
-                        <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1", statusStyles[record.status])}>
-                          {statusLabels[record.status]}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-16 text-center">
-                      <CheckCircle2 className="mx-auto h-10 w-10 text-orange-200" />
-                      <div className="mt-3 text-base font-semibold text-slate-900">暂无推广记录</div>
-                      <p className="mt-1 text-sm text-slate-500">复制推广链接给好友，产生充值后记录会显示在这里。</p>
-                    </td>
-                  </tr>
-                )}
+                {data?.records.length
+                  ? data.records.map((record) => (
+                      <tr key={record.id} className="text-slate-700 transition hover:bg-orange-50/40">
+                        <td className="border-b border-orange-50 px-4 py-3 text-center font-medium text-slate-900">{record.referredUser}</td>
+                        <td className="border-b border-orange-50 px-4 py-3 text-center tabular-nums">{formatDateTime(record.paidAt)}</td>
+                        <td className="border-b border-orange-50 px-4 py-3 text-center tabular-nums">{formatMoney(record.orderAmount)}</td>
+                        <td className="border-b border-orange-50 px-4 py-3 text-center font-semibold tabular-nums text-orange-600">
+                          {formatMoney(record.commissionAmount)}
+                        </td>
+                        <td className="border-b border-orange-50 px-4 py-3 text-center">
+                          <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1", statusStyles[record.status])}>
+                            {statusLabels[record.status]}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  : Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                      <tr key={index}>
+                        <td className="border-b border-orange-50 px-4 py-5 text-center">&nbsp;</td>
+                        <td className="border-b border-orange-50 px-4 py-5 text-center">&nbsp;</td>
+                        <td className="border-b border-orange-50 px-4 py-5 text-center">&nbsp;</td>
+                        <td className="border-b border-orange-50 px-4 py-5 text-center">&nbsp;</td>
+                        <td className="border-b border-orange-50 px-4 py-5 text-center">&nbsp;</td>
+                      </tr>
+                    ))}
               </tbody>
             </table>
           </div>
