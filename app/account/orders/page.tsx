@@ -174,7 +174,7 @@ export default function MyOrdersPage() {
             </div>
           </CardHeader>
 
-          <CardContent className="flex min-h-[660px] flex-1 overflow-hidden">
+          <CardContent className="flex min-h-0 flex-1 overflow-hidden">
             {loading ? (
               <div className="w-full space-y-3">
                 {Array.from({ length: PAGE_SIZE }).map((_, index) => (
@@ -205,7 +205,7 @@ export default function MyOrdersPage() {
                 </div>
               </div>
             ) : (
-              <div className="h-full overflow-auto">
+              <div className="h-full overflow-x-auto overflow-y-hidden">
                 <table className="w-full min-w-[980px] text-sm">
                   <thead className="sticky top-0 z-10 bg-white text-xs text-muted-foreground">
                     <tr className="border-b">
@@ -231,7 +231,7 @@ export default function MyOrdersPage() {
 
                       return (
                         <tr key={order.id} className="border-b hover:bg-slate-50">
-                          <td className="whitespace-nowrap px-3 py-4 font-mono text-xs">
+                          <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">
                             <button
                               type="button"
                               onClick={() => copyOrderNo(order.order_no)}
@@ -241,27 +241,27 @@ export default function MyOrdersPage() {
                               <Clipboard className="h-3 w-3" />
                             </button>
                           </td>
-                          <td className="max-w-[280px] truncate px-3 py-4 font-medium">
+                          <td className="max-w-[280px] truncate px-3 py-3 font-medium">
                             {firstItem?.product_name ?? "订单商品"}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4">{quantity || 1}</td>
-                          <td className="whitespace-nowrap px-3 py-4 font-semibold text-primary">
+                          <td className="whitespace-nowrap px-3 py-3">{quantity || 1}</td>
+                          <td className="whitespace-nowrap px-3 py-3 font-semibold text-primary">
                             {formatMoney(order.total_amount)}
                           </td>
-                          <td className="px-3 py-4">
+                          <td className="px-3 py-3">
                             <Badge variant="outline" className={cn("whitespace-nowrap text-xs", ORDER_STATUS_STYLES[orderStatus])}>
                               {getOrderStatusLabel(order.status)}
                             </Badge>
                           </td>
-                          <td className="px-3 py-4">
+                          <td className="px-3 py-3">
                             <Badge variant="outline" className={cn("whitespace-nowrap text-xs", PAYMENT_STATUS_STYLES[nextPaymentStatus])}>
                               {getPaymentStatusLabel(order.payment_status)}
                             </Badge>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-muted-foreground">
+                          <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
                             {formatDate(order.created_at)}
                           </td>
-                          <td className="px-3 py-4 text-right">
+                          <td className="px-3 py-3 text-right">
                             <Button variant="ghost" size="sm" onClick={() => setSelectedOrder(order)}>
                               查看详情
                             </Button>
