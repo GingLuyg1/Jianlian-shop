@@ -9,13 +9,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
@@ -66,11 +59,6 @@ export default function MyOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
-  const [lookupOpen, setLookupOpen] = useState(false);
-  const [lookupOrderNo, setLookupOrderNo] = useState("");
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const [lookupError, setLookupError] = useState("");
-  const [lookupResult, setLookupResult] = useState<OrderRecord | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
@@ -123,75 +111,15 @@ export default function MyOrdersPage() {
     toast.success("订单编号已复制");
   }
 
-  const lookupOrder = useCallback(async () => {
-    const keyword = lookupOrderNo.trim();
-    if (!keyword) {
-      setLookupError("请输入订单编号。");
-      setLookupResult(null);
-      return;
-    }
-
-    setLookupLoading(true);
-    setLookupError("");
-    setLookupResult(null);
-
-    try {
-      const params = new URLSearchParams({
-        page: "1",
-        pageSize: "5",
-        status: "all",
-        paymentStatus: "all",
-        search: keyword,
-      });
-      const response = await fetch(`/api/orders?${params.toString()}`);
-      const result = (await response.json().catch(() => null)) as {
-        orders?: OrderRecord[];
-        error?: string;
-      } | null;
-
-      if (response.status === 401) {
-        toast.error("登录状态已失效，请重新登录。");
-        setLookupOpen(false);
-        router.push("/login?redirect=/account/orders");
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(result?.error ?? "订单查询失败");
-      }
-
-      const matchedOrder = (result?.orders ?? []).find(
-        (order) => order.order_no.toLowerCase() === keyword.toLowerCase()
-      );
-
-      if (!matchedOrder) {
-        setLookupError("未找到该订单，请检查订单编号。");
-        return;
-      }
-
-      setLookupResult(matchedOrder);
-    } catch (lookupErrorValue) {
-      setLookupError(getOrderErrorMessage(lookupErrorValue, "订单查询失败"));
-    } finally {
-      setLookupLoading(false);
-    }
-  }, [lookupOrderNo, router]);
-
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-950">我的订单</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            查询当前账号的订单记录、支付状态和交付信息。
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => setLookupOpen(true)}>
-          <Search className="mr-2 h-4 w-4" />
-          订单查询
-        </Button>
+    <div className="grid gap-4 overflow-hidden">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-950">我的订单</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          查询当前账号的订单记录、支付状态和交付信息。
+        </p>
       </div>
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Card className="flex min-h-0 flex-col overflow-hidden">
           <CardHeader className="shrink-0 space-y-4 pb-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -252,7 +180,7 @@ export default function MyOrdersPage() {
             </div>
           </CardHeader>
 
-          <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <CardContent className="min-h-0 flex-1 overflow-hidden">
             {loading ? (
               <div className="space-y-3">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -367,116 +295,13 @@ export default function MyOrdersPage() {
               </Button>
             </div>
           </div>
-        </Card>
+      </Card>
 
-        <UserOrderDrawer
+      <UserOrderDrawer
         order={selectedOrder}
         onClose={() => setSelectedOrder(null)}
         onCopyOrderNo={copyOrderNo}
       />
-
-      <Dialog
-        open={lookupOpen}
-        onOpenChange={(open) => {
-          setLookupOpen(open);
-          if (!open) {
-            setLookupOrderNo("");
-            setLookupError("");
-            setLookupResult(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>订单查询</DialogTitle>
-            <DialogDescription>
-              输入订单编号，只能查询当前登录账号所属订单。
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                value={lookupOrderNo}
-                onChange={(event) => {
-                  setLookupOrderNo(event.target.value);
-                  setLookupError("");
-                  setLookupResult(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    lookupOrder();
-                  }
-                }}
-                placeholder="请输入订单编号"
-                disabled={lookupLoading}
-              />
-              <Button type="button" onClick={lookupOrder} disabled={lookupLoading}>
-                {lookupLoading ? "查询中..." : "查询"}
-              </Button>
-            </div>
-
-            {lookupError ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {lookupError}
-              </div>
-            ) : null}
-
-            {lookupResult ? (
-              <div className="rounded-xl border bg-slate-50 p-4 text-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold text-slate-950">
-                      {lookupResult.order_items?.[0]?.product_name ?? "订单商品"}
-                    </div>
-                    <div className="mt-1 font-mono text-xs text-slate-500">
-                      {lookupResult.order_no}
-                    </div>
-                  </div>
-                  <div className="shrink-0 font-semibold text-primary">
-                    {formatMoney(lookupResult.total_amount)}
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "whitespace-nowrap text-xs",
-                      ORDER_STATUS_STYLES[normalizeOrderStatus(lookupResult.status)]
-                    )}
-                  >
-                    {getOrderStatusLabel(lookupResult.status)}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "whitespace-nowrap text-xs",
-                      PAYMENT_STATUS_STYLES[normalizePaymentStatus(lookupResult.payment_status)]
-                    )}
-                  >
-                    {getPaymentStatusLabel(lookupResult.payment_status)}
-                  </Badge>
-                  <span className="text-xs text-slate-500">
-                    {formatDate(lookupResult.created_at)}
-                  </span>
-                </div>
-                <Button
-                  type="button"
-                  className="mt-4"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedOrder(lookupResult);
-                    setLookupOpen(false);
-                  }}
-                >
-                  查看详情
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
