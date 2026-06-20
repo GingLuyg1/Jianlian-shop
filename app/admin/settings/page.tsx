@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import AdminPageShell from "@/components/admin/AdminPageShell";
@@ -36,6 +36,7 @@ type SettingsPayload = {
 
 export default function AdminSettingsPage() {
   const [activeGroup, setActiveGroup] = useState<GroupId>("basic");
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const [settings, setSettings] = useState<AdminSiteSettings>(
     DEFAULT_ADMIN_SETTINGS
   );
@@ -81,6 +82,10 @@ export default function AdminSettingsPage() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0 });
+  }, [activeGroup]);
 
   const saveSettings = async (patch: Partial<AdminSiteSettings>) => {
     if (saving) return;
@@ -149,13 +154,13 @@ export default function AdminSettingsPage() {
           </nav>
         </aside>
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-          <div className="shrink-0 border-b px-5 py-4">
+        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
+          <div className="shrink-0 border-b px-5 py-3">
             <div className="text-base font-semibold text-slate-950">
               {groups.find((group) => group.id === activeGroup)?.label}
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div ref={contentRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             {loading ? (
               <div className="rounded-xl border border-dashed p-8 text-center text-sm text-slate-500">
                 正在读取系统设置...

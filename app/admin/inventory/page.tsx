@@ -327,7 +327,7 @@ export default function AdminInventoryPage() {
         </Button>
       }
     >
-      <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(360px,400px)]">
         <Card className="flex min-h-0 flex-col overflow-hidden">
           <CardHeader className="shrink-0 px-4 py-3">
             <div className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_150px_auto] xl:items-center">
@@ -375,7 +375,7 @@ export default function AdminInventoryPage() {
               />
             ) : (
               <div className="min-h-0 flex-1 overflow-auto">
-                <Table>
+                <Table className="min-w-[980px]">
                   <TableHeader className="sticky top-0 z-10 bg-white">
                     <TableRow>
                       <TableHead className="min-w-[220px]">商品</TableHead>
@@ -427,7 +427,8 @@ export default function AdminInventoryPage() {
           </CardContent>
         </Card>
 
-        <aside className="flex min-h-0 flex-col gap-3 overflow-hidden">
+        <aside className="min-h-0 overflow-y-auto pr-1">
+          <div className="flex min-h-full flex-col gap-3">
           <Card className="shrink-0">
             <CardHeader className="px-4 py-3">
               <CardTitle className="text-base">新增库存</CardTitle>
@@ -478,7 +479,7 @@ export default function AdminInventoryPage() {
             </CardContent>
           </Card>
 
-          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Card className="flex min-h-[360px] flex-1 flex-col overflow-hidden">
             <CardHeader className="shrink-0 px-4 py-3">
               <CardTitle className="text-base">批量导入</CardTitle>
             </CardHeader>
@@ -505,6 +506,7 @@ export default function AdminInventoryPage() {
               {message ? <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">{message}</div> : null}
             </CardContent>
           </Card>
+          </div>
         </aside>
       </div>
 

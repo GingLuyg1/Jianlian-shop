@@ -45,7 +45,7 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden h-dvh w-[var(--admin-sidebar-width)] shrink-0 flex-col border-r border-border bg-white md:flex">
+    <aside className="hidden h-dvh w-[var(--admin-sidebar-width)] shrink-0 flex-col border-r border-border bg-white md:flex">
       <div className="flex h-[var(--admin-header-height)] shrink-0 items-center border-b border-border px-5">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800 text-base font-bold text-white">
