@@ -15,6 +15,7 @@ import {
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import SupportCard from "@/components/common/SupportCard";
+import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,6 +69,7 @@ function getUnavailableMessage(product: PublicProductRow | null) {
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { settings } = usePublicSettings();
   const routeId = params?.id;
   const productIdentifier = Array.isArray(routeId) ? routeId[0] : routeId;
   const [product, setProduct] = useState<PublicProductRow | null>(null);
@@ -191,23 +193,25 @@ export default function ProductDetailPage() {
                     ) : null}
                     <div className="mt-5 flex flex-wrap items-center gap-3">
                       <span className="text-3xl font-black text-primary">
-                        ¥{Number(product.price).toFixed(2)}
+                        {settings.currency_symbol}{Number(product.price).toFixed(2)}
                       </span>
-                      {product.original_price ? (
+                      {settings.show_original_price && product.original_price ? (
                         <span className="text-sm text-muted-foreground line-through">
-                          ¥{Number(product.original_price).toFixed(2)}
+                          {settings.currency_symbol}{Number(product.original_price).toFixed(2)}
                         </span>
                       ) : null}
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          Number(product.stock) > 0
-                            ? "border-green-200 bg-green-50 text-green-700"
-                            : "border-slate-200 bg-slate-50 text-slate-500"
-                        )}
-                      >
-                        库存：{Number(product.stock ?? 0)}
-                      </Badge>
+                      {settings.show_stock ? (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            Number(product.stock) > 0
+                              ? "border-green-200 bg-green-50 text-green-700"
+                              : "border-slate-200 bg-slate-50 text-slate-500"
+                          )}
+                        >
+                          库存：{Number(product.stock ?? 0)}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>
@@ -249,7 +253,7 @@ export default function ProductDetailPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">商品价格</span>
                     <span className="text-2xl font-black text-primary">
-                      ¥{Number(product.price).toFixed(2)}
+                      {settings.currency_symbol}{Number(product.price).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
@@ -258,19 +262,21 @@ export default function ProductDetailPage() {
                       {getDeliveryLabel(product.delivery_type)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">当前库存</span>
-                    <span
-                      className={cn(
-                        "font-bold",
-                        Number(product.stock) > 0
-                          ? "text-green-600"
-                          : "text-slate-400"
-                      )}
-                    >
-                      {Number(product.stock ?? 0)}
-                    </span>
-                  </div>
+                  {settings.show_stock ? (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">当前库存</span>
+                      <span
+                        className={cn(
+                          "font-bold",
+                          Number(product.stock) > 0
+                            ? "text-green-600"
+                            : "text-slate-400"
+                        )}
+                      >
+                        {Number(product.stock ?? 0)}
+                      </span>
+                    </div>
+                  ) : null}
 
                   {unavailableMessage ? (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">

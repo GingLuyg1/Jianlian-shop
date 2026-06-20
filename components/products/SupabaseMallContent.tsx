@@ -15,6 +15,7 @@ import {
   Wallet,
 } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
+import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -106,6 +107,7 @@ export default function SupabaseMallContent({
 }: SupabaseMallContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { settings } = usePublicSettings();
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
   const [allCategories, setAllCategories] = useState<PublicCategory[]>([]);
   const [activeCategory, setActiveCategory] = useState<DisplayCategory | null>(
@@ -266,13 +268,16 @@ export default function SupabaseMallContent({
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return products;
-    return products.filter(
+    const visibleProducts = settings.show_sold_out_products
+      ? products
+      : products.filter((product) => product.stockStatus !== "out-of-stock");
+    if (!query) return visibleProducts;
+    return visibleProducts.filter(
       (product) =>
         product.name.toLowerCase().includes(query) ||
         product.description.toLowerCase().includes(query)
     );
-  }, [products, searchQuery]);
+  }, [products, searchQuery, settings.show_sold_out_products]);
 
   return (
     <PublicLayout contentClassName={mallContentClassName}>
@@ -286,7 +291,9 @@ export default function SupabaseMallContent({
         <ProductPanel
           error={error}
           products={filteredProducts}
+          currencySymbol={settings.currency_symbol}
           searchQuery={searchQuery}
+          showStock={settings.show_stock}
           selectedCategoryName={activeCategory?.name ?? fallbackTitle}
           selectedProductId={selectedProductId}
           onSearchChange={setSearchQuery}
@@ -395,17 +402,21 @@ function CategoryButton({
 }
 
 function ProductPanel({
+  currencySymbol,
   error,
   products,
   searchQuery,
+  showStock,
   selectedCategoryName,
   selectedProductId,
   onSearchChange,
   onSelectProduct,
 }: {
   error: string;
+  currencySymbol: string;
   products: Product[];
   searchQuery: string;
+  showStock: boolean;
   selectedCategoryName: string;
   selectedProductId: string | null;
   onSearchChange: (query: string) => void;
@@ -455,6 +466,8 @@ function ProductPanel({
                 <ProductRow
                   key={product.id}
                   product={product}
+                  currencySymbol={currencySymbol}
+                  showStock={showStock}
                   selected={selectedProductId === product.id}
                   onClick={() => onSelectProduct(product.id)}
                 />
@@ -479,11 +492,15 @@ function ProductPanel({
 }
 
 function ProductRow({
+  currencySymbol,
   product,
+  showStock,
   selected,
   onClick,
 }: {
+  currencySymbol: string;
   product: Product;
+  showStock: boolean;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -521,14 +538,16 @@ function ProductRow({
             </div>
           ) : null}
         </div>
-        <div className="hidden shrink-0 items-center gap-2 text-sm text-slate-600 md:flex">
-          库存：
-          <span className={stock > 0 ? "text-green-600" : "text-slate-400"}>
-            {stock}
-          </span>
-        </div>
+        {showStock ? (
+          <div className="hidden shrink-0 items-center gap-2 text-sm text-slate-600 md:flex">
+            库存：
+            <span className={stock > 0 ? "text-green-600" : "text-slate-400"}>
+              {stock}
+            </span>
+          </div>
+        ) : null}
         <div className="shrink-0 text-lg font-bold text-blue-600">
-          {canBuy ? `¥${product.price.toFixed(2)}` : "已售罄"}
+          {canBuy ? `${currencySymbol}${product.price.toFixed(2)}` : "已售罄"}
         </div>
       </div>
     </button>

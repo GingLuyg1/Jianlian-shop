@@ -5,11 +5,10 @@ import {
   PROMOTION_COMMISSION_RATE,
   PROMOTION_MIN_WITHDRAW_AMOUNT,
 } from "@/lib/promotion";
+import { getPromotionSettings } from "@/lib/settings/server";
 
 export const dynamic = "force-dynamic";
 
-const COMMISSION_RATE = PROMOTION_COMMISSION_RATE;
-const MIN_WITHDRAW_AMOUNT = PROMOTION_MIN_WITHDRAW_AMOUNT;
 const COMMISSION_STATUSES = ["all", "pending", "available", "withdrawn", "cancelled"] as const;
 const REFERRAL_SCHEMA_NOT_READY =
   "推广功能尚未完成数据库初始化，请管理员执行推广系统 migration。";
@@ -105,6 +104,12 @@ export async function GET(request: Request) {
     const safeStatus = COMMISSION_STATUSES.includes(status) ? status : "all";
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
+    const promotionSettings = await getPromotionSettings(supabase).catch(() => ({
+      enabled: true,
+      commissionRate: PROMOTION_COMMISSION_RATE,
+      minWithdrawAmount: PROMOTION_MIN_WITHDRAW_AMOUNT,
+    }));
+    const commissionRate = promotionSettings.commissionRate;
 
     let inviteCode = "";
     const { data: ensuredCode, error: codeError } = await supabase.rpc(
@@ -120,6 +125,30 @@ export async function GET(request: Request) {
       inviteCode = profile?.invite_code ?? "";
     } else {
       inviteCode = String(ensuredCode ?? "");
+    }
+
+    if (!promotionSettings.enabled) {
+      return NextResponse.json({
+        inviteCode,
+        promotionEnabled: false,
+        commissionRate,
+        minWithdrawAmount: promotionSettings.minWithdrawAmount,
+        updatedAt: new Date().toISOString(),
+        stats: {
+          visits: { value: null, error: "" },
+          registrations: { value: 0, error: "" },
+          referrals: { value: 0, error: "" },
+          registrationRate: { value: null, error: "" },
+          totalCommission: 0,
+          availableCommission: 0,
+          commissionError: "",
+        },
+        records: [],
+        recordError: "",
+        count: 0,
+        page,
+        pageSize,
+      });
     }
 
     const visits = await safeCount(() =>
@@ -182,8 +211,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       inviteCode,
-      commissionRate: COMMISSION_RATE,
-      minWithdrawAmount: MIN_WITHDRAW_AMOUNT,
+      promotionEnabled: true,
+      commissionRate,
+      minWithdrawAmount: promotionSettings.minWithdrawAmount,
       updatedAt: new Date().toISOString(),
       stats: {
         visits,
@@ -205,7 +235,7 @@ export async function GET(request: Request) {
             orderNo: row.order_no ?? "-",
             paidAt: row.paid_at ?? row.created_at ?? null,
             orderAmount: Number(row.order_amount ?? 0),
-            commissionRate: Number(row.commission_rate ?? COMMISSION_RATE),
+            commissionRate: Number(row.commission_rate ?? commissionRate),
             commissionAmount: Number(row.commission_amount ?? 0),
             status: normalizeCommissionStatus(row.status),
           })),

@@ -36,7 +36,11 @@ const helpItems = [
   { label: "常见问题", href: "/faq", icon: HelpCircle },
 ];
 
-export default function PublicSidebar() {
+type PublicSidebarProps = {
+  supportHref?: string;
+};
+
+export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -104,8 +108,18 @@ export default function PublicSidebar() {
       <div className="border-t border-border px-4 py-4">
         <button
           type="button"
+          onClick={() => {
+            if (!supportHref) return;
+            if (supportHref.startsWith("mailto:")) {
+              window.location.href = supportHref;
+            } else {
+              window.open(supportHref, "_blank", "noopener,noreferrer");
+            }
+          }}
           className="flex w-full select-none items-center justify-start gap-3 rounded-md bg-primary/90 px-4 py-2.5 text-[15px] font-medium text-primary-foreground shadow-sm transition-all duration-150 hover:scale-[1.015] hover:bg-primary active:scale-[1.03]"
-          {...({ popovertarget: "support-popover" } as Record<string, string>)}
+          {...(!supportHref
+            ? ({ popovertarget: "support-popover" } as Record<string, string>)
+            : {})}
         >
           <Headphones className="h-[18px] w-[18px] shrink-0" />
           <span>在线客服</span>

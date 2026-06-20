@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { PROMOTION_COMMISSION_RATE } from "@/lib/promotion";
+import { getPromotionSettings } from "@/lib/settings/server";
 import {
   ORDER_STATUS_VALUES,
   PAYMENT_STATUS_VALUES,
@@ -56,16 +57,24 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
-    const { error: commissionError } = await admin.supabase.rpc(
-      "sync_referral_commission_for_order",
-      {
-        p_order_id: context.params.orderId,
-        p_commission_rate: PROMOTION_COMMISSION_RATE,
-      }
-    );
+    const promotionSettings = await getPromotionSettings(admin.supabase).catch(() => ({
+      enabled: true,
+      commissionRate: PROMOTION_COMMISSION_RATE,
+      minWithdrawAmount: 100,
+    }));
 
-    if (commissionError) {
-      console.warn("[Admin Orders] referral commission sync skipped", commissionError);
+    if (promotionSettings.enabled) {
+      const { error: commissionError } = await admin.supabase.rpc(
+        "sync_referral_commission_for_order",
+        {
+          p_order_id: context.params.orderId,
+          p_commission_rate: promotionSettings.commissionRate,
+        }
+      );
+
+      if (commissionError) {
+        console.warn("[Admin Orders] referral commission sync skipped", commissionError);
+      }
     }
 
     return NextResponse.json({ order: data });

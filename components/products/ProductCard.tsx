@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,7 @@ const stockColorMap: Record<string, string> = {
 };
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const { settings } = usePublicSettings();
   const isDisabled =
     product.stockStatus === "out-of-stock" ||
     product.listingStatus !== "active";
@@ -52,21 +54,28 @@ export default function ProductCard({ product }: ProductCardProps) {
         {/* Price */}
         <div className="flex items-baseline gap-1 mb-3">
           <span className="text-lg font-bold text-primary">
-            ¥{product.price.toFixed(2)}
+            {settings.currency_symbol}{product.price.toFixed(2)}
           </span>
+          {settings.show_original_price && product.originalPrice ? (
+            <span className="text-xs text-muted-foreground line-through">
+              {settings.currency_symbol}{Number(product.originalPrice).toFixed(2)}
+            </span>
+          ) : null}
         </div>
 
         {/* Info row: stock, processing time, delivery */}
         <div className="space-y-1.5 mb-4">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">库存状态</span>
-            <Badge
-              variant="outline"
-              className={cn("text-[10px] px-1.5 py-0", stockColorMap[product.stockStatus])}
-            >
-              {product.stockLabel}
-            </Badge>
-          </div>
+          {settings.show_stock ? (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">库存状态</span>
+              <Badge
+                variant="outline"
+                className={cn("text-[10px] px-1.5 py-0", stockColorMap[product.stockStatus])}
+              >
+                {product.stockLabel}
+              </Badge>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">处理时效</span>
             <span className="text-foreground">{product.processingTime}</span>

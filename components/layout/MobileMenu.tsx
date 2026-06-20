@@ -48,7 +48,11 @@ const helpItems = [
   { label: "常见问题", href: "/faq", icon: HelpCircle },
 ];
 
-export default function MobileMenu() {
+type MobileMenuProps = {
+  supportHref?: string;
+};
+
+export default function MobileMenu({ supportHref }: MobileMenuProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -139,9 +143,19 @@ export default function MobileMenu() {
         <div className="px-4 py-4 border-t border-border">
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+              if (!supportHref) return;
+              if (supportHref.startsWith("mailto:")) {
+                window.location.href = supportHref;
+              } else {
+                window.open(supportHref, "_blank", "noopener,noreferrer");
+              }
+            }}
             className="w-full flex items-center justify-start gap-3 px-3 py-2 rounded-md text-sm bg-primary/90 text-primary-foreground font-medium hover:bg-primary hover:scale-[1.015] active:scale-[1.03] transition-all duration-150 shadow-sm"
-            {...({ popovertarget: "support-popover" } as Record<string, string>)}
+            {...(!supportHref
+              ? ({ popovertarget: "support-popover" } as Record<string, string>)
+              : {})}
           >
             <Headphones className="h-4 w-4 shrink-0" />
             <span>在线客服</span>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
+import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -118,6 +119,7 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
 export default function CheckoutPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { settings } = usePublicSettings();
   const productId = searchParams.get("product") || "gift-apple-tr-500";
 
   const [email, setEmail] = useState("");
@@ -280,7 +282,7 @@ export default function CheckoutPage() {
       const orderNo = result?.order?.order_no;
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
-      router.push(`/order-success?order_no=${encodeURIComponent(orderNo)}`);
+      router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
     } catch (submitError) {
       setError(getErrorText(submitError, "订单创建失败，请稍后重试"));
     } finally {
@@ -413,7 +415,7 @@ export default function CheckoutPage() {
                 <Input
                   value={customerNote}
                   onChange={(event) => setCustomerNote(event.target.value)}
-                  placeholder="如有账号、地区或补充说明，请填写在这里"
+                  placeholder={settings.default_order_note_hint}
                   className="h-10 bg-slate-50 text-sm"
                 />
               </div>
@@ -2087,3 +2089,4 @@ function getAiCategoryByProductId(productId: string) {
   if (productId.includes("grok")) return "grok";
   return "chatgpt";
 }
+

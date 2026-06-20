@@ -3,7 +3,10 @@
 import { ReactNode } from "react";
 import { X } from "lucide-react";
 
-import { announcementText } from "@/lib/mock-data";
+import {
+  SettingsProvider,
+  usePublicSettings,
+} from "@/components/settings/SettingsProvider";
 import MobileMenu from "./MobileMenu";
 import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
@@ -19,12 +22,39 @@ export default function PublicLayout({
   contentClassName = "p-4 md:p-6 max-w-7xl mx-auto mt-12 md:mt-0",
 }: PublicLayoutProps) {
   return (
+    <SettingsProvider>
+      <PublicLayoutContent contentClassName={contentClassName}>
+        {children}
+      </PublicLayoutContent>
+    </SettingsProvider>
+  );
+}
+
+function getSupportHref(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return `mailto:${trimmed}`;
+  return "";
+}
+
+function PublicLayoutContent({
+  children,
+  contentClassName,
+}: PublicLayoutProps) {
+  const { settings } = usePublicSettings();
+  const announcement = settings.top_announcement.trim();
+  const supportContact =
+    settings.support_contact.trim() || "客服暂未开放";
+  const supportHref = getSupportHref(supportContact);
+
+  return (
     <div className="min-h-screen bg-background">
       <RouteLoadingIndicator />
-      <PublicSidebar />
+      <PublicSidebar supportHref={supportHref} />
 
       <div className="fixed left-0 right-0 top-0 z-40 flex items-center gap-3 border-b border-border bg-white px-3 py-2 md:hidden">
-        <MobileMenu />
+        <MobileMenu supportHref={supportHref} />
         <div className="flex items-center gap-2">
           <img
             src="/assets/jianlian-brand-logo.png"
@@ -43,7 +73,7 @@ export default function PublicLayout({
       </div>
 
       <main className="min-h-screen min-w-0 md:ml-[270px]">
-        <PublicTopInfoBar announcementText={announcementText} />
+        <PublicTopInfoBar announcementText={announcement || undefined} />
         <div className={contentClassName}>{children}</div>
       </main>
 
@@ -66,11 +96,14 @@ export default function PublicLayout({
         <div className="text-center">
           <h2 className="text-xl font-semibold">客服信息</h2>
           <div className="mt-5 space-y-3 text-sm text-foreground">
-            <div>Telegram：</div>
-            <div>WhatsApp：</div>
-            <div>Email：</div>
-            <div>上班时间：（12:00 AM - 24:00 PM GMT+8）</div>
-            <div className="text-muted-foreground">有问题均可留言</div>
+            {supportContact.split(/\r?\n/).map((line, index) => (
+              <div
+                key={`${line}-${index}`}
+                className={index === supportContact.split(/\r?\n/).length - 1 ? "text-muted-foreground" : undefined}
+              >
+                {line}
+              </div>
+            ))}
           </div>
         </div>
       </div>
