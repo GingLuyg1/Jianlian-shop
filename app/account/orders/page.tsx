@@ -112,20 +112,14 @@ export default function MyOrdersPage() {
   }
 
   return (
-    <div className="grid gap-4 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-950">我的订单</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          查询当前账号的订单记录、支付状态和交付信息。
-        </p>
-      </div>
+    <div className="grid min-h-[640px] gap-4 overflow-hidden">
       <Card className="flex min-h-0 flex-col overflow-hidden">
           <CardHeader className="shrink-0 space-y-4 pb-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle className="text-xl">订单查询</CardTitle>
+                <CardTitle className="text-xl">我的订单</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  支持按订单编号、订单状态和支付状态筛选。
+                  查询当前账号的订单记录、支付状态和交付信息。
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={loadOrders}>
