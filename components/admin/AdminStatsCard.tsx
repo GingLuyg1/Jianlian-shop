@@ -24,15 +24,24 @@ export default function AdminStatsCard({
   iconColor = "text-primary",
   iconBg = "bg-primary/10",
 }: AdminStatsCardProps) {
+  const isPending = value === "未接入";
+
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
+    <Card className="min-w-0">
+      <CardContent className="flex h-[82px] items-center p-3">
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <div className="min-w-0">
             <div className="text-xs text-muted-foreground">{title}</div>
-            <div className="text-xl font-bold text-foreground mt-1">{value}</div>
+            <div
+              className={cn(
+                "mt-1 truncate font-bold text-foreground",
+                isPending ? "text-sm font-medium text-slate-400" : "text-xl"
+              )}
+            >
+              {value}
+            </div>
           </div>
-          <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", iconBg)}>
+          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", iconBg)}>
             <Icon className={cn("h-5 w-5", iconColor)} />
           </div>
         </div>

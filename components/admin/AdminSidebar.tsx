@@ -41,7 +41,7 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[var(--admin-sidebar-width)] flex-col border-r border-border bg-white md:flex">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden h-dvh w-[var(--admin-sidebar-width)] shrink-0 flex-col border-r border-border bg-white md:flex">
       <div className="flex h-[var(--admin-header-height)] shrink-0 items-center border-b border-border px-5">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800 text-base font-bold text-white">
@@ -151,7 +151,7 @@ export default function AdminSidebar() {
         </ul>
       </nav>
 
-      <div className="shrink-0 border-t border-border px-4 py-4">
+      <div className="shrink-0 border-t border-border bg-white px-4 py-4">
         <Link
           href="/"
           className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
