@@ -293,7 +293,7 @@ export default function PromotionPage() {
         )}
 
         <div className="grid shrink-0 gap-2.5 xl:grid-cols-[1.08fr_1fr]">
-          <section className="flex h-[166px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
+          <section className="flex h-[206px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-[22px] font-bold leading-tight text-slate-950">推广链接</h1>
@@ -333,7 +333,7 @@ export default function PromotionPage() {
             </div>
           </section>
 
-          <section className="flex h-[166px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
+          <section className="flex h-[206px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
             <div className="mb-2.5 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广数据</h2>
