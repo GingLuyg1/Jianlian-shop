@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Clipboard, ClipboardList, Eye, EyeOff, RefreshCcw, Search, X } from "lucide-react";
@@ -18,8 +18,6 @@ import {
   normalizePaymentStatus,
   ORDER_STATUS_STYLES,
   PAYMENT_STATUS_STYLES,
-  ORDER_STATUS_VALUES,
-  PAYMENT_STATUS_VALUES,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
@@ -53,9 +51,7 @@ export default function MyOrdersPage() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState("all");
-  const [paymentStatus, setPaymentStatus] = useState("all");
-  const [search, setSearch] = useState("");
+  const [queryOpen, setQueryOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
@@ -70,9 +66,6 @@ export default function MyOrdersPage() {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(PAGE_SIZE),
-        status,
-        paymentStatus,
-        search,
       });
       const response = await fetch(`/api/orders?${params.toString()}`);
       const result = (await response.json().catch(() => null)) as {
@@ -98,7 +91,7 @@ export default function MyOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, paymentStatus, router, search, status]);
+  }, [page, router]);
 
   useEffect(() => {
     loadOrders();
@@ -128,60 +121,17 @@ export default function MyOrdersPage() {
               </Button>
             </div>
 
-            <div className="rounded-xl border bg-slate-50/60 p-3">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-base font-semibold text-slate-950">订单查询</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    支持按订单编号、订单状态和支付状态筛选。
-                  </p>
-                </div>
-                <div className="text-xs text-muted-foreground">当前结果 {count} 条</div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50/60 p-3">
+              <div className="min-w-0">
+                <div className="text-base font-semibold text-slate-950">订单查询</div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  点击后输入下单邮箱，查询当前账号关联的订单。
+                </p>
               </div>
-              <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_170px_170px]">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => {
-                      setSearch(event.target.value);
-                      setPage(1);
-                    }}
-                    placeholder="搜索订单编号"
-                    className="pl-9"
-                  />
-                </div>
-                <select
-                  value={status}
-                  onChange={(event) => {
-                    setStatus(event.target.value);
-                    setPage(1);
-                  }}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="all">全部订单状态</option>
-                  {ORDER_STATUS_VALUES.map((item) => (
-                    <option key={item} value={item}>
-                      {getOrderStatusLabel(item)}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={paymentStatus}
-                  onChange={(event) => {
-                    setPaymentStatus(event.target.value);
-                    setPage(1);
-                  }}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="all">全部支付状态</option>
-                  {PAYMENT_STATUS_VALUES.map((item) => (
-                    <option key={item} value={item}>
-                      {getPaymentStatusLabel(item)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Button variant="outline" size="sm" onClick={() => setQueryOpen(true)}>
+                <Search className="mr-2 h-4 w-4" />
+                查询订单
+              </Button>
             </div>
           </CardHeader>
 
@@ -314,11 +264,304 @@ export default function MyOrdersPage() {
           </div>
       </Card>
 
+      <OrderEmailQueryDialog
+        open={queryOpen}
+        onClose={() => setQueryOpen(false)}
+        onCopyOrderNo={copyOrderNo}
+        onViewOrder={setSelectedOrder}
+      />
+
       <UserOrderDrawer
         order={selectedOrder}
         onClose={() => setSelectedOrder(null)}
         onCopyOrderNo={copyOrderNo}
       />
+    </div>
+  );
+}
+
+function OrderEmailQueryDialog({
+  open,
+  onClose,
+  onCopyOrderNo,
+  onViewOrder,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCopyOrderNo: (orderNo: string) => void | Promise<void>;
+  onViewOrder: (order: OrderRecord) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [queryEmail, setQueryEmail] = useState("");
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const queryOrders = useCallback(
+    async (targetPage = page, emailToQuery = queryEmail) => {
+      if (!emailToQuery) {
+        setError("请输入下单邮箱");
+        setOrders([]);
+        setCount(0);
+        return;
+      }
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const params = new URLSearchParams({
+          page: String(targetPage),
+          pageSize: String(PAGE_SIZE),
+          email: emailToQuery,
+        });
+        const response = await fetch(`/api/orders?${params.toString()}`);
+        const result = (await response.json().catch(() => null)) as {
+          orders?: OrderRecord[];
+          count?: number;
+          error?: string;
+        } | null;
+
+        if (response.status === 401) {
+          throw new Error("登录状态已失效，请重新登录。");
+        }
+
+        if (!response.ok) {
+          throw new Error(result?.error ?? "订单查询失败");
+        }
+
+        setOrders(result?.orders ?? []);
+        setCount(Number(result?.count ?? 0));
+      } catch (queryError) {
+        setError(getOrderErrorMessage(queryError, "订单查询失败，请稍后重试"));
+        setOrders([]);
+        setCount(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, queryEmail]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose, open]);
+
+  useEffect(() => {
+    if (!open || !queryEmail) return;
+    queryOrders(page);
+  }, [open, page, queryEmail, queryOrders]);
+
+  useEffect(() => {
+    if (open) return;
+    setEmail("");
+    setOrders([]);
+    setCount(0);
+    setPage(1);
+    setQueryEmail("");
+    setError("");
+    setSubmitted(false);
+  }, [open]);
+
+  if (!open) return null;
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitted(true);
+    if (!normalizedEmail) {
+      setError("请输入下单邮箱");
+      setOrders([]);
+      setCount(0);
+      setQueryEmail("");
+      return;
+    }
+    const shouldQueryNow = queryEmail === normalizedEmail && page === 1;
+    setQueryEmail(normalizedEmail);
+    setPage(1);
+    if (shouldQueryNow) {
+      queryOrders(1, normalizedEmail);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/30 px-4 py-6" onClick={onClose}>
+      <div
+        className="mx-auto flex h-full max-h-[760px] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4">
+          <div>
+            <div className="text-lg font-bold text-slate-950">订单查询</div>
+            <p className="mt-1 text-sm text-muted-foreground">输入下单邮箱，查询当前账号下匹配的订单。</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            aria-label="关闭订单查询"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex shrink-0 flex-col gap-3 border-b px-5 py-4 md:flex-row">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              type="email"
+              placeholder="输入下单邮箱"
+              className="pl-9"
+            />
+          </div>
+          <Button type="submit" disabled={loading}>
+            {loading ? "查询中..." : "查询"}
+          </Button>
+        </form>
+
+        <div className="min-h-0 flex-1 overflow-hidden px-5 py-4">
+          {loading ? (
+            <div className="space-y-2.5">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="h-12 rounded-xl bg-slate-100" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex h-full items-center justify-center rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+              <div className="text-center">
+                <div>{error}</div>
+                <Button variant="outline" size="sm" className="mt-4" onClick={() => queryOrders(page)}>
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  重新查询
+                </Button>
+              </div>
+            </div>
+          ) : !submitted ? (
+            <div className="flex h-full items-center justify-center rounded-xl border border-dashed bg-slate-50 text-sm text-muted-foreground">
+              请输入邮箱后查询订单。
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-orange-200 bg-orange-50/50 text-sm text-muted-foreground">
+              当前邮箱下没有可显示的订单。
+            </div>
+          ) : (
+            <div className="h-full overflow-auto rounded-lg border">
+              <table className="w-full min-w-[980px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[190px]" />
+                  <col className="w-[280px]" />
+                  <col className="w-[90px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[140px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[110px]" />
+                </colgroup>
+                <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="whitespace-nowrap px-3 py-3 text-left">订单编号</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">商品名称</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">金额</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">订单状态</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">支付状态</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-left">下单时间</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((order) => {
+                    const orderStatus = normalizeOrderStatus(order.status);
+                    const paymentStatus = normalizePaymentStatus(order.payment_status);
+                    const firstItem = order.order_items?.[0];
+
+                    return (
+                      <tr key={order.id} className="border-b hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs">
+                          <button
+                            type="button"
+                            onClick={() => onCopyOrderNo(order.order_no)}
+                            className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
+                          >
+                            {order.order_no}
+                            <Clipboard className="h-3 w-3" />
+                          </button>
+                        </td>
+                        <td className="truncate px-3 py-2.5 font-medium">
+                          {firstItem?.product_name ?? "订单商品"}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-primary">
+                          {formatMoney(order.total_amount)}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <Badge variant="outline" className={cn("whitespace-nowrap text-xs", ORDER_STATUS_STYLES[orderStatus])}>
+                            {getOrderStatusLabel(order.status)}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <Badge variant="outline" className={cn("whitespace-nowrap text-xs", PAYMENT_STATUS_STYLES[paymentStatus])}>
+                            {getPaymentStatusLabel(order.payment_status)}
+                          </Badge>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
+                          {formatDate(order.created_at)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              onClose();
+                              onViewOrder(order);
+                            }}
+                          >
+                            查看详情
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-3 text-sm text-muted-foreground">
+          <span>共 {count} 条订单</span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || loading || !queryEmail}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+            >
+              上一页
+            </Button>
+            <span>
+              第 {page} / {totalPages} 页
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || loading || !queryEmail}
+              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+            >
+              下一页
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -26,6 +26,7 @@ export async function GET(request: Request) {
     const status = url.searchParams.get("status") ?? "all";
     const paymentStatus = url.searchParams.get("paymentStatus") ?? "all";
     const search = url.searchParams.get("search") ?? "";
+    const customerEmail = url.searchParams.get("email") ?? "";
 
     const result = await listUserOrders(supabase, user.id, {
       page,
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
       status: status as never,
       paymentStatus: paymentStatus as never,
       search,
+      customerEmail,
     });
 
     return NextResponse.json(result);

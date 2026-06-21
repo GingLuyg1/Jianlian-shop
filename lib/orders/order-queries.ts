@@ -153,6 +153,7 @@ export async function listUserOrders(
     status?: OrderStatus | "all";
     paymentStatus?: PaymentStatus | "all";
     search?: string;
+    customerEmail?: string;
   } = {}
 ): Promise<OrderListResult> {
   const page = Math.max(1, options.page ?? 1);
@@ -176,6 +177,11 @@ export async function listUserOrders(
   const search = options.search?.trim();
   if (search) {
     query = query.ilike("order_no", `%${search}%`);
+  }
+
+  const customerEmail = options.customerEmail?.trim().toLowerCase();
+  if (customerEmail) {
+    query = query.ilike("customer_email", customerEmail);
   }
 
   const { data, error, count } = await query
