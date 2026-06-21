@@ -119,21 +119,21 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex h-[78px] flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <Icon className="h-4 w-4 text-orange-500" />
+    <div className="flex h-[50px] flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5">
+      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <Icon className="h-3.5 w-3.5 text-orange-500" />
         <span>{label}</span>
       </div>
-      <div className={cn("mt-1.5 text-xl font-bold text-slate-950", highlight && "text-blue-600")}>{value}</div>
+      <div className={cn("mt-0.5 text-[17px] font-bold leading-none text-slate-950", highlight && "text-blue-600")}>{value}</div>
     </div>
   );
 }
 
 function InfoTile({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex h-16 flex-col justify-center rounded-xl bg-orange-50 px-3.5 py-2.5">
+    <div className="flex h-[50px] flex-col justify-center rounded-xl bg-orange-50 px-3 py-1.5">
       <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 text-xl font-bold text-slate-950">{value}</div>
+      <div className="mt-0.5 text-[17px] font-bold leading-none text-slate-950">{value}</div>
     </div>
   );
 }
@@ -152,35 +152,31 @@ function ReferralPagination({
   const resolvedTotalPages = Math.max(1, totalPages);
 
   return (
-    <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
-      <div>共 {total} 条记录</div>
+    <div className="flex h-9 shrink-0 items-center justify-between gap-3 text-sm text-slate-500">
+      <div className="whitespace-nowrap">共 {total} 条记录，每页 10 条</div>
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => onPageChange(Math.max(1, page - 1))}
           disabled={page <= 1}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-400 transition hover:bg-orange-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-orange-400 transition hover:bg-orange-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="上一页"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <button type="button" className="h-9 min-w-9 rounded-lg bg-orange-500 px-3 font-semibold text-white">
+        <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-orange-500 px-2.5 font-semibold text-white">
           {page}
-        </button>
+        </span>
         <button
           type="button"
           onClick={() => onPageChange(Math.min(resolvedTotalPages, page + 1))}
           disabled={page >= resolvedTotalPages}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-400 transition hover:bg-orange-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-orange-400 transition hover:bg-orange-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="下一页"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
-        <span className="ml-4 text-slate-500">前往</span>
-        <span className="inline-flex h-9 min-w-12 items-center justify-center rounded-full border border-orange-100 bg-white px-4 text-slate-700">
-          {page}
-        </span>
-        <span>页</span>
+        <span className="ml-3 whitespace-nowrap text-slate-500">第 {page} / {resolvedTotalPages} 页</span>
       </div>
     </div>
   );
@@ -279,10 +275,10 @@ export default function PromotionPage() {
   }
 
   return (
-    <PublicLayout contentClassName="mx-auto flex min-h-[calc(100vh-62px)] max-w-none px-4 py-3 md:px-5">
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-3">
+    <PublicLayout contentClassName="mx-auto flex h-[calc(100dvh-72px)] max-w-none overflow-hidden px-4 py-2 md:px-5">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-2.5">
         {error && (
-          <div className="flex min-h-10 items-center rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
+          <div className="flex h-10 shrink-0 items-center rounded-xl border border-red-100 bg-red-50 px-4 text-sm text-red-700">
             <span className="min-w-0 flex-1 truncate">{error}</span>
             <button type="button" onClick={() => void loadReferralData()} className="ml-3 shrink-0 font-semibold underline">
               重新加载
@@ -291,16 +287,16 @@ export default function PromotionPage() {
         )}
 
         {data?.promotionEnabled === false && (
-          <div className="flex min-h-10 items-center rounded-xl border border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-700">
+          <div className="flex h-10 shrink-0 items-center rounded-xl border border-amber-100 bg-amber-50 px-4 text-sm text-amber-700">
             <span className="min-w-0 truncate">推广功能尚未完成数据库初始化，请管理员执行推广系统 migration。</span>
           </div>
         )}
 
-        <div className="grid gap-3 xl:grid-cols-[1.08fr_1fr]">
-          <section className="flex h-auto min-h-[208px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:h-[216px]">
+        <div className="grid shrink-0 gap-2.5 xl:grid-cols-[1.08fr_1fr]">
+          <section className="flex h-[166px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold leading-tight text-slate-950">推广链接</h1>
+                <h1 className="text-[22px] font-bold leading-tight text-slate-950">推广链接</h1>
                 <p className="mt-1 text-sm text-slate-500">复制链接发送给好友，注册后自动绑定推广关系。</p>
               </div>
               <div className="rounded-xl bg-orange-50 p-3 text-orange-500">
@@ -308,7 +304,7 @@ export default function PromotionPage() {
               </div>
             </div>
 
-            <div className="mt-3 flex h-12 items-center gap-3 rounded-xl bg-slate-50 p-2.5">
+            <div className="mt-2.5 flex h-10 items-center gap-3 rounded-xl bg-slate-50 p-2">
               <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "暂无推广链接"}>
                 {loading && !promotionLink ? "正在加载推广链接..." : promotionLink || "暂无推广链接"}
               </div>
@@ -316,20 +312,20 @@ export default function PromotionPage() {
                 type="button"
                 onClick={copyPromotionLink}
                 disabled={!promotionLink}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="复制推广链接"
               >
                 <Copy className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_1.15fr]">
+            <div className="mt-2.5 grid gap-2.5 md:grid-cols-[1fr_1fr_1.15fr]">
               <InfoTile label="充值提佣倍率" value={`${Math.round((data?.commissionRate ?? 0.03) * 100)}%`} />
               <InfoTile label="最低提现额" value={formatMoney(data?.minWithdrawAmount ?? 10)} />
               <button
                 type="button"
                 onClick={() => void loadReferralData()}
-                className="inline-flex h-16 items-center justify-center rounded-xl bg-orange-500 px-5 text-base font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-[50px] items-center justify-center rounded-xl bg-orange-500 px-5 text-base font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={loading}
               >
                 生成短链接
@@ -337,25 +333,23 @@ export default function PromotionPage() {
             </div>
           </section>
 
-          <section className="flex h-auto min-h-[208px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:h-[216px]">
-            <div className="mb-3 flex items-start justify-between gap-4">
+          <section className="flex h-[166px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
+            <div className="mb-2.5 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold leading-tight text-slate-950">推广数据</h2>
+                <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广数据</h2>
                 <p className="mt-1 text-sm text-slate-500">推广访问、注册和佣金收益统计。</p>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-orange-500 px-5 font-semibold text-white opacity-60"
-                  title="提现功能暂未开放"
-                >
-                  提现
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 px-5 font-semibold text-white opacity-60"
+                title="提现功能暂未开放"
+              >
+                提现
+              </button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {stats.map((item) => (
                 <StatCard key={item.label} {...item} />
               ))}
@@ -363,14 +357,14 @@ export default function PromotionPage() {
           </section>
         </div>
 
-        <section className="flex min-h-[560px] flex-1 flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm xl:min-h-0">
-          <div className="mb-3">
-            <h2 className="text-2xl font-bold leading-tight text-slate-950">推广记录</h2>
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-orange-100 bg-white p-3.5 shadow-sm">
+          <div className="mb-2.5 shrink-0">
+            <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广记录</h2>
             <p className="mt-1 text-sm text-slate-500">推广用户后，用户每一次充值提成记录都会在这里展示。</p>
           </div>
 
           {data?.recordError && (
-            <div className="mb-2 flex min-h-10 items-center rounded-xl border border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-700">
+            <div className="mb-2 flex h-10 shrink-0 items-center rounded-xl border border-amber-100 bg-amber-50 px-4 text-sm text-amber-700">
               <span className="min-w-0 truncate">{data.recordError}</span>
             </div>
           )}
@@ -380,24 +374,24 @@ export default function PromotionPage() {
               <table className="w-full min-w-[920px] border-collapse text-sm">
                 <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="h-[42px] border-b border-orange-100 px-4 text-center font-semibold">用户名</th>
-                    <th className="h-[42px] border-b border-orange-100 px-4 text-center font-semibold">支付时间</th>
-                    <th className="h-[42px] border-b border-orange-100 px-4 text-center font-semibold">充值金额</th>
-                    <th className="h-[42px] border-b border-orange-100 px-4 text-center font-semibold">佣金变动</th>
-                    <th className="h-[42px] border-b border-orange-100 px-4 text-center font-semibold">付款状态</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">用户名</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">支付时间</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">充值金额</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">佣金变动</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">付款状态</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data?.records.length ? (
                     data.records.map((record) => (
-                      <tr key={record.id} className="text-slate-700 transition hover:bg-orange-50/40">
-                        <td className="border-b border-orange-50 px-4 py-3 text-center font-medium text-slate-900">{record.referredUser}</td>
-                        <td className="border-b border-orange-50 px-4 py-3 text-center tabular-nums">{formatDateTime(record.paidAt)}</td>
-                        <td className="border-b border-orange-50 px-4 py-3 text-center tabular-nums">{formatMoney(record.orderAmount)}</td>
-                        <td className="border-b border-orange-50 px-4 py-3 text-center font-semibold tabular-nums text-orange-600">
+                      <tr key={record.id} className="h-11 text-slate-700 transition hover:bg-orange-50/40">
+                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-medium text-slate-900">{record.referredUser}</td>
+                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatDateTime(record.paidAt)}</td>
+                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatMoney(record.orderAmount)}</td>
+                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-semibold tabular-nums text-orange-600">
                           {formatMoney(record.commissionAmount)}
                         </td>
-                        <td className="border-b border-orange-50 px-4 py-3 text-center">
+                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center">
                           <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1", statusStyles[record.status])}>
                             {statusLabels[record.status]}
                           </span>
@@ -406,8 +400,8 @@ export default function PromotionPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="h-[380px] px-4 py-10 text-center">
-                        <div className="mx-auto flex max-w-sm flex-col items-center justify-center">
+                      <td colSpan={5} className="px-4 py-10 text-center">
+                        <div className="mx-auto flex min-h-[260px] max-w-sm flex-col items-center justify-center">
                           <div className="rounded-full bg-orange-50 p-3 text-orange-400">
                             <Users className="h-6 w-6" />
                           </div>
@@ -422,7 +416,7 @@ export default function PromotionPage() {
             </div>
           </div>
 
-          <div className="mt-3 shrink-0">
+          <div className="mt-2.5 shrink-0">
             <ReferralPagination page={page} totalPages={totalPages} total={data?.count ?? 0} onPageChange={setPage} />
           </div>
         </section>
