@@ -174,24 +174,26 @@ export default function MyOrdersPage() {
             </div>
           </CardHeader>
 
-          <CardContent className="flex min-h-0 flex-1 overflow-hidden">
+          <CardContent className="flex min-h-0 flex-1 overflow-hidden px-4 pb-0">
             {loading ? (
-              <div className="w-full space-y-3">
+              <div className="w-full space-y-2.5">
                 {Array.from({ length: PAGE_SIZE }).map((_, index) => (
-                  <div key={index} className="h-16 rounded-xl bg-slate-100" />
+                  <div key={index} className="h-12 rounded-xl bg-slate-100" />
                 ))}
               </div>
             ) : error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-                <div>{error}</div>
-                <Button variant="outline" size="sm" className="mt-4" onClick={loadOrders}>
-                  <RefreshCcw className="mr-2 h-4 w-4" />
-                  重新加载
-                </Button>
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+                <div className="text-center">
+                  <div>{error}</div>
+                  <Button variant="outline" size="sm" className="mt-4" onClick={loadOrders}>
+                    <RefreshCcw className="mr-2 h-4 w-4" />
+                    重新加载
+                  </Button>
+                </div>
               </div>
             ) : rows.length === 0 ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="max-w-md rounded-2xl border border-dashed border-orange-200 bg-orange-50/60 p-8 text-center">
+              <div className="flex min-h-0 flex-1 items-center justify-center">
+                <div className="w-full max-w-[360px] rounded-2xl border border-dashed border-orange-200 bg-orange-50/60 px-8 py-9 text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-primary shadow-sm">
                     <ClipboardList className="h-7 w-7" />
                   </div>
@@ -205,9 +207,19 @@ export default function MyOrdersPage() {
                 </div>
               </div>
             ) : (
-              <div className="h-full overflow-x-auto overflow-y-hidden">
-                <table className="w-full min-w-[980px] text-sm">
-                  <thead className="sticky top-0 z-10 bg-white text-xs text-muted-foreground">
+              <div className="h-full w-full overflow-x-auto overflow-y-hidden rounded-lg border">
+                <table className="w-full min-w-[1120px] table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[190px]" />
+                    <col className="w-[280px]" />
+                    <col className="w-[72px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[180px]" />
+                    <col className="w-[110px]" />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-muted-foreground">
                     <tr className="border-b">
                       <th className="whitespace-nowrap px-3 py-3 text-left">订单编号</th>
                       <th className="whitespace-nowrap px-3 py-3 text-left">商品名称</th>
@@ -231,7 +243,7 @@ export default function MyOrdersPage() {
 
                       return (
                         <tr key={order.id} className="border-b hover:bg-slate-50">
-                          <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">
+                          <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs">
                             <button
                               type="button"
                               onClick={() => copyOrderNo(order.order_no)}
@@ -241,27 +253,27 @@ export default function MyOrdersPage() {
                               <Clipboard className="h-3 w-3" />
                             </button>
                           </td>
-                          <td className="max-w-[280px] truncate px-3 py-3 font-medium">
+                          <td className="truncate px-3 py-2.5 font-medium">
                             {firstItem?.product_name ?? "订单商品"}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-3">{quantity || 1}</td>
-                          <td className="whitespace-nowrap px-3 py-3 font-semibold text-primary">
+                          <td className="whitespace-nowrap px-3 py-2.5">{quantity || 1}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-primary">
                             {formatMoney(order.total_amount)}
                           </td>
-                          <td className="px-3 py-3">
+                          <td className="px-3 py-2.5">
                             <Badge variant="outline" className={cn("whitespace-nowrap text-xs", ORDER_STATUS_STYLES[orderStatus])}>
                               {getOrderStatusLabel(order.status)}
                             </Badge>
                           </td>
-                          <td className="px-3 py-3">
+                          <td className="px-3 py-2.5">
                             <Badge variant="outline" className={cn("whitespace-nowrap text-xs", PAYMENT_STATUS_STYLES[nextPaymentStatus])}>
                               {getPaymentStatusLabel(order.payment_status)}
                             </Badge>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
                             {formatDate(order.created_at)}
                           </td>
-                          <td className="px-3 py-3 text-right">
+                          <td className="px-3 py-2.5 text-right">
                             <Button variant="ghost" size="sm" onClick={() => setSelectedOrder(order)}>
                               查看详情
                             </Button>
@@ -275,7 +287,7 @@ export default function MyOrdersPage() {
             )}
           </CardContent>
 
-          <div className="flex shrink-0 items-center justify-between border-t px-6 py-3 text-sm text-muted-foreground">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-6 py-3 text-sm text-muted-foreground">
             <span>共 {count} 条订单</span>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
