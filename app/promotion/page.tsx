@@ -119,7 +119,7 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex h-[50px] flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5">
+    <div className="flex h-14 flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
       <div className="flex items-center gap-1.5 text-xs text-slate-500">
         <Icon className="h-3.5 w-3.5 text-orange-500" />
         <span>{label}</span>
@@ -131,7 +131,7 @@ function StatCard({
 
 function InfoTile({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex h-[50px] flex-col justify-center rounded-xl bg-orange-50 px-3 py-1.5">
+    <div className="flex h-[58px] flex-col justify-center rounded-xl bg-orange-50 px-3 py-2">
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-0.5 text-[17px] font-bold leading-none text-slate-950">{value}</div>
     </div>
@@ -293,7 +293,7 @@ export default function PromotionPage() {
         )}
 
         <div className="grid shrink-0 gap-2.5 xl:grid-cols-[1.08fr_1fr]">
-          <section className="flex h-[206px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
+          <section className="flex h-[206px] flex-col rounded-2xl border border-orange-100 bg-white p-3.5 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-[22px] font-bold leading-tight text-slate-950">推广链接</h1>
@@ -304,7 +304,7 @@ export default function PromotionPage() {
               </div>
             </div>
 
-            <div className="mt-2.5 flex h-10 items-center gap-3 rounded-xl bg-slate-50 p-2">
+            <div className="mt-2.5 flex h-11 items-center gap-3 rounded-xl bg-slate-50 p-2">
               <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "暂无推广链接"}>
                 {loading && !promotionLink ? "正在加载推广链接..." : promotionLink || "暂无推广链接"}
               </div>
@@ -325,7 +325,7 @@ export default function PromotionPage() {
               <button
                 type="button"
                 onClick={() => void loadReferralData()}
-                className="inline-flex h-[50px] items-center justify-center rounded-xl bg-orange-500 px-5 text-base font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-[58px] items-center justify-center rounded-xl bg-orange-500 px-5 text-base font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={loading}
               >
                 生成短链接
@@ -333,8 +333,8 @@ export default function PromotionPage() {
             </div>
           </section>
 
-          <section className="flex h-[206px] flex-col rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
-            <div className="mb-2.5 flex items-start justify-between gap-4">
+          <section className="flex h-[206px] flex-col rounded-2xl border border-orange-100 bg-white p-3.5 shadow-sm">
+            <div className="mb-2 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广数据</h2>
                 <p className="mt-1 text-sm text-slate-500">推广访问、注册和佣金收益统计。</p>
