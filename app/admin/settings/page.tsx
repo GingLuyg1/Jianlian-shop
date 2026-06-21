@@ -130,8 +130,8 @@ export default function AdminSettingsPage() {
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
+      <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)]">
+        <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
           <div className="shrink-0 border-b px-4 py-3 text-sm font-semibold text-slate-950">
             设置分组
           </div>
@@ -154,7 +154,7 @@ export default function AdminSettingsPage() {
           </nav>
         </aside>
 
-        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
+        <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
           <div className="shrink-0 border-b px-5 py-3">
             <div className="text-base font-semibold text-slate-950">
               {groups.find((group) => group.id === activeGroup)?.label}
@@ -162,7 +162,7 @@ export default function AdminSettingsPage() {
           </div>
           <div ref={contentRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             {loading ? (
-              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-slate-500">
+              <div className="flex h-full min-h-[360px] flex-col justify-center rounded-xl border border-dashed bg-slate-50/70 p-8 text-center text-sm text-slate-500">
                 正在读取系统设置...
               </div>
             ) : null}
@@ -575,7 +575,7 @@ function SecuritySettings({
 
 function UnavailableSettings({ title }: { title: string }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed text-center">
+    <div className="flex h-full min-h-[260px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed text-center">
       <div className="text-sm font-semibold text-slate-950">{title}</div>
       <p className="mt-2 text-sm text-slate-500">暂未开放</p>
     </div>

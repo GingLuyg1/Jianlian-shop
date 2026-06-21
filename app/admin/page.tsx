@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
       {error ? (
         <AdminErrorState description={error} onRetry={loadDashboard} />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto xl:overflow-hidden">
+        <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-3 overflow-auto xl:overflow-hidden">
           <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 min-[1500px]:grid-cols-7">
             {stats.map((stat) => (
               <AdminStatsCard

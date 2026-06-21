@@ -187,8 +187,8 @@ export default function AdminCategoriesPage() {
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
+      <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
+        <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
           <div className="shrink-0 border-b px-4 py-3 text-sm font-semibold text-slate-950">
             一级分类
           </div>
@@ -225,7 +225,7 @@ export default function AdminCategoriesPage() {
           </div>
         </aside>
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
+        <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
           <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-slate-950">

@@ -327,8 +327,8 @@ export default function AdminInventoryPage() {
         </Button>
       }
     >
-      <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(360px,400px)]">
-        <Card className="flex min-h-0 flex-col overflow-hidden">
+      <div className="grid h-full min-h-0 w-full flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(360px,400px)]">
+        <Card className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           <CardHeader className="shrink-0 px-4 py-3">
             <div className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_150px_auto] xl:items-center">
               <div className="relative">
@@ -427,8 +427,8 @@ export default function AdminInventoryPage() {
           </CardContent>
         </Card>
 
-        <aside className="min-h-0 overflow-y-auto pr-1">
-          <div className="flex min-h-full flex-col gap-3">
+        <aside className="flex h-full min-h-0 flex-col overflow-hidden pr-1">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
           <Card className="shrink-0">
             <CardHeader className="px-4 py-3">
               <CardTitle className="text-base">新增库存</CardTitle>

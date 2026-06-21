@@ -201,7 +201,7 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
       <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">订单管理</h1>
@@ -221,7 +221,7 @@ export default function AdminOrdersPage() {
         </div>
       ) : null}
 
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Card className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         <CardHeader className="shrink-0 space-y-3 pb-3">
           <CardTitle className="text-base">订单列表</CardTitle>
           <div className="grid gap-3 2xl:grid-cols-[minmax(260px,1fr)_150px_150px_150px_140px_140px_140px_120px]">
@@ -268,7 +268,7 @@ export default function AdminOrdersPage() {
           </div>
         </CardHeader>
 
-        <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CardContent className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 6 }).map((_, index) => (
