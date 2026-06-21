@@ -656,7 +656,7 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
       <div className="mb-2 flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-950">商品与分类管理</h1>
@@ -697,14 +697,14 @@ export default function AdminProductsPage() {
       )}
 
       {activeView === "products" ? (
-          <Card className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <CardHeader className="shrink-0 px-4 py-3">
               <div className="flex min-h-10 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                 <CardTitle className="text-base">商品列表</CardTitle>
                 <span className="text-sm text-slate-500">当前结果 {productCount} 条</span>
               </div>
             </CardHeader>
-            <CardContent className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pb-0 pt-0">
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pb-0 pt-0">
               <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_190px_190px_155px_175px_145px_80px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -847,7 +847,7 @@ export default function AdminProductsPage() {
             </CardContent>
           </Card>
       ) : (
-          <Card className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <CardHeader className="shrink-0 pb-3">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <CardTitle className="text-base">分类树</CardTitle>

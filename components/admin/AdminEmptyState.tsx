@@ -19,7 +19,7 @@ export default function AdminEmptyState({
   className,
 }: AdminEmptyStateProps) {
   return (
-    <div className={cn("flex h-full min-h-[220px] flex-1 flex-col items-center justify-center rounded-xl text-center", className)}>
+    <div className={cn("flex min-h-[220px] flex-1 flex-col items-center justify-center rounded-xl text-center", className)}>
       <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-400">
         {icon ?? <Inbox className="h-5 w-5" />}
       </div>
