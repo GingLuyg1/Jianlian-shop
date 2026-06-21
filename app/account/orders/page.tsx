@@ -128,49 +128,60 @@ export default function MyOrdersPage() {
               </Button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_170px_170px]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
+            <div className="rounded-xl border bg-slate-50/60 p-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-base font-semibold text-slate-950">订单查询</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    支持按订单编号、订单状态和支付状态筛选。
+                  </p>
+                </div>
+                <div className="text-xs text-muted-foreground">当前结果 {count} 条</div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_170px_170px]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="搜索订单编号"
+                    className="pl-9"
+                  />
+                </div>
+                <select
+                  value={status}
                   onChange={(event) => {
-                    setSearch(event.target.value);
+                    setStatus(event.target.value);
                     setPage(1);
                   }}
-                  placeholder="搜索订单编号"
-                  className="pl-9"
-                />
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="all">全部订单状态</option>
+                  {ORDER_STATUS_VALUES.map((item) => (
+                    <option key={item} value={item}>
+                      {getOrderStatusLabel(item)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={paymentStatus}
+                  onChange={(event) => {
+                    setPaymentStatus(event.target.value);
+                    setPage(1);
+                  }}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="all">全部支付状态</option>
+                  {PAYMENT_STATUS_VALUES.map((item) => (
+                    <option key={item} value={item}>
+                      {getPaymentStatusLabel(item)}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <select
-                value={status}
-                onChange={(event) => {
-                  setStatus(event.target.value);
-                  setPage(1);
-                }}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="all">全部订单状态</option>
-                {ORDER_STATUS_VALUES.map((item) => (
-                  <option key={item} value={item}>
-                    {getOrderStatusLabel(item)}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={paymentStatus}
-                onChange={(event) => {
-                  setPaymentStatus(event.target.value);
-                  setPage(1);
-                }}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="all">全部支付状态</option>
-                {PAYMENT_STATUS_VALUES.map((item) => (
-                  <option key={item} value={item}>
-                    {getPaymentStatusLabel(item)}
-                  </option>
-                ))}
-              </select>
             </div>
           </CardHeader>
 
