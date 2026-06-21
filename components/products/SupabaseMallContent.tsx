@@ -299,7 +299,7 @@ export default function SupabaseMallContent({
           onSearchChange={setSearchQuery}
           onSelectProduct={(productId) => {
             setSelectedProductId(productId);
-            router.push(`/products/${productId}`);
+            router.push(`/checkout?product=${encodeURIComponent(productId)}`);
           }}
         />
       </CategoryContentBoundary>

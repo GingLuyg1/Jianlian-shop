@@ -121,13 +121,11 @@ export default function AccountRechargeContent() {
 
           <Card className="min-h-0 overflow-hidden">
             <CardContent className="flex h-full min-h-0 flex-col p-4">
-              <div className="flex shrink-0 items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-bold">账号充值</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    选择充值方式并填写金额，支付后余额自动更新。
-                  </p>
-                </div>
+              <div className="shrink-0">
+                <h2 className="text-xl font-bold">账号充值</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  选择充值方式并填写金额，支付后余额自动更新。
+                </p>
               </div>
 
               <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
@@ -190,7 +188,7 @@ export default function AccountRechargeContent() {
                 ))}
               </div>
 
-              <div className="mt-3">
+              <div className="mt-auto border-t border-border/70 pt-5">
                 <label className="mb-1.5 block text-sm font-medium">
                   <span className="text-red-500">*</span>金额
                 </label>
@@ -216,22 +214,27 @@ export default function AccountRechargeContent() {
                     。
                   </p>
                 ) : null}
-              </div>
 
-              <div className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm text-muted-foreground">
-                  <div>充值金额：{formatMoney(amount, selectedMethod.currency)}</div>
-                  <div>
-                    手续费 {formatFeeRate(selectedMethod.feeRate)}：
-                    {formatMoney(fee, selectedMethod.currency)}
+                <div className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    <div>
+                      充值金额：{formatMoney(amount, selectedMethod.currency)}
+                    </div>
+                    <div>
+                      手续费 {formatFeeRate(selectedMethod.feeRate)}：
+                      {formatMoney(fee, selectedMethod.currency)}
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-primary">
+                      总金额：{formatMoney(total, selectedMethod.currency)}
+                    </div>
                   </div>
-                  <div className="mt-1 text-lg font-bold text-primary">
-                    总金额：{formatMoney(total, selectedMethod.currency)}
-                  </div>
+                  <Button
+                    className="h-11 min-w-40 rounded-lg"
+                    disabled={!canPay}
+                  >
+                    支付
+                  </Button>
                 </div>
-                <Button className="h-11 min-w-40 rounded-lg" disabled={!canPay}>
-                  支付
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -255,90 +258,10 @@ export default function AccountRechargeContent() {
                 资金变动记录
               </Button>
             </div>
-
-            <div className="mt-5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
-              {activeRecordTab === "recharge" ? (
-                <RechargeRecordPanel />
-              ) : (
-                <FundsRecordPanel />
-              )}
-
-              <div className="mt-auto rounded-xl bg-primary/5 p-4 text-xs leading-5 text-muted-foreground">
-                后续接入登录后，这里的账号、充值订单号、到账状态和余额变动会跟随当前登录账号自动关联。
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
     </PublicLayout>
-  );
-}
-
-function RechargeRecordPanel() {
-  return (
-    <RecordEmptyCard
-      title="暂无充值记录"
-      description="接入支付后，充值订单号、支付方式、到账状态和实付金额会显示在这里。"
-      statusLabel="待接入"
-      rows={[
-        ["充值时间", "等待支付数据"],
-        ["充值金额", "等待支付数据"],
-        ["手续费", "等待支付数据"],
-        ["实付金额", "等待支付数据"],
-      ]}
-    />
-  );
-}
-
-function FundsRecordPanel() {
-  return (
-    <RecordEmptyCard
-      title="暂无资金变动记录"
-      description="接入支付后，余额充值、消费扣款、退款或人工调整会统一显示在这里。"
-      statusLabel="待接入"
-      rows={[
-        ["变动类型", "等待资金流水"],
-        ["变动金额", "等待资金流水"],
-        ["变动后余额", "等待资金流水"],
-        ["记录时间", "等待资金流水"],
-      ]}
-    />
-  );
-}
-
-function RecordEmptyCard({
-  title,
-  description,
-  statusLabel,
-  rows,
-}: {
-  title: string;
-  description: string;
-  statusLabel: string;
-  rows: Array<[string, string]>;
-}) {
-  return (
-    <div className="rounded-xl bg-slate-50 p-4 text-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="font-semibold text-primary">{title}</div>
-          <div className="mt-1 text-xs leading-5 text-muted-foreground">
-            {description}
-          </div>
-        </div>
-        <span className="shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-primary">
-          {statusLabel}
-        </span>
-      </div>
-      <div className="mt-4 grid gap-2 text-muted-foreground">
-        {rows.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between gap-3">
-            <span>{label}：</span>
-            <span className="text-right text-slate-400">{value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
