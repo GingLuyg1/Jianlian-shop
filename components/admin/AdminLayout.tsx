@@ -11,9 +11,9 @@ interface AdminLayoutProps {
 
 function AdminShell({ children }: AdminLayoutProps) {
   return (
-    <div className="flex h-dvh min-h-0 w-full overflow-hidden bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:235px]">
+    <div className="fixed inset-0 flex min-h-0 w-full overflow-hidden bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:235px]">
       <AdminSidebar />
-      <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AdminTopBar />
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
       </div>
