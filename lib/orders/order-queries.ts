@@ -19,7 +19,7 @@ const orderSelect = `
   paid_at,processed_at,completed_at,cancelled_at,created_at,updated_at,
   order_items(*),
   order_status_logs(*),
-  order_deliveries(*)
+  order_deliveries(id,order_id,order_item_id,user_id,product_id,inventory_id,delivery_type,delivery_status,delivered_at,viewed_at,created_at,updated_at,failure_reason,delivery_note)
 `;
 
 export function getOrderErrorMessage(
@@ -84,10 +84,16 @@ function normalizeDelivery(row: Record<string, unknown>): OrderDeliveryRecord {
     id: String(row.id),
     order_id: String(row.order_id),
     order_item_id: row.order_item_id ? String(row.order_item_id) : null,
+    user_id: row.user_id ? String(row.user_id) : null,
+    product_id: row.product_id ? String(row.product_id) : null,
+    inventory_id: row.inventory_id ? String(row.inventory_id) : null,
     delivery_type: row.delivery_type ? String(row.delivery_type) : null,
-    delivery_content: row.delivery_content ? String(row.delivery_content) : null,
+    delivery_content: null,
     delivery_status: String(row.delivery_status ?? "pending"),
     delivered_at: row.delivered_at ? String(row.delivered_at) : null,
+    viewed_at: row.viewed_at ? String(row.viewed_at) : null,
+    failure_reason: row.failure_reason ? String(row.failure_reason) : null,
+    delivery_note: row.delivery_note ? String(row.delivery_note) : null,
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),
   };
@@ -166,23 +172,16 @@ export async function listUserOrders(
     .select(orderSelect, { count: "exact" })
     .eq("user_id", userId);
 
-  if (options.status && options.status !== "all") {
-    query = query.eq("status", options.status);
-  }
-
+  if (options.status && options.status !== "all") query = query.eq("status", options.status);
   if (options.paymentStatus && options.paymentStatus !== "all") {
     query = query.eq("payment_status", options.paymentStatus);
   }
 
   const search = options.search?.trim();
-  if (search) {
-    query = query.ilike("order_no", `%${search}%`);
-  }
+  if (search) query = query.ilike("order_no", `%${search}%`);
 
   const customerEmail = options.customerEmail?.trim().toLowerCase();
-  if (customerEmail) {
-    query = query.ilike("customer_email", customerEmail);
-  }
+  if (customerEmail) query = query.ilike("customer_email", customerEmail);
 
   const { data, error, count } = await query
     .order("created_at", { ascending: false })
@@ -234,30 +233,18 @@ export async function listAdminOrders(
 
   let query = supabase.from("orders").select(orderSelect, { count: "exact" });
 
-  if (options.status && options.status !== "all") {
-    query = query.eq("status", options.status);
-  }
-
+  if (options.status && options.status !== "all") query = query.eq("status", options.status);
   if (options.paymentStatus && options.paymentStatus !== "all") {
     query = query.eq("payment_status", options.paymentStatus);
   }
-
   if (options.deliveryType && options.deliveryType !== "all") {
     query = query.eq("delivery_type", options.deliveryType);
   }
-
-  if (options.startDate) {
-    query = query.gte("created_at", options.startDate);
-  }
-
-  if (options.endDate) {
-    query = query.lte("created_at", options.endDate);
-  }
+  if (options.startDate) query = query.gte("created_at", options.startDate);
+  if (options.endDate) query = query.lte("created_at", options.endDate);
 
   const search = options.search?.trim();
-  if (search) {
-    query = query.or(`order_no.ilike.%${search}%,customer_email.ilike.%${search}%`);
-  }
+  if (search) query = query.or(`order_no.ilike.%${search}%,customer_email.ilike.%${search}%`);
 
   const sortBy = options.sortBy ?? "created_at";
   const sortDirection = options.sortDirection ?? "desc";

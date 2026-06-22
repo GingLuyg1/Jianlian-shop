@@ -31,10 +31,16 @@ export type OrderDeliveryRecord = {
   id: string;
   order_id: string;
   order_item_id: string | null;
+  user_id?: string | null;
+  product_id?: string | null;
+  inventory_id?: string | null;
   delivery_type: string | null;
   delivery_content: string | null;
   delivery_status: string;
   delivered_at: string | null;
+  viewed_at?: string | null;
+  failure_reason?: string | null;
+  delivery_note?: string | null;
   created_at: string;
   updated_at: string;
 };

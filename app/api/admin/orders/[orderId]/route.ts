@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { PROMOTION_COMMISSION_RATE } from "@/lib/promotion";
 import { getPromotionSettings } from "@/lib/settings/server";
@@ -51,10 +52,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     });
 
     if (error) {
-      return NextResponse.json(
-        { error: getOrderErrorMessage(error, "订单状态更新失败") },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: getOrderErrorMessage(error, "订单状态更新失败") }, { status: 400 });
     }
 
     const promotionSettings = await getPromotionSettings(admin.supabase).catch(() => ({
@@ -64,13 +62,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     }));
 
     if (promotionSettings.enabled) {
-      const { error: commissionError } = await admin.supabase.rpc(
-        "sync_referral_commission_for_order",
-        {
-          p_order_id: context.params.orderId,
-          p_commission_rate: promotionSettings.commissionRate,
-        }
-      );
+      const { error: commissionError } = await admin.supabase.rpc("sync_referral_commission_for_order", {
+        p_order_id: context.params.orderId,
+        p_commission_rate: promotionSettings.commissionRate,
+      });
 
       if (commissionError) {
         console.warn("[Admin Orders] referral commission sync skipped", commissionError);
@@ -80,10 +75,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ order: data });
   } catch (error) {
     console.error("[Admin Orders] update failed", error);
-    return NextResponse.json(
-      { error: getOrderErrorMessage(error, "订单状态更新失败") },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: getOrderErrorMessage(error, "订单状态更新失败") }, { status: 500 });
   }
 }
 
@@ -107,18 +99,12 @@ export async function POST(request: Request, context: RouteContext) {
       | null;
 
     if (body?.action === "retry_auto_delivery") {
-      const { data, error } = await admin.supabase.rpc("admin_retry_auto_delivery", {
-        p_order_id: context.params.orderId,
-      });
-
-      if (error) {
-        return NextResponse.json(
-          { error: getOrderErrorMessage(error, "自动发货重试失败") },
-          { status: 400 }
-        );
+      try {
+        const result = await deliverDigitalOrder(admin.supabase, context.params.orderId, "admin_retry");
+        return NextResponse.json({ deliveredCount: result.delivered_count ?? 0, result });
+      } catch (deliveryError) {
+        return NextResponse.json({ error: getDeliveryErrorMessage(deliveryError, "自动发货重试失败") }, { status: 400 });
       }
-
-      return NextResponse.json({ deliveredCount: data ?? 0 });
     }
 
     if (body?.action === "manual_inventory") {
@@ -134,10 +120,7 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       if (error) {
-        return NextResponse.json(
-          { error: getOrderErrorMessage(error, "手动选择库存发货失败") },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: getOrderErrorMessage(error, "手动选择库存发货失败") }, { status: 400 });
       }
 
       return NextResponse.json({ delivery: data });
@@ -150,10 +133,7 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       if (error) {
-        return NextResponse.json(
-          { error: getOrderErrorMessage(error, "交付失败标记失败") },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: getOrderErrorMessage(error, "交付失败标记失败") }, { status: 400 });
       }
 
       return NextResponse.json({ ok: true });
@@ -174,18 +154,12 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     if (error) {
-      return NextResponse.json(
-        { error: getOrderErrorMessage(error, "交付信息保存失败") },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: getOrderErrorMessage(error, "交付信息保存失败") }, { status: 400 });
     }
 
     return NextResponse.json({ delivery: data });
   } catch (error) {
     console.error("[Admin Orders] delivery update failed", error);
-    return NextResponse.json(
-      { error: getOrderErrorMessage(error, "交付信息保存失败") },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: getOrderErrorMessage(error, "交付信息保存失败") }, { status: 500 });
   }
 }

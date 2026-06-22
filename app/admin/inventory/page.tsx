@@ -22,7 +22,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-type InventoryStatus = "all" | "available" | "reserved" | "delivered" | "disabled" | "expired";
+type InventoryStatus = "all" | "available" | "reserved" | "delivered" | "disabled" | "invalid";
 
 type InventorySummary = {
   product_id: string;
@@ -70,7 +70,7 @@ const statusOptions: Array<{ value: InventoryStatus; label: string }> = [
   { value: "reserved", label: "已预留" },
   { value: "delivered", label: "已交付" },
   { value: "disabled", label: "已禁用" },
-  { value: "expired", label: "已过期" },
+  { value: "invalid", label: "无效" },
 ];
 
 const statusLabel: Record<string, string> = {
@@ -78,7 +78,7 @@ const statusLabel: Record<string, string> = {
   reserved: "已预留",
   delivered: "已交付",
   disabled: "已禁用",
-  expired: "已过期",
+  invalid: "无效",
 };
 
 const statusClass: Record<string, string> = {
@@ -86,14 +86,19 @@ const statusClass: Record<string, string> = {
   reserved: "bg-amber-50 text-amber-700 ring-amber-200",
   delivered: "bg-blue-50 text-blue-700 ring-blue-200",
   disabled: "bg-slate-100 text-slate-600 ring-slate-200",
-  expired: "bg-red-50 text-red-700 ring-red-200",
+  invalid: "bg-red-50 text-red-700 ring-red-200",
 };
-
 function formatDate(value?: string | null) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message || fallback;
+  if (typeof error === "string") return error || fallback;
+  return fallback;
 }
 
 function parseImportText(text: string) {
@@ -117,12 +122,7 @@ function parseImportText(text: string) {
     valid.push(trimmed);
   }
 
-  return {
-    total: lines.length,
-    valid,
-    empty,
-    duplicate,
-  };
+  return { total: lines.length, valid, empty, duplicate };
 }
 
 export default function AdminInventoryPage() {
@@ -182,7 +182,7 @@ export default function AdminInventoryPage() {
     } catch (loadError) {
       setRows([]);
       setCount(0);
-      setError((loadError as Error).message || "库存读取失败");
+      setError(getErrorMessage(loadError, "库存读取失败"));
     } finally {
       setLoading(false);
     }
@@ -211,7 +211,7 @@ export default function AdminInventoryPage() {
     } catch (loadError) {
       setItems([]);
       setItemCount(0);
-      setMessage((loadError as Error).message || "库存详情读取失败");
+      setMessage(getErrorMessage(loadError, "库存详情读取失败"));
     } finally {
       setDetailLoading(false);
     }
@@ -243,9 +243,7 @@ export default function AdminInventoryPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `确认导入 ${contents.length} 条库存？重复内容将由服务端继续跳过。`
-    );
+    const confirmed = window.confirm(`确认导入 ${contents.length} 条库存？重复内容将由服务端继续跳过。`);
     if (!confirmed) return;
 
     setSaving(true);
@@ -280,7 +278,7 @@ export default function AdminInventoryPage() {
       await loadRows();
       if (selected) await loadItems(selected);
     } catch (saveError) {
-      setMessage((saveError as Error).message || "库存导入失败");
+      setMessage(getErrorMessage(saveError, "库存导入失败"));
     } finally {
       setSaving(false);
     }
@@ -303,7 +301,7 @@ export default function AdminInventoryPage() {
       await loadRows();
       if (selected) await loadItems(selected);
     } catch (disableError) {
-      setMessage((disableError as Error).message || "库存禁用失败");
+      setMessage(getErrorMessage(disableError, "库存禁用失败"));
     } finally {
       setSaving(false);
     }
@@ -429,93 +427,83 @@ export default function AdminInventoryPage() {
 
         <aside className="flex min-h-0 flex-col overflow-hidden pr-1">
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-          <Card className="shrink-0">
-            <CardHeader className="px-4 py-3">
-              <CardTitle className="text-base">新增库存</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 px-4 pb-4 pt-0">
-              <div className="space-y-1.5">
-                <Label>商品</Label>
-                <select
-                  value={formProductId}
-                  onChange={(event) => setFormProductId(event.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">选择自动发货商品</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
+            <Card className="shrink-0">
+              <CardHeader className="px-4 py-3">
+                <CardTitle className="text-base">新增库存</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 px-4 pb-4 pt-0">
                 <div className="space-y-1.5">
-                  <Label>批次</Label>
-                  <Input value={batchNo} onChange={(event) => setBatchNo(event.target.value)} placeholder="可选" />
+                  <Label>商品</Label>
+                  <select
+                    value={formProductId}
+                    onChange={(event) => setFormProductId(event.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">选择自动发货商品</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label>批次</Label>
+                    <Input value={batchNo} onChange={(event) => setBatchNo(event.target.value)} placeholder="可选" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>备注</Label>
+                    <Input value={remark} onChange={(event) => setRemark(event.target.value)} placeholder="可选" />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>备注</Label>
-                  <Input value={remark} onChange={(event) => setRemark(event.target.value)} placeholder="可选" />
+                  <Label>单条库存</Label>
+                  <Textarea
+                    value={singleContent}
+                    onChange={(event) => setSingleContent(event.target.value)}
+                    rows={3}
+                    placeholder="卡密、账号---密码或完整交付内容"
+                  />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>单条库存</Label>
-                <Textarea
-                  value={singleContent}
-                  onChange={(event) => setSingleContent(event.target.value)}
-                  rows={3}
-                  placeholder="卡密、账号----密码或完整交付内容"
-                />
-              </div>
-              <Button
-                className="w-full"
-                disabled={saving || !singleContent.trim()}
-                onClick={() => importInventory([singleContent])}
-              >
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                单条新增
-              </Button>
-            </CardContent>
-          </Card>
+                <Button className="w-full" disabled={saving || !singleContent.trim()} onClick={() => importInventory([singleContent])}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  单条新增
+                </Button>
+              </CardContent>
+            </Card>
 
-          <Card className="flex min-h-[360px] flex-1 flex-col overflow-hidden">
-            <CardHeader className="shrink-0 px-4 py-3">
-              <CardTitle className="text-base">批量导入</CardTitle>
-            </CardHeader>
-            <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 pt-0">
-              <Textarea
-                value={bulkContent}
-                onChange={(event) => setBulkContent(event.target.value)}
-                className="min-h-0 flex-1 resize-none"
-                placeholder={"每行一条卡密\n账号----密码\n卡号----密码\n自定义完整交付内容"}
-              />
-              <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                <PreviewStat label="总行数" value={importPreview.total} />
-                <PreviewStat label="有效" value={importPreview.valid.length} />
-                <PreviewStat label="重复" value={importPreview.duplicate} />
-                <PreviewStat label="空行" value={importPreview.empty} />
-              </div>
-              <Button
-                disabled={saving || importPreview.valid.length === 0}
-                onClick={() => importInventory(importPreview.valid)}
-              >
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                确认导入
-              </Button>
-              {message ? <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">{message}</div> : null}
-            </CardContent>
-          </Card>
+            <Card className="flex min-h-[360px] flex-1 flex-col overflow-hidden">
+              <CardHeader className="shrink-0 px-4 py-3">
+                <CardTitle className="text-base">批量导入</CardTitle>
+              </CardHeader>
+              <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 pt-0">
+                <Textarea
+                  value={bulkContent}
+                  onChange={(event) => setBulkContent(event.target.value)}
+                  className="min-h-0 flex-1 resize-none"
+                  placeholder={"每行一条卡密\n账号----密码\n卡号----密码\n自定义完整交付内容"}
+                />
+                <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                  <PreviewStat label="总行数" value={importPreview.total} />
+                  <PreviewStat label="有效" value={importPreview.valid.length} />
+                  <PreviewStat label="重复" value={importPreview.duplicate} />
+                  <PreviewStat label="空行" value={importPreview.empty} />
+                </div>
+                <Button disabled={saving || importPreview.valid.length === 0} onClick={() => importInventory(importPreview.valid)}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  确认导入
+                </Button>
+                {message ? <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">{message}</div> : null}
+              </CardContent>
+            </Card>
           </div>
         </aside>
       </div>
 
       {selected ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setSelected(null)}>
-          <div
-            className="flex h-full w-full max-w-[760px] flex-col bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
+          <div className="flex h-full w-full max-w-[760px] flex-col bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4">
               <div>
                 <div className="font-semibold text-slate-950">{selected.product_name}</div>
@@ -566,12 +554,7 @@ export default function AdminInventoryPage() {
                         </span>
                       </div>
                       <div className="mt-3 flex justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={saving || item.status === "delivered"}
-                          onClick={() => disableItem(item)}
-                        >
+                        <Button variant="outline" size="sm" disabled={saving || item.status === "delivered"} onClick={() => disableItem(item)}>
                           禁用
                         </Button>
                       </div>
@@ -606,3 +589,4 @@ function PreviewStat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
