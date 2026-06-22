@@ -77,7 +77,7 @@ export const PAYMENT_CHANNELS = [
     configured: false,
     provider: "crypto_address",
     sort_order: 40,
-    iconSrc: "/assets/binance-pay-icon.jpg",
+    iconSrc: "/assets/usdt-trc20-icon.jpg",
     description: "TRON 网络收款地址预留，未配置前不会返回地址。",
   },
   {
@@ -97,7 +97,7 @@ export const PAYMENT_CHANNELS = [
     configured: false,
     provider: "crypto_address",
     sort_order: 50,
-    iconSrc: "/assets/binance-pay-icon.jpg",
+    iconSrc: "/assets/usdt-bep20-icon.jpg",
     description: "BSC 网络收款地址预留，未配置前不会返回地址。",
   },
 ].sort((a, b) => a.sort_order - b.sort_order) as PaymentChannel[];
