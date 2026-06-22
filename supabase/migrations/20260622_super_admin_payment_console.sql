@@ -73,6 +73,32 @@ create table if not exists public.account_recharges (
   updated_at timestamptz not null default now()
 );
 
+alter table if exists public.account_recharges
+  alter column amount type numeric(18, 6) using amount::numeric(18, 6),
+  alter column fee_amount type numeric(18, 6) using fee_amount::numeric(18, 6),
+  alter column payable_amount type numeric(18, 6) using payable_amount::numeric(18, 6),
+  alter column received_amount type numeric(18, 6) using received_amount::numeric(18, 6),
+  add column if not exists channel_code text,
+  add column if not exists channel_name text,
+  add column if not exists provider text,
+  add column if not exists currency text not null default 'CNY',
+  add column if not exists requested_amount numeric(18, 6) not null default 0,
+  add column if not exists credited_amount numeric(18, 6) not null default 0,
+  add column if not exists payment_url text,
+  add column if not exists qr_code_url text,
+  add column if not exists payment_address text,
+  add column if not exists raw_response jsonb;
+
+update public.account_recharges
+set channel_code = coalesce(channel_code, channel),
+    channel_name = coalesce(channel_name, channel),
+    requested_amount = case when requested_amount = 0 then amount else requested_amount end,
+    credited_amount = case when credited_amount = 0 then received_amount else credited_amount end
+where channel_code is null
+   or channel_name is null
+   or requested_amount = 0
+   or (credited_amount = 0 and received_amount <> 0);
+
 create index if not exists account_recharges_user_id_idx on public.account_recharges(user_id);
 create index if not exists account_recharges_user_email_idx on public.account_recharges(user_email);
 create index if not exists account_recharges_channel_idx on public.account_recharges(channel);
@@ -127,16 +153,40 @@ create table if not exists public.payment_channels (
   updated_at timestamptz not null default now()
 );
 
+alter table if exists public.payment_channels
+  add column if not exists code text,
+  add column if not exists minimum_amount numeric(18, 6),
+  add column if not exists provider text;
+
+update public.payment_channels
+set code = coalesce(code, channel),
+    minimum_amount = coalesce(minimum_amount, min_amount),
+    provider = coalesce(
+      provider,
+      case
+        when channel in ('alipay', 'wechat') then 'generic_api'
+        when channel in ('binance', 'binance_pay') then 'binance'
+        when channel in ('usdt_trc20', 'usdt_bep20') then 'crypto_address'
+        else provider_name
+      end
+    )
+where code is null or minimum_amount is null or provider is null;
+
+create unique index if not exists payment_channels_code_unique on public.payment_channels(code);
+
 create index if not exists payment_channels_enabled_idx on public.payment_channels(enabled);
 create index if not exists payment_channels_sort_order_idx on public.payment_channels(sort_order);
 
-insert into public.payment_channels (channel, enabled, display_name, currency, network, sort_order)
+insert into public.payment_channels (
+  channel, code, enabled, display_name, currency, network,
+  min_amount, minimum_amount, fee_rate, provider, sort_order
+)
 values
-  ('alipay', false, '支付宝', 'CNY', null, 10),
-  ('wechat', false, '微信支付', 'CNY', null, 20),
-  ('binance', false, '币安转账', 'USDT', 'Binance', 30),
-  ('usdt_trc20', false, 'USDT-TRC20', 'USDT', 'TRC20', 40),
-  ('usdt_bep20', false, 'USDT-BEP20', 'USDT', 'BEP20', 50)
+  ('alipay', 'alipay', false, '支付宝', 'CNY', null, 10, 10, 0, 'generic_api', 10),
+  ('wechat', 'wechat', false, '微信支付', 'CNY', null, 10, 10, 0, 'generic_api', 20),
+  ('binance_pay', 'binance_pay', false, '币安转账', 'USDT', null, 1, 1, 0, 'binance', 30),
+  ('usdt_trc20', 'usdt_trc20', false, 'USDT-TRC20', 'USDT', 'TRON', 1, 1, 0, 'crypto_address', 40),
+  ('usdt_bep20', 'usdt_bep20', false, 'USDT-BEP20', 'USDT', 'BSC', 1, 1, 0, 'crypto_address', 50)
 on conflict (channel) do nothing;
 
 create or replace function public.set_payment_admin_updated_at()
@@ -169,6 +219,12 @@ on public.account_recharges for select
 to authenticated
 using (user_id = auth.uid());
 
+drop policy if exists "Users can create own recharge records" on public.account_recharges;
+create policy "Users can create own recharge records"
+on public.account_recharges for insert
+to authenticated
+with check (user_id = auth.uid() and status = 'pending');
+
 drop policy if exists "Admins can read all recharge records" on public.account_recharges;
 create policy "Admins can read all recharge records"
 on public.account_recharges for select
@@ -200,6 +256,12 @@ create policy "Admins can read payment channels"
 on public.payment_channels for select
 to authenticated
 using (public.is_admin(auth.uid()));
+
+drop policy if exists "Public can read enabled payment channels" on public.payment_channels;
+create policy "Public can read enabled payment channels"
+on public.payment_channels for select
+to anon, authenticated
+using (enabled = true);
 
 drop policy if exists "Admins can manage payment channels" on public.payment_channels;
 create policy "Admins can manage payment channels"

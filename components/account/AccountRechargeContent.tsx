@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,41 +9,96 @@ import {
   calculateRechargeAmounts,
   formatFeeRate,
   formatPaymentAmount,
-  getPublicPaymentChannels,
 } from "@/lib/payments/channels";
-import type { PaymentChannelCode, PaymentCurrency } from "@/lib/payments/channel-types";
+import type { PaymentChannel, PaymentChannelCode, PaymentCurrency } from "@/lib/payments/channel-types";
+import {
+  rechargeStatusLabel,
+  type RechargeRecord,
+} from "@/lib/payments/recharge-utils";
 import { cn } from "@/lib/utils";
 
 type RecordTab = "recharge" | "funds";
 
-const paymentChannels = getPublicPaymentChannels();
-
 export default function AccountRechargeContent() {
-  const [selectedChannelCode, setSelectedChannelCode] =
-    useState<PaymentChannelCode>("alipay");
+  const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
+  const [selectedChannelCode, setSelectedChannelCode] = useState<PaymentChannelCode | null>(null);
+  const [channelsLoading, setChannelsLoading] = useState(true);
+  const [channelsError, setChannelsError] = useState<string | null>(null);
   const [amountText, setAmountText] = useState("");
   const [activeRecordTab, setActiveRecordTab] = useState<RecordTab>("recharge");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [records, setRecords] = useState<RechargeRecord[]>([]);
+  const [recordsLoading, setRecordsLoading] = useState(true);
+  const [recordsError, setRecordsError] = useState<string | null>(null);
+  const [recordPage, setRecordPage] = useState(1);
+  const [recordCount, setRecordCount] = useState(0);
 
   const selectedChannel =
-    paymentChannels.find((channel) => channel.code === selectedChannelCode) ??
-    paymentChannels[0];
+    paymentChannels.find((channel) => channel.code === selectedChannelCode) ?? paymentChannels[0] ?? null;
   const amount = Number(amountText) || 0;
   const summary = useMemo(
-    () => calculateRechargeAmounts(selectedChannel, amount),
+    () => (selectedChannel ? calculateRechargeAmounts(selectedChannel, amount) : null),
     [amount, selectedChannel]
   );
-  const amountSymbol = selectedChannel.currency === "USDT" ? "USDT" : "¥";
-  const reachesMin = summary.amount >= selectedChannel.minimumAmount;
-  const hasValidAmount = summary.amount > 0 && reachesMin;
-  const canSubmit = selectedChannel.enabled && hasValidAmount && !isSubmitting;
+  const amountSymbol = selectedChannel?.currency === "USDT" ? "USDT" : "¥";
+  const reachesMin = Boolean(selectedChannel && summary && summary.amount >= selectedChannel.minimumAmount);
+  const hasValidAmount = Boolean(summary && summary.amount > 0 && reachesMin);
+  const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting);
+
+  const loadRecords = useCallback(async (page: number) => {
+    setRecordsLoading(true);
+    setRecordsError(null);
+    try {
+      const response = await fetch(`/api/recharges?page=${page}&pageSize=10`, { cache: "no-store" });
+      const result = (await response.json().catch(() => null)) as
+        | { data?: RechargeRecord[]; count?: number; error?: string }
+        | null;
+      if (!response.ok) throw new Error(result?.error ?? "充值记录加载失败，请稍后重试");
+      setRecords(result?.data ?? []);
+      setRecordCount(result?.count ?? 0);
+    } catch (error) {
+      setRecordsError(getClientErrorMessage(error, "充值记录加载失败，请稍后重试"));
+    } finally {
+      setRecordsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      setChannelsLoading(true);
+      setChannelsError(null);
+      try {
+        const response = await fetch("/api/recharges/channels", { cache: "no-store" });
+        const result = (await response.json().catch(() => null)) as
+          | { channels?: PaymentChannel[]; error?: string }
+          | null;
+        if (!response.ok) throw new Error(result?.error ?? "支付渠道加载失败，请稍后重试");
+        if (!active) return;
+        const channels = result?.channels ?? [];
+        setPaymentChannels(channels);
+        setSelectedChannelCode(channels[0]?.code ?? null);
+      } catch (error) {
+        if (active) setChannelsError(getClientErrorMessage(error, "支付渠道加载失败，请稍后重试"));
+      } finally {
+        if (active) setChannelsLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    void loadRecords(recordPage);
+  }, [loadRecords, recordPage]);
 
   const updateAmount = (value: string) => {
     setSubmitError(null);
     setSubmitMessage(null);
-    setAmountText(normalizeAmountInput(value, selectedChannel.currency));
+    if (selectedChannel) setAmountText(normalizeAmountInput(value, selectedChannel.currency));
   };
 
   const selectChannel = (channelCode: PaymentChannelCode) => {
@@ -56,13 +111,13 @@ export default function AccountRechargeContent() {
   };
 
   const createRecharge = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !selectedChannel || !summary) return;
     setIsSubmitting(true);
     setSubmitError(null);
     setSubmitMessage(null);
 
     try {
-      const response = await fetch("/api/recharge/create", {
+      const response = await fetch("/api/recharges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -74,9 +129,8 @@ export default function AccountRechargeContent() {
         | { error?: string; rechargeNo?: string }
         | null;
 
-      if (!response.ok) {
-        throw new Error(result?.error ?? "充值下单失败，请稍后重试");
-      }
+      if (result?.rechargeNo) await loadRecords(1);
+      if (!response.ok) throw new Error(result?.error ?? "充值下单失败，请稍后重试");
 
       setSubmitMessage(
         result?.rechargeNo
@@ -128,8 +182,23 @@ export default function AccountRechargeContent() {
               </div>
 
               <div className="mt-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                {channelsLoading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <div key={index} className="h-[118px] animate-pulse rounded-xl border bg-slate-100" />
+                  ))
+                ) : null}
+                {!channelsLoading && channelsError ? (
+                  <div className="col-span-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {channelsError}
+                  </div>
+                ) : null}
+                {!channelsLoading && !channelsError && paymentChannels.length === 0 ? (
+                  <div className="col-span-full rounded-xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-muted-foreground">
+                    支付渠道暂未开放
+                  </div>
+                ) : null}
                 {paymentChannels.map((channel) => {
-                  const selected = selectedChannel.code === channel.code;
+                  const selected = selectedChannel?.code === channel.code;
                   const disabled = !channel.enabled || channel.status !== "active";
 
                   return (
@@ -194,13 +263,14 @@ export default function AccountRechargeContent() {
                     value={amountText}
                     inputMode="decimal"
                     onChange={(event) => updateAmount(event.target.value)}
-                    placeholder={`请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}`}
-                    className={cn("h-11", selectedChannel.currency === "USDT" ? "pl-20" : "pl-16")}
+                    disabled={!selectedChannel}
+                    placeholder={selectedChannel ? `请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}` : "请先选择支付渠道"}
+                    className={cn("h-11", selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16")}
                   />
                 </div>
                 {amount > 0 && !reachesMin ? (
                   <p className="mt-2 text-xs text-red-500">
-                    当前方式最低充值金额为 {formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency)}。
+                    当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。
                   </p>
                 ) : null}
 
@@ -217,13 +287,13 @@ export default function AccountRechargeContent() {
 
                 <div className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 sm:gap-x-8">
-                    <div>充值金额：{formatPaymentAmount(summary.amount, selectedChannel.currency)}</div>
-                    <div>手续费：{summary.fee === 0 ? "免手续费" : formatPaymentAmount(summary.fee, selectedChannel.currency)}</div>
+                    <div>充值金额：{selectedChannel && summary ? formatPaymentAmount(summary.amount, selectedChannel.currency) : "—"}</div>
+                    <div>手续费：{selectedChannel && summary ? (summary.fee === 0 ? "免手续费" : formatPaymentAmount(summary.fee, selectedChannel.currency)) : "—"}</div>
                     <div className="font-medium text-slate-700">
-                      实际支付金额：{formatPaymentAmount(summary.payableAmount, selectedChannel.currency)}
+                      实际支付金额：{selectedChannel && summary ? formatPaymentAmount(summary.payableAmount, selectedChannel.currency) : "—"}
                     </div>
                     <div className="font-medium text-slate-700">
-                      预计到账金额：{formatPaymentAmount(summary.arrivalAmount, selectedChannel.currency)}
+                      预计到账金额：{selectedChannel && summary ? formatPaymentAmount(summary.arrivalAmount, selectedChannel.currency) : "—"}
                     </div>
                   </div>
                   <Button
@@ -259,23 +329,15 @@ export default function AccountRechargeContent() {
             </div>
 
             {activeRecordTab === "recharge" ? (
-              <div className="mt-6 rounded-xl bg-slate-50 p-4 text-sm text-muted-foreground">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="font-semibold text-primary">暂无充值记录</span>
-                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">待接入</span>
-                </div>
-                <p>提交充值单后，充值单号、支付渠道、网络、到账状态和金额会显示在这里。</p>
-                <dl className="mt-4 grid gap-2">
-                  <RecordLine label="充值单号" value="等待支付数据" />
-                  <RecordLine label="支付渠道" value="等待支付数据" />
-                  <RecordLine label="网络" value="TRC20 / BEP20 渠道显示" />
-                  <RecordLine label="充值金额" value="等待支付数据" />
-                  <RecordLine label="手续费" value="等待支付数据" />
-                  <RecordLine label="应付金额" value="等待支付数据" />
-                  <RecordLine label="到账金额" value="等待支付数据" />
-                  <RecordLine label="状态" value="pending / processing / paid / failed / expired / closed" />
-                </dl>
-              </div>
+              <RechargeRecords
+                records={records}
+                loading={recordsLoading}
+                error={recordsError}
+                page={recordPage}
+                count={recordCount}
+                onRetry={() => void loadRecords(recordPage)}
+                onPageChange={setRecordPage}
+              />
             ) : (
               <div className="mt-6 flex flex-1 items-center justify-center rounded-xl bg-slate-50 p-6 text-center text-sm text-muted-foreground">
                 资金变动记录会在余额系统接入后显示。
@@ -297,6 +359,54 @@ function RecordLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+function RechargeRecords({ records, loading, error, page, count, onRetry, onPageChange }: { records: RechargeRecord[]; loading: boolean; error: string | null; page: number; count: number; onRetry: () => void; onPageChange: (page: number) => void }) {
+  const totalPages = Math.max(1, Math.ceil(count / 10));
+  if (loading) return <div className="mt-6 h-44 animate-pulse rounded-xl bg-slate-100" />;
+  if (error) return (
+    <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+      <p>{error}</p><Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>重新加载</Button>
+    </div>
+  );
+  if (records.length === 0) return (
+    <div className="mt-6 flex flex-1 items-center justify-center rounded-xl bg-slate-50 p-6 text-center text-sm text-muted-foreground">
+      暂无充值记录
+    </div>
+  );
+  return (
+    <div className="mt-5 flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        {records.map((record) => (
+          <div key={record.rechargeNo} className="rounded-xl bg-slate-50 p-4 text-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="truncate font-semibold text-slate-800" title={record.rechargeNo}>{record.rechargeNo}</span>
+              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{rechargeStatusLabel(record.status)}</span>
+            </div>
+            <dl className="grid gap-2 text-muted-foreground">
+              <RecordLine label="支付渠道" value={record.channelName} />
+              {record.network ? <RecordLine label="网络" value={record.network} /> : null}
+              <RecordLine label="充值金额" value={formatPaymentAmount(record.requestedAmount, record.currency)} />
+              <RecordLine label="手续费" value={record.feeAmount === 0 ? "免手续费" : formatPaymentAmount(record.feeAmount, record.currency)} />
+              <RecordLine label="应付金额" value={formatPaymentAmount(record.payableAmount, record.currency)} />
+              <RecordLine label="到账金额" value={formatPaymentAmount(record.creditedAmount, record.currency)} />
+              <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />
+            </dl>
+          </div>
+        ))}
+      </div>
+      {count > 10 ? (
+        <div className="mt-3 flex shrink-0 items-center justify-between text-xs text-muted-foreground">
+          <span>共 {count} 条</span>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>上一页</Button>
+            <span>{page} / {totalPages}</span>
+            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>下一页</Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function normalizeAmountInput(value: string, currency: PaymentCurrency) {
   const cleaned = value.replace(/[^\d.]/g, "");
   const [integerPart, ...decimalParts] = cleaned.split(".");
@@ -306,11 +416,16 @@ function normalizeAmountInput(value: string, currency: PaymentCurrency) {
   return integerPart.replace(/^0+(?=\d)/, "");
 }
 
-function getClientErrorMessage(error: unknown) {
+function getClientErrorMessage(error: unknown, fallback = "充值下单失败，请稍后重试") {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "object" && error) {
     const maybeMessage = (error as { message?: unknown }).message;
     if (typeof maybeMessage === "string" && maybeMessage) return maybeMessage;
   }
-  return "充值下单失败，请稍后重试";
+  return fallback;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false });
 }

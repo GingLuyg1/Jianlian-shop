@@ -51,11 +51,17 @@ export const adminRechargeSelect = `
   user_id,
   user_email,
   channel,
+  channel_code,
+  channel_name,
+  provider,
+  currency,
   network,
   amount,
+  requested_amount,
   fee_amount,
   payable_amount,
   received_amount,
+  credited_amount,
   status,
   provider_trade_no,
   paid_at,
@@ -117,10 +123,10 @@ export function normalizeOrderPaymentRow(row: AnyRow): AdminPaymentRecord {
 }
 
 export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
-  const businessAmount = numberValue(row.amount);
+  const businessAmount = numberValue(row.requested_amount ?? row.amount);
   const feeAmount = numberValue(row.fee_amount);
   const payableAmount = numberValue(row.payable_amount ?? businessAmount + feeAmount);
-  const receivedAmount = numberValue(row.received_amount);
+  const receivedAmount = numberValue(row.credited_amount ?? row.received_amount);
 
   return {
     id: String(row.id ?? ""),
@@ -129,7 +135,7 @@ export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
     business_type: "recharge",
     business_no: String(row.recharge_no ?? ""),
     user_email: stringOrNull(row.user_email),
-    channel: stringOrNull(row.channel),
+    channel: stringOrNull(row.channel_code ?? row.channel),
     network: stringOrNull(row.network),
     business_amount: businessAmount,
     fee_amount: feeAmount,

@@ -15,7 +15,7 @@ export type UnifiedPaymentStatus = (typeof PAYMENT_STATUS_VALUES)[number];
 export const PAYMENT_CHANNELS = [
   { id: "alipay", label: "支付宝", network: "" },
   { id: "wechat", label: "微信支付", network: "" },
-  { id: "binance", label: "币安转账", network: "Binance" },
+  { id: "binance_pay", label: "币安转账", network: "Binance" },
   { id: "usdt_trc20", label: "USDT-TRC20", network: "TRC20" },
   { id: "usdt_bep20", label: "USDT-BEP20", network: "BEP20" },
 ] as const;
