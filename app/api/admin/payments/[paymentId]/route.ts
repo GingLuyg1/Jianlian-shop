@@ -1,50 +1,74 @@
 ﻿import { NextResponse } from "next/server";
 
 import { getServerAdminContext } from "@/lib/auth/require-admin";
-import { getPaymentErrorMessage } from "@/lib/payments/payment-status";
-import { normalizePaymentRecord } from "@/lib/payments/payment-queries";
+import {
+  adminOrderPaymentSelect,
+  adminRechargeSelect,
+  isPaymentSchemaMissing,
+  normalizeOrderPaymentRow,
+  normalizeRechargeRow,
+  sanitizePaymentError,
+} from "@/lib/payments/admin-payment-queries";
+import type { AdminPaymentCallback } from "@/lib/payments/admin-payment-types";
 
-function isSchemaMissing(message: string) {
-  return /order_payments|admin_review_order_payment|schema cache|PGRST205|42P01/i.test(message);
+export const dynamic = "force-dynamic";
+
+function normalizeCallback(row: Record<string, unknown>): AdminPaymentCallback {
+  return {
+    id: String(row.id ?? ""),
+    channel: typeof row.channel === "string" ? row.channel : null,
+    payment_no: typeof row.payment_no === "string" ? row.payment_no : null,
+    provider_trade_no: typeof row.provider_trade_no === "string" ? row.provider_trade_no : null,
+    signature_result: typeof row.signature_result === "string" ? row.signature_result : null,
+    process_result: typeof row.process_result === "string" ? row.process_result : null,
+    http_status: row.http_status === null || row.http_status === undefined ? null : Number(row.http_status),
+    is_duplicate: Boolean(row.is_duplicate),
+    received_at: String(row.received_at ?? ""),
+    payload_summary: row.payload_summary && typeof row.payload_summary === "object" ? row.payload_summary as Record<string, unknown> : null,
+  };
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { paymentId: string } }
-) {
+export async function GET(request: Request, { params }: { params: { paymentId: string } }) {
   const admin = await getServerAdminContext();
-  if (!admin.ok) {
-    return NextResponse.json({ error: admin.message }, { status: admin.status });
-  }
+  if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
 
-  const body = (await request.json().catch(() => null)) as
-    | { action?: string; adminNote?: string }
-    | null;
-  const action = body?.action;
-
-  if (!action || !["start_review", "approve", "reject", "cancel"].includes(action)) {
-    return NextResponse.json({ error: "未知审核操作" }, { status: 400 });
-  }
-
-  if (action === "reject" && !body?.adminNote?.trim()) {
-    return NextResponse.json({ error: "驳回支付记录必须填写原因" }, { status: 400 });
-  }
+  const source = new URL(request.url).searchParams.get("source") ?? "order_payments";
 
   try {
-    const { data, error } = await admin.supabase.rpc("admin_review_order_payment", {
-      p_payment_id: params.paymentId,
-      p_action: action,
-      p_admin_note: body?.adminNote?.trim() || null,
-    });
+    const paymentResult = source === "account_recharges"
+      ? await admin.supabase.from("account_recharges").select(adminRechargeSelect).eq("id", params.paymentId).maybeSingle()
+      : await admin.supabase.from("order_payments").select(adminOrderPaymentSelect).eq("id", params.paymentId).maybeSingle();
 
-    if (error) throw error;
+    if (paymentResult.error) throw paymentResult.error;
+    if (!paymentResult.data) return NextResponse.json({ error: "支付记录不存在" }, { status: 404 });
 
-    return NextResponse.json({ payment: normalizePaymentRecord(data as Record<string, unknown>) });
+    const payment = source === "account_recharges"
+      ? normalizeRechargeRow(paymentResult.data as Record<string, unknown>)
+      : normalizeOrderPaymentRow(paymentResult.data as Record<string, unknown>);
+
+    let callbacks: AdminPaymentCallback[] = [];
+    let callbackError = "";
+    const callbackResult = await admin.supabase
+      .from("payment_callback_logs")
+      .select("id,channel,payment_no,provider_trade_no,signature_result,process_result,http_status,is_duplicate,received_at,payload_summary")
+      .eq("payment_no", payment.payment_no)
+      .order("received_at", { ascending: false })
+      .limit(50);
+
+    if (callbackResult.error) {
+      callbackError = isPaymentSchemaMissing(callbackResult.error) ? "回调记录表尚未初始化。" : "回调记录读取失败。";
+    } else {
+      callbacks = ((callbackResult.data ?? []) as Record<string, unknown>[]).map(normalizeCallback);
+    }
+
+    return NextResponse.json({ payment, callbacks, callbackError });
   } catch (error) {
-    const message = getPaymentErrorMessage(error, "支付审核操作失败");
-    return NextResponse.json(
-      { error: isSchemaMissing(message) ? "支付记录表尚未初始化，请先执行 order_payments migration。" : message },
-      { status: isSchemaMissing(message) ? 503 : 400 }
-    );
+    return NextResponse.json({ error: sanitizePaymentError(error, "支付详情加载失败") }, { status: isPaymentSchemaMissing(error) ? 503 : 500 });
   }
+}
+
+export async function PATCH() {
+  const admin = await getServerAdminContext();
+  if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
+  return NextResponse.json({ error: "当前后台不提供手动修改支付状态。" }, { status: 403 });
 }

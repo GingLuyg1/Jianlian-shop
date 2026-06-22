@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import PaymentSettingsPanel from "@/components/admin/payments/PaymentSettingsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ const groups = [
   { id: "basic", label: "基础设置" },
   { id: "shop", label: "商城设置" },
   { id: "orders", label: "订单设置" },
+  { id: "payments", label: "\u652f\u4ed8\u8bbe\u7f6e" },
   { id: "promotion", label: "推广设置" },
   { id: "notifications", label: "通知设置" },
   { id: "security", label: "安全设置" },
@@ -177,6 +179,9 @@ export default function AdminSettingsPage() {
             ) : null}
             {!loading && activeGroup === "promotion" ? (
               <PromotionSettings settings={settings} saving={saving} onSave={saveSettings} />
+            ) : null}
+            {!loading && activeGroup === "payments" ? (
+              <PaymentSettingsPanel />
             ) : null}
             {!loading && activeGroup === "notifications" ? (
               <UnavailableSettings title="通知设置" />

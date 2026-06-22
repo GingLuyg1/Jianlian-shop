@@ -20,6 +20,7 @@ const adminMenuItems = [
   { label: "控制台", href: "/admin", icon: LayoutDashboard },
   { label: "数字库存", href: "/admin/inventory", icon: PackageCheck },
   { label: "支付管理", href: "/admin/payments", icon: WalletCards },
+  { label: "\u5145\u503c\u7ba1\u7406", href: "/admin/recharges", icon: WalletCards },
   { label: "订单管理", href: "/admin/orders", icon: ClipboardList },
   { label: "用户管理", href: "/admin/users", icon: Users },
   { label: "系统设置", href: "/admin/settings", icon: Settings },

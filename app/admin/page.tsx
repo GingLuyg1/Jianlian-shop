@@ -16,6 +16,7 @@ import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminStatsCard from "@/components/admin/AdminStatsCard";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import AdminPaymentStatsStrip from "@/components/admin/payments/AdminPaymentStatsStrip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -166,6 +167,7 @@ export default function AdminDashboardPage() {
         <AdminErrorState description={error} onRetry={loadDashboard} />
       ) : (
         <div className="flex min-h-0 w-full flex-1 flex-col gap-3 overflow-auto xl:overflow-hidden">
+          <AdminPaymentStatsStrip />
           <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 min-[1500px]:grid-cols-7">
             {stats.map((stat) => (
               <AdminStatsCard

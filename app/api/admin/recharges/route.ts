@@ -2,16 +2,13 @@
 
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import {
-  adminOrderPaymentSelect,
   adminRechargeSelect,
   filterPaymentRecords,
   isPaymentSchemaMissing,
-  normalizeOrderPaymentRow,
   normalizeRechargeRow,
   sanitizePaymentError,
   sortPaymentRecords,
 } from "@/lib/payments/admin-payment-queries";
-import type { AdminPaymentRecord } from "@/lib/payments/admin-payment-types";
 
 export const dynamic = "force-dynamic";
 
@@ -24,34 +21,22 @@ export async function GET(request: Request) {
   const pageSize = Math.min(100, Math.max(10, Number(searchParams.get("pageSize") || 20)));
   const filters = {
     search: searchParams.get("search") ?? "",
-    businessType: searchParams.get("businessType") ?? "all",
+    businessType: "recharge",
     channel: searchParams.get("channel") ?? "all",
     status: searchParams.get("status") ?? "all",
     startDate: searchParams.get("startDate") ?? "",
     endDate: searchParams.get("endDate") ?? "",
     sort: searchParams.get("sort") ?? "created_desc",
-    view: searchParams.get("view") ?? "all",
-    exceptionType: searchParams.get("exceptionType") ?? "all",
+    rechargeOnly: true,
   };
 
   try {
-    const [orderResult, rechargeResult] = await Promise.all([
-      admin.supabase.from("order_payments").select(adminOrderPaymentSelect).limit(1000),
-      admin.supabase.from("account_recharges").select(adminRechargeSelect).limit(1000),
-    ]);
-
-    if (orderResult.error) throw orderResult.error;
-    if (rechargeResult.error && !isPaymentSchemaMissing(rechargeResult.error)) throw rechargeResult.error;
-
-    const rows: AdminPaymentRecord[] = [
-      ...((orderResult.data ?? []) as Record<string, unknown>[]).map(normalizeOrderPaymentRow),
-      ...((rechargeResult.data ?? []) as Record<string, unknown>[]).map(normalizeRechargeRow),
-    ];
+    const { data, error } = await admin.supabase.from("account_recharges").select(adminRechargeSelect).limit(1000);
+    if (error) throw error;
+    const rows = ((data ?? []) as Record<string, unknown>[]).map(normalizeRechargeRow);
     const filtered = sortPaymentRecords(filterPaymentRecords(rows, filters), filters.sort);
     const from = (page - 1) * pageSize;
-    const payments = filtered.slice(from, from + pageSize);
-
-    return NextResponse.json({ payments, count: filtered.length });
+    return NextResponse.json({ payments: filtered.slice(from, from + pageSize), count: filtered.length });
   } catch (error) {
     return NextResponse.json({ error: sanitizePaymentError(error) }, { status: isPaymentSchemaMissing(error) ? 503 : 500 });
   }
