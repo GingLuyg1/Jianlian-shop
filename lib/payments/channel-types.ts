@@ -1,5 +1,6 @@
-﻿export type PaymentCurrency = "CNY" | "USDT";
+export type PaymentCurrency = "CNY" | "USDT";
 export type PaymentNetwork = "TRC20" | "BEP20";
+export type ProviderNetwork = PaymentNetwork | "TRON" | "BSC";
 export type PaymentProviderCode = "generic_api" | "binance" | "crypto_address";
 export type PaymentChannelStatus = "active" | "disabled";
 export type PaymentChannelCode =
@@ -9,14 +10,7 @@ export type PaymentChannelCode =
   | "usdt_trc20"
   | "usdt_bep20";
 
-export type RechargeStatus =
-  | "pending"
-  | "processing"
-  | "paid"
-  | "failed"
-  | "expired"
-  | "closed";
-
+export type RechargeStatus = "pending" | "processing" | "paid" | "failed" | "expired" | "closed";
 export type PaymentSessionStatus = RechargeStatus;
 export type PaymentBusinessType = "order" | "recharge" | "account_recharge";
 export type PaymentResultType = "redirect" | "qrcode" | "address";
@@ -80,7 +74,7 @@ export type ProviderCreatePaymentInput = {
   userId: string;
   channel: PaymentChannel;
   currency: PaymentCurrency;
-  network?: PaymentNetwork;
+  network?: ProviderNetwork;
   requestedAmount: number;
   feeAmount: number;
   payableAmount: number;
@@ -132,9 +126,14 @@ export type ProviderParsedCallback = {
 };
 
 export type PaymentProvider = {
-  createPayment(input: CreatePaymentInput | ProviderCreatePaymentInput): Promise<CreatePaymentResult | ProviderCreatePaymentResult>;
+  createPayment(
+    input: CreatePaymentInput | ProviderCreatePaymentInput
+  ): Promise<CreatePaymentResult | ProviderCreatePaymentResult>;
   queryPayment(paymentNo: string): Promise<{ status: RechargeStatus } | ProviderQueryPaymentResult>;
   closePayment(paymentNo: string): Promise<{ closed: boolean } | ProviderClosePaymentResult>;
   verifyCallback(payload: unknown, signatureOrContext?: string | ProviderCallbackContext): Promise<boolean>;
-  parseCallback(payload: unknown, context?: ProviderCallbackContext): Promise<Record<string, unknown> | ProviderParsedCallback>;
+  parseCallback(
+    payload: unknown,
+    context?: ProviderCallbackContext
+  ): Promise<Record<string, unknown> | ProviderParsedCallback>;
 };
