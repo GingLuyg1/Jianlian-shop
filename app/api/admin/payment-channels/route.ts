@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
-import { PAYMENT_CHANNELS, maskSensitiveValue, type PaymentChannelConfig } from "@/lib/payments/admin-payment-types";
 import { isPaymentSchemaMissing } from "@/lib/payments/admin-payment-queries";
+import {
+  PAYMENT_CHANNELS,
+  maskSensitiveValue,
+  type PaymentChannelConfig,
+} from "@/lib/payments/admin-payment-types";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +30,15 @@ type ChannelPatch = {
   signing_key?: string | null;
 };
 
+const channelSelect =
+  "id,channel,enabled,display_name,min_amount,fee_rate,currency,network,sort_order,provider_name,api_url,merchant_id,app_id,callback_url,timeout_minutes,secret_key_masked,signing_key_masked,updated_at";
+
 function normalizeConfig(row: Record<string, unknown>): PaymentChannelConfig {
-  const secretLast4 = typeof row.secret_key_masked === "string" ? row.secret_key_masked.replace(/^\*+/, "") : null;
+  const secretLast4 =
+    typeof row.secret_key_masked === "string"
+      ? row.secret_key_masked.replace(/^\*+/, "")
+      : null;
+
   return {
     id: String(row.id ?? row.channel ?? ""),
     channel: String(row.channel ?? ""),
@@ -46,6 +58,27 @@ function normalizeConfig(row: Record<string, unknown>): PaymentChannelConfig {
     secret_status: row.secret_key_masked || row.signing_key_masked ? "已配置" : "未配置",
     secret_last4: secretLast4,
     updated_at: typeof row.updated_at === "string" ? row.updated_at : null,
+  };
+}
+
+function safeChannelSummary(row: Record<string, unknown>) {
+  return {
+    channel: row.channel,
+    enabled: Boolean(row.enabled),
+    display_name: row.display_name ?? null,
+    min_amount: Number(row.min_amount ?? 0),
+    fee_rate: Number(row.fee_rate ?? 0),
+    currency: row.currency ?? "CNY",
+    network: row.network ?? null,
+    sort_order: Number(row.sort_order ?? 0),
+    provider_name: row.provider_name ?? null,
+    has_api_url: Boolean(row.api_url),
+    has_merchant_id: Boolean(row.merchant_id),
+    has_app_id: Boolean(row.app_id),
+    has_callback_url: Boolean(row.callback_url),
+    timeout_minutes: Number(row.timeout_minutes ?? 30),
+    has_secret_key: Boolean(row.secret_key_masked),
+    has_signing_key: Boolean(row.signing_key_masked),
   };
 }
 
@@ -74,31 +107,71 @@ function fallbackConfigs(): PaymentChannelConfig[] {
 
 export async function GET() {
   const admin = await getServerAdminContext();
-  if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.message }, { status: admin.status });
+  }
 
   try {
     const { data, error } = await admin.supabase
       .from("payment_channels")
-      .select("id,channel,enabled,display_name,min_amount,fee_rate,currency,network,sort_order,provider_name,api_url,merchant_id,app_id,callback_url,timeout_minutes,secret_key_masked,signing_key_masked,updated_at")
+      .select(channelSelect)
       .order("sort_order", { ascending: true });
+
     if (error) throw error;
+
     const rows = ((data ?? []) as Record<string, unknown>[]).map(normalizeConfig);
     return NextResponse.json({ channels: rows.length ? rows : fallbackConfigs() });
   } catch (error) {
-    if (isPaymentSchemaMissing(error)) return NextResponse.json({ channels: fallbackConfigs(), needsMigration: true, error: "支付设置表尚未初始化，请先执行支付管理 migration。" });
+    if (isPaymentSchemaMissing(error)) {
+      return NextResponse.json({
+        channels: fallbackConfigs(),
+        needsMigration: true,
+        error: "支付渠道配置表尚未初始化，请先执行支付管理 migration。",
+      });
+    }
     return NextResponse.json({ error: "支付设置读取失败" }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
   const admin = await getServerAdminContext();
-  if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
+  if (!admin.ok) {
+    await writeAdminAuditLog({
+      request,
+      action: "update_payment_channel_config",
+      module: "payments",
+      targetType: "payment_channel",
+      result: "denied",
+      errorMessage: admin.message,
+    });
+    return NextResponse.json({ error: admin.message }, { status: admin.status });
+  }
 
-  const body = (await request.json().catch(() => null)) as { channels?: ChannelPatch[] } | null;
-  if (!Array.isArray(body?.channels)) return NextResponse.json({ error: "缺少支付渠道配置" }, { status: 400 });
-  const channelPatches = body?.channels ?? [];
+  const parsedBody = (await request.json().catch(() => null)) as { channels?: ChannelPatch[] } | null;
+  const parsedChannels = parsedBody?.channels;
+  const channelPatches = Array.isArray(parsedChannels) ? parsedChannels : null;
+
+  if (!channelPatches) {
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email },
+      action: "update_payment_channel_config",
+      module: "payments",
+      targetType: "payment_channel",
+      result: "failed",
+      errorCode: "invalid_body",
+      errorMessage: "缺少支付渠道配置",
+    });
+    return NextResponse.json({ error: "缺少支付渠道配置" }, { status: 400 });
+  }
+
+  const channelIds = channelPatches.map((channel) => channel.channel).filter(Boolean);
 
   try {
+    const beforeResult = channelIds.length
+      ? await admin.supabase.from("payment_channels").select(channelSelect).in("channel", channelIds)
+      : { data: [], error: null };
+
     const rows = channelPatches.map((channel, index) => {
       const base: Record<string, unknown> = {
         channel: channel.channel,
@@ -127,11 +200,49 @@ export async function PATCH(request: Request) {
 
     const { data, error: readError } = await admin.supabase
       .from("payment_channels")
-      .select("id,channel,enabled,display_name,min_amount,fee_rate,currency,network,sort_order,provider_name,api_url,merchant_id,app_id,callback_url,timeout_minutes,secret_key_masked,signing_key_masked,updated_at")
+      .select(channelSelect)
       .order("sort_order", { ascending: true });
     if (readError) throw readError;
-    return NextResponse.json({ channels: ((data ?? []) as Record<string, unknown>[]).map(normalizeConfig), message: "支付设置已保存" });
+
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email },
+      action: "update_payment_channel_config",
+      module: "payments",
+      targetType: "payment_channel",
+      targetLabel: channelIds.join(", "),
+      result: "success",
+      beforeSummary: {
+        channels: ((beforeResult.data ?? []) as Record<string, unknown>[]).map(safeChannelSummary),
+      },
+      afterSummary: {
+        channels: rows.map(safeChannelSummary),
+      },
+    });
+
+    return NextResponse.json({
+      channels: ((data ?? []) as Record<string, unknown>[]).map(normalizeConfig),
+      message: "支付设置已保存",
+    });
   } catch (error) {
-    return NextResponse.json({ error: isPaymentSchemaMissing(error) ? "支付设置表尚未初始化，请先执行支付管理 migration。" : "支付设置保存失败" }, { status: isPaymentSchemaMissing(error) ? 503 : 500 });
+    const schemaMissing = isPaymentSchemaMissing(error);
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email },
+      action: "update_payment_channel_config",
+      module: "payments",
+      targetType: "payment_channel",
+      targetLabel: channelIds.join(", "),
+      result: "failed",
+      errorCode: schemaMissing ? "payment_schema_missing" : null,
+      errorMessage: schemaMissing ? "支付渠道配置表尚未初始化" : "支付设置保存失败",
+    });
+
+    return NextResponse.json(
+      {
+        error: schemaMissing ? "支付渠道配置表尚未初始化，请先执行支付管理 migration。" : "支付设置保存失败",
+      },
+      { status: schemaMissing ? 503 : 500 },
+    );
   }
 }

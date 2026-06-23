@@ -1,5 +1,6 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
+import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import {
   adminOrderPaymentSelect,
@@ -13,6 +14,12 @@ import type { AdminPaymentCallback } from "@/lib/payments/admin-payment-types";
 
 export const dynamic = "force-dynamic";
 
+type RouteContext = {
+  params: {
+    paymentId: string;
+  };
+};
+
 function normalizeCallback(row: Record<string, unknown>): AdminPaymentCallback {
   return {
     id: String(row.id ?? ""),
@@ -24,51 +31,150 @@ function normalizeCallback(row: Record<string, unknown>): AdminPaymentCallback {
     http_status: row.http_status === null || row.http_status === undefined ? null : Number(row.http_status),
     is_duplicate: Boolean(row.is_duplicate),
     received_at: String(row.received_at ?? ""),
-    payload_summary: row.payload_summary && typeof row.payload_summary === "object" ? row.payload_summary as Record<string, unknown> : null,
+    payload_summary:
+      row.payload_summary && typeof row.payload_summary === "object"
+        ? (row.payload_summary as Record<string, unknown>)
+        : null,
   };
 }
 
-export async function GET(request: Request, { params }: { params: { paymentId: string } }) {
+export async function GET(request: Request, { params }: RouteContext) {
   const admin = await getServerAdminContext();
-  if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
+  if (!admin.ok) {
+    await writeAdminAuditLog({
+      request,
+      action: "view_payment_detail",
+      module: "payments",
+      targetType: "payment_record",
+      targetId: params.paymentId,
+      result: "denied",
+      errorMessage: admin.message,
+    });
+    return NextResponse.json({ error: admin.message }, { status: admin.status });
+  }
 
   const source = new URL(request.url).searchParams.get("source") ?? "order_payments";
+  const auditModule = source === "account_recharges" ? "recharges" : "payments";
 
   try {
-    const paymentResult = source === "account_recharges"
-      ? await admin.supabase.from("account_recharges").select(adminRechargeSelect).eq("id", params.paymentId).maybeSingle()
-      : await admin.supabase.from("order_payments").select(adminOrderPaymentSelect).eq("id", params.paymentId).maybeSingle();
+    const paymentResult =
+      source === "account_recharges"
+        ? await admin.supabase
+            .from("account_recharges")
+            .select(adminRechargeSelect)
+            .eq("id", params.paymentId)
+            .maybeSingle()
+        : await admin.supabase
+            .from("order_payments")
+            .select(adminOrderPaymentSelect)
+            .eq("id", params.paymentId)
+            .maybeSingle();
 
     if (paymentResult.error) throw paymentResult.error;
-    if (!paymentResult.data) return NextResponse.json({ error: "支付记录不存在" }, { status: 404 });
 
-    const payment = source === "account_recharges"
-      ? normalizeRechargeRow(paymentResult.data as Record<string, unknown>)
-      : normalizeOrderPaymentRow(paymentResult.data as Record<string, unknown>);
+    if (!paymentResult.data) {
+      await writeAdminAuditLog({
+        request,
+        admin: { id: admin.user.id, email: admin.user.email },
+        action: "view_payment_detail",
+        module: auditModule,
+        targetType: "payment_record",
+        targetId: params.paymentId,
+        result: "failed",
+        errorCode: "payment_not_found",
+        errorMessage: "支付记录不存在",
+        metadata: { source },
+      });
+      return NextResponse.json({ error: "支付记录不存在" }, { status: 404 });
+    }
+
+    const payment =
+      source === "account_recharges"
+        ? normalizeRechargeRow(paymentResult.data as Record<string, unknown>)
+        : normalizeOrderPaymentRow(paymentResult.data as Record<string, unknown>);
 
     let callbacks: AdminPaymentCallback[] = [];
     let callbackError = "";
     const callbackResult = await admin.supabase
       .from("payment_callback_logs")
-      .select("id,channel,payment_no,provider_trade_no,signature_result,process_result,http_status,is_duplicate,received_at,payload_summary")
+      .select(
+        "id,channel,payment_no,provider_trade_no,signature_result,process_result,http_status,is_duplicate,received_at,payload_summary",
+      )
       .eq("payment_no", payment.payment_no)
       .order("received_at", { ascending: false })
       .limit(50);
 
     if (callbackResult.error) {
-      callbackError = isPaymentSchemaMissing(callbackResult.error) ? "回调记录表尚未初始化。" : "回调记录读取失败。";
+      callbackError = isPaymentSchemaMissing(callbackResult.error)
+        ? "回调记录表尚未初始化。"
+        : "回调记录读取失败。";
     } else {
       callbacks = ((callbackResult.data ?? []) as Record<string, unknown>[]).map(normalizeCallback);
     }
 
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email },
+      action: "view_payment_detail",
+      module: auditModule,
+      targetType: "payment_record",
+      targetId: params.paymentId,
+      targetLabel: payment.payment_no,
+      result: "success",
+      metadata: {
+        source,
+        callback_count: callbacks.length,
+        has_callback_error: Boolean(callbackError),
+      },
+    });
+
     return NextResponse.json({ payment, callbacks, callbackError });
   } catch (error) {
-    return NextResponse.json({ error: sanitizePaymentError(error, "支付详情加载失败") }, { status: isPaymentSchemaMissing(error) ? 503 : 500 });
+    const message = sanitizePaymentError(error, "支付详情加载失败");
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email },
+      action: "view_payment_detail",
+      module: auditModule,
+      targetType: "payment_record",
+      targetId: params.paymentId,
+      result: "failed",
+      errorMessage: message,
+      metadata: { source },
+    });
+
+    return NextResponse.json(
+      { error: message },
+      { status: isPaymentSchemaMissing(error) ? 503 : 500 },
+    );
   }
 }
 
-export async function PATCH() {
+export async function PATCH(request: Request, { params }: RouteContext) {
   const admin = await getServerAdminContext();
-  if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
+  if (!admin.ok) {
+    await writeAdminAuditLog({
+      request,
+      action: "manual_update_payment_status",
+      module: "payments",
+      targetType: "payment_record",
+      targetId: params.paymentId,
+      result: "denied",
+      errorMessage: admin.message,
+    });
+    return NextResponse.json({ error: admin.message }, { status: admin.status });
+  }
+
+  await writeAdminAuditLog({
+    request,
+    admin: { id: admin.user.id, email: admin.user.email },
+    action: "manual_update_payment_status",
+    module: "payments",
+    targetType: "payment_record",
+    targetId: params.paymentId,
+    result: "denied",
+    errorMessage: "当前后台不提供手动修改支付状态。",
+  });
+
   return NextResponse.json({ error: "当前后台不提供手动修改支付状态。" }, { status: 403 });
 }

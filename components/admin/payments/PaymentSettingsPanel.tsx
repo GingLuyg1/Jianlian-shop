@@ -33,6 +33,15 @@ function fallbackChannels(): PaymentChannelConfig[] {
   }));
 }
 
+function getClientErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    const text = String(error).replace(/^Error:\s*/i, "").trim();
+    if (text) return text;
+  }
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
 export default function PaymentSettingsPanel() {
   const [channels, setChannels] = useState<PaymentChannelConfig[]>([]);
   const [secrets, setSecrets] = useState<Record<string, { secret_key?: string; signing_key?: string }>>({});
@@ -103,7 +112,7 @@ export default function PaymentSettingsPanel() {
       setSecrets({});
       toast.success(payload?.message ?? "支付设置已保存");
     } catch (error) {
-      const text = error instanceof Error ? error.message : "支付设置保存失败";
+      const text = getClientErrorMessage(error, "支付设置保存失败");
       setMessage(text);
       toast.error(text);
     } finally {

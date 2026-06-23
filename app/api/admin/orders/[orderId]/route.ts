@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
+
+import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
-import { PROMOTION_COMMISSION_RATE } from "@/lib/promotion";
-import { getPromotionSettings } from "@/lib/settings/server";
 import {
   ORDER_STATUS_VALUES,
   PAYMENT_STATUS_VALUES,
   type OrderStatus,
   type PaymentStatus,
 } from "@/lib/orders/order-status";
+import { PROMOTION_COMMISSION_RATE } from "@/lib/promotion";
+import { getPromotionSettings } from "@/lib/settings/server";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +21,35 @@ type RouteContext = {
   };
 };
 
+type AuditAdmin = {
+  id: string;
+  email?: string | null;
+};
+
+function getOrderLabel(data: unknown) {
+  if (!data || typeof data !== "object") return null;
+  const orderNo = (data as Record<string, unknown>).order_no;
+  return typeof orderNo === "string" ? orderNo : null;
+}
+
 export async function PATCH(request: Request, context: RouteContext) {
+  let auditAdmin: AuditAdmin | undefined;
+
   try {
     const admin = await getServerAdminContext();
     if (!admin.ok) {
+      await writeAdminAuditLog({
+        request,
+        action: "update_order_status",
+        module: "orders",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "denied",
+        errorMessage: admin.message,
+      });
       return NextResponse.json({ error: admin.message }, { status: admin.status });
     }
+    auditAdmin = { id: admin.user.id, email: admin.user.email };
 
     const body = (await request.json().catch(() => null)) as
       | {
@@ -36,11 +61,35 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const toStatus = body?.status;
     if (!toStatus || !ORDER_STATUS_VALUES.includes(toStatus)) {
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "update_order_status",
+        module: "orders",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "failed",
+        errorCode: "invalid_order_status",
+        errorMessage: "无效订单状态",
+        metadata: { requestedStatus: toStatus ?? null },
+      });
       return NextResponse.json({ error: "无效订单状态" }, { status: 400 });
     }
 
     const paymentStatus = body?.payment_status;
     if (paymentStatus && !PAYMENT_STATUS_VALUES.includes(paymentStatus)) {
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "update_order_status",
+        module: "orders",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "failed",
+        errorCode: "invalid_payment_status",
+        errorMessage: "无效支付状态",
+        metadata: { requestedPaymentStatus: paymentStatus },
+      });
       return NextResponse.json({ error: "无效支付状态" }, { status: 400 });
     }
 
@@ -52,7 +101,20 @@ export async function PATCH(request: Request, context: RouteContext) {
     });
 
     if (error) {
-      return NextResponse.json({ error: getOrderErrorMessage(error, "订单状态更新失败") }, { status: 400 });
+      const message = getOrderErrorMessage(error, "订单状态更新失败");
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "update_order_status",
+        module: "orders",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "failed",
+        errorCode: typeof error.code === "string" ? error.code : null,
+        errorMessage: message,
+        metadata: { toStatus, paymentStatus: paymentStatus ?? null },
+      });
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
     const promotionSettings = await getPromotionSettings(admin.supabase).catch(() => ({
@@ -72,19 +134,58 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
+    await writeAdminAuditLog({
+      request,
+      admin: auditAdmin,
+      action: "update_order_status",
+      module: "orders",
+      targetType: "order",
+      targetId: context.params.orderId,
+      targetLabel: getOrderLabel(data),
+      result: "success",
+      afterSummary: {
+        status: toStatus,
+        payment_status: paymentStatus ?? null,
+        has_admin_note: Boolean(body?.admin_note),
+      },
+    });
+
     return NextResponse.json({ order: data });
   } catch (error) {
     console.error("[Admin Orders] update failed", error);
-    return NextResponse.json({ error: getOrderErrorMessage(error, "订单状态更新失败") }, { status: 500 });
+    const message = getOrderErrorMessage(error, "订单状态更新失败");
+    await writeAdminAuditLog({
+      request,
+      admin: auditAdmin,
+      action: "update_order_status",
+      module: "orders",
+      targetType: "order",
+      targetId: context.params.orderId,
+      result: "failed",
+      errorMessage: message,
+    });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function POST(request: Request, context: RouteContext) {
+  let auditAdmin: AuditAdmin | undefined;
+
   try {
     const admin = await getServerAdminContext();
     if (!admin.ok) {
+      await writeAdminAuditLog({
+        request,
+        action: "update_delivery",
+        module: "delivery",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "denied",
+        errorMessage: admin.message,
+      });
       return NextResponse.json({ error: admin.message }, { status: admin.status });
     }
+    auditAdmin = { id: admin.user.id, email: admin.user.email };
 
     const body = (await request.json().catch(() => null)) as
       | {
@@ -101,14 +202,46 @@ export async function POST(request: Request, context: RouteContext) {
     if (body?.action === "retry_auto_delivery") {
       try {
         const result = await deliverDigitalOrder(admin.supabase, context.params.orderId, "admin_retry");
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "retry_auto_delivery",
+          module: "delivery",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "success",
+          afterSummary: { delivered_count: result.delivered_count ?? 0 },
+        });
         return NextResponse.json({ deliveredCount: result.delivered_count ?? 0, result });
       } catch (deliveryError) {
-        return NextResponse.json({ error: getDeliveryErrorMessage(deliveryError, "自动发货重试失败") }, { status: 400 });
+        const message = getDeliveryErrorMessage(deliveryError, "自动发货重试失败");
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "retry_auto_delivery",
+          module: "delivery",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "failed",
+          errorMessage: message,
+        });
+        return NextResponse.json({ error: message }, { status: 400 });
       }
     }
 
     if (body?.action === "manual_inventory") {
       if (!body.inventory_id || !body.order_item_id) {
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "manual_inventory_delivery",
+          module: "inventory",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "failed",
+          errorCode: "missing_inventory_or_item",
+          errorMessage: "请选择库存和订单商品",
+        });
         return NextResponse.json({ error: "请选择库存和订单商品" }, { status: 400 });
       }
 
@@ -120,9 +253,32 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       if (error) {
-        return NextResponse.json({ error: getOrderErrorMessage(error, "手动选择库存发货失败") }, { status: 400 });
+        const message = getOrderErrorMessage(error, "手动选择库存发货失败");
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "manual_inventory_delivery",
+          module: "inventory",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "failed",
+          errorCode: typeof error.code === "string" ? error.code : null,
+          errorMessage: message,
+          metadata: { order_item_id: body.order_item_id, inventory_id: body.inventory_id },
+        });
+        return NextResponse.json({ error: message }, { status: 400 });
       }
 
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "manual_inventory_delivery",
+        module: "inventory",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "success",
+        metadata: { order_item_id: body.order_item_id, inventory_id: body.inventory_id },
+      });
       return NextResponse.json({ delivery: data });
     }
 
@@ -133,14 +289,47 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       if (error) {
-        return NextResponse.json({ error: getOrderErrorMessage(error, "交付失败标记失败") }, { status: 400 });
+        const message = getOrderErrorMessage(error, "交付失败标记失败");
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "mark_delivery_failed",
+          module: "delivery",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "failed",
+          errorCode: typeof error.code === "string" ? error.code : null,
+          errorMessage: message,
+        });
+        return NextResponse.json({ error: message }, { status: 400 });
       }
 
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "mark_delivery_failed",
+        module: "delivery",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "success",
+        metadata: { has_note: Boolean(body.note) },
+      });
       return NextResponse.json({ ok: true });
     }
 
     const deliveryContent = body?.delivery_content?.trim();
     if (!deliveryContent) {
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "append_manual_delivery",
+        module: "delivery",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "failed",
+        errorCode: "missing_delivery_content",
+        errorMessage: "请填写交付信息",
+      });
       return NextResponse.json({ error: "请填写交付信息" }, { status: 400 });
     }
 
@@ -154,12 +343,55 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     if (error) {
-      return NextResponse.json({ error: getOrderErrorMessage(error, "交付信息保存失败") }, { status: 400 });
+      const message = getOrderErrorMessage(error, "交付信息保存失败");
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "append_manual_delivery",
+        module: "delivery",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "failed",
+        errorCode: typeof error.code === "string" ? error.code : null,
+        errorMessage: message,
+        metadata: {
+          order_item_id: body?.order_item_id ?? null,
+          delivery_type: body?.delivery_type ?? null,
+          has_delivery_content: true,
+        },
+      });
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
+    await writeAdminAuditLog({
+      request,
+      admin: auditAdmin,
+      action: "append_manual_delivery",
+      module: "delivery",
+      targetType: "order",
+      targetId: context.params.orderId,
+      result: "success",
+      metadata: {
+        order_item_id: body?.order_item_id ?? null,
+        delivery_type: body?.delivery_type ?? null,
+        delivery_status: body?.delivery_status ?? "delivered",
+        has_delivery_content: true,
+      },
+    });
     return NextResponse.json({ delivery: data });
   } catch (error) {
     console.error("[Admin Orders] delivery update failed", error);
-    return NextResponse.json({ error: getOrderErrorMessage(error, "交付信息保存失败") }, { status: 500 });
+    const message = getOrderErrorMessage(error, "交付信息保存失败");
+    await writeAdminAuditLog({
+      request,
+      admin: auditAdmin,
+      action: "update_delivery",
+      module: "delivery",
+      targetType: "order",
+      targetId: context.params.orderId,
+      result: "failed",
+      errorMessage: message,
+    });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
