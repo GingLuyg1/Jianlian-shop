@@ -2,388 +2,338 @@ import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
+import {
+  findExistingContentHashes,
+  getInventoryImportErrorMessage,
+  importDigitalInventoryBatch,
+  parseInventoryFile,
+  type InventoryContentType,
+} from "@/lib/inventory/import-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
-export const dynamic = "force-dynamic";
+const INVENTORY_STATUSES = new Set(["all", "available", "reserved", "delivered", "disabled", "expired", "invalid"]);
+const BATCH_STATUSES = new Set(["all", "processing", "completed", "partial_failed", "failed", "disabled"]);
+const CONTENT_TYPES = new Set<InventoryContentType>(["card_key", "redeem_code", "account_password", "plain_text"]);
 
-const INVENTORY_STATUSES = new Set(["all", "available", "reserved", "delivered", "disabled", "invalid"]);
-
-type AuditAdmin = {
-  id: string;
-  email?: string | null;
+type UploadFileLike = {
+  name?: string;
+  size?: number;
+  arrayBuffer: () => Promise<ArrayBuffer>;
 };
 
-function sanitizeError(error: unknown, fallback: string) {
-  return getOrderErrorMessage(error, fallback).replace(/digital_inventory/gi, "库存").replace(/public\./gi, "");
+function isUploadFile(value: FormDataEntryValue | null): value is FormDataEntryValue & UploadFileLike {
+  return Boolean(value && typeof value === "object" && "arrayBuffer" in value);
 }
 
-function parsePositiveInt(value: string | null, fallback: number, max: number) {
-  const next = Math.floor(Number(value ?? fallback));
-  if (!Number.isFinite(next)) return fallback;
-  return Math.min(Math.max(next, 1), max);
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ error: message }, { status });
+}
+
+function getSearchParam(request: Request, key: string) {
+  return new URL(request.url).searchParams.get(key)?.trim() ?? "";
 }
 
 export async function GET(request: Request) {
-  let auditAdmin: AuditAdmin | undefined;
+  const admin = await getServerAdminContext();
+  if (!admin.ok) {
+    await writeAdminAuditLog({
+      action: "view_inventory",
+      module: "inventory",
+      targetType: "digital_inventory",
+      result: "denied",
+      errorMessage: admin.message,
+    });
+    return jsonError(admin.message, admin.status);
+  }
+
+  const mode = getSearchParam(request, "mode") || "summary";
 
   try {
-    const admin = await getServerAdminContext();
-    if (!admin.ok) {
-      await writeAdminAuditLog({
-        request,
-        action: "view_inventory",
-        module: "inventory",
-        targetType: "inventory",
-        result: "denied",
-        errorMessage: admin.message,
-      });
-      return NextResponse.json({ error: admin.message }, { status: admin.status });
-    }
-    auditAdmin = { id: admin.user.id, email: admin.user.email };
-
-    const url = new URL(request.url);
-    const mode = url.searchParams.get("mode") ?? "summary";
-
     if (mode === "products") {
       const { data, error } = await admin.supabase
         .from("products")
         .select("id,name,slug,delivery_type,status")
         .in("delivery_type", ["automatic", "auto", "card", "account"])
-        .order("updated_at", { ascending: false })
-        .limit(200);
+        .order("name", { ascending: true });
 
-      if (error) {
-        const message = sanitizeError(error, "商品读取失败");
-        await writeAdminAuditLog({
-          request,
-          admin: auditAdmin,
-          action: "view_inventory_products",
-          module: "inventory",
-          targetType: "inventory",
-          result: "failed",
-          errorMessage: message,
-        });
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-
-      await writeAdminAuditLog({
-        request,
-        admin: auditAdmin,
-        action: "view_inventory_products",
-        module: "inventory",
-        targetType: "inventory",
-        result: "success",
-        metadata: { count: data?.length ?? 0 },
-      });
-      return NextResponse.json({ products: data ?? [] });
+      if (error) throw error;
+      return NextResponse.json({ data: data ?? [] });
     }
 
-    const status = url.searchParams.get("status") ?? "all";
-    if (!INVENTORY_STATUSES.has(status)) {
-      return NextResponse.json({ error: "无效库存状态" }, { status: 400 });
+    if (mode === "batches") {
+      const search = getSearchParam(request, "search");
+      const rawStatus = getSearchParam(request, "status") || "all";
+      const status = BATCH_STATUSES.has(rawStatus) ? rawStatus : "all";
+      const page = Number(getSearchParam(request, "page") || 1);
+      const pageSize = Number(getSearchParam(request, "pageSize") || 20);
+      const { data, error } = await admin.supabase.rpc("admin_list_digital_inventory_batches", {
+        p_search: search || null,
+        p_status: status,
+        p_page: Number.isFinite(page) ? page : 1,
+        p_page_size: Number.isFinite(pageSize) ? pageSize : 20,
+      });
+
+      if (error) throw error;
+      return NextResponse.json({ data: data ?? [] });
     }
 
     if (mode === "items") {
-      const productId = url.searchParams.get("productId");
-      if (!productId) {
-        return NextResponse.json({ error: "请选择商品" }, { status: 400 });
-      }
+      const productId = getSearchParam(request, "productId");
+      const search = getSearchParam(request, "search");
+      const rawStatus = getSearchParam(request, "status") || "all";
+      const status = INVENTORY_STATUSES.has(rawStatus) ? rawStatus : "all";
+      const page = Number(getSearchParam(request, "page") || 1);
+      const pageSize = Number(getSearchParam(request, "pageSize") || 20);
+
+      if (!productId) return jsonError("请选择商品后再查看库存明细");
 
       const { data, error } = await admin.supabase.rpc("admin_list_digital_inventory_items", {
         p_product_id: productId,
-        p_batch_no: url.searchParams.get("batchNo") || null,
         p_status: status,
-        p_page: parsePositiveInt(url.searchParams.get("page"), 1, 9999),
-        p_page_size: parsePositiveInt(url.searchParams.get("pageSize"), 50, 100),
+        p_search: search || null,
+        p_page: Number.isFinite(page) ? page : 1,
+        p_page_size: Number.isFinite(pageSize) ? pageSize : 20,
       });
 
-      if (error) {
-        const message = sanitizeError(error, "库存详情读取失败");
-        await writeAdminAuditLog({
-          request,
-          admin: auditAdmin,
-          action: "view_inventory_items",
-          module: "inventory",
-          targetType: "product",
-          targetId: productId,
-          result: "failed",
-          errorMessage: message,
-        });
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-
-      const rows = data ?? [];
-      await writeAdminAuditLog({
-        request,
-        admin: auditAdmin,
-        action: "view_inventory_items",
-        module: "inventory",
-        targetType: "product",
-        targetId: productId,
-        result: "success",
-        metadata: {
-          status,
-          count: Number(rows[0]?.total_rows ?? 0),
-          page: parsePositiveInt(url.searchParams.get("page"), 1, 9999),
-        },
-      });
-      return NextResponse.json({
-        items: rows,
-        count: Number(rows[0]?.total_rows ?? 0),
-      });
+      if (error) throw error;
+      return NextResponse.json({ data: data ?? [] });
     }
+
+    const search = getSearchParam(request, "search");
+    const rawStatus = getSearchParam(request, "status") || "all";
+    const status = INVENTORY_STATUSES.has(rawStatus) ? rawStatus : "all";
+    const page = Number(getSearchParam(request, "page") || 1);
+    const pageSize = Number(getSearchParam(request, "pageSize") || 20);
 
     const { data, error } = await admin.supabase.rpc("admin_list_digital_inventory_summary", {
-      p_search: url.searchParams.get("search") ?? "",
+      p_search: search || null,
       p_status: status,
-      p_page: parsePositiveInt(url.searchParams.get("page"), 1, 9999),
-      p_page_size: parsePositiveInt(url.searchParams.get("pageSize"), 20, 100),
+      p_page: Number.isFinite(page) ? page : 1,
+      p_page_size: Number.isFinite(pageSize) ? pageSize : 20,
     });
 
-    if (error) {
-      const message = sanitizeError(error, "库存列表读取失败");
-      await writeAdminAuditLog({
-        request,
-        admin: auditAdmin,
-        action: "view_inventory_summary",
-        module: "inventory",
-        targetType: "inventory",
-        result: "failed",
-        errorMessage: message,
-      });
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
-
-    const rows = data ?? [];
-    await writeAdminAuditLog({
-      request,
-      admin: auditAdmin,
-      action: "view_inventory_summary",
-      module: "inventory",
-      targetType: "inventory",
-      result: "success",
-      metadata: {
-        status,
-        count: Number(rows[0]?.total_rows ?? 0),
-      },
-    });
-    return NextResponse.json({
-      rows,
-      count: Number(rows[0]?.total_rows ?? 0),
-    });
+    if (error) throw error;
+    return NextResponse.json({ data: data ?? [] });
   } catch (error) {
-    console.error("[Admin Inventory] GET failed", error);
-    const message = sanitizeError(error, "库存读取失败");
+    const message = getOrderErrorMessage(error, "库存数据加载失败");
     await writeAdminAuditLog({
-      request,
-      admin: auditAdmin,
       action: "view_inventory",
       module: "inventory",
-      targetType: "inventory",
+      targetType: "digital_inventory",
       result: "failed",
       errorMessage: message,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonError(message, 500);
   }
 }
 
 export async function POST(request: Request) {
-  let auditAdmin: AuditAdmin | undefined;
+  const admin = await getServerAdminContext();
+  if (!admin.ok) {
+    await writeAdminAuditLog({
+      action: "import_inventory",
+      module: "inventory",
+      targetType: "digital_inventory",
+      result: "denied",
+      errorMessage: admin.message,
+    });
+    return jsonError(admin.message, admin.status);
+  }
 
   try {
-    const admin = await getServerAdminContext();
-    if (!admin.ok) {
-      await writeAdminAuditLog({
-        request,
-        action: "import_inventory",
-        module: "inventory",
-        targetType: "inventory",
-        result: "denied",
-        errorMessage: admin.message,
+    const contentTypeHeader = request.headers.get("content-type") ?? "";
+    if (contentTypeHeader.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const intent = String(formData.get("intent") ?? "preview");
+      const productId = String(formData.get("product_id") ?? "").trim();
+      const batchName = String(formData.get("batch_name") ?? "").trim();
+      const contentType = String(formData.get("content_type") ?? "card_key") as InventoryContentType;
+      const file = formData.get("file");
+
+      if (!productId) return jsonError("请选择要导入库存的商品");
+      if (!CONTENT_TYPES.has(contentType)) return jsonError("请选择正确的库存内容类型");
+      if (!isUploadFile(file)) return jsonError("请选择 TXT 或 CSV 文件");
+
+      const serviceClient = getSupabaseServiceRoleClient();
+      if (!serviceClient) return jsonError("服务端未配置库存导入权限，请检查环境变量", 500);
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const parsed = parseInventoryFile({
+        fileName: file.name || "inventory.txt",
+        buffer,
+        contentType,
       });
-      return NextResponse.json({ error: admin.message }, { status: admin.status });
-    }
-    auditAdmin = { id: admin.user.id, email: admin.user.email };
+      const existingHashes = await findExistingContentHashes(
+        serviceClient as any,
+        productId,
+        parsed.items.map((item) => item.contentHash),
+      );
+      const databaseDuplicateRows = parsed.items.filter((item) => existingHashes.has(item.contentHash)).length;
+      const preview = {
+        ...parsed,
+        items: undefined,
+        databaseDuplicateRows,
+        estimatedImportRows: parsed.items.length - databaseDuplicateRows,
+      };
 
-    const body = (await request.json().catch(() => null)) as
-      | {
-          product_id?: string;
-          contents?: string[];
-          content?: string;
-          batch_no?: string;
-          remark?: string;
-          expires_at?: string | null;
-        }
-      | null;
+      if (intent !== "import") {
+        return NextResponse.json({ preview });
+      }
 
-    const productId = body?.product_id;
-    if (!productId) {
-      return NextResponse.json({ error: "请选择商品" }, { status: 400 });
-    }
-
-    const contents = Array.isArray(body?.contents) ? body.contents : body?.content ? [body.content] : [];
-    const normalized = contents.map((item) => String(item ?? "").trim()).filter(Boolean);
-
-    if (normalized.length === 0) {
-      await writeAdminAuditLog({
-        request,
-        admin: auditAdmin,
-        action: "import_inventory",
-        module: "inventory",
-        targetType: "product",
-        targetId: productId,
-        result: "failed",
-        errorCode: "empty_inventory_content",
-        errorMessage: "请填写库存内容",
+      const result = await importDigitalInventoryBatch({
+        serviceClient: serviceClient as any,
+        productId,
+        batchName,
+        contentType,
+        sourceFilename: file.name || "inventory.txt",
+        parsed,
+        createdBy: admin.user.id,
       });
-      return NextResponse.json({ error: "请填写库存内容" }, { status: 400 });
+
+      await writeAdminAuditLog({
+        action: "import_inventory_batch",
+        module: "inventory",
+        targetType: "digital_inventory_batch",
+        targetId: result.batchId,
+        targetLabel: result.batchNo,
+        result: result.importStatus === "failed" ? "failed" : "success",
+        metadata: {
+          productId,
+          contentType,
+          sourceFilename: file.name,
+          importedRows: result.importedRows,
+          skippedRows: result.skippedRows,
+          failedRows: result.failedRows,
+        },
+      });
+
+      return NextResponse.json({ result });
     }
 
-    if (normalized.length > 1000) {
-      await writeAdminAuditLog({
-        request,
-        admin: auditAdmin,
-        action: "import_inventory",
-        module: "inventory",
-        targetType: "product",
-        targetId: productId,
-        result: "failed",
-        errorCode: "too_many_inventory_items",
-        errorMessage: "单次最多导入 1000 条",
-        metadata: { requested_count: normalized.length },
-      });
-      return NextResponse.json({ error: "单次最多导入 1000 条" }, { status: 400 });
-    }
+    const body = await request.json();
+    const productId = String(body.product_id ?? "").trim();
+    const content = String(body.content ?? "").trim();
+    const contentType = String(body.content_type ?? "card_key") as InventoryContentType;
+
+    if (!productId || !content) return jsonError("商品和库存内容不能为空");
+    if (!CONTENT_TYPES.has(contentType)) return jsonError("请选择正确的库存内容类型");
+
+    const lines = content.split(/\r\n|\n|\r/).map((line) => line.trim()).filter(Boolean);
+    if (lines.length === 0) return jsonError("没有可导入的库存内容");
 
     const { data, error } = await admin.supabase.rpc("admin_import_digital_inventory", {
       p_product_id: productId,
-      p_contents: normalized,
-      p_batch_no: body?.batch_no ?? null,
-      p_remark: body?.remark ?? null,
-      p_expires_at: body?.expires_at ?? null,
+      p_content_type: contentType,
+      p_contents: lines,
+      p_batch_no: typeof body.batch_no === "string" && body.batch_no.trim() ? body.batch_no.trim() : null,
     });
 
-    if (error) {
-      const message = sanitizeError(error, "库存导入失败");
-      await writeAdminAuditLog({
-        request,
-        admin: auditAdmin,
-        action: "import_inventory",
-        module: "inventory",
-        targetType: "product",
-        targetId: productId,
-        result: "failed",
-        errorMessage: message,
-        metadata: { batch_no: body?.batch_no ?? null, requested_count: normalized.length },
-      });
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
+    if (error) throw error;
 
-    const result = Array.isArray(data) ? data[0] : data;
     await writeAdminAuditLog({
-      request,
-      admin: auditAdmin,
       action: "import_inventory",
       module: "inventory",
-      targetType: "product",
-      targetId: productId,
+      targetType: "digital_inventory",
       result: "success",
-      afterSummary: {
-        batch_no: body?.batch_no ?? null,
-        requested_count: normalized.length,
-        result,
-      },
+      metadata: { productId, contentType, count: lines.length },
     });
-    return NextResponse.json({ result });
+
+    return NextResponse.json({ data });
   } catch (error) {
-    console.error("[Admin Inventory] import failed", error);
-    const message = sanitizeError(error, "库存导入失败");
+    const message = getInventoryImportErrorMessage(error, "库存导入失败");
     await writeAdminAuditLog({
-      request,
-      admin: auditAdmin,
       action: "import_inventory",
       module: "inventory",
-      targetType: "inventory",
+      targetType: "digital_inventory",
       result: "failed",
       errorMessage: message,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonError(message, 500);
   }
 }
 
 export async function PATCH(request: Request) {
-  let auditAdmin: AuditAdmin | undefined;
+  const admin = await getServerAdminContext();
+  if (!admin.ok) {
+    await writeAdminAuditLog({
+      action: "update_inventory",
+      module: "inventory",
+      targetType: "digital_inventory",
+      result: "denied",
+      errorMessage: admin.message,
+    });
+    return jsonError(admin.message, admin.status);
+  }
 
   try {
-    const admin = await getServerAdminContext();
-    if (!admin.ok) {
-      await writeAdminAuditLog({
-        request,
-        action: "disable_inventory",
-        module: "inventory",
-        targetType: "inventory_item",
-        result: "denied",
-        errorMessage: admin.message,
+    const body = await request.json();
+    const action = String(body.action ?? "disable_item");
+    const remark = typeof body.remark === "string" ? body.remark.trim() : "";
+
+    if (action === "disable_batch") {
+      const batchId = String(body.batch_id ?? "").trim();
+      if (!batchId) return jsonError("缺少批次 ID");
+      const { data, error } = await admin.supabase.rpc("admin_disable_digital_inventory_batch", {
+        p_batch_id: batchId,
+        p_reason: remark || null,
       });
-      return NextResponse.json({ error: admin.message }, { status: admin.status });
-    }
-    auditAdmin = { id: admin.user.id, email: admin.user.email };
-
-    const body = (await request.json().catch(() => null)) as
-      | {
-          inventory_id?: string;
-          remark?: string;
-        }
-      | null;
-
-    if (!body?.inventory_id) {
-      return NextResponse.json({ error: "请选择库存记录" }, { status: 400 });
+      if (error) throw error;
+      await writeAdminAuditLog({
+        action: "disable_inventory_batch",
+        module: "inventory",
+        targetType: "digital_inventory_batch",
+        targetId: batchId,
+        result: "success",
+        metadata: { remark },
+      });
+      return NextResponse.json({ data });
     }
 
-    const { error } = await admin.supabase.rpc("admin_disable_digital_inventory", {
-      p_inventory_id: body.inventory_id,
-      p_remark: body.remark ?? null,
+    const inventoryId = String(body.inventory_id ?? "").trim();
+    if (!inventoryId) return jsonError("缺少库存 ID");
+
+    if (action === "restore_item") {
+      const { data, error } = await admin.supabase.rpc("admin_restore_digital_inventory_item", {
+        p_inventory_id: inventoryId,
+        p_reason: remark || null,
+      });
+      if (error) throw error;
+      await writeAdminAuditLog({
+        action: "restore_inventory_item",
+        module: "inventory",
+        targetType: "digital_inventory",
+        targetId: inventoryId,
+        result: "success",
+        metadata: { remark },
+      });
+      return NextResponse.json({ data });
+    }
+
+    const { data, error } = await admin.supabase.rpc("admin_disable_digital_inventory", {
+      p_inventory_id: inventoryId,
+      p_reason: remark || null,
     });
 
-    if (error) {
-      const message = sanitizeError(error, "库存禁用失败");
-      await writeAdminAuditLog({
-        request,
-        admin: auditAdmin,
-        action: "disable_inventory",
-        module: "inventory",
-        targetType: "inventory_item",
-        targetId: body.inventory_id,
-        result: "failed",
-        errorMessage: message,
-        metadata: { has_remark: Boolean(body.remark) },
-      });
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
-
+    if (error) throw error;
     await writeAdminAuditLog({
-      request,
-      admin: auditAdmin,
-      action: "disable_inventory",
+      action: "disable_inventory_item",
       module: "inventory",
-      targetType: "inventory_item",
-      targetId: body.inventory_id,
+      targetType: "digital_inventory",
+      targetId: inventoryId,
       result: "success",
-      metadata: { has_remark: Boolean(body.remark) },
+      metadata: { remark },
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ data });
   } catch (error) {
-    console.error("[Admin Inventory] disable failed", error);
-    const message = sanitizeError(error, "库存禁用失败");
+    const message = getOrderErrorMessage(error, "库存状态更新失败");
     await writeAdminAuditLog({
-      request,
-      admin: auditAdmin,
-      action: "disable_inventory",
+      action: "update_inventory",
       module: "inventory",
-      targetType: "inventory_item",
+      targetType: "digital_inventory",
       result: "failed",
       errorMessage: message,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonError(message, 500);
   }
 }
