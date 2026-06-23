@@ -17,6 +17,8 @@ export type RechargeStatus =
   | "expired"
   | "closed";
 
+export type PaymentSessionStatus = RechargeStatus;
+export type PaymentBusinessType = "order" | "recharge" | "account_recharge";
 export type PaymentResultType = "redirect" | "qrcode" | "address";
 
 export type PaymentChannel = {
@@ -71,10 +73,68 @@ export type CreatePaymentResult = {
   payableAmount: number;
 };
 
+export type ProviderCreatePaymentInput = {
+  sessionNo: string;
+  businessType: PaymentBusinessType;
+  businessNo: string;
+  userId: string;
+  channel: PaymentChannel;
+  currency: PaymentCurrency;
+  network?: PaymentNetwork;
+  requestedAmount: number;
+  feeAmount: number;
+  payableAmount: number;
+  expiresAt: string;
+};
+
+export type ProviderCreatePaymentResult = {
+  status: "pending" | "processing";
+  paymentType: PaymentResultType;
+  paymentUrl?: string;
+  qrCodeUrl?: string;
+  walletAddress?: string;
+  providerOrderNo?: string;
+  expiresAt?: string;
+};
+
+export type ProviderQueryPaymentResult = {
+  status: PaymentSessionStatus;
+  providerTransactionId?: string;
+  paidAt?: string;
+  amount?: number;
+  currency?: PaymentCurrency;
+  rawSummary?: Record<string, unknown>;
+};
+
+export type ProviderClosePaymentResult = {
+  closed: boolean;
+  status?: PaymentSessionStatus;
+};
+
+export type ProviderCallbackContext = {
+  channelCode: PaymentChannelCode;
+  provider: PaymentProviderCode;
+  rawBody: string;
+  headers: Headers;
+};
+
+export type ProviderParsedCallback = {
+  businessNo: string;
+  sessionNo?: string;
+  providerOrderNo?: string;
+  providerTransactionId: string;
+  status: PaymentSessionStatus;
+  amount: number;
+  currency: PaymentCurrency;
+  channelCode?: PaymentChannelCode;
+  paidAt?: string;
+  rawSummary?: Record<string, unknown>;
+};
+
 export type PaymentProvider = {
-  createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;
-  queryPayment(rechargeNo: string): Promise<{ status: RechargeStatus }>;
-  closePayment(rechargeNo: string): Promise<{ closed: boolean }>;
-  verifyCallback(payload: unknown, signature?: string): Promise<boolean>;
-  parseCallback(payload: unknown): Promise<Record<string, unknown>>;
+  createPayment(input: CreatePaymentInput | ProviderCreatePaymentInput): Promise<CreatePaymentResult | ProviderCreatePaymentResult>;
+  queryPayment(paymentNo: string): Promise<{ status: RechargeStatus } | ProviderQueryPaymentResult>;
+  closePayment(paymentNo: string): Promise<{ closed: boolean } | ProviderClosePaymentResult>;
+  verifyCallback(payload: unknown, signatureOrContext?: string | ProviderCallbackContext): Promise<boolean>;
+  parseCallback(payload: unknown, context?: ProviderCallbackContext): Promise<Record<string, unknown> | ProviderParsedCallback>;
 };
