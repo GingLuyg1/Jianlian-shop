@@ -12,6 +12,11 @@ export type OrderItemRecord = {
   quantity: number;
   line_total: number;
   delivery_type: string | null;
+  delivery_status?: string | null;
+  delivered_quantity?: number | null;
+  delivery_failure_reason?: string | null;
+  delivery_started_at?: string | null;
+  delivery_completed_at?: string | null;
   product_snapshot: Record<string, unknown> | null;
   created_at: string;
 };

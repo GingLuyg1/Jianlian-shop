@@ -58,6 +58,11 @@ function normalizeItem(row: Record<string, unknown>): OrderItemRecord {
     quantity: normalizeNumber(row.quantity, 1),
     line_total: normalizeNumber(row.line_total),
     delivery_type: row.delivery_type ? String(row.delivery_type) : null,
+    delivery_status: row.delivery_status ? String(row.delivery_status) : null,
+    delivered_quantity: row.delivered_quantity === null || row.delivered_quantity === undefined ? null : normalizeNumber(row.delivered_quantity),
+    delivery_failure_reason: row.delivery_failure_reason ? String(row.delivery_failure_reason) : null,
+    delivery_started_at: row.delivery_started_at ? String(row.delivery_started_at) : null,
+    delivery_completed_at: row.delivery_completed_at ? String(row.delivery_completed_at) : null,
     product_snapshot:
       row.product_snapshot && typeof row.product_snapshot === "object"
         ? (row.product_snapshot as Record<string, unknown>)

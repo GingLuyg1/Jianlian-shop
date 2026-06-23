@@ -8,6 +8,7 @@ import { ArrowLeft, Clipboard, Eye, EyeOff, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import UserFulfillmentPanel from "@/components/orders/UserFulfillmentPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
