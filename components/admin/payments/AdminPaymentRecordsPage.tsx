@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Copy, Eye, RefreshCcw, Search, X } from "lucide-react";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminReconciliationPanel from "@/components/admin/payments/AdminReconciliationPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -60,7 +61,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [sort, setSort] = useState("created_desc");
-  const [view, setView] = useState<"all" | "exceptions">("all");
+  const [view, setView] = useState<"all" | "exceptions" | "reconciliations">("all");
   const [exceptionType, setExceptionType] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -83,7 +84,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     setSort(params.get("sort") ?? "created_desc");
     if (!isRechargePage) {
       setBusinessType(params.get("businessType") ?? "all");
-      setView(params.get("view") === "exceptions" ? "exceptions" : "all");
+      setView(params.get("view") === "exceptions" ? "exceptions" : params.get("view") === "reconciliations" ? "reconciliations" : "all");
       setExceptionType(params.get("exceptionType") ?? "all");
     }
   }, [isRechargePage]);
@@ -106,6 +107,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     setLoading(true);
     setError("");
     try {
+      if (!isRechargePage && view === "reconciliations") { setLoading(false); return; }
       const params = buildParams();
       const endpoint = isRechargePage ? "/api/admin/recharges" : "/api/admin/payments";
       const response = await fetch(`${endpoint}?${params.toString()}`, { cache: "no-store" });
@@ -123,7 +125,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [buildParams, isRechargePage]);
+  }, [buildParams, isRechargePage, view]);
 
   useEffect(() => { loadPayments(); }, [loadPayments]);
 
@@ -161,7 +163,8 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   return (
     <AdminPageShell title={isRechargePage ? "充值管理" : "支付管理"} description={isRechargePage ? "查看账户充值支付记录。管理员不能在此直接给用户余额入账。" : "统一查看商品订单和账户充值支付记录，异常支付仅做只读追踪。"} actions={<Button variant="outline" size="sm" onClick={loadPayments} disabled={loading}><RefreshCcw className="mr-2 h-4 w-4" />刷新</Button>}>
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-        {!isRechargePage ? <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => { setView("exceptions"); setPage(1); }}>异常支付</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div> : null}
+        {!isRechargePage ? <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => { setView("exceptions"); setPage(1); }}>异常支付</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "outline"} onClick={() => { setView("reconciliations"); setPage(1); }}>对账记录</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div> : null}
+        {view === "reconciliations" ? <AdminReconciliationPanel /> : <>
         <div className="grid shrink-0 gap-2 border-b px-4 py-3 min-[1200px]:grid-cols-[minmax(180px,1.2fr)_150px_150px_145px_145px_140px_86px] min-[1600px]:grid-cols-[minmax(220px,1.35fr)_140px_145px_145px_145px_140px_86px_86px]">
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="支付单号 / 业务单号 / 用户邮箱" className="h-9 pl-9" /></div>
           {!isRechargePage ? <select value={businessType} onChange={(event) => { setBusinessType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部业务</option><option value="order">商品订单</option><option value="recharge">账户充值</option></select> : null}
@@ -173,7 +176,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
           <Button variant="outline" size="sm" onClick={resetFilters}>重置</Button>
         </div>
         {error ? <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadPayments} /></div> : <div className="min-h-0 flex-1 overflow-auto"><PaymentTable isRechargePage={isRechargePage} loading={loading} payments={payments} copyText={copyText} loadDetail={loadDetail} /></div>}
-        <div className="flex h-12 shrink-0 items-center justify-between border-t px-4 text-sm text-slate-500"><span>共 {count} 条记录，每页 {PAGE_SIZE} 条</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button><span>第 {page} / {totalPages} 页</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button></div></div>
+        <div className="flex h-12 shrink-0 items-center justify-between border-t px-4 text-sm text-slate-500"><span>共 {count} 条记录，每页 {PAGE_SIZE} 条</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button><span>第 {page} / {totalPages} 页</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button></div></div></>}
       </Card>
       {selected ? <PaymentDrawer selected={selected} detail={detail} callbacks={callbacks} callbackError={callbackError} detailLoading={detailLoading} detailError={detailError} onClose={() => setSelected(null)} onRetry={() => loadDetail(selected)} copyText={copyText} /> : null}
     </AdminPageShell>

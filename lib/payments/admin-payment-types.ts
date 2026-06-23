@@ -1,4 +1,4 @@
-﻿export const PAYMENT_BUSINESS_TYPES = ["order", "recharge"] as const;
+export const PAYMENT_BUSINESS_TYPES = ["order", "recharge"] as const;
 export type PaymentBusinessType = (typeof PAYMENT_BUSINESS_TYPES)[number];
 
 export const PAYMENT_STATUS_VALUES = [
@@ -164,4 +164,97 @@ export function maskWallet(value: string | null | undefined) {
   if (!value) return "—";
   if (value.length <= 12) return value;
   return `${value.slice(0, 6)}...${value.slice(-6)}`;
+}
+
+export const RECONCILIATION_RESULTS = ["matched", "mismatched", "pending", "query_failed", "manual_review", "resolved"] as const;
+export type ReconciliationResult = (typeof RECONCILIATION_RESULTS)[number];
+
+export const RECONCILIATION_DIFFERENCE_TYPES = [
+  "provider_paid_local_unpaid",
+  "local_paid_provider_unpaid",
+  "amount_mismatch",
+  "currency_mismatch",
+  "transaction_id_conflict",
+  "status_mismatch",
+  "provider_not_found",
+] as const;
+export type ReconciliationDifferenceType = (typeof RECONCILIATION_DIFFERENCE_TYPES)[number];
+
+export type AdminPaymentReconciliation = {
+  id: string;
+  reconciliation_no: string;
+  payment_session_id: string | null;
+  business_type: "order" | "recharge";
+  business_id: string | null;
+  channel_code: string | null;
+  provider: string | null;
+  local_status: string | null;
+  provider_status: string | null;
+  local_amount: number;
+  provider_amount: number | null;
+  currency: string;
+  result: ReconciliationResult;
+  difference_type: ReconciliationDifferenceType | null;
+  error_code: string | null;
+  error_message: string | null;
+  checked_at: string;
+  resolved_at: string | null;
+  resolution: string | null;
+  risk_level: "normal" | "medium" | "high";
+  provider_trade_no: string | null;
+  local_trade_no: string | null;
+  provider_summary: Record<string, unknown>;
+  recovery_action: string | null;
+  recovery_status: string | null;
+  recovery_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function getReconciliationResultLabel(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    matched: "一致",
+    mismatched: "不一致",
+    pending: "待确认",
+    query_failed: "查询失败",
+    manual_review: "人工复核",
+    resolved: "已解决",
+  };
+  return value ? labels[value] ?? value : "—";
+}
+
+export function getReconciliationResultClass(value: string | null | undefined) {
+  const classes: Record<string, string> = {
+    matched: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    mismatched: "border-amber-200 bg-amber-50 text-amber-700",
+    pending: "border-blue-200 bg-blue-50 text-blue-700",
+    query_failed: "border-slate-200 bg-slate-100 text-slate-600",
+    manual_review: "border-red-200 bg-red-50 text-red-700",
+    resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
+  return classes[value ?? ""] ?? "border-slate-200 bg-slate-100 text-slate-600";
+}
+
+export function getDifferenceTypeLabel(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    provider_paid_local_unpaid: "渠道已付本站未付",
+    local_paid_provider_unpaid: "本站已付渠道未付",
+    amount_mismatch: "金额不一致",
+    currency_mismatch: "币种不一致",
+    transaction_id_conflict: "交易号冲突",
+    status_mismatch: "状态不一致",
+    provider_not_found: "渠道订单不存在",
+  };
+  return value ? labels[value] ?? value : "—";
+}
+
+export function getRiskLevelLabel(value: string | null | undefined) {
+  const labels: Record<string, string> = { normal: "普通", medium: "中风险", high: "高风险" };
+  return value ? labels[value] ?? value : "—";
+}
+
+export function getRiskLevelClass(value: string | null | undefined) {
+  if (value === "high") return "border-red-200 bg-red-50 text-red-700";
+  if (value === "medium") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-slate-100 text-slate-600";
 }
