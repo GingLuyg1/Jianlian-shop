@@ -225,7 +225,9 @@ export default function AdminProductsPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [productForm, setProductForm] = useState<ProductFormState | null>(null);
+  const [productInitialForm, setProductInitialForm] = useState<ProductFormState | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryFormState | null>(null);
+  const [categoryInitialForm, setCategoryInitialForm] = useState<CategoryFormState | null>(null);
   const [productErrors, setProductErrors] = useState<FieldErrors>({});
   const [categoryErrors, setCategoryErrors] = useState<FieldErrors>({});
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
@@ -253,6 +255,14 @@ export default function AdminProductsPage() {
     return undefined;
   }, [categories, primaryFilter, secondaryFilter]);
   const totalProductPages = Math.max(1, Math.ceil(productCount / productPageSize));
+  const productDirty = useMemo(
+    () => (productForm ? isProductDirty(productForm, productInitialForm) : false),
+    [productForm, productInitialForm]
+  );
+  const categoryDirty = useMemo(
+    () => (categoryForm ? isCategoryDirty(categoryForm, categoryInitialForm) : false),
+    [categoryForm, categoryInitialForm]
+  );
 
   const loadCategories = useCallback(async () => {
     setIsCategoryLoading(true);
@@ -306,6 +316,19 @@ export default function AdminProductsPage() {
     return () => window.clearTimeout(timer);
   }, [productSearch]);
 
+  useEffect(() => {
+    const shouldBlock = productDirty || categoryDirty || isSaving;
+    if (!shouldBlock) return;
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [categoryDirty, isSaving, productDirty]);
+
   function clearNotice() {
     setMessage("");
     setError("");
@@ -314,31 +337,37 @@ export default function AdminProductsPage() {
   function openNewProduct() {
     clearNotice();
     setProductErrors({});
-    setProductForm(emptyProductForm());
+    const form = emptyProductForm();
+    setProductInitialForm(form);
+    setProductForm(form);
   }
 
   function openEditProduct(product: AdminProduct) {
     clearNotice();
     setProductErrors({});
-    setProductForm(toProductForm(product, categoryMap, categories));
+    const form = toProductForm(product, categoryMap, categories);
+    setProductInitialForm(form);
+    setProductForm(form);
   }
 
   function openCopyProduct(product: AdminProduct) {
     clearNotice();
     setProductErrors({});
     const form = toProductForm(product, categoryMap, categories);
-    setProductForm({
+    const nextForm: ProductFormState = {
       ...form,
       id: undefined,
       name: `${form.name} 副本`,
       slug: `${form.slug}-copy`,
       status: "draft",
-    });
+    };
+    setProductInitialForm(emptyProductForm());
+    setProductForm(nextForm);
   }
 
   function requestCloseProduct() {
     if (!productForm || isSaving) return;
-    if (isProductDirty(productForm)) {
+    if (productDirty) {
       setConfirmAction({ type: "close-product" });
       return;
     }
@@ -347,6 +376,7 @@ export default function AdminProductsPage() {
 
   function closeProductDialog() {
     setProductForm(null);
+    setProductInitialForm(null);
     setProductErrors({});
     setError("");
   }
@@ -354,18 +384,22 @@ export default function AdminProductsPage() {
   function openNewCategory() {
     clearNotice();
     setCategoryErrors({});
-    setCategoryForm(emptyCategoryForm());
+    const form = emptyCategoryForm();
+    setCategoryInitialForm(form);
+    setCategoryForm(form);
   }
 
   function openEditCategory(category: AdminCategory) {
     clearNotice();
     setCategoryErrors({});
-    setCategoryForm(toCategoryForm(category));
+    const form = toCategoryForm(category);
+    setCategoryInitialForm(form);
+    setCategoryForm(form);
   }
 
   function requestCloseCategory() {
     if (!categoryForm || isSaving) return;
-    if (isCategoryDirty(categoryForm)) {
+    if (categoryDirty) {
       setConfirmAction({ type: "close-category" });
       return;
     }
@@ -374,6 +408,7 @@ export default function AdminProductsPage() {
 
   function closeCategoryDialog() {
     setCategoryForm(null);
+    setCategoryInitialForm(null);
     setCategoryErrors({});
     setError("");
   }
@@ -460,16 +495,25 @@ export default function AdminProductsPage() {
     clearNotice();
     const payload = buildProductPayload();
     if (!payload || !productForm) return;
+    if (!isProductDirty(productForm, productInitialForm)) {
+      setMessage("没有需要保存的修改");
+      return;
+    }
 
     setIsSaving(true);
     try {
+      let savedProduct: AdminProduct;
       if (productForm.id) {
-        await updateProduct(productForm.id, payload);
+        savedProduct = await updateProduct(productForm.id, payload);
         setMessage("商品更新成功");
       } else {
-        await createProduct(payload);
+        savedProduct = await createProduct(payload);
         setMessage("商品创建成功");
       }
+      const savedForm = toProductForm(savedProduct, categoryMap, categories);
+      setProductInitialForm(savedForm);
+      setProductForm(savedForm);
+      setProductErrors({});
       closeProductDialog();
       await loadProducts();
     } catch (saveError) {
@@ -531,16 +575,25 @@ export default function AdminProductsPage() {
     clearNotice();
     const payload = buildCategoryPayload();
     if (!payload || !categoryForm) return;
+    if (!isCategoryDirty(categoryForm, categoryInitialForm)) {
+      setMessage("没有需要保存的修改");
+      return;
+    }
 
     setIsSaving(true);
     try {
+      let savedCategory: AdminCategory;
       if (categoryForm.id) {
-        await updateCategory(categoryForm.id, payload);
+        savedCategory = await updateCategory(categoryForm.id, payload);
         setMessage("分类更新成功");
       } else {
-        await createCategory(payload);
+        savedCategory = await createCategory(payload);
         setMessage("分类创建成功");
       }
+      const savedForm = toCategoryForm(savedCategory);
+      setCategoryInitialForm(savedForm);
+      setCategoryForm(savedForm);
+      setCategoryErrors({});
       closeCategoryDialog();
       await loadCategories();
     } catch (saveError) {
@@ -890,6 +943,7 @@ export default function AdminProductsPage() {
         categories={categories}
         errors={productErrors}
         form={productForm}
+        isDirty={productDirty}
         isSaving={isSaving}
         onClose={requestCloseProduct}
         onSubmit={handleProductSubmit}
@@ -903,6 +957,7 @@ export default function AdminProductsPage() {
         categories={categories}
         errors={categoryErrors}
         form={categoryForm}
+        isDirty={categoryDirty}
         isSaving={isSaving}
         onClose={requestCloseCategory}
         onSubmit={handleCategorySubmit}
@@ -1151,6 +1206,7 @@ function ProductFormDialog({
   categories,
   errors,
   form,
+  isDirty,
   isSaving,
   onClose,
   onSubmit,
@@ -1159,6 +1215,7 @@ function ProductFormDialog({
   categories: AdminCategory[];
   errors: FieldErrors;
   form: ProductFormState | null;
+  isDirty: boolean;
   isSaving: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1324,7 +1381,7 @@ function ProductFormDialog({
               </Field>
             </FormSection>
           </div>
-          <DialogActions isSaving={isSaving} saveLabel="保存商品" onCancel={onClose} />
+          <DialogActions disableSave={!isDirty} isSaving={isSaving} saveLabel="保存商品" onCancel={onClose} />
         </form>
       )}
     </ModalFrame>
@@ -1335,6 +1392,7 @@ function CategoryFormDialog({
   categories,
   errors,
   form,
+  isDirty,
   isSaving,
   onClose,
   onSubmit,
@@ -1343,6 +1401,7 @@ function CategoryFormDialog({
   categories: AdminCategory[];
   errors: FieldErrors;
   form: CategoryFormState | null;
+  isDirty: boolean;
   isSaving: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1429,7 +1488,7 @@ function CategoryFormDialog({
               <Textarea rows={3} value={form.description} onChange={(event) => onUpdate({ ...form, description: event.target.value })} />
             </Field>
           </div>
-          <DialogActions isSaving={isSaving} saveLabel="保存分类" onCancel={onClose} />
+          <DialogActions disableSave={!isDirty} isSaving={isSaving} saveLabel="保存分类" onCancel={onClose} />
         </form>
       )}
     </ModalFrame>
@@ -1488,10 +1547,12 @@ function ModalFrame({
 }
 
 function DialogActions({
+  disableSave = false,
   isSaving,
   onCancel,
   saveLabel,
 }: {
+  disableSave?: boolean;
   isSaving: boolean;
   onCancel: () => void;
   saveLabel: string;
@@ -1501,7 +1562,7 @@ function DialogActions({
       <Button type="button" variant="outline" disabled={isSaving} onClick={onCancel}>
         取消
       </Button>
-      <Button type="submit" disabled={isSaving}>
+      <Button type="submit" disabled={isSaving || disableSave}>
         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         {isSaving ? "保存中..." : saveLabel}
       </Button>
@@ -1746,20 +1807,68 @@ function toCategoryForm(category: AdminCategory): CategoryFormState {
   };
 }
 
-function isProductDirty(form: ProductFormState) {
-  if (form.id) return true;
-  const empty = emptyProductForm();
-  return Object.keys(empty).some((key) => {
-    const field = key as keyof ProductFormState;
-    return form[field] !== empty[field];
-  });
+function normalizeOptionalText(value: string | null | undefined) {
+  const next = (value ?? "").trim();
+  return next || null;
 }
 
-function isCategoryDirty(form: CategoryFormState) {
-  if (form.id) return true;
-  const empty = emptyCategoryForm();
-  return Object.keys(empty).some((key) => {
-    const field = key as keyof CategoryFormState;
-    return form[field] !== empty[field];
-  });
+function normalizeFormNumber(value: string | number | null | undefined, fallback = 0) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
+function normalizeOptionalFormNumber(value: string | number | null | undefined) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const next = Number(value);
+  return Number.isFinite(next) ? next : null;
+}
+
+function normalizeProductFormValues(form: ProductFormState) {
+  return {
+    id: form.id ?? null,
+    name: form.name.trim(),
+    slug: form.slug.trim().toLowerCase(),
+    primaryCategoryId: form.primaryCategoryId || null,
+    category_id: form.category_id || null,
+    short_description: normalizeOptionalText(form.short_description),
+    image_url: normalizeOptionalText(form.image_url),
+    price: normalizeFormNumber(form.price),
+    original_price: normalizeOptionalFormNumber(form.original_price),
+    stock: Math.max(0, Math.trunc(normalizeFormNumber(form.stock))),
+    delivery_type: form.delivery_type,
+    status: form.status,
+    sort_order: Math.trunc(normalizeFormNumber(form.sort_order)),
+    metadata_note: normalizeOptionalText(form.metadata_note),
+  };
+}
+
+function normalizeCategoryFormValues(form: CategoryFormState) {
+  return {
+    id: form.id ?? null,
+    parent_id: form.parent_id || null,
+    level: form.level,
+    name: form.name.trim(),
+    slug: form.slug.trim().toLowerCase(),
+    icon: normalizeOptionalText(form.icon),
+    description: normalizeOptionalText(form.description),
+    sort_order: Math.trunc(normalizeFormNumber(form.sort_order)),
+    is_active: Boolean(form.is_active),
+  };
+}
+
+function hasChanged<T extends Record<string, unknown>>(current: T, initial: T) {
+  return Object.keys(current).some((key) => current[key] !== initial[key]);
+}
+
+function isProductDirty(form: ProductFormState, initialForm: ProductFormState | null = null) {
+  const current = normalizeProductFormValues(form);
+  const initial = normalizeProductFormValues(initialForm ?? emptyProductForm());
+  return hasChanged(current, initial);
+}
+
+function isCategoryDirty(form: CategoryFormState, initialForm: CategoryFormState | null = null) {
+  const current = normalizeCategoryFormValues(form);
+  const initial = normalizeCategoryFormValues(initialForm ?? emptyCategoryForm());
+  return hasChanged(current, initial);
 }
