@@ -168,7 +168,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       const supabase = getSupabaseBrowserClient();
 
       if (isRegister) {
-        const normalizedInviteCode = inviteCode.trim();
+        const normalizedInviteCode = inviteCode.trim().toUpperCase();
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,

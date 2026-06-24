@@ -97,8 +97,7 @@ function formatDateTime(value: string | null) {
 }
 
 function getPromotionOrigin() {
-  if (typeof window === "undefined") return "https://www.jianlian.shop";
-  return window.location.origin || "https://www.jianlian.shop";
+  return "https://www.jianlian.shop";
 }
 
 function getErrorMessage(error: unknown, fallback = "推广数据读取失败，请稍后重试") {
@@ -187,6 +186,7 @@ export default function PromotionPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shortLinkLoading, setShortLinkLoading] = useState(false);
 
   const loadReferralData = useCallback(async () => {
     setLoading(true);
@@ -226,7 +226,7 @@ export default function PromotionPage() {
 
   const promotionLink = useMemo(() => {
     if (!data?.inviteCode) return "";
-    return `${getPromotionOrigin()}/register?invite=${encodeURIComponent(data.inviteCode)}`;
+    return `${getPromotionOrigin()}/r/${encodeURIComponent(data.inviteCode)}`;
   }, [data?.inviteCode]);
 
   const totalPages = Math.max(1, Math.ceil((data?.count ?? 0) / PAGE_SIZE));
@@ -245,15 +245,20 @@ export default function PromotionPage() {
 
   const copyPromotionLink = async () => {
     if (!promotionLink) {
-      toast.error("暂无推广链接，请稍后重试");
+      toast.error("暂无短链接，请稍后重试");
       return;
     }
 
+    setShortLinkLoading(true);
+
     try {
       await navigator.clipboard.writeText(promotionLink);
-      toast.success("推广链接已复制");
-    } catch {
-      toast.error("复制失败，请手动复制");
+      toast.success("短链接已复制");
+    } catch (copyError) {
+      console.error("[Promotion] Failed to copy short link", copyError);
+      toast.error("短链接复制失败，请手动复制");
+    } finally {
+      setShortLinkLoading(false);
     }
   };
 
@@ -305,15 +310,15 @@ export default function PromotionPage() {
             </div>
 
             <div className="mt-2.5 flex h-11 items-center gap-3 rounded-xl bg-slate-50 p-2">
-              <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "暂无推广链接"}>
-                {loading && !promotionLink ? "正在加载推广链接..." : promotionLink || "暂无推广链接"}
+              <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "暂无短链接"}>
+                {loading && !promotionLink ? "正在加载短链接..." : promotionLink || "暂无短链接"}
               </div>
               <button
                 type="button"
                 onClick={copyPromotionLink}
-                disabled={!promotionLink}
+                disabled={!promotionLink || shortLinkLoading}
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="复制推广链接"
+                aria-label="复制短链接"
               >
                 <Copy className="h-4 w-4" />
               </button>
@@ -324,11 +329,11 @@ export default function PromotionPage() {
               <InfoTile label="最低提现额" value={formatMoney(data?.minWithdrawAmount ?? 10)} />
               <button
                 type="button"
-                onClick={() => void loadReferralData()}
+                onClick={copyPromotionLink}
                 className="inline-flex h-[58px] items-center justify-center rounded-xl bg-orange-500 px-5 text-base font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={loading}
+                disabled={loading || shortLinkLoading || !promotionLink}
               >
-                生成短链接
+                {shortLinkLoading ? "复制中..." : "生成短链接"}
               </button>
             </div>
           </section>
