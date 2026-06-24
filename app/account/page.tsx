@@ -128,8 +128,8 @@ export default function AccountOverviewPage() {
   }, [orders]);
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      <Card className="shrink-0">
         <CardHeader className="pb-3">
           <CardTitle className="text-xl">账户概览</CardTitle>
           <p className="text-sm text-muted-foreground">查看当前账号资料、订单统计和最近订单。</p>
@@ -147,7 +147,7 @@ export default function AccountOverviewPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
           <div>
             <CardTitle className="text-base">最近订单</CardTitle>
@@ -157,7 +157,7 @@ export default function AccountOverviewPage() {
             <Link href="/account/orders">查看全部</Link>
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-h-0 flex-1 overflow-auto">
           {loading ? (
             <div className="space-y-2">
               {Array.from({ length: 3 }).map((_, index) => (
@@ -169,7 +169,7 @@ export default function AccountOverviewPage() {
               订单统计加载失败，请稍后重试。
             </div>
           ) : orders.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/50 p-8 text-center">
+            <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-orange-200 bg-orange-50/50 p-8 text-center">
               <div className="font-semibold text-slate-950">暂无订单</div>
               <p className="mt-2 text-sm text-muted-foreground">下单后可在这里查看最近订单。</p>
               <Button className="mt-4" asChild>

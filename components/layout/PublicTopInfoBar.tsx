@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
-  ClipboardList,
   CreditCard,
   LogIn,
   LogOut,
@@ -85,7 +84,6 @@ const accountMenuItems = [
   { label: "账户概览", href: "/account", icon: WalletCards },
   { label: "个人资料", href: "/account/profile", icon: UserCircle },
   { label: "账号安全", href: "/account/security", icon: Shield },
-  { label: "我的订单", href: "/account/orders", icon: ClipboardList },
 ];
 
 function getAnnouncementAnimationDelay() {

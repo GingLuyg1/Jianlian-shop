@@ -110,13 +110,13 @@ export default function AccountSecurityPage() {
   }
 
   return (
-    <Card>
+    <Card className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-xl">账号安全</CardTitle>
         <p className="text-sm text-muted-foreground">修改密码前需要重新验证当前密码。</p>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="max-w-xl space-y-5">
+      <CardContent className="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <form onSubmit={handleSubmit} className="flex h-full min-h-0 max-w-xl flex-col gap-5 overflow-hidden">
           {formError ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {formError}
@@ -154,10 +154,12 @@ export default function AccountSecurityPage() {
             onChange={(value) => updateField("confirmPassword", value)}
           />
 
-          <Button type="submit" disabled={saving}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {saving ? "修改中..." : "修改密码"}
-          </Button>
+          <div className="mt-auto pt-2">
+            <Button type="submit" disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {saving ? "修改中..." : "修改密码"}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

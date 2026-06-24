@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertCircle, ClipboardList, LogOut, Shield, UserCircle, WalletCards } from "lucide-react";
+import { AlertCircle, LogOut, Shield, UserCircle, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "账户概览", href: "/account", icon: WalletCards },
   { label: "个人资料", href: "/account/profile", icon: UserCircle },
-  { label: "我的订单", href: "/account/orders", icon: ClipboardList },
   { label: "账号安全", href: "/account/security", icon: Shield },
 ];
 
@@ -34,6 +33,18 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   const [emailVerified, setEmailVerified] = useState(true);
   const [resendSeconds, setResendSeconds] = useState(0);
   const redirectPath = useMemo(() => pathname || "/account", [pathname]);
+
+  useEffect(() => {
+    const bodyOverflow = document.body.style.overflow;
+    const htmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = htmlOverflow;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -118,7 +129,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
       <PublicLayout contentClassName="px-4 py-6 md:px-6">
         <div className="mx-auto max-w-6xl space-y-4">
           <div className="h-12 animate-pulse rounded-xl bg-orange-100" />
-          <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="grid min-h-0 min-w-0 flex-1 overflow-hidden gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
             <div className="h-72 animate-pulse rounded-xl bg-white" />
             <div className="h-96 animate-pulse rounded-xl bg-white" />
           </div>
@@ -151,17 +162,17 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <PublicLayout contentClassName="px-4 py-5 md:px-6">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+    <PublicLayout contentClassName="box-border flex h-[calc(100dvh-74px)] w-full max-w-full overflow-hidden px-4 py-3 md:px-6">
+      <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-4 overflow-hidden">
         {emailNotice}
 
-        <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="hidden rounded-xl border bg-white p-2 shadow-sm md:block">
+        <div className="grid min-h-0 min-w-0 flex-1 overflow-hidden gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="hidden h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-white p-2 shadow-sm md:flex">
             <AccountNav pathname={pathname || "/account"} />
             <button
               type="button"
               onClick={handleSignOut}
-              className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-950"
+              className="mt-auto flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-950"
             >
               <LogOut className="h-4 w-4" />
               退出登录
@@ -182,7 +193,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <main className="min-w-0">{children}</main>
+          <main className="min-h-0 min-w-0 overflow-hidden">{children}</main>
         </div>
       </div>
     </PublicLayout>

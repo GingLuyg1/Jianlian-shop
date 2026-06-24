@@ -225,27 +225,27 @@ export default function AccountProfilePage() {
   }
 
   return (
-    <Card>
+    <Card className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-xl">个人资料</CardTitle>
         <p className="text-sm text-muted-foreground">维护你的联系信息、常用收件信息和头像。</p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {loading ? (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid min-h-0 min-w-0 flex-1 gap-4 md:grid-cols-2">
             {Array.from({ length: 8 }).map((_, index) => (
               <div key={index} className="h-12 animate-pulse rounded-xl bg-slate-100" />
             ))}
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
             {formError ? (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {formError}
               </div>
             ) : null}
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex shrink-0 flex-col gap-4 sm:flex-row sm:items-center">
               <div className="relative h-24 w-24 overflow-hidden rounded-full border bg-orange-50">
                 {avatarPreview || form.avatar_url ? (
                   <img src={avatarPreview || form.avatar_url} alt="" className="h-full w-full object-cover" />
@@ -266,7 +266,7 @@ export default function AccountProfilePage() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid min-h-0 min-w-0 flex-1 gap-4 md:grid-cols-2">
               <Field label="登录邮箱" htmlFor="email">
                 <Input id="email" value={form.email} readOnly className="bg-slate-50" />
               </Field>
@@ -286,11 +286,11 @@ export default function AccountProfilePage() {
                 <Input id="address_region" value={form.address_region} onChange={(event) => updateField("address_region", event.target.value)} placeholder="国家 / 州省 / 城市" />
               </Field>
               <Field label="常用地址" htmlFor="address_line" className="md:col-span-2">
-                <Textarea id="address_line" rows={3} value={form.address_line} onChange={(event) => updateField("address_line", event.target.value)} />
+                <Textarea id="address_line" rows={5} className="min-h-[128px] max-w-full resize-none" value={form.address_line} onChange={(event) => updateField("address_line", event.target.value)} />
               </Field>
             </div>
 
-            <div className="flex justify-end">
+            <div className="mt-auto flex justify-end pt-2">
               <Button type="submit" disabled={saving}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {saving ? "保存中..." : "保存资料"}

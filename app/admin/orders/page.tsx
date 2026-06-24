@@ -202,7 +202,7 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
       <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">订单管理</h1>

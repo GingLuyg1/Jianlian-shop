@@ -656,7 +656,7 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
       <div className="mb-2 flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-950">商品与分类管理</h1>
@@ -857,7 +857,7 @@ export default function AdminProductsPage() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="min-h-0 flex-1 overflow-auto">
+            <CardContent className="min-h-0 w-full flex-1 overflow-auto">
               {isCategoryLoading ? (
                 <CategoryTreeSkeleton />
               ) : enabledRoots.length === 0 ? (
@@ -965,7 +965,7 @@ function ProductTable({
   onStatusChange: (id: string, status: ProductStatus) => void;
 }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
+    <div className="min-h-0 w-full flex-1 overflow-auto">
       <Table className="w-full min-w-[1520px] table-fixed">
         <colgroup>
           <col className="w-[260px]" />
