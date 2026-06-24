@@ -4,21 +4,6 @@
 
 create extension if not exists pgcrypto;
 
-create or replace function public.is_admin(p_user_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.profiles p
-    where p.id = p_user_id
-      and p.role = 'admin'
-  );
-$$;
-
 create table if not exists public.payment_sessions (
   id uuid primary key default gen_random_uuid(),
   session_no text not null unique,
