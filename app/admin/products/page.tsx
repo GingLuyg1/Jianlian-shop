@@ -88,6 +88,7 @@ type ProductFormState = {
   primaryCategoryId: string;
   category_id: string;
   short_description: string;
+  description: string;
   image_url: string;
   price: string;
   original_price: string;
@@ -128,6 +129,7 @@ function emptyProductForm(): ProductFormState {
     primaryCategoryId: "",
     category_id: "",
     short_description: "",
+    description: "",
     image_url: "",
     price: "",
     original_price: "",
@@ -413,6 +415,11 @@ export default function AdminProductsPage() {
     setError("");
   }
 
+  function resolveProductCategoryId(form: ProductFormState) {
+    const secondaries = form.primaryCategoryId ? getEnabledChildren(categories, form.primaryCategoryId) : [];
+    return secondaries.length === 0 ? form.primaryCategoryId : form.category_id;
+  }
+
   function validateProductForm(form: ProductFormState) {
     const nextErrors: FieldErrors = {};
     const name = form.name.trim();
@@ -422,18 +429,22 @@ export default function AdminProductsPage() {
     const stock = Number(form.stock);
     const sortOrder = Number(form.sort_order);
     const primary = categoryMap.get(form.primaryCategoryId);
-    const category = categoryMap.get(form.category_id);
+    const resolvedCategoryId = resolveProductCategoryId(form);
+    const category = resolvedCategoryId ? categoryMap.get(resolvedCategoryId) : null;
+    const secondaries = form.primaryCategoryId ? getEnabledChildren(categories, form.primaryCategoryId) : [];
 
     if (!name) nextErrors.name = "商品名称必填";
     if (!slug) nextErrors.slug = "slug 必填";
     else if (!SLUG_PATTERN.test(slug)) nextErrors.slug = "只允许小写字母、数字和短横线";
     if (!form.primaryCategoryId) nextErrors.primaryCategoryId = "请选择一级分类";
-    if (!form.category_id) nextErrors.category_id = "请选择二级分类";
-    if (category && primary && category.parent_id !== primary.id) {
-      nextErrors.category_id = "二级分类必须属于已选择的一级分类";
+    if (form.primaryCategoryId && secondaries.length > 0 && !form.category_id) {
+      nextErrors.category_id = "请选择二级分类";
     }
-    if (category && category.level === 1) {
-      nextErrors.category_id = "当前商品绑定的是一级分类，请重新选择二级分类";
+    if (!category && form.primaryCategoryId) {
+      nextErrors.category_id = "请选择有效分类";
+    }
+    if (category && primary && category.level === 2 && category.parent_id !== primary.id) {
+      nextErrors.category_id = "二级分类必须属于已选择的一级分类";
     }
     if (category && !isCategoryEnabled(category)) {
       nextErrors.category_id = "请选择启用状态的分类";
@@ -472,9 +483,9 @@ export default function AdminProductsPage() {
     return {
       name: productForm.name.trim(),
       slug: productForm.slug.trim(),
-      category_id: productForm.category_id,
+      category_id: resolveProductCategoryId(productForm),
       short_description: productForm.short_description.trim() || null,
-      description: null,
+      description: productForm.description.trim() || null,
       image_url: productForm.image_url.trim() || null,
       price: parseNumber(productForm.price),
       original_price: productForm.original_price.trim()
@@ -493,29 +504,27 @@ export default function AdminProductsPage() {
   async function handleProductSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     clearNotice();
-    const payload = buildProductPayload();
-    if (!payload || !productForm) return;
+    if (!productForm || isSaving) return;
     if (!isProductDirty(productForm, productInitialForm)) {
       setMessage("没有需要保存的修改");
       return;
     }
 
+    const payload = buildProductPayload();
+    if (!payload) return;
+
     setIsSaving(true);
     try {
-      let savedProduct: AdminProduct;
-      if (productForm.id) {
-        savedProduct = await updateProduct(productForm.id, payload);
-        setMessage("商品更新成功");
-      } else {
-        savedProduct = await createProduct(payload);
-        setMessage("商品创建成功");
-      }
+      const savedProduct = productForm.id
+        ? await updateProduct(productForm.id, payload)
+        : await createProduct(payload);
       const savedForm = toProductForm(savedProduct, categoryMap, categories);
       setProductInitialForm(savedForm);
       setProductForm(savedForm);
       setProductErrors({});
+      setMessage(productForm.id ? "商品更新成功" : "商品创建成功");
       closeProductDialog();
-      await loadProducts();
+      await Promise.all([loadProducts(), loadCategories()]);
     } catch (saveError) {
       const text = getErrorText(saveError, "商品保存失败");
       if (text.toLowerCase().includes("duplicate") || text.includes("slug")) {
@@ -1270,6 +1279,13 @@ function ProductFormDialog({
                     onChange={(event) => onUpdate({ ...form, short_description: event.target.value })}
                   />
                 </Field>
+                <Field label="详细说明" className="md:col-span-2">
+                  <Textarea
+                    rows={4}
+                    value={form.description}
+                    onChange={(event) => onUpdate({ ...form, description: event.target.value })}
+                  />
+                </Field>
                 <Field label="商品图片" className="md:col-span-2" error={errors.image_url}>
                   <div className="flex gap-3">
                     <Input
@@ -1309,7 +1325,7 @@ function ProductFormDialog({
               </Field>
             </FormSection>
             <FormSection title="二级分类">
-              <Field label="二级分类" required error={errors.category_id}>
+              <Field label="二级分类" required={secondaryCategories.length > 0} error={errors.category_id}>
                 <NativeSelect
                   value={form.category_id}
                   disabled={!form.primaryCategoryId || secondaryCategories.length === 0}
@@ -1776,6 +1792,7 @@ function toProductForm(
     primaryCategoryId,
     category_id: category?.level === 1 ? "" : product.category_id ?? "",
     short_description: product.short_description ?? "",
+    description: product.description ?? "",
     image_url: product.image_url ?? "",
     price: String(product.price ?? ""),
     original_price:
@@ -1832,6 +1849,7 @@ function normalizeProductFormValues(form: ProductFormState) {
     primaryCategoryId: form.primaryCategoryId || null,
     category_id: form.category_id || null,
     short_description: normalizeOptionalText(form.short_description),
+    description: normalizeOptionalText(form.description),
     image_url: normalizeOptionalText(form.image_url),
     price: normalizeFormNumber(form.price),
     original_price: normalizeOptionalFormNumber(form.original_price),

@@ -87,7 +87,34 @@ function getClient(client?: SupabaseClient) {
 }
 
 function getErrorMessage(error: unknown, fallback = "操作失败，请稍后重试") {
-  return (error as { message?: string } | null | undefined)?.message ?? fallback;
+  const message = (error as { message?: string } | null | undefined)?.message;
+  if (!message) return fallback;
+  if (/relation|column|schema|sql|supabase|jwt|apikey|url|permission denied/i.test(message)) {
+    return fallback;
+  }
+  return message;
+}
+
+async function adminCatalogRequest<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+    cache: "no-store",
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    errors?: Record<string, string>;
+  } & T;
+
+  if (!response.ok) {
+    const fieldError = body.errors ? Object.values(body.errors)[0] : "";
+    throw new Error(body.error || fieldError || "操作失败，请稍后重试");
+  }
+
+  return body as T;
 }
 
 function normalizeNumber(value: unknown, fallback = 0) {
@@ -101,9 +128,7 @@ function normalizeProduct(row: Record<string, unknown>): AdminProduct {
     category_id: row.category_id ? String(row.category_id) : null,
     name: String(row.name ?? ""),
     slug: String(row.slug ?? ""),
-    short_description: row.short_description
-      ? String(row.short_description)
-      : null,
+    short_description: row.short_description ? String(row.short_description) : null,
     description: row.description ? String(row.description) : null,
     image_url: row.image_url ? String(row.image_url) : null,
     price: normalizeNumber(row.price),
@@ -126,7 +151,6 @@ function normalizeProduct(row: Record<string, unknown>): AdminProduct {
 
 function normalizeCategory(row: Record<string, unknown>): AdminCategory {
   const rawLevel = normalizeNumber(row.level, 1);
-
   return {
     id: String(row.id),
     parent_id: row.parent_id ? String(row.parent_id) : null,
@@ -137,8 +161,7 @@ function normalizeCategory(row: Record<string, unknown>): AdminCategory {
     description: row.description ? String(row.description) : null,
     sort_order: normalizeNumber(row.sort_order),
     status: (row.status as CategoryStatus | null | undefined) ?? null,
-    is_active:
-      typeof row.is_active === "boolean" ? Boolean(row.is_active) : null,
+    is_active: typeof row.is_active === "boolean" ? Boolean(row.is_active) : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
     created_at: row.created_at ? String(row.created_at) : null,
   };
@@ -166,62 +189,43 @@ export async function listCategories(client?: SupabaseClient) {
 }
 
 export async function createCategory(payload: CategoryPayload) {
-  const { data, error } = await getSupabaseBrowserClient()
-    .from("categories")
-    .insert(payload)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "分类新增失败，请检查填写内容"));
-  }
-
-  return normalizeCategory(data as Record<string, unknown>);
+  const result = await adminCatalogRequest<{ category: Record<string, unknown> }>("/api/admin/catalog/categories", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return normalizeCategory(result.category);
 }
 
 export async function updateCategory(id: string, payload: CategoryPayload) {
-  const { data, error } = await getSupabaseBrowserClient()
-    .from("categories")
-    .update(payload)
-    .eq("id", id)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "分类保存失败，请检查权限"));
-  }
-
-  return normalizeCategory(data as Record<string, unknown>);
+  const result = await adminCatalogRequest<{ category: Record<string, unknown> }>(
+    `/api/admin/catalog/categories/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+  return normalizeCategory(result.category);
 }
 
 export async function deleteCategory(id: string) {
-  const { error } = await getSupabaseBrowserClient()
-    .from("categories")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "分类删除失败，可能仍有关联商品或子分类"));
-  }
+  await adminCatalogRequest<{ ok: boolean }>(`/api/admin/catalog/categories/${id}`, {
+    method: "DELETE",
+  });
 }
 
-export async function setCategoryStatus(
-  category: AdminCategory,
-  enabled: boolean
-) {
+export async function setCategoryStatus(category: AdminCategory, enabled: boolean) {
   const payload =
     typeof category.is_active === "boolean"
       ? { is_active: enabled }
       : { status: enabled ? "active" : "inactive" };
 
-  const { error } = await getSupabaseBrowserClient()
-    .from("categories")
-    .update(payload)
-    .eq("id", category.id);
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "分类状态更新失败，请检查字段或权限"));
-  }
+  await adminCatalogRequest<{ category: Record<string, unknown> }>(
+    `/api/admin/catalog/categories/${category.id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 export async function listProducts({
@@ -236,9 +240,7 @@ export async function listProducts({
 }: ProductFilters): Promise<ProductListResult> {
   const from = Math.max(page - 1, 0) * pageSize;
   const to = from + pageSize - 1;
-  let query = getSupabaseBrowserClient()
-    .from("products")
-    .select("*", { count: "exact" });
+  let query = getSupabaseBrowserClient().from("products").select("*", { count: "exact" });
 
   const searchTerm = search.trim();
   if (searchTerm) {
@@ -251,22 +253,13 @@ export async function listProducts({
     query = query.in("category_id", categoryIds);
   }
 
-  if (status !== "all") {
-    query = query.eq("status", status);
-  }
-
-  if (deliveryType !== "all") {
-    query = query.eq("delivery_type", deliveryType);
-  }
+  if (status !== "all") query = query.eq("status", status);
+  if (deliveryType !== "all") query = query.eq("delivery_type", deliveryType);
 
   const sortedQuery =
     sortBy === "updated_at"
-      ? query.order("updated_at", { ascending: false }).order("sort_order", {
-          ascending: true,
-        })
-      : query.order("sort_order", { ascending: true }).order("updated_at", {
-          ascending: false,
-        });
+      ? query.order("updated_at", { ascending: false }).order("sort_order", { ascending: true })
+      : query.order("sort_order", { ascending: true }).order("updated_at", { ascending: false });
 
   const { data, error, count } = await sortedQuery.range(from, to);
 
@@ -275,60 +268,39 @@ export async function listProducts({
   }
 
   return {
-    products: ((data ?? []) as Array<Record<string, unknown>>).map(
-      normalizeProduct
-    ),
+    products: ((data ?? []) as Array<Record<string, unknown>>).map(normalizeProduct),
     count: count ?? 0,
   };
 }
 
 export async function createProduct(payload: ProductPayload) {
-  const { data, error } = await getSupabaseBrowserClient()
-    .from("products")
-    .insert(payload)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "商品新增失败，请检查填写内容"));
-  }
-
-  return normalizeProduct(data as Record<string, unknown>);
+  const result = await adminCatalogRequest<{ product: Record<string, unknown> }>("/api/admin/catalog/products", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return normalizeProduct(result.product);
 }
 
 export async function updateProduct(id: string, payload: ProductPayload) {
-  const { data, error } = await getSupabaseBrowserClient()
-    .from("products")
-    .update(payload)
-    .eq("id", id)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "商品保存失败，请检查权限"));
-  }
-
-  return normalizeProduct(data as Record<string, unknown>);
+  const result = await adminCatalogRequest<{ product: Record<string, unknown> }>(
+    `/api/admin/catalog/products/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+  return normalizeProduct(result.product);
 }
 
 export async function deleteProduct(id: string) {
-  const { error } = await getSupabaseBrowserClient()
-    .from("products")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "商品删除失败，请稍后重试"));
-  }
+  await adminCatalogRequest<{ ok: boolean }>(`/api/admin/catalog/products/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export async function setProductStatus(id: string, status: ProductStatus) {
-  const { error } = await getSupabaseBrowserClient()
-    .from("products")
-    .update({ status })
-    .eq("id", id);
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "商品状态更新失败，请检查权限"));
-  }
+  await adminCatalogRequest<{ product: Record<string, unknown> }>(`/api/admin/catalog/products/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
 }
