@@ -19,6 +19,20 @@ import { cn } from "@/lib/utils";
 
 type RecordTab = "recharge" | "funds";
 
+type BalanceTransactionRecord = {
+  transactionNo: string;
+  businessType: string;
+  businessId: string;
+  direction: "credit" | "debit";
+  amount: number;
+  balanceBefore: number | null;
+  balanceAfter: number | null;
+  currency: PaymentCurrency | string;
+  status: string;
+  remark: string | null;
+  createdAt: string | null;
+};
+
 export default function AccountRechargeContent() {
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
   const [selectedChannelCode, setSelectedChannelCode] = useState<PaymentChannelCode | null>(null);
@@ -34,6 +48,11 @@ export default function AccountRechargeContent() {
   const [recordsError, setRecordsError] = useState<string | null>(null);
   const [recordPage, setRecordPage] = useState(1);
   const [recordCount, setRecordCount] = useState(0);
+  const [fundRecords, setFundRecords] = useState<BalanceTransactionRecord[]>([]);
+  const [fundsLoading, setFundsLoading] = useState(false);
+  const [fundsError, setFundsError] = useState<string | null>(null);
+  const [fundPage, setFundPage] = useState(1);
+  const [fundCount, setFundCount] = useState(0);
 
   const selectedChannel =
     paymentChannels.find((channel) => channel.code === selectedChannelCode) ?? paymentChannels[0] ?? null;
@@ -62,6 +81,24 @@ export default function AccountRechargeContent() {
       setRecordsError(getClientErrorMessage(error, "充值记录加载失败，请稍后重试"));
     } finally {
       setRecordsLoading(false);
+    }
+  }, []);
+
+  const loadFundRecords = useCallback(async (page: number) => {
+    setFundsLoading(true);
+    setFundsError(null);
+    try {
+      const response = await fetch(`/api/account/balance-transactions?page=${page}&pageSize=10`, { cache: "no-store" });
+      const result = (await response.json().catch(() => null)) as
+        | { data?: BalanceTransactionRecord[]; count?: number; error?: string }
+        | null;
+      if (!response.ok) throw new Error(result?.error ?? "资金变动记录加载失败，请稍后重试");
+      setFundRecords(result?.data ?? []);
+      setFundCount(result?.count ?? 0);
+    } catch (error) {
+      setFundsError(getClientErrorMessage(error, "资金变动记录加载失败，请稍后重试"));
+    } finally {
+      setFundsLoading(false);
     }
   }, []);
 
@@ -95,6 +132,10 @@ export default function AccountRechargeContent() {
     void loadRecords(recordPage);
   }, [loadRecords, recordPage]);
 
+  useEffect(() => {
+    if (activeRecordTab === "funds") void loadFundRecords(fundPage);
+  }, [activeRecordTab, fundPage, loadFundRecords]);
+
   const updateAmount = (value: string) => {
     setSubmitError(null);
     setSubmitMessage(null);
@@ -123,6 +164,7 @@ export default function AccountRechargeContent() {
         body: JSON.stringify({
           channel: selectedChannel.code,
           amount: summary.amount,
+          client_request_id: createClientRequestId(),
         }),
       });
       const result = (await response.json().catch(() => null)) as
@@ -339,15 +381,113 @@ export default function AccountRechargeContent() {
                 onPageChange={setRecordPage}
               />
             ) : (
-              <div className="mt-6 flex flex-1 items-center justify-center rounded-xl bg-slate-50 p-6 text-center text-sm text-muted-foreground">
-                资金变动记录会在余额系统接入后显示。
-              </div>
+              <BalanceRecords
+                records={fundRecords}
+                loading={fundsLoading}
+                error={fundsError}
+                page={fundPage}
+                count={fundCount}
+                onRetry={() => void loadFundRecords(fundPage)}
+                onPageChange={setFundPage}
+              />
             )}
           </CardContent>
         </Card>
       </div>
     </PublicLayout>
   );
+}
+
+function BalanceRecords({
+  records,
+  loading,
+  error,
+  page,
+  count,
+  onRetry,
+  onPageChange,
+}: {
+  records: BalanceTransactionRecord[];
+  loading: boolean;
+  error: string | null;
+  page: number;
+  count: number;
+  onRetry: () => void;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(count / 10));
+  if (loading) return <div className="mt-6 h-44 animate-pulse rounded-xl bg-slate-100" />;
+  if (error) return (
+    <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+      <p>{error}</p><Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>重新加载</Button>
+    </div>
+  );
+  if (records.length === 0) return (
+    <div className="mt-6 flex flex-1 items-center justify-center rounded-xl bg-slate-50 p-6 text-center text-sm text-muted-foreground">
+      暂无资金变动记录
+    </div>
+  );
+  return (
+    <div className="mt-5 flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        {records.map((record) => {
+          const positive = record.direction === "credit";
+          return (
+            <div key={record.transactionNo} className="rounded-xl bg-slate-50 p-4 text-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <span className="truncate font-semibold text-slate-800" title={record.transactionNo}>
+                  {balanceTypeLabel(record.businessType)}
+                </span>
+                <span className={cn("shrink-0 font-semibold", positive ? "text-emerald-600" : "text-red-600")}>
+                  {positive ? "+" : "-"}{formatPaymentAmount(record.amount, record.currency as PaymentCurrency)}
+                </span>
+              </div>
+              <dl className="grid gap-2 text-muted-foreground">
+                <RecordLine label="流水号" value={record.transactionNo} />
+                <RecordLine label="关联业务" value={record.businessId || "—"} />
+                <RecordLine label="变动前余额" value={formatOptionalBalance(record.balanceBefore, record.currency)} />
+                <RecordLine label="变动后余额" value={formatOptionalBalance(record.balanceAfter, record.currency)} />
+                <RecordLine label="备注" value={record.remark || "—"} />
+                <RecordLine label="创建时间" value={record.createdAt ? formatDateTime(record.createdAt) : "—"} />
+              </dl>
+            </div>
+          );
+        })}
+      </div>
+      {count > 10 ? (
+        <div className="mt-3 flex shrink-0 items-center justify-between text-xs text-muted-foreground">
+          <span>共 {count} 条</span>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>上一页</Button>
+            <span>{page} / {totalPages}</span>
+            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>下一页</Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function balanceTypeLabel(type: string) {
+  return (
+    {
+      account_recharge: "充值入账",
+      order_payment: "订单消费",
+      admin_adjustment: "管理员调整",
+      refund: "订单退款",
+      promotion: "推广收益",
+      system: "系统处理",
+    }[type] ?? type
+  );
+}
+
+function formatOptionalBalance(value: number | null, currency: string) {
+  return value == null ? "—" : formatPaymentAmount(value, currency as PaymentCurrency);
+}
+
+function createClientRequestId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function RecordLine({ label, value }: { label: string; value: string }) {
