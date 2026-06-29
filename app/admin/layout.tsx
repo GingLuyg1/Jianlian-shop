@@ -1,8 +1,18 @@
 import { ReactNode } from "react";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import AdminLayout from "@/components/admin/AdminLayout";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
+
+export const metadata: Metadata = {
+  title: "后台管理",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
+};
 
 export default async function Layout({ children }: { children: ReactNode }) {
   const admin = await getServerAdminContext();

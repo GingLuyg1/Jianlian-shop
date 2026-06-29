@@ -2,26 +2,34 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Suspense } from "react";
+
 import PageViewTracker from "@/components/analytics/PageViewTracker";
 import { Toaster } from "@/components/ui/sonner";
+import {
+  buildPageMetadata,
+  organizationJsonLd,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  websiteJsonLd,
+} from "@/lib/seo";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.jianlian.shop"),
-  title: "Jianlian.Shop 数字商品服务",
-  description:
-    "Jianlian.Shop 数字商品服务，提供数字账号、AI会员充值、礼品卡、国际电话卡等服务。",
+  ...buildPageMetadata({
+    title: `${SITE_NAME} | 数字商品服务`,
+    description: SITE_DESCRIPTION,
+    path: "/",
+  }),
+  title: {
+    default: `${SITE_NAME} | 数字商品服务`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  applicationName: SITE_NAME,
   icons: {
     icon: "/assets/jianlian-brand-logo.png",
     shortcut: "/assets/jianlian-brand-logo.png",
     apple: "/assets/jianlian-brand-logo.png",
-  },
-  openGraph: {
-    title: "Jianlian.Shop 数字商品服务",
-    description: "一站式数字商品与通信服务平台",
-    url: "https://www.jianlian.shop",
-    siteName: "Jianlian.Shop",
   },
 };
 
@@ -33,6 +41,12 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className={inter.className}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify([organizationJsonLd(), websiteJsonLd()]),
+          }}
+        />
         {children}
         <Suspense fallback={null}>
           <PageViewTracker />
