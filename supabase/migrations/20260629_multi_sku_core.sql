@@ -132,30 +132,10 @@ create index if not exists order_deliveries_sku_idx
   on public.order_deliveries(sku_id)
   where sku_id is not null;
 
-create table if not exists public.cart_items (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  product_id uuid not null references public.products(id) on delete cascade,
-  sku_id uuid references public.product_skus(id) on delete set null,
-  quantity integer not null default 1,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint cart_items_quantity_check check (quantity > 0)
-);
-
-create unique index if not exists cart_items_user_product_sku_uidx
-  on public.cart_items(user_id, product_id, coalesce(sku_id, '00000000-0000-0000-0000-000000000000'::uuid));
-
-drop trigger if exists cart_items_set_updated_at on public.cart_items;
-create trigger cart_items_set_updated_at
-before update on public.cart_items
-for each row execute function public.set_updated_at();
-
 alter table public.product_option_groups enable row level security;
 alter table public.product_option_values enable row level security;
 alter table public.product_skus enable row level security;
 alter table public.product_sku_values enable row level security;
-alter table public.cart_items enable row level security;
 
 drop policy if exists "public can read active option groups" on public.product_option_groups;
 create policy "public can read active option groups"
@@ -205,31 +185,6 @@ to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 
-drop policy if exists "users read own cart items" on public.cart_items;
-create policy "users read own cart items"
-on public.cart_items for select
-to authenticated
-using (user_id = auth.uid());
-
-drop policy if exists "users insert own cart items" on public.cart_items;
-create policy "users insert own cart items"
-on public.cart_items for insert
-to authenticated
-with check (user_id = auth.uid());
-
-drop policy if exists "users update own cart items" on public.cart_items;
-create policy "users update own cart items"
-on public.cart_items for update
-to authenticated
-using (user_id = auth.uid())
-with check (user_id = auth.uid());
-
-drop policy if exists "users delete own cart items" on public.cart_items;
-create policy "users delete own cart items"
-on public.cart_items for delete
-to authenticated
-using (user_id = auth.uid());
-
 grant select on table public.product_option_groups to anon, authenticated;
 grant select on table public.product_option_values to anon, authenticated;
 grant select on table public.product_skus to anon, authenticated;
@@ -238,7 +193,6 @@ grant all on table public.product_option_groups to service_role;
 grant all on table public.product_option_values to service_role;
 grant all on table public.product_skus to service_role;
 grant all on table public.product_sku_values to service_role;
-grant all on table public.cart_items to service_role;
 
 create or replace function public.validate_product_option_group_limit()
 returns trigger
@@ -319,7 +273,8 @@ begin
   from public.products p
   where p.id = p_product_id
     and p.status = 'active'
-  limit 1;
+  limit 1
+  for update;
 
   if not found then
     raise exception '商品不存在或已下架';
@@ -338,7 +293,8 @@ begin
     where s.id = p_sku_id
       and s.product_id = p_product_id
       and s.status = 'active'
-    limit 1;
+    limit 1
+    for update;
 
     if not found then
       raise exception '所选规格不存在或不可购买';
@@ -388,6 +344,32 @@ begin
     raise exception '库存不足';
   end if;
 
+  if p_sku_id is not null then
+    update public.product_skus
+       set stock = stock - v_quantity,
+           status = case when stock - v_quantity <= 0 and status = 'active' then 'sold_out' else status end,
+           updated_at = now()
+     where id = p_sku_id
+       and stock >= v_quantity
+     returning stock into v_stock;
+
+    if not found then
+      raise exception '库存不足';
+    end if;
+  else
+    update public.products
+       set stock = stock - v_quantity,
+           status = case when stock - v_quantity <= 0 and status = 'active' then 'sold_out' else status end,
+           updated_at = now()
+     where id = p_product_id
+       and status = 'active'
+       and stock >= v_quantity
+     returning stock into v_stock;
+
+    if not found then
+      raise exception '库存不足';
+    end if;
+  end if;
   select c.*
     into v_category
   from public.categories c
@@ -479,7 +461,7 @@ grant execute on function public.create_order_with_item(uuid, integer, text, tex
 
 create or replace function public.deliver_digital_order(
   p_order_id uuid,
-  p_operator_type text default 'system'
+  p_trigger_source text default 'system'
 )
 returns jsonb
 language plpgsql
