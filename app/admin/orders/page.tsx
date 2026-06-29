@@ -670,6 +670,9 @@ function AdminOrderDrawer({
                 <div key={orderItem.id} className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1fr_110px_80px_120px]">
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-slate-950">{orderItem.product_name}</div>
+                    {orderItem.sku_title ? (
+                      <div className="mt-1 truncate text-xs text-slate-500">SKU: {orderItem.sku_title}</div>
+                    ) : null}
                     <div className="mt-1 truncate text-xs text-slate-500">
                       {orderItem.category_name || "未记录分类"} · {orderItem.product_slug || "未记录 slug"}
                     </div>

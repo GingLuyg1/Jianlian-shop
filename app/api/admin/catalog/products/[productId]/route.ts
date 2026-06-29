@@ -6,6 +6,7 @@ import {
   normalizeProductPayload,
   parseBody,
   requireCatalogAdmin,
+  verifyPersistedProduct,
 } from "../../_shared";
 
 type RouteContext = {
@@ -42,8 +43,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .update(payload)
     .eq("id", params.productId)
     .select(PRODUCT_FIELDS)
-    .single();
-  if (error) {
+    .maybeSingle();
+  if (error || !data) {
     await auditCatalogAction({
       request,
       user: admin.user,
@@ -55,9 +56,30 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       result: "failed",
       beforeSummary: before,
       afterSummary: payload,
-      errorMessage: "商品保存失败",
+      errorMessage: "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25",
     });
-    return jsonResponse({ error: "商品保存失败，请检查商品标识是否重复" }, 400);
+    return jsonResponse(
+      { error: data ? "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u5546\u54c1\u6807\u8bc6\u662f\u5426\u91cd\u590d" : "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u672a\u627e\u5230\u5bf9\u5e94\u5546\u54c1\u6216\u6ca1\u6709\u66f4\u65b0\u4efb\u4f55\u8bb0\u5f55" },
+      400
+    );
+  }
+
+  const verifyError = verifyPersistedProduct(data, payload);
+  if (verifyError) {
+    await auditCatalogAction({
+      request,
+      user: admin.user,
+      action: "update_product",
+      module: "products",
+      targetType: "product",
+      targetId: params.productId,
+      targetLabel: String((before as { name?: unknown }).name ?? ""),
+      result: "failed",
+      beforeSummary: before,
+      afterSummary: data,
+      errorMessage: verifyError,
+    });
+    return jsonResponse({ error: verifyError }, 409);
   }
 
   await auditCatalogAction({

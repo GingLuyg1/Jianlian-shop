@@ -383,6 +383,24 @@ export default function AdminProductsPage() {
     setError("");
   }
 
+  function closeProductDialogAfterSave() {
+    setProductForm(null);
+    setProductInitialForm(null);
+    setProductErrors({});
+    setConfirmAction(null);
+    setError("");
+  }
+
+  function mergeSavedProductIntoList(savedProduct: AdminProduct) {
+    setProducts((current) => {
+      const index = current.findIndex((product) => product.id === savedProduct.id);
+      if (index === -1) return current;
+      const next = [...current];
+      next[index] = savedProduct;
+      return next;
+    });
+  }
+
   function openNewCategory() {
     clearNotice();
     setCategoryErrors({});
@@ -519,11 +537,12 @@ export default function AdminProductsPage() {
         ? await updateProduct(productForm.id, payload)
         : await createProduct(payload);
       const savedForm = toProductForm(savedProduct, categoryMap, categories);
+      mergeSavedProductIntoList(savedProduct);
       setProductInitialForm(savedForm);
       setProductForm(savedForm);
       setProductErrors({});
-      setMessage(productForm.id ? "商品更新成功" : "商品创建成功");
-      closeProductDialog();
+      setMessage(productForm.id ? "\u5546\u54c1\u66f4\u65b0\u6210\u529f" : "\u5546\u54c1\u521b\u5efa\u6210\u529f");
+      closeProductDialogAfterSave();
       await Promise.all([loadProducts(), loadCategories()]);
     } catch (saveError) {
       const text = getErrorText(saveError, "商品保存失败");

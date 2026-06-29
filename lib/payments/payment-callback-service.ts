@@ -10,6 +10,7 @@ import type {
 } from "@/lib/payments/channel-types";
 import { completePayment } from "@/lib/payments/complete-payment-service";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
+import { assertPaymentStatusTransition } from "@/lib/payments/payment-status-machine";
 import {
   getPaymentProvider,
   isPaymentChannelCode,
@@ -94,18 +95,47 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
 
     if (!amountEqual(session.payable_amount, parsed.amount, session.currency)) {
       await updateCallbackLog(service, logId, "amount_mismatch", "渠道金额与支付会话金额不一致");
+      await recordCallbackReconciliationIssue(service, {
+        session,
+        parsed,
+        result: "manual_review",
+        differenceType: "amount_mismatch",
+        errorCode: "CALLBACK_AMOUNT_MISMATCH",
+        errorMessage: "支付回调金额与支付会话金额不一致",
+      });
       return response({ error: "支付金额不一致" }, 400);
     }
     if (String(session.currency).toUpperCase() !== String(parsed.currency).toUpperCase()) {
       await updateCallbackLog(service, logId, "currency_mismatch", "渠道币种与支付会话币种不一致");
+      await recordCallbackReconciliationIssue(service, {
+        session,
+        parsed,
+        result: "manual_review",
+        differenceType: "currency_mismatch",
+        errorCode: "CALLBACK_CURRENCY_MISMATCH",
+        errorMessage: "支付回调币种与支付会话币种不一致",
+      });
       return response({ error: "支付币种不一致" }, 400);
     }
 
     if (parsed.status !== "paid") {
+      const transition = assertPaymentStatusTransition(session.status, parsed.status);
+      if (!transition.ok) {
+        await updateCallbackLog(service, logId, "processing_failed", transition.message);
+        await recordCallbackReconciliationIssue(service, {
+          session,
+          parsed,
+          result: "manual_review",
+          differenceType: "status_mismatch",
+          errorCode: "CALLBACK_STATUS_TRANSITION_DENIED",
+          errorMessage: transition.message,
+        });
+        return response({ error: transition.message }, 409);
+      }
       await service
         .from("payment_sessions")
         .update({
-          status: parsed.status,
+          status: transition.storageStatus,
           provider_transaction_id: parsed.providerTransactionId || null,
           last_synced_at: new Date().toISOString(),
         })
@@ -118,6 +148,20 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
     if (session.status === "paid") {
       await updateCallbackLog(service, logId, "duplicate", null, { is_duplicate: true });
       return response({ ok: true, duplicate: true });
+    }
+
+    const transition = assertPaymentStatusTransition(session.status, "paid");
+    if (!transition.ok) {
+      await updateCallbackLog(service, logId, "processing_failed", transition.message);
+      await recordCallbackReconciliationIssue(service, {
+        session,
+        parsed,
+        result: "manual_review",
+        differenceType: "provider_paid_local_unpaid",
+        errorCode: "CALLBACK_PAID_TRANSITION_DENIED",
+        errorMessage: transition.message,
+      });
+      return response({ error: transition.message }, 409);
     }
 
     const completion = await completePayment(
@@ -163,7 +207,7 @@ async function findCallbackSession(
 ) {
   let query = service
     .from("payment_sessions")
-    .select("id,business_type,business_id,business_no,status,payable_amount,currency,channel_code")
+    .select("id,business_type,business_id,business_no,status,payable_amount,currency,channel_code,provider,provider_transaction_id")
     .eq("channel_code", channelCode)
     .limit(1);
   if (parsed.sessionNo) query = query.eq("session_no", parsed.sessionNo);
@@ -214,6 +258,71 @@ async function updateCallbackLog(
     })
     .eq("id", logId);
   if (error) console.error("[Payment callback] log update failed", getSafeErrorMessage(error, "callback log error"));
+}
+
+async function recordCallbackReconciliationIssue(
+  service: SupabaseClient,
+  input: {
+    session: Record<string, unknown>;
+    parsed: ProviderParsedCallback;
+    result: "mismatched" | "manual_review" | "query_failed";
+    differenceType:
+      | "provider_paid_local_unpaid"
+      | "local_paid_provider_unpaid"
+      | "amount_mismatch"
+      | "currency_mismatch"
+      | "transaction_id_conflict"
+      | "status_mismatch"
+      | "provider_not_found";
+    errorCode: string;
+    errorMessage: string;
+  }
+) {
+  const sessionId = String(input.session.id ?? "");
+  if (!sessionId) return;
+
+  const checkedAt = new Date().toISOString();
+  const providerTransactionId = input.parsed.providerTransactionId || null;
+  const dedupeKey = [
+    "callback",
+    sessionId,
+    input.differenceType,
+    providerTransactionId ?? "no-provider-transaction",
+    input.parsed.amount,
+    input.parsed.currency,
+  ].join(":");
+
+  const { error } = await service.from("payment_reconciliations").upsert(
+    {
+      reconciliation_no: `RCB${Date.now()}${Math.floor(Math.random() * 1000)}`,
+      payment_session_id: sessionId,
+      business_type: input.session.business_type,
+      business_id: String(input.session.business_id ?? input.session.business_no ?? ""),
+      channel_code: input.session.channel_code,
+      provider: input.session.provider,
+      local_status: input.session.status,
+      provider_status: input.parsed.status,
+      local_amount: input.session.payable_amount,
+      provider_amount: input.parsed.amount,
+      currency: input.session.currency,
+      result: input.result,
+      difference_type: input.differenceType,
+      risk_level: "high",
+      local_trade_no: input.session.provider_transaction_id ?? null,
+      provider_trade_no: providerTransactionId,
+      error_code: input.errorCode,
+      error_message: input.errorMessage,
+      provider_summary: summarizeParsed(input.parsed),
+      checked_at: checkedAt,
+      dedupe_key: dedupeKey,
+      updated_at: checkedAt,
+    },
+    { onConflict: "dedupe_key" }
+  );
+
+  if (error) {
+    console.error("[Payment callback] reconciliation issue record failed", getSafeErrorMessage(error, "reconciliation log error"));
+  }
 }
 
 function response(body: Record<string, unknown>, status = 200) {

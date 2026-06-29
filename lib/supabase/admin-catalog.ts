@@ -149,6 +149,11 @@ function normalizeProduct(row: Record<string, unknown>): AdminProduct {
   };
 }
 
+function assertApiRecord(value: unknown, fallback: string) {
+  if (!value || typeof value !== "object" || !("id" in value)) throw new Error(fallback);
+  return value as Record<string, unknown>;
+}
+
 function normalizeCategory(row: Record<string, unknown>): AdminCategory {
   const rawLevel = normalizeNumber(row.level, 1);
   return {
@@ -278,7 +283,7 @@ export async function createProduct(payload: ProductPayload) {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  return normalizeProduct(result.product);
+  return normalizeProduct(assertApiRecord(result.product, "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u670d\u52a1\u5668\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1"));
 }
 
 export async function updateProduct(id: string, payload: ProductPayload) {
@@ -289,7 +294,7 @@ export async function updateProduct(id: string, payload: ProductPayload) {
       body: JSON.stringify(payload),
     }
   );
-  return normalizeProduct(result.product);
+  return normalizeProduct(assertApiRecord(result.product, "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u670d\u52a1\u5668\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1"));
 }
 
 export async function deleteProduct(id: string) {

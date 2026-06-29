@@ -432,6 +432,19 @@ export default function AdminCategoriesPage() {
     return secondaries.length === 0 ? form.primaryCategoryId : form.category_id;
   }
 
+  function mergeSavedProductIntoPanel(savedProduct: AdminProduct) {
+    setProducts((current) => {
+      if (savedProduct.category_id !== selectedProductCategoryId) {
+        return current.filter((product) => product.id !== savedProduct.id);
+      }
+      const index = current.findIndex((product) => product.id === savedProduct.id);
+      if (index === -1) return [savedProduct, ...current];
+      const next = [...current];
+      next[index] = savedProduct;
+      return next;
+    });
+  }
+
   function validateProduct(form: ProductForm) {
     const errors: FieldErrors = {};
     const categoryId = resolveProductCategoryId(form);
@@ -479,12 +492,10 @@ export default function AdminCategoriesPage() {
     setError("");
     try {
       const saved = productForm.id ? await updateProduct(productForm.id, payload) : await createProduct(payload);
-      setNotice(productForm.id ? "商品已保存" : "商品已新增");
+      mergeSavedProductIntoPanel(saved);
+      setNotice(productForm.id ? "\u5546\u54c1\u5df2\u4fdd\u5b58" : "\u5546\u54c1\u5df2\u65b0\u589e");
       setProductForm(null);
       await loadProducts();
-      if (saved.category_id && saved.category_id !== selectedProductCategoryId) {
-        setProducts((current) => current.filter((product) => product.id !== saved.id));
-      }
     } catch (saveError) {
       setError(getErrorText(saveError, "商品保存失败，请检查输入内容"));
     } finally {

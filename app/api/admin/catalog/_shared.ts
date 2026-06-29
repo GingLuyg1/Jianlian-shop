@@ -189,6 +189,49 @@ export async function assertCategoryParent(
   return null;
 }
 
+function normalizePersistedComparable(value: unknown): unknown {
+  if (value === undefined || value === "") return null;
+  if (typeof value === "string") {
+    const text = value.trim();
+    return text || null;
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "boolean" || value === null) return value;
+  if (Array.isArray(value)) return value.map((item) => normalizePersistedComparable(item));
+  if (isPlainObject(value)) {
+    return Object.keys(value)
+      .sort()
+      .reduce<Record<string, unknown>>((next, key) => {
+        next[key] = normalizePersistedComparable(value[key]);
+        return next;
+      }, {});
+  }
+  return value;
+}
+
+function comparableValuesMatch(left: unknown, right: unknown) {
+  const normalizedLeft = normalizePersistedComparable(left);
+  const normalizedRight = normalizePersistedComparable(right);
+  if (typeof normalizedLeft === "number" || typeof normalizedRight === "number") {
+    const leftNumber = Number(normalizedLeft);
+    const rightNumber = Number(normalizedRight);
+    return Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && Math.abs(leftNumber - rightNumber) < 0.000001;
+  }
+  return JSON.stringify(normalizedLeft) === JSON.stringify(normalizedRight);
+}
+
+export function verifyPersistedProduct(row: unknown, payload: Partial<ProductPayload>) {
+  if (!isPlainObject(row)) return "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u6570\u636e\u5e93\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1";
+
+  const mismatchedFields = Object.keys(payload).filter((key) => {
+    const field = key as keyof ProductPayload;
+    return !comparableValuesMatch(payload[field], row[field]);
+  });
+
+  if (mismatchedFields.length > 0) return "\u5546\u54c1\u4fdd\u5b58\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u5237\u65b0\u540e\u91cd\u8bd5";
+  return null;
+}
+
 export async function auditCatalogAction(input: {
   request: Request;
   user: User;

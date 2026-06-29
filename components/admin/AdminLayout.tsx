@@ -7,6 +7,7 @@ import AdminTopBar from "./AdminTopBar";
 
 interface AdminLayoutProps {
   children: ReactNode;
+  guard?: boolean;
 }
 
 function AdminShell({ children }: AdminLayoutProps) {
@@ -58,10 +59,10 @@ function AdminLayoutSkeleton() {
   );
 }
 
-export default function AdminLayout({ children }: AdminLayoutProps) {
-  return (
-    <AdminGuard loadingFallback={<AdminLayoutSkeleton />}>
-      <AdminShell>{children}</AdminShell>
-    </AdminGuard>
-  );
+export default function AdminLayout({ children, guard = true }: AdminLayoutProps) {
+  const shell = <AdminShell>{children}</AdminShell>;
+
+  if (!guard) return shell;
+
+  return <AdminGuard loadingFallback={<AdminLayoutSkeleton />}>{shell}</AdminGuard>;
 }

@@ -10,7 +10,6 @@ import {
   hasSupabaseConfig,
 } from "@/lib/supabase/client";
 
-const ADMIN_EMAIL = "gac000189@gmail.com";
 const ADMIN_CHECK_TIMEOUT_MS = 8000;
 
 type AdminProfile = {
@@ -71,9 +70,6 @@ export default function AdminGuard({
           return;
         }
 
-        const normalizedEmail = user.email?.toLowerCase() ?? "";
-        const isConfiguredAdmin = normalizedEmail === ADMIN_EMAIL;
-
         const { data: profile, error: profileError } = await withTimeout(
           supabase.from("profiles").select("role").eq("id", user.id).single(),
           "管理员资料查询"
@@ -84,35 +80,10 @@ export default function AdminGuard({
           return;
         }
 
-        if (isConfiguredAdmin) {
-          const { data: adminProfile, error: upsertError } = await withTimeout(
-            supabase
-              .from("profiles")
-              .upsert(
-                {
-                  id: user.id,
-                  email: normalizedEmail,
-                  role: "admin",
-                  balance: 0,
-                },
-                { onConflict: "id" }
-              )
-              .select("role")
-              .single(),
-            "管理员资料同步"
-          );
-
-          if (!upsertError && adminProfile?.role === "admin") {
-            if (active) setState({ status: "allowed", profile: adminProfile });
-            return;
-          }
-
-          console.error("[AdminGuard] Failed to ensure admin profile", {
-            profileError,
-            upsertError,
+        if (profileError) {
+          console.error("[AdminGuard] Failed to load profile role", {
+            code: (profileError as { code?: string }).code,
           });
-        } else if (profileError) {
-          console.error("[AdminGuard] Failed to load profile role", profileError);
         }
 
         if (active) {
@@ -212,3 +183,4 @@ function AdminAccessMessage({
     </div>
   );
 }
+

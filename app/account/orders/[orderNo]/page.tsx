@@ -234,6 +234,9 @@ export default function UserOrderDetailPage({
                       <div key={item.id} className="grid gap-3 px-4 py-4 md:grid-cols-[1fr_120px_100px_120px]">
                         <div>
                           <div className="font-medium">{item.product_name}</div>
+                          {item.sku_title ? (
+                            <div className="mt-1 text-xs text-muted-foreground">SKU: {item.sku_title}</div>
+                          ) : null}
                           <div className="mt-1 text-xs text-muted-foreground">
                             {item.category_name || "未记录分类"} · {item.delivery_type || "未记录交付方式"}
                           </div>

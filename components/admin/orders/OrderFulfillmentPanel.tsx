@@ -127,7 +127,12 @@ export default function OrderFulfillmentPanel({
             return (
               <div key={item.id} className="rounded-lg border bg-slate-50 p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-medium text-slate-900">{item.product_name}</div>
+                  <div>
+                    <div className="font-medium text-slate-900">{item.product_name}</div>
+                    {item.sku_title ? (
+                      <div className="mt-0.5 text-xs text-slate-500">SKU: {item.sku_title}</div>
+                    ) : null}
+                  </div>
                   <Badge variant="outline" className={statusClass(summary?.deliveryStatus ?? "pending")}>{getOrderItemDeliveryStatusLabel(summary?.deliveryStatus, item.delivery_type)}</Badge>
                 </div>
                 <textarea

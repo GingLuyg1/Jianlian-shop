@@ -645,6 +645,9 @@ function UserOrderDrawer({
                 <div key={item.id} className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1fr_100px_80px_110px]">
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{item.product_name}</div>
+                    {item.sku_title ? (
+                      <div className="mt-1 truncate text-xs text-muted-foreground">SKU: {item.sku_title}</div>
+                    ) : null}
                     <div className="mt-1 text-xs text-muted-foreground">
                       {item.category_name || "未记录分类"} · {getDeliveryLabel(item.delivery_type)}
                     </div>
