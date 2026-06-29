@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 import { calculateRechargeAmounts } from "@/lib/payments/channels";
 import type { PaymentChannel } from "@/lib/payments/channel-types";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/payments/recharge-utils";
 import type { RechargeStatus } from "@/lib/payments/channel-types";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const context = await requireUser();
   if (!context.ok) return context.response;
+
+  try {
+    await assertUserBusinessAllowed(context.supabase, context.user.id, "create_recharge");
+  } catch (guardError) {
+    if (isAccountRestrictionError(guardError)) {
+      return NextResponse.json({ error: guardError.message, code: guardError.code }, { status: guardError.status });
+    }
+    throw guardError;
+  }
+
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || Object.keys(body).some((key) => !allowedCreateKeys.has(key))) {
     return NextResponse.json({ error: "充值请求参数不正确" }, { status: 400 });
@@ -266,3 +277,4 @@ function isMissingClientRequestColumn(error: unknown) {
   const message = getPaymentErrorMessage(error, "");
   return /client_request_id|42703|schema cache/i.test(message);
 }
+

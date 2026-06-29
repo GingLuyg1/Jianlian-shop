@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -80,6 +80,22 @@ function getAuthRedirectUrl(path: string) {
   return `${origin}${path}`;
 }
 
+async function getLoginRestrictionMessage(supabase: ReturnType<typeof getSupabaseBrowserClient>, userId: string) {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("account_status,risk_status")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) return "";
+    if (data?.account_status === "disabled") return "账户已被禁用，请联系客服。";
+    if (data?.risk_status === "blocked") return "账户当前受限，请联系客服。";
+    return "";
+  } catch {
+    return "";
+  }
+}
 export default function AuthScreen({ mode }: AuthScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -239,6 +255,17 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
               profileError
             )
         );
+
+        const loginRestriction = await getLoginRestrictionMessage(
+          supabase,
+          signInData.user.id
+        );
+        if (loginRestriction) {
+          await supabase.auth.signOut();
+          setMessage("");
+          setError(loginRestriction);
+          return;
+        }
       }
 
       router.push(redirectTo);
@@ -519,3 +546,4 @@ function AuthTab({
     </Link>
   );
 }
+

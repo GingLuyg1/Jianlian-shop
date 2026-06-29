@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,15 @@ export async function POST(request: Request) {
 
     if (userError || !user) {
       return NextResponse.json({ error: "请先登录后再下单" }, { status: 401 });
+    }
+
+    try {
+      await assertUserBusinessAllowed(supabase, user.id, "create_order");
+    } catch (guardError) {
+      if (isAccountRestrictionError(guardError)) {
+        return NextResponse.json({ error: guardError.message, code: guardError.code }, { status: guardError.status });
+      }
+      throw guardError;
     }
 
     const body = (await request.json().catch(() => null)) as
@@ -178,3 +188,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

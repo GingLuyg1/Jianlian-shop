@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 import { requireApiUser } from "@/lib/admin/api-auth";
+import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 import type { PaymentBusinessType } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage, isPaymentSchemaMissing } from "@/lib/payments/payment-errors";
 import {
@@ -16,6 +17,15 @@ const allowedBusinessTypes = ["order", "recharge", "account_recharge"];
 export async function POST(request: Request) {
   const context = await requireApiUser();
   if (!context.ok) return context.response;
+
+  try {
+    await assertUserBusinessAllowed(context.supabase, context.user.id, "create_payment");
+  } catch (guardError) {
+    if (isAccountRestrictionError(guardError)) {
+      return NextResponse.json({ error: guardError.message, code: guardError.code }, { status: guardError.status });
+    }
+    throw guardError;
+  }
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || Object.keys(body).some((key) => !allowedKeys.includes(key))) {
@@ -57,3 +67,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ code, error: message }, { status: schemaMissing ? 503 : 400 });
   }
 }
+

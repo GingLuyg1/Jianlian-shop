@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,15 @@ export async function GET(_request: Request, context: RouteContext) {
       return json({ error: "请先登录" }, { status: 401 });
     }
 
+    try {
+      await assertUserBusinessAllowed(supabase, user.id, "view_delivery");
+    } catch (guardError) {
+      if (isAccountRestrictionError(guardError)) {
+        return json({ error: guardError.message, code: guardError.code }, { status: guardError.status });
+      }
+      throw guardError;
+    }
+
     const { data, error } = await supabase.rpc("get_order_delivery_for_user", {
       p_order_no: context.params.orderNo,
     });
@@ -98,3 +108,4 @@ export async function GET(_request: Request, context: RouteContext) {
     return json({ error: sanitizeDeliveryError(error) }, { status: 500 });
   }
 }
+
