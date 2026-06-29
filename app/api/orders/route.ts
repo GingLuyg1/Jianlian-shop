@@ -67,6 +67,8 @@ export async function POST(request: Request) {
       | {
           product_id?: string;
           productId?: string;
+          sku_id?: string;
+          skuId?: string;
           quantity?: number;
           customer_email?: string;
           customer_name?: string;
@@ -77,6 +79,7 @@ export async function POST(request: Request) {
       | null;
 
     const productId = body?.product_id ?? body?.productId;
+    const skuId = body?.sku_id ?? body?.skuId ?? null;
     const quantity = Math.max(1, Math.floor(Number(body?.quantity ?? 1)));
     const customerEmail = body?.customer_email?.trim() || user.email || null;
     const customerName = body?.customer_name?.trim() || null;
@@ -91,7 +94,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "请填写联系邮箱" }, { status: 400 });
     }
 
-    const { data, error } = await supabase.rpc("create_order_with_item", {
+    const orderPayload: Record<string, unknown> = {
       p_product_id: productId,
       p_quantity: quantity,
       p_customer_email: customerEmail,
@@ -99,7 +102,13 @@ export async function POST(request: Request) {
       p_customer_phone: customerPhone,
       p_customer_note: customerNote,
       p_shipping_address: body?.shipping_address ?? null,
-    });
+    };
+
+    if (skuId) {
+      orderPayload.p_sku_id = skuId;
+    }
+
+    const { data, error } = await supabase.rpc("create_order_with_item", orderPayload);
 
     if (error) {
       return NextResponse.json(

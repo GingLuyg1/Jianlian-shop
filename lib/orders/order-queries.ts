@@ -19,7 +19,7 @@ const orderSelect = `
   paid_at,processed_at,completed_at,cancelled_at,created_at,updated_at,
   order_items(*),
   order_status_logs(*),
-  order_deliveries(id,order_id,order_item_id,user_id,product_id,inventory_id,delivery_type,delivery_status,delivered_at,viewed_at,created_at,updated_at,failure_reason,delivery_note)
+  order_deliveries(*)
 `;
 
 export function getOrderErrorMessage(
@@ -50,6 +50,13 @@ function normalizeItem(row: Record<string, unknown>): OrderItemRecord {
     id: String(row.id),
     order_id: String(row.order_id),
     product_id: row.product_id ? String(row.product_id) : null,
+    sku_id: row.sku_id ? String(row.sku_id) : null,
+    sku_code: row.sku_code ? String(row.sku_code) : null,
+    sku_title: row.sku_title ? String(row.sku_title) : null,
+    option_snapshot:
+      row.option_snapshot && typeof row.option_snapshot === "object"
+        ? (row.option_snapshot as Array<Record<string, unknown>> | Record<string, unknown>)
+        : null,
     product_name: String(row.product_name ?? ""),
     product_slug: row.product_slug ? String(row.product_slug) : null,
     product_image_url: row.product_image_url ? String(row.product_image_url) : null,
@@ -91,6 +98,7 @@ function normalizeDelivery(row: Record<string, unknown>): OrderDeliveryRecord {
     order_item_id: row.order_item_id ? String(row.order_item_id) : null,
     user_id: row.user_id ? String(row.user_id) : null,
     product_id: row.product_id ? String(row.product_id) : null,
+    sku_id: row.sku_id ? String(row.sku_id) : null,
     inventory_id: row.inventory_id ? String(row.inventory_id) : null,
     delivery_type: row.delivery_type ? String(row.delivery_type) : null,
     delivery_content: null,

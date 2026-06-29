@@ -4,6 +4,10 @@ export type OrderItemRecord = {
   id: string;
   order_id: string;
   product_id: string | null;
+  sku_id?: string | null;
+  sku_code?: string | null;
+  sku_title?: string | null;
+  option_snapshot?: Array<Record<string, unknown>> | Record<string, unknown> | null;
   product_name: string;
   product_slug: string | null;
   product_image_url: string | null;
@@ -38,6 +42,7 @@ export type OrderDeliveryRecord = {
   order_item_id: string | null;
   user_id?: string | null;
   product_id?: string | null;
+  sku_id?: string | null;
   inventory_id?: string | null;
   delivery_type: string | null;
   delivery_content: string | null;
