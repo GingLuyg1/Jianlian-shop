@@ -1,14 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Clipboard, Eye, EyeOff, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
-import UserFulfillmentPanel from "@/components/orders/UserFulfillmentPanel";
+import { OrderRefundPanel } from "@/components/refunds/OrderRefundPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,344 +24,399 @@ import {
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
 
-function maskSecret(value: string) {
-  if (!value) return "********";
-  if (value.length <= 8) return "********";
-  return `${value.slice(0, 4)}********${value.slice(-4)}`;
-}
-
 type DeliveryContent = {
-  product_name: string;
-  delivery_status: string;
-  delivery_type: string;
-  delivered_at: string | null;
-  viewed_at: string | null;
-  masked_content: string;
+  id: string;
+  delivery_type: string | null;
+  delivery_status: string | null;
   content: string | null;
+  masked_content: string | null;
+  delivered_at: string | null;
   delivery_note: string | null;
 };
 
-export default function UserOrderDetailPage({
-  params,
-}: {
-  params: { orderNo: string };
-}) {
+type OrderDetailResponse = {
+  order?: OrderRecord;
+  error?: string;
+};
+
+type DeliveryResponse = {
+  status?: string;
+  deliveries?: DeliveryContent[];
+  error?: string;
+};
+
+function formatMoney(value: number | string | null | undefined, currency = "CNY") {
+  const amount = Number(value ?? 0);
+  const symbol = currency === "CNY" ? "¥" : `${currency} `;
+  return `${symbol}${amount.toFixed(2)}`;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+}
+
+function statusClass(value: string, styles: Record<string, string>) {
+  return styles[value] ?? "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+export default function AccountOrderDetailPage({ params }: { params: { orderNo: string } }) {
   const router = useRouter();
+  const orderNo = decodeURIComponent(params.orderNo);
   const [order, setOrder] = useState<OrderRecord | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [showDelivery, setShowDelivery] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState(false);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
-  const [deliveryError, setDeliveryError] = useState("");
-  const [deliveryContents, setDeliveryContents] = useState<DeliveryContent[]>([]);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const [deliveries, setDeliveries] = useState<DeliveryContent[]>([]);
+  const [deliveryRequested, setDeliveryRequested] = useState(false);
+  const [visibleDeliveryIds, setVisibleDeliveryIds] = useState<Record<string, boolean>>({});
 
   const loadOrder = useCallback(async () => {
     setLoading(true);
-    setError("");
-
+    setError(null);
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(params.orderNo)}`);
-      const result = (await response.json().catch(() => null)) as
-        | { order?: OrderRecord; error?: string }
-        | null;
-
-      if (response.status === 401) {
-        router.push(`/login?redirect=/account/orders/${params.orderNo}`);
-        return;
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`, { cache: "no-store" });
+      const data = (await response.json().catch(() => ({}))) as OrderDetailResponse;
+      if (!response.ok || !data.order) {
+        throw new Error(data.error || "订单加载失败");
       }
-
-      if (!response.ok) {
-        throw new Error(result?.error ?? "订单读取失败");
-      }
-
-      setOrder(result?.order ?? null);
-      setShowDelivery(false);
-      setDeliveryContents([]);
-      setDeliveryError("");
-    } catch (loadError) {
-      setError(getOrderErrorMessage(loadError, "订单读取失败"));
+      setOrder(data.order);
+    } catch (err) {
+      setError(getOrderErrorMessage(err));
+      setOrder(null);
     } finally {
       setLoading(false);
     }
-  }, [params.orderNo, router]);
+  }, [orderNo]);
 
   useEffect(() => {
-    loadOrder();
+    void loadOrder();
   }, [loadOrder]);
 
-  async function cancelOrder() {
-    if (!order || submitting) return;
-    setSubmitting(true);
-    setError("");
-
-    try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(order.order_no)}`, {
-        method: "PATCH",
+  const mergedDeliveries = useMemo(() => {
+    const map = new Map<string, DeliveryContent>();
+    (order?.order_deliveries ?? []).forEach((delivery) => {
+      map.set(delivery.id, {
+        id: delivery.id,
+        delivery_type: delivery.delivery_type ?? null,
+        delivery_status: delivery.delivery_status ?? null,
+        content: null,
+        masked_content: delivery.delivery_content ? "••••••••" : null,
+        delivered_at: delivery.delivered_at ?? null,
+        delivery_note: delivery.delivery_note ?? null,
       });
-      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    });
+    deliveries.forEach((delivery) => map.set(delivery.id, delivery));
+    return Array.from(map.values());
+  }, [deliveries, order?.order_deliveries]);
 
-      if (!response.ok) {
-        throw new Error(result?.error ?? "订单取消失败");
+  const orderStatus = normalizeOrderStatus(order?.status);
+  const paymentStatus = normalizePaymentStatus(order?.payment_status);
+  const canCancel = order ? canUserCancelOrder(order.status) : false;
+
+  async function cancelOrder() {
+    if (!order || !canCancel || canceling) return;
+    const confirmed = window.confirm("确认取消该订单吗？取消后不能继续支付。");
+    if (!confirmed) return;
+    setCanceling(true);
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.order_no)}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await response.json().catch(() => ({}))) as OrderDetailResponse;
+      if (!response.ok || !data.order) {
+        throw new Error(data.error || "取消订单失败");
       }
-
-      await loadOrder();
-    } catch (cancelError) {
-      setError(getOrderErrorMessage(cancelError, "订单取消失败"));
+      setOrder(data.order);
+      toast.success("订单已取消");
+    } catch (err) {
+      toast.error(getOrderErrorMessage(err));
     } finally {
-      setSubmitting(false);
+      setCanceling(false);
     }
   }
 
   async function fetchDeliveryContent() {
     if (!order || deliveryLoading) return;
     setDeliveryLoading(true);
-    setDeliveryError("");
-
+    setDeliveryError(null);
+    setDeliveryRequested(true);
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(order.order_no)}/delivery`, {
-        cache: "no-store",
-      });
-      const result = (await response.json().catch(() => null)) as
-        | { deliveries?: DeliveryContent[]; error?: string; message?: string }
-        | null;
-
-      if (response.status === 401) {
-        router.push(`/login?redirect=/account/orders/${order.order_no}`);
-        return;
-      }
-
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.order_no)}/delivery`, { cache: "no-store" });
+      const data = (await response.json().catch(() => ({}))) as DeliveryResponse;
       if (!response.ok) {
-        throw new Error(result?.error ?? "交付内容读取失败");
+        throw new Error(data.error || "交付内容加载失败");
       }
-
-      const deliveries = result?.deliveries ?? [];
-      setDeliveryContents(deliveries);
-      setShowDelivery(deliveries.some((item) => Boolean(item.content)));
-      if (deliveries.length === 0) {
-        setDeliveryError(result?.message ?? "正在处理");
+      setDeliveries(data.deliveries ?? []);
+      if (!data.deliveries?.length) {
+        toast.info(data.status === "processing" ? "订单正在处理，请稍后查看" : "暂无交付内容");
       }
-    } catch (fetchError) {
-      setDeliveryError(getOrderErrorMessage(fetchError, "交付内容读取失败"));
+    } catch (err) {
+      const message = getOrderErrorMessage(err);
+      setDeliveryError(message);
+      toast.error(message);
     } finally {
       setDeliveryLoading(false);
     }
   }
 
-  const orderStatus = normalizeOrderStatus(order?.status);
-  const paymentStatus = normalizePaymentStatus(order?.payment_status);
-  const delivery = order?.order_deliveries?.[0];
-  const deliveryFailed = orderStatus === "failed" || delivery?.delivery_status === "failed";
-  const cancelled = orderStatus === "cancelled";
-  const delivered = delivery?.delivery_status === "delivered" || deliveryContents.length > 0;
-  const mergedDeliveryContents = useMemo(() => {
-    if (deliveryContents.length > 0) return deliveryContents;
-    if (!delivery) return [];
-    return [
-      {
-        product_name: order?.order_items?.[0]?.product_name ?? "—",
-        delivery_status: delivery.delivery_status,
-        delivery_type: delivery.delivery_type ?? "—",
-        delivered_at: delivery.delivered_at,
-        viewed_at: delivery.viewed_at ?? null,
-        masked_content: "********",
-        content: null,
-        delivery_note: delivery.delivery_note ?? null,
-      },
-    ];
-  }, [delivery, deliveryContents, order?.order_items]);
+  async function copyOrderNo() {
+    if (!order) return;
+    try {
+      await navigator.clipboard.writeText(order.order_no);
+      toast.success("订单编号已复制");
+    } catch {
+      toast.error("复制失败，请手动复制");
+    }
+  }
 
   async function copyDeliveryContent(content: string | null) {
     if (!content) return;
-    await navigator.clipboard.writeText(content);
-    toast.success("交付内容已复制");
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("交付内容已复制");
+    } catch {
+      toast.error("复制失败，请手动复制");
+    }
   }
 
   return (
-    <PublicLayout contentClassName="max-w-none px-4 py-4 md:px-6">
-      <div className="mx-auto max-w-[1200px] space-y-4">
+    <PublicLayout contentClassName="bg-[#fbf7f1] p-0">
+      <main className="mx-auto flex h-[calc(100vh-78px)] max-w-7xl flex-col gap-4 overflow-hidden px-5 py-4">
         <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" asChild>
-            <Link href="/account/orders">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              返回订单
-            </Link>
+          <Button variant="ghost" className="gap-2" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+            返回上一页
           </Button>
-          <Button variant="outline" size="sm" onClick={loadOrder}>
-            <RefreshCcw className="mr-2 h-4 w-4" />
+          <Button variant="outline" className="gap-2" onClick={loadOrder} disabled={loading}>
+            <RefreshCcw className="h-4 w-4" />
             重新加载
           </Button>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>订单详情</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="h-40 rounded-xl bg-slate-100" />
-            ) : error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {error}
-              </div>
-            ) : !order ? (
-              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                订单不存在或无权查看
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <InfoCard label="订单编号" value={order.order_no} mono />
-                  <InfoCard label="订单金额" value={`¥${Number(order.total_amount).toFixed(2)}`} primary />
-                  <div className="rounded-xl border bg-slate-50 p-4">
-                    <div className="text-xs text-muted-foreground">状态</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Badge variant="outline" className={cn("text-xs", ORDER_STATUS_STYLES[orderStatus])}>
-                        {getOrderStatusLabel(order.status)}
-                      </Badge>
-                      <Badge variant="outline" className={cn("text-xs", PAYMENT_STATUS_STYLES[paymentStatus])}>
-                        {getPaymentStatusLabel(order.payment_status)}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-
-                <section className="rounded-xl border">
-                  <div className="border-b px-4 py-3 font-semibold">商品列表</div>
-                  <div className="divide-y">
-                    {(order.order_items ?? []).map((item) => (
-                      <div key={item.id} className="grid gap-3 px-4 py-4 md:grid-cols-[1fr_120px_100px_120px]">
-                        <div>
-                          <div className="font-medium">{item.product_name}</div>
-                          {item.sku_title ? (
-                            <div className="mt-1 text-xs text-muted-foreground">SKU: {item.sku_title}</div>
-                          ) : null}
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {item.category_name || "未记录分类"} · {item.delivery_type || "未记录交付方式"}
-                          </div>
+        {loading ? (
+          <Card className="flex min-h-[360px] items-center justify-center border-orange-100 bg-white">
+            <div className="text-sm text-muted-foreground">订单加载中...</div>
+          </Card>
+        ) : error ? (
+          <Card className="flex min-h-[360px] items-center justify-center border-orange-100 bg-white">
+            <div className="space-y-3 text-center">
+              <div className="text-base font-semibold text-slate-900">订单加载失败</div>
+              <div className="text-sm text-muted-foreground">{error}</div>
+              <Button onClick={loadOrder}>重试</Button>
+            </div>
+          </Card>
+        ) : !order ? (
+          <Card className="flex min-h-[360px] items-center justify-center border-orange-100 bg-white">
+            <div className="space-y-3 text-center">
+              <div className="text-base font-semibold text-slate-900">订单不存在</div>
+              <Link href="/account/orders">
+                <Button>查看我的订单</Button>
+              </Link>
+            </div>
+          </Card>
+        ) : (
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1fr)_360px]">
+            <section className="min-h-0 overflow-y-auto pr-1">
+              <div className="space-y-4">
+                <Card className="border-orange-100 bg-white">
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-2xl">订单详情</CardTitle>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          <span>{order.order_no}</span>
+                          <Button variant="ghost" size="sm" className="h-7 gap-1 px-2" onClick={copyOrderNo}>
+                            <Clipboard className="h-3.5 w-3.5" />
+                            复制
+                          </Button>
                         </div>
-                        <div className="text-sm">单价 ¥{Number(item.unit_price).toFixed(2)}</div>
-                        <div className="text-sm">数量 {item.quantity}</div>
-                        <div className="font-semibold text-primary">¥{Number(item.line_total).toFixed(2)}</div>
                       </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="rounded-xl border p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">交付信息</h3>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        完整卡密或账号信息默认隐藏，点击后从服务端重新读取。
-                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className={cn("border", statusClass(orderStatus, ORDER_STATUS_STYLES))} variant="outline">
+                          {getOrderStatusLabel(orderStatus)}
+                        </Badge>
+                        <Badge className={cn("border", statusClass(paymentStatus, PAYMENT_STATUS_STYLES))} variant="outline">
+                          {getPaymentStatusLabel(paymentStatus)}
+                        </Badge>
+                      </div>
                     </div>
-                    {delivered && !cancelled ? (
-                      <Button variant="outline" size="sm" onClick={fetchDeliveryContent} disabled={deliveryLoading}>
-                        {showDelivery ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                        {deliveryLoading ? "读取中..." : showDelivery ? "刷新交付内容" : "查看交付内容"}
-                      </Button>
-                    ) : null}
-                  </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <InfoCard label="订单金额" value={formatMoney(order.total_amount, order.currency)} />
+                      <InfoCard label="下单时间" value={formatDate(order.created_at)} />
+                      <InfoCard label="交付方式" value={order.delivery_type || "—"} />
+                      <InfoCard label="收货信息" value={order.customer_email || order.customer_name || "—"} />
+                    </div>
+                  </CardContent>
+                </Card>
 
-                  <div className="mt-3 space-y-2">
-                    {cancelled ? (
-                      <DeliveryNotice>订单已取消，不显示交付内容。</DeliveryNotice>
-                    ) : deliveryFailed ? (
-                      <DeliveryNotice className="bg-amber-50 text-amber-700">
-                        交付处理失败，请联系客服，不展示内部错误。
-                      </DeliveryNotice>
-                    ) : delivered ? (
-                      mergedDeliveryContents.map((item, index) => (
-                        <div key={`${item.product_name}-${index}`} className="rounded-lg bg-slate-50 p-3 text-sm leading-6">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="font-medium">{item.product_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              交付时间：{item.delivered_at ? new Date(item.delivered_at).toLocaleString("zh-CN", { hour12: false }) : "未记录"}
+                <Card className="border-orange-100 bg-white">
+                  <CardHeader>
+                    <CardTitle>订单商品</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {(order.order_items ?? []).length ? (
+                      order.order_items!.map((item) => (
+                        <div key={item.id} className="rounded-xl border border-orange-100 bg-orange-50/30 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-slate-900">{item.product_name}</div>
+                              {item.sku_title ? <div className="mt-1 text-sm text-muted-foreground">SKU：{item.sku_title}</div> : null}
+                              {item.product_snapshot ? (
+                                <div className="mt-1 text-xs text-muted-foreground">商品快照已保存</div>
+                              ) : null}
+                            </div>
+                            <div className="text-right">
+                              <div className="font-semibold text-orange-600">{formatMoney(item.line_total, order.currency)}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {formatMoney(item.unit_price, order.currency)} × {item.quantity}
+                              </div>
                             </div>
                           </div>
-                          <div className="mt-2 whitespace-pre-wrap break-words rounded-md border bg-white p-3 font-mono text-xs">
-                            {showDelivery && item.content ? item.content : maskSecret(item.masked_content)}
-                          </div>
-                          {showDelivery && item.content ? (
-                            <div className="mt-2 flex justify-end">
-                              <Button variant="outline" size="sm" onClick={() => copyDeliveryContent(item.content)}>
-                                <Clipboard className="mr-2 h-4 w-4" />
-                                复制内容
-                              </Button>
-                            </div>
-                          ) : null}
-                          {item.delivery_note ? <div className="mt-2 text-xs text-muted-foreground">{item.delivery_note}</div> : null}
                         </div>
                       ))
                     ) : (
-                      <DeliveryNotice>正在处理。</DeliveryNotice>
-                    )}
-                    {deliveryError ? <DeliveryNotice className="bg-amber-50 text-amber-700">{deliveryError}</DeliveryNotice> : null}
-                  </div>
-                </section>
-
-                <section className="rounded-xl border p-4">
-                  <h3 className="font-semibold">状态时间线</h3>
-                  <div className="mt-3 space-y-2">
-                    {(order.order_status_logs ?? []).map((log) => (
-                      <div key={log.id} className="flex justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                        <span>
-                          {getOrderStatusLabel(log.to_status)}
-                          {log.note ? ` · ${log.note}` : ""}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {new Date(log.created_at).toLocaleString("zh-CN", { hour12: false })}
-                        </span>
+                      <div className="rounded-xl border border-dashed border-orange-200 p-8 text-center text-sm text-muted-foreground">
+                        暂无商品明细
                       </div>
-                    ))}
-                  </div>
-                </section>
+                    )}
+                  </CardContent>
+                </Card>
 
-                {canUserCancelOrder(order.status) ? (
-                  <div className="flex justify-end">
-                    <Button variant="outline" disabled={submitting} onClick={cancelOrder}>
-                      {submitting ? "正在取消..." : "取消订单"}
-                    </Button>
-                  </div>
-                ) : null}
+                <Card className="border-orange-100 bg-white">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3">
+                      <CardTitle>数字交付</CardTitle>
+                      <Button size="sm" onClick={fetchDeliveryContent} disabled={deliveryLoading || paymentStatus !== "paid"}>
+                        {deliveryLoading ? "加载中..." : "查看交付内容"}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {paymentStatus !== "paid" ? (
+                      <div className="rounded-xl border border-dashed border-orange-200 p-8 text-center text-sm text-muted-foreground">
+                        订单支付完成后可查看交付内容。
+                      </div>
+                    ) : deliveryError ? (
+                      <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">{deliveryError}</div>
+                    ) : mergedDeliveries.length ? (
+                      mergedDeliveries.map((delivery) => {
+                        const visible = visibleDeliveryIds[delivery.id];
+                        const displayContent = visible ? delivery.content || delivery.masked_content || "—" : delivery.masked_content || "••••••••";
+                        return (
+                          <div key={delivery.id} className="rounded-xl border border-orange-100 bg-orange-50/20 p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="font-medium text-slate-900">{delivery.delivery_type || "交付内容"}</div>
+                                <div className="mt-1 text-sm text-muted-foreground">交付时间：{formatDate(delivery.delivered_at)}</div>
+                              </div>
+                              <Badge variant="outline">{delivery.delivery_status || "—"}</Badge>
+                            </div>
+                            <div className="mt-3 rounded-lg bg-white p-3 font-mono text-sm text-slate-900 break-all">
+                              {displayContent}
+                            </div>
+                            {delivery.delivery_note ? (
+                              <div className="mt-2 text-sm text-muted-foreground">{delivery.delivery_note}</div>
+                            ) : null}
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-2"
+                                onClick={() => setVisibleDeliveryIds((prev) => ({ ...prev, [delivery.id]: !visible }))}
+                              >
+                                {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                {visible ? "隐藏" : "显示完整内容"}
+                              </Button>
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => copyDeliveryContent(delivery.content)} disabled={!delivery.content}>
+                                <Clipboard className="h-4 w-4" />
+                                复制内容
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-orange-200 p-8 text-center text-sm text-muted-foreground">
+                        {deliveryRequested ? "暂无交付内容，请联系客服确认。" : "交付内容默认隐藏，点击后单独请求服务端。"}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <OrderRefundPanel
+                  orderNo={order.order_no}
+                  totalAmount={Number(order.total_amount ?? 0)}
+                  currency={order.currency ?? "CNY"}
+                  status={order.status}
+                  paymentStatus={order.payment_status}
+                />
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </section>
+
+            <aside className="min-h-0 overflow-y-auto">
+              <Card className="border-orange-100 bg-white">
+                <CardHeader>
+                  <CardTitle>订单操作</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Link href="/account/orders" className="block">
+                    <Button variant="outline" className="w-full">查看我的订单</Button>
+                  </Link>
+                  <Link href="/products/sim-cards" className="block">
+                    <Button variant="outline" className="w-full">返回商城</Button>
+                  </Link>
+                  {canCancel ? (
+                    <Button variant="destructive" className="w-full" onClick={cancelOrder} disabled={canceling}>
+                      {canceling ? "取消中..." : "取消订单"}
+                    </Button>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card className="mt-4 border-orange-100 bg-white">
+                <CardHeader>
+                  <CardTitle>状态记录</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {(order.order_status_logs ?? []).length ? (
+                    order.order_status_logs!.map((log) => (
+                      <div key={log.id} className="rounded-lg border border-orange-100 p-3 text-sm">
+                        <div className="font-medium text-slate-900">
+                          {log.from_status || "—"} → {log.to_status || "—"}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">{formatDate(log.created_at)}</div>
+                        {log.note ? <div className="mt-2 text-muted-foreground">{log.note}</div> : null}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-orange-200 p-6 text-center text-sm text-muted-foreground">
+                      暂无状态记录
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </aside>
+          </div>
+        )}
+      </main>
     </PublicLayout>
   );
 }
 
-function InfoCard({
-  label,
-  value,
-  mono,
-  primary,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  primary?: boolean;
-}) {
+function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border bg-slate-50 p-4">
+    <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={cn("mt-2 truncate font-semibold", mono && "font-mono", primary && "text-primary")}>
+      <div className="mt-1 truncate font-semibold text-slate-900" title={value}>
         {value}
       </div>
     </div>
   );
-}
-
-function DeliveryNotice({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return <div className={cn("rounded-lg bg-slate-50 p-3 text-sm text-muted-foreground", className)}>{children}</div>;
 }
 
