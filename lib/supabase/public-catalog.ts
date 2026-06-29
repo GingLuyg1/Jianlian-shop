@@ -44,6 +44,42 @@ export type PublicProductRow = {
   updated_at: string | null;
 };
 
+export type CatalogSort = "default" | "latest" | "price_asc" | "price_desc" | "sales";
+export type CatalogStockFilter = "all" | "in_stock" | "low_stock" | "sold_out";
+export type CatalogMultiSkuFilter = "all" | "yes" | "no";
+
+export type PublicCatalogProductRow = PublicProductRow & {
+  category_path?: string | null;
+  has_skus?: boolean;
+  min_price?: number | null;
+  max_price?: number | null;
+  effective_stock?: number | null;
+  sales_count?: number | null;
+};
+
+export type CatalogProductQuery = {
+  categoryIds?: string[];
+  search?: string;
+  priceMin?: string | number | null;
+  priceMax?: string | number | null;
+  stock?: CatalogStockFilter;
+  deliveryType?: string;
+  multiSku?: CatalogMultiSkuFilter;
+  sort?: CatalogSort;
+  page?: number;
+  pageSize?: number;
+  excludeId?: string;
+};
+
+export type CatalogProductResult = {
+  products: PublicCatalogProductRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  deliveryTypes: string[];
+};
+
 export type PublicCatalogConfig = {
   productCategory: ProductCategory;
   primarySlugs: string[];
@@ -71,8 +107,7 @@ function normalizeCategory(row: Record<string, unknown>): PublicCategory {
     description: row.description ? String(row.description) : null,
     sort_order: normalizeNumber(row.sort_order),
     status: row.status ? String(row.status) : null,
-    is_active:
-      typeof row.is_active === "boolean" ? Boolean(row.is_active) : null,
+    is_active: typeof row.is_active === "boolean" ? Boolean(row.is_active) : null,
     created_at: row.created_at ? String(row.created_at) : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
   };
@@ -84,9 +119,7 @@ function normalizeProduct(row: Record<string, unknown>): PublicProductRow {
     category_id: row.category_id ? String(row.category_id) : null,
     name: String(row.name ?? ""),
     slug: String(row.slug ?? ""),
-    short_description: row.short_description
-      ? String(row.short_description)
-      : null,
+    short_description: row.short_description ? String(row.short_description) : null,
     description: row.description ? String(row.description) : null,
     image_url: row.image_url ? String(row.image_url) : null,
     price: normalizeNumber(row.price),
@@ -107,10 +140,7 @@ function normalizeProduct(row: Record<string, unknown>): PublicProductRow {
   };
 }
 
-export function getErrorText(
-  error: unknown,
-  fallback = "操作失败，请稍后重试"
-) {
+export function getErrorText(error: unknown, fallback = "操作失败，请稍后重试") {
   console.error("[Public Catalog]", error);
   return fallback;
 }
@@ -132,9 +162,9 @@ export async function listPublicCategories() {
     throw new Error(getErrorText(error, "分类读取失败，请检查 RLS 读取策略"));
   }
 
-  return ((data ?? []) as Array<Record<string, unknown>>).map(
-    normalizeCategory
-  );
+  return ((data ?? []) as Array<Record<string, unknown>>)
+    .map(normalizeCategory)
+    .filter(isPublicCategoryEnabled);
 }
 
 export async function listActiveProductsByCategory(categoryId: string) {
@@ -160,6 +190,45 @@ export async function listActiveProductsByCategoryIds(categoryIds: string[]) {
   return ((data ?? []) as Array<Record<string, unknown>>).map(normalizeProduct);
 }
 
+export async function searchPublicCatalogProducts(query: CatalogProductQuery) {
+  const params = new URLSearchParams();
+  if (query.categoryIds?.length) params.set("categoryIds", query.categoryIds.join(","));
+  if (query.search?.trim()) params.set("search", query.search.trim());
+  if (query.priceMin !== null && query.priceMin !== undefined && String(query.priceMin).trim()) {
+    params.set("priceMin", String(query.priceMin));
+  }
+  if (query.priceMax !== null && query.priceMax !== undefined && String(query.priceMax).trim()) {
+    params.set("priceMax", String(query.priceMax));
+  }
+  if (query.stock && query.stock !== "all") params.set("stock", query.stock);
+  if (query.deliveryType && query.deliveryType !== "all") params.set("deliveryType", query.deliveryType);
+  if (query.multiSku && query.multiSku !== "all") params.set("multiSku", query.multiSku);
+  if (query.sort && query.sort !== "default") params.set("sort", query.sort);
+  if (query.page) params.set("page", String(query.page));
+  if (query.pageSize) params.set("pageSize", String(query.pageSize));
+  if (query.excludeId) params.set("excludeId", query.excludeId);
+
+  const response = await fetch(`/api/catalog/products?${params.toString()}`, {
+    cache: "no-store",
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | (CatalogProductResult & { error?: string })
+    | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.error ?? "商品搜索失败，请稍后重试");
+  }
+
+  return {
+    products: payload?.products ?? [],
+    total: payload?.total ?? 0,
+    page: payload?.page ?? 1,
+    pageSize: payload?.pageSize ?? 20,
+    totalPages: payload?.totalPages ?? 1,
+    deliveryTypes: payload?.deliveryTypes ?? [],
+  };
+}
+
 export async function getActiveProductByIdOrSlug(identifier: string) {
   return getProductByIdOrSlug(identifier, { activeOnly: true });
 }
@@ -170,14 +239,9 @@ export async function getProductByIdOrSlug(
 ) {
   const supabase = getSupabaseBrowserClient();
   const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      identifier
-    );
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(identifier);
 
-  let baseQuery = supabase
-    .from("products")
-    .select(productSelect)
-    .limit(1);
+  let baseQuery = supabase.from("products").select(productSelect).limit(1);
 
   if (options.activeOnly) {
     baseQuery = baseQuery.eq("status", FRONTEND_ACTIVE_PRODUCT_STATUS);
@@ -194,10 +258,7 @@ export async function getProductByIdOrSlug(
   return data ? normalizeProduct(data as Record<string, unknown>) : null;
 }
 
-export function findPrimaryCategory(
-  categories: PublicCategory[],
-  config: PublicCatalogConfig
-) {
+export function findPrimaryCategory(categories: PublicCategory[], config: PublicCatalogConfig) {
   const slugSet = new Set(config.primarySlugs.map(normalizeText));
   const nameMatchers = config.primaryNames.map(normalizeText);
 
@@ -205,46 +266,59 @@ export function findPrimaryCategory(
     if (category.level !== 1 || !isPublicCategoryEnabled(category)) return false;
     const slug = normalizeText(category.slug);
     const name = normalizeText(category.name);
-    return (
-      slugSet.has(slug) ||
-      nameMatchers.some((matcher) => matcher && name.includes(matcher))
-    );
+    return slugSet.has(slug) || nameMatchers.some((matcher) => matcher && name.includes(matcher));
   });
 }
 
-export function getChildCategories(
-  categories: PublicCategory[],
-  parentId: string
-) {
+export function getChildCategories(categories: PublicCategory[], parentId: string) {
   return categories
-    .filter(
-      (category) =>
-        category.parent_id === parentId &&
-        category.level === 2 &&
-        isPublicCategoryEnabled(category)
-    )
-    .sort(
-      (first, second) =>
-        first.sort_order - second.sort_order ||
-        first.name.localeCompare(second.name)
-    );
+    .filter((category) => category.parent_id === parentId && category.level === 2 && isPublicCategoryEnabled(category))
+    .sort((first, second) => first.sort_order - second.sort_order || first.name.localeCompare(second.name));
+}
+
+export function getDescendantCategoryIds(categories: PublicCategory[], categoryId: string) {
+  const ids = new Set<string>([categoryId]);
+  const walk = (parentId: string) => {
+    categories
+      .filter((category) => category.parent_id === parentId && isPublicCategoryEnabled(category))
+      .forEach((category) => {
+        ids.add(category.id);
+        walk(category.id);
+      });
+  };
+  walk(categoryId);
+  return Array.from(ids);
 }
 
 export function mapPublicProductToProduct(
-  row: PublicProductRow,
+  row: PublicProductRow | PublicCatalogProductRow,
   productCategory: ProductCategory,
   categoryLabel: string
 ): Product {
+  const hasSkus = Boolean((row as PublicCatalogProductRow).has_skus);
+  const effectiveStock =
+    typeof (row as PublicCatalogProductRow).effective_stock === "number"
+      ? Number((row as PublicCatalogProductRow).effective_stock)
+      : row.status === "sold_out"
+        ? 0
+        : row.stock;
+  const minPrice =
+    typeof (row as PublicCatalogProductRow).min_price === "number"
+      ? Number((row as PublicCatalogProductRow).min_price)
+      : row.price;
+  const maxPrice =
+    typeof (row as PublicCatalogProductRow).max_price === "number"
+      ? Number((row as PublicCatalogProductRow).max_price)
+      : row.price;
   const stockStatus: StockStatus =
-    row.stock <= 0 ? "out-of-stock" : row.stock <= 10 ? "low-stock" : "in-stock";
+    row.status === "sold_out" || effectiveStock <= 0
+      ? "out-of-stock"
+      : effectiveStock <= 10
+        ? "low-stock"
+        : "in-stock";
   const deliveryMethod: DeliveryMethod =
-    row.delivery_type === "shipping"
-      ? "physical"
-      : row.delivery_type === "manual"
-        ? "hybrid"
-        : "digital";
-  const productType: ProductType =
-    row.delivery_type === "shipping" ? "physical" : "digital";
+    row.delivery_type === "shipping" ? "physical" : row.delivery_type === "manual" ? "hybrid" : "digital";
+  const productType: ProductType = row.delivery_type === "shipping" ? "physical" : "digital";
 
   return {
     id: row.id,
@@ -254,15 +328,15 @@ export function mapPublicProductToProduct(
     description: row.short_description ?? row.description ?? "",
     imageUrl: row.image_url,
     originalPrice: row.original_price,
-    stock: row.status === "sold_out" ? 0 : row.stock,
+    stock: effectiveStock,
     sortOrder: row.sort_order,
-    metadata: row.metadata,
+    metadata: { ...(row.metadata ?? {}), hasSkus, minPrice, maxPrice },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    price: row.price,
+    price: minPrice,
     currency: "CNY",
     stockStatus,
-    stockLabel: `库存：${row.status === "sold_out" ? 0 : row.stock}`,
+    stockLabel: row.status === "sold_out" ? "已售罄" : effectiveStock <= 0 ? "暂时缺货" : `库存：${effectiveStock}`,
     processingTime: row.delivery_type === "automatic" ? "自动发货" : "联系客服确认",
     deliveryMethod,
     deliveryLabel: getDeliveryLabel(row.delivery_type),
@@ -276,8 +350,10 @@ export function normalizeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
-function getDeliveryLabel(deliveryType: string) {
+export function getDeliveryLabel(deliveryType: string) {
   if (deliveryType === "automatic") return "自动发货";
   if (deliveryType === "shipping") return "物流发货";
+  if (deliveryType === "card") return "卡密交付";
+  if (deliveryType === "account") return "账号交付";
   return "人工处理";
 }

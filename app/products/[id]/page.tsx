@@ -20,10 +20,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  getDescendantCategoryIds,
   getErrorText,
   getProductByIdOrSlug,
   listPublicCategories,
+  searchPublicCatalogProducts,
   type PublicCategory,
+  type PublicCatalogProductRow,
   type PublicProductRow,
 } from "@/lib/supabase/public-catalog";
 import { cn } from "@/lib/utils";
@@ -74,6 +77,8 @@ export default function ProductDetailPage() {
   const productIdentifier = Array.isArray(routeId) ? routeId[0] : routeId;
   const [product, setProduct] = useState<PublicProductRow | null>(null);
   const [categories, setCategories] = useState<PublicCategory[]>([]);
+  const [recommendations, setRecommendations] = useState<PublicCatalogProductRow[]>([]);
+  const [recommendationError, setRecommendationError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -105,6 +110,40 @@ export default function ProductDetailPage() {
     loadProduct();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productIdentifier]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadRecommendations() {
+      if (!product?.category_id || categories.length === 0) {
+        setRecommendations([]);
+        return;
+      }
+
+      setRecommendationError("");
+      try {
+        const categoryIds = getDescendantCategoryIds(categories, product.category_id);
+        const result = await searchPublicCatalogProducts({
+          categoryIds,
+          sort: "sales",
+          pageSize: 4,
+          excludeId: product.id,
+        });
+        if (!mounted) return;
+        setRecommendations(result.products);
+      } catch {
+        if (!mounted) return;
+        setRecommendationError("推荐商品加载失败");
+        setRecommendations([]);
+      }
+    }
+
+    void loadRecommendations();
+
+    return () => {
+      mounted = false;
+    };
+  }, [categories, product?.category_id, product?.id]);
 
   const categoryPath = useMemo(
     () => getCategoryPath(categories, product?.category_id ?? null),
@@ -243,6 +282,51 @@ export default function ProductDetailPage() {
                   <p>1. 下单前请核对商品名称、分类路径、库存状态和交付方式。</p>
                   <p>2. 账号类商品售后期为商品发货 24 小时内，拿到账号后请第一时间检查。</p>
                   <p>3. 如需补货、批量购买或不确定商品是否适合，请先联系客服确认。</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">推荐商品</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {recommendationError ? (
+                    <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                      {recommendationError}
+                    </div>
+                  ) : recommendations.length === 0 ? (
+                    <div className="rounded-xl border border-dashed bg-slate-50 px-4 py-6 text-center text-sm text-muted-foreground">
+                      暂无相关推荐
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {recommendations.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={`/products/${item.id}`}
+                          className="group flex min-w-0 gap-3 rounded-xl border bg-white p-3 transition-colors hover:border-primary/30 hover:bg-primary/5"
+                        >
+                          <img
+                            src={item.image_url || productImageFallbackSrc}
+                            alt={item.name}
+                            onError={(event) => setProductImageFallback(event.currentTarget)}
+                            className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                          />
+                          <span className="min-w-0">
+                            <span className="line-clamp-1 text-sm font-semibold text-slate-900 group-hover:text-primary">
+                              {item.name}
+                            </span>
+                            <span className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                              {item.short_description || item.category_path || "同分类商品"}
+                            </span>
+                            <span className="mt-1 block text-sm font-bold text-primary">
+                              {settings.currency_symbol}{Number(item.price).toFixed(2)}
+                            </span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

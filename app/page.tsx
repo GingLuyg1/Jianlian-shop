@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -64,8 +64,8 @@ const categoryCards = [
 const hotLinks = [
   { title: "Apple ID", href: "/products/digital-accounts?category=apple-id" },
   { title: "Steam 账号", href: "/products/digital-accounts?category=steam" },
-  { title: "ChatGPT Plus", href: "/checkout?product=ai-gpt-cdk-tr-plus-1m" },
-  { title: "Grok Super", href: "/checkout?product=ai-grok-cdk-in-super-1m" },
+  { title: "ChatGPT Plus", href: "/products/ai-membership?search=ChatGPT" },
+  { title: "Grok Super", href: "/products/ai-membership?search=Grok" },
 ];
 
 const highlights = [
@@ -350,3 +350,4 @@ export default function HomePage() {
     </PublicLayout>
   );
 }
+

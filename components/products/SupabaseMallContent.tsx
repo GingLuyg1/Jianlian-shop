@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Bot,
@@ -14,6 +14,7 @@ import {
   Sparkles,
   Wallet,
 } from "lucide-react";
+
 import PublicLayout from "@/components/layout/PublicLayout";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Button } from "@/components/ui/button";
@@ -24,11 +25,15 @@ import { cn } from "@/lib/utils";
 import {
   findPrimaryCategory,
   getChildCategories,
+  getDescendantCategoryIds,
   getErrorText,
-  listActiveProductsByCategoryIds,
   listPublicCategories,
   mapPublicProductToProduct,
   normalizeText,
+  searchPublicCatalogProducts,
+  type CatalogMultiSkuFilter,
+  type CatalogSort,
+  type CatalogStockFilter,
   type PublicCatalogConfig,
   type PublicCategory,
 } from "@/lib/supabase/public-catalog";
@@ -37,13 +42,9 @@ import {
   categoryListScrollClassName,
   categoryPanelInnerClassName,
   compactProductRowClassName,
-  compactSearchButtonClassName,
-  compactSearchInputClassName,
-  compactSearchWrapperClassName,
   interactiveButtonClass,
   mallContentClassName,
   productImageFallbackSrc,
-  productListFiveRowsClassName,
   productPanelContentClassName,
   productSupportTextClassName,
   setProductImageFallback,
@@ -80,22 +81,19 @@ type DisplayCategory = PublicCategory & {
   displayIcon?: keyof typeof iconMap;
 };
 
-function getDescendantCategoryIds(
-  categories: PublicCategory[],
-  categoryId: string
-) {
-  const ids = new Set<string>([categoryId]);
-  const walk = (parentId: string) => {
-    categories
-      .filter((category) => category.parent_id === parentId)
-      .forEach((category) => {
-        ids.add(category.id);
-        walk(category.id);
-      });
-  };
-  walk(categoryId);
-  return Array.from(ids);
-}
+type FilterState = {
+  search: string;
+  priceMin: string;
+  priceMax: string;
+  stock: CatalogStockFilter;
+  deliveryType: string;
+  multiSku: CatalogMultiSkuFilter;
+  sort: CatalogSort;
+  page: number;
+  pageSize: number;
+};
+
+const pageSizeOptions = [20, 40, 60];
 
 export default function SupabaseMallContent({
   fallbackCategories,
@@ -110,18 +108,21 @@ export default function SupabaseMallContent({
   const { settings } = usePublicSettings();
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
   const [allCategories, setAllCategories] = useState<PublicCategory[]>([]);
-  const [activeCategory, setActiveCategory] = useState<DisplayCategory | null>(
-    null
-  );
+  const [activeCategory, setActiveCategory] = useState<DisplayCategory | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(
-    null
-  );
-  const [isLoading, setIsLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [deliveryTypes, setDeliveryTypes] = useState<string[]>([]);
+  const [draftSearch, setDraftSearch] = useState(searchParams.get("search") ?? "");
+  const [isCategoryLoading, setIsCategoryLoading] = useState(true);
+  const [isProductLoading, setIsProductLoading] = useState(true);
   const [error, setError] = useState("");
+  const productListTopRef = useRef<HTMLDivElement | null>(null);
   const requestIdRef = useRef(0);
+
+  const searchParamsKey = searchParams.toString();
+  const filters = useMemo(() => readFilters(searchParams), [searchParamsKey, searchParams]);
 
   const config = useMemo(
     () => ({ primaryNames, primarySlugs, productCategory }),
@@ -133,14 +134,9 @@ export default function SupabaseMallContent({
       const normalizedSlug = normalizeText(category.slug);
       const normalizedName = normalizeText(category.name);
       const fallback = fallbackCategories.find((item) => {
-        const aliases = [item.slug, item.name, ...(item.aliases ?? [])].map(
-          normalizeText
-        );
+        const aliases = [item.slug, item.name, ...(item.aliases ?? [])].map(normalizeText);
         return aliases.some(
-          (alias) =>
-            alias === normalizedSlug ||
-            normalizedName.includes(alias) ||
-            alias.includes(normalizedName)
+          (alias) => alias === normalizedSlug || normalizedName.includes(alias) || alias.includes(normalizedName)
         );
       });
 
@@ -153,31 +149,44 @@ export default function SupabaseMallContent({
     [fallbackCategories]
   );
 
-  const loadProducts = useCallback(
-    async (
-      category: DisplayCategory,
-      requestId: number,
-      categoryRows: PublicCategory[]
-    ) => {
-      const categoryIds = getDescendantCategoryIds(categoryRows, category.id);
-      const rows = await listActiveProductsByCategoryIds(categoryIds);
-      if (requestId !== requestIdRef.current) return;
-      setProducts(
-        rows.map((row) =>
-          mapPublicProductToProduct(row, productCategory, category.name)
-        )
-      );
+  const updateUrl = useCallback(
+    (patch: Partial<FilterState> & { categorySlug?: string | null }) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (patch.categorySlug !== undefined) {
+        if (patch.categorySlug) params.set(queryParam, patch.categorySlug);
+        else params.delete(queryParam);
+      }
+      updateOptionalParam(params, "search", patch.search);
+      updateOptionalParam(params, "priceMin", patch.priceMin);
+      updateOptionalParam(params, "priceMax", patch.priceMax);
+      updateOptionalParam(params, "stock", patch.stock, "all");
+      updateOptionalParam(params, "deliveryType", patch.deliveryType, "all");
+      updateOptionalParam(params, "multiSku", patch.multiSku, "all");
+      updateOptionalParam(params, "sort", patch.sort, "default");
+      if (patch.page !== undefined) {
+        if (patch.page > 1) params.set("page", String(patch.page));
+        else params.delete("page");
+      }
+      if (patch.pageSize !== undefined) {
+        if (patch.pageSize !== 20) params.set("pageSize", String(patch.pageSize));
+        else params.delete("pageSize");
+      }
+      router.replace(`/products/${productCategory}?${params.toString()}`, { scroll: false });
     },
-    [productCategory]
+    [productCategory, queryParam, router, searchParams]
   );
+
+  useEffect(() => {
+    setDraftSearch(filters.search);
+  }, [filters.search]);
 
   useEffect(() => {
     let mounted = true;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
-    async function loadCatalog() {
-      setIsLoading(true);
+    async function loadCategories() {
+      setIsCategoryLoading(true);
       setError("");
       try {
         const rows = await listPublicCategories();
@@ -186,121 +195,157 @@ export default function SupabaseMallContent({
         const primary = findPrimaryCategory(rows, config);
         if (!primary) {
           setCategories([]);
+          setAllCategories(rows);
           setActiveCategory(null);
           setProducts([]);
-          setError(`未找到「${fallbackTitle}」一级分类`);
+          setTotal(0);
+          setError(`未找到“${fallbackTitle}”一级分类。`);
           return;
         }
 
-        const childCategories = getChildCategories(rows, primary.id).map(
-          attachFallbackVisual
-        );
+        const childCategories = getChildCategories(rows, primary.id).map(attachFallbackVisual);
         const routeCategory = searchParams.get(queryParam);
         const selected =
-          childCategories.find(
-            (category) =>
-              category.slug === routeCategory || category.id === routeCategory
-          ) ?? childCategories[0] ?? null;
+          childCategories.find((category) => category.slug === routeCategory || category.id === routeCategory) ??
+          (routeCategory === primary.slug || routeCategory === primary.id ? attachFallbackVisual(primary) : null) ??
+          childCategories[0] ??
+          attachFallbackVisual(primary);
 
         setAllCategories(rows);
         setCategories(childCategories);
         setActiveCategory(selected);
-        setSelectedCategoryId(selected?.id ?? "");
-
-        if (selected) {
-          await loadProducts(selected, requestId, rows);
-        } else {
-          setProducts([]);
-        }
+        setSelectedCategoryId(selected.id);
       } catch (loadError) {
         if (!mounted || requestId !== requestIdRef.current) return;
-        setError(getErrorText(loadError, "商品分类读取失败，请稍后重试"));
+        setError(getErrorText(loadError, "商品分类读取失败，请稍后重试。"));
         setProducts([]);
+        setTotal(0);
       } finally {
         if (mounted && requestId === requestIdRef.current) {
-          setIsLoading(false);
+          setIsCategoryLoading(false);
         }
       }
     }
 
-    loadCatalog();
+    void loadCategories();
 
     return () => {
       mounted = false;
     };
-  }, [
-    attachFallbackVisual,
-    config,
-    fallbackTitle,
-    loadProducts,
-    queryParam,
-    searchParams,
-  ]);
+  }, [attachFallbackVisual, config, fallbackTitle, queryParam, searchParams, searchParamsKey]);
 
-  async function handleCategorySelect(category: DisplayCategory) {
+  useEffect(() => {
+    if (!activeCategory) return;
+    const currentCategory = activeCategory;
+    let mounted = true;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    setSelectedCategoryId(category.id);
-    setActiveCategory(category);
-    setSelectedProductId(null);
-    setProducts([]);
-    setError("");
-    setIsLoading(true);
-    router.replace(
-      `/products/${productCategory}?${queryParam}=${encodeURIComponent(
-        category.slug
-      )}`,
-      { scroll: false }
-    );
 
-    try {
-      await loadProducts(category, requestId, allCategories);
-    } catch (loadError) {
-      if (requestId === requestIdRef.current) {
-        setError(getErrorText(loadError, "商品读取失败，请稍后重试"));
-      }
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setIsLoading(false);
+    async function loadProducts() {
+      setIsProductLoading(true);
+      setError("");
+      try {
+        const categoryIds = getDescendantCategoryIds(allCategories, currentCategory.id);
+        const result = await searchPublicCatalogProducts({
+          categoryIds,
+          search: filters.search,
+          priceMin: filters.priceMin,
+          priceMax: filters.priceMax,
+          stock: filters.stock,
+          deliveryType: filters.deliveryType,
+          multiSku: filters.multiSku,
+          sort: filters.sort,
+          page: filters.page,
+          pageSize: filters.pageSize,
+        });
+        if (!mounted || requestId !== requestIdRef.current) return;
+        setProducts(
+          result.products.map((row) =>
+            mapPublicProductToProduct(row, productCategory, row.category_path || currentCategory.name)
+          )
+        );
+        setTotal(result.total);
+        setTotalPages(result.totalPages);
+        setDeliveryTypes(result.deliveryTypes);
+      } catch (loadError) {
+        if (!mounted || requestId !== requestIdRef.current) return;
+        setProducts([]);
+        setTotal(0);
+        setTotalPages(1);
+        setError(getErrorText(loadError, "商品读取失败，请稍后重试。"));
+      } finally {
+        if (mounted && requestId === requestIdRef.current) {
+          setIsProductLoading(false);
+        }
       }
     }
+
+    void loadProducts();
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeCategory, allCategories, filters, productCategory]);
+
+  function handleCategorySelect(category: DisplayCategory) {
+    setSelectedCategoryId(category.id);
+    setActiveCategory(category);
+    setProducts([]);
+    setError("");
+    updateUrl({ categorySlug: category.slug, page: 1 });
   }
 
-  const filteredProducts = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const visibleProducts = settings.show_sold_out_products
-      ? products
-      : products.filter((product) => product.stockStatus !== "out-of-stock");
-    if (!query) return visibleProducts;
-    return visibleProducts.filter(
-      (product) =>
-        product.name.toLowerCase().includes(query) ||
-        product.description.toLowerCase().includes(query)
-    );
-  }, [products, searchQuery, settings.show_sold_out_products]);
+  function submitSearch() {
+    const next = draftSearch.trim();
+    updateUrl({ search: next, page: 1 });
+    productListTopRef.current?.scrollIntoView({ block: "nearest" });
+  }
+
+  function resetFilters() {
+    setDraftSearch("");
+    updateUrl({
+      search: "",
+      priceMin: "",
+      priceMax: "",
+      stock: "all",
+      deliveryType: "all",
+      multiSku: "all",
+      sort: "default",
+      page: 1,
+      pageSize: 20,
+    });
+  }
 
   return (
     <PublicLayout contentClassName={mallContentClassName}>
-      <CategoryContentBoundary isLoading={isLoading}>
+      <CategoryContentBoundary isLoading={isCategoryLoading}>
         <CategoryPanel
           categories={categories}
-          disabled={isLoading}
+          disabled={isCategoryLoading || isProductLoading}
           selectedCategoryId={selectedCategoryId}
           onSelectCategory={handleCategorySelect}
         />
         <ProductPanel
-          error={error}
-          products={filteredProducts}
+          activeCategory={activeCategory}
           currencySymbol={settings.currency_symbol}
-          searchQuery={searchQuery}
+          deliveryTypes={deliveryTypes}
+          draftSearch={draftSearch}
+          error={error}
+          filters={filters}
+          isLoading={isProductLoading}
+          products={products}
+          productListTopRef={productListTopRef}
           showStock={settings.show_stock}
-          selectedCategoryName={activeCategory?.name ?? fallbackTitle}
-          selectedProductId={selectedProductId}
-          onSearchChange={setSearchQuery}
-          onSelectProduct={(productId) => {
-            setSelectedProductId(productId);
-            router.push(`/checkout?product=${encodeURIComponent(productId)}`);
+          total={total}
+          totalPages={totalPages}
+          onDraftSearchChange={setDraftSearch}
+          onFilterChange={(patch) => updateUrl({ ...patch, page: 1 })}
+          onPageChange={(page) => {
+            updateUrl({ page });
+            productListTopRef.current?.scrollIntoView({ block: "nearest" });
           }}
+          onResetFilters={resetFilters}
+          onSearchSubmit={submitSearch}
         />
       </CategoryContentBoundary>
     </PublicLayout>
@@ -383,18 +428,11 @@ function CategoryButton({
             )}
           />
         ) : (
-          <div
-            className={cn(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
-              active ? "bg-primary/15" : "bg-primary/10"
-            )}
-          >
+          <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", active ? "bg-primary/15" : "bg-primary/10")}>
             <Icon className="h-6 w-6 text-primary" />
           </div>
         )}
-        <div className="max-w-[130px] truncate whitespace-nowrap text-base font-semibold">
-          {category.name}
-        </div>
+        <div className="max-w-[130px] truncate whitespace-nowrap text-base font-semibold">{category.name}</div>
       </div>
       <ChevronRight className="h-5 w-5 shrink-0" />
     </button>
@@ -402,79 +440,171 @@ function CategoryButton({
 }
 
 function ProductPanel({
+  activeCategory,
   currencySymbol,
+  deliveryTypes,
+  draftSearch,
   error,
+  filters,
+  isLoading,
   products,
-  searchQuery,
+  productListTopRef,
   showStock,
-  selectedCategoryName,
-  selectedProductId,
-  onSearchChange,
-  onSelectProduct,
+  total,
+  totalPages,
+  onDraftSearchChange,
+  onFilterChange,
+  onPageChange,
+  onResetFilters,
+  onSearchSubmit,
 }: {
-  error: string;
+  activeCategory: DisplayCategory | null;
   currencySymbol: string;
+  deliveryTypes: string[];
+  draftSearch: string;
+  error: string;
+  filters: FilterState;
+  isLoading: boolean;
   products: Product[];
-  searchQuery: string;
+  productListTopRef: RefObject<HTMLDivElement>;
   showStock: boolean;
-  selectedCategoryName: string;
-  selectedProductId: string | null;
-  onSearchChange: (query: string) => void;
-  onSelectProduct: (productId: string) => void;
+  total: number;
+  totalPages: number;
+  onDraftSearchChange: (query: string) => void;
+  onFilterChange: (patch: Partial<FilterState>) => void;
+  onPageChange: (page: number) => void;
+  onResetFilters: () => void;
+  onSearchSubmit: () => void;
 }) {
   return (
     <Card className="h-full min-h-0 overflow-hidden">
       <CardContent className={productPanelContentClassName}>
         <ShopNotice />
 
-        <div className="mb-3 flex flex-col justify-between gap-3 md:flex-row md:items-center">
-          <div>
-            <h1 className="truncate text-xl font-bold">
-              {selectedCategoryName}
-            </h1>
+        <div ref={productListTopRef} className="mb-3 flex flex-col justify-between gap-3 xl:flex-row xl:items-start">
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold">{activeCategory?.name ?? "商品列表"}</h1>
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
               <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-              共计{products.length}个商品
+              当前结果 {total} 个商品
             </div>
           </div>
-          <div className={compactSearchWrapperClassName}>
-            <div className="relative min-w-0 flex-1">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7d6355]" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="请输入名称搜索"
-                className={compactSearchInputClassName}
-              />
+          <div className="flex w-full flex-col gap-2 xl:w-[760px]">
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7d6355]" />
+                <Input
+                  value={draftSearch}
+                  onChange={(event) => onDraftSearchChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") onSearchSubmit();
+                  }}
+                  placeholder="搜索商品、SKU、规格或分类"
+                  className="h-10 rounded-lg border-[#ead9cc] bg-[#fffaf6] pl-11 text-sm text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25"
+                />
+              </div>
+              <Button type="button" onClick={onSearchSubmit} className="h-10 w-[92px] rounded-lg bg-[#df7334] text-sm font-medium hover:bg-[#d7672a]">
+                搜索
+              </Button>
             </div>
-            <Button className={compactSearchButtonClassName}>搜索</Button>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-[1fr_1fr_135px_135px_135px_96px]">
+              <Input
+                value={filters.priceMin}
+                onChange={(event) => onFilterChange({ priceMin: event.target.value })}
+                placeholder="最低价"
+                className="h-9 text-sm"
+              />
+              <Input
+                value={filters.priceMax}
+                onChange={(event) => onFilterChange({ priceMax: event.target.value })}
+                placeholder="最高价"
+                className="h-9 text-sm"
+              />
+              <select value={filters.stock} onChange={(event) => onFilterChange({ stock: event.target.value as CatalogStockFilter })} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                <option value="all">库存状态</option>
+                <option value="in_stock">有库存</option>
+                <option value="low_stock">低库存</option>
+                <option value="sold_out">已售罄</option>
+              </select>
+              <select value={filters.deliveryType} onChange={(event) => onFilterChange({ deliveryType: event.target.value })} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                <option value="all">交付方式</option>
+                {deliveryTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {deliveryLabel(type)}
+                  </option>
+                ))}
+              </select>
+              <select value={filters.multiSku} onChange={(event) => onFilterChange({ multiSku: event.target.value as CatalogMultiSkuFilter })} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                <option value="all">SKU 类型</option>
+                <option value="yes">多 SKU</option>
+                <option value="no">单规格</option>
+              </select>
+              <Button type="button" variant="outline" onClick={onResetFilters} className="h-9 text-sm">
+                重置
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-[170px_130px_1fr]">
+              <select value={filters.sort} onChange={(event) => onFilterChange({ sort: event.target.value as CatalogSort })} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                <option value="default">综合排序</option>
+                <option value="latest">最新上架</option>
+                <option value="price_asc">价格从低到高</option>
+                <option value="price_desc">价格从高到低</option>
+                <option value="sales">销量优先</option>
+              </select>
+              <select value={filters.pageSize} onChange={(event) => onFilterChange({ pageSize: Number(event.target.value) })} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                {pageSizeOptions.map((size) => (
+                  <option key={size} value={size}>
+                    {size} 条/页
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
+            <button type="button" className="ml-3 font-semibold underline" onClick={onSearchSubmit}>
+              重试
+            </button>
           </div>
         ) : (
-          <div className={productListFiveRowsClassName}>
-            {products.length === 0 ? (
-              <div className="flex h-full items-center justify-center rounded-xl border border-dashed bg-slate-50 text-sm text-muted-foreground">
-                该分类暂无商品
-              </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {isLoading ? (
+              <ProductSkeleton />
+            ) : products.length === 0 ? (
+              <ProductEmptyState onResetFilters={onResetFilters} />
             ) : (
-              products.map((product) => (
-                <ProductRow
-                  key={product.id}
-                  product={product}
-                  currencySymbol={currencySymbol}
-                  showStock={showStock}
-                  selected={selectedProductId === product.id}
-                  onClick={() => onSelectProduct(product.id)}
-                />
-              ))
+              <div className="scroll-fade-y h-full min-h-0 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll">
+                {products.map((product) => (
+                  <ProductRow
+                    key={product.id}
+                    product={product}
+                    currencySymbol={currencySymbol}
+                    showStock={showStock}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
+
+        {!error && total > 0 ? (
+          <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t pt-3 text-sm text-muted-foreground">
+            <span>
+              第 {filters.page} / {totalPages} 页，共 {total} 个商品
+            </span>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={filters.page <= 1} onClick={() => onPageChange(filters.page - 1)}>
+                上一页
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={filters.page >= totalPages} onClick={() => onPageChange(filters.page + 1)}>
+                下一页
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         <div className={productSupportTextClassName}>
           如需补货或批量购买，请先联系在线客服确认库存。
@@ -495,31 +625,28 @@ function ProductRow({
   currencySymbol,
   product,
   showStock,
-  selected,
-  onClick,
 }: {
   currencySymbol: string;
   product: Product;
   showStock: boolean;
-  selected: boolean;
-  onClick: () => void;
 }) {
   const stock = product.stock ?? 0;
   const imageSrc = product.imageUrl || productImageFallbackSrc;
-  const canBuy = stock > 0;
+  const minPrice = Number(product.metadata?.minPrice ?? product.price);
+  const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
+  const hasSkus = Boolean(product.metadata?.hasSkus);
+  const priceText =
+    hasSkus && maxPrice > minPrice
+      ? `${currencySymbol}${minPrice.toFixed(2)}-${currencySymbol}${maxPrice.toFixed(2)}`
+      : `${currencySymbol}${product.price.toFixed(2)}`;
 
   return (
     <button
       type="button"
       onClick={() => {
-        if (canBuy) onClick();
+        window.location.href = `/products/${encodeURIComponent(product.id)}`;
       }}
-      disabled={!canBuy}
-      className={cn(
-        compactProductRowClassName,
-        selected && "border-primary/30 bg-primary/5",
-        !canBuy && "cursor-not-allowed opacity-70"
-      )}
+      className={cn(compactProductRowClassName, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-5">
         <img
@@ -529,28 +656,62 @@ function ProductRow({
           className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover"
         />
         <div className="min-w-0 flex-1 text-left">
-          <div className="truncate text-base font-semibold text-slate-700">
-            {product.name}
+          <div className="line-clamp-1 text-base font-semibold text-slate-700 group-hover:text-primary">{product.name}</div>
+          {product.description ? <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{product.description}</div> : null}
+          <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+            <span>{product.deliveryLabel}</span>
+            {hasSkus ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">多 SKU</span> : null}
           </div>
-          {product.description ? (
-            <div className="mt-1 truncate text-xs text-muted-foreground">
-              {product.description}
-            </div>
-          ) : null}
         </div>
         {showStock ? (
           <div className="hidden shrink-0 items-center gap-2 text-sm text-slate-600 md:flex">
-            库存：
-            <span className={stock > 0 ? "text-green-600" : "text-slate-400"}>
-              {stock}
-            </span>
+            {product.stockStatus === "out-of-stock" ? "暂时缺货" : product.stockStatus === "low-stock" ? "低库存" : "有库存"}
+            <span className={stock > 0 ? "text-green-600" : "text-slate-400"}>{stock}</span>
+          </div>
+        ) : null}
+        {product.originalPrice ? (
+          <div className="hidden shrink-0 text-sm text-muted-foreground line-through lg:block">
+            {currencySymbol}{Number(product.originalPrice).toFixed(2)}
           </div>
         ) : null}
         <div className="shrink-0 text-lg font-bold text-blue-600">
-          {canBuy ? `${currencySymbol}${product.price.toFixed(2)}` : "已售罄"}
+          {product.stockStatus === "out-of-stock" ? "已售罄" : priceText}
         </div>
       </div>
     </button>
+  );
+}
+
+function ProductSkeleton() {
+  return (
+    <div className="h-full space-y-2.5 overflow-hidden px-1.5 py-1 pr-2">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div key={index} className="h-[86px] rounded-xl border border-slate-100 bg-slate-50 p-4">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-slate-200" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-1/2 rounded bg-slate-200" />
+              <div className="h-3 w-2/3 rounded bg-slate-100" />
+            </div>
+            <div className="h-5 w-20 rounded bg-slate-200" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProductEmptyState({ onResetFilters }: { onResetFilters: () => void }) {
+  return (
+    <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-dashed bg-slate-50 text-center">
+      <div>
+        <p className="text-base font-semibold text-slate-800">未找到相关商品</p>
+        <p className="mt-1 text-sm text-muted-foreground">可以清空筛选或返回全部商品。</p>
+        <Button type="button" variant="outline" className="mt-4" onClick={onResetFilters}>
+          清空筛选
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -559,22 +720,64 @@ function ShopNotice() {
     <div className={shopNoticeClassName}>
       <div className="font-semibold">选购请注意</div>
       <div className="mt-2 space-y-1">
-        <p>1. 下单之前请一定一定要看清商品说明，非商品问题一经售出不退不换~</p>
+        <p>1. 下单前请看清商品说明，非商品问题售出后不退不换。</p>
         <p>
-          2. 本店在技术范围内会尽力保障商品的可用性，所有商品如无单独标注，售后期均为商品发货
-          <span className="font-bold text-red-600">24小时内</span>。
+          2. 本店会在技术范围内尽量保障商品可用性，账号类商品售后期为商品发货
+          <span className="font-bold text-red-600">24 小时内</span>。
         </p>
         <p>
-          3. 切记，
-          <span className="font-bold text-red-600">
-            拿到账号第一时间检查账号。
-          </span>
-          售后期限为<span className="font-bold text-red-600">24小时</span>，请勿扯皮！
+          3. 拿到账号或卡密后请第一时间检查，售后期为
+          <span className="font-bold text-red-600">24 小时</span>，请勿拖延。
         </p>
         <p className="font-bold text-red-600">
-          4. 本站产品拒绝任何违法行为，不提供任何教程（仅限登录），不为任何非法行业提供任何支持，仅提供电商拓客服务。
+          4. 本站拒绝任何违法用途，仅提供合法电商拓客服务。
         </p>
       </div>
     </div>
   );
+}
+
+function readFilters(searchParams: URLSearchParams): FilterState {
+  const pageSize = Number(searchParams.get("pageSize") ?? 20);
+  return {
+    search: (searchParams.get("search") ?? "").trim(),
+    priceMin: normalizePriceInput(searchParams.get("priceMin")),
+    priceMax: normalizePriceInput(searchParams.get("priceMax")),
+    stock: normalizeEnum(searchParams.get("stock"), ["all", "in_stock", "low_stock", "sold_out"], "all") as CatalogStockFilter,
+    deliveryType: normalizeToken(searchParams.get("deliveryType")) || "all",
+    multiSku: normalizeEnum(searchParams.get("multiSku"), ["all", "yes", "no"], "all") as CatalogMultiSkuFilter,
+    sort: normalizeEnum(searchParams.get("sort"), ["default", "latest", "price_asc", "price_desc", "sales"], "default") as CatalogSort,
+    page: Math.max(1, Number(searchParams.get("page") ?? 1) || 1),
+    pageSize: pageSizeOptions.includes(pageSize) ? pageSize : 20,
+  };
+}
+
+function updateOptionalParam(params: URLSearchParams, key: string, value: unknown, defaultValue = "") {
+  if (value === undefined) return;
+  const next = String(value ?? "").trim();
+  if (!next || next === defaultValue) params.delete(key);
+  else params.set(key, next);
+}
+
+function normalizePriceInput(value: string | null) {
+  if (!value) return "";
+  const next = Number(value);
+  return Number.isFinite(next) && next >= 0 ? String(next) : "";
+}
+
+function normalizeToken(value: string | null) {
+  return (value ?? "").trim().replace(/[^\w-]/g, "").slice(0, 80);
+}
+
+function normalizeEnum(value: string | null, allowed: string[], fallback: string) {
+  return value && allowed.includes(value) ? value : fallback;
+}
+
+function deliveryLabel(value: string) {
+  if (value === "automatic") return "自动发货";
+  if (value === "shipping") return "物流发货";
+  if (value === "card") return "卡密交付";
+  if (value === "account") return "账号交付";
+  if (value === "manual") return "人工处理";
+  return value;
 }
