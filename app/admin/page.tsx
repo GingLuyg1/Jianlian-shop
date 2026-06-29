@@ -267,10 +267,12 @@ function makeTrend(
   visits: Array<{ visit_date: string; visitor_key?: string | null; page_path?: string | null }> | null,
 ) {
   const base = createEmptyTrend(days);
-  const orderAmount = aggregateByDate(orders, days, (row) => row.paid_at as string | undefined, (row) => safeNumber(row.total_amount));
+  const paidOrders = orders ? orders.filter((order) => order.payment_status === "paid") : null;
+  const paidRecharges = recharges ? recharges.filter((row) => row.status === "paid") : null;
+  const orderAmount = aggregateByDate(paidOrders, days, (row) => row.paid_at as string | undefined, (row) => safeNumber(row.total_amount));
   const orderCount = aggregateByDate(orders, days, (row) => row.created_at, () => 1);
-  const paidCount = aggregateByDate(orders, days, (row) => row.paid_at as string | undefined, () => 1);
-  const rechargeAmount = aggregateByDate(recharges, days, (row) => row.created_at, (row) => safeNumber(row.amount));
+  const paidCount = aggregateByDate(paidOrders, days, (row) => row.paid_at as string | undefined, () => 1);
+  const rechargeAmount = aggregateByDate(paidRecharges, days, (row) => row.paid_at ?? row.created_at, (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
 
   let visitorMap: Map<string, Set<string>> | null = null;
   let viewMap: Map<string, number> | null = null;
@@ -366,7 +368,8 @@ async function loadDashboardData(): Promise<DashboardData> {
       .from("page_visit_events")
       .select("visit_date,visitor_key,page_path")
       .gte("visit_date", thirtyDaysAgo.toISOString())
-      .lt("visit_date", tomorrow.toISOString()),
+      .lt("visit_date", tomorrow.toISOString())
+      .not("page_path", "like", "/admin%"),
     fetch("/api/admin/payments/readiness", { cache: "no-store" }).then(async (response) => {
       if (!response.ok) throw new Error("readiness unavailable");
       return response.json();
@@ -440,13 +443,15 @@ async function loadDashboardData(): Promise<DashboardData> {
     };
   });
 
+  const paidOrderIds = new Set((orders ?? []).filter((order) => order.payment_status === "paid").map((order) => order.id));
   const orderItemRowsResult = await supabase
     .from("order_items")
-    .select("product_id,product_name,quantity,line_total,created_at")
+    .select("order_id,product_id,product_name,quantity,line_total,created_at")
     .gte("created_at", thirtyDaysAgo.toISOString());
   const orderItems = orderItemRowsResult.error
     ? null
-    : ((orderItemRowsResult.data ?? []) as Array<{ product_id?: string | null; product_name?: string | null; quantity?: number | null; line_total?: number | null }>);
+    : ((orderItemRowsResult.data ?? []) as Array<{ order_id?: string | null; product_id?: string | null; product_name?: string | null; quantity?: number | null; line_total?: number | null }>)
+        .filter((item) => item.order_id && paidOrderIds.has(item.order_id));
   const rankMap = new Map<string, ProductRank>();
   if (orderItems && products) {
     orderItems.forEach((item) => {

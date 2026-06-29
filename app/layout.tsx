@@ -1,6 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Suspense } from "react";
+import PageViewTracker from "@/components/analytics/PageViewTracker";
 import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -32,6 +34,9 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body className={inter.className}>
         {children}
+        <Suspense fallback={null}>
+          <PageViewTracker />
+        </Suspense>
         <Toaster richColors position="top-center" />
       </body>
     </html>
