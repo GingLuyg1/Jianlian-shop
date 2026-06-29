@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  AlertTriangle,
   ChevronDown,
   ClipboardList,
   LayoutDashboard,
@@ -32,6 +33,7 @@ const adminMenuItems = [
   { label: "售后退款", href: "/admin/refunds", icon: RotateCcw },
   { label: "用户管理", href: "/admin/users", icon: Users },
   { label: "系统设置", href: "/admin/settings", icon: Settings },
+  { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
   { label: "操作日志", href: "/admin/audit-logs", icon: ScrollText },
 ];
 
