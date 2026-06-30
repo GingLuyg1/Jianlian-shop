@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+﻿import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   normalizeOrderStatus,
   normalizePaymentStatus,
@@ -171,8 +171,13 @@ export async function listUserOrders(
     pageSize?: number;
     status?: OrderStatus | "all";
     paymentStatus?: PaymentStatus | "all";
+    deliveryStatus?: string;
+    startDate?: string;
+    endDate?: string;
     search?: string;
     customerEmail?: string;
+    productSearch?: string;
+    skuSearch?: string;
   } = {}
 ): Promise<OrderListResult> {
   const page = Math.max(1, options.page ?? 1);
@@ -193,8 +198,37 @@ export async function listUserOrders(
   const search = options.search?.trim();
   if (search) query = query.ilike("order_no", `%${search}%`);
 
+  if (options.startDate) query = query.gte("created_at", options.startDate);
+  if (options.endDate) query = query.lte("created_at", options.endDate);
+
   const customerEmail = options.customerEmail?.trim().toLowerCase();
   if (customerEmail) query = query.ilike("customer_email", customerEmail);
+
+  if (options.deliveryStatus && options.deliveryStatus !== "all") {
+    const { data: deliveryRows } = await supabase
+      .from("order_deliveries")
+      .select("order_id")
+      .eq("delivery_status", options.deliveryStatus)
+      .limit(5000);
+    const orderIds = Array.from(
+      new Set(((deliveryRows ?? []) as Array<{ order_id?: string }>).map((row) => row.order_id).filter(Boolean))
+    ) as string[];
+    query = orderIds.length ? query.in("id", orderIds) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  const itemKeyword = (options.productSearch || options.skuSearch || "").trim();
+  if (itemKeyword) {
+    const escaped = itemKeyword.replace(/[,%]/g, "");
+    const { data: itemRows } = await supabase
+      .from("order_items")
+      .select("order_id")
+      .or(`product_name.ilike.%${escaped}%,sku_code.ilike.%${escaped}%,sku_title.ilike.%${escaped}%`)
+      .limit(5000);
+    const orderIds = Array.from(
+      new Set(((itemRows ?? []) as Array<{ order_id?: string }>).map((row) => row.order_id).filter(Boolean))
+    ) as string[];
+    query = orderIds.length ? query.in("id", orderIds) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  }
 
   const { data, error, count } = await query
     .order("created_at", { ascending: false })
@@ -207,7 +241,6 @@ export async function listUserOrders(
     count: count ?? 0,
   };
 }
-
 export async function getUserOrderByNo(
   supabase: SupabaseClient,
   userId: string,
@@ -272,3 +305,7 @@ export async function listAdminOrders(
     count: count ?? 0,
   };
 }
+
+
+
+

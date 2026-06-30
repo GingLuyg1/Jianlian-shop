@@ -1,22 +1,29 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AlertTriangle,
   Bell,
+  ClipboardCheck,
   ClipboardList,
+  FileLock2,
+  ImageIcon,
   LayoutDashboard,
   Package,
   PackageCheck,
-  Search,
+  RotateCcw,
+  ScrollText,
   Settings,
+  ShieldCheck,
   User,
   Users,
+  WalletCards,
 } from "lucide-react";
 
+import AdminGlobalSearch from "./AdminGlobalSearch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -30,9 +37,19 @@ const adminMenuItems = [
   { label: "商品列表", href: "/admin/products", icon: Package },
   { label: "分类管理", href: "/admin/categories", icon: Package },
   { label: "数字库存", href: "/admin/inventory", icon: PackageCheck },
+  { label: "媒体资源", href: "/admin/media", icon: ImageIcon },
+  { label: "支付管理", href: "/admin/payments", icon: WalletCards },
+  { label: "充值管理", href: "/admin/recharges", icon: WalletCards },
   { label: "订单管理", href: "/admin/orders", icon: ClipboardList },
+  { label: "售后退款", href: "/admin/refunds", icon: RotateCcw },
   { label: "用户管理", href: "/admin/users", icon: Users },
+  { label: "隐私请求", href: "/admin/privacy-requests", icon: FileLock2 },
   { label: "系统设置", href: "/admin/settings", icon: Settings },
+  { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
+  { label: "项目验收", href: "/admin/system/project-status", icon: ClipboardCheck },
+  { label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
+  { label: "生产封板", href: "/admin/system/production-readiness", icon: ShieldCheck },
+  { label: "操作日志", href: "/admin/audit-logs", icon: ScrollText },
 ];
 
 export default function AdminTopBar() {
@@ -49,7 +66,7 @@ export default function AdminTopBar() {
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden">
+              <Button variant="ghost" size="icon" className="h-8 w-8 lg:hidden" aria-label="打开后台导航">
                 <LayoutDashboard className="h-4 w-4" />
               </Button>
             </SheetTrigger>
@@ -68,7 +85,7 @@ export default function AdminTopBar() {
                   </div>
                 </div>
               </div>
-              <nav className="px-3 py-3">
+              <nav className="max-h-[calc(100dvh-82px)] overflow-y-auto px-3 py-3">
                 <ul className="space-y-1">
                   {adminMenuItems.map((item) => {
                     const Icon = item.icon;
@@ -95,10 +112,7 @@ export default function AdminTopBar() {
             </SheetContent>
           </Sheet>
 
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="搜索订单、商品..." className="h-9 pl-9 text-sm" />
-          </div>
+          <AdminGlobalSearch />
         </div>
 
         <div className="flex shrink-0 items-center gap-3">

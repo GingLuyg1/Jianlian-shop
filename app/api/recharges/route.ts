@@ -11,6 +11,7 @@ import {
   normalizeRechargeRow,
 } from "@/lib/payments/recharge-utils";
 import type { RechargeStatus } from "@/lib/payments/channel-types";
+import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 
@@ -53,6 +54,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const context = await requireUser();
   if (!context.ok) return context.response;
+
+  const sizeError = checkRequestSize(request, 12 * 1024);
+  if (sizeError) return sizeError;
+  const rateLimit = checkRateLimit("recharge_create", getUserRateLimitKey(context.user.id, "recharge_create"));
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   try {
     await assertUserBusinessAllowed(context.supabase, context.user.id, "create_recharge");

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { runPaymentReconciliation } from "@/lib/payments/reconciliation-service";
+import { checkRateLimit, checkRequestSize, getInternalTaskRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,11 @@ export async function POST(request: Request) {
   if (!configuredSecret || requestSecret !== configuredSecret) {
     return NextResponse.json({ error: "无权执行支付对账任务" }, { status: 403 });
   }
+
+  const sizeError = checkRequestSize(request, 8 * 1024);
+  if (sizeError) return sizeError;
+  const rateLimit = checkRateLimit("internal_task", getInternalTaskRateLimitKey(configuredSecret, "payment_reconcile"));
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   if (running) {
     return NextResponse.json({ error: "支付对账任务正在执行，请稍后重试" }, { status: 429 });

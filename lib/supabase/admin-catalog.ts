@@ -23,17 +23,20 @@ export type AdminCategory = {
 export type AdminProduct = {
   id: string;
   category_id: string | null;
+  subcategory_id?: string | null;
   name: string;
   slug: string;
   short_description: string | null;
   description: string | null;
   image_url: string | null;
+  gallery?: string[] | null;
   price: number;
   original_price: number | null;
   stock: number;
   delivery_type: DeliveryType;
   status: ProductStatus;
   sort_order: number;
+  has_skus?: boolean;
   metadata?: Record<string, unknown> | null;
   updated_at: string | null;
   created_at?: string | null;
@@ -59,15 +62,18 @@ export type ProductPayload = {
   name: string;
   slug: string;
   category_id: string | null;
+  subcategory_id?: string | null;
   short_description: string | null;
   description: string | null;
   image_url: string | null;
+  gallery?: string[] | null;
   price: number;
   original_price: number | null;
   stock: number;
   delivery_type: DeliveryType;
   status: ProductStatus;
   sort_order: number;
+  has_skus?: boolean;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -123,14 +129,20 @@ function normalizeNumber(value: unknown, fallback = 0) {
 }
 
 function normalizeProduct(row: Record<string, unknown>): AdminProduct {
+  const gallery = Array.isArray(row.gallery)
+    ? row.gallery.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : null;
+
   return {
     id: String(row.id),
     category_id: row.category_id ? String(row.category_id) : null,
+    subcategory_id: row.subcategory_id ? String(row.subcategory_id) : null,
     name: String(row.name ?? ""),
     slug: String(row.slug ?? ""),
     short_description: row.short_description ? String(row.short_description) : null,
     description: row.description ? String(row.description) : null,
     image_url: row.image_url ? String(row.image_url) : null,
+    gallery,
     price: normalizeNumber(row.price),
     original_price:
       row.original_price === null || row.original_price === undefined
@@ -140,6 +152,7 @@ function normalizeProduct(row: Record<string, unknown>): AdminProduct {
     delivery_type: (row.delivery_type as DeliveryType) ?? "manual",
     status: (row.status as ProductStatus) ?? "draft",
     sort_order: normalizeNumber(row.sort_order),
+    has_skus: Boolean(row.has_skus),
     metadata:
       row.metadata && typeof row.metadata === "object"
         ? (row.metadata as Record<string, unknown>)

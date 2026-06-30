@@ -10,6 +10,7 @@ import {
   type InventoryContentType,
 } from "@/lib/inventory/import-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 const INVENTORY_STATUSES = new Set(["all", "available", "reserved", "delivered", "disabled", "expired", "invalid"]);
@@ -140,6 +141,11 @@ export async function POST(request: Request) {
     });
     return jsonError(admin.message, admin.status);
   }
+
+  const sizeError = checkRequestSize(request, 2 * 1024 * 1024);
+  if (sizeError) return sizeError;
+  const rateLimit = checkRateLimit("inventory_import", getAdminRateLimitKey(admin.user.id, "inventory_import"));
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   try {
     const contentTypeHeader = request.headers.get("content-type") ?? "";

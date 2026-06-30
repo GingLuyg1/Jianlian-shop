@@ -6,6 +6,7 @@ import {
   getPaymentSessionStatus,
   PaymentSessionError,
 } from "@/lib/payments/payment-session-service";
+import { checkRateLimit, getBusinessRateLimitKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,11 @@ export async function GET(_request: Request, context: { params: { sessionNo: str
   if (!sessionNo) {
     return NextResponse.json({ code: "SESSION_NO_REQUIRED", error: "缺少支付会话编号" }, { status: 400 });
   }
+  const rateLimit = checkRateLimit(
+    "payment_status_query",
+    getBusinessRateLimitKey(userContext.user.id, sessionNo, "payment_status")
+  );
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   try {
     const { data: profile } = await userContext.supabase

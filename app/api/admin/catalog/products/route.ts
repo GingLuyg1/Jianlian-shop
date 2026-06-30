@@ -10,10 +10,17 @@
 } from "../_shared";
 
 import { markMediaReferenceByUrl } from "@/lib/media/media-service";
+import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   const admin = await requireCatalogAdmin();
   if (!admin.ok) return admin.response;
+
+  const sizeError = checkRequestSize(request, 64 * 1024);
+  if (sizeError) return sizeError;
+
+  const rateLimit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "product_create"));
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   const body = parseBody(await request.json().catch(() => ({})));
   const { payload, errors } = normalizeProductPayload(body);

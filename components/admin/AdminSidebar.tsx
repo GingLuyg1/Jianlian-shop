@@ -42,6 +42,7 @@ const adminMenuItems = [
   { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
   { label: "项目验收", href: "/admin/system/project-status", icon: ClipboardCheck },
   { label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
+  { label: "生产封板", href: "/admin/system/production-readiness", icon: ShieldCheck },
   { label: "操作日志", href: "/admin/audit-logs", icon: ScrollText },
 ];
 

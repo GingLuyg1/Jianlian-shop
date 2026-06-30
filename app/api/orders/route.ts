@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
+import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 
@@ -44,6 +45,11 @@ export async function GET(request: Request) {
     const paymentStatus = url.searchParams.get("paymentStatus") ?? "all";
     const search = url.searchParams.get("search") ?? "";
     const customerEmail = url.searchParams.get("email") ?? "";
+    const deliveryStatus = url.searchParams.get("deliveryStatus") ?? "all";
+    const startDate = url.searchParams.get("startDate") ?? "";
+    const endDate = url.searchParams.get("endDate") ?? "";
+    const productSearch = url.searchParams.get("productSearch") ?? "";
+    const skuSearch = url.searchParams.get("skuSearch") ?? "";
 
     const result = await listUserOrders(supabase, user.id, {
       page,
@@ -52,6 +58,11 @@ export async function GET(request: Request) {
       paymentStatus: paymentStatus as never,
       search,
       customerEmail,
+      deliveryStatus,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      productSearch,
+      skuSearch,
     });
 
     return NextResponse.json(result);
@@ -79,6 +90,11 @@ export async function POST(request: Request) {
     if (userError || !user) {
       return NextResponse.json({ error: "请先登录后再下单" }, { status: 401 });
     }
+
+    const sizeError = checkRequestSize(request, 16 * 1024);
+    if (sizeError) return sizeError;
+    const rateLimit = checkRateLimit("order_create", getUserRateLimitKey(user.id, "order_create"));
+    if (!rateLimit.allowed) return rateLimit.response!;
 
     try {
       await assertUserBusinessAllowed(supabase, user.id, "create_order");
@@ -188,4 +204,7 @@ export async function POST(request: Request) {
     );
   }
 }
+
+
+
 

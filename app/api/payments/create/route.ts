@@ -8,6 +8,7 @@ import {
   createPaymentSession,
   PaymentSessionError,
 } from "@/lib/payments/payment-session-service";
+import { checkRateLimit, checkRequestSize, getBusinessRateLimitKey, getUserRateLimitKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,11 @@ const allowedBusinessTypes = ["order", "recharge", "account_recharge"];
 export async function POST(request: Request) {
   const context = await requireApiUser();
   if (!context.ok) return context.response;
+
+  const sizeError = checkRequestSize(request, 8 * 1024);
+  if (sizeError) return sizeError;
+  const userLimit = checkRateLimit("payment_session_create", getUserRateLimitKey(context.user.id, "payment_create"));
+  if (!userLimit.allowed) return userLimit.response!;
 
   try {
     await assertUserBusinessAllowed(context.supabase, context.user.id, "create_payment");
@@ -44,6 +50,12 @@ export async function POST(request: Request) {
   if (!channel) {
     return NextResponse.json({ code: "CHANNEL_REQUIRED", error: "请选择支付渠道" }, { status: 400 });
   }
+
+  const businessLimit = checkRateLimit(
+    "payment_session_create",
+    getBusinessRateLimitKey(context.user.id, `${businessType}:${businessNo}`, "payment_create")
+  );
+  if (!businessLimit.allowed) return businessLimit.response!;
 
   try {
     const session = await createPaymentSession({

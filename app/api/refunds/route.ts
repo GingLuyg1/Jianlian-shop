@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 
 import { formatMoney, normalizeRefundError } from "@/lib/refunds/refund-utils";
+import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,11 @@ export async function POST(request: Request) {
     const supabase = getSupabaseServerClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return json({ error: "请先登录。" }, { status: 401 });
+
+    const sizeError = checkRequestSize(request, 12 * 1024);
+    if (sizeError) return sizeError;
+    const rateLimit = checkRateLimit("refund_create", getUserRateLimitKey(user.id, "refund_create"));
+    if (!rateLimit.allowed) return rateLimit.response!;
 
     const body = (await request.json().catch(() => null)) as
       | { orderNo?: string; reasonCode?: string; reasonDetail?: string; requestedAmount?: number; contactInfo?: string; clientRequestId?: string }

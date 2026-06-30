@@ -12,6 +12,7 @@ import {
   updateMediaAssetStatus,
   uploadMediaAsset,
 } from "@/lib/media/media-service";
+import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const admin = await requireSuperAdmin(request);
   if (!admin.ok) return admin.response;
+
+  const sizeError = checkRequestSize(request, 8 * 1024 * 1024);
+  if (sizeError) return sizeError;
+  const rateLimit = checkRateLimit("media_upload", getAdminRateLimitKey(admin.user.id, "media_upload"));
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   try {
     const form = await request.formData();

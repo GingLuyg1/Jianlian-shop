@@ -12,6 +12,21 @@ export const CATEGORY_FIELDS =
 
 const PRODUCT_STATUSES: ProductStatus[] = ["draft", "active", "inactive", "sold_out"];
 const DELIVERY_TYPES: DeliveryType[] = ["manual", "automatic", "shipping"];
+const PRODUCT_UPDATE_FIELDS = new Set([
+  "name",
+  "slug",
+  "category_id",
+  "short_description",
+  "description",
+  "image_url",
+  "price",
+  "original_price",
+  "stock",
+  "delivery_type",
+  "status",
+  "sort_order",
+  "metadata",
+]);
 
 export function jsonResponse(body: unknown, status = 200) {
   const response = NextResponse.json(body, { status });
@@ -40,12 +55,12 @@ function cleanNullableText(value: unknown) {
   return text || null;
 }
 
-function finiteNumber(value: unknown, fallback = 0) {
+function finiteNumber(value: unknown, fallback: number | null = 0) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
-function finiteInteger(value: unknown, fallback = 0) {
+function finiteInteger(value: unknown, fallback: number | null = 0) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? Math.trunc(numberValue) : fallback;
 }
@@ -77,20 +92,22 @@ export function normalizeProductPayload(body: Record<string, unknown>, partial =
   if (!partial || "description" in body) payload.description = cleanNullableText(body.description);
   if (!partial || "image_url" in body) payload.image_url = cleanNullableText(body.image_url);
   if (!partial || "price" in body) {
-    const price = finiteNumber(body.price, -1);
-    if (price < 0) errors.price = "售价必须大于或等于 0";
-    payload.price = price;
+    const price = finiteNumber(body.price, null);
+    if (price === null) errors.price = "售价必须是有效数字";
+    else if (price < 0) errors.price = "售价必须大于或等于 0";
+    else payload.price = price;
   }
   if (!partial || "original_price" in body) {
     const originalPrice =
-      body.original_price === null || body.original_price === "" ? null : finiteNumber(body.original_price, -1);
+      body.original_price === null || body.original_price === "" ? null : finiteNumber(body.original_price, null);
     if (originalPrice !== null && originalPrice < 0) errors.original_price = "原价必须大于或等于 0";
-    payload.original_price = originalPrice;
+    else payload.original_price = originalPrice;
   }
   if (!partial || "stock" in body) {
-    const stock = finiteInteger(body.stock, -1);
-    if (stock < 0) errors.stock = "库存必须大于或等于 0";
-    payload.stock = stock;
+    const stock = finiteInteger(body.stock, null);
+    if (stock === null) errors.stock = "库存必须是有效整数";
+    else if (stock < 0) errors.stock = "库存必须大于或等于 0";
+    else payload.stock = stock;
   }
   if (!partial || "delivery_type" in body) {
     const deliveryType = cleanText(body.delivery_type) as DeliveryType;
@@ -102,7 +119,11 @@ export function normalizeProductPayload(body: Record<string, unknown>, partial =
     if (!PRODUCT_STATUSES.includes(status)) errors.status = "请选择有效商品状态";
     payload.status = status;
   }
-  if (!partial || "sort_order" in body) payload.sort_order = finiteInteger(body.sort_order, 0);
+  if (!partial || "sort_order" in body) {
+    const sortOrder = finiteInteger(body.sort_order, null);
+    if (sortOrder === null) errors.sort_order = "排序必须是有效整数";
+    else payload.sort_order = sortOrder;
+  }
   if (!partial || "metadata" in body) payload.metadata = isPlainObject(body.metadata) ? body.metadata : null;
 
   if (
@@ -115,6 +136,14 @@ export function normalizeProductPayload(body: Record<string, unknown>, partial =
   }
 
   return { payload, errors };
+}
+
+export function normalizeProductUpdatePayload(body: Record<string, unknown>) {
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (PRODUCT_UPDATE_FIELDS.has(key)) filtered[key] = value;
+  }
+  return normalizeProductPayload(filtered, true);
 }
 
 export function normalizeCategoryPayload(body: Record<string, unknown>, partial = false) {
@@ -140,7 +169,11 @@ export function normalizeCategoryPayload(body: Record<string, unknown>, partial 
   if (!partial || "parent_id" in body) payload.parent_id = cleanNullableText(body.parent_id);
   if (!partial || "icon" in body) payload.icon = cleanNullableText(body.icon);
   if (!partial || "description" in body) payload.description = cleanNullableText(body.description);
-  if (!partial || "sort_order" in body) payload.sort_order = finiteInteger(body.sort_order, 0);
+  if (!partial || "sort_order" in body) {
+    const sortOrder = finiteInteger(body.sort_order, null);
+    if (sortOrder === null) errors.sort_order = "排序必须是有效整数";
+    else payload.sort_order = sortOrder;
+  }
   if (!partial || "is_active" in body) payload.is_active = Boolean(body.is_active);
 
   if (payload.level === 1) payload.parent_id = null;
@@ -221,14 +254,14 @@ function comparableValuesMatch(left: unknown, right: unknown) {
 }
 
 export function verifyPersistedProduct(row: unknown, payload: Partial<ProductPayload>) {
-  if (!isPlainObject(row)) return "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u6570\u636e\u5e93\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1";
+  if (!isPlainObject(row)) return "商品保存失败，数据库没有返回最新商品";
 
   const mismatchedFields = Object.keys(payload).filter((key) => {
     const field = key as keyof ProductPayload;
     return !comparableValuesMatch(payload[field], row[field]);
   });
 
-  if (mismatchedFields.length > 0) return "\u5546\u54c1\u4fdd\u5b58\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u5237\u65b0\u540e\u91cd\u8bd5";
+  if (mismatchedFields.length > 0) return "商品保存验证失败，请刷新后重试";
   return null;
 }
 

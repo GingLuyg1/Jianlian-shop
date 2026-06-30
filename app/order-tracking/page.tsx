@@ -1,10 +1,6 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 
-export default function OrderTrackingPage({
-  searchParams,
-}: {
-  searchParams?: { id?: string };
-}) {
-  const id = searchParams?.id;
-  redirect(id ? `/account/orders?id=${encodeURIComponent(id)}` : "/account/orders");
+export default function OrderTrackingPage({ searchParams }: { searchParams?: { id?: string; orderNo?: string } }) {
+  const orderNo = searchParams?.orderNo ?? searchParams?.id;
+  redirect(orderNo ? `/order-query?orderNo=${encodeURIComponent(orderNo)}` : "/order-query");
 }

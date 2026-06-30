@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentStatus } from "./order-status";
+﻿import type { OrderStatus, PaymentStatus } from "./order-status";
 
 export type OrderItemRecord = {
   id: string;
@@ -15,6 +15,7 @@ export type OrderItemRecord = {
   unit_price: number;
   quantity: number;
   line_total: number;
+  currency?: string | null;
   delivery_type: string | null;
   delivery_status?: string | null;
   delivered_quantity?: number | null;
@@ -65,12 +66,16 @@ export type OrderRecord = {
   subtotal: number;
   discount_amount: number;
   total_amount: number;
+  paid_amount?: number | null;
+  refunded_amount?: number | null;
   currency: string;
   customer_email: string | null;
+  contact_email?: string | null;
   customer_name: string | null;
   customer_phone: string | null;
   shipping_address: Record<string, unknown> | null;
   customer_note: string | null;
+  user_note?: string | null;
   admin_note: string | null;
   delivery_type: string | null;
   paid_at: string | null;
@@ -88,3 +93,4 @@ export type OrderListResult = {
   orders: OrderRecord[];
   count: number;
 };
+

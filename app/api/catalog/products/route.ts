@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { checkRateLimit, getRequestSourceKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,9 @@ type ProductView = ProductRow & {
 
 export async function GET(request: Request) {
   try {
+    const rateLimit = checkRateLimit("catalog_read", getRequestSourceKey(request));
+    if (!rateLimit.allowed) return rateLimit.response!;
+
     const url = new URL(request.url);
     const categoryIds = normalizeIdList(url.searchParams.get("categoryIds"));
     const search = normalizeSearch(url.searchParams.get("search"));

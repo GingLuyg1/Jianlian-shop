@@ -126,3 +126,92 @@ test("data consistency admin page does not expose direct data repair actions", (
   assert.match(page, /标记已解决/);
   assert.doesNotMatch(page, /执行 SQL|修改余额|重分配库存|标记支付成功/);
 });
+
+test("guest order lookup requires token hash and does not expose delivery secrets", () => {
+  const service = file("lib/orders/order-query-service.ts");
+  const route = file("app/api/order-query/route.ts");
+  const page = file("app/order-query/page.tsx");
+  assert.match(service, /hashOrderQueryToken/);
+  assert.match(service, /timingSafeEqual/);
+  assert.match(service, /order_query_token_hash/);
+  assert.doesNotMatch(service, /delivery_content/);
+  assert.match(route, /queryToken/);
+  assert.match(route, /GENERIC_ERROR/);
+  assert.match(route, /order_lookup/);
+  assert.match(page, /仅凭订单号无法查看订单/);
+});
+
+test("order query token migration stores only hashed credentials", () => {
+  const migration = file("supabase/migrations/20260630_order_query_tokens.sql");
+  assert.match(migration, /order_query_token_hash/);
+  assert.match(migration, /order_query_token_expires_at/);
+  assert.match(migration, /order_query_token_revoked_at/);
+  assert.doesNotMatch(migration, /query_token text/i);
+  assert.doesNotMatch(migration, /access_token text/i);
+});
+
+test("guest order bind uses current authenticated user and refuses frontend user id", () => {
+  const route = file("app/api/order-query/bind/route.ts");
+  assert.match(route, /supabase\.auth\.getUser/);
+  assert.match(route, /user\.id/);
+  assert.match(route, /verifyOrderQueryToken/);
+  assert.doesNotMatch(route, /body\.user_id|body\.userId/);
+});
+
+test("logged-in order list stays scoped to current user and supports extended filters", () => {
+  const api = file("app/api/orders/route.ts");
+  const queries = file("lib/orders/order-queries.ts");
+  assert.match(api, /supabase\.auth\.getUser/);
+  assert.match(api, /user\.id/);
+  for (const key of ["deliveryStatus", "startDate", "endDate", "productSearch", "skuSearch"]) {
+    assert.match(api, new RegExp(key));
+    assert.match(queries, new RegExp(key));
+  }
+  assert.match(queries, /\.eq\("user_id", userId\)/);
+});
+
+test("high-risk APIs use shared rate limit and request size guards", () => {
+  const rateLimit = file("lib/security/rate-limit.ts");
+  assert.match(rateLimit, /checkRateLimit/);
+  assert.match(rateLimit, /checkRequestSize/);
+  for (const policy of ["order_create", "order_lookup", "payment_session_create", "payment_status_query"]) {
+    assert.match(rateLimit, new RegExp(policy));
+  }
+
+  const guardedRoutes = [
+    "app/api/orders/route.ts",
+    "app/api/payments/create/route.ts",
+    "app/api/recharges/route.ts",
+    "app/api/refunds/route.ts",
+    "app/api/order-query/route.ts",
+    "app/api/admin/inventory/route.ts",
+    "app/api/admin/media/route.ts",
+    "app/api/admin/catalog/products/route.ts",
+    "app/api/admin/catalog/products/[productId]/route.ts",
+  ];
+
+  for (const route of guardedRoutes) {
+    const source = file(route);
+    assert.match(source, /checkRateLimit/, `${route} must call checkRateLimit`);
+    assert.match(source, /checkRequestSize/, `${route} must call checkRequestSize`);
+  }
+});
+
+test("production readiness checks are read-only and cleanup scripts are safe by default", () => {
+  const route = file("app/api/admin/system/production-readiness/route.ts");
+  const service = file("lib/admin/production-readiness.ts");
+  const dryRun = file("scripts/production-data-cleanup-dry-run.sql");
+  const cleanupTemplate = file("scripts/production-data-cleanup-template.sql");
+
+  assert.match(route, /requireApiAdmin/);
+  assert.match(route, /buildProductionReadinessPayload/);
+  assert.doesNotMatch(route, /\.delete\(|\.update\(|\.insert\(|\.upsert\(/);
+  assert.doesNotMatch(service, /\.delete\(|\.update\(|\.insert\(|\.upsert\(/);
+  assert.doesNotMatch(service, /content\)/);
+
+  assert.doesNotMatch(dryRun, /\bdelete\b|\btruncate\b|\bdrop\b|\bupdate\b|\binsert\b/i);
+  assert.doesNotMatch(cleanupTemplate, /^\s*delete\s+from/im);
+  assert.doesNotMatch(cleanupTemplate, /\btruncate\b|\bdrop\s+table\b/i);
+  assert.match(cleanupTemplate, /必须先备份/);
+  assert.match(cleanupTemplate, /必须先执行 dry-run/);
+});
