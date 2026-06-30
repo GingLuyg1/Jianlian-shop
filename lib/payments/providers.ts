@@ -2,9 +2,12 @@ import type {
   CreatePaymentInput,
   CreatePaymentResult,
   PaymentChannelCode,
+  PaymentProviderCapabilities,
+  PaymentProviderConfigStatus,
   PaymentProvider,
   PaymentProviderCode,
   PaymentSessionStatus,
+  ProviderConfigCheck,
   ProviderCallbackContext,
   ProviderCreatePaymentInput,
   ProviderCreatePaymentResult,
@@ -69,6 +72,107 @@ const allowedChannels = new Set<PaymentChannelCode>([
 
 export function getPaymentProvider(provider: PaymentProviderCode) {
   return providers[provider] ?? unavailableProvider();
+}
+
+export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCapabilities> = {
+  generic_api: {
+    supportsCreate: true,
+    supportsQuery: true,
+    supportsClose: true,
+    supportsCallback: true,
+    supportsRefund: false,
+    supportsQrCode: true,
+    supportsRedirect: true,
+    supportsWalletAddress: false,
+    supportsSandbox: false,
+  },
+  binance: {
+    supportsCreate: true,
+    supportsQuery: true,
+    supportsClose: true,
+    supportsCallback: true,
+    supportsRefund: false,
+    supportsQrCode: true,
+    supportsRedirect: true,
+    supportsWalletAddress: false,
+    supportsSandbox: false,
+  },
+  crypto_address: {
+    supportsCreate: true,
+    supportsQuery: false,
+    supportsClose: false,
+    supportsCallback: true,
+    supportsRefund: false,
+    supportsQrCode: false,
+    supportsRedirect: false,
+    supportsWalletAddress: true,
+    supportsSandbox: false,
+  },
+};
+
+const providerRequiredEnvNames: Record<PaymentProviderCode, string[]> = {
+  generic_api: [
+    "GENERIC_PAYMENT_API_BASE_URL",
+    "GENERIC_PAYMENT_MERCHANT_ID",
+    "GENERIC_PAYMENT_API_SECRET",
+    "GENERIC_PAYMENT_WEBHOOK_SECRET",
+  ],
+  binance: [
+    "BINANCE_PAY_API_BASE_URL",
+    "BINANCE_PAY_MERCHANT_ID",
+    "BINANCE_PAY_API_KEY",
+    "BINANCE_PAY_API_SECRET",
+    "BINANCE_PAY_WEBHOOK_SECRET",
+  ],
+  crypto_address: ["CRYPTO_PAYMENT_WALLET_ADDRESS", "CRYPTO_PAYMENT_WEBHOOK_SECRET"],
+};
+
+export function getPaymentProviderCapabilities(provider: PaymentProviderCode): PaymentProviderCapabilities {
+  return providerCapabilities[provider] ?? {
+    supportsCreate: false,
+    supportsQuery: false,
+    supportsClose: false,
+    supportsCallback: false,
+    supportsRefund: false,
+    supportsQrCode: false,
+    supportsRedirect: false,
+    supportsWalletAddress: false,
+    supportsSandbox: false,
+  };
+}
+
+export function checkPaymentProviderConfig(
+  provider: PaymentProviderCode,
+  env: NodeJS.ProcessEnv = process.env,
+  verified = false
+): ProviderConfigCheck {
+  const requiredEnvNames = providerRequiredEnvNames[provider] ?? [];
+  const missingEnvNames = requiredEnvNames.filter((name) => !String(env[name] ?? "").trim());
+  const configuredCount = requiredEnvNames.length - missingEnvNames.length;
+  const status: PaymentProviderConfigStatus =
+    configuredCount === 0
+      ? "not_configured"
+      : missingEnvNames.length > 0
+        ? "partially_configured"
+        : verified
+          ? "connected"
+          : "pending_verification";
+
+  return {
+    provider,
+    status,
+    configured: missingEnvNames.length === 0 && requiredEnvNames.length > 0,
+    environment: env.PAYMENT_PROVIDER_ENV === "production" ? "production" : "sandbox",
+    missingEnvNames,
+    requiredEnvNames,
+  };
+}
+
+export function getPaymentProviderReadiness(env: NodeJS.ProcessEnv = process.env) {
+  return (Object.keys(providerCapabilities) as PaymentProviderCode[]).map((provider) => ({
+    ...checkPaymentProviderConfig(provider, env, env[`PAYMENT_PROVIDER_${provider.toUpperCase()}_VERIFIED`] === "true"),
+    capabilities: getPaymentProviderCapabilities(provider),
+  }));
 }
 
 export function isPaymentChannelCode(value: string): value is PaymentChannelCode {

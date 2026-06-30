@@ -5,7 +5,7 @@ import { COMPLETE_PAYMENT_SERVICE_IMPLEMENTED } from "@/lib/payments/complete-pa
 import { UNIFIED_CALLBACK_IMPLEMENTED } from "@/lib/payments/payment-callback-service";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { PAYMENT_SESSION_REUSE_IMPLEMENTED } from "@/lib/payments/payment-session-service";
-import { PROVIDER_INTERFACE_COMPLETE } from "@/lib/payments/providers";
+import { getPaymentProviderReadiness, PROVIDER_INTERFACE_COMPLETE } from "@/lib/payments/providers";
 import { RECONCILIATION_USES_COMPLETE_PAYMENT } from "@/lib/payments/reconciliation-service";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -47,6 +47,7 @@ export async function GET() {
 
   const coreDatabase = await probeCoreDatabase(service);
   const channelChecks = await probeChannels(client);
+  const providerReadiness = getPaymentProviderReadiness();
   const serviceRoleConfigured = Boolean(service);
   const providerConfigured = channelChecks.channels.some(
     (channel: { enabled?: boolean; configured?: boolean }) =>
@@ -101,6 +102,7 @@ export async function GET() {
     tableChecks,
     coreDatabase,
     channelChecks,
+    providerReadiness,
     providerConfigured,
     serviceRoleConfigured,
     blockingReasons,

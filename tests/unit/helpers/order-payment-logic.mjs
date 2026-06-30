@@ -66,3 +66,88 @@ export function applyRechargeCallback(state, callback) {
     processedCallbackIds: new Set([...state.processedCallbackIds, callback.callbackId]),
   };
 }
+
+export const providerRequiredEnv = {
+  generic_api: ["GENERIC_PAYMENT_API_BASE_URL", "GENERIC_PAYMENT_MERCHANT_ID", "GENERIC_PAYMENT_API_SECRET"],
+  binance: ["BINANCE_PAY_MERCHANT_ID", "BINANCE_PAY_API_KEY", "BINANCE_PAY_API_SECRET"],
+  crypto_address: ["CRYPTO_PAYMENT_WALLET_ADDRESS", "CRYPTO_PAYMENT_WEBHOOK_SECRET"],
+};
+
+export function evaluateProviderConfig(provider, env = {}, verified = false) {
+  const required = providerRequiredEnv[provider] ?? [];
+  const missing = required.filter((name) => !String(env[name] ?? "").trim());
+  const configuredCount = required.length - missing.length;
+  const status =
+    configuredCount === 0
+      ? "not_configured"
+      : missing.length > 0
+        ? "partially_configured"
+        : verified
+          ? "connected"
+          : "pending_verification";
+
+  return {
+    provider,
+    status,
+    configured: missing.length === 0 && required.length > 0,
+    missing,
+  };
+}
+
+export function channelCapability(provider, channel) {
+  if (provider === "generic_api") {
+    return {
+      supportsCreate: true,
+      supportsQuery: true,
+      supportsClose: true,
+      supportsCallback: true,
+      supportsRefund: false,
+      supportsQrCode: true,
+      supportsRedirect: true,
+      supportsWalletAddress: false,
+      supportsSandbox: false,
+    };
+  }
+  if (provider === "binance") {
+    return {
+      supportsCreate: true,
+      supportsQuery: true,
+      supportsClose: true,
+      supportsCallback: true,
+      supportsRefund: false,
+      supportsQrCode: true,
+      supportsRedirect: true,
+      supportsWalletAddress: false,
+      supportsSandbox: false,
+    };
+  }
+  if (provider === "crypto_address") {
+    return {
+      supportsCreate: true,
+      supportsQuery: false,
+      supportsClose: false,
+      supportsCallback: true,
+      supportsRefund: false,
+      supportsQrCode: false,
+      supportsRedirect: false,
+      supportsWalletAddress: channel === "usdt_trc20" || channel === "usdt_bep20",
+      supportsSandbox: false,
+    };
+  }
+  return {
+    supportsCreate: false,
+    supportsQuery: false,
+    supportsClose: false,
+    supportsCallback: false,
+    supportsRefund: false,
+    supportsQrCode: false,
+    supportsRedirect: false,
+    supportsWalletAddress: false,
+    supportsSandbox: false,
+  };
+}
+
+export function assertSandboxProviderAllowed(env = {}) {
+  if (env.NODE_ENV === "test" || env.PAYMENT_PROVIDER_MODE === "sandbox") return true;
+  throw new Error("Mock payment provider is disabled outside test or explicit sandbox mode.");
+}

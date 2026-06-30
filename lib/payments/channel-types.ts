@@ -2,6 +2,12 @@ export type PaymentCurrency = "CNY" | "USDT";
 export type PaymentNetwork = "TRC20" | "BEP20";
 export type ProviderNetwork = PaymentNetwork | "TRON" | "BSC";
 export type PaymentProviderCode = "generic_api" | "binance" | "crypto_address";
+export type PaymentProviderEnvironment = "sandbox" | "production";
+export type PaymentProviderConfigStatus =
+  | "not_configured"
+  | "partially_configured"
+  | "pending_verification"
+  | "connected";
 export type PaymentChannelStatus = "active" | "disabled";
 export type PaymentChannelCode =
   | "alipay"
@@ -79,6 +85,11 @@ export type ProviderCreatePaymentInput = {
   feeAmount: number;
   payableAmount: number;
   expiresAt: string;
+  subject?: string;
+  description?: string;
+  notifyUrl?: string;
+  returnUrl?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type ProviderCreatePaymentResult = {
@@ -103,6 +114,45 @@ export type ProviderQueryPaymentResult = {
 export type ProviderClosePaymentResult = {
   closed: boolean;
   status?: PaymentSessionStatus;
+};
+
+export type ProviderRefundInput = {
+  merchantOrderNo: string;
+  providerOrderId?: string;
+  providerTransactionId?: string;
+  amount: number;
+  currency: PaymentCurrency;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type ProviderRefundResult = {
+  status: "pending" | "processing" | "paid" | "failed" | "closed";
+  providerRefundId?: string;
+  amount: number;
+  currency: PaymentCurrency;
+  rawReference?: Record<string, unknown>;
+};
+
+export type PaymentProviderCapabilities = {
+  supportsCreate: boolean;
+  supportsQuery: boolean;
+  supportsClose: boolean;
+  supportsCallback: boolean;
+  supportsRefund: boolean;
+  supportsQrCode: boolean;
+  supportsRedirect: boolean;
+  supportsWalletAddress: boolean;
+  supportsSandbox: boolean;
+};
+
+export type ProviderConfigCheck = {
+  provider: PaymentProviderCode;
+  status: PaymentProviderConfigStatus;
+  configured: boolean;
+  environment: PaymentProviderEnvironment;
+  missingEnvNames: string[];
+  requiredEnvNames: string[];
 };
 
 export type ProviderCallbackContext = {
@@ -136,4 +186,7 @@ export type PaymentProvider = {
     payload: unknown,
     context?: ProviderCallbackContext
   ): Promise<Record<string, unknown> | ProviderParsedCallback>;
+  formatCallbackResponse?(result: { ok: boolean; duplicate?: boolean; message?: string }): Response | string;
+  queryRefund?(refundNo: string): Promise<ProviderRefundResult>;
+  createRefund?(input: ProviderRefundInput): Promise<ProviderRefundResult>;
 };
