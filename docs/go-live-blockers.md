@@ -1,69 +1,55 @@
-﻿# Jianlian Shop Go-Live Blockers
+# Jianlian Shop Go-Live Blockers
 
 Date: 2026-06-30
-Severity scale: P0 = do not launch, P1 = fix before production launch, P2 = fix soon after launch, P3 = experience optimization.
 
-## P0: Do Not Launch
+Severity scale:
 
-| ID | Issue | Impact | Related files | Fixed? | Migration? | Recommendation |
+- P0: prohibit testing or launch until resolved.
+- P1: must fix before production launch.
+- P2: fix soon after launch.
+- P3: experience optimization.
+
+## P0 Blockers
+
+| ID | Issue | Impact | Related files | Needs migration? | Current status | Recommendation |
 | --- | --- | --- | --- | --- | --- | --- |
-| P0-01 | Production Supabase migration execution is not verified. | Code references payment sessions, SKU fields, digital inventory batches, refunds, monitoring and schema checker tables/functions. Missing production schema can break orders, payment, inventory and admin pages. | `supabase/migrations/*`, `app/api/admin/payments/readiness/route.ts`, `lib/system/database-contract.ts` | No | Yes | Execute migrations in order on staging, then run schema probes before production. |
-| P0-02 | Real payment Provider is not connected or live-tested. | The site cannot formally collect money. Generating payment sessions without real provider configuration must not be treated as payable. | `lib/payments/payment-session-service.ts`, `lib/payments/provider-adapters.ts`, `app/api/payments/callback/[channel]/route.ts` | No | No | Configure a real provider sandbox, verify signature, query, close, callback and reconciliation before collection. |
-| P0-03 | Multi-SKU commercial chain is incomplete for SKU products. | SKU product purchase can be blocked or inconsistent because real frontend SKU picker and admin SKU editor are not complete. | `docs/multi-sku-verification.md`, `app/products/[id]/page.tsx`, `app/admin/products/page.tsx`, `supabase/migrations/20260629_multi_sku_core.sql` | No | Partly | Either disable multi-SKU products for launch or complete admin SKU editor, frontend selector and inventory import UI. |
-| P0-04 | Some admin/catalog files contain mojibake Chinese strings in the current worktree. | Admin UX can show unreadable Chinese text, and malformed strings are historically a source of runtime/build failures. | `app/admin/products/page.tsx`, `app/admin/categories/page.tsx`, `app/api/admin/catalog/products/[productId]/route.ts` | No | No | Normalize affected files to UTF-8 Chinese text and rerun build. |
-| P0-05 | Product-save browser behavior still requires final live verification. | If the unsaved-change dialog still appears after a successful save, admins may lose confidence or accidentally discard changes. | `app/admin/products/page.tsx`, `app/api/admin/catalog/products/[productId]/route.ts` | Partially | No | Run browser test: open, edit, save, close, reopen. Treat failure as immediate blocker. |
+| P0-01 | Supabase migration execution is not verified. | Missing tables/RPCs can break orders, payments, inventory, refunds, reports and admin pages. | `supabase/migrations/*`, `docs/migration-status.md`, `app/api/admin/system/project-status/route.ts` | Yes | Open | Execute migrations manually in staging, record results, then run schema check. |
+| P0-02 | Real payment Provider is not connected. | The site cannot collect real money. | `lib/payments/providers.ts`, `lib/payments/payment-session-service.ts`, `lib/payments/reconciliation-service.ts` | No | Open | Configure and verify a real provider sandbox before any real collection. |
+| P0-03 | Multi-SKU commercial chain is incomplete. | SKU products can lose accurate selection, pricing, inventory isolation or order snapshot data. | `supabase/migrations/20260629_multi_sku_core.sql`, `app/api/orders/route.ts`, `app/products/[id]/page.tsx`, `app/admin/products/page.tsx` | Yes | Partial/open | Keep single-SKU products enabled; do not launch SKU products until migration, admin SKU editor, frontend selector and SKU inventory import are verified. |
+| P0-04 | Product save browser behavior remains unverified. | Admins may see stale dirty-state prompts or stale list/detail values after saving. | `app/admin/products/page.tsx`, `app/api/admin/catalog/products/[productId]/route.ts`, `docs/manual-verification-checklist.md` | No | Unverified | Run MV-01 through MV-04. If any fails, keep as P0. |
+| P0-05 | Cross-user data isolation is unverified. | Users could access other users' orders, payments, refunds or delivery content if policies/routes are wrong. | `app/api/account/*`, `app/api/orders/*`, `supabase/migrations/*` | Yes | Unverified | Run ordinary-user and admin isolation tests after migrations. |
 
-## P1: Must Fix Before Production Launch
+## P1 Blockers
 
-| ID | Issue | Impact | Related files | Fixed? | Migration? | Recommendation |
+| ID | Issue | Impact | Related files | Needs migration? | Current status | Recommendation |
 | --- | --- | --- | --- | --- | --- | --- |
-| P1-01 | SKU-aware inventory import UI is incomplete. | Digital inventory may not be assigned to the correct SKU from admin UI, risking SKU delivery gaps. | `app/api/admin/inventory/route.ts`, `lib/inventory/import-service.ts`, `docs/multi-sku-verification.md` | No | Partly | Add SKU selector to import flow and verify per-SKU delivery. |
-| P1-02 | Automatic delivery concurrency and duplicate callback tests are not live-verified. | A race condition could cause duplicate delivery or failed fulfillment recovery issues. | `supabase/migrations/20260622_digital_delivery_hardening.sql`, `supabase/migrations/20260629_multi_sku_core.sql`, `lib/delivery/delivery-service.ts` | Partially | Yes | Run staging tests with duplicate callbacks, insufficient inventory and mixed orders. |
-| P1-03 | RLS and RPC grants need real non-admin verification. | Static policies exist, but a misconfigured Supabase project can expose admin/user data. | `supabase/migrations/*`, `app/api/admin/*`, `app/api/account/*` | No | Yes | Test ordinary user access to admin APIs, other users' orders, payments, recharges, deliveries and inventory. |
-| P1-04 | Refund flow needs over-refund and permission tests. | Incorrect refund processing can over-refund or corrupt order/payment status. | `supabase/migrations/20260629_refund_after_sales.sql`, `app/api/refunds/route.ts`, `app/api/admin/refunds/route.ts` | No | Yes | Verify partial/full refund limits, status transitions and audit logs. |
-| P1-05 | Payment channel secret handling must be verified. | Secrets must not be returned to browser or cleared accidentally on save. | `app/admin/settings`, `lib/payments/channels.ts`, `supabase/migrations/20260622_super_admin_payment_console.sql` | Partially | Yes | Test save-without-retyping secrets and inspect frontend responses for secret leakage. |
-| P1-06 | Backup and rollback runbook is documentation-only. | Production launch lacks proven rollback drill. | `docs/database-backup-restore.md`, `docs/production-rollback.md` | Partial | No | Run a staging backup/restore drill and document exact commands. |
+| P1-01 | SKU-aware inventory import UI is incomplete. | Digital inventory may be assigned to the wrong SKU or imported only at product level. | `app/api/admin/inventory/route.ts`, `lib/inventory/import-service.ts`, `docs/multi-sku-verification.md` | Yes | Partial | Add SKU selector/display to import and inventory list before SKU launch. |
+| P1-02 | Duplicate callback and duplicate delivery tests are not complete. | A race condition could cause duplicate delivery or incorrect fulfillment state. | `lib/delivery/delivery-service.ts`, `supabase/migrations/20260622_digital_delivery_hardening.sql`, `supabase/migrations/20260629_multi_sku_core.sql` | Yes | Unverified | Run staging replay tests with duplicate callbacks and retry delivery. |
+| P1-03 | Refund limits and admin permissions are not live-verified. | Over-refund or unauthorized refund processing could corrupt order/payment state. | `app/api/refunds/route.ts`, `app/api/admin/refunds/*`, `supabase/migrations/20260629_refund_after_sales.sql` | Yes | Unverified | Test partial/full refund, status transitions, audit logs and super-admin restrictions. |
+| P1-04 | Audit log coverage is not proven for every sensitive operation. | Some admin actions may not be traceable. | `lib/admin/audit-log-service.ts`, `app/api/admin/*` | Yes | Partial | Verify audit entries for product, payment, refund, user, inventory and project status checks. |
+| P1-05 | Backup and rollback are documentation-only. | Production rollback confidence is low. | `docs/database-backup-restore.md`, `docs/production-rollback.md`, `supabase/migrations/20260630_backup_runs.sql` | Optional | Partial | Run a staging backup/restore drill and record exact result. |
 
-## P2: Can Fix Soon After Test Launch
+## P2 / P3 Items
 
-| ID | Issue | Impact | Related files | Fixed? | Migration? | Recommendation |
-| --- | --- | --- | --- | --- | --- | --- |
-| P2-01 | Public catalog API caps internal product scan at 1000 rows. | Large catalogs should move to SQL/RPC search for better performance. | `app/api/catalog/products/route.ts` | Partially | Optional | Add database-side search/ranking once product volume grows. |
-| P2-02 | Audit log coverage is not proven for every sensitive operation. | Some admin actions may be missing audit entries. | `lib/admin/audit-log-service.ts`, `app/api/admin/*` | Partially | Yes | Add route-level audit checklist tests. |
-| P2-03 | Monitoring and alerts are reserved but not connected to external notification channels. | Errors are visible in admin but may not trigger active operations alerts. | `app/api/health/readiness/route.ts`, `app/admin/system-errors`, `lib/monitoring/*` | Partially | Yes | Add email/Telegram/webhook alert integration later. |
-| P2-04 | Media/resources and reports modules are present in a dirty worktree. | They may be useful but are not fully RC-verified. | `app/admin/media`, `app/admin/reports`, `lib/media`, `lib/reports` | No | Yes | Verify after migration execution and separate commits. |\n| P2-05 | Several admin UI files still contain mojibake Chinese labels, although syntax-breaking strings were fixed and build now passes. | Admin operators may see unreadable labels or messages. | `app/admin/products/page.tsx`, `app/admin/categories/page.tsx` | Partially | No | Re-save affected UI files as UTF-8 Chinese and verify pages visually. |
+| ID | Issue | Impact | Related files | Current status |
+| --- | --- | --- | --- | --- |
+| P2-01 | Public catalog API may not scale beyond small catalogs. | Search/filter performance can degrade. | `app/api/catalog/products/route.ts` | Partial |
+| P2-02 | Monitoring is internal only. | Operators may miss active alerts. | `lib/monitoring/*`, `app/admin/system-errors` | Partial |
+| P3-01 | Some older files still contain mojibake UI text. | Admin UX and docs can be hard to read. | `app/admin/*`, older docs | Open |
+| P3-02 | Dense admin layouts need visual pass on common desktop sizes. | Minor layout overflow may remain. | `components/admin/*` | Unverified |
 
-## P3: Experience Optimization
+## Cancelled Or Out Of Scope
 
-| ID | Issue | Impact | Related files | Fixed? | Migration? | Recommendation |
-| --- | --- | --- | --- | --- | --- | --- |
-| P3-01 | Some reports/docs contain encoding damage. | Engineering docs are harder to read. | `docs/payment-core-verification.md` and possibly older Chinese docs | No | No | Re-save docs as UTF-8 and replace mojibake text. |
-| P3-02 | Admin dense-table layout should be browser-verified at 1600x900 and 1920x1080. | UI may still have scroll/spacing issues. | `components/admin/*`, `app/admin/*` | Partial | No | Run visual pass after blockers are fixed. |
+| Feature | Status | Notes |
+| --- | --- | --- |
+| Shopping cart | cancelled | Direct purchase is the active flow. `cart_items` may exist as schema compatibility but cart UI/API is not in current scope. |
+| Support tickets | cancelled | `support_tickets` and `support_ticket_messages` are excluded from this task. |
+| New real payment Provider implementation | excluded from this task | Current conclusion remains `not_configured`. |
+| Automatic SQL execution/deployment | excluded from this task | All migrations must be manually executed and recorded. |
 
-## Final Launch Gates
+## Current Launch Decision
 
-Before production launch, all of the following must be true:
-
-1. `tsc --noEmit` passes.
-2. `npm run build` passes.
-3. Supabase migrations are executed in staging and production in the documented order.
-4. Readiness/schema probes show required tables, fields and RPCs exist.
-5. Product save browser test passes without stale dirty-state prompts.
-6. Multi-SKU products are either disabled or fully implemented and verified.
-7. Real payment Provider sandbox has passed create/query/close/callback/reconciliation tests.
-8. RLS isolation tests pass for ordinary users and admins.
-9. Digital inventory duplicate/cross-SKU delivery tests pass.
-
-## Current Decision
-
-- Deploy to test environment: allowed after migrations are applied to the test Supabase project.
-- Formal production launch: not allowed yet.
-- Real payment collection: not allowed yet.
-
-## Verification Run
-
-- 
-pm run build: passed on 2026-06-30 with existing Supabase dynamic dependency and CSR deopt warnings.
-- 	sc --noEmit: passed on 2026-06-30 after build regenerated Next types.
-- Fixed during this RC pass: syntax-breaking category route strings, audit module union corruption, literal backtick newline tokens, and Supabase query-builder .catch() type errors in privacy routes.
-
+- Can test locally: yes, but only for implemented areas and with manual checklist records.
+- Can deploy to test environment: yes, after migrations are manually executed and status is recorded.
+- Can deploy to production: no.
+- Can collect real money: no.
