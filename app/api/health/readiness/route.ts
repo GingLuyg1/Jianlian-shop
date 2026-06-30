@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { recordSystemError } from "@/lib/monitoring/logger";
+import { getReleaseInfo } from "@/lib/system/release-info";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { hasSupabaseServerConfig } from "@/lib/supabase/server";
 
@@ -23,35 +24,39 @@ export async function GET() {
   checks.push({
     name: "application_process",
     status: "ok",
-    message: "应用进程存活",
+    message: "Application process is alive.",
     critical: true,
     durationMs: 0,
   });
 
   checks.push(await checkDatabase());
   checks.push(await checkPaymentCore());
-  checks.push(await checkTable("orders", "订单服务", true));
-  checks.push(await checkTable("digital_inventory", "数字库存服务", false));
-  checks.push(await checkTable("order_deliveries", "自动发货服务", false));
-  checks.push(await checkTable("payment_reconciliations", "对账服务", false));
+  checks.push(await checkTable("orders", "Orders service", true));
+  checks.push(await checkTable("digital_inventory", "Digital inventory service", false));
+  checks.push(await checkTable("order_deliveries", "Delivery service", false));
+  checks.push(await checkTable("payment_reconciliations", "Payment reconciliation service", false));
   checks.push({
     name: "notification_service",
     status: process.env.MONITORING_WEBHOOK_URL || process.env.ALERT_WEBHOOK_URL ? "ok" : "not_configured",
-    message: process.env.MONITORING_WEBHOOK_URL || process.env.ALERT_WEBHOOK_URL ? "告警通道已配置" : "告警通道未配置",
+    message:
+      process.env.MONITORING_WEBHOOK_URL || process.env.ALERT_WEBHOOK_URL
+        ? "Alert channel is configured."
+        : "Alert channel is not configured.",
     critical: false,
   });
 
   const criticalFailed = checks.some((check) => check.critical && check.status === "unhealthy");
   const degraded = checks.some((check) => ["degraded", "unhealthy", "not_configured"].includes(check.status));
   const status = criticalFailed ? "unhealthy" : degraded ? "degraded" : "healthy";
+  const release = getReleaseInfo(status);
 
   if (criticalFailed) {
     await recordSystemError({
       level: "critical",
       category: "system",
       event: "health_readiness_unhealthy",
-      title: "健康检查失败",
-      message: "核心健康检查失败",
+      title: "Health readiness check failed",
+      message: "A critical health readiness check failed.",
       route: "/api/health/readiness",
       errorCode: "HEALTH_UNHEALTHY",
       metadata: { checks },
@@ -61,6 +66,12 @@ export async function GET() {
   return NextResponse.json(
     {
       status,
+      environment: release.environment,
+      version: release.release,
+      commit_sha: shortSha(release.commit),
+      build_time: release.buildTime,
+      database_reachable: checks.find((check) => check.name === "database_connection")?.status === "ok",
+      database_schema_status: status,
       timestamp: new Date().toISOString(),
       durationMs: Date.now() - started,
       checks,
@@ -74,13 +85,17 @@ export async function GET() {
   );
 }
 
+function shortSha(value: string) {
+  return value && value !== "unknown" ? value.slice(0, 12) : "unknown";
+}
+
 async function checkDatabase(): Promise<HealthCheck> {
   const started = Date.now();
   if (!hasSupabaseServerConfig()) {
     return {
       name: "database_connection",
       status: "unhealthy",
-      message: "Supabase 环境变量未配置",
+      message: "Supabase environment variables are not configured.",
       critical: true,
       durationMs: Date.now() - started,
     };
@@ -91,7 +106,7 @@ async function checkDatabase(): Promise<HealthCheck> {
     return {
       name: "database_connection",
       status: "degraded",
-      message: "Service role 未配置，无法执行完整数据库探测",
+      message: "Service role is not configured; full database probing is unavailable.",
       critical: true,
       durationMs: Date.now() - started,
     };
@@ -102,7 +117,7 @@ async function checkDatabase(): Promise<HealthCheck> {
     return {
       name: "database_connection",
       status: error ? "unhealthy" : "ok",
-      message: error ? "数据库连接不可用" : "数据库连接正常",
+      message: error ? "Database connection is unavailable." : "Database connection is healthy.",
       critical: true,
       durationMs: Date.now() - started,
     };
@@ -110,7 +125,7 @@ async function checkDatabase(): Promise<HealthCheck> {
     return {
       name: "database_connection",
       status: "unhealthy",
-      message: "数据库连接检查异常",
+      message: "Database connection check failed.",
       critical: true,
       durationMs: Date.now() - started,
     };
@@ -124,7 +139,7 @@ async function checkPaymentCore(): Promise<HealthCheck> {
     return {
       name: "payment_core",
       status: "not_configured",
-      message: "支付核心需要 service role 才能完整检查",
+      message: "Payment core check requires server service configuration.",
       critical: false,
       durationMs: Date.now() - started,
     };
@@ -134,7 +149,7 @@ async function checkPaymentCore(): Promise<HealthCheck> {
     return {
       name: "payment_core",
       status: error ? "degraded" : "ok",
-      message: error ? "支付会话表尚未就绪" : "支付核心表可访问",
+      message: error ? "Payment session table is unavailable or not initialized." : "Payment core tables are reachable.",
       critical: false,
       durationMs: Date.now() - started,
     };
@@ -142,7 +157,7 @@ async function checkPaymentCore(): Promise<HealthCheck> {
     return {
       name: "payment_core",
       status: "degraded",
-      message: "支付核心检查异常",
+      message: "Payment core check failed.",
       critical: false,
       durationMs: Date.now() - started,
     };
@@ -156,7 +171,7 @@ async function checkTable(table: string, label: string, critical: boolean): Prom
     return {
       name: table,
       status: "not_configured",
-      message: `${label}未执行完整检查`,
+      message: `${label} check requires server service configuration.`,
       critical,
       durationMs: Date.now() - started,
     };
@@ -166,7 +181,7 @@ async function checkTable(table: string, label: string, critical: boolean): Prom
     return {
       name: table,
       status: error ? (critical ? "unhealthy" : "degraded") : "ok",
-      message: error ? `${label}不可用或未初始化` : `${label}正常`,
+      message: error ? `${label} is unavailable or not initialized.` : `${label} is healthy.`,
       critical,
       durationMs: Date.now() - started,
     };
@@ -174,7 +189,7 @@ async function checkTable(table: string, label: string, critical: boolean): Prom
     return {
       name: table,
       status: critical ? "unhealthy" : "degraded",
-      message: `${label}检查异常`,
+      message: `${label} check failed.`,
       critical,
       durationMs: Date.now() - started,
     };
