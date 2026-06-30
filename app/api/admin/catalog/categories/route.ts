@@ -1,4 +1,4 @@
-import {
+﻿import {
   CATEGORY_FIELDS,
   assertCategoryParent,
   auditCatalogAction,
@@ -7,6 +7,8 @@ import {
   parseBody,
   requireCatalogAdmin,
 } from "../_shared";
+
+import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 
 export async function POST(request: Request) {
   const admin = await requireCatalogAdmin();
@@ -36,6 +38,13 @@ export async function POST(request: Request) {
     });
     return jsonResponse({ error: "分类新增失败，请检查分类标识是否重复" }, 400);
   }
+
+  await markMediaReferenceByUrl(
+    admin.supabase,
+    (data as { icon?: string | null }).icon,
+    "category",
+    String((data as { id?: unknown }).id ?? "")
+  );
 
   await auditCatalogAction({
     request,

@@ -18,8 +18,13 @@ export type PublicSiteSettings = {
   site_status: string;
   top_announcement: string;
   support_contact: string;
+  default_locale: string;
+  supported_locales: Record<string, unknown>;
   default_currency: string;
   currency_symbol: string;
+  business_timezone: string;
+  date_format: string;
+  time_format: string;
   products_per_page: number;
   show_original_price: boolean;
   show_stock: boolean;
@@ -105,6 +110,22 @@ export const SITE_SETTING_DEFINITIONS = {
     description: "默认货币",
     defaultValue: "CNY",
   },
+  default_locale: {
+    key: "default_locale",
+    type: "string",
+    group: "store",
+    isPublic: true,
+    description: "默认语言",
+    defaultValue: "zh-CN",
+  },
+  supported_locales: {
+    key: "supported_locales",
+    type: "json",
+    group: "store",
+    isPublic: true,
+    description: "支持的语言",
+    defaultValue: { values: ["zh-CN"] },
+  },
   currency_symbol: {
     key: "currency_symbol",
     type: "string",
@@ -112,6 +133,30 @@ export const SITE_SETTING_DEFINITIONS = {
     isPublic: true,
     description: "货币符号",
     defaultValue: "¥",
+  },
+  business_timezone: {
+    key: "business_timezone",
+    type: "string",
+    group: "store",
+    isPublic: true,
+    description: "业务时区",
+    defaultValue: "Asia/Shanghai",
+  },
+  date_format: {
+    key: "date_format",
+    type: "string",
+    group: "store",
+    isPublic: true,
+    description: "日期格式",
+    defaultValue: "yyyy-MM-dd",
+  },
+  time_format: {
+    key: "time_format",
+    type: "string",
+    group: "store",
+    isPublic: true,
+    description: "时间格式",
+    defaultValue: "HH:mm:ss",
   },
   products_per_page: {
     key: "products_per_page",

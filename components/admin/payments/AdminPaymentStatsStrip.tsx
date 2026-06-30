@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { BarChart3, ClipboardList, Loader, TrendingUp, WalletCards } from "lucide-react";
 
 import AdminStatsCard from "@/components/admin/AdminStatsCard";
+import { formatCurrency } from "@/lib/i18n/money";
 import { getPaymentChannelLabel } from "@/lib/payments/admin-payment-types";
 
 type PaymentStats = {
@@ -17,7 +18,7 @@ type PaymentStats = {
 };
 
 function money(value: number | undefined) {
-  return `¥${Number(value ?? 0).toFixed(2)}`;
+  return formatCurrency(value, "CNY");
 }
 
 export default function AdminPaymentStatsStrip() {

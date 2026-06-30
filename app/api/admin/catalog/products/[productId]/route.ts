@@ -1,4 +1,4 @@
-import {
+﻿import {
   PRODUCT_FIELDS,
   assertProductCategory,
   auditCatalogAction,
@@ -8,6 +8,8 @@ import {
   requireCatalogAdmin,
   verifyPersistedProduct,
 } from "../../_shared";
+
+import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 
 type RouteContext = {
   params: { productId: string };
@@ -22,7 +24,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .select(PRODUCT_FIELDS)
     .eq("id", params.productId)
     .maybeSingle();
-  if (beforeError || !before) return jsonResponse({ error: "商品不存在或已被删除" }, 404);
+  if (beforeError || !before) return jsonResponse({ error: "鍟嗗搧涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎" }, 404);
 
   const body = parseBody(await request.json().catch(() => ({})));
   const { payload, errors } = normalizeProductPayload(body, true);
@@ -30,7 +32,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return jsonResponse({ error: "商品信息填写不完整", errors }, 400);
   }
   if (Object.keys(payload).length === 0) {
-    return jsonResponse({ error: "没有需要保存的商品变更" }, 400);
+    return jsonResponse({ error: "娌℃湁闇€瑕佷繚瀛樼殑鍟嗗搧鍙樻洿" }, 400);
   }
 
   if (payload.category_id) {
@@ -82,6 +84,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return jsonResponse({ error: verifyError }, 409);
   }
 
+  await markMediaReferenceByUrl(admin.supabase, (data as { image_url?: string | null }).image_url, "product", params.productId);
+
   await auditCatalogAction({
     request,
     user: admin.user,
@@ -107,7 +111,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     .select(PRODUCT_FIELDS)
     .eq("id", params.productId)
     .maybeSingle();
-  if (beforeError || !before) return jsonResponse({ error: "商品不存在或已被删除" }, 404);
+  if (beforeError || !before) return jsonResponse({ error: "鍟嗗搧涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎" }, 404);
 
   const { error } = await admin.supabase.from("products").delete().eq("id", params.productId);
   if (error) {
@@ -121,9 +125,9 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       targetLabel: String((before as { name?: unknown }).name ?? ""),
       result: "failed",
       beforeSummary: before,
-      errorMessage: "商品删除失败",
+      errorMessage: "鍟嗗搧鍒犻櫎澶辫触",
     });
-    return jsonResponse({ error: "商品删除失败，请稍后重试" }, 400);
+    return jsonResponse({ error: "鍟嗗搧鍒犻櫎澶辫触锛岃绋嶅悗閲嶈瘯" }, 400);
   }
 
   await auditCatalogAction({
@@ -140,3 +144,8 @@ export async function DELETE(request: Request, { params }: RouteContext) {
 
   return jsonResponse({ ok: true });
 }
+
+
+
+
+

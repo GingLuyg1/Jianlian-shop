@@ -1,6 +1,8 @@
 ﻿export const REFUND_ACTIVE_STATUSES = ["requested", "reviewing", "approved", "processing"] as const;
 export const REFUND_FINAL_STATUSES = ["succeeded", "rejected", "failed", "cancelled"] as const;
 
+import { formatCurrency } from "@/lib/i18n/money";
+
 export type RefundStatus =
   | "requested"
   | "reviewing"
@@ -49,8 +51,7 @@ export function toMoney(value: unknown) {
 }
 
 export function formatMoney(value: unknown, currency = "CNY") {
-  const symbol = currency === "CNY" ? "¥" : `${currency} `;
-  return `${symbol}${toMoney(value).toFixed(2)}`;
+  return formatCurrency(value, currency);
 }
 
 export function maskEmail(email: unknown) {

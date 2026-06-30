@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import { randomUUID } from "crypto";
 
@@ -14,8 +14,8 @@ export type AdminAuditModule =
   | "inventory"
   | "delivery"
   | "settings"
-  | "system";
-
+  | "system"
+  | "privacy";
 export type AdminAuditResult = "success" | "failed" | "denied";
 
 export type AdminAuditUser = {
@@ -41,7 +41,7 @@ export type AdminAuditInput = {
 };
 
 const SENSITIVE_KEY_PATTERN =
-  /password|token|secret|api[_-]?key|sign|signature|private|credential|content|card|code|payload|raw|callback|proof|cookie|authorization|卡密|密码|密钥|令牌|私钥|签名|凭证/i;
+  /password|token|secret|api[_-]?key|sign|signature|private|credential|content|card|code|payload|raw|callback|proof|cookie|authorization/i;
 
 export function getAuditErrorMessage(error: unknown, fallback = "操作失败，请稍后重试") {
   if (typeof error === "string" && error.trim()) return error;
@@ -68,7 +68,7 @@ export function sanitizeAuditValue(value: unknown, depth = 0): unknown {
     const output: Record<string, unknown> = {};
     for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
       output[key] = SENSITIVE_KEY_PATTERN.test(key)
-        ? "已脱敏"
+        ? "[redacted]"
         : sanitizeAuditValue(nestedValue, depth + 1);
     }
     return output;
@@ -138,3 +138,5 @@ export async function writeAdminAuditLog(input: AdminAuditInput) {
     return { ok: false, error };
   }
 }
+
+

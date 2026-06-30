@@ -13,8 +13,11 @@ import { Label } from "@/components/ui/label";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function validatePassword(value: string) {
-  if (value.length < 8) return "新密码至少 8 位。";
-  if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) return "建议新密码同时包含字母和数字。";
+  if (value.length < 8) return "新密码至少需要 8 位。";
+  if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) {
+    return "新密码建议同时包含字母和数字。";
+  }
+
   return "";
 }
 
@@ -30,11 +33,19 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     let active = true;
-    getSupabaseBrowserClient().auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setReady(Boolean(data.session));
-      setInvalid(!data.session);
-    });
+    getSupabaseBrowserClient()
+      .auth.getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        setReady(Boolean(data.session));
+        setInvalid(!data.session);
+      })
+      .catch(() => {
+        if (!active) return;
+        setReady(false);
+        setInvalid(true);
+      });
+
     return () => {
       active = false;
     };
@@ -43,6 +54,7 @@ export default function ResetPasswordPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
+
     setError("");
     const passwordError = validatePassword(password);
     if (passwordError) {
@@ -55,12 +67,15 @@ export default function ResetPasswordPage() {
     }
 
     setSubmitting(true);
-    const { error: updateError } = await getSupabaseBrowserClient().auth.updateUser({ password });
+    const { error: updateError } = await getSupabaseBrowserClient().auth.updateUser({
+      password,
+    });
     if (updateError) {
       setError("重置链接已失效或密码更新失败，请重新发送重置邮件。");
       setSubmitting(false);
       return;
     }
+
     toast.success("密码已重置，请重新登录。");
     await getSupabaseBrowserClient().auth.signOut();
     router.replace("/login");
@@ -79,7 +94,11 @@ export default function ResetPasswordPage() {
               <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
             ) : invalid ? (
               <div className="space-y-4">
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+                >
                   重置链接已失效或已过期，请重新发送重置邮件。
                 </div>
                 <Button asChild>
@@ -88,7 +107,15 @@ export default function ResetPasswordPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
-                {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+                {error ? (
+                  <div
+                    role="alert"
+                    aria-live="polite"
+                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                  >
+                    {error}
+                  </div>
+                ) : null}
                 <PasswordInput
                   id="password"
                   label="新密码"
@@ -144,11 +171,18 @@ function PasswordInput({
           onChange={(event) => onChange(event.target.value)}
           className="pr-11"
           autoComplete="new-password"
+          required
         />
-        <button type="button" onClick={onToggle} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+          aria-label={visible ? "隐藏密码" : "显示密码"}
+        >
           {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
       </div>
     </div>
   );
 }
+

@@ -19,6 +19,8 @@ import {
   getRiskLevelClass,
   getRiskLevelLabel,
 } from "@/lib/payments/admin-payment-types";
+import { formatDateTime } from "@/lib/i18n/datetime";
+import { formatCurrency } from "@/lib/i18n/money";
 import { cn } from "@/lib/utils";
 
 type ListPayload = { reconciliations?: AdminPaymentReconciliation[]; count?: number; error?: string };
@@ -27,14 +29,13 @@ type DetailPayload = { reconciliation?: AdminPaymentReconciliation; error?: stri
 const PAGE_SIZE = 20;
 
 function formatMoney(value: number | null | undefined, currency = "CNY") {
-  const digits = currency === "USDT" ? 6 : 2;
-  return `${currency} ${Number(value ?? 0).toFixed(digits)}`;
+  return formatCurrency(value, currency);
 }
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false });
+  return Number.isNaN(date.getTime()) ? "—" : formatDateTime(value);
 }
 
 function useDebouncedValue(value: string, delay = 350) {

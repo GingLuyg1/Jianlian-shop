@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertCircle, LogOut, Shield, UserCircle, WalletCards } from "lucide-react";
+import { AlertCircle, FileLock2, LogOut, Shield, UserCircle, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -15,6 +15,7 @@ const navItems = [
   { label: "账户概览", href: "/account", icon: WalletCards },
   { label: "个人资料", href: "/account/profile", icon: UserCircle },
   { label: "账号安全", href: "/account/security", icon: Shield },
+  { label: "隐私设置", href: "/account/privacy", icon: FileLock2 },
 ];
 
 function getEmailRedirectTo(path = "/account") {
@@ -226,3 +227,4 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
     </>
   );
 }
+

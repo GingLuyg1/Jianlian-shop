@@ -15,8 +15,10 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getSafeInternalRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
 import {
   getOrCreateProfile,
@@ -33,6 +35,8 @@ type AuthScreenProps = {
 
 const features = ["安全账号", "快速下单", "订单查询"];
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function getSafeErrorMessage(error: unknown, fallback: string) {
   if (
     error &&
@@ -48,8 +52,6 @@ function getSafeErrorMessage(error: unknown, fallback: string) {
 }
 
 function getNetworkErrorMessage(error: unknown) {
-  return "无法连接 Supabase 服务，请检查网络、代理或 Supabase 项目配置。";
-
   const rawMessage = getSafeErrorMessage(error, "");
   const lowerMessage = rawMessage.toLowerCase();
 
@@ -64,12 +66,43 @@ function getNetworkErrorMessage(error: unknown) {
   return rawMessage || "网络请求失败，请稍后重试。";
 }
 
-function getSafeInternalRedirect(value: string | null) {
-  if (value && value.startsWith("/") && !value.startsWith("//")) {
-    return value;
+function validatePassword(value: string) {
+  if (value.length < 8) return "密码至少需要 8 位。";
+  if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) {
+    return "密码建议同时包含字母和数字。";
   }
 
-  return "/";
+  return "";
+}
+
+function getAuthErrorMessage(error: unknown, fallback: string) {
+  const rawMessage = getSafeErrorMessage(error, "");
+  const lowerMessage = rawMessage.toLowerCase();
+
+  if (
+    lowerMessage.includes("already registered") ||
+    lowerMessage.includes("user already registered") ||
+    lowerMessage.includes("already exists")
+  ) {
+    return "该邮箱已注册。";
+  }
+
+  if (lowerMessage.includes("invalid email")) return "邮箱格式不正确。";
+  if (lowerMessage.includes("password")) return "密码强度不足。";
+  if (lowerMessage.includes("rate") || lowerMessage.includes("too many")) {
+    return "请求过于频繁，请稍后再试。";
+  }
+  if (lowerMessage.includes("invalid login credentials")) {
+    return "邮箱或密码不正确。";
+  }
+  if (lowerMessage.includes("email not confirmed")) {
+    return "邮箱尚未验证，请先完成邮箱验证。";
+  }
+  if (lowerMessage.includes("signup") && lowerMessage.includes("disabled")) {
+    return "注册服务暂时不可用。";
+  }
+
+  return fallback;
 }
 
 function getAuthRedirectUrl(path: string) {
@@ -110,9 +143,11 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   );
 
   const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [inviteCode, setInviteCode] = useState(inviteFromUrl);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -148,6 +183,23 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     recordPromotionVisit();
   }, [inviteFromUrl]);
 
+  useEffect(() => {
+    if (!hasSupabaseConfig()) return;
+    let active = true;
+
+    getSupabaseBrowserClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (!active || !data.user) return;
+        router.replace(redirectTo === "/" ? "/account" : redirectTo);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [redirectTo, router]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
@@ -163,19 +215,27 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail.includes("@")) {
+    if (!EMAIL_PATTERN.test(normalizedEmail)) {
       setError("请输入正确的邮箱地址。");
       return;
     }
 
-    if (password.length < 6) {
-      setError("密码至少需要 6 位。");
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
-    if (isRegister && password !== confirmPassword) {
-      setError("两次输入的密码不一致。");
-      return;
+    if (isRegister) {
+      if (password !== confirmPassword) {
+        setError("两次输入的密码不一致。");
+        return;
+      }
+
+      if (!acceptedTerms) {
+        setError("请先阅读并同意用户协议。");
+        return;
+      }
     }
 
     setLoading(true);
@@ -185,18 +245,26 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
       if (isRegister) {
         const normalizedInviteCode = inviteCode.trim().toUpperCase();
+        const normalizedDisplayName = displayName.trim();
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
           options: {
-            emailRedirectTo: getAuthRedirectUrl("/account"),
-            data: normalizedInviteCode ? { invite_code: normalizedInviteCode } : undefined,
+            emailRedirectTo: getAuthRedirectUrl(
+              `/auth/callback?next=${encodeURIComponent("/account")}`
+            ),
+            data: {
+              ...(normalizedInviteCode ? { invite_code: normalizedInviteCode } : {}),
+              ...(normalizedDisplayName
+                ? { display_name: normalizedDisplayName }
+                : {}),
+            },
           },
         });
 
         if (signUpError) {
           setError(
-            signUpError?.message ?? "Supabase Auth 注册失败，请稍后重试。"
+            getAuthErrorMessage(signUpError, "注册服务暂时不可用，请稍后重试。")
           );
           return;
         }
@@ -241,7 +309,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
       if (signInError) {
         setError(
-          signInError?.message ?? "Supabase Auth 登录失败，请检查邮箱或密码。"
+          getAuthErrorMessage(signInError, "邮箱或密码不正确。")
         );
         return;
       }
@@ -393,6 +461,21 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {isRegister ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="displayName">昵称（选填）</Label>
+                      <Input
+                        id="displayName"
+                        value={displayName}
+                        onChange={(event) => setDisplayName(event.target.value)}
+                        placeholder="请输入昵称"
+                        className="h-12 rounded-xl bg-slate-50"
+                        autoComplete="nickname"
+                        maxLength={40}
+                      />
+                    </div>
+                  ) : null}
+
                   <div className="space-y-2">
                     <Label htmlFor="email">邮箱</Label>
                     <div className="relative">
@@ -474,17 +557,54 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                           />
                         </div>
                       </div>
+                      <div className="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-3">
+                        <Checkbox
+                          id="acceptedTerms"
+                          checked={acceptedTerms}
+                          onCheckedChange={(checked) =>
+                            setAcceptedTerms(checked === true)
+                          }
+                          className="mt-0.5"
+                        />
+                        <Label
+                          htmlFor="acceptedTerms"
+                          className="cursor-pointer text-sm font-normal leading-6 text-slate-700"
+                        >
+                          我已阅读并同意
+                          <Link
+                            href="/terms"
+                            className="mx-1 font-semibold text-primary hover:text-primary/80"
+                          >
+                            用户协议
+                          </Link>
+                          和
+                          <Link
+                            href="/privacy"
+                            className="mx-1 font-semibold text-primary hover:text-primary/80"
+                          >
+                            隐私政策
+                          </Link>
+                        </Label>
+                      </div>
                     </>
                   ) : null}
 
                   {error ? (
-                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    <div
+                      role="alert"
+                      aria-live="polite"
+                      className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+                    >
                       {error}
                     </div>
                   ) : null}
 
                   {message ? (
-                    <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
+                    >
                       {message}
                     </div>
                   ) : null}

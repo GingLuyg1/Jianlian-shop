@@ -1,4 +1,4 @@
-import {
+﻿import {
   PRODUCT_FIELDS,
   assertProductCategory,
   auditCatalogAction,
@@ -9,6 +9,8 @@ import {
   verifyPersistedProduct,
 } from "../_shared";
 
+import { markMediaReferenceByUrl } from "@/lib/media/media-service";
+
 export async function POST(request: Request) {
   const admin = await requireCatalogAdmin();
   if (!admin.ok) return admin.response;
@@ -16,7 +18,7 @@ export async function POST(request: Request) {
   const body = parseBody(await request.json().catch(() => ({})));
   const { payload, errors } = normalizeProductPayload(body);
   if (Object.keys(errors).length > 0) {
-    return jsonResponse({ error: "\u5546\u54c1\u4fe1\u606f\u586b\u5199\u4e0d\u5b8c\u6574", errors }, 400);
+    return jsonResponse({ error: "商品信息填写不完整", errors }, 400);
   }
 
   const categoryError = await assertProductCategory(admin.supabase, payload.category_id as string);
@@ -33,12 +35,9 @@ export async function POST(request: Request) {
       targetLabel: String(payload.name ?? ""),
       result: "failed",
       afterSummary: payload,
-      errorMessage: "\u5546\u54c1\u65b0\u589e\u5931\u8d25",
+      errorMessage: "商品新增失败",
     });
-    return jsonResponse(
-      { error: "\u5546\u54c1\u65b0\u589e\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u5546\u54c1\u6807\u8bc6\u662f\u5426\u91cd\u590d" },
-      400
-    );
+    return jsonResponse({ error: "商品新增失败，请检查商品标识是否重复" }, 400);
   }
 
   const verifyError = verifyPersistedProduct(data, payload);
@@ -57,6 +56,8 @@ export async function POST(request: Request) {
     });
     return jsonResponse({ error: verifyError }, 409);
   }
+
+  await markMediaReferenceByUrl(admin.supabase, (data as { image_url?: string | null }).image_url, "product", String((data as { id?: unknown }).id ?? ""));
 
   await auditCatalogAction({
     request,

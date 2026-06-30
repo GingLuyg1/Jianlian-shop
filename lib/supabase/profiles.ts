@@ -20,10 +20,8 @@ export type UserProfile = {
   updated_at: string;
 };
 
-const ADMIN_EMAILS = new Set(["gac000189@gmail.com"]);
-
-function getRoleForEmail(email: string | null | undefined): UserRole {
-  return email && ADMIN_EMAILS.has(email.toLowerCase()) ? "admin" : "user";
+function getRoleForEmail(_email: string | null | undefined): UserRole {
+  return "user";
 }
 
 function normalizeProfile(row: Partial<UserProfile>, user: User): UserProfile {
@@ -75,7 +73,11 @@ export async function getOrCreateProfile(
   const profilePayload = {
     id: user.id,
     email: user.email?.toLowerCase() ?? null,
-    role: getRoleForEmail(user.email),
+    display_name:
+      typeof user.user_metadata?.display_name === "string"
+        ? user.user_metadata.display_name.trim() || null
+        : null,
+    role: "user",
     balance: 0,
     promotion_balance: 0,
   };

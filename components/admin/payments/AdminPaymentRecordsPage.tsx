@@ -25,6 +25,8 @@ import {
   getUnifiedPaymentStatusLabel,
   maskWallet,
 } from "@/lib/payments/admin-payment-types";
+import { formatDateTime } from "@/lib/i18n/datetime";
+import { formatCurrency } from "@/lib/i18n/money";
 import { cn } from "@/lib/utils";
 
 type Props = { mode: "payments" | "recharges" };
@@ -32,13 +34,13 @@ type ListPayload = { payments?: AdminPaymentRecord[]; count?: number; error?: st
 type DetailPayload = { payment?: AdminPaymentRecord; callbacks?: AdminPaymentCallback[]; callbackError?: string; error?: string };
 const PAGE_SIZE = 20;
 
-function formatMoney(value: number | string | null | undefined) {
-  return `¥${Number(value ?? 0).toFixed(2)}`;
+function formatMoney(value: number | string | null | undefined, currency = "CNY") {
+  return formatCurrency(value, currency);
 }
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false });
+  return Number.isNaN(date.getTime()) ? "—" : formatDateTime(value);
 }
 function useDebouncedValue(value: string, delay = 350) {
   const [debounced, setDebounced] = useState(value);

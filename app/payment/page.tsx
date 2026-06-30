@@ -20,6 +20,7 @@ import {
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/i18n/money";
 
 type PaymentChannel = {
   code: string;
@@ -55,8 +56,7 @@ type PaymentStatus = {
 };
 
 function formatMoney(value: number | string | null | undefined, currency = "CNY") {
-  const amount = Number(value ?? 0).toFixed(currency === "USDT" ? 6 : 2);
-  return currency === "USDT" ? `${amount} USDT` : `¥${amount}`;
+  return formatCurrency(value, currency);
 }
 
 function formatDate(value: string | null | undefined) {

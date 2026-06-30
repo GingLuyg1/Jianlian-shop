@@ -4,6 +4,7 @@ import type {
   PaymentCurrency,
   RechargeAmountSummary,
 } from "@/lib/payments/channel-types";
+import { formatCurrency } from "@/lib/i18n/money";
 
 export const PAYMENT_CHANNELS = [
   {
@@ -142,10 +143,7 @@ export function calculateRechargeAmounts(
 }
 
 export function formatPaymentAmount(value: number, currency: PaymentCurrency) {
-  if (currency === "USDT") {
-    return `${trimTrailingZeros(value.toFixed(6))} USDT`;
-  }
-  return `¥${value.toFixed(2)}`;
+  return formatCurrency(value, currency);
 }
 
 export function formatFeeRate(feeRate: number) {

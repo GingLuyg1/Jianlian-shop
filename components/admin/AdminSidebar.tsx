@@ -7,12 +7,15 @@ import {
   AlertTriangle,
   ChevronDown,
   ClipboardList,
+  FileLock2,
+  ImageIcon,
   LayoutDashboard,
   Package,
   PackageCheck,
   RotateCcw,
   ScrollText,
   Settings,
+  ShieldCheck,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -27,13 +30,16 @@ const productLinks = [
 const adminMenuItems = [
   { label: "控制台", href: "/admin", icon: LayoutDashboard },
   { label: "数字库存", href: "/admin/inventory", icon: PackageCheck },
+  { label: "媒体资源", href: "/admin/media", icon: ImageIcon },
   { label: "支付管理", href: "/admin/payments", icon: WalletCards },
   { label: "充值管理", href: "/admin/recharges", icon: WalletCards },
   { label: "订单管理", href: "/admin/orders", icon: ClipboardList },
   { label: "售后退款", href: "/admin/refunds", icon: RotateCcw },
   { label: "用户管理", href: "/admin/users", icon: Users },
+  { label: "隐私请求", href: "/admin/privacy-requests", icon: FileLock2 },
   { label: "系统设置", href: "/admin/settings", icon: Settings },
   { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
+  { label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
   { label: "操作日志", href: "/admin/audit-logs", icon: ScrollText },
 ];
 
@@ -126,3 +132,5 @@ export default function AdminSidebar() {
     </aside>
   );
 }
+
+
