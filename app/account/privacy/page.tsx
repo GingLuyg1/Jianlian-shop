@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 type PrivacySummary = {
   profile?: { email?: string | null; displayName?: string | null; accountStatus?: string | null; riskStatus?: string | null; createdAt?: string | null };
   counts?: Record<string, number | null>;
-  recentRequests?: Array<{ id: string; requestNo: string; requestType: string; status: string; createdAt: string | null }>;`r`n  requests?: Array<{ id: string; requestNo: string; requestType: string; status: string; createdAt: string | null }>;
+  recentRequests?: Array<{ id: string; requestNo: string; requestType: string; status: string; createdAt: string | null }>;
+  requests?: Array<{ id: string; requestNo: string; requestType: string; status: string; createdAt: string | null }>;
   errors?: Record<string, string>;
 };
 

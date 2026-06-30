@@ -16,6 +16,7 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  ClipboardCheck,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -39,6 +40,7 @@ const adminMenuItems = [
   { label: "隐私请求", href: "/admin/privacy-requests", icon: FileLock2 },
   { label: "系统设置", href: "/admin/settings", icon: Settings },
   { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
+  { label: "项目验收", href: "/admin/system/project-status", icon: ClipboardCheck },
   { label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
   { label: "操作日志", href: "/admin/audit-logs", icon: ScrollText },
 ];

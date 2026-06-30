@@ -73,7 +73,8 @@ export async function getCurrentUserPrivacySummary(supabase: SupabaseClient, use
       deliveries: deliveries.count,
       notifications: notifications.count,
     },
-    requests: requests.rows.map(normalizePrivacyRequest),`r`n    recentRequests: requests.rows.map(normalizePrivacyRequest),
+    requests: requests.rows.map(normalizePrivacyRequest),
+    recentRequests: requests.rows.map(normalizePrivacyRequest),
     errors: compactErrors({ profile: profile.error, orders: orders.error, recharges: recharges.error, balance: balance.error, refunds: refunds.error, deliveries: deliveries.error, notifications: notifications.error, requests: requests.error }),
     classification: PRIVACY_DATA_CLASSIFICATION,
   };
@@ -91,7 +92,14 @@ export async function buildPersonalDataExport(userId: string) {
     safeRows(service.from("refund_requests").select("refund_no,reason_code,reason_detail,requested_amount,approved_amount,currency,status,user_visible_note,created_at,completed_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
     safeRows(service.from("order_deliveries").select("delivery_type,delivery_status,delivered_at,viewed_at,created_at,updated_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
     safeRows(service.from("user_notifications").select("title,message,status,created_at,read_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
-  \]);`r`n`r`n  const orderIds = orders.rows.map((row) => String(row.id ?? "")).filter(Boolean);`r`n  const orderItems = orderIds.length`r`n    ? await safeRows(service.from("order_items").select("order_id,product_name,sku_name,quantity,unit_price,total_price,created_at").in("order_id", orderIds).limit(5000))`r`n    : { rows: [], error: null };`r`n`r`n  const errors = compactErrors({ profile: profile.error, orders: orders.error, orderItems: orderItems.error, recharges: recharges.error, balanceTransactions: balanceTransactions.error, refunds: refunds.error, deliveries: deliveries.error, notifications: notifications.error });
+  ]);
+
+  const orderIds = orders.rows.map((row) => String(row.id ?? "")).filter(Boolean);
+  const orderItems = orderIds.length
+    ? await safeRows(service.from("order_items").select("order_id,product_name,sku_name,quantity,unit_price,total_price,created_at").in("order_id", orderIds).limit(5000))
+    : { rows: [], error: null };
+
+  const errors = compactErrors({ profile: profile.error, orders: orders.error, orderItems: orderItems.error, recharges: recharges.error, balanceTransactions: balanceTransactions.error, refunds: refunds.error, deliveries: deliveries.error, notifications: notifications.error });
   return {
     exportedAt: new Date().toISOString(),
     scope: "当前登录用户个人数据导出",
@@ -146,10 +154,14 @@ export async function getDeletionBlockers(supabase: SupabaseClient, userId: stri
   return { blocked: reasons.length > 0, reasons, errors };
 }
 
-export function normalizePrivacyRequest(row: Row) {`r`n  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;`r`n  return {
+export function normalizePrivacyRequest(row: Row) {
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  return {
     id: String(row.id ?? ""),
     requestNo: String(row.request_no ?? ""),
-    userId: String(row.user_id ?? ""),`r`n    userEmail: text(profile?.email),`r`n    userLabel: text(profile?.display_name) ?? maskEmail(profile?.email),
+    userId: String(row.user_id ?? ""),
+    userEmail: text(profile?.email),
+    userLabel: text(profile?.display_name) ?? maskEmail(profile?.email),
     requestType: String(row.request_type ?? ""),
     status: String(row.status ?? "requested"),
     blockReasons: Array.isArray(row.block_reasons) ? row.block_reasons : [],

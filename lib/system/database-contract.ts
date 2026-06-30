@@ -31,6 +31,10 @@ export const EXPECTED_MIGRATIONS: ExpectedMigration[] = [
   { order: 220, name: "20260629_system_error_events.sql", area: "monitoring", status: "active" },
   { order: 230, name: "20260629_refund_after_sales.sql", area: "refunds", status: "active" },
   { order: 240, name: "20260629_app_migration_history_and_schema_check.sql", area: "release/schema", status: "active" },
+  { order: 250, name: "20260629_i18n_currency_timezone_settings.sql", area: "settings/i18n", status: "active" },
+  { order: 260, name: "20260629_media_assets.sql", area: "media", status: "active" },
+  { order: 270, name: "20260630_backup_runs.sql", area: "backup", status: "active" },
+  { order: 280, name: "20260630_privacy_account_controls.sql", area: "privacy", status: "active" },
 ];
 
 export const KEY_SCHEMA_OBJECTS = {
@@ -51,6 +55,10 @@ export const KEY_SCHEMA_OBJECTS = {
     "digital_inventory_batches",
     "admin_audit_logs",
     "app_migration_history",
+    "media_assets",
+    "backup_runs",
+    "privacy_requests",
+    "system_error_events",
   ],
   functions: [
     "handle_new_user",
