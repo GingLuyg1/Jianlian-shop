@@ -77,3 +77,52 @@ test("digital delivery migration filters inventory by SKU and prevents cross-SKU
 
 
 
+
+test("data consistency scan rules are centralized and cover critical domains", () => {
+  const rules = file("lib/consistency/rules.ts");
+  for (const code of ["OP-001", "OP-003", "RB-001", "RB-003", "RF-001", "ID-002", "ID-006"]) {
+    assert.match(rules, new RegExp(code));
+  }
+  assert.match(rules, /CONSISTENCY_RULES/);
+  assert.match(rules, /suggestion/);
+});
+
+test("data consistency scanner is read-only for business data and persists only scan records", () => {
+  const scanner = file("lib/consistency/scanner.ts");
+  assert.match(scanner, /safeSelect/);
+  assert.match(scanner, /data_consistency_runs/);
+  assert.match(scanner, /data_consistency_issues/);
+  assert.doesNotMatch(scanner, /\.from\("orders"\)\s*\n\s*\.update/);
+  assert.doesNotMatch(scanner, /\.from\("balance_transactions"\)\s*\n\s*\.insert/);
+  assert.doesNotMatch(scanner, /\.from\("digital_inventory"\)\s*\n\s*\.update/);
+});
+
+test("data consistency APIs require super-admin or internal secret", () => {
+  const adminRoute = file("app/api/admin/system/data-consistency/route.ts");
+  const issueRoute = file("app/api/admin/system/data-consistency/[issueId]/route.ts");
+  const internalRoute = file("app/api/internal/data-consistency/route.ts");
+  assert.match(adminRoute, /requireApiAdmin/);
+  assert.match(adminRoute, /SUPER_ADMIN_EMAIL/);
+  assert.match(issueRoute, /SUPER_ADMIN_EMAIL/);
+  assert.match(internalRoute, /DATA_CONSISTENCY_SCAN_SECRET/);
+  assert.doesNotMatch(internalRoute, /process\.env\.NEXT_PUBLIC_/);
+});
+
+test("data consistency migration stores fingerprints and keeps user access read-only", () => {
+  const migration = file("supabase/migrations/20260630_data_consistency_scan.sql");
+  assert.match(migration, /data_consistency_runs/);
+  assert.match(migration, /data_consistency_issues/);
+  assert.match(migration, /fingerprint text not null/);
+  assert.match(migration, /unique \(fingerprint\)/i);
+  assert.match(migration, /enable row level security/i);
+  assert.doesNotMatch(migration, /for insert\s+with check/i);
+  assert.doesNotMatch(migration, /for update\s+using/i);
+});
+
+test("data consistency admin page does not expose direct data repair actions", () => {
+  const page = file("components/admin/system/DataConsistencyClient.tsx");
+  assert.match(page, /立即巡检/);
+  assert.match(page, /标记处理中/);
+  assert.match(page, /标记已解决/);
+  assert.doesNotMatch(page, /执行 SQL|修改余额|重分配库存|标记支付成功/);
+});
