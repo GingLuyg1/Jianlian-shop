@@ -47,13 +47,15 @@ This document is the unified acceptance record for currently implemented code. A
 
 ## Product Save Chain
 
-Current code conclusion: partial, needs manual browser verification.
+Current code conclusion: code-fixed, needs manual browser verification.
 
 - `app/api/admin/catalog/products/[productId]/route.ts` updates `products`, then calls `.select(PRODUCT_FIELDS).maybeSingle()`.
 - If the update affects 0 rows or no row is returned, the API returns failure instead of reporting success.
 - `verifyPersistedProduct(data, payload)` checks that returned database fields match the submitted payload.
 - The API returns the persisted product record to the client.
-- Remaining risk: browser dirty-state reset, dialog close behavior, product list refresh, category column refresh, reopen-after-save, and full page refresh are not proven by this pass.
+- `app/admin/products/page.tsx` rebuilds the form from the returned saved product, resets the initial dirty snapshot, closes the dialog and reloads products/categories after save.
+- `tests/unit/catalog-logic.test.mjs` verifies normalized dirty comparison and product payload validation.
+- Remaining risk: real browser account behavior, category column refresh, reopen-after-save, and full page refresh still require manual verification.
 
 ## Multi-SKU Status
 
@@ -79,3 +81,26 @@ Current code conclusion: not configured.
 - Test environment deployment: yes, after manual migration execution and registration.
 - Production launch: no.
 - Real payment collection: no.
+
+## 2026-06-30 P0/P1集中修复结果
+
+本轮新增本地测试：
+
+- `tests/unit/catalog-logic.test.mjs`
+- `tests/unit/order-payment-logic.test.mjs`
+- `tests/unit/inventory-permission-logic.test.mjs`
+
+测试覆盖：
+
+- 商品保存输入校验、dirty 状态归一、SKU 组合去重和保留已有 SKU。
+- 订单金额只按服务端价格计算，`client_request_id` 幂等返回同一订单。
+- Provider 未配置、金额不一致、币种不一致均拒绝支付回调。
+- 充值回调重复执行不会重复入账。
+- 数字库存按 SKU 隔离，库存预留/交付幂等，已交付库存不可释放。
+- 匿名管理员接口返回 401，普通用户管理员接口返回 403，跨用户资源访问返回 403。
+
+最新结论：
+
+- 商品保存链路的代码级 P0 已修复；真实管理员浏览器验证仍不能省略。
+- 多 SKU、订单 RPC 幂等、库存/RLS、支付/充值/自动发货仍依赖 migration 和 staging 数据验证。
+- Provider 未配置仍是正式收款 P0。
