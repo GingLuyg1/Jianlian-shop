@@ -22,6 +22,8 @@ const ORDER_CREATE_ALLOWED_KEYS = new Set([
   "customer_phone",
   "shipping_address",
   "customer_note",
+  "payment_method",
+  "paymentMethod",
   "agreement_version_ids",
   "agreements",
 ]);
@@ -123,6 +125,8 @@ export async function POST(request: Request) {
           customer_phone?: string;
           shipping_address?: Record<string, unknown> | null;
           customer_note?: string;
+          payment_method?: string;
+          paymentMethod?: string;
           agreement_version_ids?: AgreementInput[];
           agreements?: AgreementInput[];
         }
@@ -141,6 +145,7 @@ export async function POST(request: Request) {
     const customerName = body.customer_name?.trim() || null;
     const customerPhone = body.customer_phone?.trim() || null;
     const customerNote = body.customer_note?.trim() || null;
+    const paymentMethod = String(body.payment_method ?? body.paymentMethod ?? "balance").trim() || "balance";
     const agreementInputs = Array.isArray(body.agreements) ? body.agreements : body.agreement_version_ids;
 
     if (!productId) {
@@ -157,6 +162,10 @@ export async function POST(request: Request) {
 
     if (!customerEmail) {
       return NextResponse.json({ error: "请填写联系邮箱" }, { status: 400 });
+    }
+
+    if (paymentMethod !== "balance") {
+      return NextResponse.json({ error: "该支付方式暂未开放" }, { status: 400 });
     }
 
     let verifiedAgreements;
@@ -272,6 +281,8 @@ export async function POST(request: Request) {
     );
   }
 }
+
+
 
 
 
