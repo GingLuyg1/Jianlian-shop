@@ -528,11 +528,13 @@ export default function CheckoutPage() {
                 <div className="mb-1.5 text-xs font-medium text-muted-foreground">
                   支付方式
                 </div>
-                <div className="flex h-9 items-center gap-2 rounded-lg bg-slate-50 px-3 text-xs">
-                  <Wallet className="h-4 w-4 text-primary" />
-                  <span>余额支付</span>
-                  <span className="text-primary">（¥0.00）</span>
-                </div>
+                <PaymentMethodSelect
+                  open={paymentDropdownOpen}
+                  selected={paymentMethod}
+                  rootRef={paymentDropdownRef}
+                  onOpenChange={setPaymentDropdownOpen}
+                  onSelect={setPaymentMethod}
+                />
               </div>
 
               <div className="border-t border-border pt-3">
@@ -604,6 +606,98 @@ export default function CheckoutPage() {
       <TermsDialog open={termsOpen} onOpenChange={setTermsOpen} documents={legalDocuments} error={legalError} loading={legalLoading} />
     </PublicLayout>
   );
+}
+
+function PaymentMethodSelect({
+  open,
+  rootRef,
+  selected,
+  onOpenChange,
+  onSelect,
+}: {
+  open: boolean;
+  rootRef: React.RefObject<HTMLDivElement>;
+  selected: PaymentMethodCode;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (method: PaymentMethodCode) => void;
+}) {
+  const selectedOption = getPaymentMethodOption(selected) ?? PAYMENT_METHOD_OPTIONS[0];
+
+  return (
+    <div ref={rootRef} className="relative z-30">
+      <button
+        type="button"
+        className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-[#ead9cc] bg-[#fffaf6] px-3 py-2 text-left text-sm transition hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => onOpenChange(!open)}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <PaymentMethodIcon method={selectedOption.code} />
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-slate-900">{selectedOption.label}</span>
+            <span className="block truncate text-xs text-muted-foreground">{selectedOption.description}</span>
+          </span>
+        </span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open ? "rotate-180" : "")} />
+      </button>
+
+      {open ? (
+        <div
+          className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 max-h-72 overflow-y-auto rounded-xl border border-[#ead9cc] bg-white p-1.5 shadow-xl sm:bottom-auto sm:top-[calc(100%+8px)]"
+          role="listbox"
+        >
+          {PAYMENT_METHOD_OPTIONS.map((option) => {
+            const active = option.code === selected;
+            const unavailable = option.code !== "balance";
+            return (
+              <button
+                key={option.code}
+                type="button"
+                role="option"
+                aria-selected={active}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition",
+                  active ? "bg-primary/10 text-primary" : "text-slate-800 hover:bg-slate-50",
+                  unavailable ? "opacity-80" : ""
+                )}
+                onClick={() => {
+                  onSelect(option.code);
+                  onOpenChange(false);
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <PaymentMethodIcon method={option.code} />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{option.label}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{option.description}</span>
+                  </span>
+                </span>
+                {unavailable ? (
+                  <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    暂未开放
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                    可用
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PaymentMethodIcon({ method }: { method: PaymentMethodCode }) {
+  const className = "h-4 w-4 shrink-0 text-primary";
+  if (method === "balance") return <Wallet className={className} />;
+  if (method === "wechat_pay") return <Smartphone className={className} />;
+  if (method === "binance_pay") return <Sparkles className={className} />;
+  if (method === "usdt_trc20" || method === "usdt_bep20") return <Bot className={className} />;
+  return <CreditCard className={className} />;
 }
 
 function TermsDialog({
