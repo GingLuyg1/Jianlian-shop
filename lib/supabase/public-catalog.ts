@@ -208,9 +208,7 @@ export async function searchPublicCatalogProducts(query: CatalogProductQuery) {
   if (query.pageSize) params.set("pageSize", String(query.pageSize));
   if (query.excludeId) params.set("excludeId", query.excludeId);
 
-  const response = await fetch(`/api/catalog/products?${params.toString()}`, {
-    cache: "no-store",
-  });
+  const response = await fetch(`/api/catalog/products?${params.toString()}`);
   const payload = (await response.json().catch(() => null)) as
     | (CatalogProductResult & { error?: string })
     | null;

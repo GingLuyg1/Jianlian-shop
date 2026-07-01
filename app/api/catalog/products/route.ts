@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { CACHE_REVALIDATE_SECONDS } from "@/lib/cache/cache-tags";
 import { checkRateLimit, getRequestSourceKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -137,7 +138,7 @@ export async function GET(request: Request) {
     const from = (safePage - 1) * pageSize;
     const paged = visible.slice(from, from + pageSize);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       products: paged,
       total,
       page: safePage,
@@ -145,6 +146,11 @@ export async function GET(request: Request) {
       totalPages,
       deliveryTypes,
     });
+    response.headers.set(
+      "Cache-Control",
+      `public, max-age=${CACHE_REVALIDATE_SECONDS.publicCatalog}, stale-while-revalidate=30`
+    );
+    return response;
   } catch (error) {
     console.error("[Catalog Products]", error);
     return NextResponse.json(
