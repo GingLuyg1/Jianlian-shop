@@ -37,6 +37,7 @@ const adminMenuItems = [
   { label: "充值管理", href: "/admin/recharges", icon: WalletCards },
   { label: "订单管理", href: "/admin/orders", icon: ClipboardList },
   { label: "售后退款", href: "/admin/refunds", icon: RotateCcw },
+  { label: "风险审核", href: "/admin/risk", icon: ShieldCheck },
   { label: "用户管理", href: "/admin/users", icon: Users },
   { label: "隐私请求", href: "/admin/privacy-requests", icon: FileLock2 },
   { label: "邮件通知", href: "/admin/notifications/email-deliveries", icon: MailCheck },

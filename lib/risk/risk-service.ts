@@ -4,6 +4,8 @@ import { createHash, randomUUID } from "crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+
 export type RiskBusinessType = "account" | "login" | "order" | "inventory" | "payment" | "recharge" | "refund" | "delivery";
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 export type RiskAction = "allow" | "allow_with_monitoring" | "require_review" | "temporarily_block" | "deny";
@@ -301,6 +303,7 @@ export async function recordRiskEvent(
     metadata: Record<string, unknown>;
   }
 ) {
+  const writer = getSupabaseServiceRoleClient() ?? supabase;
   const fingerprint = createHash("sha256")
     .update([input.user_id ?? "anonymous", input.business_type, input.business_id ?? "none", input.matched_rules.map((rule) => rule.rule_code).sort().join(",")].join("|"))
     .digest("hex");
@@ -323,7 +326,7 @@ export async function recordRiskEvent(
     last_seen_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await writer
     .from("risk_events")
     .upsert(row, { onConflict: "fingerprint" })
     .select("id")
