@@ -26,6 +26,7 @@ import {
   findPrimaryCategory,
   getChildCategories,
   getErrorText,
+  getProductDetailPath,
   listPublicCategories,
   mapPublicProductToProduct,
   normalizeText,
@@ -562,7 +563,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   return (
-    <button type="button" onClick={() => { window.location.href = `/products/${encodeURIComponent(product.id)}`; }} className={cn(compactProductRowClassName, "group")}>
+    <button type="button" onClick={() => { window.location.href = getProductDetailPath({ id: product.id, slug: typeof product.metadata?.slug === "string" ? product.metadata.slug : null }); }} className={cn(compactProductRowClassName, "group")}>
       <div className="flex h-full min-w-0 items-center gap-5">
         <img src={imageSrc} alt={product.name} onError={(event) => setProductImageFallback(event.currentTarget)} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" />
         <div className="min-w-0 flex-1 text-left">
@@ -639,6 +640,8 @@ function updateOptionalParam(params: URLSearchParams, key: string, value: unknow
   if (!next || next === defaultValue) params.delete(key);
   else params.set(key, next);
 }
+
+
 
 
 
