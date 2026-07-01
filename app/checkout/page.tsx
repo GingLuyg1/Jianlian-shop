@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CreditCard,
@@ -616,7 +616,7 @@ function PaymentMethodSelect({
   onSelect,
 }: {
   open: boolean;
-  rootRef: React.RefObject<HTMLDivElement>;
+  rootRef: RefObject<HTMLDivElement>;
   selected: PaymentMethodCode;
   onOpenChange: (open: boolean) => void;
   onSelect: (method: PaymentMethodCode) => void;
