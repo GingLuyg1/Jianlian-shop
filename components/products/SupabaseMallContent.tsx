@@ -25,7 +25,6 @@ import { cn } from "@/lib/utils";
 import {
   findPrimaryCategory,
   getChildCategories,
-  getDescendantCategoryIds,
   getErrorText,
   listPublicCategories,
   mapPublicProductToProduct,
@@ -238,10 +237,18 @@ export default function SupabaseMallContent({
       setIsLoadingProducts(true);
       setError("");
       try {
-        const categoryIds = getDescendantCategoryIds(allCategories, currentCategory.id);
+        const primaryCategoryId = currentCategory.level === 1 ? currentCategory.id : currentCategory.parent_id ?? "";
+        const secondaryCategoryId = currentCategory.level === 2 ? currentCategory.id : "";
+        if (!primaryCategoryId) {
+          setProducts([]);
+          setTotal(0);
+          setTotalPages(1);
+          return;
+        }
         const result = await searchPublicCatalogProducts({
-          categoryIds,
-          search: filters.search,
+          primaryCategoryId,
+          secondaryCategoryId,
+          keyword: filters.search,
           page: filters.page,
           pageSize: filters.pageSize,
         });
@@ -608,8 +615,8 @@ function ProductEmptyState({ onResetFilters }: { onResetFilters: () => void }) {
   return (
     <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-dashed bg-slate-50 text-center">
       <div>
-        <p className="text-base font-semibold text-slate-800">暂无商品</p>
-        <p className="mt-1 text-sm text-muted-foreground">当前分类下没有匹配的商品。</p>
+        <p className="text-base font-semibold text-slate-800">当前分类暂无商品</p>
+        <p className="mt-1 text-sm text-muted-foreground">当前分类暂无商品。</p>
         <Button type="button" variant="outline" className="mt-4" onClick={onResetFilters}>
           清空搜索
         </Button>
@@ -632,5 +639,6 @@ function updateOptionalParam(params: URLSearchParams, key: string, value: unknow
   if (!next || next === defaultValue) params.delete(key);
   else params.set(key, next);
 }
+
 
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
@@ -13,14 +13,13 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import PublicLayout from "@/components/layout/PublicLayout";
 import SupportCard from "@/components/common/SupportCard";
+import PublicLayout from "@/components/layout/PublicLayout";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  getDescendantCategoryIds,
   getErrorText,
   getProductByIdOrSlug,
   listPublicCategories,
@@ -30,18 +29,20 @@ import {
   type PublicProductRow,
 } from "@/lib/supabase/public-catalog";
 import { cn } from "@/lib/utils";
-import {
-  productImageFallbackSrc,
-  setProductImageFallback,
-} from "@/components/products/product-ui";
+
+const productImageFallbackSrc = "/assets/jianlian-brand-logo.png";
+
+function setProductImageFallback(image: HTMLImageElement) {
+  if (image.src.endsWith(productImageFallbackSrc)) return;
+  image.src = productImageFallbackSrc;
+}
 
 function getCategoryPath(categories: PublicCategory[], categoryId: string | null) {
-  if (!categoryId) return "";
-
+  if (!categoryId) return "未分类";
   const byId = new Map(categories.map((category) => [category.id, category]));
   const path: string[] = [];
-  const seen = new Set<string>();
   let current = byId.get(categoryId) ?? null;
+  const seen = new Set<string>();
 
   while (current && !seen.has(current.id)) {
     seen.add(current.id);
@@ -49,7 +50,7 @@ function getCategoryPath(categories: PublicCategory[], categoryId: string | null
     current = current.parent_id ? byId.get(current.parent_id) ?? null : null;
   }
 
-  return path.join(" / ");
+  return path.join(" / ") || "未分类";
 }
 
 function getDeliveryLabel(deliveryType: string | null | undefined) {
@@ -62,16 +63,26 @@ function getDeliveryLabel(deliveryType: string | null | undefined) {
 
 function getUnavailableMessage(product: PublicProductRow | null) {
   if (!product) return "";
-  if (product.status === "sold_out" || Number(product.stock ?? 0) <= 0) {
-    return "该商品已售罄";
-  }
+  if (product.status === "sold_out" || Number(product.stock ?? 0) <= 0) return "该商品已售罄";
   if (product.status !== "active") return "该商品目前不可购买";
   return "";
 }
 
+function getRecommendationQuery(categories: PublicCategory[], product: PublicProductRow) {
+  const currentCategory = categories.find((category) => category.id === product.category_id);
+  if (!currentCategory) return {};
+  if (currentCategory.level === 1) return { primaryCategoryId: currentCategory.id };
+  if (currentCategory.level === 2) {
+    return {
+      primaryCategoryId: currentCategory.parent_id ?? "",
+      secondaryCategoryId: currentCategory.id,
+    };
+  }
+  return { primaryCategoryId: currentCategory.parent_id ?? "" };
+}
+
 export default function ProductDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const { settings } = usePublicSettings();
   const routeId = params?.id;
   const productIdentifier = Array.isArray(routeId) ? routeId[0] : routeId;
@@ -82,7 +93,7 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadProduct = async () => {
+  async function loadProduct() {
     if (!productIdentifier) {
       setError("缺少商品标识");
       setLoading(false);
@@ -104,10 +115,10 @@ export default function ProductDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
-    loadProduct();
+    void loadProduct();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productIdentifier]);
 
@@ -122,10 +133,8 @@ export default function ProductDetailPage() {
 
       setRecommendationError("");
       try {
-        const categoryIds = getDescendantCategoryIds(categories, product.category_id);
         const result = await searchPublicCatalogProducts({
-          categoryIds,
-          sort: "sales",
+          ...getRecommendationQuery(categories, product),
           pageSize: 4,
           excludeId: product.id,
         });
@@ -143,36 +152,27 @@ export default function ProductDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [categories, product?.category_id, product?.id]);
+  }, [categories, product]);
 
-  const categoryPath = useMemo(
-    () => getCategoryPath(categories, product?.category_id ?? null),
-    [categories, product?.category_id]
-  );
+  const categoryPath = useMemo(() => getCategoryPath(categories, product?.category_id ?? null), [categories, product]);
   const unavailableMessage = getUnavailableMessage(product);
   const canBuy = Boolean(product && !unavailableMessage);
 
   return (
     <PublicLayout>
-      <div className="max-w-5xl">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
-        >
+      <div className="mx-auto w-full max-w-[1360px] px-4 py-5 lg:px-7">
+        <Link href="/" className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
           <ArrowLeft className="h-4 w-4" />
-          返回上一页
-        </button>
+          返回商城
+        </Link>
 
         {loading ? (
           <Card>
-            <CardContent className="p-8">
-              <div className="h-6 w-48 animate-pulse rounded bg-slate-100" />
-              <div className="mt-4 h-32 animate-pulse rounded-xl bg-slate-100" />
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
+            <CardContent className="space-y-4 p-6">
+              <div className="h-8 w-52 animate-pulse rounded bg-slate-100" />
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="aspect-[16/9] animate-pulse rounded-2xl bg-slate-100" />
+                <div className="h-64 animate-pulse rounded-2xl bg-slate-100" />
               </div>
             </CardContent>
           </Card>
@@ -193,9 +193,7 @@ export default function ProductDetailPage() {
             <CardContent className="p-8 text-center">
               <AlertCircle className="mx-auto h-10 w-10 text-amber-500" />
               <h1 className="mt-4 text-lg font-bold">商品不存在或已被删除</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                请返回商品列表重新选择。
-              </p>
+              <p className="mt-2 text-sm text-muted-foreground">请返回商品列表重新选择。</p>
               <Button className="mt-5" asChild>
                 <Link href="/">返回商城</Link>
               </Button>
@@ -203,54 +201,39 @@ export default function ProductDetailPage() {
           </Card>
         ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="space-y-5">
+            <div className="space-y-4">
               <Card>
-                <CardContent className="grid gap-5 p-5 sm:grid-cols-[160px_minmax(0,1fr)]">
-                  <div className="aspect-square overflow-hidden rounded-2xl border bg-white">
-                    <img
-                      src={product.image_url || productImageFallbackSrc}
-                      alt={product.name}
-                      className="h-full w-full object-cover"
-                      onError={(event) =>
-                        setProductImageFallback(event.currentTarget)
-                      }
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    {categoryPath ? (
-                      <div className="mb-2 text-xs text-muted-foreground">
-                        {categoryPath}
+                <CardContent className="p-5">
+                  <div className="grid gap-5 md:grid-cols-[280px_minmax(0,1fr)]">
+                    <div className="aspect-square overflow-hidden rounded-2xl border bg-slate-50">
+                      <img
+                        src={product.image_url || productImageFallbackSrc}
+                        alt={product.name}
+                        onError={(event) => setProductImageFallback(event.currentTarget)}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{categoryPath}</Badge>
+                        <Badge variant="secondary">{getDeliveryLabel(product.delivery_type)}</Badge>
+                        {settings.show_stock ? (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              Number(product.stock) > 0
+                                ? "border-green-200 bg-green-50 text-green-700"
+                                : "border-slate-200 bg-slate-50 text-slate-500"
+                            )}
+                          >
+                            库存：{Number(product.stock ?? 0)}
+                          </Badge>
+                        ) : null}
                       </div>
-                    ) : null}
-                    <h1 className="text-2xl font-black leading-tight text-slate-950">
-                      {product.name}
-                    </h1>
-                    {product.short_description ? (
-                      <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                        {product.short_description}
+                      <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">{product.name}</h1>
+                      <p className="mt-3 text-base leading-7 text-muted-foreground">
+                        {product.short_description || product.description || "请下单前核对商品说明、库存和售后规则。"}
                       </p>
-                    ) : null}
-                    <div className="mt-5 flex flex-wrap items-center gap-3">
-                      <span className="text-3xl font-black text-primary">
-                        {settings.currency_symbol}{Number(product.price).toFixed(2)}
-                      </span>
-                      {settings.show_original_price && product.original_price ? (
-                        <span className="text-sm text-muted-foreground line-through">
-                          {settings.currency_symbol}{Number(product.original_price).toFixed(2)}
-                        </span>
-                      ) : null}
-                      {settings.show_stock ? (
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            Number(product.stock) > 0
-                              ? "border-green-200 bg-green-50 text-green-700"
-                              : "border-slate-200 bg-slate-50 text-slate-500"
-                          )}
-                        >
-                          库存：{Number(product.stock ?? 0)}
-                        </Badge>
-                      ) : null}
                     </div>
                   </div>
                 </CardContent>
@@ -261,15 +244,11 @@ export default function ProductDetailPage() {
                   <CardTitle className="text-base">商品说明</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-7 text-muted-foreground">
-                  <p>
-                    {product.description ||
-                      product.short_description ||
-                      "请下单前核对商品说明、地区、库存和售后规则。"}
-                  </p>
+                  <p>{product.description || product.short_description || "请下单前核对商品说明、地区、库存和售后规则。"}</p>
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <InfoItem icon={ShieldCheck} title="安全合规" desc="下单前请核对用途" />
+                    <InfoItem icon={ShieldCheck} title="安全合规" desc="请确认商品用途符合当地规则" />
                     <InfoItem icon={PackageCheck} title="交付方式" desc={getDeliveryLabel(product.delivery_type)} />
-                    <InfoItem icon={Headphones} title="售后支持" desc="有疑问请联系客服" />
+                    <InfoItem icon={Headphones} title="售后支持" desc="遇到问题请及时联系客服" />
                   </div>
                 </CardContent>
               </Card>
@@ -334,33 +313,9 @@ export default function ProductDetailPage() {
             <div className="space-y-4">
               <Card className="sticky top-20">
                 <CardContent className="space-y-4 p-5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">商品价格</span>
-                    <span className="text-2xl font-black text-primary">
-                      {settings.currency_symbol}{Number(product.price).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">交付方式</span>
-                    <span className="font-medium">
-                      {getDeliveryLabel(product.delivery_type)}
-                    </span>
-                  </div>
-                  {settings.show_stock ? (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">当前库存</span>
-                      <span
-                        className={cn(
-                          "font-bold",
-                          Number(product.stock) > 0
-                            ? "text-green-600"
-                            : "text-slate-400"
-                        )}
-                      >
-                        {Number(product.stock ?? 0)}
-                      </span>
-                    </div>
-                  ) : null}
+                  <InfoRow label="商品价格" value={`${settings.currency_symbol}${Number(product.price).toFixed(2)}`} strong />
+                  <InfoRow label="交付方式" value={getDeliveryLabel(product.delivery_type)} />
+                  {settings.show_stock ? <InfoRow label="当前库存" value={String(Number(product.stock ?? 0))} /> : null}
 
                   {unavailableMessage ? (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
@@ -368,24 +323,14 @@ export default function ProductDetailPage() {
                     </div>
                   ) : null}
 
-                  <Button
-                    className="w-full"
-                    disabled={!canBuy}
-                    asChild={canBuy}
-                  >
-                    {canBuy ? (
-                      <Link href={`/checkout?product=${product.id}`}>
-                        立即购买
-                      </Link>
-                    ) : (
-                      "不可购买"
-                    )}
+                  <Button className="w-full" disabled={!canBuy} asChild={canBuy}>
+                    {canBuy ? <Link href={`/checkout?product=${product.id}`}>立即购买</Link> : "不可购买"}
                   </Button>
                 </CardContent>
               </Card>
 
               <SupportCard
-                title="在线客服"
+                title="购买咨询"
                 description="购买前如需确认库存、地区或交付方式，请先联系客服。"
               />
             </div>
@@ -410,6 +355,17 @@ function InfoItem({
       <Icon className="mb-2 h-5 w-5 text-primary" />
       <div className="font-semibold text-slate-900">{title}</div>
       <div className="mt-1 text-xs text-muted-foreground">{desc}</div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("text-right font-medium text-slate-900", strong && "text-2xl font-black text-primary")}>
+        {value}
+      </span>
     </div>
   );
 }

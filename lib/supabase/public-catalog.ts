@@ -44,10 +44,6 @@ export type PublicProductRow = {
   updated_at: string | null;
 };
 
-export type CatalogSort = "default" | "latest" | "price_asc" | "price_desc" | "sales";
-export type CatalogStockFilter = "all" | "in_stock" | "low_stock" | "sold_out";
-export type CatalogMultiSkuFilter = "all" | "yes" | "no";
-
 export type PublicCatalogProductRow = PublicProductRow & {
   category_path?: string | null;
   has_skus?: boolean;
@@ -58,14 +54,9 @@ export type PublicCatalogProductRow = PublicProductRow & {
 };
 
 export type CatalogProductQuery = {
-  categoryIds?: string[];
-  search?: string;
-  priceMin?: string | number | null;
-  priceMax?: string | number | null;
-  stock?: CatalogStockFilter;
-  deliveryType?: string;
-  multiSku?: CatalogMultiSkuFilter;
-  sort?: CatalogSort;
+  primaryCategoryId?: string;
+  secondaryCategoryId?: string;
+  keyword?: string;
   page?: number;
   pageSize?: number;
   excludeId?: string;
@@ -79,6 +70,21 @@ export type CatalogProductResult = {
   totalPages: number;
   deliveryTypes: string[];
 };
+
+type CatalogProductResponse =
+  | {
+      success: true;
+      data: CatalogProductResult;
+      request_id: string;
+    }
+  | {
+      success: false;
+      error: {
+        code: string;
+        message: string;
+        request_id: string;
+      };
+    };
 
 export type PublicCatalogConfig = {
   productCategory: ProductCategory;
@@ -192,41 +198,35 @@ export async function listActiveProductsByCategoryIds(categoryIds: string[]) {
 
 export async function searchPublicCatalogProducts(query: CatalogProductQuery) {
   const params = new URLSearchParams();
-  if (query.categoryIds?.length) params.set("categoryIds", query.categoryIds.join(","));
-  if (query.search?.trim()) params.set("search", query.search.trim());
-  if (query.priceMin !== null && query.priceMin !== undefined && String(query.priceMin).trim()) {
-    params.set("priceMin", String(query.priceMin));
-  }
-  if (query.priceMax !== null && query.priceMax !== undefined && String(query.priceMax).trim()) {
-    params.set("priceMax", String(query.priceMax));
-  }
-  if (query.stock && query.stock !== "all") params.set("stock", query.stock);
-  if (query.deliveryType && query.deliveryType !== "all") params.set("deliveryType", query.deliveryType);
-  if (query.multiSku && query.multiSku !== "all") params.set("multiSku", query.multiSku);
-  if (query.sort && query.sort !== "default") params.set("sort", query.sort);
+  if (query.primaryCategoryId) params.set("primaryCategoryId", query.primaryCategoryId);
+  if (query.secondaryCategoryId) params.set("secondaryCategoryId", query.secondaryCategoryId);
+  if (query.keyword?.trim()) params.set("keyword", query.keyword.trim());
   if (query.page) params.set("page", String(query.page));
   if (query.pageSize) params.set("pageSize", String(query.pageSize));
   if (query.excludeId) params.set("excludeId", query.excludeId);
 
   const response = await fetch(`/api/catalog/products?${params.toString()}`);
-  const payload = (await response.json().catch(() => null)) as
-    | (CatalogProductResult & { error?: string })
-    | null;
+  const payload = (await response.json().catch(() => null)) as CatalogProductResponse | null;
 
-  if (!response.ok) {
-    throw new Error(payload?.error ?? "商品搜索失败，请稍后重试");
+  if (!response.ok || !payload?.success) {
+    const errorPayload = payload && !payload.success ? payload.error : null;
+    const requestId = errorPayload?.request_id ? `（Request ID: ${errorPayload.request_id}）` : "";
+    throw new Error(`${errorPayload?.message ?? "商品读取失败，请稍后重试"}${requestId}`);
+  }
+
+  if (!Array.isArray(payload.data?.products)) {
+    throw new Error("商品接口返回结构异常，请稍后重试");
   }
 
   return {
-    products: payload?.products ?? [],
-    total: payload?.total ?? 0,
-    page: payload?.page ?? 1,
-    pageSize: payload?.pageSize ?? 20,
-    totalPages: payload?.totalPages ?? 1,
-    deliveryTypes: payload?.deliveryTypes ?? [],
+    products: payload.data.products,
+    total: payload.data.total ?? 0,
+    page: payload.data.page ?? 1,
+    pageSize: payload.data.pageSize ?? 20,
+    totalPages: payload.data.totalPages ?? 1,
+    deliveryTypes: payload.data.deliveryTypes ?? [],
   };
 }
-
 export async function getActiveProductByIdOrSlug(identifier: string) {
   return getProductByIdOrSlug(identifier, { activeOnly: true });
 }
@@ -355,3 +355,4 @@ export function getDeliveryLabel(deliveryType: string) {
   if (deliveryType === "account") return "账号交付";
   return "人工处理";
 }
+
