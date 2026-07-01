@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Package,
   PackageCheck,
+  Route,
   RotateCcw,
   ScrollText,
   Settings,
@@ -43,6 +44,7 @@ const adminMenuItems = [
   { label: "邮件通知", href: "/admin/notifications/email-deliveries", icon: MailCheck },
   { label: "系统设置", href: "/admin/settings", icon: Settings },
   { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
+  { label: "请求追踪", href: "/admin/system/request-traces", icon: Route },
   { label: "项目验收", href: "/admin/system/project-status", icon: ClipboardCheck },
   { label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
   { label: "生产看板", href: "/admin/system/production-readiness", icon: ShieldCheck },
@@ -138,6 +140,7 @@ export default function AdminSidebar() {
     </aside>
   );
 }
+
 
 
 

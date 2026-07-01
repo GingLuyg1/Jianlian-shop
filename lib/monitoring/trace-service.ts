@@ -24,7 +24,7 @@ export type RequestTracePayload = {
   moduleErrors: Record<string, string>;
 };
 
-async function safeTraceQuery<T>(label: string, fn: () => Promise<{ data: T[] | null; error: unknown }>) {
+async function safeTraceQuery<T>(label: string, fn: () => PromiseLike<{ data: T[] | null; error: unknown }>) {
   try {
     const { data, error } = await fn();
     if (error) return { rows: [] as T[], error: `${label} 读取失败` };
