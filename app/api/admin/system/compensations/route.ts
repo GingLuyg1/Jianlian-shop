@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog, writeRequiredAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { requireApiAdmin } from "@/lib/admin/api-auth";

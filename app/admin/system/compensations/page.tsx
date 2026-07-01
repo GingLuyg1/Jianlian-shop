@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
@@ -50,9 +50,9 @@ const BUSINESS_LABEL: Record<string, string> = {
 };
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false });
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("zh-CN", { hour12: false });
 }
 
 export default function AdminCompensationsPage() {
@@ -172,13 +172,13 @@ export default function AdminCompensationsPage() {
                   const closed = ["resolved", "cancelled"].includes(String(task.status));
                   return (
                     <tr key={task.id} className="border-t">
-                      <td className="px-3 py-3">{BUSINESS_LABEL[String(task.business_type)] ?? task.business_type ?? "—"}</td>
-                      <td className="px-3 py-3 font-mono text-xs">{task.business_no ?? task.business_id ?? "—"}</td>
-                      <td className="px-3 py-3">{task.operation ?? "—"}</td>
-                      <td className="px-3 py-3">{task.failure_stage ?? "—"}</td>
-                      <td className="px-3 py-3">{STATUS_LABEL[String(task.status)] ?? task.status ?? "—"}</td>
-                      <td className="max-w-[260px] truncate px-3 py-3" title={task.error_summary ?? task.error_code ?? ""}>{task.error_code ?? "—"} {task.error_summary ?? ""}</td>
-                      <td className="px-3 py-3 font-mono text-xs">{task.request_id ?? "—"}</td>
+                      <td className="px-3 py-3">{BUSINESS_LABEL[String(task.business_type)] ?? task.business_type ?? "-"}</td>
+                      <td className="px-3 py-3 font-mono text-xs">{task.business_no ?? task.business_id ?? "-"}</td>
+                      <td className="px-3 py-3">{task.operation ?? "-"}</td>
+                      <td className="px-3 py-3">{task.failure_stage ?? "-"}</td>
+                      <td className="px-3 py-3">{STATUS_LABEL[String(task.status)] ?? task.status ?? "-"}</td>
+                      <td className="max-w-[260px] truncate px-3 py-3" title={task.error_summary ?? task.error_code ?? ""}>{task.error_code ?? "-"} {task.error_summary ?? ""}</td>
+                      <td className="px-3 py-3 font-mono text-xs">{task.request_id ?? "-"}</td>
                       <td className="px-3 py-3">{task.attempts ?? 0}</td>
                       <td className="px-3 py-3">{formatDate(task.created_at)}</td>
                       <td className="space-x-2 whitespace-nowrap px-3 py-3">

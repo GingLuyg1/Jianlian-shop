@@ -191,7 +191,7 @@ async function matchRiskRules(input: RiskEvaluationInput): Promise<RiskRuleHit[]
   }
 
   if (amount >= 1000 && accountAgeSeconds != null && accountAgeSeconds < RISK_RULES.ACCOUNT_RECENTLY_CREATED_HIGH_VALUE.window_seconds) {
-    addHit(hits, "ACCOUNT_RECENTLY_CREATED_HIGH_VALUE", "鏂拌处鎴风珛鍗冲彂璧烽珮閲戦鎿嶄綔");
+    addHit(hits, "ACCOUNT_RECENTLY_CREATED_HIGH_VALUE", "新账户立即发起高金额操作");
   }
 
   if (input.businessType === "order") {
@@ -202,7 +202,7 @@ async function matchRiskRules(input: RiskEvaluationInput): Promise<RiskRuleHit[]
       statuses: ["pending_payment"],
       windowSeconds: RISK_RULES.ORDER_UNPAID_BURST.window_seconds,
     });
-    if (unpaid >= RISK_RULES.ORDER_UNPAID_BURST.threshold) addHit(hits, "ORDER_UNPAID_BURST", "鐭椂闂村垱寤哄ぇ閲忔湭鏀粯璁㈠崟");
+    if (unpaid >= RISK_RULES.ORDER_UNPAID_BURST.threshold) addHit(hits, "ORDER_UNPAID_BURST", "短时间创建大量未支付订单");
 
     if (input.skuId) {
       const skuCount = await boundedCount(input.supabase, {
@@ -221,7 +221,7 @@ async function matchRiskRules(input: RiskEvaluationInput): Promise<RiskRuleHit[]
       userId: input.userId,
       windowSeconds: RISK_RULES.PAYMENT_SESSION_BURST.window_seconds,
     });
-    if (sessions >= RISK_RULES.PAYMENT_SESSION_BURST.threshold) addHit(hits, "PAYMENT_SESSION_BURST", "棰戠箒鍒涘缓鏀粯浼氳瘽");
+    if (sessions >= RISK_RULES.PAYMENT_SESSION_BURST.threshold) addHit(hits, "PAYMENT_SESSION_BURST", "频繁创建支付会话");
   }
 
   if (input.businessType === "recharge") {
@@ -379,4 +379,5 @@ export function isRiskSchemaMissing(error: unknown) {
   const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
   return /risk_events|risk_reviews|schema cache|Could not find the table/i.test(message) || ["42P01", "42703", "PGRST205"].includes(code);
 }
+
 
