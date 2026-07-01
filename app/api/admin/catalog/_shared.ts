@@ -16,6 +16,7 @@ const PRODUCT_UPDATE_FIELDS = new Set([
   "name",
   "slug",
   "category_id",
+  "subcategory_id",
   "short_description",
   "description",
   "image_url",
@@ -55,14 +56,14 @@ function cleanNullableText(value: unknown) {
   return text || null;
 }
 
-function finiteNumber(value: unknown, fallback: number | null = 0) {
+function finiteNumber(value: unknown) {
   const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? numberValue : fallback;
+  return Number.isFinite(numberValue) ? numberValue : null;
 }
 
-function finiteInteger(value: unknown, fallback: number | null = 0) {
+function finiteInteger(value: unknown) {
   const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? Math.trunc(numberValue) : fallback;
+  return Number.isFinite(numberValue) ? Math.trunc(numberValue) : null;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -76,54 +77,75 @@ export function normalizeProductPayload(body: Record<string, unknown>, partial =
   if (!partial || "name" in body) {
     const name = cleanText(body.name);
     if (!name) errors.name = "商品名称不能为空";
-    payload.name = name;
+    else payload.name = name;
   }
+
   if (!partial || "slug" in body) {
     const slug = cleanText(body.slug).toLowerCase();
     if (!slug) errors.slug = "商品标识不能为空";
     else if (!/^[a-z0-9-]+$/.test(slug)) errors.slug = "商品标识只能包含小写字母、数字和短横线";
-    payload.slug = slug;
+    else payload.slug = slug;
   }
+
   if (!partial || "category_id" in body) {
-    payload.category_id = cleanNullableText(body.category_id);
-    if (!payload.category_id) errors.category_id = "请选择商品分类";
+    const categoryId = cleanNullableText(body.category_id);
+    if (!categoryId) errors.category_id = "请选择商品分类";
+    else payload.category_id = categoryId;
   }
+
+  if ("subcategory_id" in body) {
+    const subcategoryId = cleanNullableText(body.subcategory_id);
+    if (subcategoryId) payload.category_id = subcategoryId;
+  }
+
   if (!partial || "short_description" in body) payload.short_description = cleanNullableText(body.short_description);
   if (!partial || "description" in body) payload.description = cleanNullableText(body.description);
-  if (!partial || "image_url" in body) payload.image_url = cleanNullableText(body.image_url);
+
+  if (!partial || "image_url" in body) {
+    const imageUrl = cleanNullableText(body.image_url);
+    if (imageUrl?.startsWith("blob:")) errors.image_url = "商品图片不能使用临时地址，请先上传图片";
+    payload.image_url = imageUrl;
+  }
+
   if (!partial || "price" in body) {
-    const price = finiteNumber(body.price, null);
+    const price = finiteNumber(body.price);
     if (price === null) errors.price = "售价必须是有效数字";
     else if (price < 0) errors.price = "售价必须大于或等于 0";
     else payload.price = price;
   }
+
   if (!partial || "original_price" in body) {
     const originalPrice =
-      body.original_price === null || body.original_price === "" ? null : finiteNumber(body.original_price, null);
+      body.original_price === null || body.original_price === "" ? null : finiteNumber(body.original_price);
     if (originalPrice !== null && originalPrice < 0) errors.original_price = "原价必须大于或等于 0";
     else payload.original_price = originalPrice;
   }
+
   if (!partial || "stock" in body) {
-    const stock = finiteInteger(body.stock, null);
+    const stock = finiteInteger(body.stock);
     if (stock === null) errors.stock = "库存必须是有效整数";
     else if (stock < 0) errors.stock = "库存必须大于或等于 0";
     else payload.stock = stock;
   }
+
   if (!partial || "delivery_type" in body) {
     const deliveryType = cleanText(body.delivery_type) as DeliveryType;
     if (!DELIVERY_TYPES.includes(deliveryType)) errors.delivery_type = "请选择有效交付方式";
-    payload.delivery_type = deliveryType;
+    else payload.delivery_type = deliveryType;
   }
+
   if (!partial || "status" in body) {
     const status = cleanText(body.status) as ProductStatus;
     if (!PRODUCT_STATUSES.includes(status)) errors.status = "请选择有效商品状态";
-    payload.status = status;
+    else payload.status = status;
   }
+
   if (!partial || "sort_order" in body) {
-    const sortOrder = finiteInteger(body.sort_order, null);
+    const sortOrder = finiteInteger(body.sort_order);
     if (sortOrder === null) errors.sort_order = "排序必须是有效整数";
     else payload.sort_order = sortOrder;
   }
+
   if (!partial || "metadata" in body) payload.metadata = isPlainObject(body.metadata) ? body.metadata : null;
 
   if (
@@ -162,15 +184,15 @@ export function normalizeCategoryPayload(body: Record<string, unknown>, partial 
     payload.slug = slug;
   }
   if (!partial || "level" in body) {
-    const level = finiteInteger(body.level, 0);
-    if (level !== 1 && level !== 2) errors.level = "分类层级只能是一级或二级";
+    const level = finiteInteger(body.level);
+    if (level !== 1 && level !== 2) errors.level = "分类层级只能是一层或二层";
     payload.level = level as 1 | 2;
   }
   if (!partial || "parent_id" in body) payload.parent_id = cleanNullableText(body.parent_id);
   if (!partial || "icon" in body) payload.icon = cleanNullableText(body.icon);
   if (!partial || "description" in body) payload.description = cleanNullableText(body.description);
   if (!partial || "sort_order" in body) {
-    const sortOrder = finiteInteger(body.sort_order, null);
+    const sortOrder = finiteInteger(body.sort_order);
     if (sortOrder === null) errors.sort_order = "排序必须是有效整数";
     else payload.sort_order = sortOrder;
   }
@@ -257,6 +279,7 @@ export function verifyPersistedProduct(row: unknown, payload: Partial<ProductPay
   if (!isPlainObject(row)) return "商品保存失败，数据库没有返回最新商品";
 
   const mismatchedFields = Object.keys(payload).filter((key) => {
+    if (key === "subcategory_id" || key === "gallery" || key === "has_skus") return false;
     const field = key as keyof ProductPayload;
     return !comparableValuesMatch(payload[field], row[field]);
   });

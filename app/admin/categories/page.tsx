@@ -161,6 +161,66 @@ function getCategoryPath(categoryId: string | null, categoryMap: Map<string, Adm
   return names.join(" / ");
 }
 
+function normalizeProductForm(form: ProductForm | null) {
+  if (!form) return null;
+  return {
+    id: form.id ?? "",
+    primaryCategoryId: form.primaryCategoryId,
+    category_id: form.category_id,
+    name: form.name.trim(),
+    slug: form.slug.trim().toLowerCase(),
+    short_description: form.short_description.trim(),
+    description: form.description.trim(),
+    image_url: form.image_url.trim(),
+    price: Number(form.price || 0),
+    original_price: form.original_price.trim() ? Number(form.original_price) : null,
+    stock: Number(form.stock || 0),
+    delivery_type: form.delivery_type,
+    status: form.status,
+    sort_order: Number(form.sort_order || 0),
+    metadata_note: form.metadata_note.trim(),
+  };
+}
+
+function isProductDirty(form: ProductForm, initialForm: ProductForm | null) {
+  return JSON.stringify(normalizeProductForm(form)) !== JSON.stringify(normalizeProductForm(initialForm));
+}
+
+function toProductForm(product: AdminProduct, categoryMap: Map<string, AdminCategory>): ProductForm {
+  const category = product.category_id ? categoryMap.get(product.category_id) : null;
+  const rootId = category?.level === 1 ? category.id : category?.parent_id ?? "";
+  return {
+    id: product.id,
+    primaryCategoryId: rootId,
+    category_id: category?.level === 2 ? category.id : "",
+    name: product.name,
+    slug: product.slug,
+    short_description: product.short_description ?? "",
+    description: product.description ?? "",
+    image_url: product.image_url ?? "",
+    price: String(product.price ?? ""),
+    original_price: product.original_price === null || product.original_price === undefined ? "" : String(product.original_price),
+    stock: String(product.stock ?? 0),
+    delivery_type: product.delivery_type,
+    status: product.status,
+    sort_order: String(product.sort_order ?? 0),
+    metadata_note: product.metadata && typeof product.metadata.note === "string" ? product.metadata.note : "",
+  };
+}
+
+function isValidImagePath(value: string) {
+  const text = value.trim();
+  if (!text) return true;
+  if (text.startsWith("blob:")) return false;
+  if (text.startsWith("/")) return true;
+  try {
+    const url = new URL(text);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export default function AdminCategoriesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -179,6 +239,7 @@ export default function AdminCategoriesPage() {
   const [error, setError] = useState("");
   const [categoryForm, setCategoryForm] = useState<CategoryForm | null>(null);
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
+  const [productInitialForm, setProductInitialForm] = useState<ProductForm | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const categoryMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
@@ -399,32 +460,18 @@ export default function AdminCategoriesPage() {
     setNotice("");
     setError("");
     setFieldErrors({});
-    setProductForm(emptyProductForm(selectedRootId, selectedProductCategoryId === selectedRootId ? "" : selectedProductCategoryId));
+    const form = emptyProductForm(selectedRootId, selectedProductCategoryId === selectedRootId ? "" : selectedProductCategoryId);
+    setProductInitialForm(form);
+    setProductForm(form);
   }
 
   function openEditProduct(product: AdminProduct) {
-    const category = product.category_id ? categoryMap.get(product.category_id) : null;
-    const rootId = category?.level === 1 ? category.id : category?.parent_id ?? "";
     setNotice("");
     setError("");
     setFieldErrors({});
-    setProductForm({
-      id: product.id,
-      primaryCategoryId: rootId,
-      category_id: category?.level === 2 ? category.id : "",
-      name: product.name,
-      slug: product.slug,
-      short_description: product.short_description ?? "",
-      description: product.description ?? "",
-      image_url: product.image_url ?? "",
-      price: String(product.price ?? ""),
-      original_price: product.original_price === null || product.original_price === undefined ? "" : String(product.original_price),
-      stock: String(product.stock ?? 0),
-      delivery_type: product.delivery_type,
-      status: product.status,
-      sort_order: String(product.sort_order ?? 0),
-      metadata_note: product.metadata && typeof product.metadata.note === "string" ? product.metadata.note : "",
-    });
+    const form = toProductForm(product, categoryMap);
+    setProductInitialForm(form);
+    setProductForm(form);
   }
 
   function resolveProductCategoryId(form: ProductForm) {
@@ -445,6 +492,23 @@ export default function AdminCategoriesPage() {
     });
   }
 
+  function closeProductEditorAfterSave() {
+    setProductForm(null);
+    setProductInitialForm(null);
+    setFieldErrors({});
+  }
+
+  function requestCloseProductEditor() {
+    if (saving) return;
+    if (productForm && isProductDirty(productForm, productInitialForm)) {
+      const ok = window.confirm("当前商品内容尚未保存，确定关闭吗？");
+      if (!ok) return;
+    }
+    setProductForm(null);
+    setProductInitialForm(null);
+    setFieldErrors({});
+  }
+
   function validateProduct(form: ProductForm) {
     const errors: FieldErrors = {};
     const categoryId = resolveProductCategoryId(form);
@@ -461,6 +525,7 @@ export default function AdminCategoriesPage() {
     if (originalPrice !== null && (!Number.isFinite(originalPrice) || originalPrice < price)) errors.original_price = "原价不能小于售价";
     if (!isIntegerText(form.stock) || Number(form.stock) < 0) errors.stock = "库存必须是大于或等于 0 的整数";
     if (!isIntegerText(form.sort_order)) errors.sort_order = "排序必须是整数";
+    if (!isValidImagePath(form.image_url)) errors.image_url = "图片地址必须是 /assets/... 或 http(s) URL，不能使用 blob 临时地址";
     return errors;
   }
 
@@ -470,6 +535,10 @@ export default function AdminCategoriesPage() {
     const errors = validateProduct(productForm);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
+    if (!isProductDirty(productForm, productInitialForm)) {
+      setNotice("没有需要保存的商品修改");
+      return;
+    }
 
     const payload: ProductPayload = {
       name: productForm.name.trim(),
@@ -493,8 +562,11 @@ export default function AdminCategoriesPage() {
     try {
       const saved = productForm.id ? await updateProduct(productForm.id, payload) : await createProduct(payload);
       mergeSavedProductIntoPanel(saved);
+      const savedForm = toProductForm(saved, categoryMap);
+      setProductInitialForm(savedForm);
+      setProductForm(savedForm);
       setNotice(productForm.id ? "\u5546\u54c1\u5df2\u4fdd\u5b58" : "\u5546\u54c1\u5df2\u65b0\u589e");
-      setProductForm(null);
+      closeProductEditorAfterSave();
       await loadProducts();
     } catch (saveError) {
       setError(getErrorText(saveError, "商品保存失败，请检查输入内容"));
@@ -729,7 +801,8 @@ export default function AdminCategoriesPage() {
         form={productForm}
         errors={fieldErrors}
         saving={saving}
-        onClose={() => !saving && setProductForm(null)}
+        isDirty={productForm ? isProductDirty(productForm, productInitialForm) : false}
+        onClose={requestCloseProductEditor}
         onSubmit={submitProduct}
         onUpdate={setProductForm}
       />
@@ -940,6 +1013,7 @@ function ProductDialog({
   categories,
   errors,
   form,
+  isDirty,
   onClose,
   onSubmit,
   onUpdate,
@@ -948,6 +1022,7 @@ function ProductDialog({
   categories: AdminCategory[];
   errors: FieldErrors;
   form: ProductForm | null;
+  isDirty: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdate: (form: ProductForm) => void;
@@ -1009,7 +1084,7 @@ function ProductDialog({
           <Field label="详细说明" className="sm:col-span-2">
             <Textarea rows={3} value={form.description} onChange={(event) => onUpdate({ ...form, description: event.target.value })} />
           </Field>
-          <Field label="主图" className="sm:col-span-2">
+          <Field label="主图" className="sm:col-span-2" error={errors.image_url}>
             <div className="flex gap-3">
               <Input value={form.image_url} onChange={(event) => onUpdate({ ...form, image_url: event.target.value })} />
               <img
@@ -1064,7 +1139,7 @@ function ProductDialog({
             <Input value={form.metadata_note} onChange={(event) => onUpdate({ ...form, metadata_note: event.target.value })} />
           </Field>
         </div>
-        <DialogActions saving={saving} onClose={onClose} />
+        <DialogActions saving={saving} onClose={onClose} disableSave={!isDirty} />
       </form>
     </ModalFrame>
   );
@@ -1101,13 +1176,13 @@ function ModalFrame({
   );
 }
 
-function DialogActions({ onClose, saving }: { onClose: () => void; saving: boolean }) {
+function DialogActions({ disableSave = false, onClose, saving }: { disableSave?: boolean; onClose: () => void; saving: boolean }) {
   return (
     <div className="flex shrink-0 justify-end gap-2 border-t px-5 py-4">
       <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
         取消
       </Button>
-      <Button type="submit" disabled={saving}>
+      <Button type="submit" disabled={saving || disableSave}>
         {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         {saving ? "保存中..." : "保存"}
       </Button>
