@@ -22,6 +22,7 @@ import {
   PAYMENT_STATUS_STYLES,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
+import { getPaymentMethodLabel } from "@/lib/payments/payment-methods";
 import { cn } from "@/lib/utils";
 
 type DeliveryContent = {
@@ -246,8 +247,9 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-3 md:grid-cols-4">
+                    <div className="grid gap-3 md:grid-cols-5">
                       <InfoCard label="订单金额" value={formatMoney(order.total_amount, order.currency)} />
+                      <InfoCard label="支付方式" value={order.payment_method ? getPaymentMethodLabel(order.payment_method) : "—"} />
                       <InfoCard label="下单时间" value={formatDate(order.created_at)} />
                       <InfoCard label="交付方式" value={order.delivery_type || "—"} />
                       <InfoCard label="收货信息" value={order.customer_email || order.customer_name || "—"} />

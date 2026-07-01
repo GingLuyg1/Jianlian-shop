@@ -31,9 +31,6 @@ import {
   mapPublicProductToProduct,
   normalizeText,
   searchPublicCatalogProducts,
-  type CatalogMultiSkuFilter,
-  type CatalogSort,
-  type CatalogStockFilter,
   type PublicCatalogConfig,
   type PublicCategory,
 } from "@/lib/supabase/public-catalog";
@@ -46,8 +43,6 @@ import {
   mallContentClassName,
   productImageFallbackSrc,
   productPanelContentClassName,
-  productSupportTextClassName,
-  shopNoticeClassName,
   setProductImageFallback,
 } from "./product-ui";
 
@@ -83,18 +78,11 @@ type DisplayCategory = PublicCategory & {
 
 type FilterState = {
   search: string;
-  priceMin: string;
-  priceMax: string;
-  stock: CatalogStockFilter;
-  deliveryType: string;
-  multiSku: CatalogMultiSkuFilter;
-  sort: CatalogSort;
   page: number;
   pageSize: number;
 };
 
 const CATALOG_PAGE_SIZE = 20;
-const pageSizeOptions = [20, 40, 60];
 
 export default function SupabaseMallContent({
   fallbackCategories,
@@ -112,7 +100,6 @@ export default function SupabaseMallContent({
   const [activeCategory, setActiveCategory] = useState<DisplayCategory | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
-  const [deliveryTypes, setDeliveryTypes] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [draftSearch, setDraftSearch] = useState(searchParams.get("search") ?? "");
@@ -255,12 +242,6 @@ export default function SupabaseMallContent({
         const result = await searchPublicCatalogProducts({
           categoryIds,
           search: filters.search,
-          priceMin: filters.priceMin,
-          priceMax: filters.priceMax,
-          stock: filters.stock,
-          deliveryType: filters.deliveryType,
-          multiSku: filters.multiSku,
-          sort: filters.sort,
           page: filters.page,
           pageSize: filters.pageSize,
         });
@@ -270,7 +251,6 @@ export default function SupabaseMallContent({
             mapPublicProductToProduct(row, productCategory, row.category_path || currentCategory.name)
           )
         );
-        setDeliveryTypes(result.deliveryTypes ?? []);
         setTotal(result.total);
         setTotalPages(result.totalPages);
       } catch (loadError) {
@@ -559,12 +539,6 @@ function ProductPanel({
           </div>
         ) : null}
 
-        <div className={productSupportTextClassName}>
-          如需补货或批量购买，请先联系在线客服确认库存。
-          <button type="button" className="ml-1 text-primary underline-offset-4 hover:underline" {...({ popovertarget: "support-popover" } as Record<string, string>)}>
-            联系客服
-          </button>
-        </div>
       </CardContent>
     </Card>
   );
@@ -635,47 +609,20 @@ function ProductEmptyState({ onResetFilters }: { onResetFilters: () => void }) {
     <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-dashed bg-slate-50 text-center">
       <div>
         <p className="text-base font-semibold text-slate-800">暂无商品</p>
-        <p className="mt-1 text-sm text-muted-foreground">当前分类或筛选条件下没有商品。</p>
+        <p className="mt-1 text-sm text-muted-foreground">当前分类下没有匹配的商品。</p>
         <Button type="button" variant="outline" className="mt-4" onClick={onResetFilters}>
-          清空筛选
+          清空搜索
         </Button>
       </div>
     </div>
   );
 }
 
-function ShopNotice() {
-  return (
-    <div className={shopNoticeClassName}>
-      <div className="font-semibold">选购请注意</div>
-      <div className="mt-2 space-y-1">
-        <p>1. 下单之前请一定一定要看清商品说明，非商品问题一经售出不退不换。</p>
-        <p>
-          2. 本店会在技术范围内尽量保障商品可用性，账号类商品售后期为商品发货
-          <span className="font-bold text-red-600">24 小时内</span>。
-        </p>
-        <p>
-          3. 拿到账号或卡密后请第一时间检查，售后期限为
-          <span className="font-bold text-red-600">24 小时</span>，请勿拖延。
-        </p>
-        <p className="font-bold text-red-600">4. 本站拒绝任何违法用途，仅提供合法电商拓客服务。</p>
-      </div>
-    </div>
-  );
-}
-
 function readFilters(searchParams: URLSearchParams): FilterState {
-  const pageSize = Number(searchParams.get("pageSize") ?? CATALOG_PAGE_SIZE);
   return {
     search: (searchParams.get("search") ?? "").trim(),
-    priceMin: normalizePriceInput(searchParams.get("priceMin")),
-    priceMax: normalizePriceInput(searchParams.get("priceMax")),
-    stock: normalizeEnum(searchParams.get("stock"), ["all", "in_stock", "low_stock", "sold_out"], "all") as CatalogStockFilter,
-    deliveryType: normalizeToken(searchParams.get("deliveryType")) || "all",
-    multiSku: normalizeEnum(searchParams.get("multiSku"), ["all", "yes", "no"], "all") as CatalogMultiSkuFilter,
-    sort: normalizeEnum(searchParams.get("sort"), ["default", "latest", "price_asc", "price_desc", "sales"], "default") as CatalogSort,
     page: Math.max(1, Number(searchParams.get("page") ?? 1) || 1),
-    pageSize: pageSizeOptions.includes(pageSize) ? pageSize : CATALOG_PAGE_SIZE,
+    pageSize: CATALOG_PAGE_SIZE,
   };
 }
 
@@ -685,30 +632,5 @@ function updateOptionalParam(params: URLSearchParams, key: string, value: unknow
   if (!next || next === defaultValue) params.delete(key);
   else params.set(key, next);
 }
-
-function normalizePriceInput(value: string | null) {
-  if (!value) return "";
-  const next = Number(value);
-  return Number.isFinite(next) && next >= 0 ? String(next) : "";
-}
-
-function normalizeToken(value: string | null) {
-  return (value ?? "").trim().replace(/[^\w-]/g, "").slice(0, 80);
-}
-
-function normalizeEnum(value: string | null, allowed: string[], fallback: string) {
-  return value && allowed.includes(value) ? value : fallback;
-}
-
-function deliveryLabel(value: string) {
-  if (value === "automatic") return "自动发货";
-  if (value === "shipping") return "物流发货";
-  if (value === "card") return "卡密交付";
-  if (value === "account") return "账号交付";
-  if (value === "manual") return "人工处理";
-  return value;
-}
-
-
 
 

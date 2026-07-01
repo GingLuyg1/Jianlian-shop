@@ -21,6 +21,7 @@ import {
   type OrderStatus,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
+import { getPaymentMethodLabel } from "@/lib/payments/payment-methods";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
@@ -478,6 +479,7 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
             </InfoCard>
             <InfoCard title="订单金额">
               <InfoRow label="订单总额" value={formatMoney(order.total_amount, order.currency)} strong />
+              <InfoRow label="支付方式" value={order.payment_method ? `${getPaymentMethodLabel(order.payment_method)} (${order.payment_method})` : "—"} />
               <InfoRow label="实付金额" value={formatMoney(order.paid_at ? order.total_amount : 0, order.currency)} />
               <InfoRow label="退款金额" value={formatMoney(0, order.currency)} />
               <InfoRow label="创建时间" value={formatDate(order.created_at)} />

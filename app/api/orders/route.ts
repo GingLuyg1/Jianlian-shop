@@ -2,6 +2,7 @@
 
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
 import { recordOrderAgreementAcceptances, verifyCheckoutAgreements, type AgreementInput } from "@/lib/legal/legal-service";
+import { normalizePaymentMethod } from "@/lib/payments/payment-methods";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
@@ -145,7 +146,7 @@ export async function POST(request: Request) {
     const customerName = body.customer_name?.trim() || null;
     const customerPhone = body.customer_phone?.trim() || null;
     const customerNote = body.customer_note?.trim() || null;
-    const paymentMethod = String(body.payment_method ?? body.paymentMethod ?? "balance").trim() || "balance";
+    const paymentMethod = normalizePaymentMethod(body.payment_method ?? body.paymentMethod ?? "balance");
     const agreementInputs = Array.isArray(body.agreements) ? body.agreements : body.agreement_version_ids;
 
     if (!productId) {
@@ -162,6 +163,10 @@ export async function POST(request: Request) {
 
     if (!customerEmail) {
       return NextResponse.json({ error: "请填写联系邮箱" }, { status: 400 });
+    }
+
+    if (!paymentMethod) {
+      return NextResponse.json({ error: "支付方式不支持" }, { status: 400 });
     }
 
     if (paymentMethod !== "balance") {
@@ -251,9 +256,24 @@ export async function POST(request: Request) {
     }
 
     const created = Array.isArray(data) ? data[0] : data;
-    const orderId = String((created as { id?: unknown } | null)?.id ?? "");
+    const orderId = String((created as { id?: unknown; order_id?: unknown } | null)?.id ?? (created as { order_id?: unknown } | null)?.order_id ?? "");
     if (!orderId) {
       return NextResponse.json({ error: "订单创建结果异常，请联系客服确认" }, { status: 500 });
+    }
+
+    const { data: savedOrder, error: paymentMethodError } = await supabase
+      .from("orders")
+      .update({ payment_method: paymentMethod })
+      .eq("id", orderId)
+      .eq("user_id", user.id)
+      .select("id,order_no,status,payment_status,total_amount,payment_method")
+      .single();
+
+    if (paymentMethodError || !savedOrder) {
+      return NextResponse.json(
+        { error: getOrderErrorMessage(paymentMethodError, "订单支付方式保存失败，请稍后重试") },
+        { status: 500 }
+      );
     }
 
     try {
@@ -271,7 +291,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ order: created });
+    return NextResponse.json({ order: { ...(created as Record<string, unknown>), payment_method: paymentMethod } });
 
   } catch (error) {
     console.error("[Orders] create failed", getOrderErrorMessage(error, "订单创建失败"));
