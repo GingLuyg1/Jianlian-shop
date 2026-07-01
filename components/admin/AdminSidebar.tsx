@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -19,6 +19,7 @@ import {
   ClipboardCheck,
   Users,
   WalletCards,
+  MailCheck,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -38,11 +39,12 @@ const adminMenuItems = [
   { label: "售后退款", href: "/admin/refunds", icon: RotateCcw },
   { label: "用户管理", href: "/admin/users", icon: Users },
   { label: "隐私请求", href: "/admin/privacy-requests", icon: FileLock2 },
+  { label: "邮件通知", href: "/admin/notifications/email-deliveries", icon: MailCheck },
   { label: "系统设置", href: "/admin/settings", icon: Settings },
   { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
   { label: "项目验收", href: "/admin/system/project-status", icon: ClipboardCheck },
   { label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
-  { label: "生产封板", href: "/admin/system/production-readiness", icon: ShieldCheck },
+  { label: "生产看板", href: "/admin/system/production-readiness", icon: ShieldCheck },
   { label: "操作日志", href: "/admin/audit-logs", icon: ScrollText },
 ];
 
@@ -70,7 +72,7 @@ export default function AdminSidebar() {
           </div>
           <div>
             <div className="text-sm font-semibold text-slate-900">Jianlian Admin</div>
-            <div className="text-xs text-slate-500">后台管理</div>
+            <div className="text-xs text-slate-500">管理后台</div>
           </div>
         </Link>
       </div>
@@ -135,6 +137,8 @@ export default function AdminSidebar() {
     </aside>
   );
 }
+
+
 
 
 

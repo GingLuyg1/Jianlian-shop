@@ -1,9 +1,11 @@
 ﻿import { NextResponse } from "next/server";
 
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
+import { recordOrderAgreementAcceptances, verifyCheckoutAgreements, type AgreementInput } from "@/lib/legal/legal-service";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
+import { evaluateOrderRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +22,8 @@ const ORDER_CREATE_ALLOWED_KEYS = new Set([
   "customer_phone",
   "shipping_address",
   "customer_note",
+  "agreement_version_ids",
+  "agreements",
 ]);
 
 export async function GET(request: Request) {
@@ -119,6 +123,8 @@ export async function POST(request: Request) {
           customer_phone?: string;
           shipping_address?: Record<string, unknown> | null;
           customer_note?: string;
+          agreement_version_ids?: AgreementInput[];
+          agreements?: AgreementInput[];
         }
       | null;
 
@@ -135,6 +141,7 @@ export async function POST(request: Request) {
     const customerName = body.customer_name?.trim() || null;
     const customerPhone = body.customer_phone?.trim() || null;
     const customerNote = body.customer_note?.trim() || null;
+    const agreementInputs = Array.isArray(body.agreements) ? body.agreements : body.agreement_version_ids;
 
     if (!productId) {
       return NextResponse.json({ error: "请选择商品" }, { status: 400 });
@@ -152,6 +159,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "请填写联系邮箱" }, { status: 400 });
     }
 
+    let verifiedAgreements;
+    try {
+      verifiedAgreements = await verifyCheckoutAgreements(supabase, agreementInputs);
+    } catch (agreementError) {
+      return NextResponse.json(
+        { error: getOrderErrorMessage(agreementError, "请先确认当前有效的订单协议") },
+        { status: 400 }
+      );
+    }
+
     const { count: activeSkuCount, error: skuCountError } = await supabase
       .from("product_skus")
       .select("id", { count: "exact", head: true })
@@ -167,6 +184,37 @@ export async function POST(request: Request) {
 
     if ((activeSkuCount ?? 0) > 0 && !skuId) {
       return NextResponse.json({ error: "请选择完整商品规格" }, { status: 400 });
+    }
+
+    const risk = await evaluateOrderRisk({
+      supabase,
+      request,
+      userId: user.id,
+      businessId: clientRequestId,
+      requestId: clientRequestId,
+      productId,
+      skuId,
+      quantity,
+      riskContext: {
+        has_sku: Boolean(skuId),
+        has_shipping_address: Boolean(body.shipping_address),
+      },
+    });
+
+    if (shouldBlockRisk(risk)) {
+      return NextResponse.json(
+        {
+          error: riskResponseMessage(risk),
+          code: "ORDER_RISK_BLOCKED",
+          risk: {
+            level: risk.risk_level,
+            score: risk.risk_score,
+            action: risk.recommended_action,
+            requestId: risk.request_id,
+          },
+        },
+        { status: 403 }
+      );
     }
 
     const orderPayload: Record<string, unknown> = {
@@ -194,8 +242,28 @@ export async function POST(request: Request) {
     }
 
     const created = Array.isArray(data) ? data[0] : data;
+    const orderId = String((created as { id?: unknown } | null)?.id ?? "");
+    if (!orderId) {
+      return NextResponse.json({ error: "订单创建结果异常，请联系客服确认" }, { status: 500 });
+    }
+
+    try {
+      await recordOrderAgreementAcceptances({
+        orderId,
+        user,
+        agreements: verifiedAgreements,
+        request,
+      });
+    } catch (agreementError) {
+      console.error("[Orders] agreement record failed", getOrderErrorMessage(agreementError, "协议确认记录保存失败"));
+      return NextResponse.json(
+        { error: "订单已创建，但协议确认记录保存失败，请联系客服处理" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ order: created });
+
   } catch (error) {
     console.error("[Orders] create failed", getOrderErrorMessage(error, "订单创建失败"));
     return NextResponse.json(

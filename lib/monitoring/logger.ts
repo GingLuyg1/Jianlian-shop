@@ -200,12 +200,19 @@ export async function recordPerformance(input: Omit<MonitoringLogInput, "level" 
   const warnAt = input.warnAtMs ?? 1200;
   const errorAt = input.errorAtMs ?? 5000;
   const level: LogLevel = input.durationMs >= errorAt ? "error" : input.durationMs >= warnAt ? "warn" : "info";
+  const metadata = {
+    ...(input.metadata ?? {}),
+    duration_ms: Math.round(input.durationMs),
+    route: input.route ?? null,
+    method: input.method ?? null,
+  };
   const payload: MonitoringLogInput = {
     ...input,
     level,
     category: "performance",
     message: `${input.event} completed in ${Math.round(input.durationMs)}ms`,
     errorCode: level === "error" ? "SLOW_REQUEST_ERROR" : level === "warn" ? "SLOW_REQUEST_WARN" : null,
+    metadata,
   };
   if (level === "info") {
     logServerEvent(payload);

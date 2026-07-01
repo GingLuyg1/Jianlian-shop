@@ -8,6 +8,7 @@ import {
   createPaymentSession,
   PaymentSessionError,
 } from "@/lib/payments/payment-session-service";
+import { evaluatePaymentRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 import { checkRateLimit, checkRequestSize, getBusinessRateLimitKey, getUserRateLimitKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,32 @@ export async function POST(request: Request) {
   if (!businessLimit.allowed) return businessLimit.response!;
 
   try {
+    const risk = await evaluatePaymentRisk({
+      supabase: context.supabase,
+      request,
+      userId: context.user.id,
+      businessId: businessNo,
+      requestId: `${businessType}:${businessNo}:${channel}`,
+      paymentChannel: channel,
+      riskContext: { business_type: businessType },
+    });
+
+    if (shouldBlockRisk(risk) || risk.recommended_action === "require_review") {
+      return NextResponse.json(
+        {
+          code: "PAYMENT_RISK_BLOCKED",
+          error: riskResponseMessage(risk),
+          risk: {
+            level: risk.risk_level,
+            score: risk.risk_score,
+            action: risk.recommended_action,
+            requestId: risk.request_id,
+          },
+        },
+        { status: 403 }
+      );
+    }
+
     const session = await createPaymentSession({
       businessType,
       businessNo,

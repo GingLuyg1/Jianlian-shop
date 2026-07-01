@@ -11,6 +11,7 @@ import {
   normalizeRechargeRow,
 } from "@/lib/payments/recharge-utils";
 import type { RechargeStatus } from "@/lib/payments/channel-types";
+import { evaluateRechargeRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
@@ -104,6 +105,37 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: `当前渠道最低充值金额为 ${channel.minimumAmount} ${channel.currency}` },
         { status: 400 }
+      );
+    }
+
+    const risk = await evaluateRechargeRisk({
+      supabase: context.supabase,
+      request,
+      userId: context.user.id,
+      businessId: clientRequestId,
+      requestId: clientRequestId,
+      orderAmount: summary.amount,
+      currency: channel.currency,
+      paymentChannel: channel.code,
+      riskContext: {
+        provider: channel.provider,
+        payable_amount: summary.payableAmount,
+      },
+    });
+
+    if (shouldBlockRisk(risk) || risk.recommended_action === "require_review") {
+      return NextResponse.json(
+        {
+          error: riskResponseMessage(risk),
+          code: "RECHARGE_RISK_BLOCKED",
+          risk: {
+            level: risk.risk_level,
+            score: risk.risk_score,
+            action: risk.recommended_action,
+            requestId: risk.request_id,
+          },
+        },
+        { status: 403 }
       );
     }
 

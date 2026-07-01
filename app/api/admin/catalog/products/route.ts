@@ -10,6 +10,7 @@
 } from "../_shared";
 
 import { markMediaReferenceByUrl } from "@/lib/media/media-service";
+import { revalidateProductCache } from "@/lib/cache/cache-tags";
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
@@ -65,6 +66,11 @@ export async function POST(request: Request) {
   }
 
   await markMediaReferenceByUrl(admin.supabase, (data as { image_url?: string | null }).image_url, "product", String((data as { id?: unknown }).id ?? ""));
+  revalidateProductCache({
+    id: String((data as { id?: unknown }).id ?? ""),
+    slug: String((data as { slug?: unknown }).slug ?? ""),
+    categoryId: String((data as { category_id?: unknown }).category_id ?? ""),
+  });
 
   await auditCatalogAction({
     request,

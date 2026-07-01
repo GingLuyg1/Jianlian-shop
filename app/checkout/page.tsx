@@ -51,6 +51,23 @@ type SkuOption = {
   rmb: number;
 };
 
+type LegalDocument = {
+  id: string;
+  document_type: string;
+  version: string;
+  title: string;
+  content: string;
+  content_hash: string;
+};
+
+const REQUIRED_AGREEMENT_TYPES = ["terms_of_service", "refund_policy", "digital_delivery_policy", "purchase_notice"];
+const AGREEMENT_LABELS: Record<string, string> = {
+  terms_of_service: "用户协议",
+  refund_policy: "退款政策",
+  digital_delivery_policy: "数字商品交付规则",
+  purchase_notice: "商品购买须知",
+};
+
 const SKU_OPTIONS_BY_PRODUCT_ID: Record<string, SkuOption[]> = {
   "gift-apple-us": [2, 3, 4, 5, 10, 15, 20, 25, 50, 100].map((usd) => ({
     id: `${usd}-usd`,
@@ -129,8 +146,11 @@ export default function CheckoutPage() {
   const [shippingAddress, setShippingAddress] = useState("");
   const [customerNote, setCustomerNote] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [confirmed, setConfirmed] = useState(true);
+  const [confirmed, setConfirmed] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
+  const [legalDocuments, setLegalDocuments] = useState<LegalDocument[]>([]);
+  const [legalLoading, setLegalLoading] = useState(true);
+  const [legalError, setLegalError] = useState("");
   const [selectedSkuId, setSelectedSkuId] = useState("");
   const [productRow, setProductRow] = useState<PublicProductRow | null>(null);
   const [productLoading, setProductLoading] = useState(true);
@@ -164,6 +184,31 @@ export default function CheckoutPage() {
     };
   }, [productId]);
 
+  useEffect(() => {
+    let active = true;
+    async function loadLegalDocuments() {
+      setLegalLoading(true);
+      setLegalError("");
+      try {
+        const response = await fetch("/api/legal/current", { cache: "no-store" });
+        const payload = await response.json().catch(() => null) as { documents?: LegalDocument[]; error?: string } | null;
+        if (!response.ok) throw new Error(payload?.error || "协议读取失败，请稍后重试");
+        if (!active) return;
+        setLegalDocuments(Array.isArray(payload?.documents) ? payload!.documents! : []);
+      } catch (loadError) {
+        if (!active) return;
+        setLegalError(getErrorText(loadError, "协议读取失败，请稍后重试"));
+        setLegalDocuments([]);
+      } finally {
+        if (active) setLegalLoading(false);
+      }
+    }
+    void loadLegalDocuments();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const product = useMemo(
     () => (productRow ? mapCheckoutProduct(productRow) : null),
     [productRow]
@@ -173,6 +218,9 @@ export default function CheckoutPage() {
   const selectedSku =
     skuOptions.find((sku) => sku.id === selectedSkuId) ?? skuOptions[0];
   const hasSku = skuOptions.length > 0;
+  const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) => legalDocuments.find((doc) => doc.document_type === type));
+  const agreementsReady = requiredAgreementDocs.every(Boolean);
+  const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
   const isShippingProduct = productRow?.delivery_type === "shipping";
   const isPurchasable = productRow?.status === "active" && Number(productRow.stock ?? 0) > 0;
   const unavailableMessage =
@@ -224,6 +272,16 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (legalLoading || legalError || !agreementsReady) {
+      setError(legalError || "协议版本未准备好，请刷新后重试");
+      return;
+    }
+
+    if (!confirmed) {
+      setError("请先阅读并确认订单协议");
+      return;
+    }
+
     if (!email.trim()) {
       setError("请填写联系邮箱");
       return;
@@ -254,6 +312,8 @@ export default function CheckoutPage() {
                 address: shippingAddress,
               }
             : null,
+          agreement_version_ids: agreementPayload,
+          agreements: agreementPayload,
           customer_note: [
             hasSku ? `SKU：${selectedSku.label}` : "",
             isShippingProduct
@@ -461,7 +521,7 @@ export default function CheckoutPage() {
                   <Button
                     className="h-11 rounded-full px-7 text-sm"
                     onClick={handleSubmit}
-                    disabled={!confirmed || submitLoading || !isPurchasable}
+                    disabled={!confirmed || submitLoading || !isPurchasable || legalLoading || Boolean(legalError) || !agreementsReady}
                   >
                     {submitLoading
                       ? "正在提交订单..."
@@ -482,13 +542,13 @@ export default function CheckoutPage() {
                   className="mt-0.5 h-4 w-4 accent-primary"
                 />
                 <span>
-                  我确认已填写订单信息并了解
+                  我确认已阅读并同意当前版本的用户协议、退款政策、数字商品交付规则和购买须知，且订单信息填写无误
                   <button
                     type="button"
                     className="font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
                     onClick={() => setTermsOpen(true)}
                   >
-                    下单须知
+                    查看协议版本
                   </button>
                 </span>
               </div>
@@ -497,7 +557,7 @@ export default function CheckoutPage() {
         </Card>
       </div>
 
-      <TermsDialog open={termsOpen} onOpenChange={setTermsOpen} />
+      <TermsDialog open={termsOpen} onOpenChange={setTermsOpen} documents={legalDocuments} error={legalError} loading={legalLoading} />
     </PublicLayout>
   );
 }
@@ -505,80 +565,47 @@ export default function CheckoutPage() {
 function TermsDialog({
   open,
   onOpenChange,
+  documents,
+  loading,
+  error,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  documents: LegalDocument[];
+  loading: boolean;
+  error: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[86vh] max-w-3xl overflow-hidden p-0">
         <DialogHeader className="border-b border-border bg-slate-50 px-6 py-5 text-left">
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-base">
-              ⚠️
-            </span>
-            网站使用条款
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-base">⚠️</span>
+            当前下单协议版本
           </DialogTitle>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Jianlian 服务条款和免责声明，请您购买服务前详细阅读，确认下单购买即是接受本合约。
+            请在下单前阅读当前生效的协议版本。订单创建后会保存本次确认的协议版本和内容摘要。
           </p>
         </DialogHeader>
 
         <div className="max-h-[calc(86vh-120px)] space-y-5 overflow-y-auto px-6 py-5 text-sm leading-7">
-          <section className="rounded-xl border border-border bg-white p-4">
-            <h3 className="mb-2 font-semibold text-foreground">合约说明</h3>
-            <p className="text-muted-foreground">
-              用户在使用 Jianlian 的服务或产品的过程中，与 Jianlian 发生的争议，依本“服务合约”解决。
-            </p>
-          </section>
-
-          <section className="rounded-xl border border-border bg-white p-4">
-            <h3 className="mb-2 font-semibold text-foreground">
-              O、无管理及无技术支援服务
-            </h3>
-            <p className="text-muted-foreground">
-              Jianlian 只提供运行平台且确保运行平台的稳定性，客户所提供的内容本身不在本平台存储及维护，本网站不提供包括内容管理、内容策划、内容运维等服务，请在购买我们的业务时确保自身内容符合相关平台规则规范。
-            </p>
-          </section>
-
-          <section className="rounded-xl border border-border bg-white p-4">
-            <h3 className="mb-3 font-semibold text-foreground">
-              一、客户承诺不进行如下活动
-            </h3>
-            <ol className="space-y-2 text-muted-foreground">
-              <li>
-                01、包括但不限于政治、宗教、色情、侵权、仿牌、欺诈、钓鱼、木马病毒、买卖违禁品、博彩、垃圾邮件、有损社会秩序道德等，以及触犯中国地区和所在地政策法律禁止的内容。
-              </li>
-              <li>
-                02、其它没有明确说明和声明，但实际性质是违法或非法的活动。
-              </li>
-            </ol>
-          </section>
-
-          <section className="rounded-xl border border-border bg-white p-4">
-            <h3 className="mb-2 font-semibold text-foreground">二、滥用处理方案</h3>
-            <p className="text-muted-foreground">
-              违反“一、客户承诺不进行如下活动”相关规定，Jianlian 可不经同意先封禁客户账户及订单。
-            </p>
-          </section>
-
-          <section className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <h3 className="mb-2 font-semibold text-primary">最终声明</h3>
-            <div className="space-y-2 text-muted-foreground">
-              <p>
-                Jianlian 享有本合约最终解释权，若不接受或不认同，请不要选购。
-              </p>
-              <p>
-                Jianlian 为全球社交营销平台，公司位于香港，本站仅用于全球社交媒体营销，不提供任何中国地区社交媒体服务！如有问题可尝试联系在线客服，我们将尽快回复。
-              </p>
-            </div>
-          </section>
+          {loading ? <div className="rounded-xl border bg-slate-50 p-4 text-muted-foreground">正在读取当前协议版本...</div> : null}
+          {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div> : null}
+          {!loading && !error && documents.length ? documents.map((doc) => (
+            <section key={doc.id} className="rounded-xl border border-border bg-white p-4">
+              <h3 className="mb-1 font-semibold text-foreground">{AGREEMENT_LABELS[doc.document_type] ?? doc.title} v{doc.version}</h3>
+              <div className="mb-2 font-mono text-xs text-muted-foreground">Hash: {doc.content_hash.slice(0, 16)}...</div>
+              <p className="whitespace-pre-wrap text-muted-foreground">{doc.content}</p>
+            </section>
+          )) : null}
+          {!loading && !error && !documents.length ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800">当前没有可用协议版本，请联系管理员。</div>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
   );
 }
-
 function ProductDetailCard({
   product,
   priceLabel,
@@ -2089,4 +2116,8 @@ function getAiCategoryByProductId(productId: string) {
   if (productId.includes("grok")) return "grok";
   return "chatgpt";
 }
+
+
+
+
 

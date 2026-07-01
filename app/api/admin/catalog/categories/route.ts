@@ -9,6 +9,7 @@
 } from "../_shared";
 
 import { markMediaReferenceByUrl } from "@/lib/media/media-service";
+import { revalidateCategoryCache } from "@/lib/cache/cache-tags";
 
 export async function POST(request: Request) {
   const admin = await requireCatalogAdmin();
@@ -45,6 +46,10 @@ export async function POST(request: Request) {
     "category",
     String((data as { id?: unknown }).id ?? "")
   );
+  revalidateCategoryCache({
+    id: String((data as { id?: unknown }).id ?? ""),
+    parentId: String((data as { parent_id?: unknown }).parent_id ?? ""),
+  });
 
   await auditCatalogAction({
     request,

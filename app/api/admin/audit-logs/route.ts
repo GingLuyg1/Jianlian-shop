@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 import { getAuditErrorMessage } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
@@ -19,9 +19,10 @@ const VALID_MODULES = new Set([
   "delivery",
   "settings",
   "system",
+  "privacy",
 ]);
 
-const VALID_RESULTS = new Set(["success", "failed", "denied"]);
+const VALID_RESULTS = new Set(["success", "failed", "denied", "partial"]);
 
 function clampNumber(value: string | null, fallback: number, min: number, max: number) {
   const parsed = Number(value);
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false });
 
   const adminEmail = searchParams.get("adminEmail")?.trim();
-  const module = searchParams.get("module")?.trim();
+  const auditModule = searchParams.get("module")?.trim();
   const action = searchParams.get("action")?.trim();
   const result = searchParams.get("result")?.trim();
   const targetId = searchParams.get("targetId")?.trim();
@@ -77,7 +78,7 @@ export async function GET(request: Request) {
   const endAt = searchParams.get("endAt")?.trim();
 
   if (adminEmail) query = query.ilike("admin_email", `%${adminEmail}%`);
-  if (module && VALID_MODULES.has(module)) query = query.eq("module", module);
+  if (auditModule && VALID_MODULES.has(auditModule)) query = query.eq("module", auditModule);
   if (action) query = query.ilike("action", `%${action}%`);
   if (result && VALID_RESULTS.has(result)) query = query.eq("result", result);
   if (targetId) query = query.ilike("target_id", `%${targetId}%`);

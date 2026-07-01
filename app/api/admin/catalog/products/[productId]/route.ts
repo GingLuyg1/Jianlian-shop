@@ -10,6 +10,7 @@ import {
 } from "../../_shared";
 
 import { markMediaReferenceByUrl } from "@/lib/media/media-service";
+import { revalidateProductCache } from "@/lib/cache/cache-tags";
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 type RouteContext = {
@@ -114,6 +115,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   await markMediaReferenceByUrl(admin.supabase, (data as { image_url?: string | null }).image_url, "product", productId);
+  revalidateProductCache({
+    id: productId,
+    slug: String((data as { slug?: unknown }).slug ?? ""),
+    previousSlug: String((before as { slug?: unknown }).slug ?? ""),
+    categoryId: String((data as { category_id?: unknown }).category_id ?? ""),
+    previousCategoryId: String((before as { category_id?: unknown }).category_id ?? ""),
+  });
 
   await auditCatalogAction({
     request,
@@ -177,6 +185,12 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     targetLabel: String((before as { name?: unknown }).name ?? ""),
     result: "success",
     beforeSummary: before,
+  });
+
+  revalidateProductCache({
+    id: productId,
+    slug: String((before as { slug?: unknown }).slug ?? ""),
+    categoryId: String((before as { category_id?: unknown }).category_id ?? ""),
   });
 
   return jsonResponse({ ok: true });

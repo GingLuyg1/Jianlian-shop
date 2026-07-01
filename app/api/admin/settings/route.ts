@@ -7,6 +7,7 @@ import {
   saveAdminSettings,
 } from "@/lib/settings/server";
 import type { AdminSiteSettings } from "@/lib/settings/types";
+import { revalidateSiteSettingsCache } from "@/lib/cache/cache-tags";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,7 @@ export async function PATCH(request: Request) {
   }
 
   const result = await readAdminSettings(admin.supabase);
+  revalidateSiteSettingsCache();
   await writeAdminAuditLog({
     request,
     admin: { id: admin.user.id, email: admin.user.email },

@@ -2,6 +2,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { loadOrderEvidence } from "@/lib/legal/legal-service";
+
 export type RelationGroupKey =
   | "order"
   | "items"
@@ -12,6 +14,8 @@ export type RelationGroupKey =
   | "inventory"
   | "deliveries"
   | "notifications"
+  | "agreements"
+  | "evidence"
   | "audit";
 
 export type BusinessRelationItem = {
@@ -59,6 +63,8 @@ const RELATION_LABELS: Record<RelationGroupKey, string> = {
   inventory: "数字库存预留",
   deliveries: "交付记录",
   notifications: "站内通知",
+  agreements: "协议确认",
+  evidence: "订单证据",
   audit: "管理员审计记录",
 };
 
@@ -327,6 +333,66 @@ export async function loadAdminOrderRelations(
     addEvent(events, { source: "通知", title: "站内通知", summary: text(notice.title) ?? "站内通知", status: text(notice.status), occurredAt: text(notice.created_at) ?? "", href: null });
   }
 
+  const evidenceResult = await loadOrderEvidence(supabase, orderId).catch(() => ({
+    agreements: [],
+    agreementError: "订单证据读取失败",
+    documents: [],
+    documentError: null,
+    events: [],
+    evidenceError: "订单证据读取失败",
+  }));
+  const agreementRows = asArray<Record<string, unknown>>(evidenceResult.agreements);
+  groups.push(group("agreements", agreementRows.length ? agreementRows.map((agreement) => relationItem({
+    id: String(agreement.id),
+    label: "协议确认",
+    businessNo: text(agreement.document_version),
+    summary: `${text(agreement.document_type) ?? "协议"} / hash ${text(agreement.content_hash)?.slice(0, 12) ?? "—"}`,
+    status: text(agreement.acceptance_source) ?? "checkout",
+    amount: null,
+    createdAt: text(agreement.accepted_at) ?? text(agreement.created_at),
+    href: null,
+  })) : [relationItem({
+    id: `missing-agreements:${orderId}`,
+    label: "历史记录缺失",
+    businessNo: null,
+    summary: "该订单没有保存协议确认版本，不能自动补写或伪造历史确认。",
+    status: "missing",
+    amount: null,
+    createdAt: text(order.created_at),
+    href: null,
+  })], evidenceResult.agreementError ?? undefined));
+  for (const agreement of agreementRows) {
+    addEvent(events, {
+      source: "协议确认",
+      title: "用户确认协议版本",
+      summary: `${text(agreement.document_type) ?? "协议"} ${text(agreement.document_version) ?? ""}`.trim(),
+      status: text(agreement.acceptance_source) ?? "checkout",
+      occurredAt: text(agreement.accepted_at) ?? "",
+      href: null,
+    });
+  }
+
+  const evidenceRows = asArray<Record<string, unknown>>(evidenceResult.events);
+  groups.push(group("evidence", evidenceRows.map((event) => relationItem({
+    id: String(event.id),
+    label: text(event.title) ?? text(event.event_type) ?? "证据事件",
+    businessNo: text(event.request_id),
+    summary: text(event.summary) ?? text(event.source) ?? "订单证据事件",
+    status: text(event.source),
+    amount: null,
+    createdAt: text(event.created_at),
+    href: null,
+  })), evidenceResult.evidenceError ?? undefined));
+  for (const event of evidenceRows) {
+    addEvent(events, {
+      source: text(event.source) ?? "订单证据",
+      title: text(event.title) ?? text(event.event_type) ?? "证据事件",
+      summary: text(event.summary) ?? "订单证据事件",
+      status: text(event.source),
+      occurredAt: text(event.created_at) ?? "",
+      href: null,
+    });
+  }
   const auditResult = await safeQuery<Record<string, unknown>>(() =>
     supabase
       .from("admin_audit_logs")
@@ -355,4 +421,7 @@ export async function loadAdminOrderRelations(
 
   return { orderId: String(order.id), orderNo, groups, timeline };
 }
+
+
+
 

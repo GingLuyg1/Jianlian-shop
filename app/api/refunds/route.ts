@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 
 import { formatMoney, normalizeRefundError } from "@/lib/refunds/refund-utils";
+import { evaluateRefundRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
@@ -76,6 +77,34 @@ export async function POST(request: Request) {
     if (!orderNo) return json({ error: "缺少订单编号。" }, { status: 400 });
     if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) return json({ error: "退款金额必须大于 0。" }, { status: 400 });
 
+    const refundRiskContext = await loadRefundRiskContext(supabase, user.id, orderNo);
+    const risk = await evaluateRefundRisk({
+      supabase,
+      request,
+      userId: user.id,
+      businessId: orderNo,
+      requestId: body?.clientRequestId ?? orderNo,
+      orderAmount: requestedAmount,
+      currency: refundRiskContext.currency,
+      riskContext: refundRiskContext,
+    });
+
+    if (shouldBlockRisk(risk)) {
+      return json(
+        {
+          error: riskResponseMessage(risk),
+          code: "REFUND_RISK_BLOCKED",
+          risk: {
+            level: risk.risk_level,
+            score: risk.risk_score,
+            action: risk.recommended_action,
+            requestId: risk.request_id,
+          },
+        },
+        { status: 403 }
+      );
+    }
+
     const { data, error } = await supabase.rpc("create_refund_request", {
       p_order_no: orderNo,
       p_reason_code: reasonCode,
@@ -111,6 +140,34 @@ function normalizeUserRefund(row: Row) {
     createdAt: text(row.created_at),
     reviewedAt: text(row.reviewed_at),
     completedAt: text(row.completed_at),
+  };
+}
+
+async function loadRefundRiskContext(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string, orderNo: string) {
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id,order_no,total_amount,currency,delivery_type,payment_status")
+    .eq("user_id", userId)
+    .eq("order_no", orderNo)
+    .maybeSingle();
+  const orderId = typeof order?.id === "string" ? order.id : null;
+  let deliveryDelivered = false;
+  if (orderId) {
+    const { count } = await supabase
+      .from("order_deliveries")
+      .select("id", { count: "exact", head: true })
+      .eq("order_id", orderId)
+      .eq("delivery_status", "delivered")
+      .limit(10);
+    deliveryDelivered = (count ?? 0) > 0;
+  }
+  return {
+    order_id: orderId,
+    order_amount: money(order?.total_amount),
+    currency: text(order?.currency) ?? "CNY",
+    payment_status: text(order?.payment_status),
+    delivery_type: text(order?.delivery_type),
+    deliveryDelivered,
   };
 }
 

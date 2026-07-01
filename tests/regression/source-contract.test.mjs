@@ -215,3 +215,72 @@ test("production readiness checks are read-only and cleanup scripts are safe by 
   assert.match(cleanupTemplate, /必须先备份/);
   assert.match(cleanupTemplate, /必须先执行 dry-run/);
 });
+
+test("order expiration migration adds payment expiry and idempotent release RPC", () => {
+  const migration = file("supabase/migrations/20260701_order_expiration_inventory_release.sql");
+  assert.match(migration, /payment_expires_at/);
+  assert.match(migration, /reservation_released_at/);
+  assert.match(migration, /create or replace function public\.expire_unpaid_order/);
+  assert.match(migration, /for update/);
+  assert.match(migration, /payment_status = 'paid'/);
+  assert.match(migration, /status in \('paid','processing','delivered','completed','refunded'\)/);
+  assert.match(migration, /update public\.payment_sessions[\s\S]*status = case when status in \('pending','processing'\) then 'expired'/);
+  assert.match(migration, /update public\.product_skus[\s\S]*stock = s\.stock \+ oi\.quantity/);
+  assert.match(migration, /update public\.products p[\s\S]*stock = p\.stock \+ oi\.quantity/);
+  assert.match(migration, /update public\.digital_inventory[\s\S]*status = 'available'/);
+  assert.match(migration, /delivered_at is null/);
+  assert.match(migration, /create trigger trg_orders_set_payment_expiration/);
+});
+
+test("order expiration internal API requires job secret and does not expose sensitive payloads", () => {
+  const route = file("app/api/internal/orders/expire/route.ts");
+  const service = file("lib/orders/order-expiration.ts");
+  assert.match(route, /assertOrderExpirationJobAuthorized/);
+  assert.match(route, /checkRateLimit\("internal_task"/);
+  assert.match(route, /processExpiredOrders/);
+  assert.doesNotMatch(route, /customer_email|delivery_content|secret_config|provider_raw/i);
+  assert.match(service, /ORDER_EXPIRATION_JOB_SECRET/);
+  assert.match(service, /INTERNAL_JOB_SECRET/);
+  assert.match(service, /service\.rpc\("expire_unpaid_order"/);
+  assert.match(service, /service\.rpc\("list_expirable_unpaid_orders"/);
+});
+
+test("admin order manual expiration uses unified service and audit log", () => {
+  const route = file("app/api/admin/orders/[orderId]/route.ts");
+  assert.match(route, /expireUnpaidOrder/);
+  assert.match(route, /action\?: .*expire_unpaid_order/);
+  assert.match(route, /关闭未支付订单必须填写原因/);
+  assert.match(route, /writeAdminAuditLog/);
+  assert.doesNotMatch(route, /status\s*=\s*["']cancelled["']/);
+});
+
+test("legal checkout requires versioned agreements and server-side recording", () => {
+  const migration = file("supabase/migrations/20260701_legal_documents_order_evidence.sql");
+  const checkout = file("app/checkout/page.tsx");
+  const orders = file("app/api/orders/route.ts");
+  const legal = file("lib/legal/legal-service.ts");
+  const relations = file("lib/admin/order-relations.ts");
+  assert.match(migration, /legal_documents/);
+  assert.match(migration, /order_agreement_acceptances/);
+  assert.match(migration, /order_evidence_events/);
+  assert.match(migration, /content_hash/);
+  assert.match(migration, /deny direct agreement writes/i);
+  assert.match(checkout, /useState\(false\)/);
+  assert.match(checkout, /\/api\/legal\/current/);
+  assert.match(checkout, /agreement_version_ids/);
+  assert.match(orders, /verifyCheckoutAgreements/);
+  assert.match(orders, /recordOrderAgreementAcceptances/);
+  assert.match(legal, /accepted_at/);
+  assert.match(legal, /getRequestIpHash/);
+  assert.match(relations, /协议确认/);
+  assert.match(relations, /历史记录缺失/);
+});
+
+test("legal admin API manages drafts and published versions with audit logs", () => {
+  const route = file("app/api/admin/legal/route.ts");
+  assert.match(route, /getServerAdminContext/);
+  assert.match(route, /writeAdminAuditLog/);
+  assert.match(route, /create_draft|update_draft|publish|archive/);
+  assert.match(route, /publish_reason|reason/);
+  assert.doesNotMatch(route, /service_role.*json/i);
+});

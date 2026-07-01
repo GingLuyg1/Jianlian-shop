@@ -9,6 +9,7 @@
 } from "../../_shared";
 
 import { markMediaReferenceByUrl } from "@/lib/media/media-service";
+import { revalidateCategoryCache } from "@/lib/cache/cache-tags";
 
 type RouteContext = {
   params: { categoryId: string };
@@ -62,6 +63,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   await markMediaReferenceByUrl(admin.supabase, (data as { icon?: string | null }).icon, "category", params.categoryId);
+  revalidateCategoryCache({
+    id: params.categoryId,
+    parentId: String((data as { parent_id?: unknown }).parent_id ?? (before as { parent_id?: unknown }).parent_id ?? ""),
+  });
 
   await auditCatalogAction({
     request,
@@ -135,6 +140,11 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     targetLabel: String((before as { name?: unknown }).name ?? ""),
     result: "success",
     beforeSummary: before,
+  });
+
+  revalidateCategoryCache({
+    id: params.categoryId,
+    parentId: String((before as { parent_id?: unknown }).parent_id ?? ""),
   });
 
   return jsonResponse({ ok: true });

@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
+import { expireUnpaidOrder } from "@/lib/orders/order-expiration";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
   ORDER_STATUS_VALUES,
@@ -189,7 +190,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     const body = (await request.json().catch(() => null)) as
       | {
-          action?: "retry_auto_delivery" | "manual_inventory" | "manual_content" | "mark_failed";
+          action?: "retry_auto_delivery" | "manual_inventory" | "manual_content" | "mark_failed" | "expire_unpaid_order";
           delivery_type?: string;
           delivery_content?: string;
           delivery_status?: string;
@@ -199,6 +200,44 @@ export async function POST(request: Request, context: RouteContext) {
         }
       | null;
 
+    if (body?.action === "expire_unpaid_order") {
+      const reason = String(body.note ?? "").trim();
+      if (!reason) {
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "expire_unpaid_order",
+          module: "orders",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "failed",
+          errorCode: "missing_reason",
+          errorMessage: "关闭未支付订单必须填写原因",
+        });
+        return NextResponse.json({ error: "请填写关闭原因" }, { status: 400 });
+      }
+
+      const result = await expireUnpaidOrder(context.params.orderId, `admin:${reason}`);
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "expire_unpaid_order",
+        module: "orders",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: result.ok ? "success" : "failed",
+        errorCode: result.ok ? null : result.code,
+        errorMessage: result.ok ? null : result.message,
+        afterSummary: {
+          code: result.code,
+          released_normal: result.releasedNormal ?? 0,
+          released_sku: result.releasedSku ?? 0,
+          released_digital: result.releasedDigital ?? 0,
+          request_id: result.requestId,
+        },
+      });
+      return NextResponse.json({ result });
+    }
     if (body?.action === "retry_auto_delivery") {
       try {
         const result = await deliverDigitalOrder(admin.supabase, context.params.orderId, "admin_retry");
@@ -214,7 +253,7 @@ export async function POST(request: Request, context: RouteContext) {
         });
         return NextResponse.json({ deliveredCount: result.delivered_count ?? 0, result });
       } catch (deliveryError) {
-        const message = getDeliveryErrorMessage(deliveryError, "自动发货重试失败");
+        const message = getDeliveryErrorMessage(deliveryError, "鑷姩鍙戣揣閲嶈瘯澶辫触");
         await writeAdminAuditLog({
           request,
           admin: auditAdmin,
@@ -253,7 +292,7 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       if (error) {
-        const message = getOrderErrorMessage(error, "手动选择库存发货失败");
+        const message = getOrderErrorMessage(error, "鎵嬪姩閫夋嫨搴撳瓨鍙戣揣澶辫触");
         await writeAdminAuditLog({
           request,
           admin: auditAdmin,
@@ -289,7 +328,7 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       if (error) {
-        const message = getOrderErrorMessage(error, "交付失败标记失败");
+        const message = getOrderErrorMessage(error, "浜や粯澶辫触鏍囪澶辫触");
         await writeAdminAuditLog({
           request,
           admin: auditAdmin,
@@ -343,7 +382,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     if (error) {
-      const message = getOrderErrorMessage(error, "交付信息保存失败");
+      const message = getOrderErrorMessage(error, "浜や粯淇℃伅淇濆瓨澶辫触");
       await writeAdminAuditLog({
         request,
         admin: auditAdmin,
@@ -381,7 +420,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ delivery: data });
   } catch (error) {
     console.error("[Admin Orders] delivery update failed", error);
-    const message = getOrderErrorMessage(error, "交付信息保存失败");
+    const message = getOrderErrorMessage(error, "浜や粯淇℃伅淇濆瓨澶辫触");
     await writeAdminAuditLog({
       request,
       admin: auditAdmin,
@@ -395,3 +434,4 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

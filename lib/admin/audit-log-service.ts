@@ -15,8 +15,9 @@ export type AdminAuditModule =
   | "delivery"
   | "settings"
   | "system"
-  | "privacy";
-export type AdminAuditResult = "success" | "failed" | "denied";
+  | "privacy"
+  | "notifications";
+export type AdminAuditResult = "success" | "failed" | "denied" | "partial";
 
 export type AdminAuditUser = {
   id?: string | null;
@@ -39,6 +40,26 @@ export type AdminAuditInput = {
   afterSummary?: unknown;
   metadata?: unknown;
 };
+
+export const HIGH_RISK_AUDIT_ACTIONS = new Set([
+  "adjust_user_balance",
+  "approve_refund",
+  "reject_refund",
+  "update_user_account_status",
+  "update_user_risk_status",
+  "manual_deliver_order_item",
+  "retry_digital_delivery",
+  "disable_inventory_batch",
+  "restore_inventory_batch",
+  "delete_media_asset",
+  "delete_category",
+  "update_site_settings",
+  "toggle_maintenance_mode",
+]);
+
+export function isHighRiskAuditAction(action: string) {
+  return HIGH_RISK_AUDIT_ACTIONS.has(action);
+}
 
 const SENSITIVE_KEY_PATTERN =
   /password|token|secret|api[_-]?key|sign|signature|private|credential|content|card|code|payload|raw|callback|proof|cookie|authorization/i;
@@ -137,6 +158,16 @@ export async function writeAdminAuditLog(input: AdminAuditInput) {
     console.error("[AdminAudit] unexpected write failure", error);
     return { ok: false, error };
   }
+}
+
+
+
+export async function writeRequiredAdminAuditLog(input: AdminAuditInput) {
+  const result = await writeAdminAuditLog(input);
+  if (!result.ok) {
+    throw new Error("审计日志写入失败，敏感操作已中止。");
+  }
+  return result;
 }
 
 
