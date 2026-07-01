@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CreditCard,
@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Minus,
   Bot,
+  ChevronDown,
   Plus,
   RefreshCcw,
   ShieldCheck,
@@ -37,6 +38,12 @@ import {
   getProductByIdOrSlug,
   type PublicProductRow,
 } from "@/lib/supabase/public-catalog";
+import {
+  DEFAULT_PAYMENT_METHOD,
+  getPaymentMethodOption,
+  PAYMENT_METHOD_OPTIONS,
+  type PaymentMethodCode,
+} from "@/lib/payments/payment-methods";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -146,6 +153,8 @@ export default function CheckoutPage() {
   const [shippingAddress, setShippingAddress] = useState("");
   const [customerNote, setCustomerNote] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(DEFAULT_PAYMENT_METHOD);
+  const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
   const [legalDocuments, setLegalDocuments] = useState<LegalDocument[]>([]);
@@ -156,6 +165,32 @@ export default function CheckoutPage() {
   const [productLoading, setProductLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
+  const paymentDropdownRef = useRef<HTMLDivElement | null>(null);
+  const clientRequestIdRef = useRef("");
+
+  useEffect(() => {
+    if (!paymentDropdownOpen) return;
+
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      const target = event.target;
+      if (target instanceof Node && !paymentDropdownRef.current?.contains(target)) {
+        setPaymentDropdownOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setPaymentDropdownOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [paymentDropdownOpen]);
 
   useEffect(() => {
     let active = true;
@@ -295,6 +330,13 @@ export default function CheckoutPage() {
     setSubmitLoading(true);
 
     try {
+      if (!clientRequestIdRef.current) {
+        clientRequestIdRef.current =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
+
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: {
@@ -303,6 +345,8 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           product_id: productRow.id,
           quantity,
+          payment_method: paymentMethod,
+          client_request_id: clientRequestIdRef.current,
           customer_email: email,
           customer_name: customerName,
           customer_phone: customerPhone,
