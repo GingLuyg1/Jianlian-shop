@@ -531,19 +531,26 @@ export default function AdminProductsPage() {
     const payload = buildProductPayload();
     if (!payload) return;
 
+    const editingProductId = productForm.id?.trim();
+    if (editingProductId && editingProductId !== productInitialForm?.id) {
+      setError("商品保存失败，当前编辑商品已变化，请重新打开后再保存");
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const savedProduct = productForm.id
-        ? await updateProduct(productForm.id, payload)
+      const savedProduct = editingProductId
+        ? await updateProduct(editingProductId, payload)
         : await createProduct(payload);
       const savedForm = toProductForm(savedProduct, categoryMap, categories);
       mergeSavedProductIntoList(savedProduct);
       setProductInitialForm(savedForm);
       setProductForm(savedForm);
       setProductErrors({});
-      setMessage(productForm.id ? "\u5546\u54c1\u66f4\u65b0\u6210\u529f" : "\u5546\u54c1\u521b\u5efa\u6210\u529f");
+      setMessage(editingProductId ? "\u5546\u54c1\u66f4\u65b0\u6210\u529f" : "\u5546\u54c1\u521b\u5efa\u6210\u529f");
       closeProductDialogAfterSave();
-      await Promise.all([loadProducts(), loadCategories()]);
+      void loadProducts();
+      void loadCategories();
     } catch (saveError) {
       const text = getErrorText(saveError, "商品保存失败");
       if (text.toLowerCase().includes("duplicate") || text.includes("slug")) {

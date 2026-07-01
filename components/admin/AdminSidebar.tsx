@@ -45,6 +45,7 @@ const adminMenuItems = [
   { label: "系统设置", href: "/admin/settings", icon: Settings },
   { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
   { label: "请求追踪", href: "/admin/system/request-traces", icon: Route },
+  { label: "事务补偿", href: "/admin/system/compensations", icon: AlertTriangle },
   { label: "项目验收", href: "/admin/system/project-status", icon: ClipboardCheck },
   { label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
   { label: "生产看板", href: "/admin/system/production-readiness", icon: ShieldCheck },

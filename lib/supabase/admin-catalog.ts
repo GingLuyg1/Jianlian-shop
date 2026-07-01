@@ -300,8 +300,12 @@ export async function createProduct(payload: ProductPayload) {
 }
 
 export async function updateProduct(id: string, payload: ProductPayload) {
+  const productId = id.trim();
+  if (!productId) {
+    throw new Error("\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u5546\u54c1 ID \u4e0d\u80fd\u4e3a\u7a7a");
+  }
   const result = await adminCatalogRequest<{ product: Record<string, unknown> }>(
-    `/api/admin/catalog/products/${id}`,
+    `/api/admin/catalog/products/${encodeURIComponent(productId)}`,
     {
       method: "PATCH",
       body: JSON.stringify(payload),
