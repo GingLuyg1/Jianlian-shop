@@ -335,17 +335,15 @@ function NativeSelect({
   );
 }
 
-function AdminOrderDrawer({
-  order,
-  onClose,
-  onUpdated,
-  onRefresh,
-}: {
+type AdminOrderDrawerProps = {
   order: OrderRecord;
   onClose: () => void;
   onUpdated: (order: OrderRecord) => void;
   onRefresh: () => void;
-}) {
+};
+
+function AdminOrderDrawer(props: AdminOrderDrawerProps) {
+  const { order, onClose, onUpdated, onRefresh } = props;
   const [working, setWorking] = useState(false);
   const [relations, setRelations] = useState<RelationsPayload | null>(null);
   const [relationsLoading, setRelationsLoading] = useState(true);
@@ -672,4 +670,5 @@ function InfoRow({ label, value, mono = false, strong = false }: { label: string
     </div>
   );
 }
+
 
