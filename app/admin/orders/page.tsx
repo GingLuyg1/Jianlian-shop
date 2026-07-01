@@ -298,6 +298,7 @@ export default function AdminOrdersPage() {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onUpdated={updateOrderInList}
+          onRefresh={() => void loadOrders()}
         />
       ) : null}
     </div>
@@ -338,10 +339,12 @@ function AdminOrderDrawer({
   order,
   onClose,
   onUpdated,
+  onRefresh,
 }: {
   order: OrderRecord;
   onClose: () => void;
   onUpdated: (order: OrderRecord) => void;
+  onRefresh: () => void;
 }) {
   const [working, setWorking] = useState(false);
   const [relations, setRelations] = useState<RelationsPayload | null>(null);
@@ -391,6 +394,46 @@ function AdminOrderDrawer({
     }
   }
 
+  async function expireUnpaidOrderManually() {
+    if (orderStatus !== "pending_payment" || paymentStatus !== "unpaid") {
+      toast.error("只有未支付的待支付订单可以关闭");
+      return;
+    }
+    const reason = window.prompt(`确认关闭未支付订单 ${getOrderNo(order)} 并释放库存预留？请输入操作原因：`);
+    if (reason === null) return;
+    const note = reason.trim();
+    if (!note) {
+      toast.error("请填写关闭原因");
+      return;
+    }
+    setWorking(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "expire_unpaid_order", note }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.result?.ok === false) {
+        throw new Error(payload?.error || payload?.result?.message || "关闭未支付订单失败");
+      }
+      const nextOrder = {
+        ...order,
+        status: payload?.result?.code === "already_closed" ? order.status : "cancelled",
+        payment_status: order.payment_status === "paid" ? order.payment_status : "failed",
+        cancelled_at: order.cancelled_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as OrderRecord;
+      onUpdated(nextOrder);
+      onRefresh();
+      toast.success("未支付订单已关闭，预留库存已按服务端结果释放");
+      void loadRelations();
+    } catch (err) {
+      toast.error(getOrderErrorMessage(err));
+    } finally {
+      setWorking(false);
+    }
+  }
   const availableActions = useMemo(() => {
     const transitions: Record<OrderStatus, OrderStatus[]> = {
       pending_payment: ["paid", "cancelled", "failed"],
@@ -470,18 +513,26 @@ function AdminOrderDrawer({
           <Card className="mt-4">
             <CardHeader className="px-4 py-3"><CardTitle className="text-base">状态操作</CardTitle></CardHeader>
             <CardContent className="px-4 pb-4">
-              {availableActions.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {availableActions.map((nextStatus) => (
-                    <Button key={nextStatus} size="sm" variant={nextStatus === "cancelled" || nextStatus === "failed" ? "destructive" : "outline"} disabled={working} onClick={() => void updateStatus(nextStatus)}>
-                      {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      {getOrderStatusLabel(nextStatus)}
-                    </Button>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-slate-500">当前状态没有可执行的流转操作。</div>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {availableActions.map((nextStatus) => (
+                  <Button key={nextStatus} size="sm" variant={nextStatus === "cancelled" || nextStatus === "failed" ? "destructive" : "outline"} disabled={working} onClick={() => void updateStatus(nextStatus)}>
+                    {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {getOrderStatusLabel(nextStatus)}
+                  </Button>
+                ))}
+                {orderStatus === "pending_payment" && paymentStatus === "unpaid" ? (
+                  <Button size="sm" variant="destructive" disabled={working} onClick={() => void expireUnpaidOrderManually()}>
+                    {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    关闭未支付订单并释放预留
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="ghost" disabled={working || relationsLoading} onClick={() => void loadRelations()}>
+                  重新读取处理记录
+                </Button>
+                {!availableActions.length && !(orderStatus === "pending_payment" && paymentStatus === "unpaid") ? (
+                  <div className="text-sm text-slate-500">当前状态没有可执行的流转操作。</div>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
 
@@ -621,3 +672,4 @@ function InfoRow({ label, value, mono = false, strong = false }: { label: string
     </div>
   );
 }
+
