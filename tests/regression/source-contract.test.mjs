@@ -13,8 +13,10 @@ test("order API whitelists input and does not accept frontend price fields", () 
   assert.match(source, /ORDER_CREATE_ALLOWED_KEYS/);
   assert.match(source, /client_request_id/);
   assert.match(source, /create_order_with_item/);
-  assert.doesNotMatch(source, /ORDER_CREATE_ALLOWED_KEYS[\s\S]*price/);
-  assert.doesNotMatch(source, /ORDER_CREATE_ALLOWED_KEYS[\s\S]*total_amount/);
+  const allowedKeysBlock = source.match(/const ORDER_CREATE_ALLOWED_KEYS = new Set\(\[[\s\S]*?\]\);/)?.[0] ?? "";
+  assert.ok(allowedKeysBlock, "ORDER_CREATE_ALLOWED_KEYS block should be present");
+  assert.doesNotMatch(allowedKeysBlock, /price/i);
+  assert.doesNotMatch(allowedKeysBlock, /total_amount/i);
 });
 
 test("order creation RPC recalculates product and SKU amounts server-side", () => {
@@ -284,3 +286,4 @@ test("legal admin API manages drafts and published versions with audit logs", ()
   assert.match(route, /publish_reason|reason/);
   assert.doesNotMatch(route, /service_role.*json/i);
 });
+
