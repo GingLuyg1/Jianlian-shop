@@ -292,7 +292,7 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       if (error) {
-        const message = getOrderErrorMessage(error, "鎵嬪姩閫夋嫨搴撳瓨鍙戣揣澶辫触");
+        const message = getOrderErrorMessage(error, "手动选择库存发货失败");
         await writeAdminAuditLog({
           request,
           admin: auditAdmin,
@@ -434,4 +434,5 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
 

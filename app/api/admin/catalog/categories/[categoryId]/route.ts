@@ -24,7 +24,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .select(CATEGORY_FIELDS)
     .eq("id", params.categoryId)
     .maybeSingle();
-  if (beforeError || !before) return jsonResponse({ error: "鍒嗙被涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎" }, 404);
+  if (beforeError || !before) return jsonResponse({ error: "分类不存在或已被删除" }, 404);
 
   const body = parseBody(await request.json().catch(() => ({})));
   const { payload, errors } = normalizeCategoryPayload(body, true);
@@ -32,7 +32,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return jsonResponse({ error: "分类信息填写不完整", errors }, 400);
   }
   if (Object.keys(payload).length === 0) {
-    return jsonResponse({ error: "娌℃湁闇€瑕佷繚瀛樼殑鍒嗙被鍙樻洿" }, 400);
+    return jsonResponse({ error: "没有需要保存的分类变更" }, 400);
   }
 
   const nextLevel = payload.level ?? ((before as { level?: 1 | 2 }).level ?? 1);
@@ -93,7 +93,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     .select(CATEGORY_FIELDS)
     .eq("id", params.categoryId)
     .maybeSingle();
-  if (beforeError || !before) return jsonResponse({ error: "鍒嗙被涓嶅瓨鍦ㄦ垨宸茶鍒犻櫎" }, 404);
+  if (beforeError || !before) return jsonResponse({ error: "分类不存在或已被删除" }, 404);
 
   const { count: childCount, error: childError } = await admin.supabase
     .from("categories")
@@ -108,7 +108,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     .from("products")
     .select("id", { count: "exact", head: true })
     .eq("category_id", params.categoryId);
-  if (productError) return jsonResponse({ error: "鍒嗙被鍟嗗搧鏍￠獙澶辫触锛岃绋嶅悗閲嶈瘯" }, 400);
+  if (productError) return jsonResponse({ error: "分类商品校验失败，请稍后重试" }, 400);
   if ((productCount ?? 0) > 0) {
     return jsonResponse({ error: "该分类下还有关联商品，请先移动商品后再删除" }, 400);
   }
@@ -149,5 +149,6 @@ export async function DELETE(request: Request, { params }: RouteContext) {
 
   return jsonResponse({ ok: true });
 }
+
 
 

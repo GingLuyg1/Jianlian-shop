@@ -273,7 +273,6 @@ export default function SupabaseMallContent({
         setDeliveryTypes(result.deliveryTypes ?? []);
         setTotal(result.total);
         setTotalPages(result.totalPages);
-        setDeliveryTypes(result.deliveryTypes);
       } catch (loadError) {
         if (!mounted || requestId !== productRequestIdRef.current) return;
         setProducts([]);
@@ -709,6 +708,7 @@ function deliveryLabel(value: string) {
   if (value === "manual") return "人工处理";
   return value;
 }
+
 
 
 
