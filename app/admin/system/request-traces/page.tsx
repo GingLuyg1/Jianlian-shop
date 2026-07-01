@@ -28,7 +28,7 @@ export default function AdminRequestTraceSearchPage() {
   return (
     <AdminPageShell
       title="请求追踪"
-      description="根据 Request ID 汇总系统异常、审计日志和业务事件，辅助定位慢请求和线上故障。"
+      description="根据 Request ID 汇总系统异常、审计日志和业务事件，用于定位慢请求和线上故障。"
     >
       <Card className="max-w-3xl">
         <CardHeader>
