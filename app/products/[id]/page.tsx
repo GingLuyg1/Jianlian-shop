@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -49,6 +48,8 @@ const REQUIRED_AGREEMENT_TYPES = [
 type LegalDocument = {
   id: string;
   document_type: string;
+  version?: string;
+  title?: string;
   content_hash: string;
 };
 
@@ -63,17 +64,17 @@ function getCategoryPath(categories: PublicCategory[], categoryId: string | null
   if (!categoryId) return "未分类";
 
   const byId = new Map(categories.map((category) => [category.id, category]));
-  const path: string[] = [];
+  const path: PublicCategory[] = [];
   const seen = new Set<string>();
   let current = byId.get(categoryId) ?? null;
 
   while (current && !seen.has(current.id)) {
     seen.add(current.id);
-    path.unshift(current.name);
+    path.unshift(current);
     current = current.parent_id ? byId.get(current.parent_id) ?? null : null;
   }
 
-  return path.join(" / ") || "未分类";
+  return path.length > 0 ? path.map((category) => category.name).join(" / ") : "未分类";
 }
 
 function formatPrice(symbol: string, value: number | null | undefined) {
@@ -95,6 +96,10 @@ function getStatusLabel(product: PublicProductRow, soldOut: boolean) {
   if (product.status === FRONTEND_ACTIVE_PRODUCT_STATUS && !soldOut) return "可购买";
   if (product.status === "sold_out" || soldOut) return "已售罄";
   return "已下架";
+}
+
+function isEmailLike(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function InfoItem({
@@ -150,7 +155,7 @@ export default function ProductDetailPage() {
     () => getCategoryPath(categories, product?.category_id ?? null),
     [categories, product?.category_id]
   );
-  const unitPrice = selectedSku ? selectedSku.price : Number(product?.price ?? 0);
+  const unitPrice = selectedSku ? Number(selectedSku.price ?? 0) : Number(product?.price ?? 0);
   const originalPrice = selectedSku ? selectedSku.original_price : product?.original_price ?? null;
   const availableStock = selectedSku ? Number(selectedSku.stock ?? 0) : Number(product?.stock ?? 0);
   const deliveryType = selectedSku?.delivery_type || product?.delivery_type || "manual";
@@ -162,7 +167,7 @@ export default function ProductDetailPage() {
     hasSkus &&
       (!selectedSku ||
         selectedSku.status !== FRONTEND_ACTIVE_PRODUCT_STATUS ||
-        Number(selectedSku.stock) <= 0)
+        Number(selectedSku.stock ?? 0) <= 0)
   );
   const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) =>
     legalDocuments.find((doc) => doc.document_type === type)
@@ -173,16 +178,18 @@ export default function ProductDetailPage() {
     document_version_id: doc!.id,
     content_hash: doc!.content_hash,
   }));
+  const selectedPaymentOption = PAYMENT_METHOD_OPTIONS.find((option) => option.code === paymentMethod);
+  const paymentUnavailable = paymentMethod !== "balance";
+  const quantityInvalid = quantity < 1 || quantity > Math.max(availableStock, 0);
 
   const canSubmit = Boolean(
     product &&
       !productInactive &&
       !productSoldOut &&
       !selectedSkuUnavailable &&
-      quantity >= 1 &&
-      quantity <= availableStock &&
-      contactEmail.trim() &&
-      paymentMethod === "balance" &&
+      !quantityInvalid &&
+      isEmailLike(contactEmail) &&
+      !paymentUnavailable &&
       agreementChecked &&
       !legalLoading &&
       !legalError &&
@@ -220,16 +227,18 @@ export default function ProductDetailPage() {
         return;
       }
 
-      const activeSku = detail.skus.find(
-        (sku) => sku.status === FRONTEND_ACTIVE_PRODUCT_STATUS && Number(sku.stock) > 0
+      const firstPurchasableSku = detail.skus.find(
+        (sku) => sku.status === FRONTEND_ACTIVE_PRODUCT_STATUS && Number(sku.stock ?? 0) > 0
       );
+      const firstVisibleSku = detail.skus[0];
       setProduct(detail.product);
       setSkus(detail.skus);
       setSkuError(detail.sku_error ?? "");
       setCategories(categoryRows);
-      setSelectedSkuId(activeSku?.id ?? "");
+      setSelectedSkuId(firstPurchasableSku?.id ?? firstVisibleSku?.id ?? "");
       setQuantity(1);
       setAgreementChecked(false);
+      setPaymentMethod(DEFAULT_PAYMENT_METHOD);
       setStatus("ready");
     } catch (error) {
       if (loadSeqRef.current !== seq) return;
@@ -277,47 +286,36 @@ export default function ProductDetailPage() {
   }, []);
 
   function changeQuantity(next: number) {
-    const max = Math.max(1, availableStock);
-    setQuantity(Math.max(1, Math.min(max, next)));
+    const max = Math.max(1, availableStock || 1);
+    setQuantity(Math.max(1, Math.min(max, Math.floor(next))));
+  }
+
+  function validateSubmit() {
+    if (!product) return "商品尚未加载完成";
+    if (productInactive) return "商品已下架，暂不支持购买。";
+    if (productSoldOut) return "商品已售罄，暂不支持购买。";
+    if (hasSkus && !selectedSku) return "请先选择完整商品规格。";
+    if (selectedSkuUnavailable) return "当前规格不可购买，请重新选择。";
+    if (quantityInvalid) return "购买数量超出当前库存。";
+    if (!isEmailLike(contactEmail)) return "请填写有效的联系邮箱。";
+    if (paymentUnavailable) return "该支付方式暂未开放，请选择余额支付。";
+    if (legalLoading) return "协议正在加载，请稍后再试。";
+    if (legalError) return legalError;
+    if (!agreementsReady) return "协议版本未配置完整，请稍后重试。";
+    if (!agreementChecked) return "请先阅读并确认商品说明、购买须知和订单协议。";
+    return "";
   }
 
   async function handleSubmit() {
-    if (!product || submitting) return;
+    if (submitting) return;
+    const validationError = validateSubmit();
+    if (validationError) {
+      setSubmitError(validationError);
+      return;
+    }
+    if (!product) return;
+
     setSubmitError("");
-
-    if (productInactive) {
-      setSubmitError("商品已下架，暂不可购买。");
-      return;
-    }
-    if (productSoldOut) {
-      setSubmitError("商品已售罄，暂不可购买。");
-      return;
-    }
-    if (hasSkus && !selectedSku) {
-      setSubmitError("请先选择完整商品规格。");
-      return;
-    }
-    if (selectedSkuUnavailable) {
-      setSubmitError("当前规格不可购买，请重新选择。");
-      return;
-    }
-    if (quantity < 1 || quantity > availableStock) {
-      setSubmitError("购买数量超出当前库存。");
-      return;
-    }
-    if (!contactEmail.trim()) {
-      setSubmitError("请填写联系邮箱。");
-      return;
-    }
-    if (paymentMethod !== "balance") {
-      setSubmitError("该支付方式暂未开放，请选择余额支付。");
-      return;
-    }
-    if (legalLoading || legalError || !agreementsReady || !agreementChecked) {
-      setSubmitError(legalError || "请先阅读并确认商品说明、购买须知和订单协议。");
-      return;
-    }
-
     setSubmitting(true);
     try {
       if (!clientRequestIdRef.current) {
@@ -334,7 +332,6 @@ export default function ProductDetailPage() {
           product_id: product.id,
           sku_id: selectedSku?.id ?? null,
           quantity,
-          contact_email: contactEmail.trim(),
           customer_email: contactEmail.trim(),
           payment_method: paymentMethod,
           agreement_version_ids: agreementPayload,
@@ -367,20 +364,34 @@ export default function ProductDetailPage() {
   return (
     <PublicLayout>
       <div className="mx-auto w-full max-w-[1420px] px-4 py-5 lg:px-7">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          返回上一页
-        </button>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            返回上一页
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="text-sm text-muted-foreground hover:text-primary"
+          >
+            返回首页
+          </button>
+        </div>
 
         {status === "loading" ? (
           <Card>
             <CardContent className="p-8">
-              <div className="h-6 w-48 animate-pulse rounded bg-orange-100" />
-              <div className="mt-4 h-48 animate-pulse rounded-xl bg-orange-50" />
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
+                <div className="space-y-4">
+                  <div className="h-80 animate-pulse rounded-2xl bg-orange-50" />
+                  <div className="h-32 animate-pulse rounded-2xl bg-orange-50" />
+                </div>
+                <div className="h-96 animate-pulse rounded-2xl bg-orange-50" />
+              </div>
             </CardContent>
           </Card>
         ) : status === "read_failed" ? (
@@ -388,14 +399,14 @@ export default function ProductDetailPage() {
         ) : status === "not_found" || !product ? (
           <StateCard
             title="商品不存在"
-            description="当前商品可能已下架或链接已失效。"
+            description="当前商品可能已删除，或链接已失效。"
             tone="warning"
           />
         ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
             <main className="min-w-0 space-y-5">
               <Card>
-                <CardContent className="grid gap-5 p-5 sm:grid-cols-[220px_minmax(0,1fr)]">
+                <CardContent className="grid gap-5 p-5 sm:grid-cols-[240px_minmax(0,1fr)]">
                   <div className="aspect-square overflow-hidden rounded-2xl border border-orange-100 bg-white">
                     <img
                       src={selectedSku?.image_url || product.image_url || PRODUCT_IMAGE_FALLBACK}
@@ -447,11 +458,11 @@ export default function ProductDetailPage() {
 
                     {productInactive ? (
                       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                        商品已下架，暂不可购买。
+                        商品已下架，暂不支持购买。
                       </div>
                     ) : productSoldOut ? (
                       <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                        商品已售罄，可查看详情但暂不可下单。
+                        商品已售罄，可查看详情但暂不支持下单。
                       </div>
                     ) : null}
                   </div>
@@ -473,7 +484,7 @@ export default function ProductDetailPage() {
                     <InfoItem
                       icon={ShieldCheck}
                       title="安全合规"
-                      desc="下单前请核对用途，非商品问题不支持退换。"
+                      desc="下单前请核对商品用途，非商品问题不支持退换。"
                     />
                     <InfoItem
                       icon={PackageCheck}
@@ -519,15 +530,19 @@ export default function ProductDetailPage() {
                       <div className="grid gap-2">
                         {skus.map((sku, index) => {
                           const disabled =
-                            sku.status !== FRONTEND_ACTIVE_PRODUCT_STATUS || Number(sku.stock) <= 0;
+                            sku.status !== FRONTEND_ACTIVE_PRODUCT_STATUS || Number(sku.stock ?? 0) <= 0;
                           const active = sku.id === selectedSkuId;
 
                           return (
                             <button
                               key={sku.id}
                               type="button"
-                              disabled={disabled}
-                              onClick={() => setSelectedSkuId(sku.id)}
+                              disabled={disabled || submitting}
+                              onClick={() => {
+                                setSelectedSkuId(sku.id);
+                                setQuantity(1);
+                                setSubmitError("");
+                              }}
                               className={cn(
                                 "rounded-xl border px-3 py-2 text-left transition",
                                 active
@@ -542,6 +557,7 @@ export default function ProductDetailPage() {
                               </div>
                               <div className="mt-1 text-xs text-muted-foreground">
                                 库存：{Number(sku.stock ?? 0)}
+                                {disabled ? "，暂不可购买" : ""}
                               </div>
                             </button>
                           );
@@ -566,7 +582,7 @@ export default function ProductDetailPage() {
                     <div className="flex w-36 items-center rounded-xl border border-orange-100 bg-white">
                       <button
                         type="button"
-                        className="px-3 py-2"
+                        className="px-3 py-2 disabled:opacity-40"
                         onClick={() => changeQuantity(quantity - 1)}
                         disabled={quantity <= 1 || submitting}
                       >
@@ -575,7 +591,7 @@ export default function ProductDetailPage() {
                       <Input className="h-9 border-0 text-center shadow-none" value={quantity} readOnly />
                       <button
                         type="button"
-                        className="px-3 py-2"
+                        className="px-3 py-2 disabled:opacity-40"
                         onClick={() => changeQuantity(quantity + 1)}
                         disabled={quantity >= availableStock || submitting || productSoldOut}
                       >
@@ -604,13 +620,16 @@ export default function ProductDetailPage() {
                       disabled={submitting}
                     >
                       {PAYMENT_METHOD_OPTIONS.map((option) => (
-                        <option key={option.code} value={option.code}>
+                        <option key={option.code} value={option.code} disabled={option.code !== "balance"}>
                           {option.label}
                           {option.code === "balance" ? "" : "（暂未开放）"}
                         </option>
                       ))}
                     </select>
-                    {paymentMethod !== "balance" ? (
+                    {selectedPaymentOption?.description ? (
+                      <p className="mt-2 text-xs text-muted-foreground">{selectedPaymentOption.description}</p>
+                    ) : null}
+                    {paymentUnavailable ? (
                       <p className="mt-2 text-xs text-amber-700">
                         该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
                       </p>
@@ -623,9 +642,9 @@ export default function ProductDetailPage() {
                       className="mt-1"
                       checked={agreementChecked}
                       onChange={(event) => setAgreementChecked(event.target.checked)}
-                      disabled={submitting}
+                      disabled={submitting || legalLoading || Boolean(legalError)}
                     />
-                    <span>我已阅读并确认商品说明、购买须知和订单协议。</span>
+                    <span>我已阅读并确认商品说明、购买须知、退款政策和订单协议。</span>
                   </label>
 
                   {legalLoading ? (
@@ -650,7 +669,7 @@ export default function ProductDetailPage() {
                   ) : null}
 
                   <Button className="h-11 w-full" disabled={!canSubmit} onClick={handleSubmit}>
-                    {submitting ? "正在创建订单..." : paymentMethod === "balance" ? "立即购买" : "暂未开放"}
+                    {submitting ? "正在创建订单..." : "立即购买"}
                   </Button>
                 </CardContent>
               </Card>
@@ -685,12 +704,10 @@ function StateCard({
           {onRetry ? (
             <Button onClick={onRetry}>
               <RefreshCw className="mr-2 h-4 w-4" />
-              重试
+              重新加载
             </Button>
           ) : null}
-          <Button variant="outline" asChild>
-            <Link href="/">返回首页</Link>
-          </Button>
+          <Button variant="outline" onClick={() => window.location.assign("/")}>返回首页</Button>
         </div>
       </CardContent>
     </Card>
