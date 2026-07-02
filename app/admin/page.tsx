@@ -156,6 +156,10 @@ const CHANNELS = [
   { code: "usdt_bep20", label: "USDT-BEP20" },
 ] as const;
 
+const INITIALIZING = "待初始化";
+const READ_FAILED = "读取失败";
+const BUSINESS_TIME_ZONE = "Asia/Shanghai";
+
 const NOT_CONNECTED = "未接入";
 const FAILED = "加载失败";
 
@@ -173,6 +177,21 @@ function addDays(date: Date, days: number) {
 
 function formatDateKey(date: Date) {
   return date.toISOString().slice(0, 10);
+}
+
+function formatBusinessDateKey(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : formatDateKey(date);
 }
 
 function formatMoney(value: number | null | undefined) {
@@ -220,13 +239,13 @@ function aggregateByDate<T extends Record<string, unknown>>(
   const today = startOfToday();
   const map = new Map<string, number>();
   for (let index = days - 1; index >= 0; index -= 1) {
-    map.set(formatDateKey(addDays(today, -index)), 0);
+    map.set(formatBusinessDateKey(addDays(today, -index)), 0);
   }
 
   rows.forEach((row) => {
     const rawDate = getDate(row);
     if (!rawDate) return;
-    const key = formatDateKey(new Date(rawDate));
+    const key = formatBusinessDateKey(new Date(rawDate));
     if (!map.has(key)) return;
     map.set(key, (map.get(key) ?? 0) + getValue(row));
   });
@@ -249,7 +268,7 @@ function createEmptyTrend(days: number) {
   return Array.from({ length: days }, (_, index) => {
     const date = addDays(today, index - days + 1);
     return {
-      date: formatDateKey(date),
+      date: formatBusinessDateKey(date),
       payAmount: null,
       rechargeAmount: null,
       orderCount: null,
@@ -284,7 +303,7 @@ function makeTrend(
       viewMap?.set(point.date, 0);
     });
     visits.forEach((visit) => {
-      const key = formatDateKey(new Date(visit.visit_date));
+      const key = formatBusinessDateKey(new Date(visit.visit_date));
       if (!visitorMap?.has(key)) return;
       if (visit.visitor_key) visitorMap.get(key)?.add(visit.visitor_key);
       viewMap?.set(key, (viewMap.get(key) ?? 0) + 1);
@@ -404,6 +423,13 @@ async function loadDashboardData(): Promise<DashboardData> {
   const visits = visitsResult.status === "fulfilled" && !visitsResult.value.error
     ? ((visitsResult.value.data ?? []) as Array<{ visit_date: string; visitor_key?: string | null; page_path?: string | null }>)
     : null;
+  const visitsMissing =
+    visitsResult.status === "fulfilled" &&
+    Boolean(visitsResult.value.error) &&
+    isMissingTable(visitsResult.value.error);
+  const visitsFailed =
+    visitsResult.status === "rejected" ||
+    (visitsResult.status === "fulfilled" && Boolean(visitsResult.value.error) && !visitsMissing);
   const readiness = readinessResult.status === "fulfilled" ? readinessResult.value : null;
 
   const todayOrders = orders ? orders.filter((order) => new Date(order.created_at) >= today) : null;
@@ -419,12 +445,21 @@ async function loadDashboardData(): Promise<DashboardData> {
   const yesterdayRechargeAmount = sumRows(yesterdayRecharges, (row) => row.status === "paid", (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
   const todayPaidOrders = countRows(todayOrders, (order) => order.payment_status === "paid");
 
-  const todayVisits = visits ? visits.filter((visit) => new Date(visit.visit_date) >= today) : null;
+  const todayVisitKey = formatBusinessDateKey(today);
+  const yesterdayVisitKey = formatBusinessDateKey(yesterday);
+  const todayVisits = visits ? visits.filter((visit) => formatBusinessDateKey(visit.visit_date) === todayVisitKey) : null;
+  const yesterdayVisits = visits ? visits.filter((visit) => formatBusinessDateKey(visit.visit_date) === yesterdayVisitKey) : null;
   const weekVisits = visits ? visits.filter((visit) => new Date(visit.visit_date) >= weekAgo) : null;
   const monthVisits = visits;
   const todayVisitorSet = todayVisits ? new Set(todayVisits.map((visit) => visit.visitor_key).filter(Boolean)) : null;
+  const yesterdayVisitorSet = yesterdayVisits ? new Set(yesterdayVisits.map((visit) => visit.visitor_key).filter(Boolean)) : null;
   const weekVisitorSet = weekVisits ? new Set(weekVisits.map((visit) => visit.visitor_key).filter(Boolean)) : null;
   const monthVisitorSet = monthVisits ? new Set(monthVisits.map((visit) => visit.visitor_key).filter(Boolean)) : null;
+  const visitorMetric = (value: number | null | undefined): MetricValue => {
+    if (visitsMissing) return INITIALIZING;
+    if (visitsFailed) return READ_FAILED;
+    return value ?? 0;
+  };
 
   const channelStats = CHANNELS.map((channel) => {
     const config = channels?.find((row) => row.channel_code === channel.code);
@@ -523,17 +558,19 @@ async function loadDashboardData(): Promise<DashboardData> {
       },
       {
         label: "今日访客数",
-        value: visits ? todayVisitorSet?.size ?? 0 : NOT_CONNECTED,
-        description: "去重访客",
+        value: visitsMissing ? INITIALIZING : visitsFailed ? READ_FAILED : todayVisitorSet?.size ?? 0,
+        description: `UV · ${BUSINESS_TIME_ZONE}`,
         tone: "slate",
-        change: visits ? "—" : "需执行访问统计 migration",
+        change: visits ? `昨日 ${yesterdayVisitorSet?.size ?? 0}` : visitsMissing ? "待执行访问统计 migration" : "读取失败",
+        failed: visitsFailed,
       },
       {
         label: "今日访问量",
-        value: visits ? todayVisits?.length ?? 0 : NOT_CONNECTED,
-        description: "页面访问总次数",
+        value: visitsMissing ? INITIALIZING : visitsFailed ? READ_FAILED : todayVisits?.length ?? 0,
+        description: `PV · ${BUSINESS_TIME_ZONE}`,
         tone: "slate",
-        change: visits ? "—" : "需接入埋点",
+        change: visits ? `昨日 ${yesterdayVisits?.length ?? 0}` : visitsMissing ? "待执行访问统计 migration" : "读取失败",
+        failed: visitsFailed,
       },
       {
         label: "待处理订单",
@@ -614,9 +651,9 @@ async function loadDashboardData(): Promise<DashboardData> {
       { label: "管理员数量", value: users ? users.filter((row) => row.role === "admin").length : FAILED },
     ],
     visitorStats: [
-      { label: "今日", visitors: visits ? todayVisitorSet?.size ?? 0 : NOT_CONNECTED, views: visits ? todayVisits?.length ?? 0 : NOT_CONNECTED },
-      { label: "本周", visitors: visits ? weekVisitorSet?.size ?? 0 : NOT_CONNECTED, views: visits ? weekVisits?.length ?? 0 : NOT_CONNECTED },
-      { label: "本月", visitors: visits ? monthVisitorSet?.size ?? 0 : NOT_CONNECTED, views: visits ? monthVisits?.length ?? 0 : NOT_CONNECTED },
+      { label: "今日", visitors: visitorMetric(todayVisitorSet?.size), views: visitorMetric(todayVisits?.length), failed: visitsFailed },
+      { label: "本周", visitors: visitorMetric(weekVisitorSet?.size), views: visitorMetric(weekVisits?.length), failed: visitsFailed },
+      { label: "本月", visitors: visitorMetric(monthVisitorSet?.size), views: visitorMetric(monthVisits?.length), failed: visitsFailed },
     ],
     systemStatuses,
   };

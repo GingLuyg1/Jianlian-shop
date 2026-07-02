@@ -6,6 +6,10 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 const EXCLUDED_PREFIXES = ["/admin", "/api", "/_next", "/assets", "/favicon", "/robots.txt", "/sitemap", "/health"];
 const SENSITIVE_QUERY_KEYS = ["token", "access_token", "refresh_token", "code", "password", "payment", "session", "signature", "sign", "key"];
+const MAX_BODY_BYTES = 4096;
+const DUPLICATE_WINDOW_MS = 2500;
+const BOT_USER_AGENT_PATTERN =
+  /bot|crawler|spider|crawling|slurp|bingpreview|headless|phantom|curl|wget|python-requests|httpclient|healthcheck/i;
 
 function json(body: unknown, status = 200) {
   const response = NextResponse.json(body, { status });
@@ -41,6 +45,26 @@ function sanitizePath(input: unknown) {
   return `${pathname}${query ? `?${query}` : ""}`.slice(0, 512);
 }
 
+function sanitizeReferrerHost(input: unknown) {
+  if (typeof input !== "string" || !input.trim()) return null;
+  try {
+    const url = new URL(input);
+    return url.hostname.slice(0, 120);
+  } catch {
+    return null;
+  }
+}
+
+function inferPageType(path: string) {
+  if (path === "/") return "home";
+  if (path.startsWith("/products/")) return "product_detail";
+  if (path.startsWith("/products")) return "product_list";
+  if (path.startsWith("/login") || path.startsWith("/register")) return "auth";
+  if (path.startsWith("/order-query")) return "order_query";
+  if (path.startsWith("/legal") || path.startsWith("/privacy") || path.startsWith("/terms")) return "legal";
+  return "public_page";
+}
+
 function getClientIp(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) return forwardedFor.split(",")[0]?.trim() || "";
@@ -48,6 +72,14 @@ function getClientIp(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_BODY_BYTES) return json({ ok: false, error: "统计请求过大" }, 413);
+
+  const userAgent = request.headers.get("user-agent") ?? "";
+  if (!userAgent || BOT_USER_AGENT_PATTERN.test(userAgent)) {
+    return json({ ok: true, skipped: true, reason: "bot" });
+  }
+
   const body = (await request.json().catch(() => ({}))) as {
     path?: unknown;
     referrer?: unknown;
@@ -71,23 +103,41 @@ export async function POST(request: Request) {
     userId = data.user?.id ?? null;
   }
 
-  const userAgent = request.headers.get("user-agent") ?? "";
   const ip = getClientIp(request);
-  const visitorKey = userId ? `user:${hash(userId)}` : `anon:${hash(rawVisitorKey)}`;
+  const visitorKey = `anon:${hash(rawVisitorKey).slice(0, 64)}`;
   const sessionKey =
     typeof body.sessionKey === "string" && body.sessionKey.trim()
       ? hash(body.sessionKey.trim()).slice(0, 64)
       : null;
 
+  const duplicateSince = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
+  const { data: duplicateEvent, error: duplicateError } = await serviceClient
+    .from("page_visit_events")
+    .select("id")
+    .eq("visitor_key", visitorKey)
+    .eq("page_path", pagePath)
+    .gte("visit_date", duplicateSince)
+    .limit(1)
+    .maybeSingle();
+
+  if (!duplicateError && duplicateEvent) {
+    return json({ ok: true, skipped: true, reason: "duplicate" });
+  }
+
   const { error } = await serviceClient.from("page_visit_events").insert({
     page_path: pagePath,
-    referrer_path: sanitizePath(body.referrer),
+    referrer_path: sanitizeReferrerHost(body.referrer),
     visitor_key: visitorKey,
     user_id: userId,
     session_key: sessionKey,
     user_agent_hash: userAgent ? hash(userAgent).slice(0, 64) : null,
     ip_hash: ip ? hash(ip).slice(0, 64) : null,
-    metadata: { source: "frontend_page_view", version: 1 },
+    metadata: {
+      source: "frontend_page_view",
+      version: 2,
+      page_type: inferPageType(pagePath),
+      environment: process.env.NODE_ENV,
+    },
   });
 
   if (error) return json({ ok: false, error: "访问统计写入失败" }, 503);
