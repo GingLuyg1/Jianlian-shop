@@ -11,7 +11,7 @@ const SKU_SELECT =
   "id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata";
 
 const PRODUCT_LOOKUP_SELECT = "id,slug,status";
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VISIBLE_PRODUCT_STATUSES = ["active", "sold_out"];
 
 type ProductDetailRow = Record<string, unknown>;
@@ -109,15 +109,10 @@ export async function GET(
       productError = fallback.error;
     }
 
-    let debugFallbackSlug: string | null = null;
-    let debugCatalogSlug: string | null = null;
-
     if (!productError && !productData && isUuid) {
       const fallback = await findVisibleProductSlugById(supabase, identifier);
       productError = fallback.error;
-      debugFallbackSlug = fallback.slug;
-      debugCatalogSlug = productError ? null : await findVisibleProductSlugByCatalogApi(request, identifier);
-      const fallbackSlug = debugFallbackSlug ?? debugCatalogSlug;
+      const fallbackSlug = fallback.slug ?? (productError ? null : await findVisibleProductSlugByCatalogApi(request, identifier));
       if (!productError && fallbackSlug) {
         const bySlug = await queryProduct("slug", fallbackSlug);
         productData = bySlug.data;
@@ -130,7 +125,7 @@ export async function GET(
     }
 
     if (!productData) {
-      return jsonError(404, "PRODUCT_NOT_FOUND", `Product not found isUuid=${isUuid} direct=${debugFallbackSlug ?? "-"} catalog=${debugCatalogSlug ?? "-"}`, requestId);
+      return jsonError(404, "PRODUCT_NOT_FOUND", "商品不存在", requestId);
     }
 
     const product = normalizePublicProduct(productData as Record<string, unknown>);
