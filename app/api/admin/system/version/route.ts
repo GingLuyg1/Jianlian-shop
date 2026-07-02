@@ -21,8 +21,8 @@ export async function GET() {
       version: {
         application_version: release.release,
         commit_sha: release.commit,
-        short_commit_sha: shortSha(release.commit),
-        branch: process.env.GIT_BRANCH ?? process.env.VERCEL_GIT_COMMIT_REF ?? "unknown",
+        short_commit_sha: release.shortCommit,
+        branch: release.branch,
         build_time: release.buildTime,
         environment: release.environment,
       },
@@ -77,8 +77,4 @@ async function probeDatabase(): Promise<{
       message: "Database reachability check failed.",
     };
   }
-}
-
-function shortSha(value: string) {
-  return value && value !== "unknown" ? value.slice(0, 12) : "unknown";
 }
