@@ -18,6 +18,7 @@ const ORDER_CREATE_ALLOWED_KEYS = new Set([
   "quantity",
   "client_request_id",
   "clientRequestId",
+  "contact_email",
   "customer_email",
   "customer_name",
   "customer_phone",
@@ -121,6 +122,7 @@ export async function POST(request: Request) {
           quantity?: number;
           client_request_id?: string;
           clientRequestId?: string;
+          contact_email?: string;
           customer_email?: string;
           customer_name?: string;
           customer_phone?: string;
@@ -142,7 +144,7 @@ export async function POST(request: Request) {
     const clientRequestId = String(body.client_request_id ?? body.clientRequestId ?? "").trim();
     const quantityValue = Number(body.quantity ?? 1);
     const quantity = Math.floor(quantityValue);
-    const customerEmail = body.customer_email?.trim() || user.email || null;
+    const customerEmail = body.customer_email?.trim() || body.contact_email?.trim() || user.email || null;
     const customerName = body.customer_name?.trim() || null;
     const customerPhone = body.customer_phone?.trim() || null;
     const customerNote = body.customer_note?.trim() || null;
@@ -163,6 +165,10 @@ export async function POST(request: Request) {
 
     if (!customerEmail) {
       return NextResponse.json({ error: "请填写联系邮箱" }, { status: 400 });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      return NextResponse.json({ error: "联系邮箱格式不正确" }, { status: 400 });
     }
 
     if (!paymentMethod) {

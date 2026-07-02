@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -107,7 +108,7 @@ function InfoItem({
   title,
   desc,
 }: {
-  icon: typeof ShieldCheck;
+  icon: LucideIcon;
   title: string;
   desc: string;
 }) {
@@ -285,6 +286,13 @@ export default function ProductDetailPage() {
     };
   }, []);
 
+  useEffect(() => {
+    setQuantity((current) => {
+      const max = Math.max(availableStock || 1, 1);
+      return Math.max(1, Math.min(max, current));
+    });
+  }, [availableStock]);
+
   function changeQuantity(next: number) {
     const max = Math.max(1, availableStock || 1);
     setQuantity(Math.max(1, Math.min(max, Math.floor(next))));
@@ -332,6 +340,7 @@ export default function ProductDetailPage() {
           product_id: product.id,
           sku_id: selectedSku?.id ?? null,
           quantity,
+          contact_email: contactEmail.trim(),
           customer_email: contactEmail.trim(),
           payment_method: paymentMethod,
           agreement_version_ids: agreementPayload,
@@ -620,7 +629,7 @@ export default function ProductDetailPage() {
                       disabled={submitting}
                     >
                       {PAYMENT_METHOD_OPTIONS.map((option) => (
-                        <option key={option.code} value={option.code} disabled={option.code !== "balance"}>
+                        <option key={option.code} value={option.code}>
                           {option.label}
                           {option.code === "balance" ? "" : "（暂未开放）"}
                         </option>
@@ -707,7 +716,9 @@ function StateCard({
               重新加载
             </Button>
           ) : null}
-          <Button variant="outline" onClick={() => window.location.assign("/")}>返回首页</Button>
+          <Button variant="outline" onClick={() => window.location.assign("/")}>
+            返回首页
+          </Button>
         </div>
       </CardContent>
     </Card>
