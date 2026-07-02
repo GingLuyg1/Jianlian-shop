@@ -105,6 +105,8 @@ export type PublicCatalogConfig = {
 const productSelect =
   "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,delivery_type,status,sort_order,metadata,created_at,updated_at";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+
 function normalizeNumber(value: unknown, fallback = 0) {
   const next = Number(value);
   return Number.isFinite(next) ? next : fallback;
@@ -138,7 +140,10 @@ export function normalizePublicProduct(row: Record<string, unknown>): PublicProd
     description: row.description ? String(row.description) : null,
     image_url: row.image_url ? String(row.image_url) : null,
     price: normalizeNumber(row.price),
-    original_price: row.original_price === null || row.original_price === undefined ? null : normalizeNumber(row.original_price),
+    original_price:
+      row.original_price === null || row.original_price === undefined
+        ? null
+        : normalizeNumber(row.original_price),
     stock: normalizeNumber(row.stock),
     delivery_type: row.delivery_type ? String(row.delivery_type) : "manual",
     status: row.status ? String(row.status) : "draft",
@@ -156,7 +161,10 @@ export function normalizePublicSku(row: Record<string, unknown>): PublicProductS
     sku_code: row.sku_code ? String(row.sku_code) : null,
     sku_title: row.sku_title ? String(row.sku_title) : null,
     price: normalizeNumber(row.price),
-    original_price: row.original_price === null || row.original_price === undefined ? null : normalizeNumber(row.original_price),
+    original_price:
+      row.original_price === null || row.original_price === undefined
+        ? null
+        : normalizeNumber(row.original_price),
     stock: normalizeNumber(row.stock),
     status: row.status ? String(row.status) : "draft",
     delivery_type: row.delivery_type ? String(row.delivery_type) : null,
@@ -186,7 +194,9 @@ export async function listPublicCategories() {
 
   if (error) throw new Error(getErrorText(error, "分类读取失败，请检查 RLS 读取策略"));
 
-  return ((data ?? []) as Array<Record<string, unknown>>).map(normalizeCategory).filter(isPublicCategoryEnabled);
+  return ((data ?? []) as Array<Record<string, unknown>>)
+    .map(normalizeCategory)
+    .filter(isPublicCategoryEnabled);
 }
 
 export async function listActiveProductsByCategory(categoryId: string) {
@@ -248,13 +258,22 @@ export async function getActiveProductByIdOrSlug(identifier: string) {
 
 export async function getProductByIdOrSlug(identifier: string, options: { activeOnly?: boolean } = {}) {
   const supabase = getSupabaseBrowserClient();
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(identifier);
-  let baseQuery = supabase.from("products").select(productSelect).limit(1);
-  if (options.activeOnly) baseQuery = baseQuery.eq("status", FRONTEND_ACTIVE_PRODUCT_STATUS);
+  const normalizedIdentifier = identifier.trim();
+  const isUuid = UUID_RE.test(normalizedIdentifier);
 
-  const { data, error } = isUuid
-    ? await baseQuery.eq("id", identifier).maybeSingle()
-    : await baseQuery.eq("slug", identifier).maybeSingle();
+  const queryBy = (field: "id" | "slug") => {
+    let query = supabase.from("products").select(productSelect).eq(field, normalizedIdentifier).limit(1);
+    if (options.activeOnly) query = query.eq("status", FRONTEND_ACTIVE_PRODUCT_STATUS);
+    return query.maybeSingle();
+  };
+
+  let { data, error } = isUuid ? await queryBy("id") : await queryBy("slug");
+
+  if (!error && !data && isUuid) {
+    const fallback = await queryBy("slug");
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw new Error(getErrorText(error, "商品详情读取失败"));
 
@@ -272,7 +291,10 @@ export async function getPublicProductDetail(identifier: string): Promise<Public
   if (response.status === 404) return null;
   if (!response.ok || !payload?.success) {
     const message = payload && !payload.success ? payload.error?.message : null;
-    const requestId = payload && !payload.success && payload.error?.request_id ? `（Request ID: ${payload.error.request_id}）` : "";
+    const requestId =
+      payload && !payload.success && payload.error?.request_id
+        ? `（Request ID: ${payload.error.request_id}）`
+        : "";
     throw new Error(`${message || "商品读取失败，请重试"}${requestId}`);
   }
   return payload.data;
@@ -322,10 +344,22 @@ export function mapPublicProductToProduct(
       : row.status === "sold_out"
         ? 0
         : row.stock;
-  const minPrice = typeof (row as PublicCatalogProductRow).min_price === "number" ? Number((row as PublicCatalogProductRow).min_price) : row.price;
-  const maxPrice = typeof (row as PublicCatalogProductRow).max_price === "number" ? Number((row as PublicCatalogProductRow).max_price) : row.price;
-  const stockStatus: StockStatus = row.status === "sold_out" || effectiveStock <= 0 ? "out-of-stock" : effectiveStock <= 10 ? "low-stock" : "in-stock";
-  const deliveryMethod: DeliveryMethod = row.delivery_type === "shipping" ? "physical" : row.delivery_type === "manual" ? "hybrid" : "digital";
+  const minPrice =
+    typeof (row as PublicCatalogProductRow).min_price === "number"
+      ? Number((row as PublicCatalogProductRow).min_price)
+      : row.price;
+  const maxPrice =
+    typeof (row as PublicCatalogProductRow).max_price === "number"
+      ? Number((row as PublicCatalogProductRow).max_price)
+      : row.price;
+  const stockStatus: StockStatus =
+    row.status === "sold_out" || effectiveStock <= 0
+      ? "out-of-stock"
+      : effectiveStock <= 10
+        ? "low-stock"
+        : "in-stock";
+  const deliveryMethod: DeliveryMethod =
+    row.delivery_type === "shipping" ? "physical" : row.delivery_type === "manual" ? "hybrid" : "digital";
   const productType: ProductType = row.delivery_type === "shipping" ? "physical" : "digital";
 
   return {
@@ -344,7 +378,12 @@ export function mapPublicProductToProduct(
     price: minPrice,
     currency: "CNY",
     stockStatus,
-    stockLabel: row.status === "sold_out" ? "已售罄" : effectiveStock <= 0 ? "暂时缺货" : `库存：${effectiveStock}`,
+    stockLabel:
+      row.status === "sold_out"
+        ? "已售罄"
+        : effectiveStock <= 0
+          ? "暂时缺货"
+          : `库存：${effectiveStock}`,
     processingTime: row.delivery_type === "automatic" ? "自动发货" : "联系客服确认",
     deliveryMethod,
     deliveryLabel: getDeliveryLabel(row.delivery_type),
