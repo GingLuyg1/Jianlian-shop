@@ -26,10 +26,14 @@ type SupabaseErrorLike = {
   hint?: string;
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const SAFE_PRODUCT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 
 function getRequestId(request: Request) {
   return request.headers.get("x-request-id") || request.headers.get("x-correlation-id") || randomUUID();
+}
+
+function isSafeProductId(value: string) {
+  return SAFE_PRODUCT_ID_PATTERN.test(value);
 }
 
 function safeSupabaseError(error: unknown) {
@@ -94,7 +98,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (!admin.ok) return admin.response;
 
   const productId = params.productId?.trim();
-  if (!productId || !UUID_PATTERN.test(productId)) {
+  if (!productId || !isSafeProductId(productId)) {
     return productFailureResponse("INVALID_PRODUCT_ID", "商品 ID 无效", requestId, 400);
   }
 
@@ -246,7 +250,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   if (!admin.ok) return admin.response;
 
   const productId = params.productId?.trim();
-  if (!productId || !UUID_PATTERN.test(productId)) {
+  if (!productId || !isSafeProductId(productId)) {
     return jsonResponse({ error: "商品 ID 无效" }, 400);
   }
 

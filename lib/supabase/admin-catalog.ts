@@ -131,6 +131,8 @@ type AdminCatalogEnvelope<T> = T & {
   request_id?: string;
 };
 
+const SAFE_PRODUCT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
+
 function getEnvelopeErrorMessage(body: AdminCatalogEnvelope<unknown>, fallback = "商品保存失败，请检查输入后重试") {
   if (typeof body.error === "string" && body.error.trim()) return body.error;
   const message = typeof body.error === "object" ? body.error?.message : "";
@@ -340,8 +342,8 @@ export async function createProduct(payload: ProductPayload) {
 
 export async function updateProduct(id: string, payload: ProductPayload) {
   const productId = id.trim();
-  if (!productId) {
-    throw new Error("\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u5546\u54c1 ID \u4e0d\u80fd\u4e3a\u7a7a");
+  if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {
+    throw new Error("商品保存失败，商品 ID 无效，请重新打开商品后再保存");
   }
   const result = await adminCatalogEnvelopeRequest<{ product: Record<string, unknown> }>(
     `/api/admin/catalog/products/${encodeURIComponent(productId)}`,
@@ -355,13 +357,21 @@ export async function updateProduct(id: string, payload: ProductPayload) {
 }
 
 export async function deleteProduct(id: string) {
-  await adminCatalogRequest<{ ok: boolean }>(`/api/admin/catalog/products/${id}`, {
+  const productId = id.trim();
+  if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {
+    throw new Error("商品删除失败，商品 ID 无效，请重新打开商品后再操作");
+  }
+  await adminCatalogRequest<{ ok: boolean }>(`/api/admin/catalog/products/${encodeURIComponent(productId)}`, {
     method: "DELETE",
   });
 }
 
 export async function setProductStatus(id: string, status: ProductStatus) {
-  await adminCatalogRequest<{ product: Record<string, unknown> }>(`/api/admin/catalog/products/${id}`, {
+  const productId = id.trim();
+  if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {
+    throw new Error("商品状态更新失败，商品 ID 无效，请重新打开商品后再操作");
+  }
+  await adminCatalogRequest<{ product: Record<string, unknown> }>(`/api/admin/catalog/products/${encodeURIComponent(productId)}`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
