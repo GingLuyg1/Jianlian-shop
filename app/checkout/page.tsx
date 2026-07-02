@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -144,7 +144,7 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { settings } = usePublicSettings();
-  const productId = searchParams.get("product") || "gift-apple-tr-500";
+  const productId = searchParams.get("product") ?? "";
 
   const [email, setEmail] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -200,6 +200,12 @@ export default function CheckoutPage() {
       setError("");
 
       try {
+        if (!productId.trim()) {
+          setProductRow(null);
+          setError("缺少商品参数，请返回商品列表重新选择。");
+          return;
+        }
+
         const nextProduct = await getProductByIdOrSlug(productId);
         if (!active) return;
         setProductRow(nextProduct);
@@ -257,6 +263,7 @@ export default function CheckoutPage() {
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
   const isShippingProduct = productRow?.delivery_type === "shipping";
+  const selectedPaymentUnavailable = paymentMethod !== "balance";
   const isPurchasable = productRow?.status === "active" && Number(productRow.stock ?? 0) > 0;
   const unavailableMessage =
     productRow?.status === "sold_out" || Number(productRow?.stock ?? 0) <= 0
@@ -314,6 +321,11 @@ export default function CheckoutPage() {
 
     if (!confirmed) {
       setError("请先阅读并确认订单协议");
+      return;
+    }
+
+    if (selectedPaymentUnavailable) {
+      setError("该支付方式暂未开放，请选择余额支付。");
       return;
     }
 
@@ -535,6 +547,11 @@ export default function CheckoutPage() {
                   onOpenChange={setPaymentDropdownOpen}
                   onSelect={setPaymentMethod}
                 />
+                {selectedPaymentUnavailable ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
+                  </p>
+                ) : null}
               </div>
 
               <div className="border-t border-border pt-3">
@@ -567,7 +584,7 @@ export default function CheckoutPage() {
                   <Button
                     className="h-11 rounded-full px-7 text-sm"
                     onClick={handleSubmit}
-                    disabled={!confirmed || submitLoading || !isPurchasable || legalLoading || Boolean(legalError) || !agreementsReady}
+                    disabled={!confirmed || submitLoading || !isPurchasable || selectedPaymentUnavailable || legalLoading || Boolean(legalError) || !agreementsReady}
                   >
                     {submitLoading
                       ? "正在提交订单..."
