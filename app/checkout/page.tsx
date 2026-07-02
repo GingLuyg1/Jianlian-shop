@@ -35,7 +35,7 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   getErrorText,
-  getProductByIdOrSlug,
+  getPublicProductDetail,
   type PublicProductRow,
 } from "@/lib/supabase/public-catalog";
 import {
@@ -206,9 +206,9 @@ export default function CheckoutPage() {
           return;
         }
 
-        const nextProduct = await getProductByIdOrSlug(productId);
+        const detail = await getPublicProductDetail(productId);
         if (!active) return;
-        setProductRow(nextProduct);
+        setProductRow(detail?.product ?? null);
       } catch (loadError) {
         if (!active) return;
         setError(getErrorText(loadError, "商品读取失败，请返回商品列表重试"));
