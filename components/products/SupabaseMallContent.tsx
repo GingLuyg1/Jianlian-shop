@@ -101,7 +101,6 @@ export default function SupabaseMallContent({
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
   const [draftSearch, setDraftSearch] = useState(searchParams.get("search") ?? "");
   const [isLoadingSecondaryCategories, setIsLoadingSecondaryCategories] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
@@ -243,7 +242,6 @@ export default function SupabaseMallContent({
         if (!primaryCategoryId) {
           setProducts([]);
           setTotal(0);
-          setTotalPages(1);
           return;
         }
         const result = await searchPublicCatalogProducts({
@@ -260,12 +258,10 @@ export default function SupabaseMallContent({
           )
         );
         setTotal(result.total);
-        setTotalPages(result.totalPages);
       } catch (loadError) {
         if (!mounted || requestId !== productRequestIdRef.current) return;
         setProducts([]);
         setTotal(0);
-        setTotalPages(1);
         setError(getErrorText(loadError, "商品读取失败，请稍后重试。"));
       } finally {
         if (mounted && requestId === productRequestIdRef.current) {
@@ -320,18 +316,12 @@ export default function SupabaseMallContent({
           currencySymbol={settings.currency_symbol}
           draftSearch={draftSearch}
           error={error}
-          filters={filters}
           isLoading={isLoadingProducts}
           products={products}
           productListTopRef={productListTopRef}
           showStock={settings.show_stock}
           total={total}
-          totalPages={totalPages}
           onDraftSearchChange={setDraftSearch}
-          onPageChange={(page) => {
-            updateUrl({ page });
-            productListTopRef.current?.scrollIntoView({ block: "nearest" });
-          }}
           onResetFilters={resetFilters}
           onSearchSubmit={submitSearch}
         />
@@ -452,15 +442,12 @@ function ProductPanel({
   currencySymbol,
   draftSearch,
   error,
-  filters,
   isLoading,
   products,
   productListTopRef,
   showStock,
   total,
-  totalPages,
   onDraftSearchChange,
-  onPageChange,
   onResetFilters,
   onSearchSubmit,
 }: {
@@ -468,15 +455,12 @@ function ProductPanel({
   currencySymbol: string;
   draftSearch: string;
   error: string;
-  filters: FilterState;
   isLoading: boolean;
   products: Product[];
   productListTopRef: RefObject<HTMLDivElement>;
   showStock: boolean;
   total: number;
-  totalPages: number;
   onDraftSearchChange: (query: string) => void;
-  onPageChange: (page: number) => void;
   onResetFilters: () => void;
   onSearchSubmit: () => void;
 }) {
@@ -532,20 +516,6 @@ function ProductPanel({
             )}
           </div>
         )}
-
-        {!error && total > 0 ? (
-          <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t pt-3 text-sm text-muted-foreground">
-            <span>第 {filters.page} / {totalPages} 页，共 {total} 个商品</span>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={filters.page <= 1} onClick={() => onPageChange(filters.page - 1)}>
-                上一页
-              </Button>
-              <Button type="button" variant="outline" size="sm" disabled={filters.page >= totalPages} onClick={() => onPageChange(filters.page + 1)}>
-                下一页
-              </Button>
-            </div>
-          </div>
-        ) : null}
 
       </CardContent>
     </Card>
