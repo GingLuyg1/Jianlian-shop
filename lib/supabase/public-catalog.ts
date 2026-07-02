@@ -280,15 +280,36 @@ export async function getProductByIdOrSlug(identifier: string, options: { active
   return data ? normalizePublicProduct(data as Record<string, unknown>) : null;
 }
 
+async function findPublicCatalogProductById(identifier: string) {
+  if (!UUID_RE.test(identifier)) return null;
+
+  const params = new URLSearchParams({ page: "1", pageSize: "60" });
+  const response = await fetch(`/api/catalog/products?${params.toString()}`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => null)) as CatalogProductResponse | null;
+
+  if (!response.ok || !payload?.success || !Array.isArray(payload.data?.products)) return null;
+
+  return payload.data.products.find(
+    (product) => String(product.id).toLowerCase() === identifier.toLowerCase()
+  ) ?? null;
+}
+
 export async function getPublicProductDetail(identifier: string): Promise<PublicProductDetail | null> {
-  const encoded = encodeURIComponent(identifier.trim());
+  const normalizedIdentifier = identifier.trim();
+  const encoded = encodeURIComponent(normalizedIdentifier);
   const response = await fetch(`/api/catalog/products/${encoded}`, { cache: "no-store" });
   const payload = (await response.json().catch(() => null)) as
     | { success: true; data: PublicProductDetail }
     | { success: false; error?: { code?: string; message?: string; request_id?: string } }
     | null;
 
-  if (response.status === 404) return null;
+  if (response.status === 404) {
+    const fallbackProduct = await findPublicCatalogProductById(normalizedIdentifier);
+    if (!fallbackProduct) return null;
+    if (fallbackProduct.slug) return getPublicProductDetail(fallbackProduct.slug);
+    return { product: normalizePublicProduct(fallbackProduct as Record<string, unknown>), skus: [] };
+  }
+
   if (!response.ok || !payload?.success) {
     const message = payload && !payload.success ? payload.error?.message : null;
     const requestId =
@@ -297,9 +318,9 @@ export async function getPublicProductDetail(identifier: string): Promise<Public
         : "";
     throw new Error(`${message || "商品读取失败，请重试"}${requestId}`);
   }
+
   return payload.data;
 }
-
 export function findPrimaryCategory(categories: PublicCategory[], config: PublicCatalogConfig) {
   const slugSet = new Set(config.primarySlugs.map(normalizeText));
   const nameMatchers = config.primaryNames.map(normalizeText);

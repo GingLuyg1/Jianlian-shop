@@ -49,26 +49,33 @@ async function findVisibleProductSlugById(
 
 async function findVisibleProductSlugByCatalogApi(request: Request, identifier: string) {
   const origin = new URL(request.url).origin;
-  const url = new URL("/api/catalog/products", origin);
-  url.searchParams.set("page", "1");
-  url.searchParams.set("pageSize", "60");
+  let totalPages = 1;
 
-  const response = await fetch(url.toString(), { cache: "no-store" });
-  const payload = (await response.json().catch(() => null)) as
-    | { success: true; data?: { products?: Array<{ id?: unknown; slug?: unknown }> } }
-    | { success: false }
-    | null;
+  for (let page = 1; page <= totalPages && page <= 50; page += 1) {
+    const url = new URL("/api/catalog/products", origin);
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("pageSize", "60");
 
-  const products = payload?.success ? payload.data?.products : undefined;
-  if (!response.ok || !Array.isArray(products)) return null;
+    const response = await fetch(url.toString(), { cache: "no-store" });
+    const payload = (await response.json().catch(() => null)) as
+      | { success: true; data?: { products?: Array<{ id?: unknown; slug?: unknown }>; totalPages?: number } }
+      | { success: false }
+      | null;
 
-  const product = products.find(
-    (row) => String(row.id).toLowerCase() === identifier.toLowerCase()
-  );
+    const data = payload?.success ? payload.data : null;
+    const products = data?.products;
+    if (!response.ok || !payload?.success || !Array.isArray(products)) return null;
 
-  return product?.slug ? String(product.slug) : null;
+    totalPages = Math.max(1, Number(data?.totalPages ?? 1));
+    const product = products.find(
+      (row) => String(row.id).toLowerCase() === identifier.toLowerCase()
+    );
+
+    if (product?.slug) return String(product.slug);
+  }
+
+  return null;
 }
-
 export async function GET(
   request: Request,
   context: { params: { identifier?: string } }
@@ -77,7 +84,7 @@ export async function GET(
   const identifier = decodeURIComponent(String(context.params.identifier ?? "")).trim();
 
   if (!identifier || identifier.length > 160) {
-    return jsonError(400, "INVALID_PRODUCT_IDENTIFIER", "商品参数无效", requestId);
+    return jsonError(400, "INVALID_PRODUCT_IDENTIFIER", "Invalid product identifier", requestId);
   }
 
   try {
@@ -102,10 +109,15 @@ export async function GET(
       productError = fallback.error;
     }
 
+    let debugFallbackSlug: string | null = null;
+    let debugCatalogSlug: string | null = null;
+
     if (!productError && !productData && isUuid) {
       const fallback = await findVisibleProductSlugById(supabase, identifier);
       productError = fallback.error;
-      const fallbackSlug = fallback.slug ?? (productError ? null : await findVisibleProductSlugByCatalogApi(request, identifier));
+      debugFallbackSlug = fallback.slug;
+      debugCatalogSlug = productError ? null : await findVisibleProductSlugByCatalogApi(request, identifier);
+      const fallbackSlug = debugFallbackSlug ?? debugCatalogSlug;
       if (!productError && fallbackSlug) {
         const bySlug = await queryProduct("slug", fallbackSlug);
         productData = bySlug.data;
@@ -114,11 +126,11 @@ export async function GET(
     }
 
     if (productError) {
-      return jsonError(500, "PRODUCT_DETAIL_QUERY_FAILED", "商品读取失败，请重试", requestId);
+      return jsonError(500, "PRODUCT_DETAIL_QUERY_FAILED", "Product detail query failed", requestId);
     }
 
     if (!productData) {
-      return jsonError(404, "PRODUCT_NOT_FOUND", "商品不存在", requestId);
+      return jsonError(404, "PRODUCT_NOT_FOUND", `Product not found isUuid=${isUuid} direct=${debugFallbackSlug ?? "-"} catalog=${debugCatalogSlug ?? "-"}`, requestId);
     }
 
     const product = normalizePublicProduct(productData as Record<string, unknown>);
@@ -134,7 +146,7 @@ export async function GET(
       .order("created_at", { ascending: true });
 
     if (rawSkuError && !isOptionalSkuSchemaError(rawSkuError)) {
-      skuError = "规格读取失败，单规格商品仍可继续查看";
+      skuError = "SKU query failed";
     } else if (!rawSkuError) {
       skus = ((skuData ?? []) as Array<Record<string, unknown>>).map(normalizePublicSku);
     }
@@ -148,6 +160,6 @@ export async function GET(
       { headers: { "X-Request-ID": requestId } }
     );
   } catch {
-    return jsonError(500, "PRODUCT_DETAIL_UNEXPECTED_ERROR", "商品读取失败，请重试", requestId);
+    return jsonError(500, "PRODUCT_DETAIL_UNEXPECTED_ERROR", "Product detail query failed", requestId);
   }
 }
