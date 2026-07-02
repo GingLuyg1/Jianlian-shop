@@ -1,7 +1,9 @@
+import { randomUUID } from "crypto";
+
 import {
   PRODUCT_FIELDS,
-  assertProductCategory,
   auditCatalogAction,
+  assertProductCategory,
   jsonResponse,
   normalizeProductUpdatePayload,
   parseBody,
@@ -9,39 +11,91 @@ import {
   verifyPersistedProduct,
 } from "../../_shared";
 
-import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 import { revalidateProductCache } from "@/lib/cache/cache-tags";
+import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 type RouteContext = {
   params: { productId: string };
 };
 
+type SupabaseErrorLike = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 
-function getProductSaveError(error: unknown, fallback = "商品保存失败，请稍后重试") {
+function getRequestId(request: Request) {
+  return request.headers.get("x-request-id") || request.headers.get("x-correlation-id") || randomUUID();
+}
+
+function safeSupabaseError(error: unknown) {
+  const next = (error ?? {}) as SupabaseErrorLike;
+  return {
+    code: next.code ?? "UNKNOWN",
+    message: next.message ? String(next.message).slice(0, 240) : "",
+    details: next.details ? String(next.details).slice(0, 240) : "",
+    hint: next.hint ? String(next.hint).slice(0, 160) : "",
+  };
+}
+
+function productFailureResponse(
+  code: string,
+  message: string,
+  requestId: string,
+  status = 400,
+  errors?: Record<string, string>
+) {
+  const response = jsonResponse(
+    {
+      success: false,
+      error: {
+        code,
+        message,
+        request_id: requestId,
+      },
+      errors,
+      request_id: requestId,
+    },
+    status
+  );
+  response.headers.set("X-Request-ID", requestId);
+  return response;
+}
+
+function getProductSaveFailure(error: unknown, fallback = "商品保存失败，请检查输入后重试") {
   const message = (error as { message?: string; code?: string } | null | undefined)?.message ?? "";
   const code = (error as { code?: string } | null | undefined)?.code ?? "";
 
   if (code === "PGRST116" || /0 rows|multiple rows|no rows|JSON object requested/i.test(message)) {
-    return "商品保存失败，没有更新任何记录";
+    return { status: 404, code: "PRODUCT_NOT_UPDATED", message: "商品保存失败，没有更新任何记录" };
   }
   if (code === "23505" || /duplicate|unique/i.test(message)) {
-    return "商品保存失败，请检查商品标识是否重复";
+    return { status: 400, code: "PRODUCT_DUPLICATE_SLUG", message: "商品保存失败，请检查商品标识是否重复" };
   }
   if (code === "23503" || /foreign key/i.test(message)) {
-    return "商品保存失败，分类无效";
+    return { status: 400, code: "PRODUCT_INVALID_CATEGORY", message: "商品保存失败，分类无效" };
   }
-  return fallback;
+  if (code === "42501" || /row-level security|permission denied|not authorized/i.test(message)) {
+    return { status: 403, code: "PRODUCT_UPDATE_FORBIDDEN", message: "商品保存失败，当前账号没有商品修改权限" };
+  }
+  if (code === "PGRST204" || /column .* could not be found|schema cache/i.test(message)) {
+    return { status: 400, code: "PRODUCT_INVALID_FIELD", message: "商品保存失败，提交字段与数据库不匹配" };
+  }
+  return { status: 500, code: "PRODUCT_UPDATE_FAILED", message: fallback };
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
+  const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin();
   if (!admin.ok) return admin.response;
 
   const productId = params.productId?.trim();
   if (!productId || !UUID_PATTERN.test(productId)) {
-    return jsonResponse({ error: "商品 ID 无效" }, 400);
+    return productFailureResponse("INVALID_PRODUCT_ID", "商品 ID 无效", requestId, 400);
   }
 
   const sizeError = checkRequestSize(request, 64 * 1024);
@@ -55,21 +109,44 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .select(PRODUCT_FIELDS)
     .eq("id", productId)
     .maybeSingle();
-  if (beforeError || !before) return jsonResponse({ error: "商品不存在或已被删除" }, 404);
+
+  if (beforeError) {
+    console.error("[AdminProductUpdate] product read failed", {
+      requestId,
+      productId,
+      error: safeSupabaseError(beforeError),
+    });
+    return productFailureResponse("PRODUCT_READ_FAILED", "商品读取失败，请稍后重试", requestId, 500);
+  }
+  if (!before) {
+    return productFailureResponse("PRODUCT_NOT_FOUND", "商品不存在或已被删除", requestId, 404);
+  }
 
   const body = parseBody(await request.json().catch(() => ({})));
   const { payload, errors } = normalizeProductUpdatePayload(body);
+
   if (Object.keys(errors).length > 0) {
-    return jsonResponse({ error: "商品信息填写不完整", errors }, 400);
+    return productFailureResponse("PRODUCT_VALIDATION_FAILED", "商品信息填写不完整", requestId, 400, errors);
   }
   if (Object.keys(payload).length === 0) {
-    return jsonResponse({ error: "没有需要保存的商品变更" }, 400);
+    return productFailureResponse("PRODUCT_NO_CHANGES", "没有需要保存的商品变更", requestId, 400);
   }
 
   if (payload.category_id) {
     const categoryError = await assertProductCategory(admin.supabase, payload.category_id);
-    if (categoryError) return jsonResponse({ error: categoryError }, 400);
+    if (categoryError) {
+      return productFailureResponse("PRODUCT_INVALID_CATEGORY", categoryError, requestId, 400);
+    }
   }
+
+  console.info("[AdminProductUpdate] update payload", {
+    requestId,
+    productId,
+    fields: Object.keys(payload).sort(),
+    fieldTypes: Object.fromEntries(
+      Object.entries(payload).map(([key, value]) => [key, value === null ? "null" : typeof value])
+    ),
+  });
 
   const { data, error } = await admin.supabase
     .from("products")
@@ -79,7 +156,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .single();
 
   if (error || !data) {
-    const errorMessage = getProductSaveError(error, "商品保存失败，没有更新任何记录");
+    const failure = getProductSaveFailure(error, "商品保存失败，请检查输入后重试");
+    console.error("[AdminProductUpdate] update failed", {
+      requestId,
+      productId,
+      fields: Object.keys(payload).sort(),
+      error: safeSupabaseError(error),
+    });
     await auditCatalogAction({
       request,
       user: admin.user,
@@ -91,9 +174,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       result: "failed",
       beforeSummary: before,
       afterSummary: payload,
-      errorMessage,
+      errorMessage: `${failure.code}:${failure.message}`,
     });
-    return jsonResponse({ error: errorMessage }, 400);
+    return productFailureResponse(failure.code, failure.message, requestId, failure.status);
   }
 
   const verifyError = verifyPersistedProduct(data, payload);
@@ -111,17 +194,34 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       afterSummary: data,
       errorMessage: verifyError,
     });
-    return jsonResponse({ error: verifyError }, 409);
+    return productFailureResponse("PRODUCT_VERIFY_FAILED", verifyError, requestId, 409);
   }
 
-  await markMediaReferenceByUrl(admin.supabase, (data as { image_url?: string | null }).image_url, "product", productId);
-  revalidateProductCache({
-    id: productId,
-    slug: String((data as { slug?: unknown }).slug ?? ""),
-    previousSlug: String((before as { slug?: unknown }).slug ?? ""),
-    categoryId: String((data as { category_id?: unknown }).category_id ?? ""),
-    previousCategoryId: String((before as { category_id?: unknown }).category_id ?? ""),
-  });
+  try {
+    await markMediaReferenceByUrl(admin.supabase, (data as { image_url?: string | null }).image_url, "product", productId);
+  } catch (mediaError) {
+    console.warn("[AdminProductUpdate] media reference skipped", {
+      requestId,
+      productId,
+      error: safeSupabaseError(mediaError),
+    });
+  }
+
+  try {
+    revalidateProductCache({
+      id: productId,
+      slug: String((data as { slug?: unknown }).slug ?? ""),
+      previousSlug: String((before as { slug?: unknown }).slug ?? ""),
+      categoryId: String((data as { category_id?: unknown }).category_id ?? ""),
+      previousCategoryId: String((before as { category_id?: unknown }).category_id ?? ""),
+    });
+  } catch (cacheError) {
+    console.warn("[AdminProductUpdate] cache revalidate skipped", {
+      requestId,
+      productId,
+      error: safeSupabaseError(cacheError),
+    });
+  }
 
   await auditCatalogAction({
     request,
@@ -136,7 +236,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     afterSummary: data,
   });
 
-  return jsonResponse({ product: data });
+  const response = jsonResponse({ success: true, data: { product: data }, product: data, request_id: requestId });
+  response.headers.set("X-Request-ID", requestId);
+  return response;
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {

@@ -28,6 +28,21 @@ const PRODUCT_UPDATE_FIELDS = new Set([
   "sort_order",
   "metadata",
 ]);
+const PRODUCT_DATABASE_UPDATE_FIELDS = new Set([
+  "name",
+  "slug",
+  "category_id",
+  "short_description",
+  "description",
+  "image_url",
+  "price",
+  "original_price",
+  "stock",
+  "delivery_type",
+  "status",
+  "sort_order",
+  "metadata",
+]);
 
 export function jsonResponse(body: unknown, status = 200) {
   const response = NextResponse.json(body, { status });
@@ -165,7 +180,20 @@ export function normalizeProductUpdatePayload(body: Record<string, unknown>) {
   for (const [key, value] of Object.entries(body)) {
     if (PRODUCT_UPDATE_FIELDS.has(key)) filtered[key] = value;
   }
-  return normalizeProductPayload(filtered, true);
+  if ("metadata.note" in body && !("metadata" in filtered)) {
+    const note = cleanNullableText(body["metadata.note"]);
+    filtered.metadata = note ? { note } : null;
+  }
+
+  const result = normalizeProductPayload(filtered, true);
+  const databasePayload: Partial<ProductPayload> = {};
+  for (const [key, value] of Object.entries(result.payload)) {
+    if (PRODUCT_DATABASE_UPDATE_FIELDS.has(key) && value !== undefined) {
+      (databasePayload as Record<string, unknown>)[key] = value;
+    }
+  }
+
+  return { payload: databasePayload, errors: result.errors };
 }
 
 export function normalizeCategoryPayload(body: Record<string, unknown>, partial = false) {

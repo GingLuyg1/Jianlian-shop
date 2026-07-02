@@ -123,6 +123,44 @@ async function adminCatalogRequest<T>(url: string, init: RequestInit = {}): Prom
   return body as T;
 }
 
+type AdminCatalogEnvelope<T> = T & {
+  success?: boolean;
+  data?: Partial<T>;
+  error?: string | { code?: string; message?: string; request_id?: string };
+  errors?: Record<string, string>;
+  request_id?: string;
+};
+
+function getEnvelopeErrorMessage(body: AdminCatalogEnvelope<unknown>, fallback = "商品保存失败，请检查输入后重试") {
+  if (typeof body.error === "string" && body.error.trim()) return body.error;
+  const message = typeof body.error === "object" ? body.error?.message : "";
+  const requestId =
+    typeof body.error === "object" ? body.error?.request_id || body.request_id : body.request_id;
+  const fieldError = body.errors ? Object.values(body.errors).find(Boolean) : "";
+  const text = message || fieldError || fallback;
+  return requestId ? `${text}（错误编号：${requestId}）` : text;
+}
+
+async function adminCatalogEnvelopeRequest<T>(url: string, init: RequestInit = {}): Promise<AdminCatalogEnvelope<T>> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+    cache: "no-store",
+  });
+  const body = (await response.json().catch(() => ({}))) as AdminCatalogEnvelope<T>;
+  const requestId = response.headers.get("X-Request-ID");
+  if (requestId && !body.request_id) body.request_id = requestId;
+
+  if (!response.ok || body.success === false) {
+    throw new Error(getEnvelopeErrorMessage(body));
+  }
+
+  return body;
+}
+
 function normalizeNumber(value: unknown, fallback = 0) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
@@ -292,11 +330,12 @@ export async function listProducts({
 }
 
 export async function createProduct(payload: ProductPayload) {
-  const result = await adminCatalogRequest<{ product: Record<string, unknown> }>("/api/admin/catalog/products", {
+  const result = await adminCatalogEnvelopeRequest<{ product: Record<string, unknown> }>("/api/admin/catalog/products", {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  return normalizeProduct(assertApiRecord(result.product, "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u670d\u52a1\u5668\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1"));
+  const product = result.product ?? result.data?.product;
+  return normalizeProduct(assertApiRecord(product, "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u670d\u52a1\u5668\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1"));
 }
 
 export async function updateProduct(id: string, payload: ProductPayload) {
@@ -304,14 +343,15 @@ export async function updateProduct(id: string, payload: ProductPayload) {
   if (!productId) {
     throw new Error("\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u5546\u54c1 ID \u4e0d\u80fd\u4e3a\u7a7a");
   }
-  const result = await adminCatalogRequest<{ product: Record<string, unknown> }>(
+  const result = await adminCatalogEnvelopeRequest<{ product: Record<string, unknown> }>(
     `/api/admin/catalog/products/${encodeURIComponent(productId)}`,
     {
       method: "PATCH",
       body: JSON.stringify(payload),
     }
   );
-  return normalizeProduct(assertApiRecord(result.product, "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u670d\u52a1\u5668\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1"));
+  const product = result.product ?? result.data?.product;
+  return normalizeProduct(assertApiRecord(product, "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u670d\u52a1\u5668\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1"));
 }
 
 export async function deleteProduct(id: string) {

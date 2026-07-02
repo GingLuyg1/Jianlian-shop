@@ -231,6 +231,7 @@ export default function AdminProductsPage() {
   const [categoryForm, setCategoryForm] = useState<CategoryFormState | null>(null);
   const [categoryInitialForm, setCategoryInitialForm] = useState<CategoryFormState | null>(null);
   const [productErrors, setProductErrors] = useState<FieldErrors>({});
+  const [productSubmitError, setProductSubmitError] = useState("");
   const [categoryErrors, setCategoryErrors] = useState<FieldErrors>({});
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
@@ -339,6 +340,7 @@ export default function AdminProductsPage() {
   function openNewProduct() {
     clearNotice();
     setProductErrors({});
+    setProductSubmitError("");
     const form = emptyProductForm();
     setProductInitialForm(form);
     setProductForm(form);
@@ -347,6 +349,7 @@ export default function AdminProductsPage() {
   function openEditProduct(product: AdminProduct) {
     clearNotice();
     setProductErrors({});
+    setProductSubmitError("");
     const form = toProductForm(product, categoryMap, categories);
     setProductInitialForm(form);
     setProductForm(form);
@@ -355,6 +358,7 @@ export default function AdminProductsPage() {
   function openCopyProduct(product: AdminProduct) {
     clearNotice();
     setProductErrors({});
+    setProductSubmitError("");
     const form = toProductForm(product, categoryMap, categories);
     const nextForm: ProductFormState = {
       ...form,
@@ -380,6 +384,7 @@ export default function AdminProductsPage() {
     setProductForm(null);
     setProductInitialForm(null);
     setProductErrors({});
+    setProductSubmitError("");
     setError("");
   }
 
@@ -387,6 +392,7 @@ export default function AdminProductsPage() {
     setProductForm(null);
     setProductInitialForm(null);
     setProductErrors({});
+    setProductSubmitError("");
     setConfirmAction(null);
     setError("");
   }
@@ -522,6 +528,7 @@ export default function AdminProductsPage() {
   async function handleProductSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     clearNotice();
+    setProductSubmitError("");
     if (!productForm || isSaving) return;
     if (!isProductDirty(productForm, productInitialForm)) {
       setMessage("没有需要保存的修改");
@@ -533,7 +540,7 @@ export default function AdminProductsPage() {
 
     const editingProductId = productForm.id?.trim();
     if (editingProductId && editingProductId !== productInitialForm?.id) {
-      setError("商品保存失败，当前编辑商品已变化，请重新打开后再保存");
+      setProductSubmitError("商品保存失败，当前编辑商品已变化，请重新打开后再保存");
       return;
     }
 
@@ -559,7 +566,7 @@ export default function AdminProductsPage() {
           slug: "该商品标识已存在，请更换 slug",
         }));
       }
-      setError(text);
+      setProductSubmitError(text);
     } finally {
       setIsSaving(false);
     }
@@ -981,10 +988,12 @@ export default function AdminProductsPage() {
         isDirty={productDirty}
         isSaving={isSaving}
         onClose={requestCloseProduct}
+        submitError={productSubmitError}
         onSubmit={handleProductSubmit}
         onUpdate={(form) => {
           setProductForm(form);
           if (Object.keys(productErrors).length > 0) setProductErrors({});
+          if (productSubmitError) setProductSubmitError("");
         }}
       />
 
@@ -1244,6 +1253,7 @@ function ProductFormDialog({
   isDirty,
   isSaving,
   onClose,
+  submitError,
   onSubmit,
   onUpdate,
 }: {
@@ -1253,6 +1263,7 @@ function ProductFormDialog({
   isDirty: boolean;
   isSaving: boolean;
   onClose: () => void;
+  submitError: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdate: (form: ProductFormState) => void;
 }) {
@@ -1271,6 +1282,12 @@ function ProductFormDialog({
     >
       {form && (
         <form onSubmit={onSubmit} className="flex max-h-[calc(100vh-48px)] flex-col">
+          {submitError && (
+            <div className="mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p className="font-semibold">商品保存失败</p>
+              <p className="mt-1">{submitError}</p>
+            </div>
+          )}
           {Object.keys(errors).length > 0 && (
             <div className="mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               请检查表单中标红的内容后再保存。
