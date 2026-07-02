@@ -1,120 +1,152 @@
-# Jianlian Shop Manual Production Deployment
+# Manual Production Deployment
 
-Last updated: 2026-06-30
+This runbook is intentionally manual. It does not execute SQL, deploy code, restart PM2, or edit Nginx automatically.
 
-This runbook is manual by design. Do not run it automatically from Codex.
+## Safe Deployment Order
 
-## Pre-deployment Checks
+1. Local tests pass.
+2. Push reviewed code to GitHub `main`.
+3. Back up the production database.
+4. Manually execute required migrations in Supabase SQL Editor.
+5. Verify database structure and RLS.
+6. Back up the server code directory or record current commit.
+7. Pull code with fast-forward only.
+8. Install dependencies with lockfile.
+9. Build.
+10. Restart PM2 only after build passes.
+11. Run health checks.
+12. Run core page smoke tests.
 
-Local Windows:
-
-```powershell
-cd D:\Jianlian-shop
-git fetch origin
-git status --short --branch
-git rev-parse HEAD
-git rev-parse origin/main
-npm run typecheck
-npm run build
-```
-
-GitHub:
-
-- Confirm `main` contains the intended commit.
-- Confirm CI checks, if present, passed.
-- Confirm no `.env.local`, `.next`, logs, or cache files were committed.
-
-Supabase:
-
-- Confirm pending migration files and execution order.
-- Confirm no destructive SQL is scheduled without backup.
-- Confirm service role keys are not exposed in frontend environment variables.
-
-## Deployment Steps
-
-Linux server:
+## Local Preflight
 
 ```bash
-cd /www/jianlian-shop
+git status --short --branch
 git fetch origin
 git rev-parse HEAD
 git rev-parse origin/main
-git status --short --branch
+npm.cmd run typecheck
+npm.cmd run build
 ```
 
-If the server has local changes, stop and inspect them before continuing.
+Stop if:
 
-Deploy intended `main`:
+- Local branch is not `main`.
+- Local code is behind `origin/main`.
+- Required migration is not reviewed.
+- TypeScript or build fails.
+- `.env.local`, `.next`, or `node_modules` appears in staged files.
+
+## Database Sequence
+
+Before server deployment:
+
+1. Export a Supabase backup.
+2. Pause risky writes if possible.
+3. Execute pending migrations manually in recommended order from `docs/database-schema-verification.md`.
+4. Run the manual schema checks from that same document.
+5. Confirm RLS is enabled on private tables.
+
+Do not auto-run migrations from the app server.
+
+## Server Commands
+
+Run manually on the server:
 
 ```bash
 cd /www/jianlian-shop
-git reset --hard origin/main
+git status
+git branch --show-current
+git log -1 --oneline
+git rev-parse HEAD
+```
+
+Record the stable commit:
+
+```bash
+OLD_SHA=$(git rev-parse HEAD)
+echo "$OLD_SHA"
+```
+
+Deploy code:
+
+```bash
+git fetch origin
+git pull --ff-only origin main
 npm ci
 npm run build
-pm2 restart jianlian-shop
+pm2 restart jianlian-shop --update-env
 pm2 save
+pm2 status
 ```
 
-Only reload Nginx after validating the config:
+Nginx checks:
 
 ```bash
 nginx -t
 systemctl reload nginx
 ```
 
-## Version and Health Verification
+Only reload Nginx if configuration changed or certificate/proxy changes require it.
+
+## Health Checks
 
 ```bash
-cd /www/jianlian-shop
-git rev-parse HEAD
-pm2 describe jianlian-shop
-curl -fsS http://127.0.0.1:3001/api/health
+curl -I http://127.0.0.1:3001
 curl -fsS http://127.0.0.1:3001/api/health/readiness
-curl -I https://www.jianlian.shop/
-curl -I https://www.jianlian.shop/_next/static/chunks/webpack.js
+curl -I https://www.jianlian.shop
+curl -fsS https://www.jianlian.shop/api/health/readiness
 ```
 
-If the exact webpack filename differs, copy a real asset URL from the rendered HTML or browser console.
+Smoke test:
 
-Expected:
+- Home page
+- Product category page
+- Product detail page
+- Login
+- Account orders page
+- Admin login
+- Admin products page
+- Admin orders page
+- Admin system database page
 
-- PM2 app is online.
-- App listens on port `3001`.
-- Health endpoint returns JSON, not HTML.
-- Static assets return 200 and correct JavaScript/CSS content types.
-- Homepage, product page, checkout page, `/admin`, and `/admin/orders` render without white screen.
+## Rollback Steps
 
-## Rollback
-
-Record the current commit before rollback:
+Code rollback:
 
 ```bash
 cd /www/jianlian-shop
+git status
 git rev-parse HEAD
-```
-
-Rollback to a known stable commit:
-
-```bash
-cd /www/jianlian-shop
-git reset --hard <stable_commit_sha>
+git checkout <OLD_SHA>
 npm ci
 npm run build
-pm2 restart jianlian-shop
+pm2 restart jianlian-shop --update-env
 pm2 save
+curl -fsS http://127.0.0.1:3001/api/health/readiness
 ```
 
-Do not roll back database migrations blindly. If schema changes were applied, verify whether the old code is compatible with the current schema before switching traffic.
+Database rollback principle:
+
+- Prefer forward-fix compatibility migrations.
+- Do not drop production tables.
+- Do not delete order, payment, balance, inventory, delivery, or audit data.
+- If a migration caused data corruption risk, pause writes and restore from a verified backup after human approval.
+
+## Environment File Safety
+
+- `.env.local` must remain server-local.
+- Git pull must not overwrite production secrets.
+- Do not print environment variable values.
+- Do not put service role, payment secrets, reconciliation secrets, or webhook secrets in `NEXT_PUBLIC_*`.
 
 ## Stop Conditions
 
-Stop and do not restart production if:
+Stop and roll back or hold release if:
 
-- `npm ci` changes dependency versions unexpectedly.
-- `npm run build` fails.
-- PM2 restarts repeatedly.
-- `/api/health` is `unhealthy`.
-- Nginx config test fails.
-- Supabase tables required by the release are missing.
-- Static assets return 400/404/502.
-
+- Build fails.
+- Health readiness is unhealthy.
+- Admin database page reports blocked schema.
+- Product save fails.
+- Public product pages are unavailable.
+- Users can access other users' data.
+- Payment or balance endpoints return unsafe states.
