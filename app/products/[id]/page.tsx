@@ -307,8 +307,8 @@ export default function ProductDetailPage() {
         ) : !product ? (
           <StateCard title="商品不存在" description="当前商品可能已下架或链接已失效。" tone="warning" />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-            <div className="space-y-5">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] lg:items-start">
+            <div className="min-w-0 space-y-5">
               <Card>
                 <CardContent className="grid gap-5 p-5 sm:grid-cols-[190px_minmax(0,1fr)]">
                   <div className="aspect-square overflow-hidden rounded-2xl border border-orange-100 bg-white">
@@ -381,8 +381,8 @@ export default function ProductDetailPage() {
               </Card>
             </div>
 
-            <div className="space-y-4">
-              <Card className="sticky top-20">
+            <div className="min-w-0 space-y-4">
+              <Card className="lg:sticky lg:top-24">
                 <CardHeader>
                   <CardTitle className="text-base">商品购买</CardTitle>
                 </CardHeader>

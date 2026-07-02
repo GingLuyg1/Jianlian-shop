@@ -19,6 +19,11 @@ function jsonError(status: number, code: string, message: string, requestId: str
   );
 }
 
+function isOptionalSkuSchemaError(error: { message?: string } | null) {
+  if (!error?.message) return false;
+  return /product_skus|schema cache|could not find|does not exist|PGRST/i.test(error.message);
+}
+
 export async function GET(
   _request: Request,
   context: { params: { identifier?: string } }
@@ -58,9 +63,9 @@ export async function GET(
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
 
-    if (rawSkuError) {
+    if (rawSkuError && !isOptionalSkuSchemaError(rawSkuError)) {
       skuError = "规格读取失败，单规格商品仍可继续查看";
-    } else {
+    } else if (!rawSkuError) {
       skus = ((skuData ?? []) as Array<Record<string, unknown>>).map(normalizePublicSku);
     }
 
