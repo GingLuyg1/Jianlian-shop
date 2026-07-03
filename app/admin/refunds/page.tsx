@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCcw, Search, X } from "lucide-react";
@@ -43,6 +43,25 @@ const STATUS_OPTIONS = [
   { value: "failed", label: "失败" },
   { value: "cancelled", label: "已取消" },
 ];
+
+const BALANCE_REFUND_ACTIONS = [
+  { value: "approve_balance", label: "批准余额退款" },
+  { value: "reject", label: "拒绝退款" },
+  { value: "cancel", label: "取消退款" },
+  { value: "fail", label: "标记失败" },
+];
+
+const EXTERNAL_REFUND_ACTIONS = [
+  { value: "mark_processing", label: "标记处理中" },
+  { value: "complete_external", label: "登记外部退款完成" },
+  { value: "reject", label: "拒绝退款" },
+  { value: "cancel", label: "取消退款" },
+  { value: "fail", label: "标记失败" },
+];
+
+function isBalanceRefund(row: RefundRow | null) {
+  return row?.refundMethod === "balance" && row.paymentMethod === "balance";
+}
 
 export default function AdminRefundsPage() {
   const [refunds, setRefunds] = useState<RefundRow[]>([]);
@@ -95,7 +114,7 @@ export default function AdminRefundsPage() {
 
   function openDrawer(row: RefundRow) {
     setSelected(row);
-    setAction(row.refundMethod === "balance" ? "approve_balance" : "mark_processing");
+    setAction(isBalanceRefund(row) ? "approve_balance" : "mark_processing");
     setApprovedAmount(String(row.approvedAmount ?? row.requestedAmount));
     setNote("");
     setUserNote("");
@@ -106,6 +125,19 @@ export default function AdminRefundsPage() {
     if (!selected) return;
     if (!note.trim()) {
       toast.error("请填写审核备注");
+      return;
+    }
+    const balanceRefund = isBalanceRefund(selected);
+    if (action === "approve_balance" && !balanceRefund) {
+      toast.error("外部支付订单不能通过余额退款自动完成");
+      return;
+    }
+    if (action === "complete_external" && balanceRefund) {
+      toast.error("余额支付订单请使用余额退款流程");
+      return;
+    }
+    if (action === "complete_external" && !providerRefundId.trim()) {
+      toast.error("请填写外部渠道真实退款参考号或交易摘要");
       return;
     }
     const dangerous = ["approve_balance", "reject", "cancel", "complete_external", "fail"].includes(action);
@@ -230,16 +262,18 @@ export default function AdminRefundsPage() {
 
             <div className="mt-5 space-y-3 rounded-xl border border-orange-100 p-4">
               <h3 className="font-semibold text-slate-950">审核操作</h3>
+              <div className={`rounded-lg border px-3 py-2 text-sm ${isBalanceRefund(selected) ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
+                {isBalanceRefund(selected)
+                  ? "余额支付订单会通过服务端退款流程增加用户余额并创建余额流水。"
+                  : "外部渠道暂未接入自动退款。请完成真实人工退款后，再填写真实退款参考号登记完成，不能伪造退款成功。"}
+              </div>
               <select value={action} onChange={(event) => setAction(event.target.value)} className="w-full rounded-lg border border-orange-100 px-3 py-2 outline-none">
-                <option value="approve_balance">批准余额退款</option>
-                <option value="mark_processing">标记处理中</option>
-                <option value="complete_external">登记外部退款完成</option>
-                <option value="reject">拒绝退款</option>
-                <option value="cancel">取消退款</option>
-                <option value="fail">标记失败</option>
+                {(isBalanceRefund(selected) ? BALANCE_REFUND_ACTIONS : EXTERNAL_REFUND_ACTIONS).map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
               </select>
               <input value={approvedAmount} onChange={(event) => setApprovedAmount(event.target.value)} type="number" min="0" step="0.01" className="w-full rounded-lg border border-orange-100 px-3 py-2 outline-none" placeholder="批准金额" />
-              <input value={providerRefundId} onChange={(event) => setProviderRefundId(event.target.value)} className="w-full rounded-lg border border-orange-100 px-3 py-2 outline-none" placeholder="外部渠道人工退款参考号（外部完成时必填）" />
+              <input value={providerRefundId} onChange={(event) => setProviderRefundId(event.target.value)} className="w-full rounded-lg border border-orange-100 px-3 py-2 outline-none" placeholder={isBalanceRefund(selected) ? "余额退款无需填写外部参考号" : "外部渠道真实退款参考号或交易摘要（完成时必填）"} />
               <textarea value={note} onChange={(event) => setNote(event.target.value)} className="min-h-[96px] w-full rounded-lg border border-orange-100 px-3 py-2 outline-none" placeholder="管理员审核备注（必填）" />
               <textarea value={userNote} onChange={(event) => setUserNote(event.target.value)} className="min-h-[72px] w-full rounded-lg border border-orange-100 px-3 py-2 outline-none" placeholder="用户可见说明（选填）" />
               <button disabled={submitting} onClick={submitAction} className="w-full rounded-lg bg-orange-600 px-4 py-2.5 font-semibold text-white hover:bg-orange-700 disabled:opacity-60">
