@@ -17,7 +17,12 @@ export type MonitoringCategory =
   | "delivery"
   | "reconciliation"
   | "notifications"
+  | "email"
   | "auth"
+  | "refund"
+  | "database"
+  | "security"
+  | "deployment"
   | "system"
   | "performance";
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { recordSystemError } from "@/lib/monitoring/logger";
+import { getRequestIdFromRequest, withRequestIdHeader } from "@/lib/monitoring/request-id";
 import { getReleaseInfo } from "@/lib/system/release-info";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { hasSupabaseServerConfig } from "@/lib/supabase/server";
@@ -17,7 +17,8 @@ type HealthCheck = {
   durationMs?: number;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const requestId = getRequestIdFromRequest(request, "ready");
   const started = Date.now();
   const checks: HealthCheck[] = [];
 
@@ -50,20 +51,7 @@ export async function GET() {
   const status = criticalFailed ? "unhealthy" : degraded ? "degraded" : "healthy";
   const release = getReleaseInfo(status);
 
-  if (criticalFailed) {
-    await recordSystemError({
-      level: "critical",
-      category: "system",
-      event: "health_readiness_unhealthy",
-      title: "Health readiness check failed",
-      message: "A critical health readiness check failed.",
-      route: "/api/health/readiness",
-      errorCode: "HEALTH_UNHEALTHY",
-      metadata: { checks },
-    });
-  }
-
-  return NextResponse.json(
+  return withRequestIdHeader(NextResponse.json(
     {
       status,
       environment: release.environment,
@@ -82,7 +70,7 @@ export async function GET() {
         "Cache-Control": "no-store",
       },
     }
-  );
+  ), requestId);
 }
 
 function shortSha(value: string) {
