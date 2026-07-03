@@ -53,7 +53,7 @@ let fallbackAnnouncementStart = Date.now();
 const highlightedAnnouncementParts = [
   "24小时内",
   "拿到账号第一时间检查账号",
-  "本站产品拒绝任何违法行为，不提供任何教程（仅限登录），不为任何非法行业提供任何支持，仅提供电商拓客服务。",
+  "严禁用于违法犯罪活动",
 ];
 
 function renderAnnouncementText(text: string) {

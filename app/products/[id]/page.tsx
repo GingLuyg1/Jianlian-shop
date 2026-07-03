@@ -371,8 +371,8 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <PublicLayout>
-      <div className="mx-auto w-full max-w-[1420px] px-4 py-5 lg:px-7">
+    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-hidden px-4 py-3 md:px-6">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1668px] flex-col">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
@@ -412,8 +412,8 @@ export default function ProductDetailPage() {
             tone="warning"
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
-            <main className="min-w-0 space-y-5">
+          <div className="grid min-h-0 flex-1 gap-5 overflow-hidden lg:grid-cols-[minmax(0,1fr)_390px] lg:items-stretch">
+            <main className="min-h-0 min-w-0 space-y-5 overflow-y-auto pr-1 sidebar-scroll">
               <Card>
                 <CardContent className="grid gap-5 p-5 sm:grid-cols-[240px_minmax(0,1fr)]">
                   <div className="aspect-square overflow-hidden rounded-2xl border border-orange-100 bg-white">
@@ -521,12 +521,12 @@ export default function ProductDetailPage() {
               </Card>
             </main>
 
-            <aside className="min-w-0">
-              <Card className="lg:sticky lg:top-24">
+            <aside className="min-h-0 min-w-0">
+              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
                 <CardHeader>
                   <CardTitle className="text-base">商品购买</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
                   {skuError ? (
                     <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700">
                       {skuError}

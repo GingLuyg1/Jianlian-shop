@@ -509,7 +509,7 @@ function ProductPanel({
             ) : (
               <div className="scroll-fade-y h-full min-h-0 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll">
                 {products.map((product) => (
-                  <ProductRow key={product.id} product={product} currencySymbol={currencySymbol} showStock={showStock} />
+                  <ProductRowCompact key={product.id} product={product} currencySymbol={currencySymbol} showStock={showStock} />
                 ))}
               </div>
             )}
@@ -556,6 +556,69 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
         ) : null}
         <div className="shrink-0 text-lg font-bold text-blue-600">
           {product.stockStatus === "out-of-stock" ? "已售罄" : priceText}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ProductRowCompact({ currencySymbol, product, showStock }: { currencySymbol: string; product: Product; showStock: boolean }) {
+  const stock = Number(product.stock ?? 0);
+  const imageSrc = product.imageUrl || productImageFallbackSrc;
+  const minPrice = Number(product.metadata?.minPrice ?? product.price);
+  const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
+  const hasSkus = Boolean(product.metadata?.hasSkus);
+  const hasStock = stock > 0 && product.stockStatus !== "out-of-stock";
+  const priceText = hasSkus && maxPrice > minPrice
+    ? `${currencySymbol}${minPrice.toFixed(2)}-${currencySymbol}${maxPrice.toFixed(2)}`
+    : `${currencySymbol}${product.price.toFixed(2)}`;
+
+  return (
+    <button
+      type="button"
+      onClick={() => { window.location.href = `/checkout?product=${encodeURIComponent(product.id)}`; }}
+      className={cn(compactProductRowClassName, "group")}
+    >
+      <div className="flex h-full min-w-0 items-center gap-5">
+        <img
+          src={imageSrc}
+          alt={product.name}
+          onError={(event) => setProductImageFallback(event.currentTarget)}
+          className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover"
+        />
+        <div className="min-w-0 flex-1 text-left">
+          <div className="line-clamp-1 text-base font-semibold text-slate-700 group-hover:text-primary">
+            {product.name}
+          </div>
+          {product.description ? (
+            <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+              {product.description}
+            </div>
+          ) : null}
+          {hasSkus ? (
+            <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">多 SKU</span>
+            </div>
+          ) : null}
+        </div>
+        {showStock ? (
+          <div
+            className={cn(
+              "hidden min-w-[96px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold md:flex",
+              hasStock ? "text-green-600" : "text-red-500"
+            )}
+          >
+            <span>库存</span>
+            <span>{stock}</span>
+          </div>
+        ) : null}
+        {product.originalPrice ? (
+          <div className="hidden shrink-0 text-sm text-muted-foreground line-through lg:block">
+            {currencySymbol}{Number(product.originalPrice).toFixed(2)}
+          </div>
+        ) : null}
+        <div className="min-w-[92px] shrink-0 text-center text-lg font-bold text-blue-600">
+          {hasStock ? priceText : "已售罄"}
         </div>
       </div>
     </button>
@@ -609,7 +672,6 @@ function updateOptionalParam(params: URLSearchParams, key: string, value: unknow
   if (!next || next === defaultValue) params.delete(key);
   else params.set(key, next);
 }
-
 
 
 

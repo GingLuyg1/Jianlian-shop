@@ -441,7 +441,7 @@ export default function CheckoutPage() {
           closeHref={getProductListHref(product)}
         />
 
-        <Card className="h-full min-h-0 overflow-hidden">
+        <Card className="h-full min-h-0 overflow-visible">
           <CardContent className="flex h-full min-h-0 flex-col p-0">
             <div className="shrink-0 border-b border-border bg-white p-4">
               <div className="flex items-center justify-between gap-4">
@@ -465,13 +465,14 @@ export default function CheckoutPage() {
                   onSelectSku={setSelectedSkuId}
                 />
               ) : null}
-
                 <div className="space-y-3 pt-2">
-                  <h3 className="text-base font-semibold">购买提醒</h3>
-                  <ReminderItem text="所有账号/卡密类商品请仔细核对说明，非商品问题不支持退换。" />
-                  <ReminderItem text="售后期通常为商品发货后24小时内，请收到后第一时间检查。" />
-                  <ReminderItem text="本站不提供违法用途教程，不为任何非法行业提供支持。" />
-                  <ReminderItem text="如果不确定商品是否适合，请先联系在线客服确认。" />
+                  <h3 className="text-base font-semibold">{"\u8d2d\u4e70\u63d0\u9192"}</h3>
+                  {(settings.checkout_notice || "\u6240\u6709\u8d26\u53f7/\u5361\u5bc6\u7c7b\u5546\u54c1\u8bf7\u4ed4\u7ec6\u6838\u5bf9\u8bf4\u660e\uff0c\u975e\u5546\u54c1\u95ee\u9898\u4e0d\u652f\u6301\u9000\u6362\u3002")
+                    .split(/\r?\n/)
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                    .slice(0, 6)
+                    .map((item) => <ReminderItem key={item} text={item} />)}
                 </div>
               </div>
             </div>
@@ -687,7 +688,7 @@ function PaymentMethodSelect({
 
       {open ? (
         <div
-          className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 max-h-72 overflow-y-auto rounded-xl border border-[#ead9cc] bg-white p-1.5 shadow-xl sm:bottom-auto sm:top-[calc(100%+8px)]"
+          className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 max-h-[min(340px,calc(100dvh-180px))] overflow-y-auto rounded-xl border border-[#ead9cc] bg-white p-1.5 shadow-xl"
           role="listbox"
         >
           {PAYMENT_METHOD_OPTIONS.map((option) => {

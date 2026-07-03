@@ -3,10 +3,7 @@
 import { ReactNode } from "react";
 import { X } from "lucide-react";
 
-import {
-  SettingsProvider,
-  usePublicSettings,
-} from "@/components/settings/SettingsProvider";
+import { SettingsProvider, usePublicSettings } from "@/components/settings/SettingsProvider";
 import MobileMenu from "./MobileMenu";
 import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
@@ -23,9 +20,7 @@ export default function PublicLayout({
 }: PublicLayoutProps) {
   return (
     <SettingsProvider>
-      <PublicLayoutContent contentClassName={contentClassName}>
-        {children}
-      </PublicLayoutContent>
+      <PublicLayoutContent contentClassName={contentClassName}>{children}</PublicLayoutContent>
     </SettingsProvider>
   );
 }
@@ -38,15 +33,12 @@ function getSupportHref(value: string) {
   return "";
 }
 
-function PublicLayoutContent({
-  children,
-  contentClassName,
-}: PublicLayoutProps) {
+function PublicLayoutContent({ children, contentClassName }: PublicLayoutProps) {
   const { settings } = usePublicSettings();
   const announcement = settings.top_announcement.trim();
-  const supportContact =
-    settings.support_contact.trim() || "客服暂未开放";
+  const supportContact = settings.support_contact.trim() || settings.support_email.trim() || "客服暂未开放";
   const supportHref = getSupportHref(supportContact);
+  const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,10 +56,8 @@ function PublicLayoutContent({
             className="h-8 w-8 rounded-md object-cover"
           />
           <div>
-            <div className="text-sm font-semibold leading-tight">Jianlian</div>
-            <div className="text-[10px] leading-tight text-muted-foreground">
-              数字商品服务
-            </div>
+            <div className="text-sm font-semibold leading-tight">{settings.site_name || "Jianlian"}</div>
+            <div className="text-[10px] leading-tight text-muted-foreground">{subtitle}</div>
           </div>
         </div>
       </div>
@@ -86,21 +76,15 @@ function PublicLayoutContent({
           type="button"
           className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="关闭在线客服弹窗"
-          {...({
-            popovertarget: "support-popover",
-            popovertargetaction: "hide",
-          } as Record<string, string>)}
+          {...({ popovertarget: "support-popover", popovertargetaction: "hide" } as Record<string, string>)}
         >
           <X className="h-4 w-4" />
         </button>
         <div className="text-center">
           <h2 className="text-xl font-semibold">客服信息</h2>
           <div className="mt-5 space-y-3 text-sm text-foreground">
-            {supportContact.split(/\r?\n/).map((line, index) => (
-              <div
-                key={`${line}-${index}`}
-                className={index === supportContact.split(/\r?\n/).length - 1 ? "text-muted-foreground" : undefined}
-              >
+            {supportContact.split(/\r?\n/).map((line, index, lines) => (
+              <div key={`${line}-${index}`} className={index === lines.length - 1 ? "text-muted-foreground" : undefined}>
                 {line}
               </div>
             ))}
