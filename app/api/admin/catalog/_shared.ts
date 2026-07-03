@@ -8,7 +8,7 @@ import type { CategoryPayload, DeliveryType, ProductPayload, ProductStatus } fro
 export const PRODUCT_FIELDS =
   "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,delivery_type,status,sort_order,metadata,updated_at,created_at";
 export const CATEGORY_FIELDS =
-  "id,parent_id,level,name,slug,icon,description,sort_order,status,is_active,updated_at,created_at";
+  "id,parent_id,level,name,slug,icon,description,sort_order,is_active,updated_at,created_at";
 
 const PRODUCT_STATUSES: ProductStatus[] = ["draft", "active", "inactive", "sold_out"];
 const DELIVERY_TYPES: DeliveryType[] = ["manual", "automatic", "shipping"];
@@ -234,7 +234,7 @@ export function normalizeCategoryPayload(body: Record<string, unknown>, partial 
 export async function assertProductCategory(supabase: SupabaseClient, categoryId: string) {
   const { data: category, error } = await supabase
     .from("categories")
-    .select("id,level,is_active,status")
+    .select("id,level,is_active")
     .eq("id", categoryId)
     .maybeSingle();
 
