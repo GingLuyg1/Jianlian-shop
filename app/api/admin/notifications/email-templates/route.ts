@@ -4,6 +4,7 @@ import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { auditEmailAdminAction, summarizeEmailError } from "@/lib/email/jobs";
 import { EMAIL_TEMPLATE_CODES } from "@/lib/email/types";
+import { validateSafeEmailHtml } from "@/lib/email/templates";
 import { getAdminRateLimitKey, checkRateLimit } from "@/lib/security/rate-limit";
 
 const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
@@ -71,6 +72,8 @@ export async function POST(request: NextRequest) {
 
     if (!EMAIL_TEMPLATE_CODES.includes(templateCode as any)) return json({ error: "模板代码不在允许列表中。" }, { status: 400 });
     if (!subject || !html) return json({ error: "邮件主题和 HTML 模板不能为空。" }, { status: 400 });
+    const htmlSafety = validateSafeEmailHtml(html);
+    if (!htmlSafety.ok) return json({ error: htmlSafety.error }, { status: 400 });
 
     const latest = await ctx.service
       .from("email_templates")

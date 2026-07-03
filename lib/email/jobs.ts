@@ -141,14 +141,25 @@ export async function processEmailDeliveryJob(jobId: string, triggerSource = "ma
   if (job.status === "cancelled") return { ok: false as const, error: "邮件任务已取消，不能继续发送。" };
   if (job.attempts >= job.max_attempts) return { ok: false as const, error: "邮件任务已达到最大重试次数。" };
 
+  const staleLock = job.status === "processing" && Boolean(job.updated_at) && Date.now() - new Date(job.updated_at as string).getTime() > 15 * 60_000;
+  if (job.status === "processing" && !staleLock) return { ok: false as const, error: "邮件任务正在由其他 Worker 处理。" };
+
+  const recipient = await resolveTrustedRecipient(supabase, job);
+  if (!recipient.ok) return recipient;
+
   const attempts = job.attempts + 1;
-  await supabase
+  const claimed = await supabase
     .from("email_delivery_jobs")
-    .update({ status: "processing", attempts, last_attempt_at: new Date().toISOString(), locked_by: triggerSource })
-    .eq("id", job.id);
+    .update({ status: "processing", attempts, last_attempt_at: new Date().toISOString(), locked_at: new Date().toISOString(), locked_by: triggerSource })
+    .eq("id", job.id)
+    .eq("status", job.status)
+    .select("id")
+    .maybeSingle();
+  if (claimed.error) return { ok: false as const, error: summarizeEmailError(claimed.error) };
+  if (!claimed.data) return { ok: false as const, error: "邮件任务已被其他 Worker 领取。" };
 
   const result = await sendEmail({
-    to: job.recipient_summary,
+    to: recipient.email,
     subject: job.subject_rendered ?? "",
     html: job.html_rendered ?? "",
     text: job.text_rendered ?? "",
@@ -189,6 +200,39 @@ export async function processEmailDeliveryJob(jobId: string, triggerSource = "ma
 
   if (updated.error || !updated.data) return { ok: false as const, error: summarizeEmailError(updated.error) };
   return { ok: result.status === "sent", job: updated.data as EmailDeliveryJobRecord, result };
+}
+
+export async function processDueEmailDeliveryJobs(limit = 20, triggerSource = "worker") {
+  const supabase = getSupabaseServiceRoleClient();
+  if (!supabase) return { ok: false as const, error: "邮件任务服务未配置：缺少 SUPABASE_SERVICE_ROLE_KEY。" };
+  const safeLimit = Math.min(25, Math.max(1, Math.trunc(limit)));
+  const now = new Date().toISOString();
+  const due = await supabase
+    .from("email_delivery_jobs")
+    .select("id")
+    .in("status", ["pending", "retrying"])
+    .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
+    .order("created_at", { ascending: true })
+    .limit(safeLimit);
+  if (due.error) return { ok: false as const, error: summarizeEmailError(due.error) };
+
+  const summary = { selected: due.data?.length ?? 0, sent: 0, failed: 0, deduped: 0 };
+  for (const row of due.data ?? []) {
+    const result = await processEmailDeliveryJob(String(row.id), triggerSource).catch(() => ({ ok: false as const, error: "邮件任务处理异常。" }));
+    if (result.ok && "deduped" in result && result.deduped) summary.deduped += 1;
+    else if (result.ok) summary.sent += 1;
+    else summary.failed += 1;
+  }
+  return { ok: true as const, summary };
+}
+
+async function resolveTrustedRecipient(supabase: SupabaseClient, job: EmailDeliveryJobRecord) {
+  if (!job.user_id) return { ok: false as const, error: "邮件任务缺少可信收件人引用，不能发送。" };
+  const loaded = await supabase.auth.admin.getUserById(job.user_id);
+  const email = normalizeEmailAddress(loaded.data.user?.email ?? "");
+  if (loaded.error || !email || !email.includes("@")) return { ok: false as const, error: "无法解析可信收件邮箱。" };
+  if (hashEmailRecipient(email) !== job.recipient_hash) return { ok: false as const, error: "收件邮箱已变化，请重新创建邮件任务。" };
+  return { ok: true as const, email };
 }
 
 export async function auditEmailAdminAction(input: {

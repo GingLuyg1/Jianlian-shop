@@ -1,113 +1,46 @@
-﻿# 邮件通知系统验收报告
+# 邮件通知系统验收报告
 
-## 修改范围
+## 当前调用链路
 
-本次建立邮件通知基础能力：模板、版本、发送队列、发送记录、失败重试、幂等控制、用户偏好、后台查询和审计写入。未接入真实邮件 Provider，未发送真实邮件。
+- 邮箱验证：`POST /api/auth/resend-verification` -> Supabase Auth `auth.resend`。
+- 密码重置：`/forgot-password` -> Supabase Auth `resetPasswordForEmail`。
+- 业务邮件：真实业务成功 -> `queueBusinessEmail` -> 当前发布模板 -> `email_delivery_jobs` -> 内部 Worker -> Provider。
+- 管理入口：`/admin/notifications/email-templates`、`/admin/notifications/email-deliveries`。
 
-## 新增 Migration
+Supabase Auth 邮件不进入业务邮件表，验证/重置 Token 不写入普通日志。业务邮件失败不回滚订单、支付、交付或退款事务。
 
-```text
-supabase/migrations/20260701_email_notifications.sql
-```
+## 数据结构与权限
 
-需要手动在 Supabase SQL Editor 执行。Codex 未自动执行线上 SQL。
+需手动执行 `supabase/migrations/20260701_email_notifications.sql`。它创建：
 
-## 数据结构
+- `email_templates`
+- `email_delivery_jobs`
+- `email_delivery_attempts`
+- `user_email_preferences`
 
-新增表：
+表均启用 RLS。模板和发送日志只允许超级管理员读取；写入通过服务端 Service Role；普通用户只能维护自己的邮件偏好。任务使用 `idempotency_key` 唯一约束，尝试记录使用 `(job_id, attempt_no)` 唯一约束。
 
-```text
-email_templates
-email_delivery_jobs
-email_delivery_attempts
-user_email_preferences
-```
+## 本次修复
 
-关键约束：
+1. 修复任务把脱敏邮箱当作真实收件地址的问题。发送前通过 `user_id` 在服务端重新解析 Auth 邮箱，并校验 `recipient_hash`；数据库仍不保存邮箱明文。
+2. 领取任务时使用状态条件更新，两个 Worker 并发时只有一个能成功领取。
+3. `processing` 锁 15 分钟内不可重复处理，超时后允许恢复。
+4. 新增内部入口 `POST /api/internal/email/process`，使用 `EMAIL_WORKER_SECRET`，单批最多 25 条。
+5. 新增取消未发送任务接口和后台重试/取消操作，均需超级管理员权限并写审计日志。
+6. 模板创建、编辑和渲染均拒绝脚本标签、危险事件属性和危险 URL 协议。
+7. 补齐注册成功、外部支付待处理、交付失败、退款成功和账户状态变更模板代码。
 
-- `email_templates(template_code, version)` 唯一。
-- 同一模板只允许一个当前发布版本。
-- `email_delivery_jobs(idempotency_key)` 唯一。
-- `email_delivery_attempts(job_id, attempt_no)` 唯一。
-- RLS 开启，普通用户只能读取和修改自己的邮件偏好。
-- 超级管理员可查看模板和发送记录。
+## 重试与隐私
 
-## 模板规则
+- 状态：`pending / processing / sent / retrying / failed / cancelled`。
+- 临时网络、超时、限流和 5xx 错误才进入指数退避重试，最多 5 次。
+- 配置缺失、地址错误、模板缺失和权限错误不自动重试。
+- 后台只展示 `recipient_summary`，不返回模板正文、完整邮箱、Token、密码、支付密钥或数字交付内容。
 
-支持模板代码：
+## 验收结论
 
-```text
-email_verification
-password_reset
-order_created
-payment_success
-payment_failed
-order_delivered
-refund_requested
-refund_approved
-refund_rejected
-recharge_success
-account_security_alert
-admin_system_alert
-```
+- TypeScript 静态检查通过。
+- 未执行远程 migration，未发送真实邮件。
+- Provider 适配器仍保持安全失败状态，不会伪造成功。
+- 订单、支付、交付和退款成功服务尚未全面调用 `queueBusinessEmail`，因此业务邮件接入状态为 **partial**；接入时必须放在业务事务成功之后，并使用稳定幂等键。
 
-变量使用 `{{ variable }}`，服务端渲染时做 HTML 转义。模板发布和归档要求管理员权限并写入审计日志。
-
-## 幂等与重试
-
-- 创建任务前检查用户偏好和模板状态。
-- 使用 `idempotency_key` 防止同一业务事件重复创建邮件。
-- 发送失败写入 `email_delivery_attempts`。
-- 可重试错误按指数退避写入 `next_retry_at`。
-- Provider 未配置时不伪造成功。
-
-## 用户偏好
-
-用户偏好保存在 `user_email_preferences`，支持 `marketing`、`security`、`orders`、`recharges`、`refunds`、`promotions`、`system` 等分组。
-
-当前默认策略：安全、订单、充值、退款和系统通知允许发送；营销类需要用户明确开启。
-
-## 后台能力
-
-新增后台页面：
-
-```text
-/admin/notifications/email-templates
-/admin/notifications/email-deliveries
-```
-
-新增后台接口：
-
-```text
-GET /api/admin/notifications/email-templates
-POST /api/admin/notifications/email-templates
-GET /api/admin/notifications/email-templates/[templateId]
-PATCH /api/admin/notifications/email-templates/[templateId]
-GET /api/admin/notifications/email-deliveries
-POST /api/admin/notifications/email-deliveries/[jobId]/retry
-```
-
-## 安全验收
-
-- 普通用户不能访问后台邮件接口。
-- 浏览器端不使用 Service Role Key。
-- 邮件 Provider 密钥不进入数据库和审计日志。
-- 收件人只保存摘要和哈希，后台不展示完整邮箱。
-- 发送失败不输出 Provider 原始敏感响应。
-- 邮件重试通过服务端接口处理。
-- 后台邮件操作写入管理员审计日志。
-
-## 已验证
-
-```text
-tsc --noEmit：通过
-npm run build：通过
-```
-
-## 需要继续完成
-
-- 手动执行邮件通知 migration。
-- 补充真实 Provider 适配器。
-- 配置生产 Worker 或定时任务。
-- 补充 Provider webhook 验签和状态回写。
-- 如果要发送密码重置或邮箱验证邮件，应继续使用 Supabase Auth 原生流程或服务端一次性安全引用。

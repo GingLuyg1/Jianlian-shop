@@ -6,6 +6,7 @@ import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { summarizeEmailError } from "@/lib/email/jobs";
 import { getEmailProviderStatus } from "@/lib/email/provider";
+import { EmailDeliveryActions } from "@/components/admin/EmailDeliveryActions";
 
 const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
@@ -87,6 +88,7 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
                   <th className="px-4 py-3">尝试</th>
                   <th className="px-4 py-3">Provider</th>
                   <th className="px-4 py-3">错误摘要</th>
+                  <th className="px-4 py-3">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -100,6 +102,7 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
                     <td className="px-4 py-3">{row.attempts}/{row.max_attempts}</td>
                     <td className="px-4 py-3">{row.provider || "—"}</td>
                     <td className="max-w-[280px] truncate px-4 py-3 text-slate-500" title={row.last_error_message || ""}>{row.last_error_code || row.last_error_message || "—"}</td>
+                    <td className="px-4 py-3"><EmailDeliveryActions jobId={row.id} status={row.status} /></td>
                   </tr>
                 ))}
               </tbody>

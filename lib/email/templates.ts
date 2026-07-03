@@ -22,6 +22,16 @@ export function extractTemplateVariables(template: string) {
   return Array.from(variables).sort();
 }
 
+export function validateSafeEmailHtml(html: string) {
+  if (/<\s*(script|iframe|object|embed|form|base|meta)\b/i.test(html)) {
+    return { ok: false as const, error: "邮件模板包含禁止使用的 HTML 标签。" };
+  }
+  if (/\son[a-z]+\s*=/i.test(html) || /(?:javascript|data\s*:\s*text\/html)\s*:/i.test(html)) {
+    return { ok: false as const, error: "邮件模板包含危险事件属性或链接协议。" };
+  }
+  return { ok: true as const };
+}
+
 export function getAllowedTemplateVariables(schema: Record<string, unknown> | null | undefined) {
   const safeSchema = schema ?? {};
   const required = Array.isArray(safeSchema.required) ? safeSchema.required.map(String) : [];
@@ -56,6 +66,8 @@ export function renderTemplateString(template: string, variables: Record<string,
 }
 
 export function renderEmailTemplate(template: EmailTemplateRecord, variables: Record<string, unknown>) {
+  const htmlValidation = validateSafeEmailHtml(template.html_template);
+  if (!htmlValidation.ok) return htmlValidation;
   const validation = validateTemplateVariables(template, variables);
   if (!validation.ok) return validation;
 

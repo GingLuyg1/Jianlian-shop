@@ -1,14 +1,19 @@
 ﻿export type EmailTemplateCode =
   | "email_verification"
   | "password_reset"
+  | "registration_success"
   | "order_created"
   | "payment_success"
+  | "external_payment_pending"
   | "payment_failed"
   | "order_delivered"
+  | "delivery_failed"
   | "refund_requested"
   | "refund_approved"
   | "refund_rejected"
+  | "refund_succeeded"
   | "recharge_success"
+  | "account_status_changed"
   | "account_security_alert"
   | "admin_system_alert";
 
@@ -61,14 +66,19 @@ export type SendEmailResult = {
 export const EMAIL_TEMPLATE_CODES: EmailTemplateCode[] = [
   "email_verification",
   "password_reset",
+  "registration_success",
   "order_created",
   "payment_success",
+  "external_payment_pending",
   "payment_failed",
   "order_delivered",
+  "delivery_failed",
   "refund_requested",
   "refund_approved",
   "refund_rejected",
+  "refund_succeeded",
   "recharge_success",
+  "account_status_changed",
   "account_security_alert",
   "admin_system_alert",
 ];

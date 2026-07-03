@@ -3,6 +3,7 @@
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { auditEmailAdminAction, summarizeEmailError } from "@/lib/email/jobs";
+import { validateSafeEmailHtml } from "@/lib/email/templates";
 
 const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
@@ -76,6 +77,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { templa
     }
 
     if (before.status !== "draft") return json({ error: "只有草稿模板可以编辑。" }, { status: 400 });
+    if (body.htmlTemplate !== undefined) {
+      const htmlSafety = validateSafeEmailHtml(String(body.htmlTemplate));
+      if (!htmlSafety.ok) return json({ error: htmlSafety.error }, { status: 400 });
+    }
     const patch: Record<string, unknown> = { updated_by: ctx.admin.user.id };
     for (const [inputKey, column] of Object.entries({ name: "name", subjectTemplate: "subject_template", htmlTemplate: "html_template", textTemplate: "text_template", variablesSchema: "variables_schema" })) {
       if (body[inputKey] !== undefined) patch[column] = body[inputKey];
