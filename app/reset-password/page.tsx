@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,16 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { validateAuthPassword } from "@/lib/auth/password-policy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-
-function validatePassword(value: string) {
-  if (value.length < 8) return "新密码至少需要 8 位。";
-  if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) {
-    return "新密码建议同时包含字母和数字。";
-  }
-
-  return "";
-}
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -56,7 +48,7 @@ export default function ResetPasswordPage() {
     if (submitting) return;
 
     setError("");
-    const passwordError = validatePassword(password);
+    const passwordError = validateAuthPassword(password);
     if (passwordError) {
       setError(passwordError);
       return;
@@ -71,13 +63,17 @@ export default function ResetPasswordPage() {
       password,
     });
     if (updateError) {
+      setPassword("");
+      setConfirmPassword("");
       setError("重置链接已失效或密码更新失败，请重新发送重置邮件。");
       setSubmitting(false);
       return;
     }
 
     toast.success("密码已重置，请重新登录。");
-    await getSupabaseBrowserClient().auth.signOut();
+    setPassword("");
+    setConfirmPassword("");
+    await getSupabaseBrowserClient().auth.signOut({ scope: "global" });
     router.replace("/login");
   }
 
@@ -185,4 +181,3 @@ function PasswordInput({
     </div>
   );
 }
-

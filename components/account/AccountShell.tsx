@@ -18,14 +18,6 @@ const navItems = [
   { label: "隐私设置", href: "/account/privacy", icon: FileLock2 },
 ];
 
-function getEmailRedirectTo(path = "/account") {
-  if (typeof window === "undefined") return "https://www.jianlian.shop/account";
-  const origin = window.location.origin.includes("localhost")
-    ? "http://localhost:3000"
-    : "https://www.jianlian.shop";
-  return `${origin}${path}`;
-}
-
 export default function AccountShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -104,24 +96,30 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
   async function handleSignOut() {
     if (!window.confirm("确认退出当前账号？")) return;
-    await getSupabaseBrowserClient().auth.signOut();
-    router.replace("/");
-    router.refresh();
+    try {
+      await getSupabaseBrowserClient().auth.signOut({ scope: "global" });
+      setEmail("");
+      setEmailVerified(true);
+      router.replace("/");
+      router.refresh();
+    } catch {
+      toast.error("退出登录失败，请稍后重试。");
+    }
   }
 
   async function resendVerification() {
     if (!email || resendSeconds > 0) return;
     try {
-      const { error } = await getSupabaseBrowserClient().auth.resend({
-        type: "signup",
-        email,
-        options: { emailRedirectTo: getEmailRedirectTo("/account") },
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
-      if (error) throw error;
+      const payload = (await response.json().catch(() => null)) as { error?: string; alreadyVerified?: boolean } | null;
+      if (!response.ok) throw new Error(payload?.error || "验证邮件发送失败，请稍后重试。");
       setResendSeconds(60);
-      toast.success("验证邮件已发送，请检查邮箱。");
-    } catch {
-      toast.error("验证邮件发送失败，请稍后重试。");
+      toast.success(payload?.alreadyVerified ? "邮箱已经完成验证。" : "验证邮件已发送，请检查邮箱。");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "验证邮件发送失败，请稍后重试。");
     }
   }
 

@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSafeInternalRedirect } from "@/lib/auth/redirect";
+import { getSafeAuthErrorMessage, getSafeNetworkAuthMessage, isEmailFormatValid, validateAuthPassword } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
 import {
   getOrCreateProfile,
@@ -35,75 +36,6 @@ type AuthScreenProps = {
 
 const features = ["安全账号", "快速下单", "订单查询"];
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function getSafeErrorMessage(error: unknown, fallback: string) {
-  if (
-    error &&
-    typeof error === "object" &&
-    "message" in error &&
-    typeof (error as { message?: unknown }).message === "string"
-  ) {
-    const message = (error as { message?: string }).message;
-    return message && message.trim() ? message : fallback;
-  }
-
-  return fallback;
-}
-
-function getNetworkErrorMessage(error: unknown) {
-  const rawMessage = getSafeErrorMessage(error, "");
-  const lowerMessage = rawMessage.toLowerCase();
-
-  if (
-    lowerMessage.includes("failed to fetch") ||
-    lowerMessage.includes("networkerror") ||
-    lowerMessage.includes("load failed")
-  ) {
-    return "无法连接 Supabase Auth 服务，请检查 Supabase URL、Anon Key、服务器网络或域名 CORS 配置。";
-  }
-
-  return rawMessage || "网络请求失败，请稍后重试。";
-}
-
-function validatePassword(value: string) {
-  if (value.length < 8) return "密码至少需要 8 位。";
-  if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) {
-    return "密码建议同时包含字母和数字。";
-  }
-
-  return "";
-}
-
-function getAuthErrorMessage(error: unknown, fallback: string) {
-  const rawMessage = getSafeErrorMessage(error, "");
-  const lowerMessage = rawMessage.toLowerCase();
-
-  if (
-    lowerMessage.includes("already registered") ||
-    lowerMessage.includes("user already registered") ||
-    lowerMessage.includes("already exists")
-  ) {
-    return "该邮箱已注册。";
-  }
-
-  if (lowerMessage.includes("invalid email")) return "邮箱格式不正确。";
-  if (lowerMessage.includes("password")) return "密码强度不足。";
-  if (lowerMessage.includes("rate") || lowerMessage.includes("too many")) {
-    return "请求过于频繁，请稍后再试。";
-  }
-  if (lowerMessage.includes("invalid login credentials")) {
-    return "邮箱或密码不正确。";
-  }
-  if (lowerMessage.includes("email not confirmed")) {
-    return "邮箱尚未验证，请先完成邮箱验证。";
-  }
-  if (lowerMessage.includes("signup") && lowerMessage.includes("disabled")) {
-    return "注册服务暂时不可用。";
-  }
-
-  return fallback;
-}
 
 function getAuthRedirectUrl(path: string) {
   if (typeof window === "undefined") return `https://www.jianlian.shop${path}`;
@@ -173,10 +105,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         );
 
         if (error) {
-          console.error("[Promotion] Failed to record visit", error);
+          console.warn("[Promotion] Failed to record visit");
         }
       } catch (visitError) {
-        console.error("[Promotion] Failed to record visit", visitError);
+        console.warn("[Promotion] Failed to record visit");
       }
     }
 
@@ -209,18 +141,18 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     if (!config.ok) {
       const configMessage =
         config.message ?? "Supabase URL 或 Key 未配置，请检查环境变量。";
-      console.error("[Supabase Auth]", configMessage);
+      console.warn("[Supabase Auth] Missing public config");
       setError(configMessage);
       return;
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    if (!isEmailFormatValid(normalizedEmail)) {
       setError("请输入正确的邮箱地址。");
       return;
     }
 
-    const passwordError = validatePassword(password);
+    const passwordError = validateAuthPassword(password);
     if (passwordError) {
       setError(passwordError);
       return;
@@ -264,18 +196,14 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
         if (signUpError) {
           setError(
-            getAuthErrorMessage(signUpError, "注册服务暂时不可用，请稍后重试。")
+            getSafeAuthErrorMessage(signUpError, "注册服务暂时不可用，请稍后重试。")
           );
           return;
         }
 
         if (data?.session) {
-          await getOrCreateProfile(supabase, data.session.user).catch(
-            (profileError) =>
-              console.error(
-                "[Supabase Auth] Failed to prepare profile",
-                profileError
-              )
+          await getOrCreateProfile(supabase, data.session.user).catch(() =>
+            console.warn("[Supabase Auth] Failed to prepare profile")
           );
           if (normalizedInviteCode) {
             try {
@@ -283,10 +211,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                 input_invite_code: normalizedInviteCode,
               });
               if (error) {
-                console.error("[Promotion] Failed to bind invite code", error);
+                console.warn("[Promotion] Failed to bind invite code");
               }
             } catch (bindError) {
-              console.error("[Promotion] Failed to bind invite code", bindError);
+              console.warn("[Promotion] Failed to bind invite code");
             }
           }
           setMessage("注册成功，正在进入账户中心。");
@@ -309,19 +237,16 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
       if (signInError) {
         setError(
-          getAuthErrorMessage(signInError, "邮箱或密码不正确。")
+          getSafeAuthErrorMessage(signInError, "邮箱或密码不正确。")
         );
+        setPassword("");
         return;
       }
 
       setMessage("登录成功，正在进入账户中心。");
       if (signInData?.user) {
-        await getOrCreateProfile(supabase, signInData.user).catch(
-          (profileError) =>
-            console.error(
-              "[Supabase Auth] Failed to prepare profile",
-              profileError
-            )
+        await getOrCreateProfile(supabase, signInData.user).catch(() =>
+          console.warn("[Supabase Auth] Failed to prepare profile")
         );
 
         const loginRestriction = await getLoginRestrictionMessage(
@@ -339,8 +264,8 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       router.push(redirectTo);
       router.refresh();
     } catch (authException) {
-      console.error("[Supabase Auth] Network or runtime exception", authException);
-      setError(getNetworkErrorMessage(authException));
+      console.warn("[Supabase Auth] Network or runtime exception");
+      setError(getSafeNetworkAuthMessage(authException));
     } finally {
       setLoading(false);
     }

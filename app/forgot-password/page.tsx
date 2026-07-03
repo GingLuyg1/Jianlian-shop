@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isEmailFormatValid } from "@/lib/auth/password-policy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SUCCESS_MESSAGE = "如果该邮箱已注册，重置邮件将发送至邮箱。";
 
 function getResetRedirectTo() {
@@ -43,16 +43,17 @@ export default function ForgotPasswordPage() {
 
     setError("");
     const normalizedEmail = email.trim().toLowerCase();
-    if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    if (!isEmailFormatValid(normalizedEmail)) {
       setError("请输入正确的邮箱地址。");
       return;
     }
 
     setSubmitting(true);
     try {
-      await getSupabaseBrowserClient().auth.resetPasswordForEmail(normalizedEmail, {
+      const { error: resetError } = await getSupabaseBrowserClient().auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo: getResetRedirectTo(),
       });
+      if (resetError) throw resetError;
       setSent(true);
       setCooldown(60);
     } catch {
@@ -76,7 +77,7 @@ export default function ForgotPasswordPage() {
           <CardHeader>
             <CardTitle>忘记密码</CardTitle>
             <p className="text-sm text-muted-foreground">
-              输入注册邮箱，我们将发送密码重置邮件。
+              输入注册邮箱，我们将发送密码重置邮件。为保护账号安全，页面不会透露邮箱是否存在。
             </p>
           </CardHeader>
           <CardContent>
@@ -127,4 +128,3 @@ export default function ForgotPasswordPage() {
     </main>
   );
 }
-

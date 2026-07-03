@@ -7,6 +7,7 @@ export type RateLimitPolicyName =
   | "catalog_read"
   | "order_create"
   | "order_lookup"
+  | "auth_resend"
   | "payment_session_create"
   | "payment_status_query"
   | "recharge_create"
@@ -40,6 +41,7 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
   catalog_read: { windowMs: 60_000, max: 120, message: "请求过于频繁，请稍后再试。" },
   order_create: { windowMs: 60_000, max: 8, message: "下单请求过于频繁，请稍后再试。" },
   order_lookup: { windowMs: 300_000, max: 8, message: "订单查询尝试过于频繁，请稍后再试。" },
+  auth_resend: { windowMs: 300_000, max: 3, message: "验证邮件发送过于频繁，请稍后再试。" },
   payment_session_create: { windowMs: 60_000, max: 10, message: "支付请求过于频繁，请稍后再试。" },
   payment_status_query: { windowMs: 30_000, max: 30, message: "支付状态查询过于频繁，请稍后再试。" },
   recharge_create: { windowMs: 60_000, max: 6, message: "充值请求过于频繁，请稍后再试。" },
