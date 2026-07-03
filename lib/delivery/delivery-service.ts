@@ -4,7 +4,9 @@ export type DeliveryServiceResult = {
   ok: boolean;
   order_id?: string;
   delivered_count?: number;
+  failed_count?: number;
   idempotent?: boolean;
+  message?: string;
 };
 
 function rawMessage(error: unknown) {
@@ -69,5 +71,10 @@ export async function deliverDigitalOrder(
     throw new Error(getDeliveryErrorMessage(error));
   }
 
-  return (data ?? { ok: true, delivered_count: 0, idempotent: true }) as DeliveryServiceResult;
+  const result = (data ?? { ok: true, delivered_count: 0, idempotent: true }) as DeliveryServiceResult;
+  if (result.ok === false) {
+    throw new Error(result.message || "自动发货处理失败，等待人工处理");
+  }
+
+  return result;
 }

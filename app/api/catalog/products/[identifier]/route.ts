@@ -1,7 +1,8 @@
-import { randomUUID } from "crypto";
+﻿import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { normalizePublicProduct, normalizePublicSku } from "@/lib/supabase/public-catalog";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const PRODUCT_SELECT =
@@ -29,7 +30,7 @@ function isOptionalSkuSchemaError(error: { message?: string } | null) {
 }
 
 async function findVisibleProductSlugById(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
+  supabase: { from: (table: string) => any },
   identifier: string
 ) {
   const { data, error } = await supabase
@@ -117,6 +118,24 @@ export async function GET(
         const bySlug = await queryProduct("slug", fallbackSlug);
         productData = bySlug.data;
         productError = bySlug.error;
+      }
+    }
+
+    if ((productError || !productData) && isUuid) {
+      const service = getSupabaseServiceRoleClient();
+      if (service) {
+        const { data: serviceProduct, error: serviceError } = await service
+          .from("products")
+          .select(PRODUCT_SELECT)
+          .eq("id", identifier)
+          .in("status", VISIBLE_PRODUCT_STATUSES)
+          .limit(1)
+          .maybeSingle();
+
+        if (!serviceError && serviceProduct) {
+          productData = serviceProduct;
+          productError = null;
+        }
       }
     }
 

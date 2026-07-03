@@ -243,6 +243,7 @@ export function createInventoryBatchNo() {
 export async function importDigitalInventoryBatch(input: {
   serviceClient: ServiceClient;
   productId: string;
+  skuId?: string | null;
   batchName?: string | null;
   contentType: InventoryContentType;
   sourceFilename: string;
@@ -263,6 +264,22 @@ export async function importDigitalInventoryBatch(input: {
     throw new Error("商品不存在，无法导入库存");
   }
 
+  if (input.skuId) {
+    const { data: sku, error: skuError } = await input.serviceClient
+      .from("product_skus")
+      .select("id,product_id")
+      .eq("id", input.skuId)
+      .eq("product_id", input.productId)
+      .maybeSingle();
+
+    if (skuError) {
+      throw new Error(getInventoryImportErrorMessage(skuError, "SKU 校验失败"));
+    }
+    if (!sku) {
+      throw new Error("SKU 不属于当前商品，无法导入库存");
+    }
+  }
+
   const existingHashes = await findExistingContentHashes(
     input.serviceClient,
     input.productId,
@@ -277,6 +294,7 @@ export async function importDigitalInventoryBatch(input: {
     .insert({
       batch_no: batchNo,
       product_id: input.productId,
+      sku_id: input.skuId || null,
       batch_name: input.batchName?.trim() || batchNo,
       content_type: input.contentType,
       total_count: importableItems.length,
@@ -302,6 +320,7 @@ export async function importDigitalInventoryBatch(input: {
     const chunk = importableItems.slice(index, index + 300);
     const payload = chunk.map((item) => ({
       product_id: input.productId,
+      sku_id: input.skuId || null,
       batch_id: (batchRows as { id: string }).id,
       batch_no: batchNo,
       content_type: input.contentType,

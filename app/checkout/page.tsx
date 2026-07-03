@@ -37,6 +37,7 @@ import {
   getErrorText,
   getPublicProductDetail,
   type PublicProductRow,
+  type PublicProductSkuRow,
 } from "@/lib/supabase/public-catalog";
 import {
   DEFAULT_PAYMENT_METHOD,
@@ -56,6 +57,9 @@ type SkuOption = {
   id: string;
   label: string;
   rmb: number;
+  stock?: number;
+  status?: string;
+  isDatabaseSku?: boolean;
 };
 
 type LegalDocument = {
@@ -162,6 +166,7 @@ export default function CheckoutPage() {
   const [legalError, setLegalError] = useState("");
   const [selectedSkuId, setSelectedSkuId] = useState("");
   const [productRow, setProductRow] = useState<PublicProductRow | null>(null);
+  const [productSkus, setProductSkus] = useState<PublicProductSkuRow[]>([]);
   const [productLoading, setProductLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
@@ -202,6 +207,7 @@ export default function CheckoutPage() {
       try {
         if (!productId.trim()) {
           setProductRow(null);
+          setProductSkus([]);
           setError("缺少商品参数，请返回商品列表重新选择。");
           return;
         }
@@ -209,10 +215,13 @@ export default function CheckoutPage() {
         const detail = await getPublicProductDetail(productId);
         if (!active) return;
         setProductRow(detail?.product ?? null);
+        setProductSkus(detail?.skus ?? []);
+        setSelectedSkuId("");
       } catch (loadError) {
         if (!active) return;
         setError(getErrorText(loadError, "商品读取失败，请返回商品列表重试"));
         setProductRow(null);
+        setProductSkus([]);
       } finally {
         if (active) setProductLoading(false);
       }
@@ -255,23 +264,39 @@ export default function CheckoutPage() {
     [productRow]
   );
 
-  const skuOptions = product ? SKU_OPTIONS_BY_PRODUCT_ID[product.id] ?? [] : [];
+  const databaseSkuOptions: SkuOption[] = productSkus.map((sku) => ({
+    id: sku.id,
+    label: sku.sku_title || sku.sku_code || sku.id,
+    rmb: Number(sku.price ?? productRow?.price ?? 0),
+    stock: Number(sku.stock ?? 0),
+    status: sku.status,
+    isDatabaseSku: true,
+  }));
+  const skuOptions = product
+    ? databaseSkuOptions.length > 0
+      ? databaseSkuOptions
+      : SKU_OPTIONS_BY_PRODUCT_ID[product.id] ?? []
+    : [];
   const selectedSku =
-    skuOptions.find((sku) => sku.id === selectedSkuId) ?? skuOptions[0];
+    skuOptions.find((sku) => sku.id === selectedSkuId) ??
+    skuOptions.find((sku) => sku.status === "active" && Number(sku.stock ?? 0) > 0) ??
+    skuOptions[0];
   const hasSku = skuOptions.length > 0;
+  const selectedDatabaseSkuId = selectedSku?.isDatabaseSku ? selectedSku.id : null;
+  const effectiveStock = selectedSku?.isDatabaseSku ? Number(selectedSku.stock ?? 0) : Number(product?.stock ?? 0);
   const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) => legalDocuments.find((doc) => doc.document_type === type));
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
   const isShippingProduct = productRow?.delivery_type === "shipping";
   const selectedPaymentUnavailable = paymentMethod !== "balance";
-  const isPurchasable = productRow?.status === "active" && Number(productRow.stock ?? 0) > 0;
+  const isPurchasable = productRow?.status === "active" && (!hasSku || Boolean(selectedSku)) && (!selectedSku?.isDatabaseSku || selectedSku.status === "active") && effectiveStock > 0;
   const unavailableMessage =
-    productRow?.status === "sold_out" || Number(productRow?.stock ?? 0) <= 0
+    productRow?.status === "sold_out" || effectiveStock <= 0
       ? "该商品已售罄"
       : productRow?.status && productRow.status !== "active"
         ? "该商品目前不可购买"
         : "";
-  const unitPrice = product ? (hasSku ? selectedSku.rmb : product.price) : 0;
+  const unitPrice = product ? (hasSku ? selectedSku?.rmb ?? product.price : product.price) : 0;
   const priceLabel = product ? getPriceLabel(product, selectedSku) : "";
   const amountLabel = useMemo(() => {
     if (!product) return "";
@@ -357,6 +382,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           product_id: productRow.id,
           quantity,
+          sku_id: selectedDatabaseSkuId,
           payment_method: paymentMethod,
           client_request_id: clientRequestIdRef.current,
           customer_email: email,
@@ -572,10 +598,10 @@ export default function CheckoutPage() {
                       className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground"
                       onClick={() =>
                         setQuantity((value) =>
-                          Math.min(Math.max(product.stock ?? 1, 1), value + 1)
+                          Math.min(Math.max(effectiveStock, 1), value + 1)
                         )
                       }
-                      disabled={(product.stock ?? 0) <= quantity}
+                      disabled={effectiveStock <= quantity}
                     >
                       <Plus className="h-4 w-4" />
                     </button>

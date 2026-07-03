@@ -153,6 +153,7 @@ export async function POST(request: Request) {
       const formData = await request.formData();
       const intent = String(formData.get("intent") ?? "preview");
       const productId = String(formData.get("product_id") ?? "").trim();
+      const skuId = String(formData.get("sku_id") ?? "").trim() || null;
       const batchName = String(formData.get("batch_name") ?? "").trim();
       const contentType = String(formData.get("content_type") ?? "card_key") as InventoryContentType;
       const file = formData.get("file");
@@ -190,6 +191,7 @@ export async function POST(request: Request) {
       const result = await importDigitalInventoryBatch({
         serviceClient: serviceClient as any,
         productId,
+        skuId,
         batchName,
         contentType,
         sourceFilename: file.name || "inventory.txt",
@@ -206,6 +208,7 @@ export async function POST(request: Request) {
         result: result.importStatus === "failed" ? "failed" : "success",
         metadata: {
           productId,
+          skuId,
           contentType,
           sourceFilename: file.name,
           importedRows: result.importedRows,
@@ -219,6 +222,7 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const productId = String(body.product_id ?? "").trim();
+    const skuId = String(body.sku_id ?? "").trim() || null;
     const content = String(body.content ?? "").trim();
     const contentType = String(body.content_type ?? "card_key") as InventoryContentType;
 
@@ -228,24 +232,36 @@ export async function POST(request: Request) {
     const lines = content.split(/\r\n|\n|\r/).map((line) => line.trim()).filter(Boolean);
     if (lines.length === 0) return jsonError("没有可导入的库存内容");
 
-    const { data, error } = await admin.supabase.rpc("admin_import_digital_inventory", {
-      p_product_id: productId,
-      p_content_type: contentType,
-      p_contents: lines,
-      p_batch_no: typeof body.batch_no === "string" && body.batch_no.trim() ? body.batch_no.trim() : null,
-    });
+    const serviceClient = getSupabaseServiceRoleClient();
+    if (!serviceClient) return jsonError("服务端未配置库存导入权限，请检查环境变量", 500);
 
-    if (error) throw error;
+    const parsed = parseInventoryFile({
+      fileName: "inventory.txt",
+      buffer: Buffer.from(content, "utf8"),
+      contentType,
+    });
+    if (parsed.items.length === 0) return jsonError("没有可导入的库存内容");
+
+    const result = await importDigitalInventoryBatch({
+      serviceClient: serviceClient as any,
+      productId,
+      skuId,
+      batchName: typeof body.batch_no === "string" && body.batch_no.trim() ? body.batch_no.trim() : null,
+      contentType,
+      sourceFilename: "manual-input.txt",
+      parsed,
+      createdBy: admin.user.id,
+    });
 
     await writeAdminAuditLog({
       action: "import_inventory",
       module: "inventory",
       targetType: "digital_inventory",
       result: "success",
-      metadata: { productId, contentType, count: lines.length },
+      metadata: { productId, skuId, contentType, count: result.importedRows },
     });
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ result });
   } catch (error) {
     const message = getInventoryImportErrorMessage(error, "库存导入失败");
     await writeAdminAuditLog({

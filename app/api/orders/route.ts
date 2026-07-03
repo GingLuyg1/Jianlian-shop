@@ -1,6 +1,7 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
+import { getBalancePaymentErrorMessage, payOrderWithBalance } from "@/lib/orders/balance-payment-service";
 import { recordOrderAgreementAcceptances, verifyCheckoutAgreements, type AgreementInput } from "@/lib/legal/legal-service";
 import { normalizePaymentMethod } from "@/lib/payments/payment-methods";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
@@ -295,6 +296,38 @@ export async function POST(request: Request) {
         { error: "订单已创建，但协议确认记录保存失败，请联系客服处理" },
         { status: 500 }
       );
+    }
+
+    if (paymentMethod === "balance") {
+      try {
+        const paymentResult = await payOrderWithBalance({
+          orderId,
+          userId: user.id,
+          clientRequestId,
+        });
+
+        return NextResponse.json({
+          order: {
+            ...(created as Record<string, unknown>),
+            id: orderId,
+            order_no: paymentResult.orderNo ?? (created as Record<string, unknown>).order_no,
+            status: paymentResult.status,
+            payment_status: paymentResult.paymentStatus,
+            payment_method: paymentMethod,
+            balance_transaction_no: paymentResult.transactionNo,
+            delivery_error: paymentResult.deliveryError,
+          },
+        });
+      } catch (paymentError) {
+        return NextResponse.json(
+          {
+            error: getBalancePaymentErrorMessage(paymentError),
+            code: "BALANCE_PAYMENT_FAILED",
+            order: { id: orderId, ...(savedOrder as Record<string, unknown>) },
+          },
+          { status: 402 }
+        );
+      }
     }
 
     return NextResponse.json({ order: { ...(created as Record<string, unknown>), payment_method: paymentMethod } });
