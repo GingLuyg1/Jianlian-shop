@@ -371,7 +371,7 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-hidden px-4 py-3 md:px-6">
+    <PublicLayout viewportLocked contentClassName="flex max-w-none overflow-hidden px-4 pb-4 pt-3 md:px-6 md:pb-4">
       <div className="mx-auto flex h-full min-h-0 w-full max-w-[1668px] flex-col">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <button

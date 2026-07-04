@@ -12,15 +12,17 @@ import RouteLoadingIndicator from "./RouteLoadingIndicator";
 interface PublicLayoutProps {
   children: ReactNode;
   contentClassName?: string;
+  viewportLocked?: boolean;
 }
 
 export default function PublicLayout({
   children,
   contentClassName = "p-4 md:p-6 max-w-7xl mx-auto mt-12 md:mt-0",
+  viewportLocked = false,
 }: PublicLayoutProps) {
   return (
     <SettingsProvider>
-      <PublicLayoutContent contentClassName={contentClassName}>{children}</PublicLayoutContent>
+      <PublicLayoutContent contentClassName={contentClassName} viewportLocked={viewportLocked}>{children}</PublicLayoutContent>
     </SettingsProvider>
   );
 }
@@ -33,7 +35,7 @@ function getSupportHref(value: string) {
   return "";
 }
 
-function PublicLayoutContent({ children, contentClassName }: PublicLayoutProps) {
+function PublicLayoutContent({ children, contentClassName, viewportLocked = false }: PublicLayoutProps) {
   const { settings } = usePublicSettings();
   const announcement = settings.top_announcement.trim();
   const supportContact = settings.support_contact.trim() || settings.support_email.trim() || "客服暂未开放";
@@ -41,7 +43,7 @@ function PublicLayoutContent({ children, contentClassName }: PublicLayoutProps) 
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={viewportLocked ? "h-dvh overflow-hidden bg-background" : "min-h-screen bg-background"}>
       <RouteLoadingIndicator />
       <PublicSidebar supportHref={supportHref} />
 
@@ -62,9 +64,9 @@ function PublicLayoutContent({ children, contentClassName }: PublicLayoutProps) 
         </div>
       </div>
 
-      <main className="min-h-screen min-w-0 md:ml-[270px]">
+      <main className={viewportLocked ? "flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[270px]" : "min-h-screen min-w-0 md:ml-[270px]"}>
         <PublicTopInfoBar announcementText={announcement || undefined} />
-        <div className={contentClassName}>{children}</div>
+        <div className={viewportLocked ? `min-h-0 flex-1 ${contentClassName}` : contentClassName}>{children}</div>
       </main>
 
       <div
