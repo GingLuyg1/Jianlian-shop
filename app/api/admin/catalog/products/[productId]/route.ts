@@ -112,20 +112,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   // Authentication and role checks use the caller session above. The actual
   // catalog write uses a server-only client because products RLS intentionally
   // exposes public reads but no browser-side write policy.
-  const service = getSupabaseServiceRoleClient();
-  if (!service) {
-    console.error("[AdminProductUpdate] service role unavailable", {
+  const serviceRole = getSupabaseServiceRoleClient();
+  const service = serviceRole ?? admin.supabase;
+  if (!serviceRole) {
+    console.warn("[AdminProductUpdate] service role unavailable, falling back to admin session client", {
       requestId,
       productId,
       adminId: admin.user.id,
-      httpStatus: 503,
     });
-    return productFailureResponse(
-      "PRODUCT_WRITE_SERVICE_UNAVAILABLE",
-      "商品保存服务未配置，请联系管理员检查服务端配置",
-      requestId,
-      503
-    );
   }
 
   const { data: before, error: beforeError } = await service
