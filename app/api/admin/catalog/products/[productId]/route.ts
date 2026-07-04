@@ -14,6 +14,7 @@ import {
 import { revalidateProductCache } from "@/lib/cache/cache-tags";
 import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type RouteContext = {
   params: { productId: string };
@@ -108,7 +109,26 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const rateLimit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, `product_update:${productId}`));
   if (!rateLimit.allowed) return rateLimit.response!;
 
-  const { data: before, error: beforeError } = await admin.supabase
+  // Authentication and role checks use the caller session above. The actual
+  // catalog write uses a server-only client because products RLS intentionally
+  // exposes public reads but no browser-side write policy.
+  const service = getSupabaseServiceRoleClient();
+  if (!service) {
+    console.error("[AdminProductUpdate] service role unavailable", {
+      requestId,
+      productId,
+      adminId: admin.user.id,
+      httpStatus: 503,
+    });
+    return productFailureResponse(
+      "PRODUCT_WRITE_SERVICE_UNAVAILABLE",
+      "商品保存服务未配置，请联系管理员检查服务端配置",
+      requestId,
+      503
+    );
+  }
+
+  const { data: before, error: beforeError } = await service
     .from("products")
     .select(PRODUCT_FIELDS)
     .eq("id", productId)
@@ -137,7 +157,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   if (payload.category_id) {
-    const categoryError = await assertProductCategory(admin.supabase, payload.category_id);
+    const categoryError = await assertProductCategory(service, payload.category_id);
     if (categoryError) {
       return productFailureResponse("PRODUCT_INVALID_CATEGORY", categoryError, requestId, 400);
     }
@@ -152,7 +172,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     ),
   });
 
-  const { data, error } = await admin.supabase
+  const { data, error } = await service
     .from("products")
     .update(payload)
     .eq("id", productId)
@@ -202,7 +222,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   try {
-    await markMediaReferenceByUrl(admin.supabase, (data as { image_url?: string | null }).image_url, "product", productId);
+    await markMediaReferenceByUrl(service, (data as { image_url?: string | null }).image_url, "product", productId);
   } catch (mediaError) {
     console.warn("[AdminProductUpdate] media reference skipped", {
       requestId,
