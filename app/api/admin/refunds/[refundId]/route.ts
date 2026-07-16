@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { REFUND_ACTION_LABELS, normalizeRefundError } from "@/lib/refunds/refund-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 type RouteContext = { params: { refundId: string } };
 type Row = Record<string, unknown>;
 
@@ -16,20 +15,8 @@ function json(body: unknown, init?: ResponseInit) {
 }
 
 async function requireSuperAdmin(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin;
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email },
-      action: "process_refund",
-      module: "orders",
-      targetType: "refund",
-      result: "denied",
-      errorMessage: "仅超级管理员可以处理退款售后",
-    });
-    return { ok: false as const, response: json({ error: "仅超级管理员可以处理退款售后。" }, { status: 403 }) };
-  }
   return admin;
 }
 
@@ -56,7 +43,7 @@ export async function GET(request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   const admin = await requireSuperAdmin(request);
   if (!admin.ok) return admin.response;
-  const supabase = getSupabaseServiceRoleClient() ?? admin.supabase;
+  const supabase = admin.supabase;
 
   const body = (await request.json().catch(() => null)) as
     | { action?: string; approvedAmount?: number; reviewNote?: string; userVisibleNote?: string; providerRefundId?: string; requestId?: string }
@@ -101,7 +88,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       return json({ error: "请填写外部渠道真实退款参考号或交易摘要。" }, { status: 400 });
     }
 
-    const { data, error } = await supabase.rpc("admin_process_refund_request", {
+    const { data, error } = await supabase.rpc("super_admin_process_refund_request", {
       p_refund_id: context.params.refundId,
       p_action: action,
       p_approved_amount: body?.approvedAmount ?? null,

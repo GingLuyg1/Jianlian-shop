@@ -1,17 +1,10 @@
 import "server-only";
 
-import { NextResponse } from "next/server";
-
-import { requireApiAdmin } from "@/lib/admin/api-auth";
-
-export const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 
 export async function requireRiskAdmin() {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin;
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return { ok: false as const, response: NextResponse.json({ error: "仅超级管理员可以访问风险审核中心。" }, { status: 403 }) };
-  }
   return admin;
 }
 

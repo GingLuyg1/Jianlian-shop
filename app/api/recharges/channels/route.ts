@@ -17,7 +17,7 @@ export async function GET() {
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase
       .from("payment_channels")
-      .select("channel,code,enabled,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,sort_order")
+      .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")
       .eq("enabled", true)
       .order("sort_order", { ascending: true });
     if (error) throw error;

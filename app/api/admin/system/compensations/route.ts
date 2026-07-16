@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog, writeRequiredAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import {
   type CompensationAction,
   listCompensationTasks,
@@ -10,12 +10,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 const ACTIONS = new Set<CompensationAction>(["mark_manual_review", "mark_resolved", "mark_cancelled"]);
-
-function isSuperAdmin(email?: string | null) {
-  return email?.toLowerCase() === SUPER_ADMIN_EMAIL;
-}
 
 function numberParam(value: string | null, fallback: number) {
   const parsed = Number(value);
@@ -23,19 +18,8 @@ function numberParam(value: string | null, fallback: number) {
 }
 
 export async function GET(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
-  if (!isSuperAdmin(admin.user.email)) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email },
-      module: "system",
-      action: "view_compensation_tasks",
-      result: "denied",
-      errorMessage: "非超级管理员尝试查看补偿任务",
-    });
-    return NextResponse.json({ error: "无权查看事务补偿任务。" }, { status: 403 });
-  }
 
   const params = new URL(request.url).searchParams;
   const result = await listCompensationTasks({
@@ -53,19 +37,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
-  if (!isSuperAdmin(admin.user.email)) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email },
-      module: "system",
-      action: "update_compensation_task",
-      result: "denied",
-      errorMessage: "非超级管理员尝试处理补偿任务",
-    });
-    return NextResponse.json({ error: "无权处理事务补偿任务。" }, { status: 403 });
-  }
 
   const body = await request.json().catch(() => null);
   const taskId = typeof body?.taskId === "string" ? body.taskId : "";

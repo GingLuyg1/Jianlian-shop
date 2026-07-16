@@ -2,12 +2,10 @@
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { isAuditIntegritySchemaMissing, verifyAuditRecordHash } from "@/lib/admin/audit-integrity";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
 function clampLimit(value: string | null) {
   const parsed = Number(value);
@@ -16,7 +14,7 @@ function clampLimit(value: string | null) {
 }
 
 export async function GET(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({
       request,
@@ -29,19 +27,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: admin.message }, { status: admin.status });
   }
 
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email },
-      action: "check_audit_integrity",
-      module: "system",
-      targetType: "admin_audit_logs",
-      result: "denied",
-      errorMessage: "非超级管理员访问审计完整性检查。",
-    });
-    return NextResponse.json({ error: "无权限检查审计日志完整性。" }, { status: 403 });
-  }
-
+  
   const serviceClient = getSupabaseServiceRoleClient();
   const supabase = serviceClient ?? admin.supabase;
   const limit = clampLimit(new URL(request.url).searchParams.get("limit"));

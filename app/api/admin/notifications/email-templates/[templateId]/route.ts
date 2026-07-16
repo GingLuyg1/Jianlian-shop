@@ -1,23 +1,17 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { auditEmailAdminAction, summarizeEmailError } from "@/lib/email/jobs";
 import { validateSafeEmailHtml } from "@/lib/email/templates";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
 function json(data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, init);
 }
 
 async function requireSuperAdmin(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return { ok: false as const, response: json({ error: admin.message }, { status: admin.status }) };
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    await auditEmailAdminAction({ request, admin: { id: admin.user.id, email: admin.user.email }, action: "email_template_access_denied", result: "denied" });
-    return { ok: false as const, response: json({ error: "无权管理邮件模板。" }, { status: 403 }) };
-  }
   const service = getSupabaseServiceRoleClient();
   if (!service) return { ok: false as const, response: json({ error: "后台服务未配置：缺少 SUPABASE_SERVICE_ROLE_KEY。" }, { status: 503 }) };
   return { ok: true as const, admin, service };

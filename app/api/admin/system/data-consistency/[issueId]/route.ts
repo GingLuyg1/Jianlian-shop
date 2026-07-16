@@ -1,11 +1,10 @@
 ﻿import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { updateConsistencyIssueStatus } from "@/lib/consistency/scanner";
 
 export const dynamic = "force-dynamic";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 const VALID_STATUS = new Set(["open", "investigating", "resolved", "ignored"]);
 
 function safeError(error: unknown, fallback = "数据巡检异常处理失败") {
@@ -18,11 +17,8 @@ function safeError(error: unknown, fallback = "数据巡检异常处理失败") 
 }
 
 export async function PATCH(request: Request, { params }: { params: { issueId: string } }) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return NextResponse.json({ error: "无权处理数据巡检异常。" }, { status: 403 });
-  }
 
   const body = await request.json().catch(() => ({}));
   const status = typeof body.status === "string" ? body.status : "";

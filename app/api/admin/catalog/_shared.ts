@@ -50,10 +50,23 @@ export function jsonResponse(body: unknown, status = 200) {
   return response;
 }
 
-export async function requireCatalogAdmin() {
+export async function requireCatalogAdmin(requestId?: string) {
   const admin = await getServerAdminContext();
   if (!admin.ok) {
-    return { ok: false as const, response: jsonResponse({ error: admin.message }, admin.status) };
+    if (!requestId) {
+      return { ok: false as const, response: jsonResponse({ error: admin.message }, admin.status) };
+    }
+    const code = admin.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN";
+    const response = jsonResponse(
+      {
+        success: false,
+        error: { code, message: admin.status === 401 ? "请先登录" : "权限不足", request_id: requestId },
+        request_id: requestId,
+      },
+      admin.status
+    );
+    response.headers.set("X-Request-ID", requestId);
+    return { ok: false as const, response };
   }
   return { ok: true as const, supabase: admin.supabase, user: admin.user };
 }
@@ -161,7 +174,7 @@ export function normalizeProductPayload(body: Record<string, unknown>, partial =
     else payload.sort_order = sortOrder;
   }
 
-  if (!partial || "metadata" in body) payload.metadata = isPlainObject(body.metadata) ? body.metadata : null;
+  if (!partial || "metadata" in body) payload.metadata = isPlainObject(body.metadata) ? body.metadata : {};
 
   if (
     payload.original_price !== undefined &&
@@ -182,7 +195,7 @@ export function normalizeProductUpdatePayload(body: Record<string, unknown>) {
   }
   if ("metadata.note" in body && !("metadata" in filtered)) {
     const note = cleanNullableText(body["metadata.note"]);
-    filtered.metadata = note ? { note } : null;
+    filtered.metadata = note ? { note } : {};
   }
 
   const result = normalizeProductPayload(filtered, true);

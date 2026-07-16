@@ -15,7 +15,6 @@ type ProfileForm = {
   email: string;
   display_name: string;
   phone: string;
-  country: string;
   recipient_name: string;
   address_region: string;
   address_line: string;
@@ -28,7 +27,6 @@ const emptyForm: ProfileForm = {
   email: "",
   display_name: "",
   phone: "",
-  country: "",
   recipient_name: "",
   address_region: "",
   address_line: "",
@@ -47,6 +45,26 @@ function isValidPhone(value: string) {
 
 function sanitizeError() {
   return "资料保存失败，请检查填写内容后重试。";
+}
+
+type ApiProfile = {
+  email?: string | null;
+  display_name?: string | null;
+  phone?: string | null;
+  recipient_name?: string | null;
+  shipping_address?: Record<string, unknown> | null;
+  avatar_url?: string | null;
+};
+
+async function fetchProfileOnce() {
+  const response = await fetch("/api/account/profile", { cache: "no-store" });
+  const body = (await response.json().catch(() => ({}))) as {
+    profile?: ApiProfile | null;
+    exists?: boolean;
+    error?: string;
+  };
+  if (!response.ok) throw new Error(body.error || "资料加载失败。");
+  return body;
 }
 
 async function fileToWebp(file: File) {
@@ -80,39 +98,52 @@ export default function AccountProfilePage() {
   const loadProfile = useCallback(async () => {
     setLoading(true);
     setFormError("");
-    const supabase = getSupabaseBrowserClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setFormError("请先登录后查看个人资料。");
+        setForm(emptyForm);
+        return;
+      }
 
-    setUserId(user.id);
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("email,display_name,phone,country,recipient_name,shipping_address,avatar_url")
-      .eq("id", user.id)
-      .maybeSingle();
+      setUserId(user.id);
+      let body = await fetchProfileOnce();
+      if (!body.exists) {
+        const createResponse = await fetch("/api/account/profile", { method: "POST", cache: "no-store" });
+        const createBody = (await createResponse.json().catch(() => ({}))) as {
+          profile?: ApiProfile | null;
+          error?: string;
+        };
+        if (!createResponse.ok) throw new Error(createBody.error || "资料初始化失败。");
+        body = { ...createBody, exists: Boolean(createBody.profile) };
+      }
 
-    if (error) {
-      console.error("[Account Profile] load failed", error);
-      setFormError("资料加载失败，请确认已执行用户资料字段 SQL。");
-      setForm({ ...emptyForm, email: user.email ?? "" });
-    } else {
-      const address = data?.shipping_address && typeof data.shipping_address === "object"
-        ? (data.shipping_address as Record<string, unknown>)
-        : {};
-      setForm({
-        email: String(data?.email ?? user.email ?? ""),
-        display_name: String(data?.display_name ?? ""),
-        phone: String(data?.phone ?? ""),
-        country: String(data?.country ?? ""),
-        recipient_name: String(data?.recipient_name ?? ""),
-        address_region: typeof address.region === "string" ? address.region : "",
-        address_line: typeof address.address === "string" ? address.address : "",
-        avatar_url: String(data?.avatar_url ?? ""),
-      });
+      if (!body.profile) {
+        setFormError("资料加载失败，请确认已执行用户资料字段 SQL。");
+        setForm({ ...emptyForm, email: user.email ?? "" });
+      } else {
+        const data = body.profile;
+        const address = data.shipping_address && typeof data.shipping_address === "object"
+          ? data.shipping_address
+          : {};
+        setForm({
+          email: String(data?.email ?? user.email ?? ""),
+          display_name: String(data?.display_name ?? ""),
+          phone: String(data?.phone ?? ""),
+          recipient_name: String(data?.recipient_name ?? ""),
+          address_region: typeof address.region === "string" ? address.region : "",
+          address_line: typeof address.address === "string" ? address.address : "",
+          avatar_url: String(data?.avatar_url ?? ""),
+        });
+      }
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "资料加载失败，请稍后重试。");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -193,7 +224,6 @@ export default function AccountProfilePage() {
     const payload = {
       display_name: form.display_name.trim(),
       phone: form.phone.trim() || null,
-      country: form.country.trim() || null,
       recipient_name: form.recipient_name.trim() || null,
       shipping_address: {
         region: form.address_region.trim(),
@@ -202,19 +232,19 @@ export default function AccountProfilePage() {
         phone: form.phone.trim(),
       },
       avatar_url: avatarUrl || null,
-      updated_at: new Date().toISOString(),
     };
 
-    const { error } = await getSupabaseBrowserClient()
-      .from("profiles")
-      .update(payload)
-      .eq("id", userId);
+    const response = await fetch("/api/account/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json().catch(() => ({}))) as { profile?: ApiProfile; error?: string };
 
     setSaving(false);
 
-    if (error) {
-      console.error("[Account Profile] save failed", { code: error.code });
-      setFormError(sanitizeError());
+    if (!response.ok) {
+      setFormError(body.error || sanitizeError());
       setErrors((current) => ({ ...current, display_name: current.display_name }));
       return;
     }
@@ -275,9 +305,6 @@ export default function AccountProfilePage() {
               </Field>
               <Field label="联系电话" htmlFor="phone" error={errors.phone}>
                 <Input id="phone" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} placeholder="+1 555..." />
-              </Field>
-              <Field label="国家或地区" htmlFor="country">
-                <Input id="country" value={form.country} onChange={(event) => updateField("country", event.target.value)} />
               </Field>
               <Field label="常用收件人" htmlFor="recipient_name">
                 <Input id="recipient_name" value={form.recipient_name} onChange={(event) => updateField("recipient_name", event.target.value)} />

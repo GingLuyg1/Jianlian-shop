@@ -3,6 +3,17 @@ export type SettingGroup = "basic" | "store" | "order" | "promotion" | "security
 
 export type SettingValue = string | number | boolean | Record<string, unknown> | null;
 
+export type PublicAnnouncement = {
+  id: string;
+  title: string;
+  content: string;
+  announcement_type: "info" | "warning" | "success" | "important";
+  placement: "global_top" | "home" | "checkout" | "account";
+  starts_at: string | null;
+  ends_at: string | null;
+  sort_order: number;
+};
+
 export type PublicSiteSettings = {
   site_name: string;
   site_description: string;
@@ -34,6 +45,10 @@ export type PublicSiteSettings = {
   promotion_enabled: boolean;
   promotion_commission_rate: number;
   promotion_min_withdraw_amount: number;
+};
+
+export type PublicSettingsResponse = PublicSiteSettings & {
+  announcements?: PublicAnnouncement[];
 };
 
 export type AdminSiteSettings = PublicSiteSettings & {

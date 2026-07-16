@@ -16,7 +16,7 @@ export const PRIVACY_DATA_CLASSIFICATION = [
   { group: "可导出数据", items: ["profiles 基本资料", "orders 订单摘要", "order_items 商品快照", "account_recharges 充值记录", "balance_transactions 余额流水", "refund_requests 退款记录", "order_deliveries 交付记录摘要", "user_notifications 通知记录"] },
   { group: "内部安全数据", items: ["admin_audit_logs 管理员操作记录", "user_risk_records 风控记录", "支付回调原文", "内部处理备注", "访问风控细节"] },
   { group: "注销后保留数据", items: ["历史订单", "支付和充值记录", "余额流水", "退款记录", "交付审计", "管理员审计记录"] },
-  { group: "可匿名化字段", items: ["email", "display_name", "phone", "avatar_url", "recipient_name", "shipping_address", "country"] },
+  { group: "可匿名化字段", items: ["email", "display_name", "phone", "avatar_url", "recipient_name", "shipping_address"] },
 ];
 
 export function privacyInitError(error: unknown) {
@@ -44,7 +44,7 @@ export function maskEmail(email: string | null | undefined) {
 
 export async function getCurrentUserPrivacySummary(supabase: SupabaseClient, user: Pick<User, "id" | "email" | "created_at">) {
   const [profile, orders, recharges, balance, refunds, deliveries, notifications, requests] = await Promise.all([
-    safeMaybe(supabase.from("profiles").select("id,email,display_name,phone,country,recipient_name,avatar_url,created_at,updated_at,account_status,risk_status,balance").eq("id", user.id).maybeSingle()),
+    safeMaybe(supabase.from("profiles").select("id,email,display_name,phone,recipient_name,avatar_url,created_at,updated_at,account_status,risk_status,balance").eq("id", user.id).maybeSingle()),
     safeCount(supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id)),
     safeCount(supabase.from("account_recharges").select("id", { count: "exact", head: true }).eq("user_id", user.id)),
     safeCount(supabase.from("balance_transactions").select("id", { count: "exact", head: true }).eq("user_id", user.id)),
@@ -85,7 +85,7 @@ export async function buildPersonalDataExport(userId: string) {
   if (!service) throw new Error("服务端数据导出能力未配置。");
 
   const [profile, orders, recharges, balanceTransactions, refunds, deliveries, notifications] = await Promise.all([
-    safeMaybe(service.from("profiles").select("id,email,display_name,phone,country,recipient_name,avatar_url,created_at,updated_at,account_status,risk_status,balance").eq("id", userId).maybeSingle()),
+    safeMaybe(service.from("profiles").select("id,email,display_name,phone,recipient_name,avatar_url,created_at,updated_at,account_status,risk_status,balance").eq("id", userId).maybeSingle()),
     safeRows(service.from("orders").select("id,order_no,total_amount,currency,status,payment_status,delivery_method,customer_email,customer_note,created_at,updated_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
     safeRows(service.from("account_recharges").select("recharge_no,channel_name,currency,requested_amount,credited_amount,status,created_at,paid_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
     safeRows(service.from("balance_transactions").select("transaction_no,business_type,direction,amount,balance_before,balance_after,currency,status,remark,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5000)),
@@ -221,7 +221,6 @@ function sanitizeExportProfile(profile: Row | null) {
     email: profile.email ?? null,
     displayName: profile.display_name ?? null,
     phone: profile.phone ?? null,
-    country: profile.country ?? null,
     recipientName: profile.recipient_name ?? null,
     avatarUrl: profile.avatar_url ?? null,
     balance: money(profile.balance),

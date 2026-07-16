@@ -31,6 +31,18 @@ yarn-error.log*
 # local env files
 .env
 .env*.local
+.env.local.*
+.env.*
+!.env.example
+!.env.*.example
+!.env.local.example*
+
+# local database exports and order-specific repair scripts
+/supabase/tests/catalog_export_result.json
+/supabase/tests/catalog_import_ready.sql
+/supabase/tests/catalog_import_ready.stats.json
+/supabase/tests/credit_bep20_overpayment_*.sql
+/supabase/tests/repair_bep20_manual_review_*.sql
 
 # vercel
 .vercel

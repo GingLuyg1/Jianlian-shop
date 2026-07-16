@@ -418,9 +418,12 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
       }
       const nextOrder = {
         ...order,
-        status: payload?.result?.code === "already_closed" ? order.status : "cancelled",
+        status: payload?.result?.code === "ALREADY_CANCELLED"
+          ? order.status
+          : payload?.result?.code === "ALREADY_EXPIRED"
+            ? "expired"
+            : "expired",
         payment_status: order.payment_status === "paid" ? order.payment_status : "failed",
-        cancelled_at: order.cancelled_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
       } as OrderRecord;
       onUpdated(nextOrder);
@@ -441,6 +444,7 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
       delivered: ["completed"],
       completed: [],
       cancelled: ["processing"],
+      expired: [],
       refunded: [],
       failed: ["processing"],
     };

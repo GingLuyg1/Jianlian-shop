@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { getAuditErrorMessage, writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { EXPECTED_MIGRATIONS } from "@/lib/system/database-contract";
 import {
@@ -13,8 +13,6 @@ import { getReleaseInfo } from "@/lib/system/release-info";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
 type MigrationHistoryRow = {
   migration_name?: string | null;
@@ -34,22 +32,10 @@ function json(body: unknown, init?: ResponseInit) {
 }
 
 export async function GET(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
 
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email },
-      action: "project_status_check",
-      module: "system",
-      targetType: "project_status",
-      result: "denied",
-      errorMessage: "Only super admin can view project acceptance status.",
-    });
-    return json({ error: "Only super admin can view project acceptance status." }, { status: 403 });
-  }
-
+  
   const checkedAt = new Date().toISOString();
   const supabase = getSupabaseServiceRoleClient() ?? admin.supabase;
   const migrationHistory = await loadMigrationHistory(supabase);

@@ -1,13 +1,12 @@
 ﻿import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { maskEmail, normalizeRefundError } from "@/lib/refunds/refund-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 type Row = Record<string, unknown>;
 
 function json(body: unknown, init?: ResponseInit) {
@@ -15,19 +14,8 @@ function json(body: unknown, init?: ResponseInit) {
 }
 
 async function requireSuperAdmin(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin;
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email },
-      action: "view_refunds",
-      module: "orders",
-      result: "denied",
-      errorMessage: "仅超级管理员可以管理退款售后",
-    });
-    return { ok: false as const, response: json({ error: "仅超级管理员可以管理退款售后。" }, { status: 403 }) };
-  }
   return admin;
 }
 

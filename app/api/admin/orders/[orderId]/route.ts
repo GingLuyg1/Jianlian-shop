@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
@@ -33,6 +33,9 @@ function getOrderLabel(data: unknown) {
   return typeof orderNo === "string" ? orderNo : null;
 }
 
+const PAYMENT_FLOW_ONLY_ORDER_STATUSES = new Set(["paid", "payment_completed", "completed_payment"]);
+
+
 export async function PATCH(request: Request, context: RouteContext) {
   let auditAdmin: AuditAdmin | undefined;
 
@@ -60,6 +63,29 @@ export async function PATCH(request: Request, context: RouteContext) {
         }
       | null;
 
+    const requestedStatus = String(body?.status ?? "").trim();
+    const requestedPaymentStatus = String(body?.payment_status ?? "").trim();
+    if (PAYMENT_FLOW_ONLY_ORDER_STATUSES.has(requestedStatus) || requestedPaymentStatus === "paid") {
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "update_order_status",
+        module: "orders",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "failed",
+        errorCode: "ORDER_PAYMENT_STATUS_REQUIRES_PAYMENT_FLOW",
+        errorMessage: "订单支付成功状态必须通过支付完成流程写入",
+        metadata: { requestedStatus: requestedStatus || null, requestedPaymentStatus: requestedPaymentStatus || null },
+      });
+      return NextResponse.json(
+        {
+          error: "订单支付成功状态必须通过支付完成流程写入",
+          code: "ORDER_PAYMENT_STATUS_REQUIRES_PAYMENT_FLOW",
+        },
+        { status: 409 }
+      );
+    }
     const toStatus = body?.status;
     if (!toStatus || !ORDER_STATUS_VALUES.includes(toStatus)) {
       await writeAdminAuditLog({
@@ -434,5 +460,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+
 
 

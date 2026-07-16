@@ -2,11 +2,11 @@
 
 import {
   DEFAULT_PUBLIC_SETTINGS,
-  type PublicSiteSettings,
+  type PublicSettingsResponse,
 } from "@/lib/settings/types";
 
-let cachedPublicSettings: PublicSiteSettings | null = null;
-let inflightPublicSettings: Promise<PublicSiteSettings> | null = null;
+let cachedPublicSettings: PublicSettingsResponse | null = null;
+let inflightPublicSettings: Promise<PublicSettingsResponse> | null = null;
 
 export async function fetchPublicSettings() {
   if (cachedPublicSettings) return cachedPublicSettings;
@@ -19,7 +19,7 @@ export async function fetchPublicSettings() {
     .then(async (response) => {
       if (!response.ok) return DEFAULT_PUBLIC_SETTINGS;
       const payload = (await response.json().catch(() => null)) as
-        | { settings?: PublicSiteSettings }
+        | { settings?: PublicSettingsResponse }
         | null;
       cachedPublicSettings = payload?.settings ?? DEFAULT_PUBLIC_SETTINGS;
       return cachedPublicSettings;

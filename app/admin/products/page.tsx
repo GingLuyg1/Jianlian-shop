@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -38,6 +38,7 @@ import {
   createProduct,
   deleteCategory,
   deleteProduct,
+  getProduct,
   isCategoryEnabled,
   listCategories,
   listProducts,
@@ -97,6 +98,7 @@ type ProductFormState = {
   status: ProductStatus;
   sort_order: string;
   metadata_note: string;
+  metadata_base?: Record<string, unknown> | null;
 };
 
 type CategoryFormState = {
@@ -138,6 +140,7 @@ function emptyProductForm(): ProductFormState {
     status: "draft",
     sort_order: "0",
     metadata_note: "",
+    metadata_base: null,
   };
 }
 
@@ -155,7 +158,19 @@ function emptyCategoryForm(): CategoryFormState {
 }
 
 function getErrorText(error: unknown, fallback = "操作失败，请稍后重试") {
-  return (error as { message?: string } | null | undefined)?.message ?? fallback;
+  if (typeof error === "string" && error.trim()) return error.trim();
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+    const nested = (error as { error?: unknown }).error;
+    if (typeof nested === "string" && nested.trim()) return nested.trim();
+    if (nested && typeof nested === "object") {
+      const nestedMessage = (nested as { message?: unknown }).message;
+      if (typeof nestedMessage === "string" && nestedMessage.trim()) return nestedMessage.trim();
+    }
+  }
+  return fallback;
 }
 
 function parseNumber(value: string, fallback = 0) {
@@ -234,6 +249,8 @@ export default function AdminProductsPage() {
   const [productSubmitError, setProductSubmitError] = useState("");
   const [categoryErrors, setCategoryErrors] = useState<FieldErrors>({});
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+  const productReadRequestRef = useRef(0);
+  const productListRequestRef = useRef(0);
 
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -281,6 +298,7 @@ export default function AdminProductsPage() {
   }, []);
 
   const loadProducts = useCallback(async () => {
+    const requestSequence = ++productListRequestRef.current;
     setIsProductLoading(true);
     setError("");
     try {
@@ -294,12 +312,14 @@ export default function AdminProductsPage() {
         page: productPage,
         pageSize: productPageSize,
       });
+      if (productListRequestRef.current !== requestSequence) return;
       setProducts(result.products);
       setProductCount(result.count);
     } catch (loadError) {
+      if (productListRequestRef.current !== requestSequence) return;
       setError(getErrorText(loadError, "商品列表读取失败"));
     } finally {
-      setIsProductLoading(false);
+      if (productListRequestRef.current === requestSequence) setIsProductLoading(false);
     }
   }, [debouncedSearch, deliveryFilter, productCategoryIds, productPage, productPageSize, productStatusFilter, sortBy]);
 
@@ -346,13 +366,26 @@ export default function AdminProductsPage() {
     setProductForm(form);
   }
 
-  function openEditProduct(product: AdminProduct) {
+  async function openEditProduct(product: AdminProduct) {
     clearNotice();
     setProductErrors({});
     setProductSubmitError("");
     const form = toProductForm(product, categoryMap, categories);
     setProductInitialForm(form);
     setProductForm(form);
+
+    const requestSequence = ++productReadRequestRef.current;
+    try {
+      const latestProduct = await getProduct(product.id);
+      if (productReadRequestRef.current !== requestSequence) return;
+      const latestForm = toProductForm(latestProduct, categoryMap, categories);
+      setProductInitialForm(latestForm);
+      setProductForm(latestForm);
+      mergeSavedProductIntoList(latestProduct);
+    } catch (readError) {
+      if (productReadRequestRef.current !== requestSequence) return;
+      setProductSubmitError(getErrorText(readError, "商品读取失败，请稍后重试"));
+    }
   }
 
   function openCopyProduct(product: AdminProduct) {
@@ -381,6 +414,7 @@ export default function AdminProductsPage() {
   }
 
   function closeProductDialog() {
+    productReadRequestRef.current += 1;
     setProductForm(null);
     setProductInitialForm(null);
     setProductErrors({});
@@ -389,6 +423,7 @@ export default function AdminProductsPage() {
   }
 
   function closeProductDialogAfterSave() {
+    productReadRequestRef.current += 1;
     setProductForm(null);
     setProductInitialForm(null);
     setProductErrors({});
@@ -503,6 +538,13 @@ export default function AdminProductsPage() {
     const nextErrors = validateProductForm(productForm);
     setProductErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return null;
+    const metadata =
+      productForm.metadata_base && typeof productForm.metadata_base === "object" && !Array.isArray(productForm.metadata_base)
+        ? { ...productForm.metadata_base }
+        : {};
+    const note = productForm.metadata_note.trim();
+    if (note) metadata.note = note;
+    else delete metadata.note;
 
     return {
       name: productForm.name.trim(),
@@ -519,9 +561,7 @@ export default function AdminProductsPage() {
       delivery_type: productForm.delivery_type,
       status: productForm.status,
       sort_order: parseNumber(productForm.sort_order),
-      metadata: productForm.metadata_note.trim()
-        ? { note: productForm.metadata_note.trim() }
-        : null,
+      metadata,
     };
   }
 
@@ -550,6 +590,7 @@ export default function AdminProductsPage() {
         ? await updateProduct(editingProductId, payload)
         : await createProduct(payload);
       const savedForm = toProductForm(savedProduct, categoryMap, categories);
+      productListRequestRef.current += 1;
       mergeSavedProductIntoList(savedProduct);
       setProductInitialForm(savedForm);
       setProductForm(savedForm);
@@ -654,11 +695,12 @@ export default function AdminProductsPage() {
 
   async function handleProductStatus(id: string, status: ProductStatus) {
     clearNotice();
+    productListRequestRef.current += 1;
     setIsProductLoading(true);
     try {
-      await setProductStatus(id, status);
+      const savedProduct = await setProductStatus(id, status);
+      mergeSavedProductIntoList(savedProduct);
       setMessage("商品状态已更新");
-      await loadProducts();
     } catch (statusError) {
       setError(getErrorText(statusError, "商品状态更新失败"));
     } finally {
@@ -1850,6 +1892,10 @@ function toProductForm(
       product.metadata && typeof product.metadata.note === "string"
         ? product.metadata.note
         : "",
+    metadata_base:
+      product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata)
+        ? product.metadata
+        : null,
   };
 }
 

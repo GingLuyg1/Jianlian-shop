@@ -1,12 +1,11 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { auditEmailAdminAction, summarizeEmailError } from "@/lib/email/jobs";
 import { getEmailProviderStatus } from "@/lib/email/provider";
 import { getAdminRateLimitKey, checkRateLimit } from "@/lib/security/rate-limit";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 const VALID_STATUSES = new Set(["pending", "processing", "sent", "retrying", "failed", "cancelled"]);
 
 function json(data: unknown, init?: ResponseInit) {
@@ -14,12 +13,8 @@ function json(data: unknown, init?: ResponseInit) {
 }
 
 async function requireSuperAdmin(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return { ok: false as const, response: json({ error: admin.message }, { status: admin.status }) };
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    await auditEmailAdminAction({ request, admin: { id: admin.user.id, email: admin.user.email }, action: "email_delivery_access_denied", result: "denied" });
-    return { ok: false as const, response: json({ error: "无权查看邮件发送记录。" }, { status: 403 }) };
-  }
   const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_deliveries_read"));
   if (!limit.allowed) return { ok: false as const, response: limit.response! };
   const service = getSupabaseServiceRoleClient();

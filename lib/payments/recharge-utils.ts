@@ -6,12 +6,20 @@ import type {
   PaymentProviderCode,
   RechargeStatus,
 } from "@/lib/payments/channel-types";
+import { normalizeRechargeStatus, rechargeFlowStatusLabel } from "@/lib/recharges/status-machine";
 
 export const RECHARGE_STATUSES: RechargeStatus[] = [
   "pending",
+  "waiting_payment",
+  "submitted",
+  "reviewing",
+  "approved",
   "processing",
+  "succeeded",
   "paid",
   "failed",
+  "rejected",
+  "cancelled",
   "expired",
   "closed",
 ];
@@ -31,6 +39,8 @@ export type RechargeRecord = {
   status: RechargeStatus;
   createdAt: string;
   paidAt: string | null;
+  completedAt?: string | null;
+  reviewReason?: string | null;
 };
 
 type AnyRow = Record<string, unknown>;
@@ -63,6 +73,9 @@ export function normalizeChannelRow(row: AnyRow): PaymentChannel | null {
   const minimumAmount = finiteNumber(row.minimum_amount ?? row.min_amount);
   const feeRate = finiteNumber(row.fee_rate);
   const enabled = row.enabled === true;
+  const publicConfig = row.public_config && typeof row.public_config === "object" ? row.public_config as Record<string, unknown> : {};
+  const configured = row.configured === true;
+  const reviewMode = publicConfig.review_mode === "manual" || publicConfig.payment_mode === "manual" ? "manual" : "provider";
 
   return {
     channel_code: code,
@@ -77,9 +90,11 @@ export function normalizeChannelRow(row: AnyRow): PaymentChannel | null {
     minimumAmount,
     fee_rate: feeRate,
     feeRate,
-    status: enabled ? "active" : "disabled",
+    status: enabled && configured ? "active" : "disabled",
     enabled,
-    configured: false,
+    configured,
+    reviewMode,
+    maximumAmount: finiteNumber(publicConfig.maximum_amount, currency === "USDT" ? 100000 : 1000000),
     provider,
     sort_order: Math.trunc(finiteNumber(row.sort_order, 100)),
     iconSrc: channelIcon(code),
@@ -87,9 +102,7 @@ export function normalizeChannelRow(row: AnyRow): PaymentChannel | null {
 }
 
 export function normalizeRechargeRow(row: AnyRow): RechargeRecord {
-  const status = RECHARGE_STATUSES.includes(row.status as RechargeStatus)
-    ? (row.status as RechargeStatus)
-    : "pending";
+  const status = normalizeRechargeStatus(row.status) as RechargeStatus;
   const currency: PaymentCurrency = row.currency === "USDT" ? "USDT" : "CNY";
   return {
     rechargeNo: String(row.recharge_no ?? ""),
@@ -104,6 +117,8 @@ export function normalizeRechargeRow(row: AnyRow): RechargeRecord {
     status,
     createdAt: String(row.created_at ?? ""),
     paidAt: textOrNull(row.paid_at),
+    completedAt: textOrNull(row.completed_at ?? row.paid_at),
+    reviewReason: textOrNull(row.review_reason ?? row.error_summary),
   };
 }
 
@@ -121,6 +136,8 @@ export function channelLabel(code: string) {
 }
 
 export function rechargeStatusLabel(status: string) {
+  return rechargeFlowStatusLabel(status);
+  /* Legacy labels retained below for source compatibility. */
   return (
     {
       pending: "待支付",

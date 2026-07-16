@@ -1,12 +1,11 @@
 ﻿import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { getAuditErrorMessage } from "@/lib/admin/audit-log-service";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 const PAGE_SIZE_DEFAULT = 20;
 const paidRechargeStatuses = new Set(["paid", "succeeded"]);
 const spendOrderStatuses = new Set(["paid", "processing", "delivered", "completed"]);
@@ -37,18 +36,14 @@ function json(body: unknown, init?: ResponseInit) {
 }
 
 async function requireSuperAdmin() {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin;
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return { ok: false as const, response: json({ error: "仅超级管理员可以访问用户管理。" }, { status: 403 }) };
-  }
   return admin;
 }
 
 export async function GET(request: Request) {
   const admin = await requireSuperAdmin();
   if (!admin.ok) return admin.response;
-
   const serviceClient = getSupabaseServiceRoleClient();
   const supabase = serviceClient ?? admin.supabase;
   const url = new URL(request.url);

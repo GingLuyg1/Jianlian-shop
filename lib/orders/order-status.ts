@@ -5,6 +5,7 @@ export const ORDER_STATUS_VALUES = [
   "delivered",
   "completed",
   "cancelled",
+  "expired",
   "refunded",
   "failed",
 ] as const;
@@ -27,6 +28,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   delivered: "已发货",
   completed: "已完成",
   cancelled: "已取消",
+  expired: "已过期",
   refunded: "已退款",
   failed: "处理失败",
 };
@@ -46,6 +48,7 @@ export const ORDER_STATUS_STYLES: Record<OrderStatus, string> = {
   delivered: "border-sky-200 bg-sky-50 text-sky-700",
   completed: "border-green-200 bg-green-50 text-green-700",
   cancelled: "border-slate-200 bg-slate-50 text-slate-600",
+  expired: "border-slate-200 bg-slate-50 text-slate-600",
   refunded: "border-violet-200 bg-violet-50 text-violet-700",
   failed: "border-red-200 bg-red-50 text-red-700",
 };
@@ -59,12 +62,13 @@ export const PAYMENT_STATUS_STYLES: Record<PaymentStatus, string> = {
 };
 
 export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pending_payment: ["paid", "cancelled"],
+  pending_payment: ["paid", "cancelled", "expired"],
   paid: ["processing", "refunded"],
   processing: ["delivered", "failed", "refunded"],
   delivered: ["completed", "refunded"],
   completed: [],
   cancelled: [],
+  expired: [],
   refunded: [],
   failed: ["processing", "refunded"],
 };

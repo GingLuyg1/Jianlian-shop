@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { X } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { SettingsProvider, usePublicSettings } from "@/components/settings/SettingsProvider";
 import MobileMenu from "./MobileMenu";
@@ -36,8 +37,12 @@ function getSupportHref(value: string) {
 }
 
 function PublicLayoutContent({ children, contentClassName, viewportLocked = false }: PublicLayoutProps) {
+  const pathname = usePathname();
   const { settings } = usePublicSettings();
-  const announcement = settings.top_announcement.trim();
+  const pagePlacement = pathname === "/" ? "home" : pathname.startsWith("/checkout") ? "checkout" : pathname.startsWith("/account") ? "account" : null;
+  const pageAnnouncement = pagePlacement ? settings.announcements?.find((item) => item.placement === pagePlacement) : undefined;
+  const globalAnnouncement = settings.announcements?.find((item) => item.placement === "global_top");
+  const announcement = pageAnnouncement?.content.trim() || globalAnnouncement?.content.trim() || settings.top_announcement.trim();
   const supportContact = settings.support_contact.trim() || settings.support_email.trim() || "客服暂未开放";
   const supportHref = getSupportHref(supportContact);
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";

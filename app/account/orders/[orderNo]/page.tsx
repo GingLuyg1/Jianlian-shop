@@ -40,6 +40,13 @@ type OrderDetailResponse = {
   error?: string;
 };
 
+type OrderActionResponse = {
+  ok?: boolean;
+  error?: string | { message?: string | null } | null;
+  message?: string | null;
+  code?: string | null;
+};
+
 type DeliveryResponse = {
   status?: string;
   deliveries?: DeliveryContent[];
@@ -59,6 +66,16 @@ function formatDate(value?: string | null) {
 
 function statusClass(value: string, styles: Record<string, string>) {
   return styles[value] ?? "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+function getSafeOrderActionMessage(payload: OrderActionResponse | null | undefined, fallback: string) {
+  if (!payload) return fallback;
+  if (payload.error && typeof payload.error === "object" && typeof payload.error.message === "string" && payload.error.message.trim()) {
+    return payload.error.message.trim();
+  }
+  if (typeof payload.message === "string" && payload.message.trim()) return payload.message.trim();
+  if (typeof payload.error === "string" && payload.error.trim()) return payload.error.trim();
+  return fallback;
 }
 
 export default function AccountOrderDetailPage({ params }: { params: { orderNo: string } }) {
@@ -115,7 +132,7 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
 
   const orderStatus = normalizeOrderStatus(order?.status);
   const paymentStatus = normalizePaymentStatus(order?.payment_status);
-  const canCancel = order ? canUserCancelOrder(order.status) : false;
+  const canCancel = order ? canUserCancelOrder(order.status) && paymentStatus === "unpaid" : false;
 
   async function cancelOrder() {
     if (!order || !canCancel || canceling) return;
@@ -123,18 +140,20 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
     if (!confirmed) return;
     setCanceling(true);
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(order.order_no)}/cancel`, {
-        method: "POST",
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.order_no)}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "用户主动取消" }),
       });
-      const data = (await response.json().catch(() => ({}))) as OrderDetailResponse;
-      if (!response.ok || !data.order) {
-        throw new Error(data.error || "取消订单失败");
+      const data = (await response.json().catch(() => ({}))) as OrderActionResponse;
+      if (!response.ok || data.ok === false) {
+        throw new Error(getSafeOrderActionMessage(data, "订单取消失败，请稍后重试"));
       }
-      setOrder(data.order);
       toast.success("订单已取消");
+      await loadOrder();
+      router.refresh();
     } catch (err) {
-      toast.error(getOrderErrorMessage(err));
+      toast.error(getOrderErrorMessage(err, "订单取消失败，请稍后重试"));
     } finally {
       setCanceling(false);
     }
@@ -345,7 +364,9 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                       })
                     ) : (
                       <div className="rounded-xl border border-dashed border-orange-200 p-8 text-center text-sm text-muted-foreground">
-                        {deliveryRequested ? "暂无交付内容，请联系客服确认。" : "交付内容默认隐藏，点击后单独请求服务端。"}
+                        {["manual", "manual_delivery"].includes(String(order.delivery_type ?? order.order_items?.[0]?.delivery_type ?? ""))
+                          ? orderStatus === "processing" ? "人工处理中。" : "待人工处理。"
+                          : deliveryRequested ? "暂无交付内容，请联系客服确认。" : "交付内容默认隐藏，点击后单独请求服务端。"}
                       </div>
                     )}
                   </CardContent>

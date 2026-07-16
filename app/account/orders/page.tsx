@@ -706,7 +706,11 @@ function UserOrderDrawer({
               </div>
             ) : (
               <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">
-                等待交付。
+                {paymentStatus !== "paid"
+                  ? "等待支付。"
+                  : ["manual", "manual_delivery"].includes(String(order.delivery_type ?? firstItem?.delivery_type ?? ""))
+                    ? orderStatus === "processing" ? "人工处理中。" : "待人工处理。"
+                    : orderStatus === "processing" ? "交付处理中。" : "等待交付。"}
               </div>
             )}
           </section>

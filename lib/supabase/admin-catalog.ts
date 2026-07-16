@@ -116,8 +116,15 @@ async function adminCatalogRequest<T>(url: string, init: RequestInit = {}): Prom
   } & T;
 
   if (!response.ok) {
-    const fieldError = body.errors ? Object.values(body.errors)[0] : "";
-    throw new Error(body.error || fieldError || "操作失败，请稍后重试");
+    const fieldError = body.errors ? Object.values(body.errors).find(Boolean) : "";
+    const apiError = body.error as unknown;
+    const apiMessage =
+      typeof apiError === "string"
+        ? apiError
+        : apiError && typeof apiError === "object" && "message" in apiError
+          ? String((apiError as { message?: unknown }).message ?? "")
+          : "";
+    throw new Error(apiMessage || fieldError || "操作失败，请稍后重试");
   }
 
   return body as T;
@@ -133,11 +140,16 @@ type AdminCatalogEnvelope<T> = T & {
 
 const SAFE_PRODUCT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 
-function getEnvelopeErrorMessage(body: AdminCatalogEnvelope<unknown>, fallback = "商品保存失败，请检查输入后重试") {
-  if (typeof body.error === "string" && body.error.trim()) return body.error;
-  const message = typeof body.error === "object" ? body.error?.message : "";
+function getEnvelopeErrorMessage(body: AdminCatalogEnvelope<unknown>, fallback = "操作失败，请稍后重试") {
+  const rawError = body.error;
+  const message =
+    typeof rawError === "string"
+      ? rawError.trim()
+      : rawError && typeof rawError === "object"
+        ? String(rawError.message ?? "").trim()
+        : "";
   const requestId =
-    typeof body.error === "object" ? body.error?.request_id || body.request_id : body.request_id;
+    rawError && typeof rawError === "object" ? rawError.request_id || body.request_id : body.request_id;
   const fieldError = body.errors ? Object.values(body.errors).find(Boolean) : "";
   const text = message || fieldError || fallback;
   return requestId ? `${text}（错误编号：${requestId}）` : text;
@@ -296,43 +308,43 @@ export async function listProducts({
   page = 1,
   pageSize = 10,
 }: ProductFilters): Promise<ProductListResult> {
-  const from = Math.max(page - 1, 0) * pageSize;
-  const to = from + pageSize - 1;
-  let query = getSupabaseBrowserClient().from("products").select("*", { count: "exact" });
+  const params = new URLSearchParams();
+  if (search.trim()) params.set("search", search.trim());
+  if (categoryId !== "all") params.set("categoryId", categoryId);
+  if (categoryIds && categoryIds.length > 0) params.set("categoryIds", categoryIds.join(","));
+  if (status !== "all") params.set("status", status);
+  if (deliveryType !== "all") params.set("deliveryType", deliveryType);
+  params.set("sortBy", sortBy);
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
 
-  const searchTerm = search.trim();
-  if (searchTerm) {
-    query = query.or(`name.ilike.%${searchTerm}%,slug.ilike.%${searchTerm}%`);
-  }
-
-  if (categoryId !== "all") {
-    query = query.eq("category_id", categoryId);
-  } else if (categoryIds && categoryIds.length > 0) {
-    query = query.in("category_id", categoryIds);
-  }
-
-  if (status !== "all") query = query.eq("status", status);
-  if (deliveryType !== "all") query = query.eq("delivery_type", deliveryType);
-
-  const sortedQuery =
-    sortBy === "updated_at"
-      ? query.order("updated_at", { ascending: false }).order("sort_order", { ascending: true })
-      : query.order("sort_order", { ascending: true }).order("updated_at", { ascending: false });
-
-  const { data, error, count } = await sortedQuery.range(from, to);
-
-  if (error) {
-    throw new Error(getErrorMessage(error, "商品读取失败，请检查权限或筛选条件"));
-  }
-
+  const result = await adminCatalogEnvelopeRequest<{
+    products?: Array<Record<string, unknown>>;
+    count?: number;
+    data?: { products?: Array<Record<string, unknown>>; count?: number };
+  }>(`/api/admin/products?${params.toString()}`);
+  const products = result.products ?? result.data?.products ?? [];
+  const count = Number(result.count ?? result.data?.count ?? products.length);
   return {
-    products: ((data ?? []) as Array<Record<string, unknown>>).map(normalizeProduct),
-    count: count ?? 0,
+    products: products.map(normalizeProduct),
+    count: Number.isFinite(count) ? count : 0,
   };
 }
 
+export async function getProduct(id: string) {
+  const productId = id.trim();
+  if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {
+    throw new Error("商品读取失败，商品 ID 无效，请重新打开商品后再试");
+  }
+  const result = await adminCatalogEnvelopeRequest<{ product: Record<string, unknown> }>(
+    `/api/admin/products/${encodeURIComponent(productId)}`
+  );
+  const product = result.product ?? result.data?.product;
+  return normalizeProduct(assertApiRecord(product, "商品读取失败，服务器没有返回商品数据"));
+}
+
 export async function createProduct(payload: ProductPayload) {
-  const result = await adminCatalogEnvelopeRequest<{ product: Record<string, unknown> }>("/api/admin/catalog/products", {
+  const result = await adminCatalogEnvelopeRequest<{ product: Record<string, unknown> }>("/api/admin/products", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -346,7 +358,7 @@ export async function updateProduct(id: string, payload: ProductPayload) {
     throw new Error("商品保存失败，商品 ID 无效，请重新打开商品后再保存");
   }
   const result = await adminCatalogEnvelopeRequest<{ product: Record<string, unknown> }>(
-    `/api/admin/catalog/products/${encodeURIComponent(productId)}`,
+    `/api/admin/products/${encodeURIComponent(productId)}`,
     {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -361,7 +373,7 @@ export async function deleteProduct(id: string) {
   if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {
     throw new Error("商品删除失败，商品 ID 无效，请重新打开商品后再操作");
   }
-  await adminCatalogRequest<{ ok: boolean }>(`/api/admin/catalog/products/${encodeURIComponent(productId)}`, {
+  await adminCatalogRequest<{ ok: boolean }>(`/api/admin/products/${encodeURIComponent(productId)}`, {
     method: "DELETE",
   });
 }
@@ -371,8 +383,13 @@ export async function setProductStatus(id: string, status: ProductStatus) {
   if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {
     throw new Error("商品状态更新失败，商品 ID 无效，请重新打开商品后再操作");
   }
-  await adminCatalogRequest<{ product: Record<string, unknown> }>(`/api/admin/catalog/products/${encodeURIComponent(productId)}`, {
-    method: "PATCH",
-    body: JSON.stringify({ status }),
-  });
+  const result = await adminCatalogEnvelopeRequest<{ product: Record<string, unknown> }>(
+    `/api/admin/products/${encodeURIComponent(productId)}/status`,
+    {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    }
+  );
+  const product = result.product ?? result.data?.product;
+  return normalizeProduct(assertApiRecord(product, "商品状态更新失败，服务器没有返回最新商品"));
 }

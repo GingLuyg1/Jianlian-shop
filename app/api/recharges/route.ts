@@ -1,7 +1,7 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { calculateRechargeAmounts } from "@/lib/payments/channels";
-import type { PaymentChannel } from "@/lib/payments/channel-types";
+import type { PaymentChannel, RechargeStatus } from "@/lib/payments/channel-types";
 import { getPaymentProvider } from "@/lib/payments/providers";
 import {
   RECHARGE_STATUSES,
@@ -10,7 +10,6 @@ import {
   normalizeChannelRow,
   normalizeRechargeRow,
 } from "@/lib/payments/recharge-utils";
-import type { RechargeStatus } from "@/lib/payments/channel-types";
 import { evaluateRechargeRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
@@ -19,8 +18,20 @@ import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/user
 export const dynamic = "force-dynamic";
 
 const rechargeSelect =
-  "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,status,created_at,paid_at";
-const allowedCreateKeys = new Set(["channel", "amount", "client_request_id", "clientRequestId"]);
+  "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,status,created_at,paid_at,completed_at,review_reason,error_summary";
+const allowedCreateKeys = new Set(["channel", "payment_method", "amount", "currency", "customer_note", "client_request_id", "clientRequestId"]);
+const reusableRechargeStatuses = [
+  "pending",
+  "waiting_payment",
+  "submitted",
+  "reviewing",
+  "approved",
+  "processing",
+  "failed",
+  "rejected",
+  "succeeded",
+  "paid",
+];
 
 export async function GET(request: Request) {
   const context = await requireUser();
@@ -35,6 +46,7 @@ export async function GET(request: Request) {
     let query = context.supabase
       .from("account_recharges")
       .select(rechargeSelect, { count: "exact" })
+      .eq("user_id", context.user.id)
       .order("created_at", { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
     if (status !== "all" && RECHARGE_STATUSES.includes(status as RechargeStatus)) query = query.eq("status", status);
@@ -48,7 +60,7 @@ export async function GET(request: Request) {
       pageSize,
     });
   } catch (error) {
-    return paymentFailure(error, "充值记录加载失败，请稍后重试");
+    return paymentFailure(error, "Recharge records loading failed. Please try again later.", "RECHARGE_LIST_READ_FAILED");
   }
 }
 
@@ -72,19 +84,23 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || Object.keys(body).some((key) => !allowedCreateKeys.has(key))) {
-    return NextResponse.json({ error: "充值请求参数不正确" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid recharge request parameters." }, { status: 400 });
   }
 
-  const channelCode = typeof body.channel === "string" ? body.channel.trim() : "";
+  const channelValue = body.channel ?? body.payment_method;
+  const channelCode = typeof channelValue === "string" ? channelValue.trim() : "";
+  const currency = typeof body.currency === "string" ? body.currency.trim().toUpperCase() : "";
+  const customerNote = typeof body.customer_note === "string" ? body.customer_note.trim() : "";
   const rawAmount = typeof body.amount === "number" ? body.amount : Number(body.amount);
   const clientRequestId = normalizeRequestId(body.client_request_id ?? body.clientRequestId);
-  if (!channelCode) return NextResponse.json({ error: "请选择支付渠道" }, { status: 400 });
+  if (!channelCode) return NextResponse.json({ error: "Please select a payment channel." }, { status: 400 });
   if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
-    return NextResponse.json({ error: "请输入有效充值金额" }, { status: 400 });
+    return NextResponse.json({ error: "Please enter a valid recharge amount." }, { status: 400 });
   }
   if (!clientRequestId) {
-    return NextResponse.json({ error: "缺少有效的充值请求编号" }, { status: 400 });
+    return NextResponse.json({ error: "Missing valid recharge request id." }, { status: 400 });
   }
+  if (customerNote.length > 500) return NextResponse.json({ error: "Recharge note cannot exceed 500 characters." }, { status: 400 });
 
   try {
     const existing = await findExistingRecharge(context.supabase, context.user.id, clientRequestId);
@@ -92,20 +108,24 @@ export async function POST(request: Request) {
 
     const { data: channelData, error: channelError } = await context.supabase
       .from("payment_channels")
-      .select("channel,code,enabled,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,sort_order")
+      .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")
       .or(`code.eq.${channelCode},channel.eq.${channelCode}`)
       .eq("enabled", true)
       .maybeSingle();
     if (channelError) throw channelError;
     const channel = channelData ? normalizeChannelRow(channelData as Record<string, unknown>) : null;
-    if (!channel || !channel.enabled) return NextResponse.json({ error: "支付渠道暂未开放" }, { status: 400 });
+    if (!channel || !channel.enabled || !channel.configured) return NextResponse.json({ error: "Payment channel is not available." }, { status: 400 });
+    if (currency && currency !== channel.currency) return NextResponse.json({ error: "Recharge currency does not match payment channel." }, { status: 400 });
 
     const summary = calculateRechargeAmounts(channel, rawAmount);
     if (summary.amount < channel.minimumAmount) {
       return NextResponse.json(
-        { error: `当前渠道最低充值金额为 ${channel.minimumAmount} ${channel.currency}` },
+        { error: `Minimum recharge amount for this channel is ${channel.minimumAmount} ${channel.currency}.` },
         { status: 400 }
       );
+    }
+    if (channel.maximumAmount && summary.amount > channel.maximumAmount) {
+      return NextResponse.json({ error: `Single recharge amount cannot exceed ${channel.maximumAmount} ${channel.currency}.` }, { status: 400 });
     }
 
     const risk = await evaluateRechargeRisk({
@@ -147,7 +167,13 @@ export async function POST(request: Request) {
       fee: summary.fee,
       payableAmount: summary.payableAmount,
       clientRequestId,
+      customerNote,
     });
+
+    if (channel.reviewMode === "manual") {
+      await context.supabase.from("account_recharges").update({ status: "waiting_payment" }).eq("recharge_no", rechargeNo).eq("user_id", context.user.id);
+      return NextResponse.json({ rechargeNo, status: "waiting_payment", amount: summary.amount, fee: summary.fee, payableAmount: summary.payableAmount, reviewMode: "manual" }, { status: 201 });
+    }
 
     try {
       const result = await getPaymentProvider(channel.provider).createPayment({
@@ -160,10 +186,10 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(result, { status: 201 });
     } catch (providerError) {
-      console.error("[Recharge provider]", getPaymentErrorMessage(providerError, "Provider 未配置"));
+      console.error("[Recharge provider]", getPaymentErrorMessage(providerError, "Provider is not configured"));
       return NextResponse.json(
         {
-          error: "渠道尚未配置，充值单已保留为待支付状态。",
+          error: "Payment channel is not configured. The recharge request is retained as pending payment.",
           rechargeNo,
           status: "pending",
           amount: summary.amount,
@@ -174,7 +200,7 @@ export async function POST(request: Request) {
       );
     }
   } catch (error) {
-    return paymentFailure(error, "充值单创建失败，请稍后重试");
+    return paymentFailure(error, "Recharge creation failed. Please try again later.", "RECHARGE_CREATE_FAILED");
   }
 }
 
@@ -188,7 +214,7 @@ async function findExistingRecharge(
     .select("recharge_no,status,amount,requested_amount,fee_amount,payable_amount")
     .eq("user_id", userId)
     .eq("client_request_id", clientRequestId)
-    .in("status", ["pending", "processing"])
+    .in("status", reusableRechargeStatuses)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -218,6 +244,7 @@ async function insertRecharge(
     fee: number;
     payableAmount: number;
     clientRequestId: string;
+    customerNote: string;
   }
 ) {
   let lastError: unknown = null;
@@ -241,6 +268,10 @@ async function insertRecharge(
       credited_amount: 0,
       status: "pending",
       client_request_id: input.clientRequestId,
+      payment_method: input.channel.code,
+      review_mode: input.channel.reviewMode ?? "provider",
+      customer_note: input.customerNote || null,
+      user_note: input.customerNote || null,
     };
 
     const insertResult = await supabase.from("account_recharges").insert(row);
@@ -263,28 +294,29 @@ async function insertRecharge(
     }
     break;
   }
-  throw lastError ?? new Error("充值单创建失败");
+  throw lastError ?? new Error("Recharge creation failed");
 }
 
 async function requireUser() {
   if (!hasSupabaseServerConfig()) {
-    return { ok: false as const, response: NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 503 }) };
+    return { ok: false as const, response: NextResponse.json({ error: "Recharge service is unavailable.", code: "RECHARGE_LIST_READ_FAILED" }, { status: 503 }) };
   }
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
-    return { ok: false as const, response: NextResponse.json({ error: "请先登录后再操作" }, { status: 401 }) };
+    return { ok: false as const, response: NextResponse.json({ error: "Please sign in before continuing.", code: "RECHARGE_AUTH_REQUIRED" }, { status: 401 }) };
   }
   return { ok: true as const, supabase, user: data.user };
 }
 
-function paymentFailure(error: unknown, fallback: string) {
+function paymentFailure(error: unknown, fallback: string, code: string) {
   console.error("[Recharge API]", getPaymentErrorMessage(error, fallback));
   return NextResponse.json(
     {
       error: isPaymentSchemaUnavailable(error)
-        ? "支付数据库尚未初始化，请先执行支付管理 migration。"
+        ? "Payment database is not initialized. Please apply the payment management migration."
         : getPaymentErrorMessage(error, fallback),
+      code,
     },
     { status: isPaymentSchemaUnavailable(error) ? 503 : 500 }
   );
@@ -315,4 +347,3 @@ function isMissingClientRequestColumn(error: unknown) {
   const message = getPaymentErrorMessage(error, "");
   return /client_request_id|42703|schema cache/i.test(message);
 }
-

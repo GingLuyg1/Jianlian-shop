@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,6 +39,8 @@ export default function AccountRechargeContent() {
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [channelsError, setChannelsError] = useState<string | null>(null);
   const [amountText, setAmountText] = useState("");
+  const [customerNote, setCustomerNote] = useState("");
+  const clientRequestIdRef = useRef<string | null>(null);
   const [activeRecordTab, setActiveRecordTab] = useState<RecordTab>("recharge");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
@@ -140,6 +142,7 @@ export default function AccountRechargeContent() {
     setSubmitError(null);
     setSubmitMessage(null);
     if (selectedChannel) setAmountText(normalizeAmountInput(value, selectedChannel.currency));
+    clientRequestIdRef.current = null;
   };
 
   const selectChannel = (channelCode: PaymentChannelCode) => {
@@ -149,6 +152,7 @@ export default function AccountRechargeContent() {
     setAmountText("");
     setSubmitError(null);
     setSubmitMessage(null);
+    clientRequestIdRef.current = null;
   };
 
   const createRecharge = async () => {
@@ -158,13 +162,17 @@ export default function AccountRechargeContent() {
     setSubmitMessage(null);
 
     try {
+      clientRequestIdRef.current ||= createClientRequestId();
       const response = await fetch("/api/recharges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           channel: selectedChannel.code,
+          payment_method: selectedChannel.code,
           amount: summary.amount,
-          client_request_id: createClientRequestId(),
+          currency: selectedChannel.currency,
+          customer_note: customerNote,
+          client_request_id: clientRequestIdRef.current,
         }),
       });
       const result = (await response.json().catch(() => null)) as
@@ -327,6 +335,9 @@ export default function AccountRechargeContent() {
                   </div>
                 ) : null}
 
+                <label className="mt-3 block text-sm font-medium">充值备注（可选）</label>
+                <Input value={customerNote} maxLength={500} onChange={(event) => { setCustomerNote(event.target.value); clientRequestIdRef.current = null; }} placeholder="填写必要的付款说明，最多 500 字" className="mt-1.5 h-10" />
+
                 <div className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 sm:gap-x-8">
                     <div>充值金额：{selectedChannel && summary ? formatPaymentAmount(summary.amount, selectedChannel.currency) : "—"}</div>
@@ -379,6 +390,7 @@ export default function AccountRechargeContent() {
                 count={recordCount}
                 onRetry={() => void loadRecords(recordPage)}
                 onPageChange={setRecordPage}
+                onProofSubmitted={() => void loadRecords(recordPage)}
               />
             ) : (
               <BalanceRecords
@@ -499,7 +511,7 @@ function RecordLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RechargeRecords({ records, loading, error, page, count, onRetry, onPageChange }: { records: RechargeRecord[]; loading: boolean; error: string | null; page: number; count: number; onRetry: () => void; onPageChange: (page: number) => void }) {
+function RechargeRecords({ records, loading, error, page, count, onRetry, onPageChange, onProofSubmitted }: { records: RechargeRecord[]; loading: boolean; error: string | null; page: number; count: number; onRetry: () => void; onPageChange: (page: number) => void; onProofSubmitted: () => void }) {
   const totalPages = Math.max(1, Math.ceil(count / 10));
   if (loading) return <div className="mt-6 h-44 animate-pulse rounded-xl bg-slate-100" />;
   if (error) return (
@@ -529,7 +541,10 @@ function RechargeRecords({ records, loading, error, page, count, onRetry, onPage
               <RecordLine label="应付金额" value={formatPaymentAmount(record.payableAmount, record.currency)} />
               <RecordLine label="到账金额" value={formatPaymentAmount(record.creditedAmount, record.currency)} />
               <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />
+              {record.completedAt ? <RecordLine label="完成时间" value={formatDateTime(record.completedAt)} /> : null}
+              {record.reviewReason && ["failed", "rejected", "cancelled"].includes(String(record.status)) ? <RecordLine label="处理说明" value={record.reviewReason} /> : null}
             </dl>
+            {["waiting_payment", "submitted", "rejected"].includes(String(record.status)) ? <RechargeProofForm record={record} onSubmitted={onProofSubmitted} /> : null}
           </div>
         ))}
       </div>
@@ -545,6 +560,36 @@ function RechargeRecords({ records, loading, error, page, count, onRetry, onPage
       ) : null}
     </div>
   );
+}
+
+function RechargeProofForm({ record, onSubmitted }: { record: RechargeRecord; onSubmitted: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [reference, setReference] = useState("");
+  const [payer, setPayer] = useState("");
+  const [paymentTime, setPaymentTime] = useState("");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  async function submit() {
+    if (submitting) return;
+    setSubmitting(true); setError("");
+    try {
+      const form = new FormData();
+      form.set("paymentAmount", String(record.payableAmount));
+      form.set("transactionReference", reference);
+      form.set("payerAccountSummary", payer);
+      form.set("paymentTime", paymentTime);
+      form.set("userNote", note);
+      files.forEach((file) => form.append("files", file));
+      const response = await fetch(`/api/recharges/${encodeURIComponent(record.rechargeNo)}/proof`, { method: "POST", body: form });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || "凭证提交失败，请稍后重试。");
+      setOpen(false); setFiles([]); setReference(""); setPayer(""); setPaymentTime(""); setNote(""); onSubmitted();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "凭证提交失败，请稍后重试。"); }
+    finally { setSubmitting(false); }
+  }
+  return <div className="mt-3 border-t pt-3">{!open ? <Button size="sm" variant="outline" onClick={() => setOpen(true)}>{record.status === "submitted" ? "补充支付凭证" : "提交支付凭证"}</Button> : <div className="space-y-2 rounded-lg border bg-white p-3"><div className="text-xs text-slate-500">付款金额：{formatPaymentAmount(record.payableAmount, record.currency)}</div><Input value={reference} maxLength={160} onChange={(e) => setReference(e.target.value)} placeholder="交易流水号" /><Input value={payer} maxLength={120} onChange={(e) => setPayer(e.target.value)} placeholder="付款账号摘要（请勿填写完整敏感信息）" /><Input type="datetime-local" value={paymentTime} onChange={(e) => setPaymentTime(e.target.value)} /><Input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="用户备注（可选）" /><Input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 3))} /><p className="text-xs text-slate-500">支持 JPG、PNG、WEBP、PDF，单个最大 5MB，最多 3 个。</p>{error ? <p className="text-xs text-red-600">{error}</p> : null}<div className="flex gap-2"><Button size="sm" disabled={submitting} onClick={() => void submit()}>{submitting ? "提交中..." : "提交审核"}</Button><Button size="sm" variant="outline" disabled={submitting} onClick={() => setOpen(false)}>取消</Button></div></div>}</div>;
 }
 
 function normalizeAmountInput(value: string, currency: PaymentCurrency) {

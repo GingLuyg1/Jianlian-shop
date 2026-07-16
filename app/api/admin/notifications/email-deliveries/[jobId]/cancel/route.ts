@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { auditEmailAdminAction, summarizeEmailError } from "@/lib/email/jobs";
 import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
-
 export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return NextResponse.json({ error: "无权取消邮件任务。" }, { status: 403 });
-  }
-  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_delivery_cancel"));
+    const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_delivery_cancel"));
   if (!limit.allowed) return limit.response!;
   const service = getSupabaseServiceRoleClient();
   if (!service) return NextResponse.json({ error: "后台服务未配置。" }, { status: 503 });

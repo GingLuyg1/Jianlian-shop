@@ -93,9 +93,44 @@ function getProductSaveFailure(error: unknown, fallback = "商品保存失败，
   return { status: 500, code: "PRODUCT_UPDATE_FAILED", message: fallback };
 }
 
+
+export async function GET(request: Request, { params }: RouteContext) {
+  const requestId = getRequestId(request);
+  const admin = await requireCatalogAdmin(requestId);
+  if (!admin.ok) return admin.response;
+  const service = getSupabaseServiceRoleClient() ?? admin.supabase;
+
+  const productId = params.productId?.trim();
+  if (!productId || !isSafeProductId(productId)) {
+    return productFailureResponse("INVALID_PRODUCT_ID", "商品 ID 无效", requestId, 400);
+  }
+
+  const { data, error } = await service
+    .from("products")
+    .select(PRODUCT_FIELDS)
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[AdminProductRead] product read failed", {
+      requestId,
+      productId,
+      error: safeSupabaseError(error),
+    });
+    return productFailureResponse("PRODUCT_READ_FAILED", "商品读取失败，请稍后重试", requestId, 500);
+  }
+  if (!data) {
+    return productFailureResponse("PRODUCT_NOT_FOUND", "商品不存在或已被删除", requestId, 404);
+  }
+
+  const response = jsonResponse({ success: true, data: { product: data }, product: data, request_id: requestId });
+  response.headers.set("X-Request-ID", requestId);
+  return response;
+}
+
 export async function PATCH(request: Request, { params }: RouteContext) {
   const requestId = getRequestId(request);
-  const admin = await requireCatalogAdmin();
+  const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
 
   const productId = params.productId?.trim();
@@ -113,14 +148,20 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   // catalog write uses a server-only client because products RLS intentionally
   // exposes public reads but no browser-side write policy.
   const serviceRole = getSupabaseServiceRoleClient();
-  const service = serviceRole ?? admin.supabase;
   if (!serviceRole) {
-    console.warn("[AdminProductUpdate] service role unavailable, falling back to admin session client", {
+    console.error("[AdminProductUpdate] service role unavailable", {
       requestId,
       productId,
       adminId: admin.user.id,
     });
+    return productFailureResponse(
+      "PRODUCT_SERVICE_ROLE_UNAVAILABLE",
+      "商品保存失败，本地服务端缺少 Supabase service role 配置，无法写入商品表。",
+      requestId,
+      500
+    );
   }
+  const service = serviceRole;
 
   const { data: before, error: beforeError } = await service
     .from("products")
@@ -260,7 +301,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {
-  const admin = await requireCatalogAdmin();
+  const requestId = getRequestId(request);
+  const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
 
   const productId = params.productId?.trim();

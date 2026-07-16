@@ -2,13 +2,11 @@
 import { redirect } from "next/navigation";
 import { MailCheck } from "lucide-react";
 
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { summarizeEmailError } from "@/lib/email/jobs";
 import { getEmailProviderStatus } from "@/lib/email/provider";
 import { EmailDeliveryActions } from "@/components/admin/EmailDeliveryActions";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
 type DeliveryRow = {
   id: string;
@@ -29,11 +27,8 @@ type DeliveryRow = {
 };
 
 export default async function EmailDeliveriesPage({ searchParams }: { searchParams?: { status?: string } }) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) redirect("/login");
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return <AdminEmailPageState title="无权访问" message="只有超级管理员可以查看邮件发送记录。" />;
-  }
   const service = getSupabaseServiceRoleClient();
   if (!service) return <AdminEmailPageState title="服务未配置" message="缺少 SUPABASE_SERVICE_ROLE_KEY，无法读取邮件发送记录。" />;
 

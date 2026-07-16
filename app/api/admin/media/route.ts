@@ -1,6 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import {
   assertUploadBatchLimit,
@@ -17,8 +17,6 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
-
 function json(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init);
   response.headers.set("Cache-Control", "no-store");
@@ -26,20 +24,9 @@ function json(body: unknown, init?: ResponseInit) {
 }
 
 async function requireSuperAdmin(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin;
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email },
-      action: "media_access",
-      module: "system",
-      result: "denied",
-      errorMessage: "仅超级管理员可以管理媒体资源",
-    });
-    return { ok: false as const, response: json({ error: "仅超级管理员可以管理媒体资源。" }, { status: 403 }) };
-  }
-  return admin;
+    return admin;
 }
 
 export async function GET(request: Request) {

@@ -12,11 +12,11 @@ import {
 import { fetchPublicSettings } from "@/lib/settings/client";
 import {
   DEFAULT_PUBLIC_SETTINGS,
-  type PublicSiteSettings,
+  type PublicSettingsResponse,
 } from "@/lib/settings/types";
 
 type SettingsContextValue = {
-  settings: PublicSiteSettings;
+  settings: PublicSettingsResponse;
   loading: boolean;
 };
 
@@ -26,7 +26,7 @@ const SettingsContext = createContext<SettingsContextValue>({
 });
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<PublicSiteSettings>(
+  const [settings, setSettings] = useState<PublicSettingsResponse>(
     DEFAULT_PUBLIC_SETTINGS
   );
   const [loading, setLoading] = useState(true);

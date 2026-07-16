@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import { getOrderErrorMessage, getUserOrderByNo } from "@/lib/orders/order-queries";
 import { canUserCancelOrder } from "@/lib/orders/order-status";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
@@ -11,10 +12,14 @@ type RouteContext = {
   };
 };
 
+function jsonError(message: string, status: number, code?: string) {
+  return NextResponse.json({ error: message, ...(code ? { code } : {}) }, { status });
+}
+
 export async function GET(_request: Request, context: RouteContext) {
   try {
     if (!hasSupabaseServerConfig()) {
-      return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 500 });
+      return jsonError("Supabase server configuration is missing.", 500);
     }
 
     const supabase = getSupabaseServerClient();
@@ -24,29 +29,25 @@ export async function GET(_request: Request, context: RouteContext) {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return NextResponse.json({ error: "请先登录" }, { status: 401 });
+      return jsonError("Please sign in first.", 401);
     }
 
     const order = await getUserOrderByNo(supabase, user.id, context.params.orderNo);
-
     if (!order) {
-      return NextResponse.json({ error: "订单不存在或无权查看" }, { status: 404 });
+      return jsonError("Order does not exist or you do not have permission to view it.", 404);
     }
 
     return NextResponse.json({ order });
   } catch (error) {
     console.error("[Orders] detail failed", error);
-    return NextResponse.json(
-      { error: getOrderErrorMessage(error, "订单详情读取失败") },
-      { status: 500 }
-    );
+    return jsonError(getOrderErrorMessage(error, "Order details could not be loaded."), 500);
   }
 }
 
-export async function PATCH(_request: Request, context: RouteContext) {
+export async function PATCH(request: Request, context: RouteContext) {
   try {
     if (!hasSupabaseServerConfig()) {
-      return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 500 });
+      return jsonError("Supabase server configuration is missing.", 500);
     }
 
     const supabase = getSupabaseServerClient();
@@ -56,73 +57,49 @@ export async function PATCH(_request: Request, context: RouteContext) {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return NextResponse.json({ error: "请先登录" }, { status: 401 });
+      return jsonError("Please sign in first.", 401);
     }
 
     const order = await getUserOrderByNo(supabase, user.id, context.params.orderNo);
-
     if (!order) {
-      return NextResponse.json({ error: "订单不存在或无权查看" }, { status: 404 });
+      return jsonError("Order does not exist or you do not have permission to view it.", 404);
     }
 
-    const { data: allowCancelSetting } = await supabase.rpc(
-      "get_site_setting_boolean",
-      {
-        p_setting_key: "allow_user_cancel_pending_order",
-        p_default: true,
-      }
-    );
+    const { data: allowCancelSetting } = await supabase.rpc("get_site_setting_boolean", {
+      p_setting_key: "allow_user_cancel_pending_order",
+      p_default: true,
+    });
 
     if (allowCancelSetting === false) {
-      return NextResponse.json(
-        { error: "当前不允许用户自行取消订单，请联系客服处理" },
-        { status: 400 }
-      );
+      return jsonError("User cancellation is currently disabled. Please contact support.", 400);
     }
 
     if (!canUserCancelOrder(order.status)) {
-      return NextResponse.json(
-        { error: "当前订单状态不允许取消" },
-        { status: 400 }
-      );
+      return jsonError("This order status cannot be cancelled by the user.", 400, "ORDER_NOT_CANCELLABLE");
     }
 
-    const { error: updateError } = await supabase
-      .from("orders")
-      .update({
-        status: "cancelled",
-        cancelled_at: new Date().toISOString(),
-      })
-      .eq("id", order.id)
-      .eq("user_id", user.id)
-      .eq("status", "pending_payment");
+    const body = (await request.json().catch(() => null)) as { reason?: string | null } | null;
+    const reason = String(body?.reason ?? "user_cancelled").trim().slice(0, 120) || "user_cancelled";
 
-    if (updateError) {
-      return NextResponse.json(
-        { error: getOrderErrorMessage(updateError, "订单取消失败") },
-        { status: 400 }
-      );
-    }
-
-    await supabase.from("order_status_logs").insert({
-      order_id: order.id,
-      from_status: order.status,
-      to_status: "cancelled",
-      operator_id: user.id,
-      operator_type: "user",
-      note: "用户取消订单",
-    });
-
-    await supabase.rpc("release_order_inventory", {
+    const { data: cancelResult, error: cancelError } = await supabase.rpc("cancel_unpaid_order", {
       p_order_id: order.id,
+      p_reason: reason,
     });
 
-    return NextResponse.json({ ok: true });
+    if (cancelError) {
+      return jsonError(getOrderErrorMessage(cancelError, "Order cancellation failed."), 400);
+    }
+
+    const result = cancelResult && typeof cancelResult === "object" ? (cancelResult as Record<string, unknown>) : {};
+    if (result.ok === false) {
+      const code = typeof result.code === "string" ? result.code : "ORDER_CANCEL_FAILED";
+      const status = code === "ORDER_NOT_FOUND" ? 404 : 400;
+      return jsonError(typeof result.message === "string" ? result.message : "Order cancellation failed.", status, code);
+    }
+
+    return NextResponse.json({ ok: true, result });
   } catch (error) {
     console.error("[Orders] cancel failed", error);
-    return NextResponse.json(
-      { error: getOrderErrorMessage(error, "订单取消失败") },
-      { status: 500 }
-    );
+    return jsonError(getOrderErrorMessage(error, "Order cancellation failed."), 500);
   }
 }

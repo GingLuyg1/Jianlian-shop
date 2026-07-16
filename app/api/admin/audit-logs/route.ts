@@ -1,12 +1,10 @@
 ﻿import { NextResponse } from "next/server";
 
 import { getAuditErrorMessage } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
 const VALID_MODULES = new Set([
   "payments",
@@ -46,14 +44,11 @@ function isAuditTableMissing(error: unknown) {
 }
 
 export async function GET(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) {
     return NextResponse.json({ error: admin.message }, { status: admin.status });
   }
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return NextResponse.json({ error: "无权限查看操作日志。" }, { status: 403 });
-  }
-
+  
   const serviceClient = getSupabaseServiceRoleClient();
   const supabase = serviceClient ?? admin.supabase;
   const searchParams = new URL(request.url).searchParams;

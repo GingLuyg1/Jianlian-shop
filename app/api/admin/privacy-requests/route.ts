@@ -1,13 +1,11 @@
 ﻿import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { normalizePrivacyRequest, privacyInitError } from "@/lib/privacy/privacy-service";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
 type PatchBody = {
   action?: string;
@@ -28,12 +26,9 @@ function requireService() {
 }
 
 async function requireSuperAdmin() {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin;
-  if ((admin.user.email ?? admin.profile.email ?? "").toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return { ok: false as const, response: json({ error: "只有超级管理员可以处理隐私请求。" }, { status: 403 }) };
-  }
-  return admin;
+    return admin;
 }
 
 export async function GET(request: Request) {
@@ -152,7 +147,7 @@ export async function PATCH(request: Request) {
       if (error) throw error;
       updated = data;
     } else if (action === "complete_anonymize") {
-      const { data, error } = await service.rpc("anonymize_user_account", {
+      const { data, error } = await service.rpc("super_admin_anonymize_user_account", {
         p_request_id: requestId,
         p_admin_id: admin.user.id,
         p_reason: note,
@@ -176,7 +171,7 @@ export async function PATCH(request: Request) {
 
     await writeAdminAuditLog({
       request,
-      admin: { id: admin.user.id, email: admin.user.email ?? admin.profile.email ?? null },
+      admin: { id: admin.user.id, email: admin.user.email ?? null },
       action: `privacy_${action}`,
       module: "privacy",
       targetType: "privacy_request",
@@ -193,7 +188,7 @@ export async function PATCH(request: Request) {
   } catch (error) {
     await writeAdminAuditLog({
       request,
-      admin: { id: admin.user.id, email: admin.user.email ?? admin.profile.email ?? null },
+      admin: { id: admin.user.id, email: admin.user.email ?? null },
       action: action || "privacy_action_failed",
       module: "privacy",
       targetType: "privacy_request",

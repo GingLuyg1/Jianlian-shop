@@ -230,6 +230,9 @@ function MaintenanceSettings({ settings, saving, onChange, onSave }: SettingsSec
 function AnnouncementSettings({ settings, saving, onChange, onSave }: SettingsSectionProps) {
   return (
     <Section>
+      <div className="flex justify-end">
+        <Button asChild variant="outline"><Link href="/admin/settings/announcements">管理结构化公告</Link></Button>
+      </div>
       <Field label="全站顶部公告"><Textarea rows={5} value={settings.top_announcement} onChange={(e) => onChange({ top_announcement: e.target.value })} /></Field>
       <Field label="Checkout 购买提醒"><Textarea rows={5} value={settings.checkout_notice} onChange={(e) => onChange({ checkout_notice: e.target.value })} /></Field>
       <p className="text-xs text-slate-500">公告以纯文本方式渲染，不执行 HTML 或脚本。多公告结构已通过 migration 预留，当前顶部公告和购买提醒从系统设置读取。</p>

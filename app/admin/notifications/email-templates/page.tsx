@@ -2,11 +2,9 @@
 import { redirect } from "next/navigation";
 import { MailPlus } from "lucide-react";
 
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { summarizeEmailError } from "@/lib/email/jobs";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
 type TemplateRow = {
   id: string;
@@ -21,11 +19,8 @@ type TemplateRow = {
 };
 
 export default async function EmailTemplatesPage() {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) redirect("/login");
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return <AdminEmailPageState title="无权访问" message="只有超级管理员可以管理邮件模板。" />;
-  }
   const service = getSupabaseServiceRoleClient();
   if (!service) return <AdminEmailPageState title="服务未配置" message="缺少 SUPABASE_SERVICE_ROLE_KEY，无法读取邮件模板。" />;
 

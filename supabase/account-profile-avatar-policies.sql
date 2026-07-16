@@ -3,7 +3,6 @@
 
 alter table public.profiles
 add column if not exists display_name text,
-add column if not exists country text,
 add column if not exists recipient_name text,
 add column if not exists shipping_address jsonb not null default '{}'::jsonb,
 add column if not exists avatar_url text;

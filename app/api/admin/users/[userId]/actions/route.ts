@@ -1,12 +1,11 @@
 ﻿import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { getAuditErrorMessage, writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 
 export const dynamic = "force-dynamic";
 
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 const ACCOUNT_STATUSES = new Set(["active", "restricted", "suspended", "disabled"]);
 const RISK_STATUSES = new Set(["normal", "watch", "high_risk", "blocked"]);
 const ADJUSTMENT_TYPES = new Set(["increase", "decrease", "compensation", "refund", "correction", "other"]);
@@ -30,18 +29,14 @@ function json(body: unknown, init?: ResponseInit) {
 }
 
 async function requireSuperAdmin() {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin;
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    return { ok: false as const, response: json({ error: "仅超级管理员可以执行用户管理操作。" }, { status: 403 }) };
-  }
   return admin;
 }
 
 export async function POST(request: Request, context: RouteContext) {
   const admin = await requireSuperAdmin();
   if (!admin.ok) return admin.response;
-
   const body = (await request.json().catch(() => null)) as ActionBody | null;
   if (!body) return json({ error: "请求参数不正确。" }, { status: 400 });
 
@@ -58,7 +53,7 @@ export async function POST(request: Request, context: RouteContext) {
       const nextStatus = String(body.nextStatus ?? "").trim();
       if (!ACCOUNT_STATUSES.has(nextStatus)) return json({ error: "账户状态不合法。" }, { status: 400 });
       const before = await loadProfile(admin.supabase, userId);
-      const { data, error } = await admin.supabase.rpc("admin_update_user_account_status", {
+      const { data, error } = await admin.supabase.rpc("super_admin_update_user_account_status", {
         p_user_id: userId,
         p_next_status: nextStatus,
         p_reason: reason,
@@ -88,7 +83,7 @@ export async function POST(request: Request, context: RouteContext) {
       const nextRiskStatus = String(body.nextRiskStatus ?? "").trim();
       if (!RISK_STATUSES.has(nextRiskStatus)) return json({ error: "风险状态不合法。" }, { status: 400 });
       const before = await loadProfile(admin.supabase, userId);
-      const { data, error } = await admin.supabase.rpc("admin_update_user_risk_status", {
+      const { data, error } = await admin.supabase.rpc("super_admin_update_user_risk_status", {
         p_user_id: userId,
         p_next_status: nextRiskStatus,
         p_reason: reason,
@@ -122,7 +117,7 @@ export async function POST(request: Request, context: RouteContext) {
       if (!DIRECTIONS.has(direction)) return json({ error: "调整方向不合法。" }, { status: 400 });
       if (!Number.isFinite(amount) || amount <= 0) return json({ error: "调整金额必须大于 0。" }, { status: 400 });
       const before = await loadProfile(admin.supabase, userId);
-      const { data, error } = await admin.supabase.rpc("admin_adjust_user_balance", {
+      const { data, error } = await admin.supabase.rpc("super_admin_adjust_user_balance", {
         p_user_id: userId,
         p_adjustment_type: adjustmentType,
         p_direction: direction,

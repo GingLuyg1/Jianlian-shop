@@ -1,23 +1,17 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { auditEmailAdminAction, processEmailDeliveryJob, summarizeEmailError } from "@/lib/email/jobs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
 
 function json(data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, init);
 }
 
 export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return json({ error: admin.message }, { status: admin.status });
-  if (admin.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    await auditEmailAdminAction({ request, admin: { id: admin.user.id, email: admin.user.email }, action: "email_delivery_retry_denied", targetId: params.jobId, result: "denied" });
-    return json({ error: "无权重试邮件发送。" }, { status: 403 });
-  }
   const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_delivery_retry"));
   if (!limit.allowed) return limit.response!;
 

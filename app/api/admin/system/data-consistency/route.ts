@@ -1,16 +1,10 @@
 ﻿import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { listDataConsistencyState, runDataConsistencyScan } from "@/lib/consistency/scanner";
 
 export const dynamic = "force-dynamic";
-
-const SUPER_ADMIN_EMAIL = "gac000189@gmail.com";
-
-function isSuperAdmin(email?: string | null) {
-  return email?.toLowerCase() === SUPER_ADMIN_EMAIL;
-}
 
 function safeError(error: unknown, fallback = "数据巡检操作失败") {
   if (typeof error === "string" && error.trim()) return error;
@@ -22,12 +16,9 @@ function safeError(error: unknown, fallback = "数据巡检操作失败") {
 }
 
 export async function GET(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
-  if (!isSuperAdmin(admin.user.email)) {
-    return NextResponse.json({ error: "无权查看数据巡检。" }, { status: 403 });
-  }
-
+  
   const params = new URL(request.url).searchParams;
   try {
     const result = await listDataConsistencyState({
@@ -45,20 +36,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
-  if (!isSuperAdmin(admin.user.email)) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email },
-      action: "run_data_consistency_scan",
-      module: "system",
-      result: "denied",
-      errorMessage: "非超级管理员尝试执行数据巡检",
-    });
-    return NextResponse.json({ error: "无权执行数据巡检。" }, { status: 403 });
-  }
-
+  
   try {
     const result = await runDataConsistencyScan({ runType: "manual", persist: true, triggeredBy: admin.user.id });
     await writeAdminAuditLog({
