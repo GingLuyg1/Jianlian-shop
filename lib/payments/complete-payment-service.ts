@@ -12,7 +12,7 @@ export const COMPLETE_PAYMENT_SERVICE_IMPLEMENTED = true;
 export type CompletePaymentInput = {
   paymentSessionId: string;
   providerTransactionId: string;
-  amount: number;
+  amount: string | number;
   currency: PaymentCurrency | string;
   paidAt?: string | null;
   source: "callback" | "reconciliation";

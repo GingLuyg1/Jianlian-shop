@@ -16,8 +16,8 @@ export type PaymentChannelCode =
   | "usdt_trc20"
   | "usdt_bep20";
 
-export type RechargeStatus = "pending" | "processing" | "paid" | "failed" | "expired" | "closed";
-export type PaymentSessionStatus = RechargeStatus;
+export type RechargeStatus = "pending" | "waiting_payment" | "submitted" | "reviewing" | "approved" | "processing" | "succeeded" | "failed" | "rejected" | "cancelled" | "expired" | "paid" | "closed";
+export type PaymentSessionStatus = "pending" | "processing" | "paid" | "failed" | "expired" | "closed";
 export type PaymentBusinessType = "order" | "recharge" | "account_recharge";
 export type PaymentResultType = "redirect" | "qrcode" | "address";
 
@@ -36,6 +36,8 @@ export type PaymentChannel = {
   status: PaymentChannelStatus;
   enabled: boolean;
   configured: boolean;
+  reviewMode?: "provider" | "manual";
+  maximumAmount?: number;
   provider: PaymentProviderCode;
   sort_order: number;
   iconSrc?: string;

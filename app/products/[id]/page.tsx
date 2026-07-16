@@ -36,6 +36,7 @@ import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethodCode,
 } from "@/lib/payments/payment-methods";
+import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const PRODUCT_IMAGE_FALLBACK = "/assets/jianlian-brand-logo.png";
@@ -45,6 +46,7 @@ const REQUIRED_AGREEMENT_TYPES = [
   "digital_delivery_policy",
   "purchase_notice",
 ] as const;
+const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20"]);
 
 type LegalDocument = {
   id: string;
@@ -180,7 +182,7 @@ export default function ProductDetailPage() {
     content_hash: doc!.content_hash,
   }));
   const selectedPaymentOption = PAYMENT_METHOD_OPTIONS.find((option) => option.code === paymentMethod);
-  const paymentUnavailable = paymentMethod !== "balance";
+  const paymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod);
   const quantityInvalid = quantity < 1 || quantity > Math.max(availableStock, 0);
 
   const canSubmit = Boolean(
@@ -192,6 +194,18 @@ export default function ProductDetailPage() {
       isEmailLike(contactEmail) &&
       !paymentUnavailable &&
       agreementChecked &&
+      !legalLoading &&
+      !legalError &&
+      agreementsReady &&
+      !submitting
+  );
+  const canAttemptSubmit = Boolean(
+    product &&
+      !productInactive &&
+      !productSoldOut &&
+      !selectedSkuUnavailable &&
+      !quantityInvalid &&
+      isEmailLike(contactEmail) &&
       !legalLoading &&
       !legalError &&
       agreementsReady &&
@@ -256,6 +270,30 @@ export default function ProductDetailPage() {
   }, [productIdentifier]);
 
   useEffect(() => {
+    if (!hasSupabaseConfig()) return;
+    let active = true;
+
+    async function loadCurrentUserEmail() {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const email = session?.user?.email?.trim();
+        if (!active || !email) return;
+        setContactEmail((current) => current.trim() || email);
+      } catch {
+        // Auth loading is non-blocking; submit still requires a valid contact email.
+      }
+    }
+
+    void loadCurrentUserEmail();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     async function loadLegalDocuments() {
@@ -306,7 +344,7 @@ export default function ProductDetailPage() {
     if (selectedSkuUnavailable) return "当前规格不可购买，请重新选择。";
     if (quantityInvalid) return "购买数量超出当前库存。";
     if (!isEmailLike(contactEmail)) return "请填写有效的联系邮箱。";
-    if (paymentUnavailable) return "该支付方式暂未开放，请选择余额支付。";
+    if (paymentUnavailable) return "该支付方式暂未开放，请选择余额支付或 USDT-BEP20。";
     if (legalLoading) return "协议正在加载，请稍后再试。";
     if (legalError) return legalError;
     if (!agreementsReady) return "协议版本未配置完整，请稍后重试。";
@@ -631,7 +669,7 @@ export default function ProductDetailPage() {
                       {PAYMENT_METHOD_OPTIONS.map((option) => (
                         <option key={option.code} value={option.code}>
                           {option.label}
-                          {option.code === "balance" ? "" : "（暂未开放）"}
+                          {ORDER_ENABLED_PAYMENT_METHODS.has(option.code) ? "" : "（暂未开放）"}
                         </option>
                       ))}
                     </select>
@@ -677,7 +715,7 @@ export default function ProductDetailPage() {
                     </div>
                   ) : null}
 
-                  <Button className="h-11 w-full" disabled={!canSubmit} onClick={handleSubmit}>
+                  <Button className="h-11 w-full" disabled={!canSubmit && !canAttemptSubmit} onClick={handleSubmit}>
                     {submitting ? "正在创建订单..." : "立即购买"}
                   </Button>
                 </CardContent>

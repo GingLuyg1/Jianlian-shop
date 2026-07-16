@@ -57,7 +57,7 @@ export const PAYMENT_METHOD_OPTIONS: PaymentMethodOption[] = [
     code: "usdt_bep20",
     label: "USDT-BEP20",
     network: "BNB Smart Chain 网络",
-    description: "BNB Smart Chain 网络，暂未开放",
+    description: "BNB Smart Chain 网络，提交订单后进入链上 TxHash 核验",
     channelCodes: ["usdt_bep20"],
   },
 ];

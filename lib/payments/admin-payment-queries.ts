@@ -34,9 +34,13 @@ export const adminOrderPaymentSelect = `
   channel,
   network,
   business_amount,
+  order_amount,
+  order_currency,
   fee_amount,
   payable_amount,
+  payable_currency,
   received_amount,
+  received_currency,
   provider_trade_no,
   paid_at,
   callback_status,
@@ -88,10 +92,13 @@ function stringOrNull(value: unknown) {
 export function normalizeOrderPaymentRow(row: AnyRow): AdminPaymentRecord {
   const order = row.orders && typeof row.orders === "object" ? row.orders : null;
   const amount = numberValue(row.amount);
-  const businessAmount = numberValue(row.business_amount ?? order?.total_amount ?? amount);
+  const businessAmount = numberValue(row.order_amount ?? row.business_amount ?? order?.total_amount ?? amount);
+  const businessCurrency = stringOrNull(row.order_currency) ?? stringOrNull(row.currency);
   const feeAmount = numberValue(row.fee_amount);
   const payableAmount = numberValue(row.payable_amount ?? amount);
+  const payableCurrency = stringOrNull(row.payable_currency) ?? stringOrNull(row.currency);
   const receivedAmount = numberValue(row.received_amount ?? (row.status === "paid" ? amount : 0));
+  const receivedCurrency = stringOrNull(row.received_currency) ?? (receivedAmount > 0 ? payableCurrency : null);
   const channel = stringOrNull(row.channel) ?? stringOrNull(row.payment_method);
 
   return {
@@ -104,9 +111,12 @@ export function normalizeOrderPaymentRow(row: AnyRow): AdminPaymentRecord {
     channel,
     network: stringOrNull(row.network),
     business_amount: businessAmount,
+    business_currency: businessCurrency,
     fee_amount: feeAmount,
     payable_amount: payableAmount,
+    payable_currency: payableCurrency,
     received_amount: receivedAmount,
+    received_currency: receivedCurrency,
     platform_net_amount: Math.max(receivedAmount - feeAmount, 0),
     status: normalizeUnifiedPaymentStatus(row.status === "submitted" || row.status === "under_review" ? "processing" : row.status),
     provider_trade_no: stringOrNull(row.provider_trade_no),
@@ -124,9 +134,12 @@ export function normalizeOrderPaymentRow(row: AnyRow): AdminPaymentRecord {
 
 export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
   const businessAmount = numberValue(row.requested_amount ?? row.amount);
+  const businessCurrency = stringOrNull(row.currency);
   const feeAmount = numberValue(row.fee_amount);
   const payableAmount = numberValue(row.payable_amount ?? businessAmount + feeAmount);
+  const payableCurrency = stringOrNull(row.currency);
   const receivedAmount = numberValue(row.credited_amount ?? row.received_amount);
+  const receivedCurrency = stringOrNull(row.currency);
 
   return {
     id: String(row.id ?? ""),
@@ -138,9 +151,12 @@ export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
     channel: stringOrNull(row.channel_code ?? row.channel),
     network: stringOrNull(row.network),
     business_amount: businessAmount,
+    business_currency: businessCurrency,
     fee_amount: feeAmount,
     payable_amount: payableAmount,
+    payable_currency: payableCurrency,
     received_amount: receivedAmount,
+    received_currency: receivedCurrency,
     platform_net_amount: Math.max(receivedAmount - feeAmount, 0),
     status: normalizeUnifiedPaymentStatus(row.status),
     provider_trade_no: stringOrNull(row.provider_trade_no),

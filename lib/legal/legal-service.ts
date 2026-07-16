@@ -161,7 +161,7 @@ export async function recordOrderAgreementAcceptances(input: {
   });
   if (error) throw error;
 
-  await service.from("order_evidence_events").insert({
+  const { error: evidenceError } = await service.from("order_evidence_events").insert({
     order_id: input.orderId,
     user_id: input.user.id,
     event_type: "agreement_accepted",
@@ -171,6 +171,7 @@ export async function recordOrderAgreementAcceptances(input: {
     request_id: getRequestId(input.request),
     metadata: { document_count: rows.length },
   });
+  if (evidenceError) throw evidenceError;
 }
 
 export async function loadOrderEvidence(supabase: SupabaseClient, orderId: string) {

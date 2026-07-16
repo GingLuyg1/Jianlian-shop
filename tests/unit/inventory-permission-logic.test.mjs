@@ -90,6 +90,20 @@ test("delivery is idempotent and delivered stock is not released", () => {
   assert.equal(released.find((item) => item.id === "inv_1").status, "delivered");
 });
 
+test("delivery does not consume available inventory that was not reserved for the order", () => {
+  assert.throws(
+    () =>
+      deliverReservedInventory(baseInventory, {
+        orderId: "order_1",
+        productId: "p1",
+        skuId: "sku_us",
+        quantity: 1,
+        now: "2026-06-30T00:01:00Z",
+      }),
+    /已预留|reserved|搴撳瓨/,
+  );
+});
+
 test("admin API authorization returns 401 for anonymous and 403 for normal user", () => {
   assert.deepEqual(authorizeAdmin(null), { ok: false, status: 401 });
   assert.deepEqual(authorizeAdmin({ id: "user_1", role: "user" }), { ok: false, status: 403 });

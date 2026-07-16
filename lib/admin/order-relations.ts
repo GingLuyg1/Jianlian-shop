@@ -9,6 +9,7 @@ export type RelationGroupKey =
   | "items"
   | "payment_sessions"
   | "payments"
+  | "chain_payment_sessions"
   | "refunds"
   | "balance"
   | "inventory"
@@ -58,6 +59,7 @@ const RELATION_LABELS: Record<RelationGroupKey, string> = {
   items: "订单项",
   payment_sessions: "支付会话",
   payments: "成功支付记录",
+  chain_payment_sessions: "链上支付会话",
   refunds: "退款申请",
   balance: "余额流水",
   inventory: "数字库存预留",
@@ -81,6 +83,14 @@ function money(amount: unknown, currency: unknown = "CNY") {
   const n = Number(amount);
   if (!Number.isFinite(n)) return null;
   return `${String(currency || "CNY") === "CNY" ? "¥" : String(currency || "")}${n.toFixed(2)}`;
+}
+
+function exactMoney(amount: unknown, currency: unknown) {
+  if (amount === null || typeof amount === "undefined") return null;
+  const value = String(amount).trim();
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return null;
+  const code = String(currency ?? "").trim().toUpperCase();
+  return code === "CNY" ? `¥${value}` : `${value}${code ? ` ${code}` : ""}`;
 }
 
 async function safeQuery<T>(fn: () => any): Promise<{ rows: T[]; error?: string }> {
@@ -152,7 +162,7 @@ export async function loadAdminOrderRelations(
   const itemsResult = await safeQuery<Record<string, unknown>>(() =>
     supabase
       .from("order_items")
-      .select("id,order_id,product_id,sku_id,sku_code,product_name,sku_title,quantity,unit_price,line_total,currency,delivery_type,delivery_status,created_at,delivery_started_at,delivery_completed_at")
+      .select("id,order_id,product_id,sku_id,sku_code,product_name,sku_title,quantity,unit_price,line_total,delivery_type,delivery_status,created_at,delivery_started_at,delivery_completed_at")
       .eq("order_id", orderId)
       .order("created_at", { ascending: true })
   );
@@ -163,7 +173,7 @@ export async function loadAdminOrderRelations(
     businessNo: text(item.sku_code),
     summary: `${text(item.product_name) ?? "订单商品"}${text(item.sku_title) ? ` / ${text(item.sku_title)}` : ""} x ${Number(item.quantity ?? 0)}`,
     status: text(item.delivery_status) ?? text(item.delivery_type),
-    amount: money(item.line_total, item.currency),
+    amount: money(item.line_total, order.currency),
     createdAt: text(item.created_at),
     href: item.product_id ? `/admin/products?search=${encodeURIComponent(text(item.product_name) ?? String(item.product_id))}` : null,
   })), itemsResult.error));
@@ -175,7 +185,7 @@ export async function loadAdminOrderRelations(
   const sessionsResult = await safeQuery<Record<string, unknown>>(() =>
     supabase
       .from("payment_sessions")
-      .select("id,session_no,business_type,business_id,business_no,provider,provider_order_no,provider_transaction_id,status,payable_amount,currency,created_at,paid_at,failed_at,updated_at")
+      .select("id,session_no,business_type,business_id,business_no,provider,provider_order_no,provider_transaction_id,status,payable_amount,currency,created_at,paid_at,closed_at,last_error,updated_at")
       .eq("business_type", "order")
       .eq("business_id", orderId)
       .order("created_at", { ascending: false })
@@ -194,13 +204,13 @@ export async function loadAdminOrderRelations(
   for (const session of sessionsResult.rows) {
     addEvent(events, { source: "支付会话", title: "支付会话创建", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.created_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}` });
     if (text(session.paid_at)) addEvent(events, { source: "支付会话", title: "支付成功", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.paid_at)!, href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}` });
-    if (text(session.failed_at)) addEvent(events, { source: "支付会话", title: "支付失败", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.failed_at)!, href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}` });
+    if (text(session.status) === "failed") addEvent(events, { source: "支付会话", title: "支付失败", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.closed_at) ?? text(session.updated_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}` });
   }
 
   const paymentsResult = await safeQuery<Record<string, unknown>>(() =>
     supabase
       .from("order_payments")
-      .select("id,payment_no,order_id,user_id,payment_method,channel,status,amount,currency,provider_trade_no,created_at,paid_at,submitted_at,reviewed_at")
+      .select("id,payment_no,payment_session_id,order_id,user_id,payment_method,channel,status,amount,currency,payable_amount,payable_currency,received_amount,received_currency,provider_trade_no,created_at,paid_at,submitted_at,reviewed_at")
       .eq("order_id", orderId)
       .order("created_at", { ascending: false })
       .limit(20)
@@ -209,7 +219,11 @@ export async function loadAdminOrderRelations(
     id: String(payment.id),
     label: "支付记录",
     businessNo: text(payment.payment_no) ?? text(payment.provider_trade_no),
-    summary: text(payment.channel) ?? text(payment.payment_method) ?? "支付记录",
+    summary: [
+      text(payment.channel) ?? text(payment.payment_method) ?? "支付记录",
+      exactMoney(payment.payable_amount, payment.payable_currency) ? `应付 ${exactMoney(payment.payable_amount, payment.payable_currency)}` : null,
+      exactMoney(payment.received_amount, payment.received_currency) ? `到账 ${exactMoney(payment.received_amount, payment.received_currency)}` : null,
+    ].filter(Boolean).join(" / "),
     status: text(payment.status),
     amount: money(payment.amount, payment.currency),
     createdAt: text(payment.paid_at) ?? text(payment.created_at),
@@ -217,6 +231,39 @@ export async function loadAdminOrderRelations(
   })), paymentsResult.error));
   for (const payment of paymentsResult.rows) {
     addEvent(events, { source: "支付记录", title: text(payment.paid_at) ? "支付确认" : "支付记录创建", summary: text(payment.payment_no) ?? "支付记录", status: text(payment.status), occurredAt: text(payment.paid_at) ?? text(payment.created_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(text(payment.payment_no) ?? orderNo)}` });
+  }
+
+  const chainSessionsResult = await safeQuery<Record<string, unknown>>(() =>
+    supabase
+      .from("chain_payment_sessions")
+      .select("id,order_id,payment_session_id,payment_id,payment_method,network,chain_id,asset,token_contract,order_currency,order_amount,payment_currency,exchange_rate,exchange_rate_source,expected_amount,confirmed_amount,receive_address,status,submitted_tx_hash,confirmed_at,expires_at,manual_review_reason,failure_reason,created_at,updated_at")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false })
+      .limit(20)
+  );
+  groups.push(group("chain_payment_sessions", chainSessionsResult.rows.map((session) => relationItem({
+    id: String(session.id),
+    label: `${text(session.asset) ?? "USDT"}-${text(session.network) ?? "链上支付"}`,
+    businessNo: text(session.submitted_tx_hash),
+    summary: [
+      `Chain ID ${String(session.chain_id ?? "—")}`,
+      exactMoney(session.expected_amount, session.payment_currency) ? `应付 ${exactMoney(session.expected_amount, session.payment_currency)}` : null,
+      exactMoney(session.confirmed_amount, session.payment_currency) ? `到账 ${exactMoney(session.confirmed_amount, session.payment_currency)}` : null,
+    ].filter(Boolean).join(" / "),
+    status: text(session.status),
+    amount: exactMoney(session.confirmed_amount ?? session.expected_amount, session.payment_currency),
+    createdAt: text(session.confirmed_at) ?? text(session.created_at),
+    href: `/admin/payments?search=${encodeURIComponent(text(session.submitted_tx_hash) ?? orderNo)}`,
+  })), chainSessionsResult.error));
+  for (const session of chainSessionsResult.rows) {
+    addEvent(events, {
+      source: "链上支付",
+      title: text(session.confirmed_at) ? "链上到账确认" : "链上支付会话创建",
+      summary: text(session.submitted_tx_hash) ?? `${text(session.asset) ?? "USDT"}-${text(session.network) ?? "BEP20"}`,
+      status: text(session.status),
+      occurredAt: text(session.confirmed_at) ?? text(session.created_at) ?? "",
+      href: `/admin/payments?search=${encodeURIComponent(text(session.submitted_tx_hash) ?? orderNo)}`,
+    });
   }
 
   const refundsResult = await safeQuery<Record<string, unknown>>(() =>

@@ -30,15 +30,19 @@ export function getDeliveryErrorMessage(error: unknown, fallback = "自动发货
     return "数字发货功能尚未完成数据库初始化，请管理员执行数字发货 migration。";
   }
 
-  if (message.includes("permission denied") || message.includes("无后台访问权限")) {
+  if (message.includes("permission denied") || message.includes("requires service role") || message.includes("access denied")) {
     return "无权执行自动发货操作";
   }
 
-  if (message.includes("订单未支付")) return "订单未支付，不能发货";
-  if (message.includes("商品不是自动发货商品")) return "商品不是自动发货商品";
-  if (message.includes("库存不足")) return "自动发货库存不足，请人工处理";
-  if (message.includes("订单不存在")) return "订单不存在";
-  if (message.includes("取消") || message.includes("退款")) return "订单已取消或退款，不能发货";
+  if (message.includes("not paid") || message.includes("未支付")) return "订单未支付，不能发货";
+  if (message.includes("not found") || message.includes("不存在")) return "订单不存在或无权查看";
+  if (message.includes("not allow delivery") || message.includes("取消") || message.includes("过期") || message.includes("退款")) {
+    return "订单当前状态不能发货";
+  }
+  if (message.includes("reserved inventory is insufficient") || message.includes("库存不足")) {
+    return "自动发货库存不足，请人工处理";
+  }
+  if (message.includes("state changed")) return "库存状态已变化，请稍后重试或人工处理";
 
   return message || fallback;
 }

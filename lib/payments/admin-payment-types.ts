@@ -49,9 +49,12 @@ export type AdminPaymentRecord = {
   channel: string | null;
   network: string | null;
   business_amount: number;
+  business_currency: string | null;
   fee_amount: number;
   payable_amount: number;
+  payable_currency: string | null;
   received_amount: number;
+  received_currency: string | null;
   platform_net_amount: number;
   status: UnifiedPaymentStatus;
   provider_trade_no: string | null;
@@ -79,6 +82,75 @@ export type AdminPaymentCallback = {
   payload_summary: Record<string, unknown> | null;
 };
 
+export type AdminBep20ChainPayment = {
+  sessionId: string;
+  paymentId: string | null;
+  orderNo: string;
+  network: string;
+  chainId: number;
+  asset: string;
+  orderCurrency: string;
+  orderAmount: string;
+  paymentCurrency: string;
+  exchangeRate: string;
+  exchangeRateSource: string;
+  exchangeRateFetchedAt: string | null;
+  exchangeRateExpiresAt: string | null;
+  expectedAmount: string;
+  expectedRawAmount: string;
+  confirmedAmount: string | null;
+  confirmedRawAmount: string | null;
+  receiveAddress: string;
+  submittedTxHash: string | null;
+  tokenContract: string;
+  tokenDecimals: number;
+  status: string;
+  pricingStatus: string;
+  requiredConfirmations: number;
+  confirmedAt: string | null;
+  lastCheckedAt: string | null;
+  failureReason: string | null;
+  manualReviewReason: string | null;
+  manualReviewDecision: string | null;
+  manualReviewDecisionReason: string | null;
+  manualReviewDecidedAt: string | null;
+  manualReviewDecidedBy: string | null;
+  expiresAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  explorerUrl: string | null;
+  transaction: {
+    txHash: string;
+    fromAddress: string | null;
+    toAddress: string | null;
+    blockNumber: string | null;
+    blockHash: string | null;
+    logIndex: number | null;
+    confirmationCount: number | null;
+    status: string | null;
+    normalizedAmount: string | null;
+    tokenContract: string | null;
+  } | null;
+};
+
+export type AdminBep20OverpaymentDisposition = {
+  chainSessionId: string;
+  orderId: string;
+  paymentId: string;
+  overpaidUsdt: string;
+  exchangeRate: string;
+  creditedCny: string;
+  processedAt: string;
+  reason: string;
+};
+
+export type AdminBep20OverpaymentWallet = {
+  authorized: boolean;
+  available: boolean;
+  error: string | null;
+  disposition: AdminBep20OverpaymentDisposition | null;
+};
+
 export type PaymentChannelConfig = {
   id: string;
   channel: string;
@@ -101,8 +173,18 @@ export type PaymentChannelConfig = {
 };
 
 export function normalizeUnifiedPaymentStatus(value: unknown): UnifiedPaymentStatus {
-  return PAYMENT_STATUS_VALUES.includes(value as UnifiedPaymentStatus)
-    ? (value as UnifiedPaymentStatus)
+  const aliases: Record<string, UnifiedPaymentStatus> = {
+    waiting_payment: "pending",
+    submitted: "processing",
+    reviewing: "processing",
+    approved: "processing",
+    succeeded: "paid",
+    rejected: "failed",
+    cancelled: "closed",
+  };
+  const normalized = aliases[String(value ?? "")] ?? value;
+  return PAYMENT_STATUS_VALUES.includes(normalized as UnifiedPaymentStatus)
+    ? (normalized as UnifiedPaymentStatus)
     : "pending";
 }
 

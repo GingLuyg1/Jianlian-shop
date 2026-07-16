@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { getBep20RuntimeConfigStatus } from "@/lib/payments/bep20-chain-service";
 import { COMPLETE_PAYMENT_SERVICE_IMPLEMENTED } from "@/lib/payments/complete-payment-service";
 import { UNIFIED_CALLBACK_IMPLEMENTED } from "@/lib/payments/payment-callback-service";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
@@ -48,6 +49,7 @@ export async function GET() {
   const coreDatabase = await probeCoreDatabase(service);
   const channelChecks = await probeChannels(client);
   const providerReadiness = getPaymentProviderReadiness();
+  const bep20Config = await getBep20RuntimeConfigStatus();
   const serviceRoleConfigured = Boolean(service);
   const providerConfigured = channelChecks.channels.some(
     (channel: { enabled?: boolean; configured?: boolean }) =>
@@ -103,8 +105,11 @@ export async function GET() {
     coreDatabase,
     channelChecks,
     providerReadiness,
-    providerConfigured,
-    serviceRoleConfigured,
+    bep20Config,
+    generalReadiness: {
+      paymentProviderReady: providerConfigured,
+      serviceRoleReady: serviceRoleConfigured,
+    },
     blockingReasons,
     partialReasons,
     note:

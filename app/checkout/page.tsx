@@ -72,6 +72,7 @@ type LegalDocument = {
 };
 
 const REQUIRED_AGREEMENT_TYPES = ["terms_of_service", "refund_policy", "digital_delivery_policy", "purchase_notice"];
+const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20"]);
 const AGREEMENT_LABELS: Record<string, string> = {
   terms_of_service: "用户协议",
   refund_policy: "退款政策",
@@ -288,7 +289,7 @@ export default function CheckoutPage() {
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
   const isShippingProduct = productRow?.delivery_type === "shipping";
-  const selectedPaymentUnavailable = paymentMethod !== "balance";
+  const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod);
   const isPurchasable = productRow?.status === "active" && (!hasSku || Boolean(selectedSku)) && (!selectedSku?.isDatabaseSku || selectedSku.status === "active") && effectiveStock > 0;
   const unavailableMessage =
     productRow?.status === "sold_out" || effectiveStock <= 0
@@ -409,8 +410,17 @@ export default function CheckoutPage() {
       });
 
       const result = (await response.json().catch(() => null)) as
-        | { order?: { order_no?: string }; error?: string }
+        | {
+            order?: { order_no?: string };
+            order_no?: string | null;
+            error?: string;
+            code?: string;
+            request_id?: string;
+            warning_code?: string;
+          }
         | null;
+
+      const orderNo = result?.order?.order_no ?? result?.order_no ?? null;
 
       if (!response.ok) {
         const message = result?.error ?? "订单创建失败，请稍后重试";
@@ -418,10 +428,15 @@ export default function CheckoutPage() {
           router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`);
           return;
         }
+        // Once the API confirms an order number, the idempotent order exists.
+        // Continue with that order instead of inviting a second submission.
+        if (orderNo) {
+          router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
+          return;
+        }
         throw new Error(message);
       }
 
-      const orderNo = result?.order?.order_no;
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
       router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
@@ -452,12 +467,6 @@ export default function CheckoutPage() {
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               <div className="space-y-5">
-              {error ? (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {error}
-                </div>
-              ) : null}
-
               {hasSku ? (
                 <SkuSelector
                   options={skuOptions}
@@ -581,6 +590,14 @@ export default function CheckoutPage() {
                 ) : null}
               </div>
 
+              <div id="checkout-submit-feedback" aria-live="polite">
+                {error ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {error}
+                  </div>
+                ) : null}
+              </div>
+
               <div className="border-t border-border pt-3">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex h-10 items-center rounded-lg border border-border bg-white">
@@ -609,9 +626,11 @@ export default function CheckoutPage() {
                   </div>
 
                   <Button
+                    type="button"
                     className="h-11 rounded-full px-7 text-sm"
                     onClick={handleSubmit}
-                    disabled={!confirmed || submitLoading || !isPurchasable || selectedPaymentUnavailable || legalLoading || Boolean(legalError) || !agreementsReady}
+                    disabled={submitLoading}
+                    aria-describedby="checkout-submit-feedback"
                   >
                     {submitLoading
                       ? "正在提交订单..."
@@ -693,7 +712,7 @@ function PaymentMethodSelect({
         >
           {PAYMENT_METHOD_OPTIONS.map((option) => {
             const active = option.code === selected;
-            const unavailable = option.code !== "balance";
+            const unavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(option.code);
             return (
               <button
                 key={option.code}
