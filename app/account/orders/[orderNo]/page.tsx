@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Clipboard, Eye, EyeOff, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
+import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { OrderRefundPanel } from "@/components/refunds/OrderRefundPanel";
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +138,7 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
   const canCancel = order ? canUserCancelOrder(order.status) && paymentStatus === "unpaid" : false;
   const paymentAction = order ? getBep20PaymentAction(order) : null;
   const paymentNotice = order ? getBep20PaymentNotice(order) : null;
+  const isBep20Order = String(order?.payment_method ?? "").toLowerCase() === "usdt_bep20";
 
   async function cancelOrder() {
     if (!order || !canCancel || canceling) return;
@@ -313,6 +315,8 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                   </CardContent>
                 </Card>
 
+                <Bep20OrderPaymentSummary order={order} onUpdated={loadOrder} />
+
                 <Card className="border-orange-100 bg-white">
                   <CardHeader>
                     <div className="flex items-center justify-between gap-3">
@@ -392,12 +396,12 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                   <CardTitle>订单操作</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {paymentAction ? (
+                  {paymentAction && !isBep20Order ? (
                     <Button asChild className="w-full">
                       <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
                     </Button>
                   ) : null}
-                  {!paymentAction && paymentNotice ? (
+                  {!paymentAction && !isBep20Order && paymentNotice ? (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                       {paymentNotice}
                     </div>

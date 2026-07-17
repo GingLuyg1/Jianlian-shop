@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Clipboard, ClipboardList, Eye, EyeOff, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -586,6 +587,7 @@ function UserOrderDrawer({
   const paymentStatus = normalizePaymentStatus(order.payment_status);
   const paymentAction = getBep20PaymentAction(order);
   const paymentNotice = getBep20PaymentNotice(order);
+  const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
   const firstItem = order.order_items?.[0];
   const delivery = order.order_deliveries?.[0];
   const deliveryContent = delivery?.delivery_content ?? "";
@@ -627,12 +629,12 @@ function UserOrderDrawer({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-          {paymentAction ? (
+          {paymentAction && !isBep20Order ? (
             <Button asChild className="w-full">
               <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
             </Button>
           ) : null}
-          {!paymentAction && paymentNotice ? (
+          {!paymentAction && !isBep20Order && paymentNotice ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               {paymentNotice}
             </div>
@@ -675,6 +677,8 @@ function UserOrderDrawer({
               <InfoLine label="订单备注" value={order.customer_note || "无"} wide />
             </div>
           </section>
+
+          <Bep20OrderPaymentSummary order={order} compact />
 
           <section className="rounded-xl border p-4 text-sm">
             <div className="mb-3 flex items-center justify-between gap-3">

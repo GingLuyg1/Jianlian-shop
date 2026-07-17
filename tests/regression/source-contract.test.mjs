@@ -1122,6 +1122,49 @@ test("account order tables use one centered user-facing status column", () => {
   assert.match(orderQueries, /status === "payment_failed"\) return "payment_failed"/);
 });
 
+test("BEP20 order details render a compact payment summary without creating sessions on open", () => {
+  const orderList = file("app/account/orders/page.tsx");
+  const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+  const summary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
+  const sessionRoute = file("app/api/payments/bep20/session/route.ts");
+
+  assert.match(orderList, /import \{ Bep20OrderPaymentSummary \}/);
+  assert.match(orderDetail, /import \{ Bep20OrderPaymentSummary \}/);
+  assert.match(orderList, /<Bep20OrderPaymentSummary order=\{order\} compact \/>/);
+  assert.match(orderDetail, /<Bep20OrderPaymentSummary order=\{order\} onUpdated=\{loadOrder\} \/>/);
+  assert.match(summary, /String\(order\.payment_method \?\? ""\)\.toLowerCase\(\) === "usdt_bep20"/);
+
+  assert.match(summary, /fetch\(`\/api\/payments\/bep20\/session\?order=\$\{encodeURIComponent\(order\.order_no\)\}`,\s*\{ cache: "no-store" \}\)/);
+  assert.match(summary, /fetch\("\/api\/payments\/bep20\/session",\s*\{[\s\S]*?method: "POST"/);
+  assert.match(summary, /onClick=\{\(\) => loadSession\(\{ create: true \}\)\}/);
+  assert.match(summary, /body: JSON\.stringify\(\{ order: order\.order_no \}\)/);
+  assert.match(sessionRoute, /export async function GET/);
+  assert.match(sessionRoute, /getBep20PaymentSession\(orderNo, userContext\.user\.id\)/);
+  assert.match(sessionRoute, /export async function POST/);
+  assert.match(sessionRoute, /createBep20PaymentSession\(orderNo, userContext\.user\.id\)/);
+
+  assert.match(summary, /paymentAction === "continue_active_payment"/);
+  assert.match(summary, /paymentAction === "renew_payment_session"/);
+  assert.match(summary, /canSubmitLateTransaction/);
+  assert.match(summary, /status === "manual_review"/);
+  assert.match(summary, /paymentAction === "rejected"/);
+  assert.match(summary, /paymentAction === "paid"/);
+  assert.match(summary, /status === "underpaid"/);
+  assert.match(summary, /status === "payment_failed"/);
+  assert.match(summary, /chain_session_id: session\.canSubmitLateTransaction \? session\.chainSessionId : undefined/);
+  assert.match(summary, /disabled=\{!txHashValid \|\| verifying\}/);
+  assert.match(summary, /查看完整支付页/);
+  assert.match(summary, /href=\{fullPaymentHref\}/);
+  assert.match(summary, /shortHash\(session\.receiveAddress\)/);
+  assert.match(summary, /shortHash\(session\.submittedTxHash\)/);
+  assert.match(summary, /truncate/);
+  assert.match(summary, /BscScan/);
+  assert.doesNotMatch(summary, /LocalAddressQr|qrCode|QRCode|Chain ID|exchangeRate|tokenContract/);
+  assert.doesNotMatch(orderList, /paymentAction && !isBep20Order[\s\S]{0,140}<Bep20OrderPaymentSummary order=\{order\} compact \/>[\s\S]{0,140}paymentAction && isBep20Order/);
+  assert.match(orderList, /paymentAction && !isBep20Order/);
+  assert.match(orderDetail, /paymentAction && !isBep20Order/);
+});
+
 test("order payment completion does not mutate inventory after order creation", () => {
   const migration = file("supabase/migrations/20260710_order_payment_inventory_idempotency_fix.sql");
   assert.match(migration, /create or replace function public\.complete_order_payment/);
