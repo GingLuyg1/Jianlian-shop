@@ -1080,6 +1080,48 @@ test("paid orders never render as waiting for payment and manual delivery has ex
   assert.match(orderDetail, /"人工处理中。"/);
 });
 
+test("account order tables use one centered user-facing status column", () => {
+  const orderList = file("app/account/orders/page.tsx");
+  const orderStatus = file("lib/orders/order-status.ts");
+  const orderQueries = file("lib/orders/order-queries.ts");
+
+  assert.match(orderList, /const PAGE_SIZE = 10/);
+  assert.doesNotMatch(orderList, /RefreshCcw/);
+  assert.doesNotMatch(orderList, /重新加载|重新查询/);
+  assert.doesNotMatch(orderList, /min-w-\[1230px\]/);
+  assert.doesNotMatch(orderList, /rounded-xl border bg-slate-50\/60 px-3 py-2\.5/);
+  assert.match(orderList, /<CardHeader className="shrink-0 px-5 py-4">/);
+  assert.match(orderList, /<Search className="mr-2 h-4 w-4" \/>[\s\S]{0,80}订单查询/);
+  assert.match(orderList, /getUserOrderDisplayStatus\(order\)/);
+  assert.match(orderList, /<table className="w-full table-fixed text-sm">/);
+  for (const width of ["16%", "27%", "6%", "8%", "10%", "15%", "18%"]) {
+    assert.match(orderList, new RegExp(`w-\\[${width.replace("%", "%")}\\]`));
+  }
+  assert.match(orderList, /<th className="whitespace-nowrap px-3 py-3 text-center align-middle">[^<]+<\/th>/);
+  assert.doesNotMatch(orderList, /<th[^>]*>订单状态<\/th>/);
+  assert.doesNotMatch(orderList, /<th[^>]*>支付状态<\/th>/);
+  assert.match(orderList, /text-center align-middle font-mono/);
+  assert.match(orderList, /inline-flex items-center justify-center gap-1/);
+  assert.match(orderList, /max-w-\[260px\] truncate whitespace-nowrap/);
+  assert.match(orderList, /title=\{productName\}/);
+  assert.match(orderList, /flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap/);
+  assert.match(orderStatus, /export function getUserOrderDisplayStatus/);
+  assert.match(orderStatus, /status === "cancelled"/);
+  assert.match(orderStatus, /status === "refunded"/);
+  assert.match(orderStatus, /status === "refund_pending"/);
+  assert.match(orderStatus, /status === "completed"/);
+  assert.match(orderStatus, /paymentStatus === "paid"/);
+  assert.match(orderStatus, /status === "expired"/);
+  assert.match(orderStatus, /status === "failed" \|\| paymentStatus === "failed"/);
+  assert.match(orderStatus, /normalizedStatus === "pending_payment" && normalizedPaymentStatus === "unpaid"/);
+  for (const state of ["continue_active_payment", "renew_payment_session", "confirming", "manual_review_pending", "rejected"]) {
+    assert.match(orderStatus, new RegExp(state));
+  }
+  assert.match(orderQueries, /status === "manual_review"\) return "manual_review_pending"/);
+  assert.match(orderQueries, /status === "confirming"\) return "confirming"/);
+  assert.match(orderQueries, /status === "payment_failed"\) return "payment_failed"/);
+});
+
 test("order payment completion does not mutate inventory after order creation", () => {
   const migration = file("supabase/migrations/20260710_order_payment_inventory_idempotency_fix.sql");
   assert.match(migration, /create or replace function public\.complete_order_payment/);

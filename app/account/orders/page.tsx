@@ -3,7 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clipboard, ClipboardList, Eye, EyeOff, RefreshCcw, Search, X } from "lucide-react";
+import { Clipboard, ClipboardList, Eye, EyeOff, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
   getBep20PaymentNotice,
   getOrderStatusLabel,
   getPaymentStatusLabel,
+  getUserOrderDisplayStatus,
   normalizeOrderStatus,
   normalizePaymentStatus,
   ORDER_STATUS_STYLES,
@@ -109,7 +110,7 @@ export default function MyOrdersPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <CardHeader className="shrink-0 space-y-3 px-5 py-4">
+          <CardHeader className="shrink-0 px-5 py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <CardTitle className="text-xl">我的订单</CardTitle>
@@ -117,22 +118,9 @@ export default function MyOrdersPage() {
                   查询当前账号的订单记录、支付状态和交付信息。
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={loadOrders}>
-                <RefreshCcw className="mr-2 h-4 w-4" />
-                重新加载
-              </Button>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50/60 px-3 py-2.5">
-              <div className="min-w-0">
-                <div className="text-base font-semibold text-slate-950">订单查询</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  点击后输入下单邮箱，查询当前账号关联的订单。
-                </p>
-              </div>
               <Button variant="outline" size="sm" onClick={() => setQueryOpen(true)}>
                 <Search className="mr-2 h-4 w-4" />
-                查询订单
+                订单查询
               </Button>
             </div>
           </CardHeader>
@@ -149,8 +137,7 @@ export default function MyOrdersPage() {
                 <div className="text-center">
                   <div>{error}</div>
                   <Button variant="outline" size="sm" className="mt-4" onClick={loadOrders}>
-                    <RefreshCcw className="mr-2 h-4 w-4" />
-                    重新加载
+                    重试
                   </Button>
                 </div>
               </div>
@@ -171,35 +158,33 @@ export default function MyOrdersPage() {
               </div>
             ) : (
               <div className="h-full w-full overflow-auto rounded-lg border">
-                <table className="w-full min-w-[1120px] table-fixed text-sm">
+                <table className="w-full table-fixed text-sm">
                   <colgroup>
-                    <col className="w-[190px]" />
-                    <col className="w-[280px]" />
-                    <col className="w-[72px]" />
-                    <col className="w-[110px]" />
-                    <col className="w-[130px]" />
-                    <col className="w-[130px]" />
-                    <col className="w-[180px]" />
-                    <col className="w-[110px]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[27%]" />
+                    <col className="w-[6%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[18%]" />
                   </colgroup>
                   <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-muted-foreground">
                     <tr className="border-b">
-                      <th className="whitespace-nowrap px-3 py-3 text-left">订单编号</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-left">商品名称</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-left">数量</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-left">金额</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-left">订单状态</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-left">支付状态</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-left">下单时间</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-right">操作</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center align-middle">订单编号</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center align-middle">商品名称</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center align-middle">数量</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center align-middle">金额</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center align-middle">状态</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center align-middle">下单时间</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center align-middle">操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((order) => {
-                      const orderStatus = normalizeOrderStatus(order.status);
-                      const nextPaymentStatus = normalizePaymentStatus(order.payment_status);
+                      const displayStatus = getUserOrderDisplayStatus(order);
                       const paymentAction = getBep20PaymentAction(order);
                       const firstItem = order.order_items?.[0];
+                      const productName = firstItem?.product_name ?? "订单商品";
                       const quantity = (order.order_items ?? []).reduce(
                         (sum, item) => sum + Number(item.quantity ?? 0),
                         0
@@ -207,38 +192,35 @@ export default function MyOrdersPage() {
 
                       return (
                         <tr key={order.id} className="border-b hover:bg-slate-50">
-                          <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
                             <button
                               type="button"
                               onClick={() => copyOrderNo(order.order_no)}
-                              className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
+                              className="inline-flex items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
                             >
                               {order.order_no}
                               <Clipboard className="h-3 w-3" />
                             </button>
                           </td>
-                          <td className="truncate px-3 py-2.5 font-medium">
-                            {firstItem?.product_name ?? "订单商品"}
+                          <td className="px-3 py-2.5 text-center align-middle font-medium">
+                            <div className="mx-auto max-w-[260px] truncate whitespace-nowrap" title={productName}>
+                              {productName}
+                            </div>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-2.5">{quantity || 1}</td>
-                          <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-primary">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
                             {formatMoney(order.total_amount)}
                           </td>
-                          <td className="px-3 py-2.5">
-                            <Badge variant="outline" className={cn("whitespace-nowrap text-xs", ORDER_STATUS_STYLES[orderStatus])}>
-                              {getOrderStatusLabel(order.status)}
+                          <td className="px-3 py-2.5 text-center align-middle">
+                            <Badge variant="outline" className={cn("whitespace-nowrap text-xs", displayStatus.className)}>
+                              {displayStatus.label}
                             </Badge>
                           </td>
-                          <td className="px-3 py-2.5">
-                            <Badge variant="outline" className={cn("whitespace-nowrap text-xs", PAYMENT_STATUS_STYLES[nextPaymentStatus])}>
-                              {getPaymentStatusLabel(order.payment_status)}
-                            </Badge>
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
                             {formatDate(order.created_at)}
                           </td>
-                          <td className="px-3 py-2.5 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                          <td className="px-3 py-2.5 text-center align-middle">
+                            <div className="flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap">
                               {paymentAction ? (
                                 <Button asChild size="sm">
                                   <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
@@ -453,8 +435,7 @@ function OrderEmailQueryDialog({
               <div className="text-center">
                 <div>{error}</div>
                 <Button variant="outline" size="sm" className="mt-4" onClick={() => queryOrders(page)}>
-                  <RefreshCcw className="mr-2 h-4 w-4" />
-                  重新查询
+                  重试
                 </Button>
               </div>
             </div>
@@ -468,65 +449,67 @@ function OrderEmailQueryDialog({
             </div>
           ) : (
             <div className="h-full overflow-auto rounded-lg border">
-              <table className="w-full min-w-[980px] table-fixed text-sm">
-                <colgroup>
-                  <col className="w-[190px]" />
-                  <col className="w-[280px]" />
-                  <col className="w-[90px]" />
-                  <col className="w-[120px]" />
-                  <col className="w-[140px]" />
-                  <col className="w-[180px]" />
-                  <col className="w-[110px]" />
-                </colgroup>
+                <table className="w-full table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[16%]" />
+                    <col className="w-[27%]" />
+                    <col className="w-[6%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[18%]" />
+                  </colgroup>
                 <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-muted-foreground">
                   <tr className="border-b">
-                    <th className="whitespace-nowrap px-3 py-3 text-left">订单编号</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">商品名称</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">金额</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">订单状态</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">支付状态</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-left">下单时间</th>
-                    <th className="whitespace-nowrap px-3 py-3 text-right">操作</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-center align-middle">订单编号</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-center align-middle">商品名称</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-center align-middle">数量</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-center align-middle">金额</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-center align-middle">状态</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-center align-middle">下单时间</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-center align-middle">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map((order) => {
-                    const orderStatus = normalizeOrderStatus(order.status);
-                    const paymentStatus = normalizePaymentStatus(order.payment_status);
                     const firstItem = order.order_items?.[0];
+                    const productName = firstItem?.product_name ?? "订单商品";
+                    const quantity = (order.order_items ?? []).reduce(
+                      (sum, item) => sum + Number(item.quantity ?? 0),
+                      0
+                    );
+                    const displayStatus = getUserOrderDisplayStatus(order);
 
                     return (
                       <tr key={order.id} className="border-b hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs">
+                        <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
                           <button
                             type="button"
                             onClick={() => onCopyOrderNo(order.order_no)}
-                            className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
+                            className="inline-flex items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
                           >
                             {order.order_no}
                             <Clipboard className="h-3 w-3" />
                           </button>
                         </td>
-                        <td className="truncate px-3 py-2.5 font-medium">
-                          {firstItem?.product_name ?? "订单商品"}
+                        <td className="px-3 py-2.5 text-center align-middle font-medium">
+                          <div className="mx-auto max-w-[260px] truncate whitespace-nowrap" title={productName}>
+                            {productName}
+                          </div>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-primary">
+                        <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
                           {formatMoney(order.total_amount)}
                         </td>
-                        <td className="px-3 py-2.5">
-                          <Badge variant="outline" className={cn("whitespace-nowrap text-xs", ORDER_STATUS_STYLES[orderStatus])}>
-                            {getOrderStatusLabel(order.status)}
+                        <td className="px-3 py-2.5 text-center align-middle">
+                          <Badge variant="outline" className={cn("whitespace-nowrap text-xs", displayStatus.className)}>
+                            {displayStatus.label}
                           </Badge>
                         </td>
-                        <td className="px-3 py-2.5">
-                          <Badge variant="outline" className={cn("whitespace-nowrap text-xs", PAYMENT_STATUS_STYLES[paymentStatus])}>
-                            {getPaymentStatusLabel(order.payment_status)}
-                          </Badge>
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
+                        <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
                           {formatDate(order.created_at)}
                         </td>
-                        <td className="px-3 py-2.5 text-right">
+                        <td className="px-3 py-2.5 text-center align-middle">
                           <Button
                             variant="ghost"
                             size="sm"

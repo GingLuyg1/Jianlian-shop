@@ -196,10 +196,11 @@ function deriveBep20PaymentState(order: OrderRecord, session?: Bep20SessionSumma
   const decision = String(session.manual_review_decision ?? "").trim();
   if (decision === "rejected") return "rejected";
   if (status === "paid") return "paid";
-  if (status === "manual_review") return "view_status";
-  if (["confirming", "verified", "completing", "payment_failed", "underpaid"].includes(status)) {
-    return "view_status";
-  }
+  if (status === "manual_review") return "manual_review_pending";
+  if (status === "confirming") return "confirming";
+  if (status === "payment_failed") return "payment_failed";
+  if (status === "underpaid") return "underpaid";
+  if (["verified", "completing"].includes(status)) return "view_status";
   if (status === "expired") return "renew_payment_session";
   if (["waiting_payment", "submitted", "failed"].includes(status)) {
     const expiresAt = Date.parse(String(session.expires_at ?? ""));

@@ -93,6 +93,64 @@ export function getPaymentStatusLabel(value: unknown) {
   return PAYMENT_STATUS_LABELS[normalizePaymentStatus(value)];
 }
 
+export function getUserOrderDisplayStatus(order: {
+  status?: unknown;
+  payment_status?: unknown;
+  bep20_payment_state?: unknown;
+}) {
+  const status = String(order.status ?? "").trim();
+  const paymentStatus = String(order.payment_status ?? "").trim();
+  const bep20State = String(order.bep20_payment_state ?? "").trim();
+  const normalizedStatus = normalizeOrderStatus(status);
+  const normalizedPaymentStatus = normalizePaymentStatus(paymentStatus);
+
+  if (status === "cancelled") {
+    return { label: "已取消", className: ORDER_STATUS_STYLES.cancelled };
+  }
+  if (status === "refunded" || paymentStatus === "refunded" || paymentStatus === "partially_refunded") {
+    return { label: "已退款", className: ORDER_STATUS_STYLES.refunded };
+  }
+  if (status === "refund_pending" || paymentStatus === "refund_pending") {
+    return { label: "退款处理中", className: ORDER_STATUS_STYLES.refunded };
+  }
+  if (status === "completed" || status === "fulfilled" || status === "delivered") {
+    return { label: "已完成", className: ORDER_STATUS_STYLES.completed };
+  }
+  if (paymentStatus === "paid" || status === "paid") {
+    return { label: "已支付", className: ORDER_STATUS_STYLES.paid };
+  }
+
+  if (bep20State === "confirming") {
+    return { label: "确认中", className: ORDER_STATUS_STYLES.processing };
+  }
+  if (bep20State === "manual_review_pending") {
+    return { label: "人工审核中", className: ORDER_STATUS_STYLES.processing };
+  }
+  if (bep20State === "rejected") {
+    return { label: "审核已结束", className: ORDER_STATUS_STYLES.cancelled };
+  }
+  if (bep20State === "payment_failed") {
+    return { label: "支付失败", className: PAYMENT_STATUS_STYLES.failed };
+  }
+  if (bep20State === "underpaid") {
+    return { label: "到账金额不足", className: ORDER_STATUS_STYLES.failed };
+  }
+  if (bep20State === "view_status") {
+    return { label: "支付处理中", className: ORDER_STATUS_STYLES.processing };
+  }
+  if (status === "expired") {
+    return { label: "已过期", className: ORDER_STATUS_STYLES.expired };
+  }
+  if (status === "failed" || paymentStatus === "failed") {
+    return { label: "支付失败", className: ORDER_STATUS_STYLES.failed };
+  }
+  if (normalizedStatus === "pending_payment" && normalizedPaymentStatus === "unpaid") {
+    return { label: "待支付", className: ORDER_STATUS_STYLES.pending_payment };
+  }
+
+  return { label: getOrderStatusLabel(status), className: ORDER_STATUS_STYLES[normalizedStatus] };
+}
+
 export function canUserCancelOrder(status: unknown) {
   return normalizeOrderStatus(status) === "pending_payment";
 }
@@ -133,7 +191,13 @@ export function getBep20PaymentAction(order: {
   if (state === "submit_late_transaction") {
     return { kind: "late" as const, label: "提交旧交易哈希" };
   }
-  if (state === "view_status") {
+  if (
+    state === "view_status" ||
+    state === "confirming" ||
+    state === "manual_review_pending" ||
+    state === "payment_failed" ||
+    state === "underpaid"
+  ) {
     return { kind: "status" as const, label: "查看支付状态" };
   }
   return null;
