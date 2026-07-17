@@ -12,7 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
-  canContinueBep20Payment,
+  getBep20PaymentAction,
+  getBep20PaymentNotice,
   getOrderStatusLabel,
   getPaymentStatusLabel,
   normalizeOrderStatus,
@@ -197,7 +198,7 @@ export default function MyOrdersPage() {
                     {rows.map((order) => {
                       const orderStatus = normalizeOrderStatus(order.status);
                       const nextPaymentStatus = normalizePaymentStatus(order.payment_status);
-                      const canContinuePayment = canContinueBep20Payment(order);
+                      const paymentAction = getBep20PaymentAction(order);
                       const firstItem = order.order_items?.[0];
                       const quantity = (order.order_items ?? []).reduce(
                         (sum, item) => sum + Number(item.quantity ?? 0),
@@ -238,9 +239,9 @@ export default function MyOrdersPage() {
                           </td>
                           <td className="px-3 py-2.5 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {canContinuePayment ? (
+                              {paymentAction ? (
                                 <Button asChild size="sm">
-                                  <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>继续支付</Link>
+                                  <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
                                 </Button>
                               ) : null}
                               <Button variant="ghost" size="sm" onClick={() => setSelectedOrder(order)}>
@@ -600,7 +601,8 @@ function UserOrderDrawer({
 
   const orderStatus = normalizeOrderStatus(order.status);
   const paymentStatus = normalizePaymentStatus(order.payment_status);
-  const canContinuePayment = canContinueBep20Payment(order);
+  const paymentAction = getBep20PaymentAction(order);
+  const paymentNotice = getBep20PaymentNotice(order);
   const firstItem = order.order_items?.[0];
   const delivery = order.order_deliveries?.[0];
   const deliveryContent = delivery?.delivery_content ?? "";
@@ -642,10 +644,15 @@ function UserOrderDrawer({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-          {canContinuePayment ? (
+          {paymentAction ? (
             <Button asChild className="w-full">
-              <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>继续支付</Link>
+              <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
             </Button>
+          ) : null}
+          {!paymentAction && paymentNotice ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              {paymentNotice}
+            </div>
           ) : null}
           <section className="grid gap-3 md:grid-cols-3">
             <InfoBlock label="订单金额" value={formatMoney(order.total_amount)} primary />

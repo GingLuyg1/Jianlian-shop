@@ -101,7 +101,11 @@ export function canContinueBep20Payment(order: {
   status?: unknown;
   payment_status?: unknown;
   payment_method?: unknown;
+  bep20_payment_state?: unknown;
 }) {
+  if (String(order.bep20_payment_state ?? "") === "continue_active_payment") return true;
+  if (order.bep20_payment_state) return false;
+
   const status = String(order.status ?? "").trim();
   const paymentStatus = String(order.payment_status ?? "").trim();
   const paymentMethod = String(order.payment_method ?? "").trim().toLowerCase();
@@ -111,6 +115,34 @@ export function canContinueBep20Payment(order: {
     (paymentStatus === "unpaid" || paymentStatus === "未支付") &&
     paymentMethod === "usdt_bep20"
   );
+}
+
+export function getBep20PaymentAction(order: {
+  status?: unknown;
+  payment_status?: unknown;
+  payment_method?: unknown;
+  bep20_payment_state?: unknown;
+}) {
+  const state = String(order.bep20_payment_state ?? "").trim();
+  if (state === "continue_active_payment") {
+    return { kind: "continue" as const, label: "继续支付" };
+  }
+  if (state === "renew_payment_session") {
+    return { kind: "renew" as const, label: "重新生成支付单" };
+  }
+  if (state === "submit_late_transaction") {
+    return { kind: "late" as const, label: "提交旧交易哈希" };
+  }
+  if (state === "view_status") {
+    return { kind: "status" as const, label: "查看支付状态" };
+  }
+  return null;
+}
+
+export function getBep20PaymentNotice(order: { bep20_payment_state?: unknown }) {
+  const state = String(order.bep20_payment_state ?? "").trim();
+  if (state === "rejected") return "该支付已结束，如有疑问请联系客服。";
+  return null;
 }
 
 export function canTransitionOrder(from: unknown, to: unknown) {

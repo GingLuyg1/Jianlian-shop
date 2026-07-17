@@ -314,17 +314,18 @@ test("BEP20 retryable failures recover without weakening terminal protections", 
 
   assert.ok(blockedStatuses);
   assert.doesNotMatch(blockedStatuses, /"failed"/);
-  for (const terminal of ["underpaid", "expired", "manual_review", "payment_failed", "completing"]) {
+  for (const terminal of ["underpaid", "manual_review", "payment_failed", "completing"]) {
     assert.match(blockedStatuses, new RegExp(`"${terminal}"`));
   }
+  assert.doesNotMatch(blockedStatuses, /"expired"/);
   assert.match(verificationFlow, /manual_review_decision === "rejected"/);
   assert.match(verificationFlow, /Bep20PaymentError\("CHAIN_SESSION_REJECTED"[\s\S]*?409\)/);
   assert.ok(
     verificationFlow.indexOf("CHAIN_SESSION_REJECTED") < verificationFlow.indexOf("loadReceipt"),
     "rejected sessions must stop before any receipt lookup or claim"
   );
-  assert.match(service, /receipt\.status && receipt\.status !== "0x1"[\s\S]*?status: "submitted"/);
-  assert.match(service, /if \(!transfer\)[\s\S]*?status: "submitted"/);
+  assert.match(service, /receipt\.status && receipt\.status !== "0x1"[\s\S]*?status: session\.status === "expired" \? "expired" : "submitted"/);
+  assert.match(service, /if \(!transfer\)[\s\S]*?status: session\.status === "expired" \? "expired" : "submitted"/);
   assert.match(service, /可重新提交其他 TxHash/);
   assert.match(service, /claim === "claimed_by_other_order"[\s\S]*?"TX_HASH_USED"/);
   assert.match(service, /mutableStatuses = \[[\s\S]*?"failed"/);
@@ -400,6 +401,7 @@ test("BEP20 reusable session statuses match active database ownership states", (
 test("BEP20 admin recovery requires durable audit attempt and supports late payment decisions", () => {
   const service = file("lib/payments/bep20-chain-service.ts");
   const route = file("app/api/admin/payments/[paymentId]/route.ts");
+  const page = file("components/admin/payments/AdminPaymentRecordsPage.tsx");
   const migration = file("supabase/migrations/20260708_bep20_phase1_completion_hardening.sql");
   const decisionMigration = file("supabase/migrations/20260708_bep20_phase1_manual_review_decision.sql");
   assert.match(service, /ADMIN_REVIEW_AUDIT_FAILED/);
@@ -408,6 +410,8 @@ test("BEP20 admin recovery requires durable audit attempt and supports late paym
   assert.match(route, /getServerSuperAdminContext/);
   assert.match(route, /approve_late_payment/);
   assert.match(route, /reject_late_payment/);
+  assert.match(page, /const canManageChainPayment = overpaymentWallet\.authorized/);
+  assert.match(page, /canManageChainPayment \? <><Button[\s\S]*?approve_late_payment[\s\S]*?reject_late_payment/);
   assert.match(migration, /bep20_admin_review_attempts/);
   assert.match(migration, /result_status = 'processing'/);
   assert.match(migration, /admin review result could not be recorded/);
@@ -1696,15 +1700,28 @@ test("unpaid BEP20 orders can resume the existing payment page", () => {
   const orderList = file("app/account/orders/page.tsx");
   const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
   const orderStatus = file("lib/orders/order-status.ts");
+  const orderQueries = file("lib/orders/order-queries.ts");
 
   assert.match(checkout, /\/payment\?order=\$\{encodeURIComponent\(orderNo\)\}/);
-  assert.match(orderList, /canContinueBep20Payment\(order\)/);
-  assert.match(orderDetail, /canContinueBep20Payment\(order\)/);
+  assert.match(orderList, /getBep20PaymentAction\(order\)/);
+  assert.match(orderDetail, /getBep20PaymentAction\(order\)/);
+  assert.match(orderList, /getBep20PaymentNotice\(order\)/);
+  assert.match(orderDetail, /getBep20PaymentNotice\(order\)/);
   assert.match(orderList, /\/payment\?order=\$\{encodeURIComponent\(order\.order_no\)\}/);
   assert.match(orderDetail, /\/payment\?order=\$\{encodeURIComponent\(order\.order_no\)\}/);
+  assert.match(orderStatus, /export function getBep20PaymentAction/);
+  assert.match(orderStatus, /renew_payment_session/);
+  assert.match(orderStatus, /view_status/);
+  assert.match(orderStatus, /rejected/);
   assert.match(orderStatus, /status === "pending_payment" \|\| status === "待支付"/);
   assert.match(orderStatus, /paymentStatus === "unpaid" \|\| paymentStatus === "未支付"/);
   assert.match(orderStatus, /paymentMethod === "usdt_bep20"/);
+  assert.match(orderQueries, /bep20_payment_state/);
+  assert.match(orderQueries, /manual_review_decision/);
+  assert.match(orderQueries, /deriveBep20PaymentState/);
+  assert.match(orderQueries, /renew_payment_session/);
+  assert.match(orderQueries, /continue_active_payment/);
+  assert.match(orderQueries, /rejected/);
   assert.doesNotMatch(orderList, /POST \/api\/orders/);
   assert.doesNotMatch(orderDetail, /POST \/api\/orders/);
 });
@@ -1718,16 +1735,28 @@ test("BEP20 payment page uses current session API data and guards duplicate requ
   assert.match(page, /setBep20Session\(result\)/);
   assert.match(page, /prefillSubmittedTxHash/);
   assert.match(page, /setTxHash\(result\?\.prefillSubmittedTxHash \? result\.submittedTxHash \?\? "" : ""\)/);
-  assert.match(page, /disabled=\{!txHashValid \|\| verifying \|\| session\.status === "paid" \|\| session\.status === "expired"\}/);
+  assert.match(page, /"continue_active_payment"[\s\S]*?"renew_payment_session"[\s\S]*?"submit_late_transaction"[\s\S]*?"view_status"[\s\S]*?"rejected"[\s\S]*?"paid"[\s\S]*?"closed"/);
+  assert.match(page, /const canSubmitTxHash = session\.paymentAction === "continue_active_payment" \|\| session\.canSubmitLateTransaction/);
+  assert.match(page, /canRenewPaymentSession/);
+  assert.match(page, /canSubmitLateTransaction/);
+  assert.match(page, /chain_session_id: bep20Session\?\.canSubmitLateTransaction \? bep20Session\.chainSessionId : undefined/);
+  assert.match(page, /disabled=\{!txHashValid \|\| verifying \|\| !canSubmitTxHash\}/);
+  assert.match(page, /支付会话已过期。如果你已完成转账，可以提交交易哈希进行人工核验；请不要再次转账。/);
+  assert.match(page, /该支付审核已结束，如有疑问请联系客服。/);
+  assert.match(page, /getBep20SessionStatusText/);
   assert.match(page, /if \(!order\?\.order_no \|\| creatingSession\) return/);
   assert.match(page, /if \(!order\?\.order_no \|\| verifyingTx\) return/);
   assert.match(page, /setCreatingSession\(true\)[\s\S]*?setCreatingSession\(false\)/);
   assert.match(page, /setVerifyingTx\(true\)[\s\S]*?setVerifyingTx\(false\)/);
   assert.doesNotMatch(page, /fetch\("\/api\/orders"[\s\S]{0,120}loadBep20Session/);
+  assert.match(sessionRoute, /export async function GET/);
+  assert.match(sessionRoute, /getBep20PaymentSession\(orderNo, userContext\.user\.id\)/);
+  assert.match(sessionRoute, /export async function POST/);
   assert.match(sessionRoute, /createBep20PaymentSession\(orderNo, userContext\.user\.id\)/);
   assert.match(service, /getReusableChainSession\(service, order\.id\)/);
   assert.match(service, /\.in\("status", \[\.\.\.ACTIVE_CHAIN_SESSION_STATUSES\]\)/);
   assert.match(service, /\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
+  assert.match(service, /export async function getBep20PaymentSession[\s\S]*?if \(!session\) return toBep20SessionResponse\(order\.order_no, null, config, order\)/);
   assert.match(service, /if \(!error && data\) return toBep20SessionResponse/);
   assert.match(service, /if \(raced\) return toBep20SessionResponse/);
   assert.match(service, /prefillSubmittedTxHash: shouldPrefillBep20TxHash/);

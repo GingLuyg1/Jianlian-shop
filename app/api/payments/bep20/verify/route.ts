@@ -12,9 +12,10 @@ export async function POST(request: Request) {
   const sizeError = checkRequestSize(request, 4 * 1024);
   if (sizeError) return sizeError;
 
-  const body = (await request.json().catch(() => null)) as { order?: string; order_id?: string; orderNo?: string; tx_hash?: string; txHash?: string } | null;
+  const body = (await request.json().catch(() => null)) as { order?: string; order_id?: string; orderNo?: string; tx_hash?: string; txHash?: string; chain_session_id?: string; chainSessionId?: string } | null;
   const orderNo = String(body?.order ?? body?.order_id ?? body?.orderNo ?? "").trim();
   const txHash = String(body?.tx_hash ?? body?.txHash ?? "").trim();
+  const chainSessionId = String(body?.chain_session_id ?? body?.chainSessionId ?? "").trim() || null;
   if (!orderNo) return NextResponse.json({ error: "缺少订单编号" }, { status: 400 });
   if (!txHash) return NextResponse.json({ error: "请输入交易哈希" }, { status: 400 });
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   if (!rateLimit.allowed) return rateLimit.response!;
 
   try {
-    const result = await verifyBep20TxHash({ orderNo, txHash, userId: userContext.user.id });
+    const result = await verifyBep20TxHash({ orderNo, txHash, userId: userContext.user.id, chainSessionId });
     return NextResponse.json(result);
   } catch (error) {
     const status = typeof (error as { status?: unknown })?.status === "number" ? Number((error as { status: number }).status) : 500;

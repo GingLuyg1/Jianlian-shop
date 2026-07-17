@@ -6,6 +6,7 @@ import {
   type PaymentStatus,
 } from "./order-status";
 import type {
+  Bep20PaymentState,
   OrderDeliveryRecord,
   OrderItemRecord,
   OrderListResult,
@@ -21,6 +22,16 @@ const orderSelect = `
   order_status_logs(*),
   order_deliveries(*)
 `;
+
+type Bep20SessionSummary = {
+  order_id?: string | null;
+  status?: string | null;
+  manual_review_decision?: string | null;
+  expires_at?: string | null;
+  submitted_tx_hash?: string | null;
+  failure_reason?: string | null;
+  created_at?: string | null;
+};
 
 export function getOrderErrorMessage(
   error: unknown,
@@ -160,7 +171,73 @@ export function normalizeOrder(row: Record<string, unknown>): OrderRecord {
         new Date(second.updated_at || second.created_at).getTime() -
         new Date(first.updated_at || first.created_at).getTime()
     ),
+    bep20_payment_state: typeof row.bep20_payment_state === "string"
+      ? (row.bep20_payment_state as Bep20PaymentState)
+      : undefined,
   };
+}
+
+function isBep20SchemaMissing(error: unknown) {
+  const value = error as { code?: string | null; message?: string | null } | null;
+  const text = `${value?.code ?? ""} ${value?.message ?? ""}`;
+  return /PGRST205|42P01|chain_payment_sessions|schema cache|does not exist/i.test(text);
+}
+
+function deriveBep20PaymentState(order: OrderRecord, session?: Bep20SessionSummary | null): Bep20PaymentState {
+  if (order.payment_method !== "usdt_bep20") return "not_applicable";
+  if (order.payment_status === "paid" || order.status === "paid") return "paid";
+  if (["cancelled", "refunded", "failed"].includes(order.status)) return "closed";
+
+  const stillUnpaid = order.status === "pending_payment" && order.payment_status === "unpaid";
+  if (!stillUnpaid) return "closed";
+  if (!session) return "renew_payment_session";
+
+  const status = String(session.status ?? "").trim();
+  const decision = String(session.manual_review_decision ?? "").trim();
+  if (decision === "rejected") return "rejected";
+  if (status === "paid") return "paid";
+  if (status === "manual_review") return "view_status";
+  if (["confirming", "verified", "completing", "payment_failed", "underpaid"].includes(status)) {
+    return "view_status";
+  }
+  if (status === "expired") return "renew_payment_session";
+  if (["waiting_payment", "submitted", "failed"].includes(status)) {
+    const expiresAt = Date.parse(String(session.expires_at ?? ""));
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? "continue_active_payment" : "renew_payment_session";
+  }
+  return "renew_payment_session";
+}
+
+async function attachBep20PaymentStates(supabase: SupabaseClient, orders: OrderRecord[]) {
+  const targetOrders = orders.filter((order) => order.payment_method === "usdt_bep20");
+  if (!targetOrders.length) return orders;
+
+  const orderIds = targetOrders.map((order) => order.id);
+  const { data, error } = await supabase
+    .from("chain_payment_sessions")
+    .select("order_id,status,manual_review_decision,expires_at,submitted_tx_hash,failure_reason,created_at")
+    .in("order_id", orderIds)
+    .eq("payment_method", "usdt_bep20")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (!isBep20SchemaMissing(error)) throw error;
+    return orders.map((order) => ({
+      ...order,
+      bep20_payment_state: deriveBep20PaymentState(order, null),
+    }));
+  }
+
+  const latestByOrderId = new Map<string, Bep20SessionSummary>();
+  for (const row of (data ?? []) as Bep20SessionSummary[]) {
+    const orderId = String(row.order_id ?? "");
+    if (orderId && !latestByOrderId.has(orderId)) latestByOrderId.set(orderId, row);
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    bep20_payment_state: deriveBep20PaymentState(order, latestByOrderId.get(order.id) ?? null),
+  }));
 }
 
 export async function listUserOrders(
@@ -236,8 +313,9 @@ export async function listUserOrders(
 
   if (error) throw new Error(getOrderErrorMessage(error, "订单读取失败"));
 
+  const orders = ((data ?? []) as Array<Record<string, unknown>>).map(normalizeOrder);
   return {
-    orders: ((data ?? []) as Array<Record<string, unknown>>).map(normalizeOrder),
+    orders: await attachBep20PaymentStates(supabase, orders),
     count: count ?? 0,
   };
 }
@@ -254,7 +332,9 @@ export async function getUserOrderByNo(
     .maybeSingle();
 
   if (error) throw new Error(getOrderErrorMessage(error, "订单详情读取失败"));
-  return data ? normalizeOrder(data as Record<string, unknown>) : null;
+  if (!data) return null;
+  const [order] = await attachBep20PaymentStates(supabase, [normalizeOrder(data as Record<string, unknown>)]);
+  return order;
 }
 
 export async function listAdminOrders(

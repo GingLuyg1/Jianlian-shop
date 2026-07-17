@@ -44,6 +44,18 @@ test("transfer one second after expiry requires manual review", () => {
   }), "manual_review");
 });
 
+test("late underpaid transfer after expiry remains a manual exception, not paid", () => {
+  assert.equal(decideBep20TransferStatus({
+    rawAmount: "9583333",
+    expectedRawAmount: "9583334",
+    confirmations: 12,
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-08T12:00:01.000Z",
+    sessionExpiresAt: "2026-07-08T12:00:00.000Z",
+    exchangeRateExpiresAt: "2026-07-08T12:00:00.000Z",
+  }), "manual_review");
+});
+
 test("pre-expiry transfer remains confirming until enough confirmations", () => {
   assert.equal(decideBep20TransferStatus({
     rawAmount: "9583334",

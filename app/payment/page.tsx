@@ -56,6 +56,7 @@ type PaymentStatus = {
 };
 
 type Bep20ChainSession = {
+  chainSessionId: string | null;
   orderNo: string;
   network: string;
   chainId: number;
@@ -73,6 +74,16 @@ type Bep20ChainSession = {
   status: string;
   submittedTxHash: string | null;
   prefillSubmittedTxHash: boolean;
+  paymentAction:
+    | "continue_active_payment"
+    | "renew_payment_session"
+    | "submit_late_transaction"
+    | "view_status"
+    | "rejected"
+    | "paid"
+    | "closed";
+  canRenewPaymentSession: boolean;
+  canSubmitLateTransaction: boolean;
   requiredConfirmations: number;
   tokenContract: string;
   pricingStatus: string;
@@ -98,6 +109,18 @@ function getStatusText(status: string) {
   if (status === "expired") return "支付超时";
   if (status === "closed") return "订单关闭";
   return "等待支付";
+}
+
+function getBep20SessionStatusText(session: Bep20ChainSession) {
+  if (session.paymentAction === "paid") return "支付成功";
+  if (session.paymentAction === "rejected") return "审核已结束";
+  if (session.canSubmitLateTransaction) return "已过期，可提交晚到账核验";
+  if (session.status === "manual_review") return "人工核验中";
+  if (session.status === "confirming") return "等待区块确认";
+  if (session.status === "verified" || session.status === "completing") return "支付处理中";
+  if (session.status === "underpaid") return "到账金额不足";
+  if (session.status === "payment_failed") return "支付完成待重试";
+  return "等待提交";
 }
 
 function secondsLeft(expiresAt?: string | null) {
@@ -512,16 +535,18 @@ export default function PaymentPage() {
     }
   }
 
-  async function loadBep20Session() {
+  async function loadBep20Session(options: { create?: boolean } = {}) {
     if (!order?.order_no || creatingSession) return;
     setCreatingSession(true);
     setError("");
     try {
-      const response = await fetch("/api/payments/bep20/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: order.order_no }),
-      });
+      const response = options.create
+        ? await fetch("/api/payments/bep20/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order: order.order_no }),
+          })
+        : await fetch(`/api/payments/bep20/session?order=${encodeURIComponent(order.order_no)}`, { cache: "no-store" });
       const result = (await response.json().catch(() => null)) as (Bep20ChainSession & { error?: string }) | null;
       if (!response.ok) throw new Error(result?.error ?? "USDT-BEP20 支付单创建失败");
       setBep20Session(result);
@@ -541,7 +566,11 @@ export default function PaymentPage() {
       const response = await fetch("/api/payments/bep20/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: order.order_no, tx_hash: txHash }),
+        body: JSON.stringify({
+          order: order.order_no,
+          tx_hash: txHash,
+          chain_session_id: bep20Session?.canSubmitLateTransaction ? bep20Session.chainSessionId : undefined,
+        }),
       });
       const result = (await response.json().catch(() => null)) as (Bep20ChainSession & { error?: string }) | null;
       if (!response.ok) throw new Error(result?.error ?? "链上交易校验失败");
@@ -662,7 +691,7 @@ export default function PaymentPage() {
                     txHash={txHash}
                     verifying={verifyingTx}
                     remainingSeconds={bep20RemainingSeconds}
-                    onCreate={loadBep20Session}
+                    onCreate={() => loadBep20Session({ create: true })}
                     onTxHashChange={setTxHash}
                     onVerify={verifyBep20TxHash}
                     onCopy={copyText}
@@ -842,6 +871,13 @@ function Bep20PaymentPanel({
     );
   }
 
+  const canSubmitTxHash = session.paymentAction === "continue_active_payment" || session.canSubmitLateTransaction;
+  const isLateSubmission = session.canSubmitLateTransaction;
+  const isReviewPending = session.status === "manual_review" && session.paymentAction === "view_status";
+  const isRejected = session.paymentAction === "rejected";
+  const isPaid = session.paymentAction === "paid";
+  const isRenewable = session.paymentAction === "renew_payment_session";
+
   return (
     <div className="space-y-4 rounded-xl border bg-slate-50 p-4">
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
@@ -849,7 +885,29 @@ function Bep20PaymentPanel({
         <div>请勿通过 ERC20、TRC20、opBNB 或其他网络转账。转错网络或错误代币可能无法自动处理。</div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
+      {isRenewable ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+          当前没有有效的支付会话。你可以重新生成支付单；如果已按旧支付单完成转账，也可以在下方提交旧交易哈希进行人工核验。
+        </div>
+      ) : isLateSubmission ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+          支付会话已过期。如果你已完成转账，可以提交交易哈希进行人工核验；请不要再次转账。
+        </div>
+      ) : isReviewPending ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+          已收到链上交易，当前正在人工核验，请勿重复付款。
+        </div>
+      ) : isRejected ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+          该支付审核已结束，如有疑问请联系客服。
+        </div>
+      ) : isPaid ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm leading-6 text-emerald-800">
+          该订单已完成支付。
+        </div>
+      ) : null}
+
+      {session.paymentAction !== "renew_payment_session" ? <div className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
         <div className="rounded-xl bg-white p-3 text-center">
           <LocalAddressQr value={session.receiveAddress} />
           <div className="mt-2 text-xs text-muted-foreground">本地生成，仅包含公开收款地址</div>
@@ -865,12 +923,14 @@ function Bep20PaymentPanel({
           <Info label="收款地址" value={session.receiveAddress} copyable onCopy={() => onCopy(session.receiveAddress)} />
           <Info label="截止时间" value={formatDate(session.expiresAt)} />
           <Info label="确认数要求" value={`${session.requiredConfirmations} 个区块确认`} />
-          <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-muted-foreground">
-            <Clock3 className="h-4 w-4" />
-            剩余 {Math.floor(remainingSeconds / 60)} 分 {remainingSeconds % 60} 秒
-          </div>
+          {!isLateSubmission ? (
+            <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-muted-foreground">
+              <Clock3 className="h-4 w-4" />
+              剩余 {Math.floor(remainingSeconds / 60)} 分 {remainingSeconds % 60} 秒
+            </div>
+          ) : null}
         </div>
-      </div>
+      </div> : null}
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">交易哈希 TxHash</label>
@@ -888,15 +948,15 @@ function Bep20PaymentPanel({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={onVerify} disabled={!txHashValid || verifying || session.status === "paid" || session.status === "expired"}>
+        <Button type="button" onClick={onVerify} disabled={!txHashValid || verifying || !canSubmitTxHash}>
           {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          提交链上校验
+          {isLateSubmission ? "提交晚到账核验" : "提交链上校验"}
         </Button>
-        <Button type="button" variant="outline" onClick={onCreate} disabled={loading}>
+        {session.canRenewPaymentSession ? <Button type="button" variant="outline" onClick={onCreate} disabled={loading}>
           <RefreshCw className="mr-2 h-4 w-4" />
-          刷新支付单
-        </Button>
-        <Badge variant="outline">{session.status}</Badge>
+          重新生成支付单
+        </Button> : null}
+        <Badge variant="outline">{getBep20SessionStatusText(session)}</Badge>
       </div>
     </div>
   );

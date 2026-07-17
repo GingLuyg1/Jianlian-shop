@@ -13,8 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
-  canContinueBep20Payment,
   canUserCancelOrder,
+  getBep20PaymentAction,
+  getBep20PaymentNotice,
   getOrderStatusLabel,
   getPaymentStatusLabel,
   normalizeOrderStatus,
@@ -134,7 +135,8 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
   const orderStatus = normalizeOrderStatus(order?.status);
   const paymentStatus = normalizePaymentStatus(order?.payment_status);
   const canCancel = order ? canUserCancelOrder(order.status) && paymentStatus === "unpaid" : false;
-  const canContinuePayment = order ? canContinueBep20Payment(order) : false;
+  const paymentAction = order ? getBep20PaymentAction(order) : null;
+  const paymentNotice = order ? getBep20PaymentNotice(order) : null;
 
   async function cancelOrder() {
     if (!order || !canCancel || canceling) return;
@@ -390,10 +392,15 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                   <CardTitle>订单操作</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {canContinuePayment ? (
+                  {paymentAction ? (
                     <Button asChild className="w-full">
-                      <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>继续支付</Link>
+                      <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
                     </Button>
+                  ) : null}
+                  {!paymentAction && paymentNotice ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      {paymentNotice}
+                    </div>
                   ) : null}
                   <Link href="/account/orders" className="block">
                     <Button variant="outline" className="w-full">查看我的订单</Button>

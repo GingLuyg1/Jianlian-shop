@@ -25,7 +25,7 @@ const ACTIVE_CHAIN_SESSION_STATUSES = [
   "underpaid",
   "manual_review",
 ] as const;
-const USER_RECOVERY_BLOCKED_STATUSES = ["underpaid", "expired", "manual_review", "payment_failed", "completing"] as const;
+const USER_RECOVERY_BLOCKED_STATUSES = ["underpaid", "manual_review", "payment_failed", "completing"] as const;
 const SUPPORTED_PRICING_MODES = ["manual_fixed_rate", "provider_rate"] as const;
 
 type PricingMode = (typeof SUPPORTED_PRICING_MODES)[number];
@@ -154,6 +154,7 @@ type PricingSnapshot = {
 };
 
 export type Bep20SessionResponse = {
+  chainSessionId: string | null;
   orderNo: string;
   network: "BNB Smart Chain (BEP20)";
   chainId: number;
@@ -171,6 +172,16 @@ export type Bep20SessionResponse = {
   status: string;
   submittedTxHash: string | null;
   prefillSubmittedTxHash: boolean;
+  paymentAction:
+    | "continue_active_payment"
+    | "renew_payment_session"
+    | "submit_late_transaction"
+    | "view_status"
+    | "rejected"
+    | "paid"
+    | "closed";
+  canRenewPaymentSession: boolean;
+  canSubmitLateTransaction: boolean;
   requiredConfirmations: number;
   tokenContract: string;
   pricingStatus: string;
@@ -339,18 +350,18 @@ export async function getBep20PaymentSession(orderNo: string, userId: string): P
   const config = readBep20Config();
   const order = await loadOwnedOrder(service, orderNo, userId);
   const session = await getLatestChainSession(service, order.id);
-  if (!session) return createBep20PaymentSession(orderNo, userId);
+  if (!session) return toBep20SessionResponse(order.order_no, null, config, order);
   return toBep20SessionResponse(order.order_no, session, config);
 }
 
-export async function verifyBep20TxHash(input: { orderNo: string; txHash: string; userId: string }): Promise<Bep20VerifyResponse> {
+export async function verifyBep20TxHash(input: { orderNo: string; txHash: string; userId: string; chainSessionId?: string | null }): Promise<Bep20VerifyResponse> {
   const service = requiredServiceClient();
   const config = readBep20Config();
   await assertConfiguredTokenDecimals(config);
   const txHash = normalizeTxHash(input.txHash);
   const order = await loadOwnedOrder(service, input.orderNo, input.userId);
   ensureOrderAllowsBep20(order);
-  return verifyBep20TxHashForOrder({ service, config, order, txHash, allowRecovery: false });
+  return verifyBep20TxHashForOrder({ service, config, order, txHash, allowRecovery: false, chainSessionId: input.chainSessionId ?? null });
 }
 
 export async function recheckAdminBep20ChainPaymentSession(sessionId: string, adminId?: string | null, reason?: string | null): Promise<Bep20VerifyResponse> {
@@ -614,10 +625,19 @@ async function verifyBep20TxHashForOrder(input: {
   allowRecovery: boolean;
   allowLateApproval?: boolean;
   reviewAttemptId?: string | null;
+  chainSessionId?: string | null;
 }): Promise<Bep20VerifyResponse> {
-  const { service, config, order, txHash, allowRecovery, allowLateApproval = false, reviewAttemptId = null } = input;
-  const session = (await getReusableChainSession(service, order.id)) ?? (await getLatestChainSession(service, order.id));
+  const { service, config, order, txHash, allowRecovery, allowLateApproval = false, reviewAttemptId = null, chainSessionId = null } = input;
+  const session = chainSessionId
+    ? await getChainSessionById(service, chainSessionId)
+    : (await getReusableChainSession(service, order.id)) ?? (await getLatestChainSession(service, order.id));
   if (!session) throw new Bep20PaymentError("CHAIN_SESSION_NOT_FOUND", "链上支付单不存在，请重新打开支付页面。", 404);
+  if (session.order_id !== order.id || session.payment_method !== "usdt_bep20") {
+    throw new Bep20PaymentError("CHAIN_SESSION_NOT_FOUND", "链上支付单不存在或无权访问。", 404);
+  }
+  if (chainSessionId && !allowRecovery && session.status !== "expired") {
+    throw new Bep20PaymentError("CHAIN_SESSION_NOT_LATE_SUBMITTABLE", "当前支付单状态不允许提交晚到账交易。", 409);
+  }
   if (session.status === "paid") {
     return {
       ...toBep20SessionResponse(order.order_no, session, config),
@@ -660,7 +680,7 @@ async function verifyBep20TxHashForOrder(input: {
 
   if (receipt.status && receipt.status !== "0x1") {
     const retryable = await updateNonFinalChainSession(service, session.id, {
-      status: "submitted",
+      status: session.status === "expired" ? "expired" : "submitted",
       submitted_tx_hash: txHash,
       last_checked_at: new Date().toISOString(),
       failure_reason: "链上交易执行失败。",
@@ -677,7 +697,7 @@ async function verifyBep20TxHashForOrder(input: {
   const transfer = await findUsdtTransfer(config, receipt, txHash);
   if (!transfer) {
     const retryable = await updateNonFinalChainSession(service, session.id, {
-      status: "submitted",
+      status: session.status === "expired" ? "expired" : "submitted",
       submitted_tx_hash: txHash,
       last_checked_at: new Date().toISOString(),
       failure_reason: "未找到转入本站收款地址的 USDT-BEP20 Transfer 日志。",
@@ -1359,8 +1379,39 @@ async function getChainSessionById(service: SupabaseClient, sessionId: string) {
   return data as ChainSessionRow;
 }
 
-function toBep20SessionResponse(orderNo: string, session: ChainSessionRow, config: Bep20Config): Bep20SessionResponse {
+function toBep20SessionResponse(orderNo: string, session: ChainSessionRow | null, config: Bep20Config, order?: OrderRow): Bep20SessionResponse {
+  if (!session) {
+    return {
+      chainSessionId: null,
+      orderNo,
+      network: "BNB Smart Chain (BEP20)",
+      chainId: config.chainId,
+      asset: "USDT",
+      orderCurrency: String(order?.currency || "CNY"),
+      orderAmount: decimalString(order?.total_amount ?? "0"),
+      paymentCurrency: "USDT",
+      exchangeRate: "",
+      exchangeRateSource: "not_frozen",
+      exchangeRateFetchedAt: null,
+      exchangeRateExpiresAt: null,
+      expectedAmount: "",
+      receiveAddress: "",
+      expiresAt: "",
+      status: "no_session",
+      submittedTxHash: null,
+      prefillSubmittedTxHash: false,
+      paymentAction: "renew_payment_session",
+      canRenewPaymentSession: Boolean(order && order.status === "pending_payment" && order.payment_status !== "paid"),
+      canSubmitLateTransaction: false,
+      requiredConfirmations: config.requiredConfirmations,
+      tokenContract: config.tokenContract,
+      pricingStatus: "not_frozen",
+    };
+  }
+
+  const paymentAction = getBep20UserPaymentAction(session);
   return {
+    chainSessionId: session.id,
     orderNo,
     network: "BNB Smart Chain (BEP20)",
     chainId: Number(session.chain_id ?? config.chainId),
@@ -1382,10 +1433,25 @@ function toBep20SessionResponse(orderNo: string, session: ChainSessionRow, confi
       submittedTxHash: session.submitted_tx_hash,
       failureReason: session.failure_reason,
     }),
+    paymentAction,
+    canRenewPaymentSession: paymentAction === "renew_payment_session",
+    canSubmitLateTransaction: session.status === "expired" && session.manual_review_decision !== "rejected",
     requiredConfirmations: config.requiredConfirmations,
     tokenContract: String(session.token_contract),
     pricingStatus: String(session.pricing_status || "frozen"),
   };
+}
+
+function getBep20UserPaymentAction(session: ChainSessionRow): Bep20SessionResponse["paymentAction"] {
+  if (session.status === "paid") return "paid";
+  if (session.manual_review_decision === "rejected") return "rejected";
+  if (session.status === "expired") return "renew_payment_session";
+  if (["manual_review", "confirming", "verified", "completing", "payment_failed", "underpaid"].includes(session.status)) {
+    return "view_status";
+  }
+  const expiresAt = Date.parse(String(session.expires_at ?? ""));
+  if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) return "renew_payment_session";
+  return "continue_active_payment";
 }
 
 export function decimalToRawAmount(value: string, decimals: number) {

@@ -1,5 +1,15 @@
 ﻿import type { OrderStatus, PaymentStatus } from "./order-status";
 
+export type Bep20PaymentState =
+  | "not_applicable"
+  | "continue_active_payment"
+  | "renew_payment_session"
+  | "submit_late_transaction"
+  | "view_status"
+  | "rejected"
+  | "paid"
+  | "closed";
+
 export type OrderItemRecord = {
   id: string;
   order_id: string;
@@ -87,6 +97,7 @@ export type OrderRecord = {
   order_items?: OrderItemRecord[];
   order_status_logs?: OrderLogRecord[];
   order_deliveries?: OrderDeliveryRecord[];
+  bep20_payment_state?: Bep20PaymentState;
 };
 
 export type OrderListResult = {
