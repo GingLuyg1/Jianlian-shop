@@ -1,0 +1,11 @@
+record_type,constraint_name,constraint_definition,enum_type,enum_value,enum_sort_order
+check_constraint,chain_payment_sessions_address_format_check,CHECK (receive_address ~* '^0x[0-9a-f]{40}$'::text AND token_contract ~* '^0x[0-9a-f]{40}$'::text),null,null,null
+check_constraint,chain_payment_sessions_amount_check,CHECK (expected_amount > 0::numeric AND expected_raw_amount > 0::numeric),null,null,null
+check_constraint,chain_payment_sessions_chain_check,CHECK (chain_id = 56),null,null,null
+check_constraint,chain_payment_sessions_exchange_rate_check,CHECK (exchange_rate IS NULL OR exchange_rate > 0::numeric),null,null,null
+check_constraint,chain_payment_sessions_manual_review_decision_check,"CHECK (manual_review_decision IS NULL OR (manual_review_decision = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))",null,null,null
+check_constraint,chain_payment_sessions_method_check,CHECK (payment_method = 'usdt_bep20'::text),null,null,null
+check_constraint,chain_payment_sessions_payment_currency_check,CHECK (payment_currency = 'USDT'::text),null,null,null
+check_constraint,chain_payment_sessions_pricing_status_check,"CHECK (pricing_status = ANY (ARRAY['frozen'::text, 'invalid'::text, 'manual_review'::text]))",null,null,null
+check_constraint,chain_payment_sessions_status_check,"CHECK (status = ANY (ARRAY['waiting_payment'::text, 'submitted'::text, 'confirming'::text, 'verified'::text, 'completing'::text, 'payment_failed'::text, 'paid'::text, 'underpaid'::text, 'overpaid'::text, 'expired'::text, 'manual_review'::text, 'failed'::text]))",null,null,null
+check_constraint,chain_payment_sessions_tx_hash_format_check,CHECK (submitted_tx_hash IS NULL OR submitted_tx_hash ~* '^0x[0-9a-f]{64}$'::text),null,null,null

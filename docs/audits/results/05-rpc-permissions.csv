@@ -1,0 +1,17 @@
+schema,function_name,oid,identity_arguments,role_name,has_execute_privilege
+public,cancel_unpaid_order,27132,"p_order_id uuid, p_reason text",anon,false
+public,cancel_unpaid_order,27132,"p_order_id uuid, p_reason text",authenticated,true
+public,cancel_unpaid_order,27132,"p_order_id uuid, p_reason text",public,false
+public,cancel_unpaid_order,27132,"p_order_id uuid, p_reason text",service_role,true
+public,expire_unpaid_order,27133,"p_order_id uuid, p_reason text",anon,false
+public,expire_unpaid_order,27133,"p_order_id uuid, p_reason text",authenticated,false
+public,expire_unpaid_order,27133,"p_order_id uuid, p_reason text",public,false
+public,expire_unpaid_order,27133,"p_order_id uuid, p_reason text",service_role,true
+public,release_order_inventory,25932,p_order_id uuid,anon,false
+public,release_order_inventory,25932,p_order_id uuid,authenticated,false
+public,release_order_inventory,25932,p_order_id uuid,public,false
+public,release_order_inventory,25932,p_order_id uuid,service_role,true
+public,release_order_inventory,27131,"p_order_id uuid, p_reason text",anon,false
+public,release_order_inventory,27131,"p_order_id uuid, p_reason text",authenticated,false
+public,release_order_inventory,27131,"p_order_id uuid, p_reason text",public,false
+public,release_order_inventory,27131,"p_order_id uuid, p_reason text",service_role,true

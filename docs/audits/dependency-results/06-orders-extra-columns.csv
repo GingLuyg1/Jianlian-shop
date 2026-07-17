@@ -1,0 +1,2 @@
+reservation_release_reason_exists,data_type,is_nullable,column_default
+false,null,null,null

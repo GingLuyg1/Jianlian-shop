@@ -1,0 +1,4 @@
+column_name,data_type,udt_name,is_nullable,column_default
+order_id,uuid,uuid,NO,null
+status,text,text,NO,'waiting_payment'::text
+failure_reason,text,text,YES,null

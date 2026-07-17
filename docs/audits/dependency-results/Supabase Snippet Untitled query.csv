@@ -1,0 +1,2 @@
+schema,table_name,table_type
+public,chain_payment_sessions,BASE TABLE

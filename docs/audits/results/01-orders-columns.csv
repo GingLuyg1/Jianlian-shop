@@ -1,0 +1,6 @@
+column_name,data_type,udt_name,is_nullable,column_default
+payment_expires_at,timestamp with time zone,timestamptz,YES,null
+reservation_released_at,timestamp with time zone,timestamptz,YES,null
+expired_at,timestamp with time zone,timestamptz,YES,null
+status,text,text,NO,'pending_payment'::text
+payment_status,text,text,NO,'unpaid'::text

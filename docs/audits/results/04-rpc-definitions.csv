@@ -1,0 +1,320 @@
+schema,function_name,oid,identity_arguments,function_definition
+public,cancel_unpaid_order,27132,"p_order_id uuid, p_reason text","CREATE OR REPLACE FUNCTION public.cancel_unpaid_order(p_order_id uuid, p_reason text DEFAULT 'user_cancelled'::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_user_id uuid := auth.uid();
+  v_is_service_role boolean := coalesce(auth.role(), '') = 'service_role';
+  v_order public.orders;
+  v_release jsonb;
+  v_now timestamptz := now();
+  v_reason text := coalesce(nullif(btrim(p_reason), ''), 'user_cancelled');
+begin
+  select * into v_order
+  from public.orders
+  where id = p_order_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'code', 'ORDER_NOT_FOUND', 'message', 'order not found');
+  end if;
+
+  if v_user_id is not null and v_order.user_id <> v_user_id and not public.is_admin() and not v_is_service_role then
+    return jsonb_build_object('ok', false, 'code', 'ORDER_NOT_FOUND', 'message', 'order not found');
+  end if;
+
+  if v_user_id is null and not public.is_admin() and not v_is_service_role then
+    return jsonb_build_object('ok', false, 'code', 'UNAUTHENTICATED', 'message', 'please sign in first');
+  end if;
+
+  if v_order.status = 'cancelled' then
+    return jsonb_build_object('ok', true, 'code', 'ALREADY_CANCELLED', 'order_id', p_order_id, 'order_no', v_order.order_no);
+  end if;
+
+  if v_order.payment_status = 'paid'
+     or v_order.status in ('paid','processing','delivered','completed','refunded','expired') then
+    return jsonb_build_object('ok', false, 'code', 'ORDER_NOT_CANCELLABLE', 'message', 'this order cannot be cancelled');
+  end if;
+
+  if v_order.status <> 'pending_payment' then
+    return jsonb_build_object('ok', false, 'code', 'ORDER_NOT_CANCELLABLE', 'message', 'only pending payment orders can be cancelled');
+  end if;
+
+  v_release := public.release_order_inventory(p_order_id, 'cancel:' || v_reason);
+
+  update public.orders
+     set status = 'cancelled',
+         cancelled_at = coalesce(cancelled_at, v_now),
+         updated_at = v_now
+   where id = p_order_id
+     and status = 'pending_payment'
+     and payment_status <> 'paid'
+   returning * into v_order;
+
+  if not found then
+    return jsonb_build_object('ok', true, 'code', 'STATE_CHANGED', 'order_id', p_order_id);
+  end if;
+
+  insert into public.order_status_logs(order_id, from_status, to_status, operator_id, operator_type, note)
+  values (p_order_id, 'pending_payment', 'cancelled', v_user_id, case when v_is_service_role then 'service' when public.is_admin() then 'admin' else 'user' end, 'cancelled order: ' || left(v_reason, 160));
+
+  return jsonb_build_object(
+    'ok', true,
+    'code', 'CANCELLED',
+    'order_id', p_order_id,
+    'order_no', v_order.order_no,
+    'release', v_release
+  );
+end;
+$function$
+"
+public,expire_unpaid_order,27133,"p_order_id uuid, p_reason text","CREATE OR REPLACE FUNCTION public.expire_unpaid_order(p_order_id uuid, p_reason text DEFAULT 'payment_timeout'::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_order public.orders;
+  v_release jsonb;
+  v_now timestamptz := now();
+  v_note text := coalesce(nullif(btrim(p_reason), ''), 'payment_timeout');
+begin
+  select * into v_order
+  from public.orders
+  where id = p_order_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'code', 'ORDER_NOT_FOUND', 'message', 'order not found');
+  end if;
+
+  if v_order.payment_status = 'paid'
+     or v_order.status in ('paid','processing','delivered','completed','refunded') then
+    return jsonb_build_object('ok', true, 'code', 'SKIPPED_PAID_OR_FINAL', 'order_id', p_order_id, 'status', v_order.status, 'payment_status', v_order.payment_status);
+  end if;
+
+  if v_order.status = 'expired' then
+    return jsonb_build_object('ok', true, 'code', 'ALREADY_EXPIRED', 'order_id', p_order_id, 'released', v_order.reservation_released_at is not null);
+  end if;
+
+  if v_order.status = 'cancelled' then
+    return jsonb_build_object('ok', true, 'code', 'ALREADY_CANCELLED', 'order_id', p_order_id, 'released', v_order.reservation_released_at is not null);
+  end if;
+
+  if coalesce(v_order.payment_expires_at, v_order.created_at + interval '30 minutes') > v_now then
+    return jsonb_build_object('ok', true, 'code', 'NOT_DUE', 'order_id', p_order_id, 'expires_at', coalesce(v_order.payment_expires_at, v_order.created_at + interval '30 minutes'));
+  end if;
+
+  if to_regclass('public.payment_sessions') is not null and exists (
+    select 1
+    from public.payment_sessions ps
+    where ps.business_type = 'order'
+      and ps.business_id = p_order_id
+      and ps.status = 'paid'
+  ) then
+    return jsonb_build_object('ok', true, 'code', 'SKIPPED_SESSION_PAID', 'order_id', p_order_id);
+  end if;
+
+  if to_regclass('public.payment_sessions') is not null then
+    update public.payment_sessions ps
+       set status = case when ps.status in ('pending','processing') then 'expired' else ps.status end,
+           closed_at = coalesce(ps.closed_at, v_now),
+           updated_at = v_now
+     where ps.business_type = 'order'
+       and ps.business_id = p_order_id
+       and ps.status in ('pending','processing','failed');
+  end if;
+
+  v_release := public.release_order_inventory(p_order_id, 'expired:' || v_note);
+
+  update public.orders
+     set status = 'expired',
+         payment_status = case when payment_status = 'unpaid' then 'failed' else payment_status end,
+         expired_at = coalesce(expired_at, v_now),
+         updated_at = v_now
+   where id = p_order_id
+     and payment_status <> 'paid'
+     and status = 'pending_payment'
+   returning * into v_order;
+
+  if not found then
+    return jsonb_build_object('ok', true, 'code', 'STATE_CHANGED', 'order_id', p_order_id);
+  end if;
+
+  insert into public.order_status_logs(order_id, from_status, to_status, operator_id, operator_type, note)
+  values (p_order_id, 'pending_payment', 'expired', null, 'system', 'unpaid order expired: ' || left(v_note, 160));
+
+  return jsonb_build_object(
+    'ok', true,
+    'code', 'EXPIRED',
+    'order_id', p_order_id,
+    'order_no', v_order.order_no,
+    'release', v_release,
+    'status', v_order.status,
+    'payment_status', v_order.payment_status
+  );
+end;
+$function$
+"
+public,release_order_inventory,25932,p_order_id uuid,"CREATE OR REPLACE FUNCTION public.release_order_inventory(p_order_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_count integer := 0;
+  v_product_id uuid;
+begin
+  if not public.is_admin() and not exists (
+    select 1 from public.orders
+    where id = p_order_id and user_id = auth.uid()
+  ) then
+    raise exception '无权释放该订单库存';
+  end if;
+
+  for v_product_id in
+    select distinct product_id
+    from public.digital_inventory
+    where order_id = p_order_id and status = 'reserved'
+  loop
+    update public.digital_inventory
+      set status = 'available',
+          order_id = null,
+          reserved_at = null
+    where order_id = p_order_id
+      and product_id = v_product_id
+      and status = 'reserved';
+
+    get diagnostics v_count = row_count;
+    perform public.sync_product_available_stock(v_product_id);
+  end loop;
+
+  return coalesce(v_count, 0);
+end;
+$function$
+"
+public,release_order_inventory,27131,"p_order_id uuid, p_reason text","CREATE OR REPLACE FUNCTION public.release_order_inventory(p_order_id uuid, p_reason text DEFAULT 'release'::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_order public.orders;
+  v_released_normal integer := 0;
+  v_released_sku integer := 0;
+  v_released_digital integer := 0;
+  v_now timestamptz := now();
+  v_reason text := coalesce(nullif(btrim(p_reason), ''), 'release');
+begin
+  select * into v_order
+  from public.orders
+  where id = p_order_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'code', 'ORDER_NOT_FOUND', 'message', 'order not found');
+  end if;
+
+  if v_order.reservation_released_at is not null then
+    return jsonb_build_object(
+      'ok', true,
+      'code', 'ALREADY_RELEASED',
+      'order_id', p_order_id,
+      'released_normal', 0,
+      'released_sku', 0,
+      'released_digital', 0
+    );
+  end if;
+
+  if v_order.payment_status = 'paid'
+     or v_order.status in ('paid','processing','delivered','completed','refunded') then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'ORDER_NOT_RELEASABLE',
+      'message', 'paid or fulfilled order inventory cannot be released',
+      'order_id', p_order_id,
+      'status', v_order.status,
+      'payment_status', v_order.payment_status
+    );
+  end if;
+
+  update public.product_skus s
+     set stock = s.stock + oi.quantity,
+         status = case when s.status = 'sold_out' then 'active' else s.status end,
+         updated_at = v_now
+    from public.order_items oi
+   where oi.order_id = p_order_id
+     and oi.sku_id is not null
+     and s.id = oi.sku_id
+     and lower(coalesce(oi.delivery_type, '')) not in ('automatic','auto','card','account','auto_delivery')
+     and not exists (
+       select 1
+       from public.order_deliveries od
+       where od.order_item_id = oi.id
+         and od.delivery_status = 'delivered'
+     );
+  get diagnostics v_released_sku = row_count;
+
+  update public.products p
+     set stock = p.stock + oi.quantity,
+         status = case when p.status = 'sold_out' then 'active' else p.status end,
+         updated_at = v_now
+    from public.order_items oi
+   where oi.order_id = p_order_id
+     and oi.sku_id is null
+     and p.id = oi.product_id
+     and lower(coalesce(oi.delivery_type, '')) not in ('automatic','auto','card','account','auto_delivery')
+     and not exists (
+       select 1
+       from public.order_deliveries od
+       where od.order_item_id = oi.id
+         and od.delivery_status = 'delivered'
+     );
+  get diagnostics v_released_normal = row_count;
+
+  update public.digital_inventory di
+     set status = 'available',
+         order_id = null,
+         reserved_order_id = null,
+         reserved_order_item_id = null,
+         reserved_at = null,
+         expires_at = null,
+         updated_at = v_now
+   where coalesce(di.reserved_order_id, di.order_id) = p_order_id
+     and di.status = 'reserved'
+     and di.delivered_at is null
+     and di.delivered_order_id is null;
+  get diagnostics v_released_digital = row_count;
+
+  update public.orders
+     set reservation_released_at = v_now,
+         updated_at = v_now
+   where id = p_order_id;
+
+  insert into public.order_status_logs(order_id, from_status, to_status, operator_id, operator_type, note)
+  values (
+    p_order_id,
+    v_order.status,
+    v_order.status,
+    null,
+    'system',
+    'inventory released: ' || left(v_reason, 160)
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'code', 'RELEASED',
+    'order_id', p_order_id,
+    'released_normal', v_released_normal,
+    'released_sku', v_released_sku,
+    'released_digital', v_released_digital
+  );
+end;
+$function$
+"

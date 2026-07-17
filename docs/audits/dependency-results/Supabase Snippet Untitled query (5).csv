@@ -1,0 +1,5 @@
+constraint_name,constraint_definition
+orders_fulfillment_status_check,"CHECK (fulfillment_status = ANY (ARRAY['pending'::text, 'partially_delivered'::text, 'processing'::text, 'delivered'::text, 'delivery_failed'::text]))"
+orders_payment_status_check,"CHECK (payment_status = ANY (ARRAY['unpaid'::text, 'paid'::text, 'refunded'::text, 'partially_refunded'::text, 'failed'::text]))"
+orders_refund_status_check,"CHECK (refund_status = ANY (ARRAY['none'::text, 'partial'::text, 'processing'::text, 'full'::text, 'failed'::text]))"
+orders_status_check,"CHECK (status = ANY (ARRAY['pending_payment'::text, 'paid'::text, 'processing'::text, 'delivered'::text, 'completed'::text, 'cancelled'::text, 'expired'::text, 'refunded'::text, 'failed'::text]))"

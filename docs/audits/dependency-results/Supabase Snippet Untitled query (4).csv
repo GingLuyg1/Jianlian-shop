@@ -1,0 +1,9 @@
+indexname,indexdef
+chain_payment_sessions_active_order_unique,"CREATE UNIQUE INDEX chain_payment_sessions_active_order_unique ON public.chain_payment_sessions USING btree (order_id, payment_method) WHERE (status = ANY (ARRAY['waiting_payment'::text, 'submitted'::text, 'confirming'::text, 'verified'::text, 'completing'::text, 'payment_failed'::text, 'underpaid'::text, 'manual_review'::text]))"
+chain_payment_sessions_order_idx,"CREATE INDEX chain_payment_sessions_order_idx ON public.chain_payment_sessions USING btree (order_id, created_at DESC)"
+chain_payment_sessions_order_payment_unique,CREATE UNIQUE INDEX chain_payment_sessions_order_payment_unique ON public.chain_payment_sessions USING btree (payment_id) WHERE (payment_id IS NOT NULL)
+chain_payment_sessions_payment_idx,CREATE INDEX chain_payment_sessions_payment_idx ON public.chain_payment_sessions USING btree (payment_id) WHERE (payment_id IS NOT NULL)
+chain_payment_sessions_payment_session_unique,CREATE UNIQUE INDEX chain_payment_sessions_payment_session_unique ON public.chain_payment_sessions USING btree (payment_session_id) WHERE (payment_session_id IS NOT NULL)
+chain_payment_sessions_pkey,CREATE UNIQUE INDEX chain_payment_sessions_pkey ON public.chain_payment_sessions USING btree (id)
+chain_payment_sessions_pricing_idx,"CREATE INDEX chain_payment_sessions_pricing_idx ON public.chain_payment_sessions USING btree (payment_currency, pricing_status, exchange_rate_expires_at)"
+chain_payment_sessions_status_idx,"CREATE INDEX chain_payment_sessions_status_idx ON public.chain_payment_sessions USING btree (status, expires_at)"

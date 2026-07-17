@@ -1,0 +1,9 @@
+schema,table_name,column_name,column_exists,data_type,udt_name,is_nullable,column_default
+public,orders,id,true,uuid,uuid,NO,gen_random_uuid()
+public,orders,payment_expires_at,true,timestamp with time zone,timestamptz,YES,null
+public,orders,payment_status,true,text,text,NO,'unpaid'::text
+public,orders,reservation_released_at,true,timestamp with time zone,timestamptz,YES,null
+public,orders,status,true,text,text,NO,'pending_payment'::text
+public,chain_payment_sessions,failure_reason,true,text,text,YES,null
+public,chain_payment_sessions,order_id,true,uuid,uuid,NO,null
+public,chain_payment_sessions,status,true,text,text,NO,'waiting_payment'::text

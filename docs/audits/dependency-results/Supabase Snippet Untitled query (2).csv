@@ -1,0 +1,6 @@
+schema,table_name,constraint_name,column_name,referenced_schema,referenced_table,referenced_column,update_rule,delete_rule,constraint_definition
+public,chain_payment_sessions,chain_payment_sessions_last_rechecked_by_fkey,last_rechecked_by,auth,users,id,NO ACTION,SET NULL,FOREIGN KEY (last_rechecked_by) REFERENCES auth.users(id) ON DELETE SET NULL
+public,chain_payment_sessions,chain_payment_sessions_manual_review_decided_by_fkey,manual_review_decided_by,auth,users,id,NO ACTION,SET NULL,FOREIGN KEY (manual_review_decided_by) REFERENCES auth.users(id) ON DELETE SET NULL
+public,chain_payment_sessions,chain_payment_sessions_order_id_fkey,order_id,public,orders,id,NO ACTION,RESTRICT,FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT
+public,chain_payment_sessions,chain_payment_sessions_payment_id_fkey,payment_id,public,order_payments,id,NO ACTION,SET NULL,FOREIGN KEY (payment_id) REFERENCES order_payments(id) ON DELETE SET NULL
+public,chain_payment_sessions,chain_payment_sessions_payment_session_id_fkey,payment_session_id,public,payment_sessions,id,NO ACTION,SET NULL,FOREIGN KEY (payment_session_id) REFERENCES payment_sessions(id) ON DELETE SET NULL

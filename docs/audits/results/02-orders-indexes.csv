@@ -1,0 +1,7 @@
+indexname,indexdef
+orders_unpaid_expiration_idx,"CREATE INDEX orders_unpaid_expiration_idx ON public.orders USING btree (payment_expires_at, status, payment_status) WHERE ((payment_expires_at IS NOT NULL) AND (status = 'pending_payment'::text) AND (payment_status <> 'paid'::text))"
+orders_order_no_idx,CREATE INDEX orders_order_no_idx ON public.orders USING btree (order_no)
+orders_order_no_key,CREATE UNIQUE INDEX orders_order_no_key ON public.orders USING btree (order_no)
+orders_pkey,CREATE UNIQUE INDEX orders_pkey ON public.orders USING btree (id)
+orders_user_client_request_uidx,"CREATE UNIQUE INDEX orders_user_client_request_uidx ON public.orders USING btree (user_id, client_request_id) WHERE ((client_request_id IS NOT NULL) AND (btrim(client_request_id) <> ''::text))"
+orders_user_created_idx,"CREATE INDEX orders_user_created_idx ON public.orders USING btree (user_id, created_at DESC)"

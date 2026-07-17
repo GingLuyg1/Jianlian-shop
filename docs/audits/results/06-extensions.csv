@@ -1,0 +1,5 @@
+extension_name,is_installed,installed_version,is_available,default_version,available_view_installed_version,comment
+pg_cron,false,null,true,1.6.4,null,Job scheduler for PostgreSQL
+pg_net,false,null,true,0.20.3,null,Async HTTP
+supabase_vault,true,0.3.1,true,0.3.1,0.3.1,Supabase Vault Extension
+vault,false,null,false,null,null,null
