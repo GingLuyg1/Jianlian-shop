@@ -1,0 +1,3 @@
+column_name,expected_value,expected_literal_present_in_check,relevant_check_definitions
+payment_status,failed,true,"orders_payment_status_check: CHECK (payment_status = ANY (ARRAY['unpaid'::text, 'paid'::text, 'refunded'::text, 'partially_refunded'::text, 'failed'::text]))"
+status,expired,true,"orders_status_check: CHECK (status = ANY (ARRAY['pending_payment'::text, 'paid'::text, 'processing'::text, 'delivered'::text, 'completed'::text, 'cancelled'::text, 'expired'::text, 'refunded'::text, 'failed'::text]))"

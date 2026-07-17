@@ -1,0 +1,3 @@
+schema_name,table_name,relkind,table_exists
+public,chain_payment_sessions,r,true
+public,orders,r,true
