@@ -57,7 +57,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       result: "failed",
       beforeSummary: before,
       afterSummary: payload,
-      errorMessage: "鍒嗙被淇濆瓨澶辫触",
+      errorMessage: "分类保存失败",
     });
     return jsonResponse({ error: "分类保存失败，请检查分类标识是否重复" }, 400);
   }
@@ -99,7 +99,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     .from("categories")
     .select("id", { count: "exact", head: true })
     .eq("parent_id", params.categoryId);
-  if (childError) return jsonResponse({ error: "鍒嗙被鍒犻櫎鏍￠獙澶辫触锛岃绋嶅悗閲嶈瘯" }, 400);
+  if (childError) return jsonResponse({ error: "分类删除校验失败，请稍后重试" }, 400);
   if ((childCount ?? 0) > 0) {
     return jsonResponse({ error: "该分类下还有子分类，请先移动或删除子分类" }, 400);
   }
@@ -125,9 +125,9 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       targetLabel: String((before as { name?: unknown }).name ?? ""),
       result: "failed",
       beforeSummary: before,
-      errorMessage: "鍒嗙被鍒犻櫎澶辫触",
+      errorMessage: "分类删除失败",
     });
-    return jsonResponse({ error: "鍒嗙被鍒犻櫎澶辫触锛岃绋嶅悗閲嶈瘯" }, 400);
+    return jsonResponse({ error: "分类删除失败，请稍后重试" }, 400);
   }
 
   await auditCatalogAction({

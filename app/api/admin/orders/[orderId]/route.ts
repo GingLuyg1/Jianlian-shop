@@ -279,7 +279,7 @@ export async function POST(request: Request, context: RouteContext) {
         });
         return NextResponse.json({ deliveredCount: result.delivered_count ?? 0, result });
       } catch (deliveryError) {
-        const message = getDeliveryErrorMessage(deliveryError, "鑷姩鍙戣揣閲嶈瘯澶辫触");
+        const message = getDeliveryErrorMessage(deliveryError, "自动发货重试失败");
         await writeAdminAuditLog({
           request,
           admin: auditAdmin,
@@ -354,7 +354,7 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
       if (error) {
-        const message = getOrderErrorMessage(error, "浜や粯澶辫触鏍囪澶辫触");
+        const message = getOrderErrorMessage(error, "交付失败标记失败");
         await writeAdminAuditLog({
           request,
           admin: auditAdmin,
@@ -408,7 +408,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     if (error) {
-      const message = getOrderErrorMessage(error, "浜や粯淇℃伅淇濆瓨澶辫触");
+      const message = getOrderErrorMessage(error, "交付信息保存失败");
       await writeAdminAuditLog({
         request,
         admin: auditAdmin,
@@ -446,7 +446,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ delivery: data });
   } catch (error) {
     console.error("[Admin Orders] delivery update failed", error);
-    const message = getOrderErrorMessage(error, "浜や粯淇℃伅淇濆瓨澶辫触");
+    const message = getOrderErrorMessage(error, "交付信息保存失败");
     await writeAdminAuditLog({
       request,
       admin: auditAdmin,
