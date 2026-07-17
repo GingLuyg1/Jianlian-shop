@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerAdminContext, getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import {
   adminOrderPaymentSelect,
   adminRechargeSelect,
@@ -211,7 +211,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({
       request,

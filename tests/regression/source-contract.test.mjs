@@ -405,6 +405,7 @@ test("BEP20 admin recovery requires durable audit attempt and supports late paym
   assert.match(service, /ADMIN_REVIEW_AUDIT_FAILED/);
   assert.match(service, /approveLateBep20PaymentSession/);
   assert.match(service, /rejectLateBep20PaymentSession/);
+  assert.match(route, /getServerSuperAdminContext/);
   assert.match(route, /approve_late_payment/);
   assert.match(route, /reject_late_payment/);
   assert.match(migration, /bep20_admin_review_attempts/);
