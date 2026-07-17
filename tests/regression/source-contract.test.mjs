@@ -1136,7 +1136,11 @@ test("BEP20 order details render a compact payment summary without creating sess
 
   assert.match(summary, /fetch\(`\/api\/payments\/bep20\/session\?order=\$\{encodeURIComponent\(order\.order_no\)\}`,\s*\{ cache: "no-store" \}\)/);
   assert.match(summary, /fetch\("\/api\/payments\/bep20\/session",\s*\{[\s\S]*?method: "POST"/);
-  assert.match(summary, /onClick=\{\(\) => loadSession\(\{ create: true \}\)\}/);
+  assert.match(summary, /AlertDialog/);
+  assert.match(summary, /确认重新生成支付单？/);
+  assert.match(summary, /重新生成后将创建新的 30 分钟支付会话/);
+  assert.match(summary, /confirmRenewPaymentSession/);
+  assert.match(summary, /onClick=\{confirmRenewPaymentSession\}/);
   assert.match(summary, /body: JSON\.stringify\(\{ order: order\.order_no \}\)/);
   assert.match(sessionRoute, /export async function GET/);
   assert.match(sessionRoute, /getBep20PaymentSession\(orderNo, userContext\.user\.id\)/);
@@ -1153,7 +1157,8 @@ test("BEP20 order details render a compact payment summary without creating sess
   assert.match(summary, /status === "payment_failed"/);
   assert.match(summary, /chain_session_id: session\.canSubmitLateTransaction \? session\.chainSessionId : undefined/);
   assert.match(summary, /disabled=\{!txHashValid \|\| verifying\}/);
-  assert.match(summary, /查看完整支付页/);
+  assert.match(summary, /提交原订单支付凭证/);
+  assert.doesNotMatch(summary, /查看完整支付页/);
   assert.match(summary, /href=\{fullPaymentHref\}/);
   assert.match(summary, /shortHash\(session\.receiveAddress\)/);
   assert.match(summary, /shortHash\(session\.submittedTxHash\)/);
@@ -1163,6 +1168,79 @@ test("BEP20 order details render a compact payment summary without creating sess
   assert.doesNotMatch(orderList, /paymentAction && !isBep20Order[\s\S]{0,140}<Bep20OrderPaymentSummary order=\{order\} compact \/>[\s\S]{0,140}paymentAction && isBep20Order/);
   assert.match(orderList, /paymentAction && !isBep20Order/);
   assert.match(orderDetail, /paymentAction && !isBep20Order/);
+});
+
+test("account order details use a single user-facing status card and compact item rows", () => {
+  const orderList = file("app/account/orders/page.tsx");
+  const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+
+  for (const source of [orderList, orderDetail]) {
+    assert.match(source, /getUserOrderDisplayStatus\(order\)/);
+    assert.match(source, /label="状态"/);
+    assert.match(source, /md:grid-cols-2/);
+    assert.match(source, /md:grid-cols-\[minmax\(0,1fr\)_120px_80px\]/);
+    assert.match(source, /title=\{item\.product_name\}/);
+    assert.match(source, /formatMoney\(item\.unit_price/);
+    assert.match(source, /× \{item\.quantity\}|x \{item\.quantity\}/);
+  }
+
+  assert.doesNotMatch(orderList, /StatusBlock label="订单状态"/);
+  assert.doesNotMatch(orderList, /StatusBlock label="支付状态"/);
+  assert.doesNotMatch(orderDetail, /getOrderStatusLabel\(orderStatus\)/);
+  assert.doesNotMatch(orderDetail, /getPaymentStatusLabel\(paymentStatus\)/);
+  assert.doesNotMatch(orderDetail, /formatMoney\(item\.line_total/);
+  assert.doesNotMatch(orderList, /formatMoney\(item\.line_total/);
+});
+
+test("user order cancellation blocks BEP20 sessions with chain activity before releasing inventory", () => {
+  const route = file("app/api/orders/[orderNo]/route.ts");
+
+  assert.match(route, /getSupabaseServiceRoleClient/);
+  assert.match(route, /BEP20_CANCEL_BLOCKING_STATUSES/);
+  for (const status of ["confirming", "verified", "completing", "manual_review", "underpaid", "payment_failed", "paid"]) {
+    assert.match(route, new RegExp(`"${status}"`));
+  }
+  assert.match(route, /\.from\("chain_payment_sessions"\)/);
+  assert.match(route, /\.from\("chain_transaction_claims"\)/);
+  assert.match(route, /BEP20_PAYMENT_IN_PROGRESS/);
+  assert.match(route, /BEP20_TRANSACTION_CLAIMED/);
+  assert.match(route, /const bep20CancelGuard = await assertBep20OrderCancelable\(order\)/);
+  assert.match(route, /supabase\.rpc\("cancel_unpaid_order"/);
+  assert.ok(
+    route.indexOf("assertBep20OrderCancelable(order)") < route.indexOf('supabase.rpc("cancel_unpaid_order"'),
+    "BEP20 cancel guard must run before cancel_unpaid_order"
+  );
+});
+
+test("order expiration internal job is protected and has a local readiness check", () => {
+  const route = file("app/api/internal/orders/expire/route.ts");
+  const service = file("lib/orders/order-expiration.ts");
+  const script = file("scripts/check-order-expiration-readiness.mjs");
+  const pkg = file("package.json");
+
+  assert.match(route, /export async function POST/);
+  assert.doesNotMatch(route, /export async function GET/);
+  assert.match(route, /assertOrderExpirationJobAuthorized\(request\)/);
+  assert.match(route, /Math\.min\(Number\(payload\?\.limit \?\? 50\) \|\| 50, 200\)/);
+  assert.match(route, /processed/);
+  assert.match(route, /skipped/);
+  assert.match(route, /failed/);
+
+  assert.match(service, /ORDER_EXPIRATION_JOB_SECRET/);
+  assert.match(service, /INTERNAL_JOB_SECRET/);
+  assert.match(service, /getSupabaseServiceRoleClient/);
+  assert.match(service, /service\.rpc\("expire_unpaid_order"/);
+  assert.match(service, /service\.rpc\("list_expirable_unpaid_orders"/);
+
+  assert.match(script, /Order expiration readiness: PASS/);
+  assert.match(script, /ORDER_EXPIRATION_JOB_SECRET/);
+  assert.match(script, /INTERNAL_JOB_SECRET/);
+  assert.match(script, /app\/api\/internal\/orders\/expire\/route\.ts/);
+  assert.match(script, /lib\/orders\/order-expiration\.ts/);
+  assert.match(script, /process\.exit\(1\)/);
+  assert.doesNotMatch(script, /fetch\(/);
+  assert.doesNotMatch(script, /createClient/);
+  assert.match(pkg, /"check:order-expiration-readiness": "node scripts\/check-order-expiration-readiness\.mjs"/);
 });
 
 test("order payment completion does not mutate inventory after order creation", () => {

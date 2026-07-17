@@ -17,15 +17,11 @@ import {
   canUserCancelOrder,
   getBep20PaymentAction,
   getBep20PaymentNotice,
-  getOrderStatusLabel,
-  getPaymentStatusLabel,
+  getUserOrderDisplayStatus,
   normalizeOrderStatus,
   normalizePaymentStatus,
-  ORDER_STATUS_STYLES,
-  PAYMENT_STATUS_STYLES,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
-import { getPaymentMethodLabel } from "@/lib/payments/payment-methods";
 import { cn } from "@/lib/utils";
 
 type DeliveryContent = {
@@ -65,10 +61,6 @@ function formatMoney(value: number | string | null | undefined, currency = "CNY"
 function formatDate(value?: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
-}
-
-function statusClass(value: string, styles: Record<string, string>) {
-  return styles[value] ?? "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 function getSafeOrderActionMessage(payload: OrderActionResponse | null | undefined, fallback: string) {
@@ -139,6 +131,7 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
   const paymentAction = order ? getBep20PaymentAction(order) : null;
   const paymentNotice = order ? getBep20PaymentNotice(order) : null;
   const isBep20Order = String(order?.payment_method ?? "").toLowerCase() === "usdt_bep20";
+  const displayStatus = order ? getUserOrderDisplayStatus(order) : null;
 
   async function cancelOrder() {
     if (!order || !canCancel || canceling) return;
@@ -261,23 +254,12 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                           </Button>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className={cn("border", statusClass(orderStatus, ORDER_STATUS_STYLES))} variant="outline">
-                          {getOrderStatusLabel(orderStatus)}
-                        </Badge>
-                        <Badge className={cn("border", statusClass(paymentStatus, PAYMENT_STATUS_STYLES))} variant="outline">
-                          {getPaymentStatusLabel(paymentStatus)}
-                        </Badge>
-                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-3 md:grid-cols-5">
+                    <div className="grid gap-3 md:grid-cols-2">
                       <InfoCard label="订单金额" value={formatMoney(order.total_amount, order.currency)} />
-                      <InfoCard label="支付方式" value={order.payment_method ? getPaymentMethodLabel(order.payment_method) : "—"} />
-                      <InfoCard label="下单时间" value={formatDate(order.created_at)} />
-                      <InfoCard label="交付方式" value={order.delivery_type || "—"} />
-                      <InfoCard label="收货信息" value={order.customer_email || order.customer_name || "—"} />
+                      <StatusInfoCard label="状态" value={displayStatus?.label ?? "—"} className={displayStatus?.className ?? ""} />
                     </div>
                   </CardContent>
                 </Card>
@@ -290,19 +272,17 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                     {(order.order_items ?? []).length ? (
                       order.order_items!.map((item) => (
                         <div key={item.id} className="rounded-xl border border-orange-100 bg-orange-50/30 p-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <div className="font-semibold text-slate-900">{item.product_name}</div>
+                          <div className="grid items-center gap-3 text-sm md:grid-cols-[minmax(0,1fr)_120px_80px]">
+                            <div className="min-w-0">
+                              <div className="truncate font-semibold text-slate-900" title={item.product_name}>{item.product_name}</div>
                               {item.sku_title ? <div className="mt-1 text-sm text-muted-foreground">SKU：{item.sku_title}</div> : null}
                               {item.product_snapshot ? (
                                 <div className="mt-1 text-xs text-muted-foreground">商品快照已保存</div>
                               ) : null}
                             </div>
-                            <div className="text-right">
-                              <div className="font-semibold text-orange-600">{formatMoney(item.line_total, order.currency)}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {formatMoney(item.unit_price, order.currency)} × {item.quantity}
-                              </div>
+                            <div className="text-center font-semibold text-orange-600">{formatMoney(item.unit_price, order.currency)}</div>
+                            <div className="text-center text-sm text-muted-foreground">
+                              × {item.quantity}
                             </div>
                           </div>
                         </div>
@@ -452,11 +432,22 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-3">
+    <div className="flex min-h-[92px] flex-col items-center justify-center rounded-xl border border-orange-100 bg-orange-50/30 p-3 text-center">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 truncate font-semibold text-slate-900" title={value}>
+      <div className="mt-2 truncate font-semibold text-slate-900" title={value}>
         {value}
       </div>
+    </div>
+  );
+}
+
+function StatusInfoCard({ label, value, className }: { label: string; value: string; className: string }) {
+  return (
+    <div className="flex min-h-[92px] flex-col items-center justify-center rounded-xl border border-orange-100 bg-orange-50/30 p-3 text-center">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <Badge variant="outline" className={cn("mt-2 whitespace-nowrap border text-xs", className)}>
+        {value}
+      </Badge>
     </div>
   );
 }

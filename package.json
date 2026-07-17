@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "check:bep20-test-readiness": "node scripts/check-bep20-test-readiness.mjs",
+    "check:order-expiration-readiness": "node scripts/check-order-expiration-readiness.mjs",
     "catalog:migrate": "node scripts/migrate-static-catalog-to-supabase.cjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getOrderErrorMessage, getUserOrderByNo } from "@/lib/orders/order-queries";
 import { canUserCancelOrder } from "@/lib/orders/order-status";
+import type { OrderRecord } from "@/lib/orders/order-types";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +16,89 @@ type RouteContext = {
 
 function jsonError(message: string, status: number, code?: string) {
   return NextResponse.json({ error: message, ...(code ? { code } : {}) }, { status });
+}
+
+const BEP20_CANCEL_BLOCKING_STATUSES = new Set([
+  "confirming",
+  "verified",
+  "completing",
+  "manual_review",
+  "underpaid",
+  "payment_failed",
+  "paid",
+]);
+
+async function assertBep20OrderCancelable(order: OrderRecord) {
+  if (String(order.payment_method ?? "").toLowerCase() !== "usdt_bep20") {
+    return { ok: true as const };
+  }
+
+  const service = getSupabaseServiceRoleClient();
+  if (!service) {
+    return {
+      ok: false as const,
+      status: 503,
+      code: "BEP20_CANCEL_CHECK_UNAVAILABLE",
+      message: "无法确认链上支付状态，请稍后重试。",
+    };
+  }
+
+  const { data: sessions, error: sessionError } = await service
+    .from("chain_payment_sessions")
+    .select("id,status,submitted_tx_hash,manual_review_decision")
+    .eq("order_id", order.id)
+    .eq("payment_method", "usdt_bep20")
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (sessionError) {
+    return {
+      ok: false as const,
+      status: 503,
+      code: "BEP20_CANCEL_CHECK_FAILED",
+      message: "无法确认链上支付状态，请稍后重试。",
+    };
+  }
+
+  const blockingSession = (sessions ?? []).find((session) => {
+    const status = String(session.status ?? "").trim();
+    return BEP20_CANCEL_BLOCKING_STATUSES.has(status);
+  });
+
+  if (blockingSession) {
+    return {
+      ok: false as const,
+      status: 409,
+      code: "BEP20_PAYMENT_IN_PROGRESS",
+      message: "该订单已有链上支付处理记录，暂不能取消。",
+    };
+  }
+
+  const { data: claims, error: claimError } = await service
+    .from("chain_transaction_claims")
+    .select("id")
+    .eq("order_id", order.id)
+    .limit(1);
+
+  if (claimError) {
+    return {
+      ok: false as const,
+      status: 503,
+      code: "BEP20_CANCEL_CHECK_FAILED",
+      message: "无法确认链上支付状态，请稍后重试。",
+    };
+  }
+
+  if ((claims ?? []).length > 0) {
+    return {
+      ok: false as const,
+      status: 409,
+      code: "BEP20_TRANSACTION_CLAIMED",
+      message: "该订单已有链上交易记录，暂不能取消。",
+    };
+  }
+
+  return { ok: true as const };
 }
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -76,6 +161,11 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (!canUserCancelOrder(order.status)) {
       return jsonError("This order status cannot be cancelled by the user.", 400, "ORDER_NOT_CANCELLABLE");
+    }
+
+    const bep20CancelGuard = await assertBep20OrderCancelable(order);
+    if (!bep20CancelGuard.ok) {
+      return jsonError(bep20CancelGuard.message, bep20CancelGuard.status, bep20CancelGuard.code);
     }
 
     const body = (await request.json().catch(() => null)) as { reason?: string | null } | null;

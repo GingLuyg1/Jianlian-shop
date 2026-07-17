@@ -15,13 +15,9 @@ import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
   getBep20PaymentAction,
   getBep20PaymentNotice,
-  getOrderStatusLabel,
-  getPaymentStatusLabel,
   getUserOrderDisplayStatus,
   normalizeOrderStatus,
   normalizePaymentStatus,
-  ORDER_STATUS_STYLES,
-  PAYMENT_STATUS_STYLES,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
@@ -588,6 +584,7 @@ function UserOrderDrawer({
   const paymentAction = getBep20PaymentAction(order);
   const paymentNotice = getBep20PaymentNotice(order);
   const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
+  const displayStatus = getUserOrderDisplayStatus(order);
   const firstItem = order.order_items?.[0];
   const delivery = order.order_deliveries?.[0];
   const deliveryContent = delivery?.delivery_content ?? "";
@@ -639,19 +636,18 @@ function UserOrderDrawer({
               {paymentNotice}
             </div>
           ) : null}
-          <section className="grid gap-3 md:grid-cols-3">
+          <section className="grid gap-3 md:grid-cols-2">
             <InfoBlock label="订单金额" value={formatMoney(order.total_amount)} primary />
-            <StatusBlock label="订单状态" value={getOrderStatusLabel(order.status)} className={ORDER_STATUS_STYLES[orderStatus]} />
-            <StatusBlock label="支付状态" value={getPaymentStatusLabel(order.payment_status)} className={PAYMENT_STATUS_STYLES[paymentStatus]} />
+            <StatusBlock label="状态" value={displayStatus.label} className={displayStatus.className} />
           </section>
 
           <section className="rounded-xl border">
             <div className="border-b px-4 py-3 font-semibold">订单商品</div>
             <div className="divide-y">
               {(order.order_items ?? []).map((item) => (
-                <div key={item.id} className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1fr_100px_80px_110px]">
+                <div key={item.id} className="grid items-center gap-3 px-4 py-4 text-sm md:grid-cols-[minmax(0,1fr)_120px_80px]">
                   <div className="min-w-0">
-                    <div className="truncate font-semibold">{item.product_name}</div>
+                    <div className="truncate font-semibold" title={item.product_name}>{item.product_name}</div>
                     {item.sku_title ? (
                       <div className="mt-1 truncate text-xs text-muted-foreground">SKU: {item.sku_title}</div>
                     ) : null}
@@ -659,9 +655,8 @@ function UserOrderDrawer({
                       {item.category_name || "未记录分类"} · {getDeliveryLabel(item.delivery_type)}
                     </div>
                   </div>
-                  <div>{formatMoney(item.unit_price)}</div>
-                  <div>x {item.quantity}</div>
-                  <div className="font-semibold text-primary">{formatMoney(item.line_total)}</div>
+                  <div className="text-center font-semibold text-primary">{formatMoney(item.unit_price)}</div>
+                  <div className="text-center text-muted-foreground">x {item.quantity}</div>
                 </div>
               ))}
             </div>
@@ -731,7 +726,7 @@ function UserOrderDrawer({
 
 function InfoBlock({ label, value, primary }: { label: string; value: string; primary?: boolean }) {
   return (
-    <div className="rounded-xl border bg-slate-50 p-4">
+    <div className="flex min-h-[88px] flex-col items-center justify-center rounded-xl border bg-slate-50 p-4 text-center">
       <div className="text-xs text-slate-500">{label}</div>
       <div className={cn("mt-2 font-semibold", primary && "text-primary")}>{value}</div>
     </div>
@@ -740,7 +735,7 @@ function InfoBlock({ label, value, primary }: { label: string; value: string; pr
 
 function StatusBlock({ label, value, className }: { label: string; value: string; className: string }) {
   return (
-    <div className="rounded-xl border bg-slate-50 p-4">
+    <div className="flex min-h-[88px] flex-col items-center justify-center rounded-xl border bg-slate-50 p-4 text-center">
       <div className="text-xs text-slate-500">{label}</div>
       <Badge variant="outline" className={cn("mt-2 whitespace-nowrap text-xs", className)}>
         {value}

@@ -5,6 +5,15 @@ import Link from "next/link";
 import { CheckCircle2, Clipboard, ExternalLink, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
@@ -100,7 +109,7 @@ function noticeForSession(session: Bep20Session | null, order: OrderRecord) {
     return "当前没有有效支付单，你可以重新生成新的支付单。";
   }
   if (session.status === "underpaid") return "到账金额不足，不能按足额支付处理。";
-  if (session.status === "payment_failed") return "支付处理失败，请查看完整支付页或联系客服。";
+  if (session.status === "payment_failed") return "支付处理失败，请提交原订单支付凭证或联系客服。";
   return "当前有有效支付信息，请仅通过 BNB Smart Chain (BEP20) 转账。";
 }
 
@@ -154,6 +163,7 @@ export function Bep20OrderPaymentSummary({
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [nowTick, setNowTick] = useState(0);
+  const [renewConfirmOpen, setRenewConfirmOpen] = useState(false);
 
   const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
   const status = statusCopy(session);
@@ -167,7 +177,7 @@ export function Bep20OrderPaymentSummary({
 
   const loadSession = useCallback(
     async (options: { create?: boolean } = {}) => {
-      if (!isBep20Order || loading || creating) return;
+      if (!isBep20Order || loading || creating) return false;
       if (options.create) setCreating(true);
       else setLoading(true);
       setError("");
@@ -183,8 +193,10 @@ export function Bep20OrderPaymentSummary({
         if (!response.ok) throw new Error(result?.error ?? "支付信息读取失败");
         setSession(result);
         setTxHash(result?.prefillSubmittedTxHash ? result.submittedTxHash ?? "" : "");
+        return true;
       } catch (sessionError) {
         setError(getOrderErrorMessage(sessionError, options.create ? "支付单生成失败，请稍后重试" : "支付信息读取失败，请稍后重试"));
+        return false;
       } finally {
         setLoading(false);
         setCreating(false);
@@ -192,6 +204,15 @@ export function Bep20OrderPaymentSummary({
     },
     [creating, isBep20Order, loading, order.order_no]
   );
+
+  async function confirmRenewPaymentSession() {
+    if (!canRenew || creating) return;
+    const ok = await loadSession({ create: true });
+    if (ok) {
+      setRenewConfirmOpen(false);
+      await onUpdated?.();
+    }
+  }
 
   useEffect(() => {
     if (!isBep20Order) return;
@@ -286,15 +307,32 @@ export function Bep20OrderPaymentSummary({
           </Button>
         ) : null}
         {canRenew ? (
-          <Button type="button" size="sm" variant="outline" onClick={() => loadSession({ create: true })} disabled={creating}>
-            {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            重新生成支付单
-          </Button>
+          <AlertDialog open={renewConfirmOpen} onOpenChange={(open) => !creating && setRenewConfirmOpen(open)}>
+            <Button type="button" size="sm" variant="outline" onClick={() => setRenewConfirmOpen(true)} disabled={creating}>
+              {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              重新生成支付单
+            </Button>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>确认重新生成支付单？</AlertDialogTitle>
+                <AlertDialogDescription className="leading-6">
+                  重新生成后将创建新的 30 分钟支付会话。请按新支付单显示的金额和信息付款。如果你已经完成原支付单转账，请取消并选择“提交原订单支付凭证”，避免重复付款。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={creating}>取消</AlertDialogCancel>
+                <Button type="button" onClick={confirmRenewPaymentSession} disabled={creating}>
+                  {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  确认重新生成
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         ) : null}
         <Button asChild size="sm" variant="outline">
           <Link href={fullPaymentHref}>
             <ExternalLink className="mr-2 h-4 w-4" />
-            查看完整支付页
+            提交原订单支付凭证
           </Link>
         </Button>
         {session?.paymentAction === "paid" && session.submittedTxHash ? (
