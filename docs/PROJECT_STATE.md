@@ -1,8 +1,8 @@
 # Jianlian Shop 当前项目状态
 
 更新日期：2026-07-18
-代码基线：`main` / `69d794a0325c2967e65b2ae19e577030a14c6b11`
-状态口径：代码事实来自仓库只读核对；正式库事实来自用户在目标项目人工执行两轮只读审计后导出的 `docs/audits/results/*.csv` 与 `docs/audits/dependency-results/*.csv`。审计未覆盖的对象仍不得视为已确认。
+代码基线：`main` / `5a3eb2aa36b143b9c158a0f5f4b3135adc053027`
+状态口径：代码事实来自仓库只读核对；正式库事实来自用户在目标项目人工执行只读审计、Migration 和 Postcheck 后提供的执行记录及 `docs/audits/postcheck-results/*.csv`。审计未覆盖的对象仍不得视为已确认。
 
 ## 项目架构
 
@@ -51,7 +51,7 @@
 - 四个函数均由 `postgres` 拥有，均为 `SECURITY DEFINER`、`VOLATILE`、`PARALLEL UNSAFE`，并固定 `search_path=public`。
 - `cancel_unpaid_order(uuid,text)` 允许 `authenticated` 与 `service_role` 执行；拒绝 `anon` 与 `public`。
 - `expire_unpaid_order(uuid,text)` 及两个 `release_order_inventory` 重载仅允许 `service_role` 执行；`anon`、`authenticated`、`public` 均无执行权。
-- `public.list_expirable_unpaid_orders(integer)` 没有任何签名、定义或权限记录，正式库确认缺失。
+- 首轮审计时 `public.list_expirable_unpaid_orders(integer)` 没有任何签名、定义或权限记录；该缺口已在后续人工 Migration 中补齐。
 - `pg_cron` 与 `pg_net` 可用但未安装；`supabase_vault` 已安装，版本 `0.3.1`；名为 `vault` 的扩展不可用且未安装。
 - `cron` schema 与 `cron.job` 表均不存在，因此当前没有可查询的 Cron 任务表。
 - 元数据关键词搜索未返回 `set_order_payment_expiration` 或 `trg_orders_set_payment_expiration`；在本次查询覆盖范围内，这两个 `20260701` 对象没有出现在正式库。
@@ -66,7 +66,7 @@
 - 正式函数调用两参数重载 `release_order_inventory(order_id, reason)`。该重载先检查 `reservation_released_at`，避免重复释放；恢复未交付且非自动交付的 SKU/普通商品库存；将未交付的已预留数字库存恢复为 `available`；最后写入 `reservation_released_at`。
 - 当前两参数释放函数不会清空 `digital_inventory.reserved_user_id`，也不会写 `orders.reservation_release_reason`。这与仓库 `20260709` 版本不同，但与 `20260710` 兼容基线一致。
 - 一参数 `release_order_inventory(uuid) → integer` 是旧重载，仅处理旧式数字库存并调用库存同步函数；过期 RPC 不会解析到该重载。
-- 正式库不存在 `list_expirable_unpaid_orders`，所以没有“实际候选筛选逻辑”可确认。当前应用批处理和 dry-run 依赖该 RPC，在补齐前无法正常列出候选。
+- 首轮审计时正式库不存在 `list_expirable_unpaid_orders`，当时没有实际候选筛选逻辑可确认；后续 Migration 与 Postcheck 已确认该 RPC 部署完成。
 
 ### 第二轮依赖审计实际确认
 
@@ -78,11 +78,11 @@
 - 依赖汇总确认 `orders.id/payment_expires_at/reservation_released_at/status/payment_status` 与 `chain_payment_sessions.order_id/status/failure_reason` 八个依赖字段全部存在；`orders.created_at` 另由现有索引和已编译函数定义间接确认。
 - 独立布尔存在性审计结果 `06-orders-extra-columns.csv` 返回 `reservation_release_reason_exists=false`，由正式库元数据查询确认 `public.orders.reservation_release_reason` 不存在。它不被 `20260717` 列表 RPC 引用，因此不构成此次最小修复的阻断条件。
 
-### 仅根据仓库定义确认的候选行为
+### Postcheck 确认的候选行为
 
 - `20260717` 候选逻辑要求 `pending_payment`、严格 `unpaid`、`reservation_released_at is null`，并且 `coalesce(payment_expires_at, created_at + 30 minutes) <= now()`。
 - 该定义会阻止 `confirming`、`verified`、`completing`、`manual_review`、`underpaid`、`overpaid`、`paid`、`payment_failed` 自动过期；`submitted` 且 `failure_reason` 为空也阻止过期，`submitted` 且失败原因非空则允许继续候选。
-- 第二轮审计只证明上述 SQL 的结构和约束依赖兼容，不读取业务数据，因此没有确认正式库实际候选数量或任一订单是否应被过期。
+- Postcheck 函数定义已确认上述逻辑部署到正式库；Postcheck 不读取业务数据，因此仍没有确认正式库实际候选数量或任一订单是否应被过期。
 
 ### 已识别的实现差异
 
@@ -95,7 +95,7 @@
 
 | 环境 | 项目名 | Project ref | 当前可确认状态 |
 | --- | --- | --- | --- |
-| 正式 | Jianlian-shop | `qvbovrvybirscaurwuov` | 已由用户人工完成两轮只读元数据审计：核心字段、索引、生命周期函数及 `20260717` 的链上会话依赖均兼容；候选列表 RPC 缺失；`pg_cron`/`pg_net` 未安装；尚无 Cron schema。 |
+| 正式 | Jianlian-shop | `qvbovrvybirscaurwuov` | 用户已人工执行 `20260717` 最小 Migration，SQL Editor 返回 Success；Postcheck 确认列表 RPC 已存在、定义匹配且仅 `service_role` 可执行。`pg_cron`/`pg_net` 仍未安装，尚无 Cron schema。 |
 | 测试 | Jianlian-shop-test | `czuoivbfxzachiobdohw` | 用户确认已执行 `20260717_order_expiration_list_rpc_compatibility.sql`，并完成一笔测试订单的过期与库存释放验证。 |
 
 任何正式库操作前必须同时核对项目名与 Project ref，避免连接到测试项目或其他项目。
@@ -116,7 +116,7 @@
 - `20260701_order_expiration_inventory_release.sql`：三个时间字段和目标索引已存在；但正式 `expire_unpaid_order` 不再是该文件的 `cancelled` 版本；该文件的旧列表 RPC、付款过期设置函数和触发器未在审计结果中出现。
 - `20260709_order_lifecycle_non_payment_hardening.sql`：字段、索引及生命周期能力大体存在；但正式两参数库存释放函数没有该版本的 `reservation_release_reason` 写入和 `reserved_user_id` 清理，函数定义不一致。
 - `20260710_order_lifecycle_compatibility_baseline.sql`：正式库的两参数库存释放、取消、过期函数及权限与该兼容基线一致；旧的一参数 `integer` 重载被保留，符合该文件“不改变既有返回类型”的兼容策略。
-- `20260717_order_expiration_list_rpc_compatibility.sql`：正式库缺少该文件定义的 `list_expirable_unpaid_orders(integer)`；第二轮依赖审计确认其表、字段、外键及状态约束依赖满足，可原样作为当前最小兼容性修复，不需要附加表结构或索引变更。
+- `20260717_order_expiration_list_rpc_compatibility.sql`：用户已按 SHA-256 `7A3BBF6397F6A51DA56C8C9158077CCEE120AA9F152AEBE0E1D3766866041519` 在正式项目人工执行，SQL Editor 返回 Success；Postcheck 已通过。
 - 测试库：用户确认已执行 `20260717_order_expiration_list_rpc_compatibility.sql`。
 - 正式库真实 Migration 执行历史仍未审计；以上仅是对象级对比，不能反推哪些完整 Migration 曾经执行。
 
@@ -131,20 +131,25 @@
 
 该结果证明测试环境中的指定场景已通过，不自动证明正式环境结构一致，也不证明调度已配置。
 
+## 20260717 正式执行与 Postcheck
+
+- 执行主体：用户在正式项目 Jianlian-shop / `qvbovrvybirscaurwuov` 的 `main / PRODUCTION` 环境人工执行。
+- 执行前文件 SHA-256：`7A3BBF6397F6A51DA56C8C9158077CCEE120AA9F152AEBE0E1D3766866041519`。
+- SQL Editor 返回 Success；该 DDL 没有结果行属于正常执行结果。
+- Postcheck 确认 `public.list_expirable_unpaid_orders(p_limit integer)` 已存在，OID 为 27525，返回 `TABLE(order_id uuid)`，owner 为 `postgres`，语言为 `plpgsql`，`SECURITY DEFINER=true`，`search_path=public`。
+- 完整定义与批准的 Migration 一致：默认 limit 50，限制为 1—200；筛选到期的 `pending_payment/unpaid` 且预留未释放订单，并按既定链上会话状态排除规则保护处理中付款。
+- 权限符合 service-role-only：`service_role` 有 EXECUTE；`anon`、`authenticated`、`PUBLIC` 均无 EXECUTE。
+- Postcheck 已通过，最小 Migration 阶段完成。回滚 SQL 仍只作为紧急且单独授权的方案保留，不应因成功上线而执行。
+
 ## 当前生产上线缺口
 
-当前目标为 C → G：Cron 调度、正式库最小 Migration、生产环境受限上线。上线前仍缺：
+下一阶段只包括：准备正式环境 `CRON_SECRET`、执行正式 API dry-run、根据候选结果另行决定是否授权 `limit=1`，验证成功后再设计 `pg_cron + pg_net` 调度。当前没有创建 Cron、安装扩展或执行 API。
 
-1. 人工逐块执行 `docs/audits/production-list-rpc-preflight.sql`，确认目标函数仍不存在且依赖未漂移。
-2. 用户单独明确授权正式 Migration。
-3. 人工只执行 `20260717_order_expiration_list_rpc_compatibility.sql`，并保存项目标识、文件哈希和执行结果。
-4. 人工逐块执行 `docs/audits/production-list-rpc-postcheck.sql`，复核签名、定义、安全属性和权限。
-5. postcheck 通过后，再由用户另行决定是否授权正式环境 dry-run；`limit=1` 与 Cron 不属于当前阶段。
+### Dry-run 准备基线
 
-## 20260717 正式执行准备
-
-- 完整静态审查确认 Migration 只创建或替换 `public.list_expirable_unpaid_orders(integer)`，设置 `SECURITY DEFINER`、`search_path=public`，并调整该精确签名的 EXECUTE 权限。
-- 文件不包含表结构、订单数据、库存数据、索引、触发器、RLS、其他 RPC、扩展或调度修改。
-- 当前文件 SHA-256：`7A3BBF6397F6A51DA56C8C9158077CCEE120AA9F152AEBE0E1D3766866041519`。
-- 已创建只读 preflight、只读 postcheck 和 `docs/runbooks/20260717-production-list-rpc-rollout.md`；这些文件只供后续人工执行与复核，本轮没有执行其中任何 SQL。
-- 在 preflight 确认目标精确签名此前不存在的前提下，该变更可通过删除 `public.list_expirable_unpaid_orders(integer)` 回滚到原状态。回滚会重新造成列表 RPC 缺失，且必须取得独立明确授权。
+- 人工执行手册：`docs/runbooks/production-order-expiration-dry-run.md`。
+- 推荐请求：`GET https://<正式站点域名>/api/internal/orders/expire?dry_run=true&limit=10`。正式域名必须人工确认，不使用 Preview URL。
+- 认证：`Authorization: Bearer <CRON_SECRET>`；代码也兼容 `x-internal-job-secret`，但正式方案优先统一使用 Bearer。不得在日志、文档或聊天中记录实际密钥。
+- 成功预期：HTTP 200，`success=true`、`dry_run=true`、有效 `requestId`、`candidate_count`，以及仅含脱敏 `order_id_summary` 的 `candidates`。
+- dry-run 只调用列表 RPC，不调用 `expire_unpaid_order`，因此不应修改订单、支付会话或库存。
+- 若候选为 0，不进入 `limit=1`；若候选大于 0，也必须先单独复核并取得真实过期授权。非 dry-run 的 `limit=1` 会处理调用时最早的候选，不能按 dry-run 返回的摘要指定某一订单，且候选可能在两次请求间变化。

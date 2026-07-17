@@ -1,15 +1,27 @@
 # 20260717 正式库列表 RPC 上线手册
 
-本手册只覆盖正式库缺失的 `public.list_expirable_unpaid_orders(integer)`。它不授权执行任何步骤，也不包含 dry-run、真实订单过期或调度创建授权。
+状态：已完成。用户已在正式库人工执行目标 Migration，Postcheck 已通过；不得因本手册仍保留执行步骤而重复执行。本文继续作为执行记录和紧急回滚参考，不授权 dry-run、真实订单过期或调度创建。
 
 ## 固定目标与文件
 
 - 正式项目名：Jianlian-shop
 - Project ref：`qvbovrvybirscaurwuov`
-- 唯一待执行文件：`supabase/migrations/20260717_order_expiration_list_rpc_compatibility.sql`
+- 唯一已执行文件：`supabase/migrations/20260717_order_expiration_list_rpc_compatibility.sql`
 - 批准时文件 SHA-256：`7A3BBF6397F6A51DA56C8C9158077CCEE120AA9F152AEBE0E1D3766866041519`
 - 执行前检查：`docs/audits/production-list-rpc-preflight.sql`
 - 执行后复核：`docs/audits/production-list-rpc-postcheck.sql`
+
+## 正式执行结果
+
+- 执行目标：Jianlian-shop / `qvbovrvybirscaurwuov`，`main / PRODUCTION`。
+- 执行主体：用户人工执行。
+- 执行前 SHA-256 与本手册固定值一致。
+- Supabase SQL Editor 返回 Success；DDL 未返回数据属于正常结果。
+- Postcheck 三份结果文件已归档到 `docs/audits/postcheck-results/`。
+- 元数据：`public.list_expirable_unpaid_orders(p_limit integer)`，OID 27525，返回 `TABLE(order_id uuid)`，owner `postgres`，语言 `plpgsql`，`SECURITY DEFINER=true`，`search_path=public`。
+- 权限：`service_role` 有 EXECUTE；`anon`、`authenticated`、`PUBLIC` 无 EXECUTE。
+- 定义：默认 limit 50、限制 1—200，候选与链上支付会话保护逻辑与批准 Migration 一致。
+- 结论：Migration 与 Postcheck 阶段完成，不需要回滚，也不得重复执行。
 
 ## 已审查的 Migration 边界
 
@@ -30,7 +42,7 @@
 4. 保存每块结果。目标函数精确 integer 签名必须不存在；所有依赖表、字段、类型和状态约束必须兼容。任何 false、缺行、多余同名实现或无法解释的结果都必须停止。
 5. 确认已有正式库审计结论仍有效，并取得“只执行这一份 Migration”的单独明确授权。
 
-## Migration 人工执行
+## Migration 人工执行（已完成，禁止重复）
 
 获得单独授权后，只把 `supabase/migrations/20260717_order_expiration_list_rpc_compatibility.sql` 的完整原文作为一个独立执行单元运行一次。
 
@@ -39,7 +51,7 @@
 - 不改写函数体、权限、签名或 `search_path`。
 - 保存执行时间、执行人、项目标识、文件 SHA-256 和 SQL Editor 返回结果；不得记录密钥或环境变量值。
 
-## 执行后只读复核
+## 执行后只读复核（已完成）
 
 逐块、单独执行 `production-list-rpc-postcheck.sql` 并保存结果：
 
@@ -83,4 +95,4 @@ commit;
 
 ## 本手册边界
 
-Migration 和 postcheck 完成只代表列表 RPC 已部署并通过元数据复核。下一阶段的正式环境 dry-run 必须另行授权。本手册不授权或继续执行 `dry_run`、`limit=1`、真实过期处理、支付操作、扩展安装、`pg_cron + pg_net` 调度、环境变量变更或部署。
+Migration 和 Postcheck 已完成，只代表列表 RPC 已部署并通过元数据复核。下一阶段的正式环境 dry-run 必须按 `docs/CURRENT_TASK.md` 和 `docs/runbooks/production-order-expiration-dry-run.md` 另行准备和授权。本手册不授权或继续执行 `dry_run`、`limit=1`、真实过期处理、支付操作、扩展安装、`pg_cron + pg_net` 调度、环境变量变更或部署。

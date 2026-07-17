@@ -1,0 +1,5 @@
+role_name,has_execute_privilege,role_or_public_exists
+anon,false,true
+authenticated,false,true
+public,false,true
+service_role,true,true

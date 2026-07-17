@@ -1,0 +1,55 @@
+schema_name,function_name,oid,identity_arguments,function_definition
+public,list_expirable_unpaid_orders,27525,p_limit integer,"CREATE OR REPLACE FUNCTION public.list_expirable_unpaid_orders(p_limit integer DEFAULT 50)
+ RETURNS TABLE(order_id uuid)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_limit integer := greatest(1, least(coalesce(p_limit, 50), 200));
+  v_sql text;
+begin
+  v_sql := $query$
+    select o.id
+    from public.orders o
+    where o.status = 'pending_payment'
+      and o.payment_status = 'unpaid'
+      and o.reservation_released_at is null
+      and coalesce(o.payment_expires_at, o.created_at + interval '30 minutes') <= now()
+  $query$;
+
+  if to_regclass('public.chain_payment_sessions') is not null then
+    v_sql := v_sql || $query$
+      and not exists (
+        select 1
+        from public.chain_payment_sessions cps
+        where cps.order_id = o.id
+          and (
+            cps.status in (
+              'confirming',
+              'verified',
+              'completing',
+              'manual_review',
+              'underpaid',
+              'overpaid',
+              'paid',
+              'payment_failed'
+            )
+            or (
+              cps.status = 'submitted'
+              and nullif(btrim(coalesce(cps.failure_reason, '')), '') is null
+            )
+          )
+      )
+    $query$;
+  end if;
+
+  v_sql := v_sql || $query$
+    order by coalesce(o.payment_expires_at, o.created_at + interval '30 minutes') asc
+    limit $1
+  $query$;
+
+  return query execute v_sql using v_limit;
+end;
+$function$
+"

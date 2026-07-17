@@ -85,3 +85,38 @@
 - 修改：更新 `docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md`。
 - 未执行：任何 SQL、RPC、Migration、Supabase/API 操作、数据库修改、真实订单过期、扩展安装、Cron、环境变量修改、部署、测试、commit 或 push。
 - 下一步：人工执行 preflight；通过后由用户单独授权正式 Migration；人工执行 Migration 与 postcheck；postcheck 通过后再另行授权 dry-run。
+
+---
+
+## 2026-07-18 — 正式列表 RPC Migration 与 Postcheck 完成
+
+- 目标：根据用户人工执行记录和三份 Postcheck CSV，确认正式最小 Migration 完成，并把当前任务切换到正式 API dry-run 准备。
+- 操作边界：只读取本地 CSV、交接文档和 API 实现并更新 Markdown；本轮不连接 Supabase，不执行 SQL/RPC/Migration/API，不修改数据库或环境变量，不安装扩展，不创建 Cron，不部署，不 commit、不 push。
+- 开始基线：`main...origin/main [ahead 1]`；HEAD 为 `5a3eb2aa36b143b9c158a0f5f4b3135adc053027`；已有未跟踪目录 `docs/audits/preflight-results/`。
+- 用户执行记录：正式项目 Jianlian-shop / `qvbovrvybirscaurwuov`，`main / PRODUCTION`；执行前 SHA-256 为 `7A3BBF6397F6A51DA56C8C9158077CCEE120AA9F152AEBE0E1D3766866041519`；SQL Editor 返回 Success，DDL 无结果行正常。
+- Postcheck 元数据：`public.list_expirable_unpaid_orders(p_limit integer)` 已存在，OID 27525，返回 `TABLE(order_id uuid)`，owner 为 `postgres`，语言 `plpgsql`，`SECURITY DEFINER=true`，`search_path=public`。
+- Postcheck 权限：`service_role` 有 EXECUTE；`anon`、`authenticated`、`PUBLIC` 无 EXECUTE，符合 service-role-only。
+- Postcheck 定义：默认 limit 50、限制 1—200；订单状态、付款状态、释放状态、到期时间及链上支付会话排除逻辑与批准 Migration 一致。
+- 路径整理：三份 Postcheck 文件最初误放在 `docs/audits/preflight-results/`；后续文档整理任务已将其移动到 `docs/audits/postcheck-results/`，内容未修改。
+- Migration 结论：正式最小 Migration 已成功完成，Postcheck 通过，无需回滚；列表 RPC 缺失问题已关闭。
+- Dry-run 准备：代码确认正式接口为 `GET/POST /api/internal/orders/expire`，支持 Bearer 或 `x-internal-job-secret`、`dry_run` 和 `limit`；成功响应只返回候选数量及脱敏订单 ID 摘要。
+- 修改：更新 `docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md`、`docs/runbooks/20260717-production-list-rpc-rollout.md`。
+- 未执行：任何 SQL、RPC、Migration、API、数据库修改、环境变量修改、真实订单过期、扩展安装、Cron、部署、测试、commit 或 push。
+- 下一步：准备正式环境 `CRON_SECRET`；另行授权 API dry-run；根据候选结果再决定 `limit=1`；验证成功后才设计 `pg_cron + pg_net`。
+
+---
+
+## 2026-07-18 — Postcheck 证据归档与 dry-run 接口核对
+
+- 目标：把正式 Migration 后的三份 Postcheck CSV 归档到正确目录，并按当前代码固定人工 dry-run 契约。
+- 操作边界：只移动审计 CSV、只读检查接口/认证/限流代码并更新文档；不修改业务代码或 Migration，不执行 SQL/RPC/API，不改环境变量，不部署，不安装扩展，不创建 Cron，不 push。
+- 开始基线：`main...origin/main [ahead 1]`；四份上轮状态文档有未提交修改，`docs/audits/preflight-results/` 为未跟踪目录。
+- 移动证据：将 `01-function-metadata.csv`、`02-function-definition.csv`、`03-function-permissions.csv` 从 `docs/audits/preflight-results/` 移至 `docs/audits/postcheck-results/`，文件长度与内容未改。
+- GET 与参数：`GET /api/internal/orders/expire` 为正式导出处理器；`dry_run` 经 trim/lowercase 后接受 `1`、`true`、`yes`。其他值或缺失均为 false，可能进入真实处理分支，因此人工手册固定使用 `dry_run=true`。
+- limit：dry-run 默认 10、范围 1—50；非 dry-run 默认 50、范围 1—200；有效数字向下取整，越界夹紧，无效值回退默认值。
+- 认证：服务端期望值优先级为 `CRON_SECRET`、`ORDER_EXPIRATION_JOB_SECRET`、`INTERNAL_JOB_SECRET`；请求头优先读取 `x-internal-job-secret`，否则读取大小写不敏感的 `Authorization: Bearer <secret>`。不应同时发送两个认证头。
+- dry-run 安全性：路由在 dry-run 分支调用 `listExpirableUnpaidOrdersDryRun()` 后立即返回；该 helper 只调用只读列表 RPC，不调用 `expire_unpaid_order`，Postcheck 定义中也无写语句，因此不会更新订单、库存或支付会话。唯一状态变化是应用进程内的限流计数。
+- 响应：成功返回 `success/requestId/dry_run/candidate_count/candidates[].order_id_summary`；订单 UUID 以首 8 位、末 6 位摘要返回，不返回完整 UUID。
+- 错误：401 返回 `error`；认证配置缺失的 503 返回 `error`；列表 RPC 不可用的 503 返回 `success/requestId/dry_run/readiness_code/error_code/error`；429 返回 `error/code/retryAfter` 及限流响应头。
+- 创建或修改：新增 `docs/runbooks/production-order-expiration-dry-run.md`，更新 `docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md` 与正式列表 RPC 上线手册。
+- 未执行：任何 SQL、RPC、Migration、API、数据库或环境变量修改、真实订单过期、部署、扩展安装、Cron 或 push。
