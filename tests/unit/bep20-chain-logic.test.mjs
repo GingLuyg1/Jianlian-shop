@@ -6,6 +6,7 @@ import {
   createSharedAsyncCheck,
   createBep20CompletionInput,
   decideBep20TransferStatus,
+  normalizeBep20TxHash,
   validateTokenDecimalsResult,
   validateFrozenSettlement,
 } from "../../lib/payments/bep20-chain-logic.mjs";
@@ -130,4 +131,21 @@ test("frozen settlement separates CNY order value from USDT channel amount", () 
   assert.deepEqual(validateFrozenSettlement({
     payableAmount: "69", sessionCurrency: "CNY", paidAmount: "69.000000", paidCurrency: "CNY",
   }), { ok: true, reason: "matched" });
+});
+
+test("BEP20 TxHash normalization accepts valid case and whitespace variants", () => {
+  const lower = `0x${"ab".repeat(32)}`;
+  const upper = `0x${"AB".repeat(32)}`;
+
+  assert.equal(normalizeBep20TxHash(lower), lower);
+  assert.equal(normalizeBep20TxHash(upper), lower);
+  assert.equal(normalizeBep20TxHash(`  ${upper}  `), lower);
+});
+
+test("BEP20 TxHash normalization rejects malformed input", () => {
+  assert.throws(() => normalizeBep20TxHash(""), /TX_HASH_INVALID/);
+  assert.throws(() => normalizeBep20TxHash(`${"ab".repeat(32)}`), /TX_HASH_INVALID/);
+  assert.throws(() => normalizeBep20TxHash(`0x${"ab".repeat(31)}`), /TX_HASH_INVALID/);
+  assert.throws(() => normalizeBep20TxHash(`0x${"ab".repeat(33)}`), /TX_HASH_INVALID/);
+  assert.throws(() => normalizeBep20TxHash(`0x${"gh".repeat(32)}`), /TX_HASH_INVALID/);
 });

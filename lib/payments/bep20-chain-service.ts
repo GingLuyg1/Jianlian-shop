@@ -8,9 +8,9 @@ import {
   createSharedAsyncCheck,
   createBep20CompletionInput,
   decideBep20TransferStatus,
+  normalizeBep20TxHash,
 } from "@/lib/payments/bep20-chain-logic.mjs";
 import { completePayment } from "@/lib/payments/complete-payment-service";
-import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -926,9 +926,11 @@ function normalizeAddress(value: unknown) {
 }
 
 function normalizeTxHash(value: unknown) {
-  const text = String(value ?? "").trim().toLowerCase();
-  if (!/^0x[0-9a-f]{64}$/.test(text)) throw new Bep20PaymentError("TX_HASH_INVALID", "请输入合法的 0x 开头 32 字节交易哈希。", 400);
-  return text;
+  try {
+    return normalizeBep20TxHash(value);
+  } catch {
+    throw new Bep20PaymentError("TX_HASH_INVALID", "请输入合法的 0x 开头 32 字节交易哈希。", 400);
+  }
 }
 
 async function loadOwnedOrder(service: SupabaseClient, orderNo: string, userId: string): Promise<OrderRow> {
@@ -1459,5 +1461,6 @@ function statusMessage(status: string) {
 }
 
 export function getBep20ErrorMessage(error: unknown) {
-  return getSafeErrorMessage(error, "USDT-BEP20 支付处理失败，请稍后重试。");
+  if (error instanceof Bep20PaymentError) return error.message;
+  return "支付校验暂时失败，请稍后重试。";
 }

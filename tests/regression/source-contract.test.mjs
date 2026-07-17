@@ -26,6 +26,25 @@ function listRuntimeSourceFiles(dir) {
   return files;
 }
 
+test("runtime source files do not contain common mojibake sequences", () => {
+  const files = [
+    ...listRuntimeSourceFiles("app"),
+    ...listRuntimeSourceFiles("lib"),
+    ...listRuntimeSourceFiles("components"),
+  ];
+  const mojibakePattern = /鑷|閾|璁|缂|鏀|澶辫触|鈧|锟|鐠|閺|娴|閻/;
+  const failures = [];
+
+  for (const sourceFile of files) {
+    const lines = file(sourceFile).split(/\r?\n/);
+    lines.forEach((line, index) => {
+      if (mojibakePattern.test(line)) failures.push(`${sourceFile}:${index + 1}: ${line.trim()}`);
+    });
+  }
+
+  assert.deepEqual(failures, []);
+});
+
 test("order API whitelists input and does not accept frontend price fields", () => {
   const source = file("app/api/orders/route.ts");
   assert.match(source, /ORDER_CREATE_ALLOWED_KEYS/);
@@ -1687,6 +1706,69 @@ test("unpaid BEP20 orders can resume the existing payment page", () => {
   assert.match(orderStatus, /paymentMethod === "usdt_bep20"/);
   assert.doesNotMatch(orderList, /POST \/api\/orders/);
   assert.doesNotMatch(orderDetail, /POST \/api\/orders/);
+});
+
+test("BEP20 payment page uses current session API data and guards duplicate requests", () => {
+  const page = file("app/payment/page.tsx");
+  const sessionRoute = file("app/api/payments/bep20/session/route.ts");
+  const service = file("lib/payments/bep20-chain-service.ts");
+
+  assert.match(page, /fetch\("\/api\/payments\/bep20\/session"/);
+  assert.match(page, /setBep20Session\(result\)/);
+  assert.match(page, /setTxHash\(result\?\.submittedTxHash \?\? ""\)/);
+  assert.match(page, /if \(!order\?\.order_no \|\| creatingSession\) return/);
+  assert.match(page, /if \(!order\?\.order_no \|\| verifyingTx\) return/);
+  assert.match(page, /setCreatingSession\(true\)[\s\S]*?setCreatingSession\(false\)/);
+  assert.match(page, /setVerifyingTx\(true\)[\s\S]*?setVerifyingTx\(false\)/);
+  assert.doesNotMatch(page, /fetch\("\/api\/orders"[\s\S]{0,120}loadBep20Session/);
+  assert.match(sessionRoute, /createBep20PaymentSession\(orderNo, userContext\.user\.id\)/);
+  assert.match(service, /getReusableChainSession\(service, order\.id\)/);
+  assert.match(service, /\.in\("status", \[\.\.\.ACTIVE_CHAIN_SESSION_STATUSES\]\)/);
+  assert.match(service, /\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
+  assert.match(service, /if \(!error && data\) return toBep20SessionResponse/);
+  assert.match(service, /if \(raced\) return toBep20SessionResponse/);
+});
+
+test("BEP20 TxHash validation is normalized before receipt lookup and database claim", () => {
+  const logic = file("lib/payments/bep20-chain-logic.mjs");
+  const service = file("lib/payments/bep20-chain-service.ts");
+  const unit = file("tests/unit/bep20-chain-logic.test.mjs");
+
+  assert.match(logic, /export function normalizeBep20TxHash/);
+  assert.match(logic, /\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(logic, /\^0x\[0-9a-f\]\{64\}\$/);
+  assert.match(service, /normalizeBep20TxHash\(value\)/);
+  assert.match(service, /throw new Bep20PaymentError\("TX_HASH_INVALID"/);
+  assert.match(unit, /valid case and whitespace variants/);
+  assert.match(unit, /rejects malformed input/);
+});
+
+test("BEP20 user-facing errors keep business messages but hide unknown internals", () => {
+  const service = file("lib/payments/bep20-chain-service.ts");
+  const sessionRoute = file("app/api/payments/bep20/session/route.ts");
+  const verifyRoute = file("app/api/payments/bep20/verify/route.ts");
+
+  assert.match(service, /if \(error instanceof Bep20PaymentError\) return error\.message/);
+  assert.match(service, /支付校验暂时失败，请稍后重试。/);
+  assert.doesNotMatch(service, /getSafeErrorMessage\(error,\s*"USDT-BEP20/);
+  assert.match(sessionRoute, /code = typeof \(error as \{ code\?: unknown \}\)\?\.code === "string"/);
+  assert.match(verifyRoute, /code = typeof \(error as \{ code\?: unknown \}\)\?\.code === "string"/);
+});
+
+test("BEP20 test readiness command is local-only and redacts sensitive values", () => {
+  const pkg = JSON.parse(file("package.json"));
+  const script = file("scripts/check-bep20-test-readiness.mjs");
+
+  assert.equal(pkg.scripts["check:bep20-test-readiness"], "node scripts/check-bep20-test-readiness.mjs");
+  assert.match(script, /czuoivbfxzachiobdohw/);
+  assert.match(script, /BEP20 test readiness: PASS/);
+  assert.match(script, /readFileSync\(filePath, "utf8"\)/);
+  assert.match(script, /process\.exit\(1\)/);
+  assert.match(script, /maskAddress/);
+  assert.doesNotMatch(script, /fetch\(/);
+  assert.doesNotMatch(script, /createClient|supabase-js|eth_call|https\.request|http\.request/);
+  assert.doesNotMatch(script, /console\.log\(`?\$\{value\("SUPABASE_SERVICE_ROLE_KEY"\)\}/);
+  assert.doesNotMatch(script, /console\.log\(`?\$\{value\("BSC_RPC_URL"\)\}/);
 });
 
 test("privacy anonymization compatibility only updates deployed profile columns", () => {

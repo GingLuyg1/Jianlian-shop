@@ -524,7 +524,7 @@ export default function PaymentPage() {
       const result = (await response.json().catch(() => null)) as (Bep20ChainSession & { error?: string }) | null;
       if (!response.ok) throw new Error(result?.error ?? "USDT-BEP20 支付单创建失败");
       setBep20Session(result);
-      if (result?.submittedTxHash) setTxHash(result.submittedTxHash);
+      setTxHash(result?.submittedTxHash ?? "");
     } catch (sessionError) {
       setError(getOrderErrorMessage(sessionError, "USDT-BEP20 支付单创建失败"));
     } finally {
