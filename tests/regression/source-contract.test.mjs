@@ -324,8 +324,11 @@ test("BEP20 retryable failures recover without weakening terminal protections", 
     verificationFlow.indexOf("CHAIN_SESSION_REJECTED") < verificationFlow.indexOf("loadReceipt"),
     "rejected sessions must stop before any receipt lookup or claim"
   );
+  assert.match(service, /if \(!receipt\)[\s\S]*?status: expired \? "expired" : "submitted"[\s\S]*?failure_reason:/);
   assert.match(service, /receipt\.status && receipt\.status !== "0x1"[\s\S]*?status: session\.status === "expired" \? "expired" : "submitted"/);
+  assert.match(service, /receipt\.status && receipt\.status !== "0x1"[\s\S]*?failure_reason:/);
   assert.match(service, /if \(!transfer\)[\s\S]*?status: session\.status === "expired" \? "expired" : "submitted"/);
+  assert.match(service, /if \(!transfer\)[\s\S]*?failure_reason:/);
   assert.match(service, /可重新提交其他 TxHash/);
   assert.match(service, /claim === "claimed_by_other_order"[\s\S]*?"TX_HASH_USED"/);
   assert.match(service, /mutableStatuses = \[[\s\S]*?"failed"/);
@@ -963,17 +966,76 @@ test("order expiration migration adds payment expiry and idempotent release RPC"
   assert.match(migration, /create trigger trg_orders_set_payment_expiration/);
 });
 
+test("order expiration list RPC compatibility migration only adds the missing list function", () => {
+  const migration = file("supabase/migrations/20260717_order_expiration_list_rpc_compatibility.sql");
+
+  assert.match(migration, /create or replace function public\.list_expirable_unpaid_orders\(p_limit integer default 50\)/);
+  assert.match(migration, /returns table\(order_id uuid\)/);
+  assert.match(migration, /language plpgsql/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /set search_path = public/);
+  assert.match(migration, /greatest\(1, least\(coalesce\(p_limit, 50\), 200\)\)/);
+  assert.match(migration, /o\.status = 'pending_payment'/);
+  assert.match(migration, /o\.payment_status = 'unpaid'/);
+  assert.match(migration, /o\.reservation_released_at is null/);
+  assert.match(migration, /coalesce\(o\.payment_expires_at, o\.created_at \+ interval '30 minutes'\) <= now\(\)/);
+  assert.match(migration, /to_regclass\('public\.chain_payment_sessions'\) is not null/);
+  assert.match(migration, /cps\.status in \(/);
+  for (const status of ["confirming", "verified", "completing", "manual_review", "underpaid", "overpaid", "paid", "payment_failed"]) {
+    assert.match(migration, new RegExp(`'${status}'`));
+  }
+  assert.match(migration, /cps\.status = 'submitted'[\s\S]*nullif\(btrim\(coalesce\(cps\.failure_reason, ''\)\), ''\) is null/);
+  assert.doesNotMatch(migration, /cps\.status in \([\s\S]{0,120}'submitted'/);
+  assert.match(migration, /revoke execute on function public\.list_expirable_unpaid_orders\(integer\) from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function public\.list_expirable_unpaid_orders\(integer\) to service_role/);
+  assert.match(migration, /pg_get_function_identity_arguments/);
+  assert.match(migration, /pg_get_function_result/);
+  assert.match(migration, /pg_get_functiondef/);
+
+  for (const forbidden of [
+    /create or replace function public\.release_order_inventory/i,
+    /create or replace function public\.cancel_unpaid_order/i,
+    /create or replace function public\.expire_unpaid_order/i,
+    /create or replace function public\.create_order_with_item/i,
+    /alter table/i,
+    /create index/i,
+    /drop trigger/i,
+    /create trigger/i,
+    /enable row level security/i,
+    /\bdelete\s+from\b/i,
+    /\bupdate\s+public\./i,
+    /\binsert\s+into\b/i,
+  ]) {
+    assert.doesNotMatch(migration, forbidden);
+  }
+});
+
 test("order expiration internal API requires job secret and does not expose sensitive payloads", () => {
   const route = file("app/api/internal/orders/expire/route.ts");
   const service = file("lib/orders/order-expiration.ts");
+  assert.match(route, /export async function GET/);
+  assert.match(route, /export async function POST/);
+  assert.match(route, /handleOrderExpirationRequest/);
   assert.match(route, /assertOrderExpirationJobAuthorized/);
   assert.match(route, /checkRateLimit\("internal_task"/);
   assert.match(route, /processExpiredOrders/);
+  assert.match(route, /listExpirableUnpaidOrdersDryRun/);
+  assert.match(route, /dry_run/);
+  assert.match(route, /success: false/);
+  assert.match(route, /CODE_OR_DB_NOT_READY/);
+  assert.match(route, /error_code: dryRunResult\.code/);
+  assert.match(route, /status: 503/);
+  assert.match(route, /success: true/);
+  assert.match(route, /parseLimit\(options\.limit, 50, 200\)/);
+  assert.match(route, /parseLimit\(options\.limit, 10, 50\)/);
   assert.doesNotMatch(route, /customer_email|delivery_content|secret_config|provider_raw/i);
+  assert.match(service, /CRON_SECRET/);
   assert.match(service, /ORDER_EXPIRATION_JOB_SECRET/);
   assert.match(service, /INTERNAL_JOB_SECRET/);
   assert.match(service, /service\.rpc\("expire_unpaid_order"/);
   assert.match(service, /service\.rpc\("list_expirable_unpaid_orders"/);
+  assert.match(service, /listExpirableUnpaidOrdersDryRun/);
+  assert.match(service, /ORDER_EXPIRATION_RPC_UNAVAILABLE/);
 });
 
 test("digital delivery only consumes reserved inventory and keeps delivery secrets private", () => {
@@ -1218,25 +1280,52 @@ test("order expiration internal job is protected and has a local readiness check
   const script = file("scripts/check-order-expiration-readiness.mjs");
   const pkg = file("package.json");
 
+  assert.match(route, /export async function GET/);
   assert.match(route, /export async function POST/);
-  assert.doesNotMatch(route, /export async function GET/);
+  assert.match(route, /handleOrderExpirationRequest/);
   assert.match(route, /assertOrderExpirationJobAuthorized\(request\)/);
-  assert.match(route, /Math\.min\(Number\(payload\?\.limit \?\? 50\) \|\| 50, 200\)/);
+  assert.match(route, /searchParams\.get\("limit"\)/);
+  assert.match(route, /searchParams\.get\("dry_run"\)/);
+  assert.match(route, /parseLimit\(options\.limit, 50, 200\)/);
+  assert.match(route, /parseLimit\(options\.limit, 10, 50\)/);
+  assert.match(route, /listExpirableUnpaidOrdersDryRun\(limit\)/);
+  assert.match(route, /success: false/);
+  assert.match(route, /readiness_code: "CODE_OR_DB_NOT_READY"/);
+  assert.match(route, /error_code: dryRunResult\.code/);
+  assert.match(route, /status: 503/);
+  assert.match(route, /success: true/);
+  assert.match(route, /order_id_summary: item\.orderIdSummary/);
+  assert.doesNotMatch(route, /order_id: item\.orderId/);
+  assert.doesNotMatch(route, /candidate_count:\s*0[\s\S]{0,200}error:/);
   assert.match(route, /processed/);
   assert.match(route, /skipped/);
   assert.match(route, /failed/);
 
+  assert.match(service, /CRON_SECRET/);
   assert.match(service, /ORDER_EXPIRATION_JOB_SECRET/);
   assert.match(service, /INTERNAL_JOB_SECRET/);
   assert.match(service, /getSupabaseServiceRoleClient/);
   assert.match(service, /service\.rpc\("expire_unpaid_order"/);
   assert.match(service, /service\.rpc\("list_expirable_unpaid_orders"/);
+  assert.match(service, /listExpirableUnpaidOrdersDryRun/);
+  assert.match(service, /ORDER_EXPIRATION_RPC_UNAVAILABLE/);
+  assert.match(service, /ok: false/);
+  assert.ok(
+    service.indexOf("listExpirableUnpaidOrdersDryRun") < service.indexOf("assertOrderExpirationJobAuthorized"),
+    "dry-run helper must not call the expiration RPC"
+  );
 
   assert.match(script, /Order expiration readiness: PASS/);
+  assert.match(script, /CODE_NOT_READY/);
+  assert.match(script, /CONFIG_NOT_READY/);
+  assert.match(script, /SCHEDULE_NOT_CONFIGURED/);
+  assert.match(script, /CRON_SECRET/);
   assert.match(script, /ORDER_EXPIRATION_JOB_SECRET/);
   assert.match(script, /INTERNAL_JOB_SECRET/);
   assert.match(script, /app\/api\/internal\/orders\/expire\/route\.ts/);
   assert.match(script, /lib\/orders\/order-expiration\.ts/);
+  assert.match(script, /vercel\.json/);
+  assert.match(script, /\/api\/internal\/orders\/expire/);
   assert.match(script, /process\.exit\(1\)/);
   assert.doesNotMatch(script, /fetch\(/);
   assert.doesNotMatch(script, /createClient/);

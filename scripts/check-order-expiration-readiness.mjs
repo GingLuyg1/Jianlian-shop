@@ -34,62 +34,84 @@ function readDotEnvLocal() {
 const dotEnv = readDotEnvLocal();
 const config = { ...dotEnv, ...process.env };
 const failures = [];
+const warnings = [];
 
 function value(name) {
   return String(config[name] ?? "").trim();
 }
 
-function requireFile(path) {
+function readText(path) {
   const absolute = resolve(process.cwd(), path);
-  if (!existsSync(absolute)) failures.push(`${path}: MISSING`);
-  return absolute;
+  if (!existsSync(absolute)) {
+    failures.push(`${path}: MISSING`);
+    return "";
+  }
+  return readFileSync(absolute, "utf8");
 }
 
-function requireText(path, patterns) {
-  const absolute = requireFile(path);
-  if (!existsSync(absolute)) return "";
-  const text = readFileSync(absolute, "utf8");
+function requirePatterns(path, patterns) {
+  const text = readText(path);
+  if (!text) return;
   for (const [label, pattern] of patterns) {
     if (!pattern.test(text)) failures.push(`${path}: missing ${label}`);
   }
-  return text;
 }
 
-for (const path of requiredFiles) requireFile(path);
+for (const path of requiredFiles) readText(path);
 
 const hasExpirationMigration = migrationCandidates.some((path) => existsSync(resolve(process.cwd(), path)));
-if (!hasExpirationMigration) {
-  failures.push("order expiration migration: MISSING");
-}
+if (!hasExpirationMigration) failures.push("order expiration migration: MISSING");
 
-requireText("app/api/internal/orders/expire/route.ts", [
+requirePatterns("app/api/internal/orders/expire/route.ts", [
+  ["GET handler", /export\s+async\s+function\s+GET/],
   ["POST handler", /export\s+async\s+function\s+POST/],
-  ["internal secret authorization", /assertOrderExpirationJobAuthorized/],
-  ["batch limit clamp", /Math\.min\([\s\S]*?,\s*200\)/],
+  ["shared handler", /handleOrderExpirationRequest/],
+  ["Authorization helper", /assertOrderExpirationJobAuthorized/],
+  ["dry-run support", /dry_run/],
+  ["200 batch cap", /parseLimit\([^)]*,\s*50,\s*200\)/],
+  ["50 dry-run cap", /parseLimit\([^)]*,\s*10,\s*50\)/],
   ["processed skipped failed counters", /processed[\s\S]*skipped[\s\S]*failed/],
 ]);
 
-requireText("lib/orders/order-expiration.ts", [
+requirePatterns("lib/orders/order-expiration.ts", [
+  ["CRON_SECRET", /CRON_SECRET/],
   ["ORDER_EXPIRATION_JOB_SECRET", /ORDER_EXPIRATION_JOB_SECRET/],
   ["INTERNAL_JOB_SECRET", /INTERNAL_JOB_SECRET/],
   ["service role client", /getSupabaseServiceRoleClient/],
   ["expire_unpaid_order RPC", /rpc\("expire_unpaid_order"/],
   ["list_expirable_unpaid_orders RPC", /rpc\("list_expirable_unpaid_orders"/],
+  ["dry-run list helper", /listExpirableUnpaidOrdersDryRun/],
 ]);
 
-if (!value("ORDER_EXPIRATION_JOB_SECRET") && !value("INTERNAL_JOB_SECRET")) {
-  failures.push("ORDER_EXPIRATION_JOB_SECRET or INTERNAL_JOB_SECRET: MISSING");
+const hasSecret = Boolean(value("CRON_SECRET") || value("ORDER_EXPIRATION_JOB_SECRET") || value("INTERNAL_JOB_SECRET"));
+if (!hasSecret) warnings.push("CONFIG_NOT_READY: CRON_SECRET or ORDER_EXPIRATION_JOB_SECRET or INTERNAL_JOB_SECRET is missing");
+
+const vercelPath = resolve(process.cwd(), "vercel.json");
+if (!existsSync(vercelPath)) {
+  warnings.push("SCHEDULE_NOT_CONFIGURED: vercel.json is missing");
+} else {
+  const vercelText = readFileSync(vercelPath, "utf8");
+  if (!/\/api\/internal\/orders\/expire/.test(vercelText)) {
+    warnings.push("SCHEDULE_NOT_CONFIGURED: vercel.json does not reference /api/internal/orders/expire");
+  }
 }
 
 if (failures.length > 0) {
-  console.error("Order expiration readiness: FAIL");
+  console.error("Order expiration readiness: CODE_NOT_READY");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
+if (warnings.length > 0) {
+  console.error("Order expiration readiness: CONFIG_NOT_READY");
+  for (const warning of warnings) console.error(`- ${warning}`);
+  process.exit(1);
+}
+
 console.log("Order expiration readiness: PASS");
-console.log("ORDER_EXPIRATION_JOB_SECRET or INTERNAL_JOB_SECRET: PRESENT");
-console.log("Internal order expiration API: PRESENT");
+console.log("Internal order expiration API: GET/POST PRESENT");
+console.log("Authorization: Bearer secret supported");
+console.log("CRON_SECRET / ORDER_EXPIRATION_JOB_SECRET / INTERNAL_JOB_SECRET: PRESENT");
 console.log("Order expiration service: PRESENT");
 console.log("Order expiration migration: PRESENT");
-console.log("Vercel Cron recommendation: POST /api/internal/orders/expire with Authorization: Bearer <configured secret> every 5 minutes, batch limit <= 200.");
+console.log("Vercel schedule: PRESENT");
