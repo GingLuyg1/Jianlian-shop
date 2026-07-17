@@ -7,6 +7,7 @@ import {
   createBep20CompletionInput,
   decideBep20TransferStatus,
   normalizeBep20TxHash,
+  shouldPrefillBep20TxHash,
   validateTokenDecimalsResult,
   validateFrozenSettlement,
 } from "../../lib/payments/bep20-chain-logic.mjs";
@@ -148,4 +149,32 @@ test("BEP20 TxHash normalization rejects malformed input", () => {
   assert.throws(() => normalizeBep20TxHash(`0x${"ab".repeat(31)}`), /TX_HASH_INVALID/);
   assert.throws(() => normalizeBep20TxHash(`0x${"ab".repeat(33)}`), /TX_HASH_INVALID/);
   assert.throws(() => normalizeBep20TxHash(`0x${"gh".repeat(32)}`), /TX_HASH_INVALID/);
+});
+
+test("BEP20 failed retryable TxHash is not prefilled on resume", () => {
+  const txHash = `0x${"ab".repeat(32)}`;
+  assert.equal(shouldPrefillBep20TxHash({
+    status: "submitted",
+    submittedTxHash: txHash,
+    failureReason: "transaction not found",
+  }), false);
+});
+
+test("BEP20 active confirmed states keep submitted TxHash on resume", () => {
+  const txHash = `0x${"ab".repeat(32)}`;
+  for (const status of ["confirming", "verified", "completing", "payment_failed", "manual_review", "paid"]) {
+    assert.equal(shouldPrefillBep20TxHash({
+      status,
+      submittedTxHash: txHash,
+      failureReason: null,
+    }), true);
+  }
+});
+
+test("BEP20 new session without TxHash starts with an empty input", () => {
+  assert.equal(shouldPrefillBep20TxHash({
+    status: "waiting_payment",
+    submittedTxHash: null,
+    failureReason: null,
+  }), false);
 });

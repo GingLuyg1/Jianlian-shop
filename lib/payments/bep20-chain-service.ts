@@ -9,6 +9,7 @@ import {
   createBep20CompletionInput,
   decideBep20TransferStatus,
   normalizeBep20TxHash,
+  shouldPrefillBep20TxHash,
 } from "@/lib/payments/bep20-chain-logic.mjs";
 import { completePayment } from "@/lib/payments/complete-payment-service";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -169,6 +170,7 @@ export type Bep20SessionResponse = {
   expiresAt: string;
   status: string;
   submittedTxHash: string | null;
+  prefillSubmittedTxHash: boolean;
   requiredConfirmations: number;
   tokenContract: string;
   pricingStatus: string;
@@ -1375,6 +1377,11 @@ function toBep20SessionResponse(orderNo: string, session: ChainSessionRow, confi
     expiresAt: String(session.expires_at),
     status: String(session.status),
     submittedTxHash: session.submitted_tx_hash ?? null,
+    prefillSubmittedTxHash: shouldPrefillBep20TxHash({
+      status: session.status,
+      submittedTxHash: session.submitted_tx_hash,
+      failureReason: session.failure_reason,
+    }),
     requiredConfirmations: config.requiredConfirmations,
     tokenContract: String(session.token_contract),
     pricingStatus: String(session.pricing_status || "frozen"),

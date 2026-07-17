@@ -1715,7 +1715,9 @@ test("BEP20 payment page uses current session API data and guards duplicate requ
 
   assert.match(page, /fetch\("\/api\/payments\/bep20\/session"/);
   assert.match(page, /setBep20Session\(result\)/);
-  assert.match(page, /setTxHash\(result\?\.submittedTxHash \?\? ""\)/);
+  assert.match(page, /prefillSubmittedTxHash/);
+  assert.match(page, /setTxHash\(result\?\.prefillSubmittedTxHash \? result\.submittedTxHash \?\? "" : ""\)/);
+  assert.match(page, /disabled=\{!txHashValid \|\| verifying \|\| session\.status === "paid" \|\| session\.status === "expired"\}/);
   assert.match(page, /if \(!order\?\.order_no \|\| creatingSession\) return/);
   assert.match(page, /if \(!order\?\.order_no \|\| verifyingTx\) return/);
   assert.match(page, /setCreatingSession\(true\)[\s\S]*?setCreatingSession\(false\)/);
@@ -1727,6 +1729,24 @@ test("BEP20 payment page uses current session API data and guards duplicate requ
   assert.match(service, /\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
   assert.match(service, /if \(!error && data\) return toBep20SessionResponse/);
   assert.match(service, /if \(raced\) return toBep20SessionResponse/);
+  assert.match(service, /prefillSubmittedTxHash: shouldPrefillBep20TxHash/);
+  assert.match(service, /failureReason: session\.failure_reason/);
+});
+
+test("BEP20 payment page does not prefill retryable failed TxHash on resume", () => {
+  const logic = file("lib/payments/bep20-chain-logic.mjs");
+  const service = file("lib/payments/bep20-chain-service.ts");
+  const unit = file("tests/unit/bep20-chain-logic.test.mjs");
+
+  assert.match(logic, /export function shouldPrefillBep20TxHash/);
+  assert.match(logic, /\["confirming", "verified", "completing", "payment_failed", "manual_review", "paid"\]/);
+  assert.match(logic, /status === "submitted" && String\(input\?\.failureReason \?\? ""\)\.trim\(\)/);
+  assert.match(service, /prefillSubmittedTxHash: boolean/);
+  assert.match(service, /submittedTxHash: session\.submitted_tx_hash \?\? null/);
+  assert.match(service, /failureReason: session\.failure_reason/);
+  assert.match(unit, /failed retryable TxHash is not prefilled on resume/);
+  assert.match(unit, /active confirmed states keep submitted TxHash on resume/);
+  assert.match(unit, /new session without TxHash starts with an empty input/);
 });
 
 test("BEP20 TxHash validation is normalized before receipt lookup and database claim", () => {
