@@ -1671,6 +1671,24 @@ test("user order cancellation uses the real PATCH detail API", () => {
   assert.ok(!existsSync(join(root, "app/api/orders/[orderNo]/cancel/route.ts")), "do not add a duplicate POST cancel route");
 });
 
+test("unpaid BEP20 orders can resume the existing payment page", () => {
+  const checkout = file("app/checkout/page.tsx");
+  const orderList = file("app/account/orders/page.tsx");
+  const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+  const orderStatus = file("lib/orders/order-status.ts");
+
+  assert.match(checkout, /\/payment\?order=\$\{encodeURIComponent\(orderNo\)\}/);
+  assert.match(orderList, /canContinueBep20Payment\(order\)/);
+  assert.match(orderDetail, /canContinueBep20Payment\(order\)/);
+  assert.match(orderList, /\/payment\?order=\$\{encodeURIComponent\(order\.order_no\)\}/);
+  assert.match(orderDetail, /\/payment\?order=\$\{encodeURIComponent\(order\.order_no\)\}/);
+  assert.match(orderStatus, /status === "pending_payment" \|\| status === "待支付"/);
+  assert.match(orderStatus, /paymentStatus === "unpaid" \|\| paymentStatus === "未支付"/);
+  assert.match(orderStatus, /paymentMethod === "usdt_bep20"/);
+  assert.doesNotMatch(orderList, /POST \/api\/orders/);
+  assert.doesNotMatch(orderDetail, /POST \/api\/orders/);
+});
+
 test("privacy anonymization compatibility only updates deployed profile columns", () => {
   const migration = file("supabase/migrations/20260715_privacy_anonymization_profile_compatibility.sql");
 

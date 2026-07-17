@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
+  canContinueBep20Payment,
   getOrderStatusLabel,
   getPaymentStatusLabel,
   normalizeOrderStatus,
@@ -196,6 +197,7 @@ export default function MyOrdersPage() {
                     {rows.map((order) => {
                       const orderStatus = normalizeOrderStatus(order.status);
                       const nextPaymentStatus = normalizePaymentStatus(order.payment_status);
+                      const canContinuePayment = canContinueBep20Payment(order);
                       const firstItem = order.order_items?.[0];
                       const quantity = (order.order_items ?? []).reduce(
                         (sum, item) => sum + Number(item.quantity ?? 0),
@@ -235,9 +237,16 @@ export default function MyOrdersPage() {
                             {formatDate(order.created_at)}
                           </td>
                           <td className="px-3 py-2.5 text-right">
-                            <Button variant="ghost" size="sm" onClick={() => setSelectedOrder(order)}>
-                              查看详情
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              {canContinuePayment ? (
+                                <Button asChild size="sm">
+                                  <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>继续支付</Link>
+                                </Button>
+                              ) : null}
+                              <Button variant="ghost" size="sm" onClick={() => setSelectedOrder(order)}>
+                                查看详情
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -591,6 +600,7 @@ function UserOrderDrawer({
 
   const orderStatus = normalizeOrderStatus(order.status);
   const paymentStatus = normalizePaymentStatus(order.payment_status);
+  const canContinuePayment = canContinueBep20Payment(order);
   const firstItem = order.order_items?.[0];
   const delivery = order.order_deliveries?.[0];
   const deliveryContent = delivery?.delivery_content ?? "";
@@ -632,6 +642,11 @@ function UserOrderDrawer({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          {canContinuePayment ? (
+            <Button asChild className="w-full">
+              <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>继续支付</Link>
+            </Button>
+          ) : null}
           <section className="grid gap-3 md:grid-cols-3">
             <InfoBlock label="订单金额" value={formatMoney(order.total_amount)} primary />
             <StatusBlock label="订单状态" value={getOrderStatusLabel(order.status)} className={ORDER_STATUS_STYLES[orderStatus]} />

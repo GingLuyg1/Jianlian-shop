@@ -97,6 +97,22 @@ export function canUserCancelOrder(status: unknown) {
   return normalizeOrderStatus(status) === "pending_payment";
 }
 
+export function canContinueBep20Payment(order: {
+  status?: unknown;
+  payment_status?: unknown;
+  payment_method?: unknown;
+}) {
+  const status = String(order.status ?? "").trim();
+  const paymentStatus = String(order.payment_status ?? "").trim();
+  const paymentMethod = String(order.payment_method ?? "").trim().toLowerCase();
+
+  return (
+    (status === "pending_payment" || status === "待支付") &&
+    (paymentStatus === "unpaid" || paymentStatus === "未支付") &&
+    paymentMethod === "usdt_bep20"
+  );
+}
+
 export function canTransitionOrder(from: unknown, to: unknown) {
   const fromStatus = normalizeOrderStatus(from);
   const toStatus = normalizeOrderStatus(to);
