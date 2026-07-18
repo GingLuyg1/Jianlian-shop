@@ -1,0 +1,2 @@
+query_id,result_state,schema_name,table_name,trigger_name,trigger_enabled,trigger_definition
+11-triggers,NO_ROWS,null,null,null,null,null

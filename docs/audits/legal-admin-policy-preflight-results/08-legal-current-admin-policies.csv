@@ -1,0 +1,10 @@
+query_id,result_state,schemaname,tablename,policyname,permissive,roles,command,using_expression,with_check_expression
+08-legal-current-admin-policies,FOUND,public,legal_documents,public can read effective legal documents,PERMISSIVE,{public},SELECT,((status = 'published'::text) AND ((effective_at IS NULL) OR (effective_at <= now()))),null
+08-legal-current-admin-policies,FOUND,public,legal_documents,super admins can manage legal documents,PERMISSIVE,{public},ALL,"(EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))","(EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))"
+08-legal-current-admin-policies,FOUND,public,legal_documents,super admins can read legal documents,PERMISSIVE,{public},SELECT,"(EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",null

@@ -1,0 +1,5 @@
+query_id,object_kind,schema_name,object_name,object_exists,object_type,owning_extension
+02-dependent-objects,function,extensions,gen_random_uuid(),true,uuid,pgcrypto
+02-dependent-objects,table,auth,users,true,ordinary table,null
+02-dependent-objects,table,public,orders,true,ordinary table,null
+02-dependent-objects,table,public,profiles,true,ordinary table,null

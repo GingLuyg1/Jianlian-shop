@@ -1,0 +1,20 @@
+query_id,result_state,schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check
+09-policies,FOUND,public,legal_documents,public can read effective legal documents,PERMISSIVE,{public},SELECT,((status = 'published'::text) AND ((effective_at IS NULL) OR (effective_at <= now()))),null
+09-policies,FOUND,public,legal_documents,super admins can manage legal documents,PERMISSIVE,{public},ALL,"(EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))","(EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))"
+09-policies,FOUND,public,legal_documents,super admins can read legal documents,PERMISSIVE,{public},SELECT,"(EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",null
+09-policies,FOUND,public,order_agreement_acceptances,admins can read order agreement acceptances,PERMISSIVE,{public},SELECT,"(EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",null
+09-policies,FOUND,public,order_agreement_acceptances,deny direct agreement writes,PERMISSIVE,{public},INSERT,null,false
+09-policies,FOUND,public,order_agreement_acceptances,users can read own order agreement acceptances,PERMISSIVE,{public},SELECT,(user_id = auth.uid()),null
+09-policies,FOUND,public,order_evidence_events,admins can read order evidence events,PERMISSIVE,{public},SELECT,"(EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",null
+09-policies,FOUND,public,order_evidence_events,deny direct evidence writes,PERMISSIVE,{public},INSERT,null,false
+09-policies,FOUND,public,order_evidence_events,users can read own order evidence events,PERMISSIVE,{public},SELECT,(user_id = auth.uid()),null

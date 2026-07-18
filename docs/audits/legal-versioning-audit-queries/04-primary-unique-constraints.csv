@@ -1,0 +1,6 @@
+query_id,result_state,schema_name,table_name,constraint_name,constraint_type,constraint_definition,is_validated
+04-primary-unique-constraints,FOUND,public,legal_documents,legal_documents_pkey,PRIMARY KEY,PRIMARY KEY (id),true
+04-primary-unique-constraints,FOUND,public,legal_documents,legal_documents_document_type_version_key,UNIQUE,"UNIQUE (document_type, version)",true
+04-primary-unique-constraints,FOUND,public,order_agreement_acceptances,order_agreement_acceptances_pkey,PRIMARY KEY,PRIMARY KEY (id),true
+04-primary-unique-constraints,FOUND,public,order_agreement_acceptances,order_agreement_acceptances_order_id_document_type_key,UNIQUE,"UNIQUE (order_id, document_type)",true
+04-primary-unique-constraints,FOUND,public,order_evidence_events,order_evidence_events_pkey,PRIMARY KEY,PRIMARY KEY (id),true

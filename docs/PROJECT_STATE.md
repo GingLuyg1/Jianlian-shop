@@ -1,7 +1,7 @@
 # Jianlian Shop 当前项目状态
 
-更新日期：2026-07-18
-代码基线：`main` / `32b71313e72c0028df0d88db6257c0f1093d1d99`
+更新日期：2026-07-19
+代码基线：`main` / `f43c841d087960b91a8cf6b25c386551b64bb992`
 状态口径：代码事实来自仓库只读核对；正式库事实来自用户在目标项目人工执行只读审计、Migration 和 Postcheck 后提供的执行记录及 `docs/audits/postcheck-results/*.csv`。审计未覆盖的对象仍不得视为已确认。
 
 ## 项目架构
@@ -152,11 +152,51 @@
 - Dry-run 没有调用真实过期处理，未修改订单、库存或支付会话。
 - 由于没有候选，本阶段明确不执行真实 `limit=1`。
 
+## 正式库协议版本化只读审计（2026-07-18）
+
+证据来源：用户在正式项目 Jianlian-shop / `qvbovrvybirscaurwuov` 人工执行 14 个只读查询。用户给出的结果目录名为 `docs/audits/legal-versioning-audit-results/`，但本地实际 CSV 位于 `docs/audits/legal-versioning-audit-queries/`；01—14 文件齐全，本节仅以这些 CSV 为数据库事实。
+
+### 数据库实际查询确认
+
+- `public.legal_documents`、`public.order_agreement_acceptances`、`public.order_evidence_events` 均存在且为普通表，owner 均为 `postgres`，RLS 均已启用但未强制。
+- `orders`、`profiles`、`auth.users` 和 `extensions.gen_random_uuid()` 依赖均存在；UUID 函数由 `pgcrypto` 提供。
+- 三张表的 36 个基线字段、类型、默认值和可空性与 `20260701_legal_documents_order_evidence.sql` 一致。
+- 主键、`(document_type, version)`、`(order_id, document_type)` 唯一约束、6 个外键、3 个 CHECK、10 个索引均存在、有效且与仓库基线定义一致。
+- 未发现非内部触发器，也未发现名称或依赖指向协议/证据表的额外函数。
+- `anon`、`authenticated`、`service_role` 和 `postgres` 对三张表均有表级 CRUD 权限；因此创建草稿失败不是 relation grant 缺失，实际写入仍受 RLS 约束。
+- `legal_documents` 的公开读取 policy 仅放行已发布且已生效记录；管理员读取和管理 policy 均只接受 `profiles.id=auth.uid()` 且 `profiles.role='admin'`。
+- 当前正式库共有 5 条协议记录：`terms_of_service/refund_policy/digital_delivery_policy` 各 1 条 published，`privacy_policy/purchase_notice` 各 1 条 draft。CSV 没有 `refund_policy` draft；这与此前后台口头观察“退款政策另有 draft”不一致，应以正式审计聚合为准。
+- 已发布记录共 3 条，草稿共 2 条；`purchase_notice` 没有 published，和 `/api/legal/current` 只缺该类型的 HTTP 503 结果一致。
+
+### 根因判断与兼容性结论
+
+- 当前后台接口使用带用户会话的 anon-key Supabase client。后台认证允许有效 `admin_users` 记录或旧 `profiles.role='admin'`，但 `legal_documents` 管理 policy 只接受后者。
+- 后续 8 份正式 preflight 已确认：正式库只有 1 个 active `super_admin`，该管理员同时满足 `profiles.role='admin'`，且 `active_admin_users_without_profile_admin=0`。因此，虽然应用认证与旧 policy 的标准在设计上不完全一致，但“当前管理员不满足旧 policy 导致 RLS 拒绝”已被本次正式事实排除，暂不创建 policy Migration。
+- 正式库已存在 `purchase_notice / 2026.0718-01 / draft`。`legal_documents` 有 `(document_type, version)` 唯一约束，当前页面的 `create_draft` 只做 insert；如果再次提交该精确组合，数据库必然返回 `23505`。这是当前创建草稿失败的最高可信原因。
+- 当前 `/api/admin/legal` 的错误分类忽略 `error.code`，并把 message 中只要含 `legal_documents` 的普通错误一律映射成“协议版本表尚未初始化”。`23505` 的约束错误通常携带表/约束名，因而与页面现有误报完全吻合。
+- 发布功能是否存在独立故障仍无法确认：当前没有发布请求的原始 code/message。代码确有非事务两步更新且未检查第一步归档错误的结构风险，但不能据此宣称正式发布已失败。
+- `legal_documents.is_current`、`archived_at`、`archived_by` 三个增强 API 字段不存在。当前页面 `/api/admin/legal` 不依赖它们，所以它们不是本次失败原因；若未来启用 `/api/admin/settings/legal`，需另行设计字段、回填和约束 Migration。
+- 不应原样重放 `20260701_legal_documents_order_evidence.sql`：基线对象已经完整存在，原文件会重建相同且仍不兼容 `admin_users` 的 policy，不能修复根因，也不会补齐三个增强字段。
+- 绝对不得重放 `20260709_legal_documents_seed.sql`；它包含测试协议正文，会归档现有 published 并写入/覆盖测试版本。
+- 本地代码已完成错误分类与重复提交体验修复，不涉及数据库 policy Migration：`23505` 返回 HTTP 409，`42501` 返回 HTTP 403，`42P01/PGRST205` 返回 HTTP 503；`42703/PGRST204` 返回结构不兼容提示。按 `legal_documents`、schema cache 或普通表名宽泛判断缺表的逻辑已移除，其他数据库/PostgREST 错误不会向客户端泄漏内部信息。
+- `create_draft` 保持普通 insert；页面新增同步提交锁、重复 draft 刷新定位、draft 编辑和取消编辑。编辑调用现有 `update_draft`，服务端再次检查记录状态且不接受客户端修改记录 ID。
+- 发布/归档已加固：读取错误与不存在分开；旧 published 归档错误会阻止后续发布；发布和归档 update 带状态约束；archive 服务端拒绝非 published。缓存刷新失败不会覆盖已成功的数据库结果，只记录脱敏上下文。
+- 协议错误日志仅保留 action、数据库 code、约束摘要、脱敏文档 ID、document_type 和 version；不记录协议正文、完整请求 body、请求元数据、密钥或用户敏感信息。
+- 本地验证通过：`npm test` 134/134、`npm run typecheck`、`npm run build`。修复尚未 commit、push、部署或在正式环境验证。
+
+### 数据影响与回滚边界
+
+- 本轮结论不要求修改 policy、表结构或协议数据；现有 5 条记录和 3 published / 2 draft 聚合保持不变。
+- 错误码泄漏和快速重复提交已在本地修复；剩余主要风险是发布两步更新仍非事务，旧版本归档成功而新版本发布失败时可能出现部分成功。
+- 代码错误映射修复可通过回滚对应代码提交恢复；它不需要数据库回滚。发布事务化若未来需要，应作为独立数据库方案审查。
+
 ## 当前生产上线缺口
 
-1. 创建或等待一个明确的正式测试订单通过正常业务流程自然过期；不得通过 SQL 或直接数据库修改制造候选。
-2. 在候选出现后完成只读前置核对，并重新执行一次 `dry_run=true&limit=1`，确认脱敏摘要稳定且对应指定测试订单。
-3. 取得单独明确授权后，才执行一次真实 `limit=1` 受控验证。
-4. 验证订单状态、付款状态、过期时间、预留释放和库存恢复全部正确后，才评估安装 `pg_cron`、`pg_net` 并创建调度。
+1. 协议版本管理修复尚未 commit、push、部署或在正式环境验证；正式 `purchase_notice / 2026.0718-01` 测试草稿正文“1”不得发布。
+2. 完整事务化发布仍是后续独立任务；当前两步发布流程必须保留部分成功风险提示。
+3. 创建或等待一个明确的正式测试订单通过正常业务流程自然过期；不得通过 SQL 或直接数据库修改制造候选。
+4. 在候选出现后完成只读前置核对，并重新执行一次 `dry_run=true&limit=1`，确认脱敏摘要稳定且对应指定测试订单。
+5. 取得单独明确授权后，才执行一次真实 `limit=1` 受控验证。
+6. 验证订单状态、付款状态、过期时间、预留释放和库存恢复全部正确后，才评估安装 `pg_cron`、`pg_net` 并创建调度。
 
 真实 `limit=1` 是数据库写操作且不能依赖自动回滚；若候选身份、付款状态、链上会话或库存基线有任何不确定，必须停止。

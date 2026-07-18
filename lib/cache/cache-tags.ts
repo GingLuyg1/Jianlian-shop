@@ -27,10 +27,10 @@ function scopedTag(prefix: string, value: string) {
 function safeRevalidateTag(tag: string) {
   try {
     revalidateTag(tag);
-  } catch (error) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[Cache] revalidateTag failed", { tag, error: error instanceof Error ? error.message : "unknown" });
-    }
+    return true;
+  } catch {
+    console.warn("[Cache] revalidateTag failed", { tag });
+    return false;
   }
 }
 
@@ -69,5 +69,5 @@ export function revalidateSiteSettingsCache() {
 }
 
 export function revalidateLegalDocumentsCache() {
-  safeRevalidateTag(CACHE_TAGS.legalDocuments);
+  return safeRevalidateTag(CACHE_TAGS.legalDocuments);
 }

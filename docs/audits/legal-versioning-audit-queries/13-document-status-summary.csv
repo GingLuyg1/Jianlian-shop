@@ -1,0 +1,7 @@
+query_id,summary_level,document_type,status,record_count,effective_or_unscheduled_count,has_published_timestamp_count
+13-document-status-summary,TYPE_STATUS,digital_delivery_policy,published,1,1,1
+13-document-status-summary,TYPE_STATUS,privacy_policy,draft,1,1,0
+13-document-status-summary,TYPE_STATUS,purchase_notice,draft,1,1,0
+13-document-status-summary,TYPE_STATUS,refund_policy,published,1,1,1
+13-document-status-summary,TYPE_STATUS,terms_of_service,published,1,1,1
+13-document-status-summary,TOTAL,null,null,5,5,3

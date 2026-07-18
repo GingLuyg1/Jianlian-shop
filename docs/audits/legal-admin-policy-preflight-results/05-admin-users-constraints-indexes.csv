@@ -1,0 +1,11 @@
+query_id,result_state,object_kind,object_name,object_type,object_definition,is_primary,is_unique,is_valid,predicate
+05-admin-users-constraints-indexes,FOUND,CONSTRAINT,admin_users_created_by_fkey,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL,null,false,true,null
+05-admin-users-constraints-indexes,FOUND,CONSTRAINT,admin_users_level_check,CHECK,"CHECK (admin_level = ANY (ARRAY['admin'::text, 'super_admin'::text]))",null,false,true,null
+05-admin-users-constraints-indexes,FOUND,CONSTRAINT,admin_users_permissions_object_check,CHECK,CHECK (jsonb_typeof(permissions) = 'object'::text),null,false,true,null
+05-admin-users-constraints-indexes,FOUND,CONSTRAINT,admin_users_pkey,PRIMARY KEY,PRIMARY KEY (user_id),null,true,true,null
+05-admin-users-constraints-indexes,FOUND,CONSTRAINT,admin_users_reason_check,CHECK,CHECK (length(btrim(reason)) >= 1 AND length(btrim(reason)) <= 500),null,false,true,null
+05-admin-users-constraints-indexes,FOUND,CONSTRAINT,admin_users_status_check,CHECK,"CHECK (status = ANY (ARRAY['active'::text, 'disabled'::text]))",null,false,true,null
+05-admin-users-constraints-indexes,FOUND,CONSTRAINT,admin_users_updated_by_fkey,FOREIGN KEY,FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL,null,false,true,null
+05-admin-users-constraints-indexes,FOUND,CONSTRAINT,admin_users_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE RESTRICT,null,false,true,null
+05-admin-users-constraints-indexes,FOUND,INDEX,admin_users_level_status_idx,INDEX,"CREATE INDEX admin_users_level_status_idx ON public.admin_users USING btree (admin_level, status)",false,false,true,null
+05-admin-users-constraints-indexes,FOUND,INDEX,admin_users_pkey,INDEX,CREATE UNIQUE INDEX admin_users_pkey ON public.admin_users USING btree (user_id),true,true,true,null

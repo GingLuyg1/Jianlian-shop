@@ -1,0 +1,37 @@
+query_id,result_state,table_schema,table_name,ordinal_position,column_name,data_type,udt_schema,udt_name,is_nullable,column_default
+03-legal-columns,FOUND,public,legal_documents,1,id,uuid,pg_catalog,uuid,NO,gen_random_uuid()
+03-legal-columns,FOUND,public,legal_documents,2,document_type,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,legal_documents,3,version,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,legal_documents,4,title,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,legal_documents,5,content,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,legal_documents,6,content_hash,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,legal_documents,7,status,text,pg_catalog,text,NO,'draft'::text
+03-legal-columns,FOUND,public,legal_documents,8,effective_at,timestamp with time zone,pg_catalog,timestamptz,YES,null
+03-legal-columns,FOUND,public,legal_documents,9,published_at,timestamp with time zone,pg_catalog,timestamptz,YES,null
+03-legal-columns,FOUND,public,legal_documents,10,published_by,uuid,pg_catalog,uuid,YES,null
+03-legal-columns,FOUND,public,legal_documents,11,publish_reason,text,pg_catalog,text,YES,null
+03-legal-columns,FOUND,public,legal_documents,12,created_at,timestamp with time zone,pg_catalog,timestamptz,NO,now()
+03-legal-columns,FOUND,public,legal_documents,13,updated_at,timestamp with time zone,pg_catalog,timestamptz,NO,now()
+03-legal-columns,FOUND,public,order_agreement_acceptances,1,id,uuid,pg_catalog,uuid,NO,gen_random_uuid()
+03-legal-columns,FOUND,public,order_agreement_acceptances,2,order_id,uuid,pg_catalog,uuid,NO,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,3,user_id,uuid,pg_catalog,uuid,NO,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,4,document_type,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,5,document_version_id,uuid,pg_catalog,uuid,NO,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,6,document_version,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,7,content_hash,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,8,accepted_at,timestamp with time zone,pg_catalog,timestamptz,NO,now()
+03-legal-columns,FOUND,public,order_agreement_acceptances,9,acceptance_source,text,pg_catalog,text,NO,'checkout'::text
+03-legal-columns,FOUND,public,order_agreement_acceptances,10,ip_hash,text,pg_catalog,text,YES,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,11,user_agent_summary,text,pg_catalog,text,YES,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,12,request_id,text,pg_catalog,text,YES,null
+03-legal-columns,FOUND,public,order_agreement_acceptances,13,created_at,timestamp with time zone,pg_catalog,timestamptz,NO,now()
+03-legal-columns,FOUND,public,order_evidence_events,1,id,uuid,pg_catalog,uuid,NO,gen_random_uuid()
+03-legal-columns,FOUND,public,order_evidence_events,2,order_id,uuid,pg_catalog,uuid,NO,null
+03-legal-columns,FOUND,public,order_evidence_events,3,user_id,uuid,pg_catalog,uuid,YES,null
+03-legal-columns,FOUND,public,order_evidence_events,4,event_type,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,order_evidence_events,5,source,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,order_evidence_events,6,title,text,pg_catalog,text,NO,null
+03-legal-columns,FOUND,public,order_evidence_events,7,summary,text,pg_catalog,text,YES,null
+03-legal-columns,FOUND,public,order_evidence_events,8,request_id,text,pg_catalog,text,YES,null
+03-legal-columns,FOUND,public,order_evidence_events,9,metadata,jsonb,pg_catalog,jsonb,NO,'{}'::jsonb
+03-legal-columns,FOUND,public,order_evidence_events,10,created_at,timestamp with time zone,pg_catalog,timestamptz,NO,now()

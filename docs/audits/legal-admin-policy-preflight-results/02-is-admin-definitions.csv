@@ -1,0 +1,28 @@
+query_id,expected_signature,function_exists,schema_name,function_name,identity_arguments,function_definition
+02-is-admin-definitions,public.is_admin(),true,public,is_admin,,"CREATE OR REPLACE FUNCTION public.is_admin()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$ select public.is_admin(auth.uid()); $function$
+"
+02-is-admin-definitions,public.is_admin(uuid),true,public,is_admin,user_id uuid,"CREATE OR REPLACE FUNCTION public.is_admin(user_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select $1 is not null and (
+    exists (
+      select 1 from public.admin_users au
+      where au.user_id = $1
+        and au.status = 'active'
+        and au.admin_level in ('admin','super_admin')
+    )
+    or (
+      not exists (select 1 from public.admin_users au where au.user_id = $1)
+      and exists (select 1 from public.profiles p where p.id = $1 and p.role = 'admin')
+    )
+  );
+$function$
+"

@@ -1,0 +1,4 @@
+query_id,schema_name,table_name,object_exists,table_type,oid
+01-target-tables,public,legal_documents,true,ordinary table,27431
+01-target-tables,public,order_agreement_acceptances,true,ordinary table,27453
+01-target-tables,public,order_evidence_events,true,ordinary table,27484

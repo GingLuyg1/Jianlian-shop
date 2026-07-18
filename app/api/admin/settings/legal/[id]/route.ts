@@ -3,7 +3,8 @@
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { revalidateLegalDocumentsCache } from "@/lib/cache/cache-tags";
-import { getLegalDocumentById, hashLegalContent, normalizeLegalError } from "@/lib/legal/legal-documents";
+import { getLegalDocumentById, hashLegalContent } from "@/lib/legal/legal-documents";
+import { classifyLegalDatabaseError, getLegalConstraintSummary } from "@/lib/legal/legal-error.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,20 @@ function cleanText(value: unknown, max = 20000) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
+function documentIdSummary(value: string) {
+  return value.length > 14 ? `${value.slice(0, 8)}...${value.slice(-6)}` : "[redacted]";
+}
+
+function revalidateLegalCacheSafely(action: string, document: Record<string, unknown>) {
+  if (revalidateLegalDocumentsCache()) return;
+  console.warn("[LegalAdmin] cache revalidation failed", {
+    action,
+    document_id_summary: documentIdSummary(String(document.id ?? "")),
+    document_type: cleanText(document.document_type, 80) || null,
+    version: cleanText(document.version, 80) || null,
+  });
+}
+
 export async function GET(_request: Request, context: RouteContext) {
   const admin = await getServerAdminContext();
   if (!admin.ok) return json({ error: admin.message }, admin.status);
@@ -28,7 +43,8 @@ export async function GET(_request: Request, context: RouteContext) {
     if (!document) return json({ error: "协议版本不存在。" }, 404);
     return json({ document });
   } catch (error) {
-    return json({ error: normalizeLegalError(error) }, 500);
+    const classified = classifyLegalDatabaseError(error, "协议版本读取失败，请稍后重试。");
+    return json({ error: classified.message }, classified.status);
   }
 }
 
@@ -71,7 +87,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return json({ document: data });
   } catch (error) {
-    return json({ error: normalizeLegalError(error, "协议草稿保存失败。") }, 500);
+    const classified = classifyLegalDatabaseError(error, "协议草稿保存失败，请稍后重试。");
+    return json({ error: classified.message }, classified.status);
   }
 }
 
@@ -92,12 +109,14 @@ export async function POST(request: Request, context: RouteContext) {
       if (!reason) return json({ error: "发布原因不能为空。" }, 400);
       const effectiveAt = cleanText(body?.effective_at, 80) || new Date().toISOString();
 
-      await admin.supabase
+      // These remain two writes. A fully atomic publish requires a separately reviewed transaction RPC.
+      const { error: archivePreviousError } = await admin.supabase
         .from("legal_documents")
         .update({ is_current: false, status: "archived", archived_at: new Date().toISOString(), archived_by: admin.user.id })
         .eq("document_type", document.document_type)
         .eq("status", "published")
         .eq("is_current", true);
+      if (archivePreviousError) throw archivePreviousError;
 
       const { data, error } = await admin.supabase
         .from("legal_documents")
@@ -127,7 +146,7 @@ export async function POST(request: Request, context: RouteContext) {
         result: "success",
         afterSummary: { document_type: document.document_type, version: document.version, effective_at: effectiveAt, reason },
       });
-      revalidateLegalDocumentsCache();
+      revalidateLegalCacheSafely("publish", data as Record<string, unknown>);
       return json({ document: data });
     }
 
@@ -152,22 +171,19 @@ export async function POST(request: Request, context: RouteContext) {
         targetLabel: `${document.document_type} ${document.version}`,
         result: "success",
       });
-      revalidateLegalDocumentsCache();
+      revalidateLegalCacheSafely("archive", data as Record<string, unknown>);
       return json({ document: data });
     }
 
     return json({ error: "不支持的协议操作。" }, 400);
   } catch (error) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email ?? null },
+    const classified = classifyLegalDatabaseError(error, "协议操作失败，请稍后重试。");
+    console.warn("[LegalAdmin] request failed", {
       action: action || "legal_document_action",
-      module: "settings",
-      targetType: "legal_document",
-      targetId: context.params.id,
-      result: "failed",
-      errorMessage: normalizeLegalError(error),
+      database_error_code: classified.code,
+      constraint_summary: getLegalConstraintSummary(error),
+      document_id_summary: documentIdSummary(context.params.id),
     });
-    return json({ error: normalizeLegalError(error, "协议操作失败。") }, 500);
+    return json({ error: classified.message }, classified.status);
   }
 }

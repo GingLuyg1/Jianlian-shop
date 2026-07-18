@@ -1,0 +1,4 @@
+query_id,schema_name,table_name,table_exists,owner,rls_enabled,rls_forced
+08-rls-status,public,legal_documents,true,postgres,true,false
+08-rls-status,public,order_agreement_acceptances,true,postgres,true,false
+08-rls-status,public,order_evidence_events,true,postgres,true,false

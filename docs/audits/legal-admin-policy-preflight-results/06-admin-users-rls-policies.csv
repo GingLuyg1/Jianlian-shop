@@ -1,0 +1,4 @@
+query_id,row_kind,schema_name,table_name,policy_name,permissive,roles,command,using_expression,with_check_expression,table_exists,owner,rls_enabled,rls_forced
+06-admin-users-rls-policies,POLICY,public,admin_users,active admins can read own authorization,PERMISSIVE,{authenticated},SELECT,((user_id = auth.uid()) AND (status = 'active'::text)),null,true,null,null,null
+06-admin-users-rls-policies,POLICY,public,admin_users,super admins can read all authorizations,PERMISSIVE,{authenticated},SELECT,is_super_admin(),null,true,null,null,null
+06-admin-users-rls-policies,RLS_STATUS,public,admin_users,null,null,null,null,null,null,true,postgres,true,false

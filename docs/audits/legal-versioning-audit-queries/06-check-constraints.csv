@@ -1,0 +1,4 @@
+query_id,result_state,schema_name,table_name,constraint_name,constraint_definition,is_validated
+06-check-constraints,FOUND,public,legal_documents,legal_documents_document_type_check,"CHECK (document_type = ANY (ARRAY['terms_of_service'::text, 'privacy_policy'::text, 'refund_policy'::text, 'digital_delivery_policy'::text, 'purchase_notice'::text]))",true
+06-check-constraints,FOUND,public,legal_documents,legal_documents_status_check,"CHECK (status = ANY (ARRAY['draft'::text, 'published'::text, 'archived'::text]))",true
+06-check-constraints,FOUND,public,order_agreement_acceptances,order_agreement_acceptances_acceptance_source_check,"CHECK (acceptance_source = ANY (ARRAY['checkout'::text, 'payment'::text, 'admin_import'::text]))",true

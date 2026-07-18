@@ -3,6 +3,8 @@
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { classifyLegalDatabaseError } from "@/lib/legal/legal-error.mjs";
+
 export const LEGAL_DOCUMENT_TYPES = [
   "terms_of_service",
   "privacy_policy",
@@ -60,23 +62,7 @@ export function hashLegalContent(content: string) {
 }
 
 export function normalizeLegalError(error: unknown, fallback = "协议数据读取失败，请稍后重试。") {
-  const message =
-    typeof error === "string"
-      ? error
-      : error && typeof error === "object" && "message" in error
-        ? String((error as { message?: unknown }).message ?? "")
-        : "";
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? String((error as { code?: unknown }).code ?? "")
-      : "";
-
-  if (/legal_documents|order_agreement_acceptances|schema cache|Could not find|42P01|42703|PGRST/i.test(`${message} ${code}`)) {
-    return "协议版本数据表尚未初始化，请先在 Supabase 执行协议版本 migration。";
-  }
-  if (/duplicate key|unique/i.test(message)) return "同类协议已有当前生效版本，请刷新后重试。";
-  if (/permission|policy|forbidden|unauthorized/i.test(message)) return "没有权限执行该协议操作。";
-  return message || fallback;
+  return classifyLegalDatabaseError(error, fallback).message;
 }
 
 function normalizeDocument(row: Record<string, unknown>): LegalDocumentRecord {
@@ -116,13 +102,13 @@ export async function listLegalDocuments(
   if (options.status && options.status !== "all") query = query.eq("status", options.status);
 
   const { data, error } = await query;
-  if (error) throw new Error(normalizeLegalError(error));
+  if (error) throw error;
   return ((data ?? []) as Array<Record<string, unknown>>).map(normalizeDocument);
 }
 
 export async function getLegalDocumentById(supabase: SupabaseClient, id: string) {
   const { data, error } = await supabase.from("legal_documents").select("*").eq("id", id).maybeSingle();
-  if (error) throw new Error(normalizeLegalError(error));
+  if (error) throw error;
   return data ? normalizeDocument(data as Record<string, unknown>) : null;
 }
 
@@ -135,7 +121,7 @@ export async function getCurrentLegalDocuments(supabase: SupabaseClient) {
     .in("document_type", [...LEGAL_DOCUMENT_TYPES])
     .order("document_type", { ascending: true });
 
-  if (error) throw new Error(normalizeLegalError(error));
+  if (error) throw error;
   return ((data ?? []) as Array<Record<string, unknown>>).map(normalizeDocument);
 }
 

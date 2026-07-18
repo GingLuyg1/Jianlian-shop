@@ -1,0 +1,9 @@
+query_id,expected_signature,function_exists,role_name,has_execute
+03-is-admin-permissions,public.is_admin(),true,anon,false
+03-is-admin-permissions,public.is_admin(),true,authenticated,true
+03-is-admin-permissions,public.is_admin(),true,PUBLIC,false
+03-is-admin-permissions,public.is_admin(),true,service_role,true
+03-is-admin-permissions,public.is_admin(uuid),true,anon,false
+03-is-admin-permissions,public.is_admin(uuid),true,authenticated,true
+03-is-admin-permissions,public.is_admin(uuid),true,PUBLIC,false
+03-is-admin-permissions,public.is_admin(uuid),true,service_role,true

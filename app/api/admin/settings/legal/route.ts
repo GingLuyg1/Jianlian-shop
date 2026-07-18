@@ -2,7 +2,8 @@
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
-import { hashLegalContent, LEGAL_DOCUMENT_TYPES, listLegalDocuments, normalizeLegalError } from "@/lib/legal/legal-documents";
+import { hashLegalContent, LEGAL_DOCUMENT_TYPES, listLegalDocuments } from "@/lib/legal/legal-documents";
+import { classifyLegalDatabaseError, getLegalConstraintSummary } from "@/lib/legal/legal-error.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,8 @@ export async function GET(request: Request) {
     });
     return json({ documents });
   } catch (error) {
-    return json({ error: normalizeLegalError(error) }, 500);
+    const classified = classifyLegalDatabaseError(error, "协议列表读取失败，请稍后重试。");
+    return json({ error: classified.message }, classified.status);
   }
 }
 
@@ -78,15 +80,12 @@ export async function POST(request: Request) {
 
     return json({ document: data }, 201);
   } catch (error) {
-    await writeAdminAuditLog({
-      request,
-      admin: { id: admin.user.id, email: admin.user.email ?? null },
+    const classified = classifyLegalDatabaseError(error, "协议草稿创建失败，请稍后重试。");
+    console.warn("[LegalAdmin] request failed", {
       action: "create_legal_document_draft",
-      module: "settings",
-      targetType: "legal_document",
-      result: "failed",
-      errorMessage: normalizeLegalError(error),
+      database_error_code: classified.code,
+      constraint_summary: getLegalConstraintSummary(error),
     });
-    return json({ error: normalizeLegalError(error, "协议草稿创建失败。") }, 500);
+    return json({ error: classified.message }, classified.status);
   }
 }

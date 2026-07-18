@@ -1,0 +1,10 @@
+query_id,result_state,table_schema,table_name,ordinal_position,column_name,data_type,udt_schema,udt_name,is_nullable,column_default
+04-admin-users-columns,FOUND,public,admin_users,1,user_id,uuid,pg_catalog,uuid,NO,null
+04-admin-users-columns,FOUND,public,admin_users,2,admin_level,text,pg_catalog,text,NO,null
+04-admin-users-columns,FOUND,public,admin_users,3,status,text,pg_catalog,text,NO,'active'::text
+04-admin-users-columns,FOUND,public,admin_users,4,permissions,jsonb,pg_catalog,jsonb,NO,'{}'::jsonb
+04-admin-users-columns,FOUND,public,admin_users,5,created_by,uuid,pg_catalog,uuid,YES,null
+04-admin-users-columns,FOUND,public,admin_users,6,updated_by,uuid,pg_catalog,uuid,YES,null
+04-admin-users-columns,FOUND,public,admin_users,7,created_at,timestamp with time zone,pg_catalog,timestamptz,NO,now()
+04-admin-users-columns,FOUND,public,admin_users,8,updated_at,timestamp with time zone,pg_catalog,timestamptz,NO,now()
+04-admin-users-columns,FOUND,public,admin_users,9,reason,text,pg_catalog,text,NO,null

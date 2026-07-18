@@ -1,0 +1,5 @@
+query_id,metric,metric_count,masked_user_ids
+07-admin-authorization-summary,active_admin_users,1,a0dfaed2…575886
+07-admin-authorization-summary,active_admin_users_with_profile_admin,1,a0dfaed2…575886
+07-admin-authorization-summary,active_admin_users_without_profile_admin,0,NONE
+07-admin-authorization-summary,active_super_admins,1,a0dfaed2…575886

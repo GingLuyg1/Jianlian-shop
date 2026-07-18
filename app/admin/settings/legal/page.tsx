@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -43,20 +43,26 @@ export default function AdminLegalSettingsPage() {
   const [documentType, setDocumentType] = useState("all");
   const [form, setForm] = useState(EMPTY_FORM);
   const [selected, setSelected] = useState<LegalDocument | null>(null);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   const filteredDocuments = useMemo(() => documents, [documents]);
+
+  async function fetchDocuments(filters = { status, documentType }) {
+    const params = new URLSearchParams();
+    if (filters.status !== "all") params.set("status", filters.status);
+    if (filters.documentType !== "all") params.set("documentType", filters.documentType);
+    const response = await fetch(`/api/admin/legal?${params.toString()}`, { cache: "no-store" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error || "协议列表读取失败");
+    return (payload.documents ?? []) as LegalDocument[];
+  }
 
   async function loadDocuments() {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
-      if (status !== "all") params.set("status", status);
-      if (documentType !== "all") params.set("documentType", documentType);
-      const response = await fetch(`/api/admin/legal?${params.toString()}`, { cache: "no-store" });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.error || "协议列表读取失败");
-      setDocuments(payload.documents ?? []);
+      setDocuments(await fetchDocuments());
     } catch (err) {
       setError(err instanceof Error ? err.message : "协议列表读取失败");
     } finally {
@@ -68,7 +74,24 @@ export default function AdminLegalSettingsPage() {
     void loadDocuments();
   }, [status, documentType]);
 
-  async function postAction(body: Record<string, unknown>, successMessage: string) {
+  async function locateExistingDraft(targetType: string, targetVersion: string) {
+    const nextDocuments = await fetchDocuments({ status: "draft", documentType: targetType });
+    setStatus("draft");
+    setDocumentType(targetType);
+    setDocuments(nextDocuments);
+    const existing = nextDocuments.find(
+      (document) => document.status === "draft" && document.document_type === targetType && document.version === targetVersion
+    );
+    if (existing) setSelected(existing);
+  }
+
+  async function postAction(
+    body: Record<string, unknown>,
+    successMessage: string,
+    options: { duplicateDraft?: { documentType: string; version: string } } = {}
+  ) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSaving(true);
     try {
       const response = await fetch("/api/admin/legal", {
@@ -77,20 +100,54 @@ export default function AdminLegalSettingsPage() {
         body: JSON.stringify(body),
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.error || "操作失败");
+      if (!response.ok) {
+        if (response.status === 409 && options.duplicateDraft) {
+          await locateExistingDraft(options.duplicateDraft.documentType, options.duplicateDraft.version);
+        }
+        throw new Error(payload?.error || "操作失败");
+      }
       toast.success(successMessage);
+      setEditingDraftId(null);
       setForm(EMPTY_FORM);
       setSelected(payload.document ?? null);
       await loadDocuments();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作失败");
     } finally {
+      submittingRef.current = false;
       setSaving(false);
     }
   }
 
-  function createDraft() {
-    void postAction({ action: "create_draft", ...form }, "协议草稿已创建");
+  function saveDraft() {
+    if (editingDraftId) {
+      void postAction({ action: "update_draft", id: editingDraftId, ...form }, "协议草稿已更新");
+      return;
+    }
+    void postAction(
+      { action: "create_draft", ...form },
+      "协议草稿已创建",
+      { duplicateDraft: { documentType: form.documentType, version: form.version.trim() } }
+    );
+  }
+
+  function editDraft(document: LegalDocument) {
+    if (document.status !== "draft" || saving) return;
+    setEditingDraftId(document.id);
+    setForm({
+      documentType: document.document_type,
+      version: document.version,
+      title: document.title,
+      content: document.content,
+      effectiveAt: document.effective_at ?? "",
+    });
+    setSelected(null);
+  }
+
+  function cancelEditing() {
+    if (saving) return;
+    setEditingDraftId(null);
+    setForm(EMPTY_FORM);
   }
 
   function publishDocument(document: LegalDocument) {
@@ -122,16 +179,21 @@ export default function AdminLegalSettingsPage() {
 
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
         <Card className="min-h-0 overflow-hidden">
-          <CardHeader className="border-b px-4 py-3"><CardTitle className="text-base">创建草稿</CardTitle></CardHeader>
+          <CardHeader className="border-b px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-base">{editingDraftId ? "编辑草稿" : "创建草稿"}</CardTitle>
+              {editingDraftId ? <Button size="sm" variant="ghost" disabled={saving} onClick={cancelEditing}>取消编辑</Button> : null}
+            </div>
+          </CardHeader>
           <CardContent className="space-y-3 p-4">
-            <select className="h-10 w-full rounded-md border px-3 text-sm" value={form.documentType} onChange={(e) => setForm((v) => ({ ...v, documentType: e.target.value }))}>
+            <select className="h-10 w-full rounded-md border px-3 text-sm disabled:bg-slate-50" disabled={Boolean(editingDraftId) || saving} value={form.documentType} onChange={(e) => setForm((v) => ({ ...v, documentType: e.target.value }))}>
               {DOCUMENT_TYPES.map((type) => <option key={type} value={type}>{DOCUMENT_TYPE_LABELS[type]}</option>)}
             </select>
-            <Input placeholder="版本号，例如 2026.07.01" value={form.version} onChange={(e) => setForm((v) => ({ ...v, version: e.target.value }))} />
-            <Input placeholder="协议标题" value={form.title} onChange={(e) => setForm((v) => ({ ...v, title: e.target.value }))} />
-            <Input placeholder="生效时间，可选：2026-07-01T00:00:00+08:00" value={form.effectiveAt} onChange={(e) => setForm((v) => ({ ...v, effectiveAt: e.target.value }))} />
-            <textarea className="h-72 w-full resize-none rounded-md border px-3 py-2 text-sm" placeholder="协议正文" value={form.content} onChange={(e) => setForm((v) => ({ ...v, content: e.target.value }))} />
-            <Button className="w-full" disabled={saving} onClick={createDraft}>{saving ? "保存中..." : "保存草稿"}</Button>
+            <Input disabled={Boolean(editingDraftId) || saving} placeholder="版本号，例如 2026.07.01" value={form.version} onChange={(e) => setForm((v) => ({ ...v, version: e.target.value }))} />
+            <Input disabled={saving} placeholder="协议标题" value={form.title} onChange={(e) => setForm((v) => ({ ...v, title: e.target.value }))} />
+            <Input disabled={saving} placeholder="生效时间，可选：2026-07-01T00:00:00+08:00" value={form.effectiveAt} onChange={(e) => setForm((v) => ({ ...v, effectiveAt: e.target.value }))} />
+            <textarea disabled={saving} className="h-72 w-full resize-none rounded-md border px-3 py-2 text-sm disabled:bg-slate-50" placeholder="协议正文" value={form.content} onChange={(e) => setForm((v) => ({ ...v, content: e.target.value }))} />
+            <Button className="w-full" disabled={saving} onClick={saveDraft}>{saving ? "保存中..." : editingDraftId ? "保存草稿修改" : "保存草稿"}</Button>
           </CardContent>
         </Card>
 
@@ -167,9 +229,10 @@ export default function AdminLegalSettingsPage() {
                       <div className="mt-1 truncate font-mono text-xs text-slate-400">{doc.content_hash}</div>
                     </button>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setSelected(doc)}>预览</Button>
-                      {doc.status === "draft" ? <Button size="sm" onClick={() => publishDocument(doc)}>发布</Button> : null}
-                      {doc.status === "published" ? <Button size="sm" variant="outline" onClick={() => archiveDocument(doc)}>归档</Button> : null}
+                      <Button size="sm" variant="outline" disabled={saving} onClick={() => setSelected(doc)}>预览</Button>
+                      {doc.status === "draft" ? <Button size="sm" variant="outline" disabled={saving} onClick={() => editDraft(doc)}>编辑</Button> : null}
+                      {doc.status === "draft" ? <Button size="sm" disabled={saving} onClick={() => publishDocument(doc)}>发布</Button> : null}
+                      {doc.status === "published" ? <Button size="sm" variant="outline" disabled={saving} onClick={() => archiveDocument(doc)}>归档</Button> : null}
                     </div>
                   </div>
                 ))}

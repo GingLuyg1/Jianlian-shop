@@ -137,3 +137,56 @@
 - 下一阶段方案：创建或等待一个明确正式测试订单通过正常流程自然过期；完成状态、付款、链上会话和库存基线只读核对；重新 dry-run `limit=1`；再单独授权一次真实 `limit=1`；验证通过后才进入 `pg_cron + pg_net`。
 - 修改：`docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md`、`docs/runbooks/production-order-expiration-dry-run.md`。
 - 未执行：任何 API、SQL、RPC、Migration、订单创建/修改、数据库修改、真实过期、扩展安装、Cron、环境变量修改、部署或 push。
+
+---
+
+## 2026-07-18 — 正式库协议版本化只读审计结果分析
+
+- 目标：分析正式项目 Jianlian-shop / `qvbovrvybirscaurwuov` 的 14 份协议版本化只读审计 CSV，判断草稿/发布失败根因和最小修复范围。
+- 证据路径：用户给出的 `docs/audits/legal-versioning-audit-results/` 在本地不存在；完整的 01—14 CSV 实际位于 `docs/audits/legal-versioning-audit-queries/`，本轮未移动或修改 CSV。
+- 结构结论：三张目标表及外部依赖均存在；36 个基线字段、默认值、主外键、唯一约束、CHECK、10 个索引和 9 条 RLS policy 与 `20260701` 基线一致；未发现相关触发器或额外函数。
+- 权限结论：三表对 anon/authenticated/service_role/postgres 有表级权限，RLS 均启用。`legal_documents` 管理 policy 只接受 `profiles.role='admin'`，而应用后台认证兼容 active `admin_users`，标准不一致。
+- 根因判断：管理员 policy 与应用认证标准不一致是已确认兼容缺口，也是保存与发布共同失败的最可能原因；API 的宽泛错误归一化会将该类错误误报为未初始化。CSV 未包含当前账号授权归属或原始 PostgreSQL 错误，因此 RLS 直接拒绝仍需补充只读确认。
+- 排除项：基线字段/默认值漂移、表级权限缺失、缺表和唯一约束不是保存与发布共同失败的原因。重复版本仍可能单独触发唯一约束，但不能解释发布失败。
+- 数据汇总：正式库 5 条记录；published 为 terms/refund/digital delivery，draft 为 privacy/purchase notice。审计未发现 refund draft，与此前后台口头观察不一致。
+- 契约缺口：`is_current`、`archived_at`、`archived_by` 不存在，但当前页面与 `/api/admin/legal` 不依赖这些字段，不是当前故障原因。
+- Migration 决策：不重放 `20260701`；绝不重放 `20260709` seed。建议在补充只读核验正式 `public.is_admin()` 后，新建 policy-only 最小兼容性 Migration，使两条管理员 policy 与 canonical 管理员标准一致。
+- 数据保护：建议修复不触碰表结构或协议数据，现有 published/draft 应保持 3/2；回滚仅恢复当前 policy 定义，不做数据回滚。
+- 修改：更新 `docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md`。
+- 未执行：任何 SQL、RPC、Migration、API、数据库修改、协议创建/发布/归档、业务代码修改、环境变量修改、部署、测试、commit 或 push。
+
+---
+
+## 2026-07-18 — 协议管理员 Preflight 结论修正与错误映射代码审计
+
+- 目标：根据用户提供的 8 份正式 preflight 结论，纠正此前 RLS 根因判断，并只读审计当前创建、发布、归档、前端请求和错误归一化实现。
+- 正式事实：`public.is_admin()` / `public.is_admin(uuid)` 均存在，owner=`postgres`、`SECURITY DEFINER`、`search_path=public`；`authenticated/service_role` 有 EXECUTE，`anon/PUBLIC` 无 EXECUTE。
+- 身份核验：正式库只有 1 个 active `super_admin`，该管理员同时满足 `profiles.role='admin'`，`active_admin_users_without_profile_admin=0`。旧 `legal_documents` 管理 policy 对当前管理员有效，故“当前管理员身份标准不一致导致 RLS 拒绝”已排除，暂不创建 policy Migration。
+- 重复冲突：正式库已存在 `purchase_notice / 2026.0718-01 / draft`；创建接口只做 insert，`(document_type,version)` 唯一约束会对相同组合返回 `23505`。这是创建草稿失败的最高可信原因。
+- 误报原因：`app/api/admin/legal/route.ts` 的 `legalError()` 忽略 `error.code`，只要 message 包含 `legal_documents` 等宽泛文本就返回未初始化提示；`lib/legal/legal-documents.ts` 的共享 normalizer 也把表名、`42703` 和所有 `PGRST*` 放在重复/权限判断之前。相关管理路由 catch 均固定返回 HTTP 500。
+- 创建路径：当前页面 POST `/api/admin/legal`、action=`create_draft`；存在 `update_draft` 后端 action，但页面没有编辑入口。创建成功会清空表单并刷新；失败会保留输入。按钮依赖 React `saving` 状态禁用，没有同步锁，快速双击仍有并发窗口。
+- 发布路径：当前页面 POST 同一路由、action=`publish`；先读取 draft，再归档同类型 published，最后发布目标 draft、写审计并刷新缓存。两次 update 非事务，第一步错误未检查；这是结构风险。没有原始发布错误时，不能认定正式发布功能已独立故障。
+- 审计日志：协议路由调用的是不会抛出的 `writeAdminAuditLog()`，其失败只返回 `{ok:false}`；所以日志写入失败不会把已成功主操作误判为失败。现有摘要 sanitizer 会按 key 脱敏 `content` 等字段。
+- 最小修复设计：代码按 `error.code` 优先分类；`23505`→409 和“该协议类型和版本号已存在，请编辑现有草稿或更换版本号”，`42501`→403，仅 `42P01/PGRST205`→503 未初始化/不可用；其他结构/PostgREST 错误使用独立安全提示。移除按表名宽泛判断，增加同步提交锁与已有草稿跳转/编辑入口，保留不含正文和敏感信息的安全日志。
+- 发布风险后续：至少检查第一步归档错误；完整原子性需要单独设计数据库事务/RPC，仅在取得原始发布错误和新授权后评估，不混入当前错误提示修复。
+- 修改：仅更新 `docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md`。
+- 未执行：任何 SQL、RPC、Migration、API、数据库/协议修改、业务代码修改、环境变量修改、部署、测试、commit 或 push。
+
+---
+
+## 2026-07-19 — 协议错误分类、重复草稿与管理流程加固
+
+- 目标：在不操作数据库或生产环境的前提下，修复重复版本 `23505` 被误报为缺表的问题，补齐 draft 编辑体验，并加固现有发布/归档流程。
+- 正式证据沿用：三张协议/证据表完整；当前管理员同时满足 active `admin_users` 与 `profiles.role='admin'`；正式库已有 `purchase_notice / 2026.0718-01 / draft`。因此不创建 policy Migration，不重放 `20260701/20260709`。
+- 错误分类：新增共享 code-first 分类器；`23505`→HTTP 409 和指定重复版本提示，`42501`→403，`42P01/PGRST205`→503，`42703/PGRST204`→结构不兼容，其他错误使用不泄漏内部信息的通用提示。删除按表名/schema-cache 文本宽泛判断缺表的逻辑。
+- 原始错误：协议查询 helper 改为直接抛出 Supabase 原始错误对象，避免提前包装成仅含 message 的 `Error` 丢失 code。
+- 创建体验：保留普通 insert，未使用 upsert；增加 `useRef` 同步锁和请求中禁用。`23505` 后自动查询对应类型的 draft、刷新筛选列表并选中精确版本。
+- 编辑体验：draft 列表增加“编辑”和“取消编辑”；载入类型、版本、标题、正文、生效时间，保存调用现有 `update_draft`。类型/版本在编辑模式不可修改，ID 只来自选中记录，服务端读取并再次约束 `status=draft`。
+- 发布加固：读取错误不再误当 404；旧 published 归档错误会立即抛出并停止目标发布；目标 update 再次约束 draft。两次写仍非事务，完整原子化需要后续独立 RPC/Migration。
+- 归档加固：服务端先读取目标并只允许 published，最终 update 同样约束 published，不再只依赖前端按钮可见性。
+- 缓存与日志：缓存刷新 helper 返回结果并吞吐异常；失败只安全记录 action、脱敏文档 ID、类型和版本，不改变成功响应。协议数据库错误日志只记录 action、code、约束摘要、脱敏 ID、类型和版本，不记录正文、完整请求、请求元数据、密钥或用户敏感信息。
+- 测试：新增分类器单测和协议管理源契约回归测试；`npm test` 通过 134/134，`npm run typecheck` 通过。
+- 构建：`npm run build` 通过；仅出现仓库既有 Supabase dynamic dependency 与若干页面 CSR deopt 警告。
+- 修改范围：协议管理页面与三组相关管理 API、共享协议错误/查询工具、缓存刷新返回值、测试脚本与两份新测试，以及三份项目文档。
+- 正式边界：修复尚未 commit、push、部署或正式验证；正文为“1”的 `purchase_notice` 草稿仍禁止发布。
+- 未执行：任何 SQL、RPC、Migration、生产 API、数据库/协议修改、环境变量修改、部署、commit 或 push；未删除或修改审计证据。

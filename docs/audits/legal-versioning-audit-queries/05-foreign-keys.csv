@@ -1,0 +1,7 @@
+query_id,result_state,schema_name,table_name,constraint_name,constraint_definition,update_rule,delete_rule,is_validated
+05-foreign-keys,FOUND,public,legal_documents,legal_documents_published_by_fkey,FOREIGN KEY (published_by) REFERENCES auth.users(id) ON DELETE SET NULL,NO ACTION,SET NULL,true
+05-foreign-keys,FOUND,public,order_agreement_acceptances,order_agreement_acceptances_document_version_id_fkey,FOREIGN KEY (document_version_id) REFERENCES legal_documents(id) ON DELETE RESTRICT,NO ACTION,RESTRICT,true
+05-foreign-keys,FOUND,public,order_agreement_acceptances,order_agreement_acceptances_order_id_fkey,FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,NO ACTION,CASCADE,true
+05-foreign-keys,FOUND,public,order_agreement_acceptances,order_agreement_acceptances_user_id_fkey,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,NO ACTION,CASCADE,true
+05-foreign-keys,FOUND,public,order_evidence_events,order_evidence_events_order_id_fkey,FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,NO ACTION,CASCADE,true
+05-foreign-keys,FOUND,public,order_evidence_events,order_evidence_events_user_id_fkey,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL,NO ACTION,SET NULL,true

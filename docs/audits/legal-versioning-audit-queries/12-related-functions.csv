@@ -1,0 +1,2 @@
+query_id,result_state,schema_name,function_name,oid,identity_arguments,result_type,owner,security_definer,volatility,parallel_safety,proconfig,proacl,function_definition,public_execute,anon_execute,authenticated_execute,service_role_execute
+12-related-functions,NO_ROWS,null,null,null,null,null,null,null,null,null,null,null,null,false,false,false,false

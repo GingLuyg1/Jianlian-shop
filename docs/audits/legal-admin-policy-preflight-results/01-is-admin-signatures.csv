@@ -1,0 +1,3 @@
+query_id,expected_signature,function_exists,schema_name,function_name,oid,identity_arguments,result_type,owner,language,security_definer,search_path_setting,proconfig,volatility,parallel_safety
+01-is-admin-signatures,public.is_admin(),true,public,is_admin,25502,,boolean,postgres,sql,true,search_path=public,"[""search_path=public""]",STABLE,UNSAFE
+01-is-admin-signatures,public.is_admin(uuid),true,public,is_admin,17581,user_id uuid,boolean,postgres,sql,true,search_path=public,"[""search_path=public""]",STABLE,UNSAFE
