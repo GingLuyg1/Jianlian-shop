@@ -2,6 +2,19 @@
 
 本手册根据当前仓库代码固定正式 dry-run 的请求和响应契约。它不授权调用 API，也不包含任何真实 secret、正式域名或环境变量值。
 
+## 正式执行结果（已通过）
+
+- 执行主体：用户人工执行。
+- 正式项目：Jianlian-shop / `qvbovrvybirscaurwuov`。
+- 正式站：`https://jianlian-shop.vercel.app`。
+- 请求：`GET /api/internal/orders/expire?dry_run=true&limit=10`。
+- 结果：HTTP 200、`success=true`、`dry_run=true`、`candidate_count=0`、`candidates=[]`。
+- 已确认正式 `CRON_SECRET`、Supabase URL、管理员客户端和列表 RPC 链路正常；未记录任何变量值。
+- 已确认 dry-run 未修改订单、库存或支付会话。
+- 因没有候选，本次执行到此停止，没有执行真实 `limit=1`。
+
+下一阶段受控验证方案记录在 `docs/CURRENT_TASK.md`。必须先创建或等待一个明确测试订单自然过期，并重新取得 dry-run 与真实 `limit=1` 的独立授权。
+
 ## 操作边界
 
 - 只允许在获得单独明确授权后执行 dry-run。

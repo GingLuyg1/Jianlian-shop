@@ -1,78 +1,85 @@
-# 当前任务：正式订单过期 API dry-run 准备
+# 当前任务：等待正式候选并准备 limit=1 受控验证
 
 更新日期：2026-07-18
-目标：在正式列表 RPC 已部署并通过 Postcheck 的基础上，准备受控 dry-run；本轮不修改环境变量、不调用 API，也不进入真实过期或调度。
+目标：正式 dry-run 已通过但没有候选；暂不执行真实过期，等待一个明确的正式测试订单自然过期后，再单独授权 `limit=1`。
 
 ## 已完成基线
 
-- 正式项目：Jianlian-shop / `qvbovrvybirscaurwuov`，`main / PRODUCTION`。
-- 用户已人工执行 `20260717_order_expiration_list_rpc_compatibility.sql`；执行前 SHA-256 为 `7A3BBF6397F6A51DA56C8C9158077CCEE120AA9F152AEBE0E1D3766866041519`，SQL Editor 返回 Success。
-- Postcheck 已确认 `public.list_expirable_unpaid_orders(integer)` 存在，返回 `TABLE(order_id uuid)`，owner 为 `postgres`，使用 `plpgsql`、`SECURITY DEFINER` 与 `search_path=public`。
-- 完整函数定义与批准的 Migration 一致；`service_role` 有 EXECUTE，`anon`、`authenticated`、`PUBLIC` 无 EXECUTE。
-- 三份 Postcheck 证据已整理到 `docs/audits/postcheck-results/`。
-- 人工执行规范：`docs/runbooks/production-order-expiration-dry-run.md`。
+- 正式项目：Jianlian-shop / `qvbovrvybirscaurwuov`。
+- 正式站：`https://jianlian-shop.vercel.app`。
+- `20260717_order_expiration_list_rpc_compatibility.sql` 已人工执行，Postcheck 已通过。
+- `CRON_SECRET`、`NEXT_PUBLIC_SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和列表 RPC 的正式运行链路已验证正常。
+- 用户已人工执行 `GET /api/internal/orders/expire?dry_run=true&limit=10`：HTTP 200、`success=true`、`dry_run=true`、`candidate_count=0`、`candidates=[]`。
+- Dry-run 未修改订单、库存或支付会话。
 
 ## 下一阶段
 
-1. 正式环境 `CRON_SECRET` 准备。
-2. 正式 API dry-run。
-3. 根据候选结果选择 `limit=1` 验证。
-4. 验证成功后再设计 `pg_cron + pg_net` 调度。
+1. 暂不执行真实 `limit=1`。
+2. 创建或等待一个明确的正式测试订单自然过期。
+3. 候选通过前置核对后，再单独授权一次真实 `limit=1`。
+4. `limit=1` 验证通过后，才安装 `pg_cron` / `pg_net` 并创建调度。
 
-## Dry-run 执行准备方案
+## 正式 limit=1 受控验证方案
 
-### 前置条件
+### 1. 准备指定测试订单
 
-- 人工确认正式站点基准 URL，不使用 Preview、测试或本地地址。
-- 在正式运行环境准备独立、高强度的 `CRON_SECRET`，仅配置于服务端；本轮不创建、读取或修改其值。
-- 确认正式部署已加载该配置，并具备现有 Supabase service-role 服务端配置；不得把任何值复制到文档或执行记录。
-- dry-run 需要新的明确授权，并应避开短时间重复请求。当前 `internal_task` 限流为每 5 分钟最多 3 次。
+- 订单只能通过正式站正常业务流程创建；本方案不授权创建订单，也不允许通过 SQL、RPC 或直接数据库写入制造候选。
+- 明确标记该订单用于受控验证，保存脱敏订单标识和商品/库存基线，不记录用户隐私、完整地址、TxHash 或密钥。
+- 不进行真实付款，不提交 TxHash，不触发人工审核、晚到账或其他支付处理。
+- 等待 `payment_expires_at` 自然到期，不人工改时间或状态。
 
-### 推荐请求
+### 2. 到期后只读前置核对
 
-```text
-GET https://<正式站点域名>/api/internal/orders/expire?dry_run=true&limit=10
-Authorization: Bearer <CRON_SECRET>
-Accept: application/json
-```
+必须确认：
 
-- URL 路径固定为 `/api/internal/orders/expire`；正式站点域名仍需人工确认。
-- `dry_run=true` 必须显式提供。
-- 建议首次显式使用 `limit=10`；dry-run 默认 10、最小 1、最大 50。
-- 也支持 POST JSON `{"dry_run":true,"limit":10}`，但首次人工验证优先使用参数更直观的 GET。
-- 代码也接受 `x-internal-job-secret: <CRON_SECRET>`，但正式方案优先统一采用 Bearer。
+- 订单仍为 `status=pending_payment`、`payment_status=unpaid`。
+- `reservation_released_at is null`，且到期时间已小于等于当前时间。
+- 不存在应阻止自动过期的链上支付会话状态。
+- 如果存在 `submitted` 会话，只有 `failure_reason` 非空时才允许继续。
+- 订单没有付款、交付、退款、人工审核或其他并发处理迹象。
+- 已保存可核对的库存基线，能够判断释放是否准确且只发生一次。
 
-### 预期响应
+任一条件不明确即停止。
 
-成功时应为 HTTP 200，结构如下：
+### 3. 紧邻真实验证的 dry-run
 
-```json
-{
-  "success": true,
-  "requestId": "<request-id>",
-  "dry_run": true,
-  "candidate_count": 1,
-  "candidates": [
-    { "order_id_summary": "<脱敏订单 UUID 摘要>" }
-  ]
-}
-```
+- 在新的明确授权下执行 `dry_run=true&limit=1`。
+- 必须返回 HTTP 200、`success=true`、`dry_run=true`、`candidate_count=1`。
+- 返回的 `order_id_summary` 必须与指定测试订单的脱敏摘要一致。
+- 如果候选为 0、摘要不一致、候选发生变化或响应异常，停止，不执行真实请求。
 
-- `candidate_count` 应与 `candidates` 数量一致且不超过请求 limit。
-- 响应不得包含完整订单 UUID、密钥、地址或环境变量值。
-- dry-run 只读取列表 RPC，不调用 `expire_unpaid_order`，订单、支付会话和库存都不应变化。
+### 4. 单独授权真实 limit=1
 
-### 后续判断
+- 真实请求是写操作，必须在 dry-run 结果确认后再次取得单独明确授权。
+- 只允许执行一次，参数固定为 `limit=1`；不得扩大批次、重复调用或创建调度。
+- API 会在调用时重新选择最早候选，不能按订单 ID 定向处理，因此 dry-run 与真实调用之间的时间窗口应尽可能短。
 
-- `candidate_count=0`：记录 dry-run 成功但无候选，停止，不执行 `limit=1`。
-- `candidate_count>0`：只记录脱敏摘要；先对候选规则和正式环境状态做独立复核，再申请真实 `limit=1` 授权。
-- 非 dry-run 的 `limit=1` 不能指定 dry-run 中某个摘要，而是重新选择调用时最早的候选。候选集合可能在两次请求之间变化，因此真实调用前应再次 dry-run `limit=1` 并比较摘要；任何变化都应暂停复核。
+### 5. 成功判定与只读复核
 
-## 风险与停止条件
+预期批处理响应：
 
-- 正式域名、项目或运行环境无法明确确认时停止。
-- `CRON_SECRET` 尚未配置、来源不明、疑似泄露，或部署尚未加载时停止。
-- HTTP 401 表示认证失败；HTTP 503 可能表示任务密钥未配置或列表 RPC 调用不可用；其他 HTTP 5xx 可能表示服务端数据库配置或运行错误；HTTP 429 表示触发限流。任何非 200 都停止，不通过重复请求绕过。
-- HTTP 200 但 `success` 或 `dry_run` 不为 true、缺少 `requestId`、响应结构不符、出现完整敏感标识或候选数异常时停止。
-- 发现订单、支付会话或库存发生任何变化时立即停止并保留证据。
-- dry-run 成功不授权 `limit=1`、Cron、扩展安装、环境变量变更或部署；这些步骤必须分别获得明确授权。
+- `processed=1`
+- `skipped=0`
+- `failed=0`
+- 唯一结果 `ok=true`、`code=EXPIRED`
+
+随后只读核对：
+
+- 订单变为 `expired/failed`。
+- `expired_at` 已写入。
+- `reservation_released_at` 已写入。
+- 普通、SKU 或数字库存按订单实际类型准确恢复。
+- 不存在重复释放、负库存、额外订单变化或异常支付会话更新。
+
+### 6. 停止与后续边界
+
+- 任何认证、HTTP、候选、状态、支付会话、库存或响应异常都立即停止，不重试、不扩大批次。
+- 真实过期没有自动安全回滚；异常时保留证据并进入人工事件处理，不直接反向修改数据库。
+- `limit=1` 成功只证明单次受控场景；扩展安装和调度设计仍需新的独立方案与授权。
+- 只有上述验证全部通过，才进入 `pg_cron + pg_net` 的安装、Secret 保存、频率、告警、停用和回滚设计。
+
+## 当前禁止事项
+
+- 当前没有候选，不执行真实 `limit=1`。
+- 不调用 API，不创建或修改订单，不执行 SQL/RPC/Migration。
+- 不安装扩展、不创建 Cron、不修改环境变量、不部署、不 push。

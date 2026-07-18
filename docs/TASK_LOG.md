@@ -120,3 +120,20 @@
 - 错误：401 返回 `error`；认证配置缺失的 503 返回 `error`；列表 RPC 不可用的 503 返回 `success/requestId/dry_run/readiness_code/error_code/error`；429 返回 `error/code/retryAfter` 及限流响应头。
 - 创建或修改：新增 `docs/runbooks/production-order-expiration-dry-run.md`，更新 `docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md` 与正式列表 RPC 上线手册。
 - 未执行：任何 SQL、RPC、Migration、API、数据库或环境变量修改、真实订单过期、部署、扩展安装、Cron 或 push。
+
+---
+
+## 2026-07-18 — 正式订单过期 dry-run 通过
+
+- 目标：记录用户人工完成的正式 dry-run 结果，并准备下一阶段 `limit=1` 受控验证方案。
+- 操作边界：只更新项目状态、当前任务、任务日志和 dry-run 手册；本轮不调用 API，不执行 SQL/RPC/Migration，不创建或修改订单，不改环境变量，不安装扩展，不创建 Cron，不部署、不 push。
+- 开始基线：`main...origin/main [ahead 3]`；工作区干净，HEAD 为 `32b71313e72c0028df0d88db6257c0f1093d1d99`。
+- 正式目标：Jianlian-shop / `qvbovrvybirscaurwuov`；正式站 `https://jianlian-shop.vercel.app`。
+- 用户执行请求：`GET /api/internal/orders/expire?dry_run=true&limit=10`。
+- 实际结果：HTTP 200、`success=true`、`dry_run=true`、`candidate_count=0`、`candidates=[]`。
+- 配置结论：`CRON_SECRET`、`NEXT_PUBLIC_SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `public.list_expirable_unpaid_orders(integer)` 的正式链路正常。
+- 数据安全：dry-run 未修改订单、库存或支付会话；执行当时不存在正式候选订单。
+- 决策：由于 `candidate_count=0`，不执行真实 `limit=1`。
+- 下一阶段方案：创建或等待一个明确正式测试订单通过正常流程自然过期；完成状态、付款、链上会话和库存基线只读核对；重新 dry-run `limit=1`；再单独授权一次真实 `limit=1`；验证通过后才进入 `pg_cron + pg_net`。
+- 修改：`docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md`、`docs/runbooks/production-order-expiration-dry-run.md`。
+- 未执行：任何 API、SQL、RPC、Migration、订单创建/修改、数据库修改、真实过期、扩展安装、Cron、环境变量修改、部署或 push。

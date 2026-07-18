@@ -1,7 +1,7 @@
 # Jianlian Shop 当前项目状态
 
 更新日期：2026-07-18
-代码基线：`main` / `5a3eb2aa36b143b9c158a0f5f4b3135adc053027`
+代码基线：`main` / `32b71313e72c0028df0d88db6257c0f1093d1d99`
 状态口径：代码事实来自仓库只读核对；正式库事实来自用户在目标项目人工执行只读审计、Migration 和 Postcheck 后提供的执行记录及 `docs/audits/postcheck-results/*.csv`。审计未覆盖的对象仍不得视为已确认。
 
 ## 项目架构
@@ -82,7 +82,7 @@
 
 - `20260717` 候选逻辑要求 `pending_payment`、严格 `unpaid`、`reservation_released_at is null`，并且 `coalesce(payment_expires_at, created_at + 30 minutes) <= now()`。
 - 该定义会阻止 `confirming`、`verified`、`completing`、`manual_review`、`underpaid`、`overpaid`、`paid`、`payment_failed` 自动过期；`submitted` 且 `failure_reason` 为空也阻止过期，`submitted` 且失败原因非空则允许继续候选。
-- Postcheck 函数定义已确认上述逻辑部署到正式库；Postcheck 不读取业务数据，因此仍没有确认正式库实际候选数量或任一订单是否应被过期。
+- Postcheck 函数定义已确认上述逻辑部署到正式库；后续正式 dry-run 返回 `candidate_count=0`，确认执行当时没有符合规则的正式候选订单。
 
 ### 已识别的实现差异
 
@@ -141,15 +141,22 @@
 - 权限符合 service-role-only：`service_role` 有 EXECUTE；`anon`、`authenticated`、`PUBLIC` 均无 EXECUTE。
 - Postcheck 已通过，最小 Migration 阶段完成。回滚 SQL 仍只作为紧急且单独授权的方案保留，不应因成功上线而执行。
 
+## 正式环境 dry-run（已通过）
+
+- 执行主体：用户人工执行。
+- 正式项目：Jianlian-shop / `qvbovrvybirscaurwuov`。
+- 正式站：`https://jianlian-shop.vercel.app`。
+- 请求：`GET /api/internal/orders/expire?dry_run=true&limit=10`。
+- 响应：HTTP 200，`success=true`、`dry_run=true`、`candidate_count=0`、`candidates=[]`。
+- 已确认 `CRON_SECRET`、`NEXT_PUBLIC_SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `public.list_expirable_unpaid_orders(integer)` 的正式链路正常。
+- Dry-run 没有调用真实过期处理，未修改订单、库存或支付会话。
+- 由于没有候选，本阶段明确不执行真实 `limit=1`。
+
 ## 当前生产上线缺口
 
-下一阶段只包括：准备正式环境 `CRON_SECRET`、执行正式 API dry-run、根据候选结果另行决定是否授权 `limit=1`，验证成功后再设计 `pg_cron + pg_net` 调度。当前没有创建 Cron、安装扩展或执行 API。
+1. 创建或等待一个明确的正式测试订单通过正常业务流程自然过期；不得通过 SQL 或直接数据库修改制造候选。
+2. 在候选出现后完成只读前置核对，并重新执行一次 `dry_run=true&limit=1`，确认脱敏摘要稳定且对应指定测试订单。
+3. 取得单独明确授权后，才执行一次真实 `limit=1` 受控验证。
+4. 验证订单状态、付款状态、过期时间、预留释放和库存恢复全部正确后，才评估安装 `pg_cron`、`pg_net` 并创建调度。
 
-### Dry-run 准备基线
-
-- 人工执行手册：`docs/runbooks/production-order-expiration-dry-run.md`。
-- 推荐请求：`GET https://<正式站点域名>/api/internal/orders/expire?dry_run=true&limit=10`。正式域名必须人工确认，不使用 Preview URL。
-- 认证：`Authorization: Bearer <CRON_SECRET>`；代码也兼容 `x-internal-job-secret`，但正式方案优先统一使用 Bearer。不得在日志、文档或聊天中记录实际密钥。
-- 成功预期：HTTP 200，`success=true`、`dry_run=true`、有效 `requestId`、`candidate_count`，以及仅含脱敏 `order_id_summary` 的 `candidates`。
-- dry-run 只调用列表 RPC，不调用 `expire_unpaid_order`，因此不应修改订单、支付会话或库存。
-- 若候选为 0，不进入 `limit=1`；若候选大于 0，也必须先单独复核并取得真实过期授权。非 dry-run 的 `limit=1` 会处理调用时最早的候选，不能按 dry-run 返回的摘要指定某一订单，且候选可能在两次请求间变化。
+真实 `limit=1` 是数据库写操作且不能依赖自动回滚；若候选身份、付款状态、链上会话或库存基线有任何不确定，必须停止。
