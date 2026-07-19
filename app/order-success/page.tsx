@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { normalizeOrderItemDeliveryType } from "@/lib/orders/order-fulfillment-status";
 import {
   getOrderStatusLabel,
   getPaymentStatusLabel,
@@ -39,13 +40,13 @@ function formatDate(value: string | null | undefined) {
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
 
-function formatShippingAddress(value: Record<string, unknown> | null) {
-  if (!value) return "无";
-  const region = typeof value.region === "string" ? value.region : "";
-  const address = typeof value.address === "string" ? value.address : "";
-  const recipient = typeof value.recipient === "string" ? value.recipient : "";
-  const phone = typeof value.phone === "string" ? value.phone : "";
-  return [recipient, phone, region, address].filter(Boolean).join(" ") || "无";
+function formatShippingAddress(order: OrderRecord) {
+  const value = order.shipping_address;
+  const region = value && typeof value.region === "string" ? value.region : "";
+  const address = value && typeof value.address === "string" ? value.address : "";
+  const recipient = value && typeof value.recipient === "string" ? value.recipient : order.customer_name ?? "";
+  const phone = value && typeof value.phone === "string" ? value.phone : order.customer_phone ?? "";
+  return [recipient, phone, region, address].filter(Boolean).join(" ") || "未填写";
 }
 
 export default function OrderSuccessPage() {
@@ -98,6 +99,7 @@ export default function OrderSuccessPage() {
   const quantity = firstItem?.quantity ?? 1;
   const orderStatus = normalizeOrderStatus(order?.status);
   const paymentStatus = normalizePaymentStatus(order?.payment_status);
+  const isShippingOrder = normalizeOrderItemDeliveryType(order?.delivery_type ?? firstItem?.delivery_type) === "physical";
 
   async function copyOrderNo() {
     if (!order?.order_no) return;
@@ -164,7 +166,7 @@ export default function OrderSuccessPage() {
                   label="交付方式"
                   value={getDeliveryLabel(order.delivery_type ?? firstItem?.delivery_type)}
                 />
-                <InfoRow label="收货信息" value={formatShippingAddress(order.shipping_address)} />
+                {isShippingOrder ? <InfoRow label="收货信息" value={formatShippingAddress(order)} /> : null}
                 <InfoRow label="订单备注" value={order.customer_note || "无"} />
               </div>
             ) : (

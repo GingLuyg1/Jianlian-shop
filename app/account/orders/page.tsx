@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { normalizeOrderItemDeliveryType } from "@/lib/orders/order-fulfillment-status";
 import {
   getBep20PaymentAction,
   getBep20PaymentNotice,
@@ -218,7 +219,7 @@ export default function MyOrdersPage() {
                           </td>
                           <td className="px-3 py-2.5 text-center align-middle">
                             <div className="flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap">
-                              {paymentAction ? (
+                              {paymentAction && paymentAction.kind !== "renew" ? (
                                 <Button asChild size="sm">
                                   <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
                                 </Button>
@@ -586,6 +587,7 @@ function UserOrderDrawer({
   const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
   const displayStatus = getUserOrderDisplayStatus(order);
   const firstItem = order.order_items?.[0];
+  const isShippingOrder = normalizeOrderItemDeliveryType(order.delivery_type ?? firstItem?.delivery_type) === "physical";
   const delivery = order.order_deliveries?.[0];
   const deliveryContent = delivery?.delivery_content ?? "";
   const cancelled = orderStatus === "cancelled";
@@ -668,7 +670,9 @@ function UserOrderDrawer({
               <InfoLine label="下单时间" value={formatDate(order.created_at)} />
               <InfoLine label="更新时间" value={formatDate(order.updated_at)} />
               <InfoLine label="交付方式" value={getDeliveryLabel(order.delivery_type ?? firstItem?.delivery_type)} />
-              <InfoLine label="收货信息" value={formatShippingAddress(order.shipping_address)} />
+              {isShippingOrder ? (
+                <InfoLine label="收货信息" value={formatShippingAddress(order)} />
+              ) : null}
               <InfoLine label="订单备注" value={order.customer_note || "无"} wide />
             </div>
           </section>
@@ -753,11 +757,11 @@ function InfoLine({ label, value, wide }: { label: string; value: string; wide?:
   );
 }
 
-function formatShippingAddress(value: Record<string, unknown> | null) {
-  if (!value) return "无";
-  const region = typeof value.region === "string" ? value.region : "";
-  const address = typeof value.address === "string" ? value.address : "";
-  const recipient = typeof value.recipient === "string" ? value.recipient : "";
-  const phone = typeof value.phone === "string" ? value.phone : "";
-  return [recipient, phone, region, address].filter(Boolean).join(" ") || "无";
+function formatShippingAddress(order: OrderRecord) {
+  const value = order.shipping_address;
+  const region = value && typeof value.region === "string" ? value.region : "";
+  const address = value && typeof value.address === "string" ? value.address : "";
+  const recipient = value && typeof value.recipient === "string" ? value.recipient : order.customer_name ?? "";
+  const phone = value && typeof value.phone === "string" ? value.phone : order.customer_phone ?? "";
+  return [recipient, phone, region, address].filter(Boolean).join(" ") || "未填写";
 }

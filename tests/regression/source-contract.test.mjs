@@ -1391,6 +1391,33 @@ test("order API keeps an RPC-created order successful when agreement evidence is
   assert.match(checkout, /aria-describedby="checkout-submit-feedback"/);
 });
 
+test("checkout and user order views keep payment and fulfillment presentation scoped", () => {
+  const checkout = file("app/checkout/page.tsx");
+  const orders = file("app/account/orders/page.tsx");
+  const success = file("app/order-success/page.tsx");
+
+  assert.doesNotMatch(checkout, /联系电话（可选）|便于客服核对订单/);
+  assert.match(checkout, /const \[customerPhone, setCustomerPhone\] = useState\(""\)/);
+  assert.match(checkout, /\["shipping", "physical"\]\.includes\(String\(productRow\?\.delivery_type/);
+  assert.match(checkout, /isShippingProduct && \(!customerName\.trim\(\) \|\| !customerPhone\.trim\(\)/);
+  assert.match(checkout, /isShippingProduct && !isValidContactPhone\(customerPhone\)/);
+  assert.match(checkout, /<span className="text-red-500">\*<\/span>联系电话/);
+  assert.match(checkout, /\.\.\.\(isShippingProduct \? \{ customer_phone: customerPhone\.trim\(\) \} : \{\}\)/);
+  assert.doesNotMatch(checkout, /customer_phone:\s*customerPhone,\s*shipping_address/);
+  assert.match(checkout, /agreement_version_ids:\s*agreementPayload/);
+  assert.match(checkout, /agreements:\s*agreementPayload/);
+  assert.match(checkout, /max-h-\[178px\] overflow-y-auto/);
+  assert.match(checkout, /event\.key === "ArrowDown" \|\| event\.key === "ArrowUp"/);
+  assert.match(checkout, /event\.key === "Enter" && open/);
+  assert.match(checkout, /event\.key === "Escape"/);
+  assert.match(checkout, /h-14 w-full items-center/);
+
+  assert.match(orders, /paymentAction && paymentAction\.kind !== "renew"/);
+  assert.match(orders, /normalizeOrderItemDeliveryType[\s\S]*?=== "physical"/);
+  assert.match(orders, /isShippingOrder \? \([\s\S]*?<InfoLine label="收货信息"/);
+  assert.match(success, /isShippingOrder \? <InfoRow label="收货信息"/);
+});
+
 test("admin order status cannot bypass payment flow", () => {
   const route = file("app/api/admin/orders/[orderId]/route.ts");
   const migration = file("supabase/migrations/20260710_order_payment_inventory_idempotency_fix.sql");

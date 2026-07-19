@@ -1,6 +1,13 @@
 "use client";
 
-import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CreditCard,
@@ -288,7 +295,7 @@ export default function CheckoutPage() {
   const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) => legalDocuments.find((doc) => doc.document_type === type));
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
-  const isShippingProduct = productRow?.delivery_type === "shipping";
+  const isShippingProduct = ["shipping", "physical"].includes(String(productRow?.delivery_type ?? ""));
   const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod);
   const isPurchasable = productRow?.status === "active" && (!hasSku || Boolean(selectedSku)) && (!selectedSku?.isDatabaseSku || selectedSku.status === "active") && effectiveStock > 0;
   const unavailableMessage =
@@ -361,7 +368,12 @@ export default function CheckoutPage() {
     }
 
     if (isShippingProduct && (!customerName.trim() || !customerPhone.trim() || !shippingRegion.trim() || !shippingAddress.trim())) {
-      setError("请完整填写收件人、手机号、省市区和详细地址");
+      setError("请完整填写收件人、联系电话、省市区和详细地址");
+      return;
+    }
+
+    if (isShippingProduct && !isValidContactPhone(customerPhone)) {
+      setError("请输入有效的联系电话");
       return;
     }
 
@@ -388,7 +400,7 @@ export default function CheckoutPage() {
           client_request_id: clientRequestIdRef.current,
           customer_email: email,
           customer_name: customerName,
-          customer_phone: customerPhone,
+          ...(isShippingProduct ? { customer_phone: customerPhone.trim() } : {}),
           shipping_address: isShippingProduct
             ? {
                 region: shippingRegion,
@@ -514,12 +526,14 @@ export default function CheckoutPage() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-medium">
-                      <span className="text-red-500">*</span>手机号
+                      <span className="text-red-500">*</span>联系电话
                     </label>
                     <Input
                       value={customerPhone}
                       onChange={(event) => setCustomerPhone(event.target.value)}
-                      placeholder="请输入手机号"
+                      placeholder="请输入收件人联系电话"
+                      inputMode="tel"
+                      autoComplete="tel"
                       className="h-10 bg-slate-50 text-sm"
                     />
                   </div>
@@ -546,19 +560,7 @@ export default function CheckoutPage() {
                     />
                   </div>
                 </div>
-              ) : (
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium">
-                    联系电话（可选）
-                  </label>
-                  <Input
-                    value={customerPhone}
-                    onChange={(event) => setCustomerPhone(event.target.value)}
-                    placeholder="便于客服核对订单，可选"
-                    className="h-10 bg-slate-50 text-sm"
-                  />
-                </div>
-              )}
+              ) : null}
 
               <div>
                 <label className="mb-1.5 block text-xs font-medium">
@@ -643,23 +645,26 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 border-t border-border pt-3 text-xs">
+              <div className="flex min-w-0 items-center gap-2 border-t border-border pt-2 text-xs leading-5">
                 <input
+                  id="checkout-agreement-confirmation"
                   type="checkbox"
                   checked={confirmed}
                   onChange={(event) => setConfirmed(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-primary"
+                  aria-label="确认已阅读并同意当前订单协议"
+                  className="h-4 w-4 shrink-0 accent-primary"
                 />
-                <span>
+                <div className="min-w-0">
                   我确认已阅读并同意当前版本的用户协议、退款政策、数字商品交付规则和购买须知，且订单信息填写无误
+                  {" "}
                   <button
                     type="button"
-                    className="font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
+                    className="inline whitespace-nowrap font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
                     onClick={() => setTermsOpen(true)}
                   >
                     查看协议版本
                   </button>
-                </span>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -668,6 +673,17 @@ export default function CheckoutPage() {
 
       <TermsDialog open={termsOpen} onOpenChange={setTermsOpen} documents={legalDocuments} error={legalError} loading={legalLoading} />
     </PublicLayout>
+  );
+}
+
+function isValidContactPhone(value: string) {
+  const normalized = value.trim();
+  const digitCount = normalized.replace(/\D/g, "").length;
+  return (
+    normalized.length <= 30 &&
+    digitCount >= 6 &&
+    digitCount <= 20 &&
+    /^\+?[0-9][0-9()\s-]*$/.test(normalized)
   );
 }
 
@@ -685,14 +701,63 @@ function PaymentMethodSelect({
   onSelect: (method: PaymentMethodCode) => void;
 }) {
   const selectedOption = getPaymentMethodOption(selected) ?? PAYMENT_METHOD_OPTIONS[0];
+  const selectedIndex = Math.max(0, PAYMENT_METHOD_OPTIONS.findIndex((option) => option.code === selected));
+  const [activeIndex, setActiveIndex] = useState(selectedIndex);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  useEffect(() => {
+    if (open) setActiveIndex(selectedIndex);
+  }, [open, selectedIndex]);
+
+  useEffect(() => {
+    if (open) optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, open]);
+
+  function moveActive(step: number) {
+    setActiveIndex((current) => {
+      const count = PAYMENT_METHOD_OPTIONS.length;
+      return (current + step + count) % count;
+    });
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      if (open) {
+        event.preventDefault();
+        onOpenChange(false);
+      }
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) {
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        setActiveIndex((selectedIndex + step + PAYMENT_METHOD_OPTIONS.length) % PAYMENT_METHOD_OPTIONS.length);
+        onOpenChange(true);
+      } else {
+        moveActive(event.key === "ArrowDown" ? 1 : -1);
+      }
+      return;
+    }
+
+    if (event.key === "Enter" && open) {
+      event.preventDefault();
+      const option = PAYMENT_METHOD_OPTIONS[activeIndex];
+      if (option) onSelect(option.code);
+      onOpenChange(false);
+    }
+  }
 
   return (
-    <div ref={rootRef} className="relative z-30">
+    <div ref={rootRef} className="relative z-30" onKeyDown={handleKeyDown}>
       <button
         type="button"
         className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-[#ead9cc] bg-[#fffaf6] px-3 py-2 text-left text-sm transition hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls="checkout-payment-method-options"
+        aria-activedescendant={open ? `checkout-payment-method-${PAYMENT_METHOD_OPTIONS[activeIndex]?.code ?? selected}` : undefined}
         onClick={() => onOpenChange(!open)}
       >
         <span className="flex min-w-0 items-center gap-2">
@@ -707,23 +772,30 @@ function PaymentMethodSelect({
 
       {open ? (
         <div
-          className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 max-h-[min(340px,calc(100dvh-180px))] overflow-y-auto rounded-xl border border-[#ead9cc] bg-white p-1.5 shadow-xl"
+          id="checkout-payment-method-options"
+          className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 max-h-[178px] overflow-y-auto rounded-xl border border-[#ead9cc] bg-white p-1 shadow-xl"
           role="listbox"
         >
-          {PAYMENT_METHOD_OPTIONS.map((option) => {
+          {PAYMENT_METHOD_OPTIONS.map((option, index) => {
             const active = option.code === selected;
+            const keyboardActive = index === activeIndex;
             const unavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(option.code);
             return (
               <button
                 key={option.code}
+                id={`checkout-payment-method-${option.code}`}
+                ref={(node) => { optionRefs.current[index] = node; }}
                 type="button"
                 role="option"
                 aria-selected={active}
+                tabIndex={-1}
                 className={cn(
-                  "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition",
+                  "flex h-14 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition",
                   active ? "bg-primary/10 text-primary" : "text-slate-800 hover:bg-slate-50",
+                  keyboardActive && !active ? "bg-slate-50 ring-1 ring-primary/20" : "",
                   unavailable ? "opacity-80" : ""
                 )}
+                onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => {
                   onSelect(option.code);
                   onOpenChange(false);
