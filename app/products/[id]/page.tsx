@@ -410,26 +410,8 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <PublicLayout viewportLocked contentClassName="flex max-w-none overflow-hidden px-4 py-3 md:px-6">
-      <div className={`mx-auto flex w-full max-w-[1668px] flex-col ${publicMainPanelHeightClassName}`}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            返回上一页
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="text-sm text-muted-foreground hover:text-primary"
-          >
-            返回首页
-          </button>
-        </div>
-
+    <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
+      <div className={`mx-auto flex w-full max-w-[1668px] flex-col overflow-visible md:overflow-hidden ${publicMainPanelHeightClassName}`}>
         {status === "loading" ? (
           <Card>
             <CardContent className="p-8">
@@ -451,8 +433,17 @@ export default function ProductDetailPage() {
             tone="warning"
           />
         ) : (
-          <div className="grid min-h-0 flex-1 gap-5 overflow-hidden lg:h-full lg:grid-cols-[minmax(0,1fr)_390px] lg:items-stretch">
-            <main className="min-h-0 min-w-0 space-y-5 overflow-y-auto pr-1 sidebar-scroll lg:h-full">
+          <div className="grid min-h-0 flex-1 gap-5 overflow-visible md:overflow-hidden lg:h-full lg:grid-cols-[minmax(0,1fr)_390px] lg:items-stretch">
+            <main className="min-h-0 min-w-0 space-y-5 overflow-visible pr-1 sidebar-scroll md:overflow-y-auto lg:h-full">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                返回上一页
+              </button>
+
               <Card>
                 <CardContent className="grid gap-5 p-5 sm:grid-cols-[240px_minmax(0,1fr)]">
                   <div className="aspect-square overflow-hidden rounded-2xl border border-orange-100 bg-white">
@@ -560,10 +551,19 @@ export default function ProductDetailPage() {
               </Card>
             </main>
 
-            <aside className="flex min-h-0 min-w-0 overflow-hidden lg:h-full">
+            <aside className="flex min-h-0 min-w-0 overflow-visible md:overflow-hidden lg:h-full">
               <Card className="flex min-h-0 w-full flex-col overflow-hidden lg:h-full lg:max-h-full">
                 <CardHeader className="shrink-0">
-                  <CardTitle className="text-base">商品购买</CardTitle>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="text-base">商品购买</CardTitle>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/")}
+                      className="shrink-0 text-sm text-muted-foreground hover:text-primary"
+                    >
+                      返回首页
+                    </button>
+                  </div>
                 </CardHeader>
                 <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-5 pr-4 sidebar-scroll">
                   {skuError ? (

@@ -55,7 +55,6 @@ export type OrderDeliveryRecord = {
   id: string;
   order_id: string;
   order_item_id: string | null;
-  user_id?: string | null;
   product_id?: string | null;
   sku_id?: string | null;
   inventory_id?: string | null;

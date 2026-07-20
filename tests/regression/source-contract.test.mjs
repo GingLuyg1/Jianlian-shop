@@ -39,6 +39,18 @@ test("public account surfaces share the responsive viewport panel height", () =>
   }
   assert.match(accountShell, /md:overflow-y-auto/);
   assert.match(accountShell, /matchMedia\("\(min-width: 768px\)"\)/);
+  assert.doesNotMatch(productPage, /<PublicLayout\s+viewportLocked/);
+  assert.match(productPage, /md:overflow-y-auto/);
+});
+
+test("user order drawer owns viewport scrolling without changing payment behavior", () => {
+  const ordersPage = file("app/account/orders/page.tsx");
+
+  assert.match(ordersPage, /h-dvh max-h-dvh/);
+  assert.match(ordersPage, /overflow-y-auto overscroll-contain/);
+  assert.match(ordersPage, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(ordersPage, /document\.documentElement\.style\.overflow = "hidden"/);
+  assert.match(ordersPage, /<Bep20OrderPaymentSummary order=\{order\} compact \/>/);
 });
 
 test("account overview omits internal identity and unfinished-order summary cards", () => {
@@ -1971,6 +1983,43 @@ test("two-user order isolation verification is read-only and matches ownership c
   assert.match(detailRoute, /supabase\.rpc\("cancel_unpaid_order"/);
   assert.match(detailRoute, /p_order_id: order\.id/);
   assert.match(detailRoute, /p_reason: reason/);
+});
+
+test("user order reads scope deliveries through the owned order without delivery user_id", () => {
+  const queries = file("lib/orders/order-queries.ts");
+  const listRoute = file("app/api/orders/route.ts");
+  const detailRoute = file("app/api/orders/[orderNo]/route.ts");
+  const deliveryRoute = file("app/api/orders/[orderNo]/delivery/route.ts");
+  const fulfillmentRoute = file("app/api/orders/[orderNo]/fulfillment/route.ts");
+  const orderList = file("app/account/orders/page.tsx");
+  const productDetail = file("app/products/[id]/page.tsx");
+  const fulfillmentMigration = file("supabase/migrations/20260709_digital_delivery_reserved_fulfillment_hardening.sql");
+
+  const orderSelect = queries.match(/const orderSelect = `([\s\S]*?)`;/)?.[1] ?? "";
+  assert.match(
+    orderSelect,
+    /order_deliveries\(id,order_id,order_item_id,delivery_type,delivery_status,delivered_at,created_at,updated_at\)/
+  );
+  assert.doesNotMatch(orderSelect, /order_deliveries\(\*\)/);
+  assert.doesNotMatch(orderSelect, /order_deliveries\([^)]*\buser_id\b/);
+  assert.doesNotMatch(orderSelect, /order_deliveries\([^)]*delivery_content/);
+
+  assert.match(listRoute, /listUserOrders\(supabase, user\.id/);
+  assert.match(queries, /from\("orders"\)[\s\S]*?\.eq\("user_id", userId\)/);
+  assert.match(queries, /\.eq\("user_id", userId\)\s*\.eq\("order_no", orderNo\)\s*\.maybeSingle\(\)/);
+  assert.match(queries, /Array\.isArray\(row\.order_deliveries\)[\s\S]*?: \[\]/);
+
+  assert.match(detailRoute, /getUserOrderByNo\(supabase, user\.id/);
+  assert.match(deliveryRoute, /supabase\.rpc\("get_order_delivery_for_user"/);
+  assert.match(fulfillmentRoute, /supabase\.rpc\("get_order_fulfillment_for_user"/);
+  assert.match(deliveryRoute, /if \(userError \|\| !user\)/);
+  assert.match(fulfillmentRoute, /if \(userError \|\| !user\)/);
+  assert.match(fulfillmentMigration, /where order_no = p_order_no and user_id = auth\.uid\(\)/);
+  assert.match(fulfillmentMigration, /if v_order\.payment_status <> 'paid' then raise exception 'order is not paid'/);
+  assert.match(fulfillmentMigration, /then string_agg\(ds\.content/);
+  assert.match(orderList, /Bep20OrderPaymentSummary/);
+  assert.match(orderList, /TxHash|submittedTxHash|bep20/i);
+  assert.match(productDetail, /publicMainPanelHeightClassName/);
 });
 
 test("user order cancellation uses the real PATCH detail API", () => {

@@ -571,11 +571,19 @@ function UserOrderDrawer({
   useEffect(() => {
     if (!order) return;
     setShowDelivery(false);
+    const bodyOverflow = document.body.style.overflow;
+    const htmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = htmlOverflow;
+    };
   }, [onClose, order]);
 
   if (!order) return null;
@@ -600,9 +608,9 @@ function UserOrderDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={onClose}>
+    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/30" onClick={onClose}>
       <aside
-        className="ml-auto flex h-full w-full max-w-[760px] flex-col bg-white shadow-2xl"
+        className="ml-auto flex h-dvh max-h-dvh w-full max-w-[760px] flex-col overflow-hidden bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between border-b px-6 py-4">
@@ -627,7 +635,7 @@ function UserOrderDrawer({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
           {paymentAction && !isBep20Order ? (
             <Button asChild className="w-full">
               <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
