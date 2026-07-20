@@ -610,19 +610,20 @@ function UserOrderDrawer({
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/30" onClick={onClose}>
       <aside
-        className="ml-auto flex h-dvh max-h-dvh w-full max-w-[760px] flex-col overflow-hidden bg-white shadow-2xl"
+        data-testid="order-detail-drawer"
+        className="absolute inset-y-0 right-0 flex h-dvh max-h-dvh min-w-0 w-full max-w-[760px] flex-col overflow-hidden bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b px-6 py-4">
-          <div>
+        <div className="flex min-w-0 max-w-full shrink-0 items-center justify-between gap-4 overflow-hidden border-b px-6 py-4">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <div className="text-lg font-bold text-slate-950">订单详情</div>
             <button
               type="button"
               onClick={() => onCopyOrderNo(order.order_no)}
-              className="mt-1 inline-flex items-center gap-2 rounded px-1 py-0.5 font-mono text-xs text-slate-500 hover:bg-muted"
+              className="mt-1 inline-flex max-w-full items-center gap-2 overflow-hidden rounded px-1 py-0.5 font-mono text-xs text-slate-500 hover:bg-muted"
             >
-              {order.order_no}
-              <Clipboard className="h-3 w-3" />
+              <span className="min-w-0 truncate">{order.order_no}</span>
+              <Clipboard className="h-3 w-3 shrink-0" />
             </button>
           </div>
           <button
@@ -635,7 +636,10 @@ function UserOrderDrawer({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
+        <div
+          data-testid="order-detail-drawer-scroll"
+          className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-6 py-5 [&>*]:min-w-0 [&>*]:max-w-full"
+        >
           {paymentAction && !isBep20Order ? (
             <Button asChild className="w-full">
               <Link href={`/payment?order=${encodeURIComponent(order.order_no)}`}>{paymentAction.label}</Link>
@@ -646,16 +650,16 @@ function UserOrderDrawer({
               {paymentNotice}
             </div>
           ) : null}
-          <section className="grid gap-3 md:grid-cols-2">
+          <section className="grid min-w-0 max-w-full gap-3 md:grid-cols-2">
             <InfoBlock label="订单金额" value={formatMoney(order.total_amount)} primary />
             <StatusBlock label="状态" value={displayStatus.label} className={displayStatus.className} />
           </section>
 
-          <section className="rounded-xl border">
+          <section className="min-w-0 max-w-full overflow-hidden rounded-xl border">
             <div className="border-b px-4 py-3 font-semibold">订单商品</div>
             <div className="divide-y">
               {(order.order_items ?? []).map((item) => (
-                <div key={item.id} className="grid items-center gap-3 px-4 py-4 text-sm md:grid-cols-[minmax(0,1fr)_120px_80px]">
+                <div key={item.id} className="grid min-w-0 max-w-full items-center gap-3 px-4 py-4 text-sm md:grid-cols-[minmax(0,1fr)_120px_80px]">
                   <div className="min-w-0">
                     <div className="truncate font-semibold" title={item.product_name}>{item.product_name}</div>
                     {item.sku_title ? (

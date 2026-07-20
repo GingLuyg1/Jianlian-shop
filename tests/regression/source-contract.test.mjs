@@ -40,14 +40,20 @@ test("public account surfaces share the responsive viewport panel height", () =>
   assert.match(accountShell, /md:overflow-y-auto/);
   assert.match(accountShell, /matchMedia\("\(min-width: 768px\)"\)/);
   assert.doesNotMatch(productPage, /<PublicLayout\s+viewportLocked/);
-  assert.match(productPage, /md:overflow-y-auto/);
+  assert.match(productPage, /data-testid="product-detail-grid"[\s\S]*publicMainPanelHeightClassName/);
+  assert.match(productPage, /data-testid="product-detail-left"[\s\S]*md:h-full md:overflow-x-hidden md:overflow-y-auto/);
+  assert.match(productPage, /data-testid="product-detail-purchase-card"[\s\S]*md:h-full md:max-h-full/);
+  assert.doesNotMatch(productPage, /flex-1[\s\S]{0,120}publicMainPanelHeightClassName/);
 });
 
 test("user order drawer owns viewport scrolling without changing payment behavior", () => {
   const ordersPage = file("app/account/orders/page.tsx");
+  const paymentSummary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
 
-  assert.match(ordersPage, /h-dvh max-h-dvh/);
-  assert.match(ordersPage, /overflow-y-auto overscroll-contain/);
+  assert.match(ordersPage, /data-testid="order-detail-drawer"[\s\S]*absolute inset-y-0 right-0[\s\S]*h-dvh max-h-dvh[\s\S]*min-w-0[\s\S]*overflow-hidden/);
+  assert.match(ordersPage, /data-testid="order-detail-drawer-scroll"[\s\S]*min-h-0 min-w-0 flex-1[\s\S]*overflow-x-hidden overflow-y-auto overscroll-contain/);
+  assert.match(ordersPage, /\[&>\*\]:min-w-0 \[&>\*\]:max-w-full/);
+  assert.match(paymentSummary, /min-w-0 max-w-full overflow-hidden/);
   assert.match(ordersPage, /document\.body\.style\.overflow = "hidden"/);
   assert.match(ordersPage, /document\.documentElement\.style\.overflow = "hidden"/);
   assert.match(ordersPage, /<Bep20OrderPaymentSummary order=\{order\} compact \/>/);

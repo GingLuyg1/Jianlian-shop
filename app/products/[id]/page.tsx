@@ -411,7 +411,7 @@ export default function ProductDetailPage() {
 
   return (
     <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
-      <div className={`mx-auto flex w-full max-w-[1668px] flex-col overflow-visible md:overflow-hidden ${publicMainPanelHeightClassName}`}>
+      <div className="mx-auto w-full max-w-[1668px] overflow-visible md:overflow-hidden">
         {status === "loading" ? (
           <Card>
             <CardContent className="p-8">
@@ -433,8 +433,14 @@ export default function ProductDetailPage() {
             tone="warning"
           />
         ) : (
-          <div className="grid min-h-0 flex-1 gap-5 overflow-visible md:overflow-hidden lg:h-full lg:grid-cols-[minmax(0,1fr)_390px] lg:items-stretch">
-            <main className="min-h-0 min-w-0 space-y-5 overflow-visible pr-1 sidebar-scroll md:overflow-y-auto lg:h-full">
+          <div
+            data-testid="product-detail-grid"
+            className={`grid gap-5 overflow-visible md:min-h-0 md:overflow-hidden lg:grid-cols-[minmax(0,1fr)_390px] lg:items-stretch ${publicMainPanelHeightClassName}`}
+          >
+            <main
+              data-testid="product-detail-left"
+              className="min-h-0 min-w-0 space-y-5 overflow-visible pr-1 sidebar-scroll md:h-full md:overflow-x-hidden md:overflow-y-auto"
+            >
               <button
                 type="button"
                 onClick={() => router.back()}
@@ -551,8 +557,11 @@ export default function ProductDetailPage() {
               </Card>
             </main>
 
-            <aside className="flex min-h-0 min-w-0 overflow-visible md:overflow-hidden lg:h-full">
-              <Card className="flex min-h-0 w-full flex-col overflow-hidden lg:h-full lg:max-h-full">
+            <aside className="flex min-h-0 min-w-0 overflow-visible md:h-full md:overflow-hidden">
+              <Card
+                data-testid="product-detail-purchase-card"
+                className="flex min-h-0 min-w-0 w-full max-w-full flex-col overflow-hidden md:h-full md:max-h-full"
+              >
                 <CardHeader className="shrink-0">
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle className="text-base">商品购买</CardTitle>
@@ -565,7 +574,7 @@ export default function ProductDetailPage() {
                     </button>
                   </div>
                 </CardHeader>
-                <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-5 pr-4 sidebar-scroll">
+                <CardContent className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto pb-5 pr-4 sidebar-scroll">
                   {skuError ? (
                     <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700">
                       {skuError}

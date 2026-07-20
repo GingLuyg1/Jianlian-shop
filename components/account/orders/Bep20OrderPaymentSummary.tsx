@@ -254,7 +254,7 @@ export function Bep20OrderPaymentSummary({
   if (!isBep20Order) return null;
 
   return (
-    <section className={cn("rounded-xl border border-orange-100 bg-white p-4 text-sm", compact ? "space-y-3" : "space-y-4")}>
+    <section className={cn("min-w-0 max-w-full overflow-hidden rounded-xl border border-orange-100 bg-white p-4 text-sm", compact ? "space-y-3" : "space-y-4")}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 font-semibold text-slate-950">
           <ShieldCheck className="h-4 w-4 text-primary" />
