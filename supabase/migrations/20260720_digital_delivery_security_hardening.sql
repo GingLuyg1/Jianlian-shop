@@ -24,6 +24,7 @@ declare
   v_missing_functions text[];
   v_delivery_count bigint;
   v_user_policy_count integer;
+  v_admin_policy_count integer;
   v_record record;
 begin
   if to_regclass('public.order_deliveries') is null
@@ -87,14 +88,44 @@ begin
   from pg_catalog.pg_policies p
   where p.schemaname = 'public'
     and p.tablename = 'order_deliveries'
-    and p.cmd = 'SELECT'
-    and 'authenticated' = any(p.roles)
-    and coalesce(p.qual, '') ~ 'auth[.]uid[(][)]'
-    and coalesce(p.qual, '') !~ 'is_admin';
+    and p.policyname = 'users can read own deliveries'
+    and p.cmd = 'SELECT';
 
   if v_user_policy_count <> 1 then
     raise exception 'DIGITAL_DELIVERY_PREFLIGHT_USER_POLICY_COUNT: %', v_user_policy_count;
   end if;
+
+  select count(*)
+    into v_admin_policy_count
+  from pg_catalog.pg_policies p
+  where p.schemaname = 'public'
+    and p.tablename = 'order_deliveries'
+    and p.policyname = 'admins can manage deliveries'
+    and p.cmd = 'ALL'
+    and coalesce(p.qual, '') ~ 'is_admin[(][)]'
+    and coalesce(p.with_check, '') ~ 'is_admin[(][)]';
+
+  if v_admin_policy_count <> 1 then
+    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_ADMIN_POLICY_COUNT: %', v_admin_policy_count;
+  end if;
+
+  select
+    p.policyname,
+    p.roles,
+    p.permissive,
+    p.cmd,
+    p.qual,
+    p.with_check
+    into strict v_record
+  from pg_catalog.pg_policies p
+  where p.schemaname = 'public'
+    and p.tablename = 'order_deliveries'
+    and p.policyname = 'users can read own deliveries'
+    and p.cmd = 'SELECT';
+
+  raise notice 'pre-migration user policy: % roles=% permissive=% cmd=% using=% check=%',
+    v_record.policyname, v_record.roles, v_record.permissive, v_record.cmd,
+    v_record.qual, v_record.with_check;
 
   if pg_get_functiondef('public.deliver_digital_order(uuid,text)'::regprocedure)
        !~ 'digital_delivery_secrets'
@@ -107,6 +138,7 @@ begin
     select
       p.policyname,
       p.roles,
+      p.permissive,
       p.cmd,
       p.qual,
       p.with_check
@@ -115,8 +147,8 @@ begin
       and p.tablename = 'order_deliveries'
     order by p.policyname
   loop
-    raise notice 'pre-migration policy: % roles=% cmd=% using=% check=%',
-      v_record.policyname, v_record.roles, v_record.cmd,
+    raise notice 'pre-migration policy: % roles=% permissive=% cmd=% using=% check=%',
+      v_record.policyname, v_record.roles, v_record.permissive, v_record.cmd,
       v_record.qual, v_record.with_check;
   end loop;
 
@@ -259,40 +291,28 @@ end;
 $$;
 
 -- -----------------------------------------------------------------------------
--- 3. Harden the existing authenticated user SELECT policy in place.
---    The precheck requires exactly one owner-based non-admin policy, so this does
---    not alter the separate administrator policy.
+-- 3. Replace the legacy PUBLIC user SELECT policy with an authenticated-only
+--    policy. Administrator access remains governed by the separate
+--    "admins can manage deliveries" policy and is not changed here.
 -- -----------------------------------------------------------------------------
-do $$
-declare
-  v_policy_name text;
-begin
-  select p.policyname
-    into strict v_policy_name
-  from pg_catalog.pg_policies p
-  where p.schemaname = 'public'
-    and p.tablename = 'order_deliveries'
-    and p.cmd = 'SELECT'
-    and 'authenticated' = any(p.roles)
-    and coalesce(p.qual, '') ~ 'auth[.]uid[(][)]'
-    and coalesce(p.qual, '') !~ 'is_admin';
+drop policy if exists "users can read own deliveries"
+  on public.order_deliveries;
 
-  execute format(
-    'alter policy %I on public.order_deliveries to authenticated using (
-       delivery_status = ''delivered''
-       and exists (
-         select 1
-         from public.orders o
-         where o.id = order_deliveries.order_id
-           and o.user_id = auth.uid()
-           and o.payment_status = ''paid''
-           and o.status not in (''cancelled'', ''expired'', ''failed'')
-       )
-     )',
-    v_policy_name
+create policy "users can read own deliveries"
+  on public.order_deliveries
+  for select
+  to authenticated
+  using (
+    order_deliveries.delivery_status = 'delivered'
+    and exists (
+      select 1
+      from public.orders o
+      where o.id = order_deliveries.order_id
+        and o.user_id = auth.uid()
+        and o.payment_status = 'paid'
+        and o.status not in ('cancelled', 'expired', 'failed')
+    )
   );
-end
-$$;
 
 -- -----------------------------------------------------------------------------
 -- 4. Remove direct writes and reduce authenticated SELECT to the columns required
@@ -389,6 +409,7 @@ comment on function public.admin_append_manual_delivery(uuid,uuid,text,text,text
 do $$
 declare
   v_policy_count integer;
+  v_admin_policy_count integer;
   v_secure_function_count integer;
   v_manual_function_oid oid;
   v_manual_public_execute boolean;
@@ -430,15 +451,42 @@ begin
   from pg_catalog.pg_policies p
   where p.schemaname = 'public'
     and p.tablename = 'order_deliveries'
+    and p.policyname = 'users can read own deliveries'
     and p.cmd = 'SELECT'
-    and 'authenticated' = any(p.roles)
+    and p.roles = array['authenticated']::name[]
     and coalesce(p.qual, '') ~ 'auth[.]uid[(][)]'
     and coalesce(p.qual, '') ~ 'payment_status[^'']*''paid'''
     and coalesce(p.qual, '') ~ 'delivery_status[^'']*''delivered'''
-    and coalesce(p.qual, '') ~ '''cancelled''[^;]*''expired''[^;]*''failed''';
+    and coalesce(p.qual, '') ~ '''cancelled''[^;]*''expired''[^;]*''failed'''
+    and coalesce(p.qual, '') !~ 'is_admin';
 
   if v_policy_count <> 1 then
     raise exception 'DIGITAL_DELIVERY_POSTCHECK_USER_POLICY_FAILED: %', v_policy_count;
+  end if;
+
+  select count(*)
+    into v_admin_policy_count
+  from pg_catalog.pg_policies p
+  where p.schemaname = 'public'
+    and p.tablename = 'order_deliveries'
+    and p.policyname = 'admins can manage deliveries'
+    and p.cmd = 'ALL'
+    and coalesce(p.qual, '') ~ 'is_admin[(][)]'
+    and coalesce(p.with_check, '') ~ 'is_admin[(][)]';
+
+  if v_admin_policy_count <> 1 then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_ADMIN_POLICY_MISSING: %', v_admin_policy_count;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'order_deliveries'
+      and c.relrowsecurity
+  ) then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_RLS_DISABLED';
   end if;
 
   select count(*)
@@ -479,6 +527,9 @@ begin
      or has_table_privilege('anon', 'public.order_deliveries', 'INSERT')
      or has_table_privilege('anon', 'public.order_deliveries', 'UPDATE')
      or has_table_privilege('anon', 'public.order_deliveries', 'DELETE')
+     or has_table_privilege('anon', 'public.order_deliveries', 'TRUNCATE')
+     or has_table_privilege('anon', 'public.order_deliveries', 'REFERENCES')
+     or has_table_privilege('anon', 'public.order_deliveries', 'TRIGGER')
      or not has_table_privilege('service_role', 'public.order_deliveries', 'SELECT')
      or not has_table_privilege('service_role', 'public.order_deliveries', 'INSERT')
      or not has_table_privilege('service_role', 'public.order_deliveries', 'UPDATE')
@@ -648,8 +699,17 @@ commit;
 -- applying this file.
 --
 -- Policy rollback:
---   ALTER POLICY <captured_policy_name> ON public.order_deliveries
---   TO authenticated USING (<captured_pre_migration_using_expression>);
+--   The production precheck record is the source of truth. It currently records
+--   policy "users can read own deliveries" with roles={public}, its original USING
+--   expression (including the legacy admin compatibility branch), and a null
+--   WITH CHECK expression. Recreate it only from those captured fields:
+--   DROP POLICY IF EXISTS "users can read own deliveries" ON public.order_deliveries;
+--   CREATE POLICY "users can read own deliveries" ON public.order_deliveries
+--     AS <captured_permissive> FOR SELECT TO <captured_roles>
+--     USING (<captured_pre_migration_using_expression>);
+--   The captured WITH CHECK is null for this SELECT policy, so rollback must omit
+--   WITH CHECK rather than inventing an expression. If a future capture is non-null,
+--   restore that exact captured expression as well.
 --
 -- ACL rollback:
 --   Restore only the exact table, column and function grants shown in the captured

@@ -1127,9 +1127,21 @@ test("digital delivery security hardening closes direct reads and unsafe RPC ent
 
   assert.match(migration, /^begin;/m);
   assert.match(migration, /^commit;/m);
-  assert.match(migration, /alter policy[\s\S]*delivery_status = ''delivered''/);
-  assert.match(migration, /o\.payment_status = ''paid''/);
-  assert.match(migration, /o\.status not in \(''cancelled'', ''expired'', ''failed''\)/);
+  assert.match(migration, /drop policy if exists "users can read own deliveries"[\s\S]*on public\.order_deliveries/);
+  assert.match(migration, /create policy "users can read own deliveries"[\s\S]*for select[\s\S]*to authenticated/);
+  assert.match(migration, /order_deliveries\.delivery_status = 'delivered'/);
+  assert.match(migration, /o\.payment_status = 'paid'/);
+  assert.match(migration, /o\.status not in \('cancelled', 'expired', 'failed'\)/);
+  assert.match(migration, /p\.policyname = 'users can read own deliveries'[\s\S]{0,100}p\.cmd = 'SELECT'/);
+  assert.doesNotMatch(precheck, /'authenticated' = any\(p\.roles\)/);
+  assert.match(precheck, /pre-migration user policy: % roles=% permissive=% cmd=% using=% check=%/);
+  assert.match(precheck, /p\.policyname = 'admins can manage deliveries'[\s\S]{0,100}p\.cmd = 'ALL'/);
+  assert.match(migration, /p\.roles = array\['authenticated'\]::name\[\]/);
+  assert.match(migration, /coalesce\(p\.qual, ''\) !~ 'is_admin'/);
+  assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_ADMIN_POLICY_MISSING/);
+  assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_RLS_DISABLED/);
+  assert.match(migration, /has_table_privilege\('anon', 'public\.order_deliveries', 'TRUNCATE'\)/);
+  assert.match(migration, /roles=\{public\}[\s\S]*captured_pre_migration_using_expression/);
   assert.match(migration, /revoke insert, update, delete on table public\.order_deliveries from public, anon, authenticated/);
   assert.match(migration, /revoke select on table public\.order_deliveries from public, anon, authenticated/);
   assert.match(migration, /grant select \([\s\S]*id,[\s\S]*order_id,[\s\S]*order_item_id,[\s\S]*user_id,[\s\S]*delivery_type,[\s\S]*delivery_status,[\s\S]*failure_reason,[\s\S]*delivered_at,[\s\S]*created_at,[\s\S]*updated_at[\s\S]*\) on table public\.order_deliveries to authenticated/);
