@@ -1123,6 +1123,7 @@ test("digital delivery only consumes reserved inventory and keeps delivery secre
 
 test("digital delivery security hardening closes direct reads and unsafe RPC entry points", () => {
   const migration = file("supabase/migrations/20260720_digital_delivery_security_hardening.sql");
+  const precheck = migration.split("-- 2. Make the safe manual-delivery function")[0];
 
   assert.match(migration, /^begin;/m);
   assert.match(migration, /^commit;/m);
@@ -1144,8 +1145,13 @@ test("digital delivery security hardening closes direct reads and unsafe RPC ent
   assert.match(migration, /grant execute on function public\.deliver_digital_order\(uuid,text\) to service_role/);
   assert.match(migration, /grant execute on function public\.admin_deliver_order_item_manual\(uuid,uuid,text,text\) to service_role/);
   assert.match(migration, /create or replace function public\.admin_deliver_order_item_manual/);
+  assert.doesNotMatch(precheck, /public\.admin_deliver_order_item_manual\(uuid,uuid,text,text\)/);
   assert.match(migration, /v_jwt_role <> 'service_role'/);
   assert.match(migration, /digital_delivery_secrets/);
+  assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_MANUAL_DELIVERY_SIGNATURE_MISSING/);
+  assert.match(migration, /pg_get_function_identity_arguments\(p\.oid\) = 'p_order_id uuid, p_order_item_id uuid, p_delivery_content text, p_delivery_note text'/);
+  assert.match(migration, /acl\.grantee = 0[\s\S]{0,100}acl\.privilege_type = 'EXECUTE'/);
+  assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_MANUAL_DELIVERY_PUBLIC_EXECUTE/);
   assert.match(migration, /revoke execute on function public\.auto_deliver_order\(uuid\) from public, anon, authenticated, service_role/);
   assert.match(migration, /revoke execute on function public\.admin_append_manual_delivery\(uuid,uuid,text,text,text,text\) from public, anon, authenticated, service_role/);
   assert.match(migration, /pre-migration function ACL/);

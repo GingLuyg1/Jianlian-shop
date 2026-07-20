@@ -55,7 +55,6 @@ begin
     'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)',
     'public.sync_product_available_stock(uuid)',
     'public.deliver_digital_order(uuid,text)',
-    'public.admin_deliver_order_item_manual(uuid,uuid,text,text)',
     'public.get_order_fulfillment_for_user(text)',
     'public.get_order_delivery_for_user(text)',
     'public.auto_deliver_order(uuid)',
@@ -104,13 +103,6 @@ begin
     raise exception 'DIGITAL_DELIVERY_PREFLIGHT_AUTO_DELIVERY_DEFINITION_UNSAFE';
   end if;
 
-  if pg_get_functiondef('public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure)
-       !~ 'digital_delivery_secrets'
-     or pg_get_functiondef('public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure)
-       !~ 'payment_status[^;]*paid' then
-    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_MANUAL_DELIVERY_DEFINITION_UNSAFE';
-  end if;
-
   for v_record in
     select
       p.policyname,
@@ -141,7 +133,6 @@ begin
         'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)'::regprocedure,
         'public.sync_product_available_stock(uuid)'::regprocedure,
         'public.deliver_digital_order(uuid,text)'::regprocedure,
-        'public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure,
         'public.get_order_fulfillment_for_user(text)'::regprocedure,
         'public.get_order_delivery_for_user(text)'::regprocedure,
         'public.auto_deliver_order(uuid)'::regprocedure,
@@ -399,10 +390,41 @@ do $$
 declare
   v_policy_count integer;
   v_secure_function_count integer;
+  v_manual_function_oid oid;
+  v_manual_public_execute boolean;
   v_unexpected_authenticated_column text;
   v_missing_authenticated_column text;
   v_anon_column text;
 begin
+  select p.oid
+    into v_manual_function_oid
+  from pg_catalog.pg_proc p
+  join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname = 'admin_deliver_order_item_manual'
+    and pg_get_function_identity_arguments(p.oid) = 'p_order_id uuid, p_order_item_id uuid, p_delivery_content text, p_delivery_note text';
+
+  if v_manual_function_oid is null
+     or v_manual_function_oid <> to_regprocedure(
+       'public.admin_deliver_order_item_manual(uuid,uuid,text,text)'
+     ) then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_MANUAL_DELIVERY_SIGNATURE_MISSING';
+  end if;
+
+  select exists (
+    select 1
+    from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+    where acl.grantee = 0
+      and acl.privilege_type = 'EXECUTE'
+  )
+    into v_manual_public_execute
+  from pg_catalog.pg_proc p
+  where p.oid = v_manual_function_oid;
+
+  if coalesce(v_manual_public_execute, false) then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_MANUAL_DELIVERY_PUBLIC_EXECUTE';
+  end if;
+
   select count(*)
     into v_policy_count
   from pg_catalog.pg_policies p
