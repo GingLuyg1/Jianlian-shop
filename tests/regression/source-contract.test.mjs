@@ -1148,7 +1148,13 @@ test("digital delivery security hardening closes direct reads and unsafe RPC ent
   assert.doesNotMatch(migration, /grant select \([\s\S]{0,500}\b(?:delivery_content|encrypted_content|inventory_id|delivery_note|viewed_at)\b[\s\S]{0,100}\) on table public\.order_deliveries to authenticated/);
   assert.match(migration, /grant select, insert, update, delete on table public\.order_deliveries to service_role/);
   assert.match(migration, /aclexplode\(coalesce\(c\.relacl, acldefault\('r', c\.relowner\)\)\)/);
-  assert.match(migration, /aclexplode\(coalesce\(a\.attacl, '\{\}'::aclitem\[\]\)\)/);
+  assert.doesNotMatch(migration, /aclexplode\(coalesce\(a\.attacl, '\{\}'::aclitem\[\]\)\)/);
+  assert.doesNotMatch(migration, /aclexplode\([^)]*'\{\}'::aclitem\[\]/);
+  assert.match(migration, /with explicit_column_acls as materialized \([\s\S]{0,400}a\.attacl is not null[\s\S]{0,100}cardinality\(a\.attacl\) > 0/);
+  assert.match(migration, /cross join lateral pg_catalog\.aclexplode\(a\.attacl\) acl/);
+  assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_REQUIRED_AUTHENTICATED_COLUMN_MISSING/);
+  assert.match(migration, /'delivery_content', 'encrypted_content', 'inventory_id', 'delivery_note',[\s\S]{0,150}'viewed_at', 'product_id', 'sku_id', 'delivery_status_updated_at'/);
+  assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_SENSITIVE_COLUMN_ACL/);
   assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_UNEXPECTED_TABLE_ACL/);
   assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_UNEXPECTED_COLUMN_ACL/);
   assert.match(migration, /DIGITAL_DELIVERY_POSTCHECK_SERVICE_TABLE_ACL_UNEXPECTED/);

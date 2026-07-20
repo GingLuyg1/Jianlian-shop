@@ -447,6 +447,7 @@ declare
   v_unexpected_service_table_privilege text;
   v_unexpected_column_acl text;
   v_missing_authenticated_column text;
+  v_forbidden_authenticated_column text;
 begin
   select p.oid
     into v_manual_function_oid
@@ -621,14 +622,20 @@ begin
     'delivery_status', 'failure_reason', 'delivered_at', 'created_at', 'updated_at'
   ]::text[]) allowed(column_name)
   where not exists (
+    with explicit_column_acls as materialized (
+      select a.attname, a.attacl
+      from pg_catalog.pg_attribute a
+      where a.attrelid = 'public.order_deliveries'::regclass
+        and a.attnum > 0
+        and not a.attisdropped
+        and a.attacl is not null
+        and cardinality(a.attacl) > 0
+    )
     select 1
-    from pg_catalog.pg_attribute a
-    cross join lateral aclexplode(coalesce(a.attacl, '{}'::aclitem[])) acl
+    from explicit_column_acls a
+    cross join lateral pg_catalog.aclexplode(a.attacl) acl
     join pg_catalog.pg_roles r on r.oid = acl.grantee
-    where a.attrelid = 'public.order_deliveries'::regclass
-      and a.attnum > 0
-      and not a.attisdropped
-      and a.attname = allowed.column_name
+    where a.attname = allowed.column_name
       and r.rolname = 'authenticated'
       and acl.privilege_type = 'SELECT'
   )
@@ -640,6 +647,43 @@ begin
       v_missing_authenticated_column;
   end if;
 
+  with explicit_column_acls as materialized (
+    select a.attnum, a.attname, a.attacl
+    from pg_catalog.pg_attribute a
+    where a.attrelid = 'public.order_deliveries'::regclass
+      and a.attnum > 0
+      and not a.attisdropped
+      and a.attacl is not null
+      and cardinality(a.attacl) > 0
+  )
+  select a.attname
+    into v_forbidden_authenticated_column
+  from explicit_column_acls a
+  cross join lateral pg_catalog.aclexplode(a.attacl) acl
+  join pg_catalog.pg_roles r on r.oid = acl.grantee
+  where r.rolname = 'authenticated'
+    and acl.privilege_type = 'SELECT'
+    and a.attname = any(array[
+      'delivery_content', 'encrypted_content', 'inventory_id', 'delivery_note',
+      'viewed_at', 'product_id', 'sku_id', 'delivery_status_updated_at'
+    ]::name[])
+  order by a.attnum
+  limit 1;
+
+  if v_forbidden_authenticated_column is not null then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_SENSITIVE_COLUMN_ACL: %',
+      v_forbidden_authenticated_column;
+  end if;
+
+  with explicit_column_acls as materialized (
+    select a.attnum, a.attname, a.attacl
+    from pg_catalog.pg_attribute a
+    where a.attrelid = 'public.order_deliveries'::regclass
+      and a.attnum > 0
+      and not a.attisdropped
+      and a.attacl is not null
+      and cardinality(a.attacl) > 0
+  )
   select format(
       '%s.%s:%s',
       case when acl.grantee = 0 then 'PUBLIC' else pg_get_userbyid(acl.grantee) end,
@@ -647,12 +691,9 @@ begin
       acl.privilege_type
     )
     into v_unexpected_column_acl
-  from pg_catalog.pg_attribute a
-  cross join lateral aclexplode(coalesce(a.attacl, '{}'::aclitem[])) acl
-  where a.attrelid = 'public.order_deliveries'::regclass
-    and a.attnum > 0
-    and not a.attisdropped
-    and (
+  from explicit_column_acls a
+  cross join lateral pg_catalog.aclexplode(a.attacl) acl
+  where (
       acl.grantee = 0
       or acl.grantee in (
         select r.oid from pg_catalog.pg_roles r
