@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -409,8 +410,8 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <PublicLayout viewportLocked contentClassName="flex max-w-none overflow-hidden px-4 pb-4 pt-3 md:px-6 md:pb-4">
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1668px] flex-col">
+    <PublicLayout viewportLocked contentClassName="flex max-w-none overflow-hidden px-4 py-3 md:px-6">
+      <div className={`mx-auto flex w-full max-w-[1668px] flex-col ${publicMainPanelHeightClassName}`}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"

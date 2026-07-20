@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -280,8 +281,8 @@ export default function PromotionPage() {
   }
 
   return (
-    <PublicLayout contentClassName="mx-auto flex h-[calc(100dvh-72px)] max-w-none overflow-hidden px-4 py-2 md:px-5">
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-2.5">
+    <PublicLayout contentClassName="mx-auto max-w-none px-4 py-3 md:px-5">
+      <div className={`flex w-full flex-col gap-2.5 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
         {error && (
           <div className="flex h-10 shrink-0 items-center rounded-xl border border-red-100 bg-red-50 px-4 text-sm text-red-700">
             <span className="min-w-0 flex-1 truncate">{error}</span>

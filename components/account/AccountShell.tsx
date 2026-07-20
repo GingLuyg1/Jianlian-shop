@@ -7,6 +7,7 @@ import { AlertCircle, FileLock2, LogOut, Shield, UserCircle, WalletCards } from 
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { Button } from "@/components/ui/button";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -28,12 +29,21 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   const redirectPath = useMemo(() => pathname || "/account", [pathname]);
 
   useEffect(() => {
+    const desktopQuery = window.matchMedia("(min-width: 768px)");
     const bodyOverflow = document.body.style.overflow;
     const htmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
+
+    const syncViewportOverflow = () => {
+      const overflow = desktopQuery.matches ? "hidden" : bodyOverflow;
+      document.body.style.overflow = overflow;
+      document.documentElement.style.overflow = desktopQuery.matches ? "hidden" : htmlOverflow;
+    };
+
+    syncViewportOverflow();
+    desktopQuery.addEventListener("change", syncViewportOverflow);
 
     return () => {
+      desktopQuery.removeEventListener("change", syncViewportOverflow);
       document.body.style.overflow = bodyOverflow;
       document.documentElement.style.overflow = htmlOverflow;
     };
@@ -151,8 +161,8 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
   if (pathname === "/account/orders") {
     return (
-      <PublicLayout contentClassName="box-border flex h-[calc(100dvh-74px)] overflow-hidden px-4 py-2 md:px-6">
-        <div className="mx-auto flex min-h-0 w-full max-w-[1540px] flex-1 flex-col gap-3">
+      <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
+        <div className={`mx-auto flex w-full max-w-[1540px] flex-col gap-3 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
           {emailNotice}
           {children}
         </div>
@@ -161,11 +171,11 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <PublicLayout contentClassName="box-border flex h-[calc(100dvh-74px)] w-full max-w-full overflow-hidden px-4 py-3 md:px-6">
-      <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-4 overflow-hidden">
+    <PublicLayout contentClassName="w-full max-w-none px-4 py-3 md:px-6">
+      <div className={`mx-auto flex w-full max-w-6xl flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
         {emailNotice}
 
-        <div className="grid min-h-0 min-w-0 flex-1 overflow-hidden gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid min-w-0 flex-1 gap-4 overflow-visible md:min-h-0 md:grid-cols-[220px_minmax(0,1fr)] md:overflow-hidden">
           <aside className="hidden h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-white p-2 shadow-sm md:flex">
             <AccountNav pathname={pathname || "/account"} />
             <button
@@ -192,7 +202,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <main className="min-h-0 min-w-0 overflow-hidden">{children}</main>
+          <main className="min-w-0 overflow-visible md:min-h-0 md:overflow-y-auto">{children}</main>
         </div>
       </div>
     </PublicLayout>

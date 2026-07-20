@@ -26,6 +26,32 @@ function listRuntimeSourceFiles(dir) {
   return files;
 }
 
+test("public account surfaces share the responsive viewport panel height", () => {
+  const sharedLayout = file("components/layout/public-content.ts");
+  const accountShell = file("components/account/AccountShell.tsx");
+  const promotionPage = file("app/promotion/page.tsx");
+  const productPage = file("app/products/[id]/page.tsx");
+
+  assert.match(sharedLayout, /md:h-\[calc\(100dvh-87px\)\]/);
+  assert.doesNotMatch(sharedLayout, /h-\[(?:775|970|974)px\]/);
+  for (const source of [accountShell, promotionPage, productPage]) {
+    assert.match(source, /publicMainPanelHeightClassName/);
+  }
+  assert.match(accountShell, /md:overflow-y-auto/);
+  assert.match(accountShell, /matchMedia\("\(min-width: 768px\)"\)/);
+});
+
+test("account overview omits internal identity and unfinished-order summary cards", () => {
+  const accountOverview = file("app/account/page.tsx");
+
+  for (const removedLabel of ["显示名称", "账户角色", "余额来源", "未完成订单"]) {
+    assert.doesNotMatch(accountOverview, new RegExp(`label=["']${removedLabel}["']`));
+  }
+  assert.match(accountOverview, /label="登录邮箱"/);
+  assert.match(accountOverview, /label="当前余额"/);
+  assert.match(accountOverview, /href="\/account\/orders"/);
+});
+
 test("runtime source files do not contain common mojibake sequences", () => {
   const files = [
     ...listRuntimeSourceFiles("app"),

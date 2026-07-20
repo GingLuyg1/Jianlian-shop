@@ -2,30 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
   Clock,
-  CreditCard,
   Mail,
   ReceiptText,
   RefreshCw,
-  ShieldCheck,
   TrendingDown,
   TrendingUp,
-  UserRound,
   WalletCards,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getOrderStatusLabel, normalizeOrderStatus } from "@/lib/orders/order-status";
+import { getOrderStatusLabel } from "@/lib/orders/order-status";
 import { rechargeStatusLabel } from "@/lib/payments/recharge-utils";
 
 type ProfileView = {
   email: string | null;
-  displayName: string | null;
-  role: string | null;
   createdAt: string | null;
   balance: number;
 };
@@ -75,7 +71,6 @@ type AccountAssetsResponse = {
     totalRecharge: number;
     totalSpend: number;
     orderCount: number;
-    unfinishedOrderCount: number;
   };
   diagnostics: {
     profileError?: string | null;
@@ -117,10 +112,6 @@ function balanceTypeLabel(type: string) {
       system: "系统处理",
     }[type] ?? type
   );
-}
-
-function isUnfinishedOrder(status: string) {
-  return ["pending_payment", "paid", "processing", "delivered"].includes(normalizeOrderStatus(status));
 }
 
 export default function AccountOverviewPage() {
@@ -189,17 +180,8 @@ export default function AccountOverviewPage() {
             <InfoCard icon={TrendingUp} label="累计充值" value={formatMoney(data?.summary.totalRecharge ?? 0)} loading={loading} />
             <InfoCard icon={TrendingDown} label="累计消费" value={formatMoney(data?.summary.totalSpend ?? 0)} loading={loading} />
             <InfoCard icon={ReceiptText} label="订单数量" value={String(data?.summary.orderCount ?? 0)} loading={loading} />
-            <InfoCard icon={ReceiptText} label="未完成订单" value={String(data?.summary.unfinishedOrderCount ?? 0)} loading={loading} />
             <InfoCard icon={Mail} label="登录邮箱" value={data?.profile.email || "—"} loading={loading} />
-            <InfoCard icon={UserRound} label="显示名称" value={data?.profile.displayName || "—"} loading={loading} />
-            <InfoCard icon={ShieldCheck} label="账户角色" value={data?.profile.role || "user"} loading={loading} />
             <InfoCard icon={Clock} label="注册时间" value={formatDate(data?.profile.createdAt)} loading={loading} />
-            <InfoCard
-              icon={CreditCard}
-              label="余额来源"
-              value="profiles.balance"
-              loading={loading}
-            />
           </div>
         </CardContent>
       </Card>
@@ -323,7 +305,7 @@ function InfoCard({
   loading,
   value,
 }: {
-  icon: typeof UserRound;
+  icon: LucideIcon;
   label: string;
   loading: boolean;
   value: string;

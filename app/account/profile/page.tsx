@@ -260,7 +260,7 @@ export default function AccountProfilePage() {
         <CardTitle className="text-xl">个人资料</CardTitle>
         <p className="text-sm text-muted-foreground">维护你的联系信息、常用收件信息和头像。</p>
       </CardHeader>
-      <CardContent className="min-h-0 min-w-0 flex-1 overflow-hidden">
+      <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {loading ? (
           <div className="grid min-h-0 min-w-0 flex-1 gap-4 md:grid-cols-2">
             {Array.from({ length: 8 }).map((_, index) => (
@@ -268,7 +268,7 @@ export default function AccountProfilePage() {
             ))}
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
+          <form onSubmit={handleSubmit} className="flex min-h-full min-w-0 flex-col gap-4">
             {formError ? (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {formError}

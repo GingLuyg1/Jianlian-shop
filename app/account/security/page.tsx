@@ -115,8 +115,8 @@ export default function AccountSecurityPage() {
         <CardTitle className="text-xl">账号安全</CardTitle>
         <p className="text-sm text-muted-foreground">修改密码前需要重新验证当前密码。</p>
       </CardHeader>
-      <CardContent className="min-h-0 min-w-0 flex-1 overflow-hidden">
-        <form onSubmit={handleSubmit} className="flex h-full min-h-0 max-w-xl flex-col gap-5 overflow-hidden">
+      <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex min-h-full max-w-xl flex-col gap-5">
           {formError ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {formError}
