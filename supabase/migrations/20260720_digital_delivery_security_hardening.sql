@@ -25,6 +25,7 @@ declare
   v_delivery_count bigint;
   v_user_policy_count integer;
   v_admin_policy_count integer;
+  v_explicit_column_acl_count integer;
   v_record record;
 begin
   if to_regclass('public.order_deliveries') is null
@@ -185,6 +186,17 @@ begin
     and c.relname = 'order_deliveries';
   raise notice 'pre-migration order_deliveries table ACL: %', v_record.relacl;
 
+  select count(*)
+    into v_explicit_column_acl_count
+  from pg_catalog.pg_attribute a
+  where a.attrelid = 'public.order_deliveries'::regclass
+    and a.attnum > 0
+    and not a.attisdropped
+    and a.attacl is not null
+    and cardinality(a.attacl) > 0;
+  raise notice 'pre-migration order_deliveries columns with explicit ACL entries: %',
+    v_explicit_column_acl_count;
+
   for v_record in
     select a.attname as column_name, a.attacl
     from pg_catalog.pg_attribute a
@@ -315,35 +327,52 @@ create policy "users can read own deliveries"
   );
 
 -- -----------------------------------------------------------------------------
--- 4. Remove direct writes and reduce authenticated SELECT to the columns required
---    by the current user order/privacy queries and browser admin dashboard.
+-- 4. Reset table and explicit column ACLs, then grant only the permissions used by
+--    the current server and authenticated user queries.
 --
 -- user_id is required by the authenticated privacy summary/count query.
 -- failure_reason is required by the current authenticated browser admin dashboard.
 -- The RLS policies still separate ordinary users from administrators row-by-row.
 -- -----------------------------------------------------------------------------
-revoke insert, update, delete on table public.order_deliveries from public, anon, authenticated;
-revoke select on table public.order_deliveries from public, anon, authenticated;
-revoke select (
-  id,
-  order_id,
-  order_item_id,
-  delivery_type,
-  delivery_content,
-  delivery_status,
-  delivered_at,
-  created_at,
-  updated_at,
-  sku_id,
-  user_id,
-  product_id,
-  inventory_id,
-  encrypted_content,
-  viewed_at,
-  failure_reason,
-  delivery_note,
-  delivery_status_updated_at
-) on table public.order_deliveries from public, anon, authenticated;
+revoke all privileges on table public.order_deliveries
+  from public, anon, authenticated, service_role;
+
+-- REVOKE ALL PRIVILEGES ON TABLE does not remove historical column-specific ACLs.
+-- Build the complete deployed column list from pg_attribute and revoke every
+-- column-grantable privilege before applying the safe allow-list below.
+do $$
+declare
+  v_column_list text;
+begin
+  select string_agg(format('%I', a.attname), ', ' order by a.attnum)
+    into v_column_list
+  from pg_catalog.pg_attribute a
+  where a.attrelid = 'public.order_deliveries'::regclass
+    and a.attnum > 0
+    and not a.attisdropped;
+
+  if nullif(v_column_list, '') is null then
+    raise exception 'DIGITAL_DELIVERY_COLUMN_ACL_RESET_NO_COLUMNS';
+  end if;
+
+  execute format(
+    'revoke select (%s) on table public.order_deliveries from public, anon, authenticated, service_role',
+    v_column_list
+  );
+  execute format(
+    'revoke insert (%s) on table public.order_deliveries from public, anon, authenticated, service_role',
+    v_column_list
+  );
+  execute format(
+    'revoke update (%s) on table public.order_deliveries from public, anon, authenticated, service_role',
+    v_column_list
+  );
+  execute format(
+    'revoke references (%s) on table public.order_deliveries from public, anon, authenticated, service_role',
+    v_column_list
+  );
+end
+$$;
 
 grant select (
   id,
@@ -413,9 +442,11 @@ declare
   v_secure_function_count integer;
   v_manual_function_oid oid;
   v_manual_public_execute boolean;
-  v_unexpected_authenticated_column text;
+  v_unexpected_table_acl text;
+  v_missing_service_table_privilege text;
+  v_unexpected_service_table_privilege text;
+  v_unexpected_column_acl text;
   v_missing_authenticated_column text;
-  v_anon_column text;
 begin
   select p.oid
     into v_manual_function_oid
@@ -520,21 +551,67 @@ begin
     raise exception 'DIGITAL_DELIVERY_POSTCHECK_MANUAL_DELIVERY_DEFINITION_FAILED';
   end if;
 
-  if has_table_privilege('authenticated', 'public.order_deliveries', 'INSERT')
-     or has_table_privilege('authenticated', 'public.order_deliveries', 'UPDATE')
-     or has_table_privilege('authenticated', 'public.order_deliveries', 'DELETE')
-     or has_table_privilege('anon', 'public.order_deliveries', 'SELECT')
-     or has_table_privilege('anon', 'public.order_deliveries', 'INSERT')
-     or has_table_privilege('anon', 'public.order_deliveries', 'UPDATE')
-     or has_table_privilege('anon', 'public.order_deliveries', 'DELETE')
-     or has_table_privilege('anon', 'public.order_deliveries', 'TRUNCATE')
-     or has_table_privilege('anon', 'public.order_deliveries', 'REFERENCES')
-     or has_table_privilege('anon', 'public.order_deliveries', 'TRIGGER')
-     or not has_table_privilege('service_role', 'public.order_deliveries', 'SELECT')
-     or not has_table_privilege('service_role', 'public.order_deliveries', 'INSERT')
-     or not has_table_privilege('service_role', 'public.order_deliveries', 'UPDATE')
-     or not has_table_privilege('service_role', 'public.order_deliveries', 'DELETE') then
-    raise exception 'DIGITAL_DELIVERY_POSTCHECK_TABLE_ACL_FAILED';
+  -- Inspect direct table ACL entries only. PostgreSQL owner privileges are ignored,
+  -- and column grants are checked separately from pg_attribute.attacl below.
+  select format(
+      '%s:%s',
+      case when acl.grantee = 0 then 'PUBLIC' else pg_get_userbyid(acl.grantee) end,
+      acl.privilege_type
+    )
+    into v_unexpected_table_acl
+  from pg_catalog.pg_class c
+  cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+  where c.oid = 'public.order_deliveries'::regclass
+    and (
+      acl.grantee = 0
+      or acl.grantee in (
+        select r.oid from pg_catalog.pg_roles r
+        where r.rolname in ('anon', 'authenticated')
+      )
+    )
+  order by 1
+  limit 1;
+
+  if v_unexpected_table_acl is not null then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_UNEXPECTED_TABLE_ACL: %',
+      v_unexpected_table_acl;
+  end if;
+
+  select required.privilege_type
+    into v_missing_service_table_privilege
+  from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE']::text[])
+    required(privilege_type)
+  where not exists (
+    select 1
+    from pg_catalog.pg_class c
+    cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+    join pg_catalog.pg_roles r on r.oid = acl.grantee
+    where c.oid = 'public.order_deliveries'::regclass
+      and r.rolname = 'service_role'
+      and acl.privilege_type = required.privilege_type
+  )
+  order by required.privilege_type
+  limit 1;
+
+  if v_missing_service_table_privilege is not null then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_SERVICE_TABLE_ACL_MISSING: %',
+      v_missing_service_table_privilege;
+  end if;
+
+  select acl.privilege_type
+    into v_unexpected_service_table_privilege
+  from pg_catalog.pg_class c
+  cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+  join pg_catalog.pg_roles r on r.oid = acl.grantee
+  where c.oid = 'public.order_deliveries'::regclass
+    and r.rolname = 'service_role'
+    and acl.privilege_type <> all(array['SELECT', 'INSERT', 'UPDATE', 'DELETE']::text[])
+  order by acl.privilege_type
+  limit 1;
+
+  if v_unexpected_service_table_privilege is not null then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_SERVICE_TABLE_ACL_UNEXPECTED: %',
+      v_unexpected_service_table_privilege;
   end if;
 
   select allowed.column_name
@@ -543,11 +620,17 @@ begin
     'id', 'order_id', 'order_item_id', 'user_id', 'delivery_type',
     'delivery_status', 'failure_reason', 'delivered_at', 'created_at', 'updated_at'
   ]::text[]) allowed(column_name)
-  where not has_column_privilege(
-    'authenticated',
-    'public.order_deliveries',
-    allowed.column_name,
-    'SELECT'
+  where not exists (
+    select 1
+    from pg_catalog.pg_attribute a
+    cross join lateral aclexplode(coalesce(a.attacl, '{}'::aclitem[])) acl
+    join pg_catalog.pg_roles r on r.oid = acl.grantee
+    where a.attrelid = 'public.order_deliveries'::regclass
+      and a.attnum > 0
+      and not a.attisdropped
+      and a.attname = allowed.column_name
+      and r.rolname = 'authenticated'
+      and acl.privilege_type = 'SELECT'
   )
   order by allowed.column_name
   limit 1;
@@ -557,53 +640,41 @@ begin
       v_missing_authenticated_column;
   end if;
 
-  select c.column_name
-    into v_unexpected_authenticated_column
-  from information_schema.columns c
-  where c.table_schema = 'public'
-    and c.table_name = 'order_deliveries'
-    and has_column_privilege(
-      'authenticated',
-      format('%I.%I', c.table_schema, c.table_name),
-      c.column_name,
-      'SELECT'
+  select format(
+      '%s.%s:%s',
+      case when acl.grantee = 0 then 'PUBLIC' else pg_get_userbyid(acl.grantee) end,
+      a.attname,
+      acl.privilege_type
     )
-    and c.column_name <> all(array[
-      'id', 'order_id', 'order_item_id', 'user_id', 'delivery_type',
-      'delivery_status', 'failure_reason', 'delivered_at', 'created_at', 'updated_at'
-    ]::text[])
-  order by c.ordinal_position
+    into v_unexpected_column_acl
+  from pg_catalog.pg_attribute a
+  cross join lateral aclexplode(coalesce(a.attacl, '{}'::aclitem[])) acl
+  where a.attrelid = 'public.order_deliveries'::regclass
+    and a.attnum > 0
+    and not a.attisdropped
+    and (
+      acl.grantee = 0
+      or acl.grantee in (
+        select r.oid from pg_catalog.pg_roles r
+        where r.rolname in ('anon', 'service_role')
+      )
+      or (
+        acl.grantee = (select r.oid from pg_catalog.pg_roles r where r.rolname = 'authenticated')
+        and (
+          acl.privilege_type <> 'SELECT'
+          or a.attname <> all(array[
+            'id', 'order_id', 'order_item_id', 'user_id', 'delivery_type',
+            'delivery_status', 'failure_reason', 'delivered_at', 'created_at', 'updated_at'
+          ]::name[])
+        )
+      )
+    )
+  order by a.attnum, acl.privilege_type
   limit 1;
 
-  if v_unexpected_authenticated_column is not null then
-    raise exception 'DIGITAL_DELIVERY_POSTCHECK_UNEXPECTED_AUTHENTICATED_COLUMN: %',
-      v_unexpected_authenticated_column;
-  end if;
-
-  if has_column_privilege('authenticated', 'public.order_deliveries', 'delivery_content', 'SELECT')
-     or has_column_privilege('authenticated', 'public.order_deliveries', 'encrypted_content', 'SELECT')
-     or has_column_privilege('authenticated', 'public.order_deliveries', 'inventory_id', 'SELECT')
-     or has_column_privilege('authenticated', 'public.order_deliveries', 'delivery_note', 'SELECT')
-     or has_column_privilege('authenticated', 'public.order_deliveries', 'viewed_at', 'SELECT') then
-    raise exception 'DIGITAL_DELIVERY_POSTCHECK_SENSITIVE_COLUMN_ACL_FAILED';
-  end if;
-
-  select c.column_name
-    into v_anon_column
-  from information_schema.columns c
-  where c.table_schema = 'public'
-    and c.table_name = 'order_deliveries'
-    and has_column_privilege(
-      'anon',
-      format('%I.%I', c.table_schema, c.table_name),
-      c.column_name,
-      'SELECT'
-    )
-  order by c.ordinal_position
-  limit 1;
-
-  if v_anon_column is not null then
-    raise exception 'DIGITAL_DELIVERY_POSTCHECK_ANON_COLUMN_ACCESS: %', v_anon_column;
+  if v_unexpected_column_acl is not null then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_UNEXPECTED_COLUMN_ACL: %',
+      v_unexpected_column_acl;
   end if;
 
   if has_function_privilege('anon', 'public.get_order_fulfillment_for_user(text)', 'EXECUTE')
