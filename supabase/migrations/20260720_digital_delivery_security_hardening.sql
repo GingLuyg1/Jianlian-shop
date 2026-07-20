@@ -1,0 +1,639 @@
+-- Digital delivery security hardening.
+--
+-- IMPORTANT:
+-- - This migration must be run only after the production preflight is reviewed.
+-- - It does not read delivery_content or digital inventory secret content.
+-- - It does not migrate delivery rows or add a redundant order_deliveries.user_id.
+-- - Deploy the application change that removes the legacy delivery RPC calls before
+--   applying this migration.
+
+begin;
+
+-- -----------------------------------------------------------------------------
+-- 1. Precheck: dependencies, exact signatures, RLS, row count, current ACL/policy.
+-- -----------------------------------------------------------------------------
+do $$
+declare
+  v_expected_columns text[] := array[
+    'id', 'order_id', 'order_item_id', 'delivery_type', 'delivery_content',
+    'delivery_status', 'delivered_at', 'created_at', 'updated_at', 'sku_id',
+    'user_id', 'product_id', 'inventory_id', 'encrypted_content', 'viewed_at',
+    'failure_reason', 'delivery_note', 'delivery_status_updated_at'
+  ];
+  v_missing_columns text[];
+  v_missing_functions text[];
+  v_delivery_count bigint;
+  v_user_policy_count integer;
+  v_record record;
+begin
+  if to_regclass('public.order_deliveries') is null
+     or to_regclass('public.orders') is null
+     or to_regclass('public.digital_delivery_secrets') is null then
+    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_TABLE_MISSING';
+  end if;
+
+  select array_agg(expected.column_name order by expected.column_name)
+    into v_missing_columns
+  from unnest(v_expected_columns) as expected(column_name)
+  where not exists (
+    select 1
+    from information_schema.columns c
+    where c.table_schema = 'public'
+      and c.table_name = 'order_deliveries'
+      and c.column_name = expected.column_name
+  );
+
+  if cardinality(v_missing_columns) > 0 then
+    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_COLUMNS_MISSING: %', v_missing_columns;
+  end if;
+
+  select array_agg(expected.signature order by expected.signature)
+    into v_missing_functions
+  from unnest(array[
+    'public.refresh_order_fulfillment_status(uuid)',
+    'public.log_order_item_delivery_status(uuid,uuid,text,text,text,text)',
+    'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)',
+    'public.sync_product_available_stock(uuid)',
+    'public.deliver_digital_order(uuid,text)',
+    'public.admin_deliver_order_item_manual(uuid,uuid,text,text)',
+    'public.get_order_fulfillment_for_user(text)',
+    'public.get_order_delivery_for_user(text)',
+    'public.auto_deliver_order(uuid)',
+    'public.admin_retry_auto_delivery(uuid)',
+    'public.admin_deliver_inventory_item(uuid,uuid,uuid,text)',
+    'public.admin_append_manual_delivery(uuid,uuid,text,text,text,text)'
+  ]::text[]) as expected(signature)
+  where to_regprocedure(expected.signature) is null;
+
+  if cardinality(v_missing_functions) > 0 then
+    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_FUNCTIONS_MISSING: %', v_missing_functions;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'order_deliveries'
+      and c.relrowsecurity
+  ) then
+    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_RLS_DISABLED';
+  end if;
+
+  select count(*) into v_delivery_count from public.order_deliveries;
+  raise notice 'order_deliveries row count (content not read): %', v_delivery_count;
+
+  select count(*)
+    into v_user_policy_count
+  from pg_catalog.pg_policies p
+  where p.schemaname = 'public'
+    and p.tablename = 'order_deliveries'
+    and p.cmd = 'SELECT'
+    and 'authenticated' = any(p.roles)
+    and coalesce(p.qual, '') ~ 'auth[.]uid[(][)]'
+    and coalesce(p.qual, '') !~ 'is_admin';
+
+  if v_user_policy_count <> 1 then
+    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_USER_POLICY_COUNT: %', v_user_policy_count;
+  end if;
+
+  if pg_get_functiondef('public.deliver_digital_order(uuid,text)'::regprocedure)
+       !~ 'digital_delivery_secrets'
+     or pg_get_functiondef('public.deliver_digital_order(uuid,text)'::regprocedure)
+       ~ 'delivery_content[[:space:]]*[,)]' then
+    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_AUTO_DELIVERY_DEFINITION_UNSAFE';
+  end if;
+
+  if pg_get_functiondef('public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure)
+       !~ 'digital_delivery_secrets'
+     or pg_get_functiondef('public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure)
+       !~ 'payment_status[^;]*paid' then
+    raise exception 'DIGITAL_DELIVERY_PREFLIGHT_MANUAL_DELIVERY_DEFINITION_UNSAFE';
+  end if;
+
+  for v_record in
+    select
+      p.policyname,
+      p.roles,
+      p.cmd,
+      p.qual,
+      p.with_check
+    from pg_catalog.pg_policies p
+    where p.schemaname = 'public'
+      and p.tablename = 'order_deliveries'
+    order by p.policyname
+  loop
+    raise notice 'pre-migration policy: % roles=% cmd=% using=% check=%',
+      v_record.policyname, v_record.roles, v_record.cmd,
+      v_record.qual, v_record.with_check;
+  end loop;
+
+  for v_record in
+    select
+      p.oid::regprocedure as signature,
+      p.proacl
+    from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.oid in (
+        'public.refresh_order_fulfillment_status(uuid)'::regprocedure,
+        'public.log_order_item_delivery_status(uuid,uuid,text,text,text,text)'::regprocedure,
+        'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)'::regprocedure,
+        'public.sync_product_available_stock(uuid)'::regprocedure,
+        'public.deliver_digital_order(uuid,text)'::regprocedure,
+        'public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure,
+        'public.get_order_fulfillment_for_user(text)'::regprocedure,
+        'public.get_order_delivery_for_user(text)'::regprocedure,
+        'public.auto_deliver_order(uuid)'::regprocedure,
+        'public.admin_retry_auto_delivery(uuid)'::regprocedure,
+        'public.admin_deliver_inventory_item(uuid,uuid,uuid,text)'::regprocedure,
+        'public.admin_append_manual_delivery(uuid,uuid,text,text,text,text)'::regprocedure
+      )
+    order by p.oid::regprocedure::text
+  loop
+    raise notice 'pre-migration function ACL: % acl=%', v_record.signature, v_record.proacl;
+  end loop;
+
+  select c.relacl
+    into v_record
+  from pg_catalog.pg_class c
+  join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public'
+    and c.relname = 'order_deliveries';
+  raise notice 'pre-migration order_deliveries table ACL: %', v_record.relacl;
+
+  for v_record in
+    select a.attname as column_name, a.attacl
+    from pg_catalog.pg_attribute a
+    where a.attrelid = 'public.order_deliveries'::regclass
+      and a.attnum > 0
+      and not a.attisdropped
+    order by a.attnum
+  loop
+    raise notice 'pre-migration order_deliveries column ACL: % acl=%',
+      v_record.column_name, v_record.attacl;
+  end loop;
+end
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 2. Make the safe manual-delivery function compatible with its service-role-only
+--    caller. All payment, order-state, item-type, duplicate and secret-storage
+--    checks from the deployed safe implementation remain in place.
+-- -----------------------------------------------------------------------------
+create or replace function public.admin_deliver_order_item_manual(
+  p_order_id uuid,
+  p_order_item_id uuid,
+  p_delivery_content text,
+  p_delivery_note text default null
+)
+returns public.order_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.orders;
+  v_item public.order_items;
+  v_delivery public.order_deliveries;
+  v_now timestamptz := now();
+  v_jwt_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
+begin
+  if v_jwt_role <> 'service_role' then
+    raise exception 'manual delivery requires service role';
+  end if;
+  if nullif(btrim(coalesce(p_delivery_content, '')), '') is null then
+    raise exception '交付内容为空';
+  end if;
+
+  select * into v_order from public.orders where id = p_order_id for update;
+  if not found then raise exception '订单不存在'; end if;
+  if v_order.payment_status <> 'paid' then raise exception '订单未支付'; end if;
+  if v_order.status in ('cancelled','expired','refunded','failed') then
+    raise exception '订单已取消、过期、退款或失败';
+  end if;
+
+  select * into v_item
+  from public.order_items
+  where id = p_order_item_id and order_id = p_order_id
+  for update;
+  if not found then raise exception '订单项不存在'; end if;
+  if public.normalize_order_item_delivery_type(v_item.delivery_type) <> 'manual_delivery' then
+    raise exception '交付类型不匹配';
+  end if;
+  if coalesce(v_item.delivery_status, '') in ('delivered','not_required')
+    or exists (
+      select 1
+      from public.order_deliveries
+      where order_item_id = p_order_item_id
+        and delivery_status = 'delivered'
+    ) then
+    raise exception '重复交付';
+  end if;
+
+  insert into public.order_deliveries (
+    order_id, order_item_id, user_id, product_id, sku_id, delivery_type,
+    encrypted_content, delivery_status, delivered_at, delivery_note, created_at, updated_at
+  )
+  values (
+    p_order_id, p_order_item_id, v_order.user_id, v_item.product_id, v_item.sku_id, 'manual_delivery',
+    'stored_in_private_table', 'delivered', v_now,
+    nullif(btrim(coalesce(p_delivery_note, '')), ''), v_now, v_now
+  )
+  returning * into v_delivery;
+
+  insert into public.digital_delivery_secrets (delivery_id, content)
+  values (v_delivery.id, btrim(p_delivery_content));
+
+  update public.order_items
+  set delivery_status = 'delivered',
+      delivered_quantity = coalesce(quantity, 1),
+      delivery_completed_at = v_now,
+      delivery_status_updated_at = v_now,
+      delivery_failure_reason = null
+  where id = p_order_item_id;
+
+  perform public.log_order_item_delivery_status(
+    p_order_id, p_order_item_id, v_item.delivery_status, 'delivered',
+    'admin', '管理员提交人工交付内容'
+  );
+  perform public.write_delivery_log(
+    p_order_id, p_order_item_id, null, 'manual_admin', 'delivery_success',
+    '管理员人工交付完成', jsonb_build_object('has_delivery_content', true)
+  );
+  perform public.refresh_order_fulfillment_status(p_order_id);
+
+  return v_delivery;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 3. Harden the existing authenticated user SELECT policy in place.
+--    The precheck requires exactly one owner-based non-admin policy, so this does
+--    not alter the separate administrator policy.
+-- -----------------------------------------------------------------------------
+do $$
+declare
+  v_policy_name text;
+begin
+  select p.policyname
+    into strict v_policy_name
+  from pg_catalog.pg_policies p
+  where p.schemaname = 'public'
+    and p.tablename = 'order_deliveries'
+    and p.cmd = 'SELECT'
+    and 'authenticated' = any(p.roles)
+    and coalesce(p.qual, '') ~ 'auth[.]uid[(][)]'
+    and coalesce(p.qual, '') !~ 'is_admin';
+
+  execute format(
+    'alter policy %I on public.order_deliveries to authenticated using (
+       delivery_status = ''delivered''
+       and exists (
+         select 1
+         from public.orders o
+         where o.id = order_deliveries.order_id
+           and o.user_id = auth.uid()
+           and o.payment_status = ''paid''
+           and o.status not in (''cancelled'', ''expired'', ''failed'')
+       )
+     )',
+    v_policy_name
+  );
+end
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 4. Remove direct writes and reduce authenticated SELECT to the columns required
+--    by the current user order/privacy queries and browser admin dashboard.
+--
+-- user_id is required by the authenticated privacy summary/count query.
+-- failure_reason is required by the current authenticated browser admin dashboard.
+-- The RLS policies still separate ordinary users from administrators row-by-row.
+-- -----------------------------------------------------------------------------
+revoke insert, update, delete on table public.order_deliveries from public, anon, authenticated;
+revoke select on table public.order_deliveries from public, anon, authenticated;
+revoke select (
+  id,
+  order_id,
+  order_item_id,
+  delivery_type,
+  delivery_content,
+  delivery_status,
+  delivered_at,
+  created_at,
+  updated_at,
+  sku_id,
+  user_id,
+  product_id,
+  inventory_id,
+  encrypted_content,
+  viewed_at,
+  failure_reason,
+  delivery_note,
+  delivery_status_updated_at
+) on table public.order_deliveries from public, anon, authenticated;
+
+grant select (
+  id,
+  order_id,
+  order_item_id,
+  user_id,
+  delivery_type,
+  delivery_status,
+  failure_reason,
+  delivered_at,
+  created_at,
+  updated_at
+) on table public.order_deliveries to authenticated;
+
+grant select, insert, update, delete on table public.order_deliveries to service_role;
+
+-- -----------------------------------------------------------------------------
+-- 5. Delivery write functions and internal helpers: service-role only.
+--    SECURITY DEFINER owner calls from approved outer functions remain valid.
+-- -----------------------------------------------------------------------------
+revoke execute on function public.refresh_order_fulfillment_status(uuid) from public, anon, authenticated;
+revoke execute on function public.log_order_item_delivery_status(uuid,uuid,text,text,text,text) from public, anon, authenticated;
+revoke execute on function public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb) from public, anon, authenticated;
+revoke execute on function public.sync_product_available_stock(uuid) from public, anon, authenticated;
+
+grant execute on function public.refresh_order_fulfillment_status(uuid) to service_role;
+grant execute on function public.log_order_item_delivery_status(uuid,uuid,text,text,text,text) to service_role;
+grant execute on function public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb) to service_role;
+grant execute on function public.sync_product_available_stock(uuid) to service_role;
+
+-- User read functions retain their internal auth.uid(), ownership, paid-state,
+-- order-state and delivered-state checks.
+revoke execute on function public.get_order_fulfillment_for_user(text) from public, anon;
+revoke execute on function public.get_order_delivery_for_user(text) from public, anon;
+grant execute on function public.get_order_fulfillment_for_user(text) to authenticated, service_role;
+grant execute on function public.get_order_delivery_for_user(text) to authenticated, service_role;
+
+-- Administrator routes authenticate and authorize with their Cookie client first,
+-- then explicitly use a server-only service-role client for these RPCs.
+revoke execute on function public.deliver_digital_order(uuid,text) from public, anon, authenticated;
+revoke execute on function public.admin_deliver_order_item_manual(uuid,uuid,text,text) from public, anon, authenticated;
+grant execute on function public.deliver_digital_order(uuid,text) to service_role;
+grant execute on function public.admin_deliver_order_item_manual(uuid,uuid,text,text) to service_role;
+
+-- Fully deprecate unsafe legacy entry points. They are intentionally not granted
+-- to service_role because their audited definitions can mark unpaid orders paid,
+-- deliver pending orders, select arbitrary available inventory, or write plaintext
+-- into order_deliveries.delivery_content. They remain owner-callable for forensic
+-- rollback only and are not dropped in this compatibility migration.
+revoke execute on function public.auto_deliver_order(uuid) from public, anon, authenticated, service_role;
+revoke execute on function public.admin_retry_auto_delivery(uuid) from public, anon, authenticated, service_role;
+revoke execute on function public.admin_deliver_inventory_item(uuid,uuid,uuid,text) from public, anon, authenticated, service_role;
+revoke execute on function public.admin_append_manual_delivery(uuid,uuid,text,text,text,text) from public, anon, authenticated, service_role;
+
+comment on function public.auto_deliver_order(uuid) is 'DEPRECATED: unsafe legacy delivery entry point; use deliver_digital_order(uuid,text).';
+comment on function public.admin_retry_auto_delivery(uuid) is 'DEPRECATED: unsafe legacy retry entry point; use deliver_digital_order(uuid,text).';
+comment on function public.admin_deliver_inventory_item(uuid,uuid,uuid,text) is 'DEPRECATED: unsafe legacy inventory delivery entry point.';
+comment on function public.admin_append_manual_delivery(uuid,uuid,text,text,text,text) is 'DEPRECATED: unsafe plaintext delivery entry point; use admin_deliver_order_item_manual(uuid,uuid,text,text).';
+
+-- -----------------------------------------------------------------------------
+-- 6. Postcheck: exact policy behavior and effective role permissions.
+-- -----------------------------------------------------------------------------
+do $$
+declare
+  v_policy_count integer;
+  v_secure_function_count integer;
+  v_unexpected_authenticated_column text;
+  v_missing_authenticated_column text;
+  v_anon_column text;
+begin
+  select count(*)
+    into v_policy_count
+  from pg_catalog.pg_policies p
+  where p.schemaname = 'public'
+    and p.tablename = 'order_deliveries'
+    and p.cmd = 'SELECT'
+    and 'authenticated' = any(p.roles)
+    and coalesce(p.qual, '') ~ 'auth[.]uid[(][)]'
+    and coalesce(p.qual, '') ~ 'payment_status[^'']*''paid'''
+    and coalesce(p.qual, '') ~ 'delivery_status[^'']*''delivered'''
+    and coalesce(p.qual, '') ~ '''cancelled''[^;]*''expired''[^;]*''failed''';
+
+  if v_policy_count <> 1 then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_USER_POLICY_FAILED: %', v_policy_count;
+  end if;
+
+  select count(*)
+    into v_secure_function_count
+  from pg_catalog.pg_proc p
+  where p.oid in (
+      'public.refresh_order_fulfillment_status(uuid)'::regprocedure,
+      'public.log_order_item_delivery_status(uuid,uuid,text,text,text,text)'::regprocedure,
+      'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)'::regprocedure,
+      'public.sync_product_available_stock(uuid)'::regprocedure,
+      'public.deliver_digital_order(uuid,text)'::regprocedure,
+      'public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure,
+      'public.get_order_fulfillment_for_user(text)'::regprocedure,
+      'public.get_order_delivery_for_user(text)'::regprocedure
+    )
+    and p.prosecdef
+    and coalesce(p.proconfig, array[]::text[]) @> array['search_path=public'];
+
+  if v_secure_function_count <> 8 then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_SECURITY_CONFIGURATION_FAILED: %', v_secure_function_count;
+  end if;
+
+  if pg_get_functiondef('public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure)
+       !~ 'request[.]jwt[.]claim[.]role'
+     or pg_get_functiondef('public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure)
+       !~ 'service_role'
+     or pg_get_functiondef('public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure)
+       !~ 'payment_status[^;]*paid'
+     or pg_get_functiondef('public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure)
+       !~ 'digital_delivery_secrets' then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_MANUAL_DELIVERY_DEFINITION_FAILED';
+  end if;
+
+  if has_table_privilege('authenticated', 'public.order_deliveries', 'INSERT')
+     or has_table_privilege('authenticated', 'public.order_deliveries', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.order_deliveries', 'DELETE')
+     or has_table_privilege('anon', 'public.order_deliveries', 'SELECT')
+     or has_table_privilege('anon', 'public.order_deliveries', 'INSERT')
+     or has_table_privilege('anon', 'public.order_deliveries', 'UPDATE')
+     or has_table_privilege('anon', 'public.order_deliveries', 'DELETE')
+     or not has_table_privilege('service_role', 'public.order_deliveries', 'SELECT')
+     or not has_table_privilege('service_role', 'public.order_deliveries', 'INSERT')
+     or not has_table_privilege('service_role', 'public.order_deliveries', 'UPDATE')
+     or not has_table_privilege('service_role', 'public.order_deliveries', 'DELETE') then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_TABLE_ACL_FAILED';
+  end if;
+
+  select allowed.column_name
+    into v_missing_authenticated_column
+  from unnest(array[
+    'id', 'order_id', 'order_item_id', 'user_id', 'delivery_type',
+    'delivery_status', 'failure_reason', 'delivered_at', 'created_at', 'updated_at'
+  ]::text[]) allowed(column_name)
+  where not has_column_privilege(
+    'authenticated',
+    'public.order_deliveries',
+    allowed.column_name,
+    'SELECT'
+  )
+  order by allowed.column_name
+  limit 1;
+
+  if v_missing_authenticated_column is not null then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_REQUIRED_AUTHENTICATED_COLUMN_MISSING: %',
+      v_missing_authenticated_column;
+  end if;
+
+  select c.column_name
+    into v_unexpected_authenticated_column
+  from information_schema.columns c
+  where c.table_schema = 'public'
+    and c.table_name = 'order_deliveries'
+    and has_column_privilege(
+      'authenticated',
+      format('%I.%I', c.table_schema, c.table_name),
+      c.column_name,
+      'SELECT'
+    )
+    and c.column_name <> all(array[
+      'id', 'order_id', 'order_item_id', 'user_id', 'delivery_type',
+      'delivery_status', 'failure_reason', 'delivered_at', 'created_at', 'updated_at'
+    ]::text[])
+  order by c.ordinal_position
+  limit 1;
+
+  if v_unexpected_authenticated_column is not null then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_UNEXPECTED_AUTHENTICATED_COLUMN: %',
+      v_unexpected_authenticated_column;
+  end if;
+
+  if has_column_privilege('authenticated', 'public.order_deliveries', 'delivery_content', 'SELECT')
+     or has_column_privilege('authenticated', 'public.order_deliveries', 'encrypted_content', 'SELECT')
+     or has_column_privilege('authenticated', 'public.order_deliveries', 'inventory_id', 'SELECT')
+     or has_column_privilege('authenticated', 'public.order_deliveries', 'delivery_note', 'SELECT')
+     or has_column_privilege('authenticated', 'public.order_deliveries', 'viewed_at', 'SELECT') then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_SENSITIVE_COLUMN_ACL_FAILED';
+  end if;
+
+  select c.column_name
+    into v_anon_column
+  from information_schema.columns c
+  where c.table_schema = 'public'
+    and c.table_name = 'order_deliveries'
+    and has_column_privilege(
+      'anon',
+      format('%I.%I', c.table_schema, c.table_name),
+      c.column_name,
+      'SELECT'
+    )
+  order by c.ordinal_position
+  limit 1;
+
+  if v_anon_column is not null then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_ANON_COLUMN_ACCESS: %', v_anon_column;
+  end if;
+
+  if has_function_privilege('anon', 'public.get_order_fulfillment_for_user(text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.get_order_delivery_for_user(text)', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.get_order_fulfillment_for_user(text)', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.get_order_delivery_for_user(text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.get_order_fulfillment_for_user(text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.get_order_delivery_for_user(text)', 'EXECUTE') then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_USER_READ_ACL_FAILED';
+  end if;
+
+  if has_function_privilege('anon', 'public.deliver_digital_order(uuid,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.deliver_digital_order(uuid,text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.deliver_digital_order(uuid,text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.admin_deliver_order_item_manual(uuid,uuid,text,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.admin_deliver_order_item_manual(uuid,uuid,text,text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.admin_deliver_order_item_manual(uuid,uuid,text,text)', 'EXECUTE') then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_DELIVER_ACL_FAILED';
+  end if;
+
+  if has_function_privilege('anon', 'public.refresh_order_fulfillment_status(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.refresh_order_fulfillment_status(uuid)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.refresh_order_fulfillment_status(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.log_order_item_delivery_status(uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.log_order_item_delivery_status(uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.log_order_item_delivery_status(uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.sync_product_available_stock(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.sync_product_available_stock(uuid)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.sync_product_available_stock(uuid)', 'EXECUTE') then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_INTERNAL_ACL_FAILED';
+  end if;
+
+  if has_function_privilege('anon', 'public.auto_deliver_order(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.auto_deliver_order(uuid)', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.auto_deliver_order(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.admin_retry_auto_delivery(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.admin_retry_auto_delivery(uuid)', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.admin_retry_auto_delivery(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.admin_append_manual_delivery(uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.admin_append_manual_delivery(uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.admin_append_manual_delivery(uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.admin_deliver_inventory_item(uuid,uuid,uuid,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.admin_deliver_inventory_item(uuid,uuid,uuid,text)', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.admin_deliver_inventory_item(uuid,uuid,uuid,text)', 'EXECUTE') then
+    raise exception 'DIGITAL_DELIVERY_POSTCHECK_LEGACY_ACL_FAILED';
+  end if;
+end
+$$;
+
+-- Export-friendly effective permission postcheck. PUBLIC is evaluated from the
+-- function ACL because it is a pseudo-role rather than a login role.
+select
+  'digital-delivery-function-permissions'::text as check_id,
+  p.oid::regprocedure::text as function_signature,
+  roles.role_name,
+  case
+    when roles.role_name = 'PUBLIC' then exists (
+      select 1
+      from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+      where acl.grantee = 0
+        and acl.privilege_type = 'EXECUTE'
+    )
+    else has_function_privilege(roles.role_name, p.oid, 'EXECUTE')
+  end as can_execute
+from pg_catalog.pg_proc p
+cross join (values ('PUBLIC'), ('anon'), ('authenticated'), ('service_role')) roles(role_name)
+where p.oid in (
+  'public.refresh_order_fulfillment_status(uuid)'::regprocedure,
+  'public.log_order_item_delivery_status(uuid,uuid,text,text,text,text)'::regprocedure,
+  'public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb)'::regprocedure,
+  'public.sync_product_available_stock(uuid)'::regprocedure,
+  'public.deliver_digital_order(uuid,text)'::regprocedure,
+  'public.admin_deliver_order_item_manual(uuid,uuid,text,text)'::regprocedure,
+  'public.get_order_fulfillment_for_user(text)'::regprocedure,
+  'public.get_order_delivery_for_user(text)'::regprocedure,
+  'public.auto_deliver_order(uuid)'::regprocedure,
+  'public.admin_retry_auto_delivery(uuid)'::regprocedure,
+  'public.admin_deliver_inventory_item(uuid,uuid,uuid,text)'::regprocedure,
+  'public.admin_append_manual_delivery(uuid,uuid,text,text,text,text)'::regprocedure
+)
+order by function_signature, roles.role_name;
+
+commit;
+
+-- -----------------------------------------------------------------------------
+-- Rollback / downgrade guidance (intentionally not executable here)
+-- -----------------------------------------------------------------------------
+-- The precheck emits the exact pre-migration policy expressions, table/column ACLs,
+-- and pg_proc.proacl values. Preserve that output with the execution record before
+-- applying this file.
+--
+-- Policy rollback:
+--   ALTER POLICY <captured_policy_name> ON public.order_deliveries
+--   TO authenticated USING (<captured_pre_migration_using_expression>);
+--
+-- ACL rollback:
+--   Restore only the exact table, column and function grants shown in the captured
+--   pre-migration ACL values.
+--   This file intentionally does not guess prior grants. Reopening PUBLIC/anon access
+--   or re-enabling the four unsafe legacy functions is a security downgrade.
+--
+-- Application downgrade must happen after ACL rollback if an older deployment still
+-- calls the deprecated RPCs. No table data is changed by this migration.

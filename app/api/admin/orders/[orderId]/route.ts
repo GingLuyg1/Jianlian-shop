@@ -13,6 +13,7 @@ import {
 } from "@/lib/orders/order-status";
 import { PROMOTION_COMMISSION_RATE } from "@/lib/promotion";
 import { getPromotionSettings } from "@/lib/settings/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
@@ -265,8 +266,23 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ result });
     }
     if (body?.action === "retry_auto_delivery") {
+      const serviceClient = getSupabaseServiceRoleClient();
+      if (!serviceClient) {
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "retry_auto_delivery",
+          module: "delivery",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "failed",
+          errorCode: "service_role_unavailable",
+          errorMessage: "服务端交付权限未配置",
+        });
+        return NextResponse.json({ error: "服务端交付权限未配置" }, { status: 503 });
+      }
       try {
-        const result = await deliverDigitalOrder(admin.supabase, context.params.orderId, "admin_retry");
+        const result = await deliverDigitalOrder(serviceClient, context.params.orderId, "admin_retry");
         await writeAdminAuditLog({
           request,
           admin: auditAdmin,
@@ -295,45 +311,6 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     if (body?.action === "manual_inventory") {
-      if (!body.inventory_id || !body.order_item_id) {
-        await writeAdminAuditLog({
-          request,
-          admin: auditAdmin,
-          action: "manual_inventory_delivery",
-          module: "inventory",
-          targetType: "order",
-          targetId: context.params.orderId,
-          result: "failed",
-          errorCode: "missing_inventory_or_item",
-          errorMessage: "请选择库存和订单商品",
-        });
-        return NextResponse.json({ error: "请选择库存和订单商品" }, { status: 400 });
-      }
-
-      const { data, error } = await admin.supabase.rpc("admin_deliver_inventory_item", {
-        p_order_id: context.params.orderId,
-        p_order_item_id: body.order_item_id,
-        p_inventory_id: body.inventory_id,
-        p_note: body.note ?? null,
-      });
-
-      if (error) {
-        const message = getOrderErrorMessage(error, "手动选择库存发货失败");
-        await writeAdminAuditLog({
-          request,
-          admin: auditAdmin,
-          action: "manual_inventory_delivery",
-          module: "inventory",
-          targetType: "order",
-          targetId: context.params.orderId,
-          result: "failed",
-          errorCode: typeof error.code === "string" ? error.code : null,
-          errorMessage: message,
-          metadata: { order_item_id: body.order_item_id, inventory_id: body.inventory_id },
-        });
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-
       await writeAdminAuditLog({
         request,
         admin: auditAdmin,
@@ -341,10 +318,14 @@ export async function POST(request: Request, context: RouteContext) {
         module: "inventory",
         targetType: "order",
         targetId: context.params.orderId,
-        result: "success",
-        metadata: { order_item_id: body.order_item_id, inventory_id: body.inventory_id },
+        result: "failed",
+        errorCode: "legacy_inventory_delivery_disabled",
+        errorMessage: "旧版指定库存发货入口已停用，请使用安全的自动交付或逐项人工交付流程",
       });
-      return NextResponse.json({ delivery: data });
+      return NextResponse.json(
+        { error: "旧版指定库存发货入口已停用，请使用安全的自动交付或逐项人工交付流程" },
+        { status: 410 },
+      );
     }
 
     if (body?.action === "mark_failed") {
@@ -398,13 +379,42 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "请填写交付信息" }, { status: 400 });
     }
 
-    const { data, error } = await admin.supabase.rpc("admin_append_manual_delivery", {
+    if (!body?.order_item_id) {
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "append_manual_delivery",
+        module: "delivery",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "failed",
+        errorCode: "missing_order_item",
+        errorMessage: "请选择需要人工交付的订单商品",
+      });
+      return NextResponse.json({ error: "请选择需要人工交付的订单商品" }, { status: 400 });
+    }
+
+    const serviceClient = getSupabaseServiceRoleClient();
+    if (!serviceClient) {
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "append_manual_delivery",
+        module: "delivery",
+        targetType: "order",
+        targetId: context.params.orderId,
+        result: "failed",
+        errorCode: "service_role_unavailable",
+        errorMessage: "服务端交付权限未配置",
+      });
+      return NextResponse.json({ error: "服务端交付权限未配置" }, { status: 503 });
+    }
+
+    const { data, error } = await serviceClient.rpc("admin_deliver_order_item_manual", {
       p_order_id: context.params.orderId,
-      p_order_item_id: body?.order_item_id ?? null,
-      p_delivery_type: body?.delivery_type ?? null,
+      p_order_item_id: body.order_item_id,
       p_delivery_content: deliveryContent,
-      p_delivery_status: body?.delivery_status ?? "delivered",
-      p_note: body?.note ?? null,
+      p_delivery_note: body?.note ?? null,
     });
 
     if (error) {

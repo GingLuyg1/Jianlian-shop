@@ -40,10 +40,24 @@ test("public account surfaces share the responsive viewport panel height", () =>
   assert.match(accountShell, /md:overflow-y-auto/);
   assert.match(accountShell, /matchMedia\("\(min-width: 768px\)"\)/);
   assert.doesNotMatch(productPage, /<PublicLayout\s+viewportLocked/);
+  assert.match(productPage, /data-testid="product-detail-shell"/);
+  assert.doesNotMatch(productPage, /data-testid="product-detail-shell"[\s\S]{0,180}md:overflow-hidden/);
   assert.match(productPage, /data-testid="product-detail-grid"[\s\S]*publicMainPanelHeightClassName/);
   assert.match(productPage, /data-testid="product-detail-left"[\s\S]*md:h-full md:overflow-x-hidden md:overflow-y-auto/);
   assert.match(productPage, /data-testid="product-detail-purchase-card"[\s\S]*md:h-full md:max-h-full/);
   assert.doesNotMatch(productPage, /flex-1[\s\S]{0,120}publicMainPanelHeightClassName/);
+});
+
+test("visible-bound measurement intersects every clipping ancestor", () => {
+  const helper = file("tests/e2e/visible-bounds.ts");
+
+  assert.match(helper, /getBoundingClientRect\(\)/);
+  assert.match(helper, /CLIPPING_OVERFLOW_VALUES/);
+  assert.match(helper, /style\.overflowY/);
+  assert.match(helper, /Math\.max\(visibleTop, ancestorRect\.top\)/);
+  assert.match(helper, /Math\.min\(visibleBottom, ancestorRect\.bottom\)/);
+  assert.match(helper, /hiddenBottom: Math\.max\(0, rect\.bottom - visibleBottom\)/);
+  assert.match(helper, /clippingAncestor/);
 });
 
 test("user order drawer owns viewport scrolling without changing payment behavior", () => {
@@ -1105,6 +1119,79 @@ test("digital delivery only consumes reserved inventory and keeps delivery secre
   assert.match(fulfillmentRoute, /Cache-Control", "no-store/);
   assert.match(service, /p_event_type: "delivery_failed"/);
   assert.doesNotMatch(service, /console\.error\([^)]*content|console\.log\([^)]*content/i);
+});
+
+test("digital delivery security hardening closes direct reads and unsafe RPC entry points", () => {
+  const migration = file("supabase/migrations/20260720_digital_delivery_security_hardening.sql");
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /alter policy[\s\S]*delivery_status = ''delivered''/);
+  assert.match(migration, /o\.payment_status = ''paid''/);
+  assert.match(migration, /o\.status not in \(''cancelled'', ''expired'', ''failed''\)/);
+  assert.match(migration, /revoke insert, update, delete on table public\.order_deliveries from public, anon, authenticated/);
+  assert.match(migration, /revoke select on table public\.order_deliveries from public, anon, authenticated/);
+  assert.match(migration, /grant select \([\s\S]*id,[\s\S]*order_id,[\s\S]*order_item_id,[\s\S]*user_id,[\s\S]*delivery_type,[\s\S]*delivery_status,[\s\S]*failure_reason,[\s\S]*delivered_at,[\s\S]*created_at,[\s\S]*updated_at[\s\S]*\) on table public\.order_deliveries to authenticated/);
+  assert.doesNotMatch(migration, /grant select \([\s\S]{0,500}\b(?:delivery_content|encrypted_content|inventory_id|delivery_note|viewed_at)\b[\s\S]{0,100}\) on table public\.order_deliveries to authenticated/);
+  assert.match(migration, /has_column_privilege\('authenticated', 'public\.order_deliveries', 'delivery_content', 'SELECT'\)/);
+  assert.match(migration, /has_column_privilege\('authenticated', 'public\.order_deliveries', 'encrypted_content', 'SELECT'\)/);
+  assert.match(migration, /revoke execute on function public\.refresh_order_fulfillment_status\(uuid\) from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function public\.refresh_order_fulfillment_status\(uuid\) to service_role/);
+  assert.match(migration, /revoke execute on function public\.get_order_delivery_for_user\(text\) from public, anon/);
+  assert.match(migration, /grant execute on function public\.get_order_delivery_for_user\(text\) to authenticated, service_role/);
+  assert.match(migration, /revoke execute on function public\.deliver_digital_order\(uuid,text\) from public, anon, authenticated/);
+  assert.match(migration, /revoke execute on function public\.admin_deliver_order_item_manual\(uuid,uuid,text,text\) from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function public\.deliver_digital_order\(uuid,text\) to service_role/);
+  assert.match(migration, /grant execute on function public\.admin_deliver_order_item_manual\(uuid,uuid,text,text\) to service_role/);
+  assert.match(migration, /create or replace function public\.admin_deliver_order_item_manual/);
+  assert.match(migration, /v_jwt_role <> 'service_role'/);
+  assert.match(migration, /digital_delivery_secrets/);
+  assert.match(migration, /revoke execute on function public\.auto_deliver_order\(uuid\) from public, anon, authenticated, service_role/);
+  assert.match(migration, /revoke execute on function public\.admin_append_manual_delivery\(uuid,uuid,text,text,text,text\) from public, anon, authenticated, service_role/);
+  assert.match(migration, /pre-migration function ACL/);
+  assert.match(migration, /does not guess prior grants/);
+  assert.doesNotMatch(migration, /add column[^;]*order_deliveries[^;]*user_id/i);
+});
+
+test("digital delivery writes elevate only after cookie administrator authorization", () => {
+  const balance = file("lib/orders/balance-payment-service.ts");
+  const completion = file("lib/payments/complete-payment-service.ts");
+  const bep20 = file("lib/payments/bep20-chain-service.ts");
+  const adminOrder = file("app/api/admin/orders/[orderId]/route.ts");
+  const adminItem = file("app/api/admin/orders/[orderId]/items/[itemId]/deliver/route.ts");
+  const fulfillment = file("app/api/orders/[orderNo]/fulfillment/route.ts");
+  const delivery = file("app/api/orders/[orderNo]/delivery/route.ts");
+
+  assert.match(balance, /getSupabaseServiceRoleClient\(\)/);
+  assert.match(balance, /deliverDigitalOrder\(service, result\.orderId, "balance_payment"\)/);
+  assert.match(completion, /getSupabaseServiceRoleClient\(\)/);
+  assert.match(completion, /deliverDigitalOrder\(service, result\.businessId, input\.source\)/);
+  assert.match(bep20, /completePayment\([\s\S]{0,500}service/);
+  assert.ok(adminOrder.indexOf("const admin = await getServerAdminContext()") < adminOrder.indexOf("const serviceClient = getSupabaseServiceRoleClient()"));
+  assert.ok(adminItem.indexOf("const admin = await getServerAdminContext()") < adminItem.indexOf("const serviceClient = getSupabaseServiceRoleClient()"));
+  assert.match(adminOrder, /if \(!admin\.ok\)[\s\S]{0,500}return/);
+  assert.match(adminItem, /if \(!admin\.ok\)[\s\S]{0,500}return/);
+  assert.match(adminOrder, /deliverDigitalOrder\(serviceClient, context\.params\.orderId, "admin_retry"\)/);
+  assert.match(adminOrder, /serviceClient\.rpc\("admin_deliver_order_item_manual"/);
+  assert.match(adminItem, /serviceClient\.rpc\("admin_deliver_order_item_manual"/);
+  assert.doesNotMatch(adminOrder, /admin\.supabase\.rpc\("admin_deliver_order_item_manual"/);
+  assert.doesNotMatch(adminItem, /admin\.supabase\.rpc\("admin_deliver_order_item_manual"/);
+  assert.doesNotMatch(`${adminOrder}\n${adminItem}`, /SUPABASE_(?:SERVICE_ROLE|SECRET|SERVICE_KEY)/);
+  assert.match(file("lib/delivery/delivery-service.ts"), /await supabase\.rpc\("write_delivery_log"/);
+  assert.match(fulfillment, /getSupabaseServerClient\(\)[\s\S]*rpc\("get_order_fulfillment_for_user"/);
+  assert.match(delivery, /getSupabaseServerClient\(\)[\s\S]*rpc\("get_order_delivery_for_user"/);
+});
+
+test("admin delivery routes use hardened RPCs and reject the unsafe legacy inventory action", () => {
+  const route = file("app/api/admin/orders/[orderId]/route.ts");
+
+  assert.match(route, /deliverDigitalOrder\(serviceClient, context\.params\.orderId, "admin_retry"\)/);
+  assert.match(route, /rpc\("admin_deliver_order_item_manual"/);
+  assert.match(route, /legacy_inventory_delivery_disabled/);
+  assert.match(route, /status: 410/);
+  assert.doesNotMatch(route, /rpc\("admin_retry_auto_delivery"/);
+  assert.doesNotMatch(route, /rpc\("admin_deliver_inventory_item"/);
+  assert.doesNotMatch(route, /rpc\("admin_append_manual_delivery"/);
 });
 
 test("admin order manual expiration uses unified service and audit log", () => {

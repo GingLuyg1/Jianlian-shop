@@ -3,6 +3,7 @@
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +74,24 @@ export async function POST(request: Request, context: RouteContext) {
       return json({ error: "交付内容不能为空" }, { status: 400 });
     }
 
-    const { data, error } = await admin.supabase.rpc("admin_deliver_order_item_manual", {
+    const serviceClient = getSupabaseServiceRoleClient();
+    if (!serviceClient) {
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "deliver_order_item",
+        module: "delivery",
+        targetType: "order_item",
+        targetId: context.params.itemId,
+        result: "failed",
+        errorCode: "service_role_unavailable",
+        errorMessage: "服务端交付权限未配置",
+        metadata: { order_id: context.params.orderId },
+      });
+      return json({ error: "服务端交付权限未配置" }, { status: 503 });
+    }
+
+    const { data, error } = await serviceClient.rpc("admin_deliver_order_item_manual", {
       p_order_id: context.params.orderId,
       p_order_item_id: context.params.itemId,
       p_delivery_content: deliveryContent,

@@ -411,7 +411,10 @@ export default function ProductDetailPage() {
 
   return (
     <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
-      <div className="mx-auto w-full max-w-[1668px] overflow-visible md:overflow-hidden">
+      <div
+        data-testid="product-detail-shell"
+        className="mx-auto w-full max-w-[1668px] overflow-visible"
+      >
         {status === "loading" ? (
           <Card>
             <CardContent className="p-8">
