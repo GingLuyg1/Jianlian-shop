@@ -47,6 +47,7 @@ export type MonitoringLogInput = {
 };
 
 const SENSITIVE_KEY_PATTERN = /password|token|secret|key|signature|authorization|cookie|credential|private|card|delivery_content|content|code/i;
+const MONITORING_WRITE_TIMEOUT_MS = 1500;
 
 export function createRequestId(prefix = "req") {
   return `${prefix}_${randomUUID()}`;
@@ -85,6 +86,8 @@ export function sanitizeMessage(message: string) {
     .replace(/\/[^\s]+\/[^\s]+/g, "[path]")
     .replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[redacted]")
     .replace(/(key|token|secret|signature)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[redacted-jwt]")
+    .replace(/\b0x[a-fA-F0-9]{40,64}\b/g, "[redacted-chain-value]")
     .slice(0, 800);
 }
 
@@ -128,6 +131,9 @@ export async function recordSystemError(input: MonitoringLogInput & { title?: st
     title: input.title ?? normalized.event,
     message: normalized.message,
     route: normalized.route,
+    http_method: normalized.method,
+    http_status: normalized.status_code,
+    environment: normalized.environment,
     request_id: normalized.request_id,
     user_id: normalized.user_id,
     admin_id: normalized.admin_id,
@@ -140,7 +146,10 @@ export async function recordSystemError(input: MonitoringLogInput & { title?: st
   };
 
   try {
-    const { error } = await service.rpc("upsert_system_error_event", { p_event: row });
+    const { error } = await withMonitoringTimeout(
+      service.rpc("upsert_system_error_event", { p_event: row }),
+      MONITORING_WRITE_TIMEOUT_MS
+    );
     if (error) {
       logServerEvent({
         level: "warn",
@@ -234,12 +243,12 @@ function normalizeLogInput(input: MonitoringLogInput) {
     event: input.event,
     message: sanitizeMessage(input.message),
     request_id: input.requestId ?? null,
-    user_id: input.userId ?? null,
-    admin_id: input.adminId ?? null,
-    order_id: input.orderId ?? null,
-    payment_id: input.paymentId ?? null,
-    product_id: input.productId ?? null,
-    sku_id: input.skuId ?? null,
+    user_id: uuidOrNull(input.userId),
+    admin_id: uuidOrNull(input.adminId),
+    order_id: uuidOrNull(input.orderId),
+    payment_id: uuidOrNull(input.paymentId),
+    product_id: uuidOrNull(input.productId),
+    sku_id: uuidOrNull(input.skuId),
     route: input.route ?? null,
     method: input.method ?? null,
     status_code: input.statusCode ?? null,
@@ -249,6 +258,27 @@ function normalizeLogInput(input: MonitoringLogInput) {
     environment: process.env.NODE_ENV ?? "unknown",
     release: process.env.NEXT_PUBLIC_APP_VERSION ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
   };
+}
+
+async function withMonitoringTimeout<T>(operation: PromiseLike<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(operation),
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("monitoring write timed out")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function uuidOrNull(value: string | null | undefined) {
+  if (!value) return null;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
 }
 
 function createFingerprint(parts: unknown[]) {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { createRequestId, logServerEvent } from "@/lib/monitoring/logger";
 
 const EXCLUDED_PREFIXES = ["/admin", "/api", "/_next", "/assets", "/favicon", "/robots.txt", "/sitemap", "/health"];
 const SENSITIVE_QUERY_KEYS = ["token", "access_token", "refresh_token", "code", "password", "payment", "session", "signature", "sign", "key"];
@@ -15,6 +16,26 @@ function json(body: unknown, status = 200) {
   const response = NextResponse.json(body, { status });
   response.headers.set("Cache-Control", "no-store");
   return response;
+}
+
+function telemetryUnavailable(reason: "service_role_unavailable" | "database_write_failed", databaseError?: unknown) {
+  const requestId = createRequestId("pageview");
+  const databaseCode = databaseError && typeof databaseError === "object"
+    ? String((databaseError as { code?: unknown }).code ?? "").slice(0, 80) || null
+    : null;
+  logServerEvent({
+    level: "warn",
+    category: "performance",
+    event: "page_view_telemetry_unavailable",
+    message: "Page-view telemetry was accepted but could not be stored.",
+    route: "/api/analytics/page-view",
+    method: "POST",
+    statusCode: 202,
+    requestId,
+    errorCode: databaseCode ?? reason.toUpperCase(),
+    metadata: { reason },
+  });
+  return json({ ok: true, accepted: true, stored: false, reason: "telemetry_unavailable", request_id: requestId }, 202);
 }
 
 function hash(value: string) {
@@ -94,7 +115,7 @@ export async function POST(request: Request) {
   if (!rawVisitorKey || rawVisitorKey.length > 128) return json({ ok: false, error: "访问标识无效" }, 400);
 
   const serviceClient = getSupabaseServiceRoleClient();
-  if (!serviceClient) return json({ ok: false, error: "访问统计未配置" }, 503);
+  if (!serviceClient) return telemetryUnavailable("service_role_unavailable");
 
   let userId: string | null = null;
   if (hasSupabaseServerConfig()) {
@@ -140,6 +161,6 @@ export async function POST(request: Request) {
     },
   });
 
-  if (error) return json({ ok: false, error: "访问统计写入失败" }, 503);
+  if (error) return telemetryUnavailable("database_write_failed", error);
   return json({ ok: true });
 }

@@ -2228,6 +2228,73 @@ test("recharge user APIs enforce ownership", () => {
   assert.match(adminRoute, /requireApiAdmin|getServerAdminContext|requireSuperAdmin/);
 });
 
+test("recharge completion compatibility adds only the real final workflow timestamp", () => {
+  const migration = file("supabase/migrations/20260725_account_recharges_completion_compatibility.sql");
+  const userRoute = file("app/api/recharges/route.ts");
+  const reviewService = file("lib/recharges/review-service.ts");
+  const completionService = file("lib/payments/complete-payment-service.ts");
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /alter table public\.account_recharges\s+add column if not exists completed_at timestamptz/);
+  assert.match(migration, /v_nullable <> 'YES'/);
+  assert.match(migration, /v_default is not null/);
+  assert.doesNotMatch(migration, /update\s+public\.account_recharges/i);
+  assert.doesNotMatch(migration, /create\s+(?:unique\s+)?index/i);
+  assert.match(userRoute, /paid_at,completed_at/);
+  assert.match(reviewService, /status: "succeeded", completed_at: new Date\(\)\.toISOString\(\)/);
+  assert.match(reviewService, /rpc\("complete_account_recharge"/);
+  assert.match(completionService, /if \(result\.businessType === "order"\)/);
+  assert.doesNotMatch(completionService, /result\.businessType === "recharge"[\s\S]{0,120}deliverDigitalOrder/);
+});
+
+test("system error monitoring is service-only, deduplicated, sanitized, and best-effort", () => {
+  const migration = file("supabase/migrations/20260725_system_error_events_baseline.sql");
+  const logger = file("lib/monitoring/logger.ts");
+  const pageView = file("app/api/analytics/page-view/route.ts");
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /create table if not exists public\.system_error_events/);
+  assert.match(migration, /create unique index if not exists system_error_events_fingerprint_uidx/);
+  assert.match(migration, /on conflict \(fingerprint\)/);
+  assert.match(migration, /occurrences = public\.system_error_events\.occurrences \+ 1/);
+  assert.match(migration, /first_seen_at timestamptz not null default now\(\)/);
+  assert.match(migration, /last_seen_at timestamptz not null default now\(\)/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /set search_path = public/);
+  assert.match(migration, /v_role <> 'service_role'/);
+  assert.match(migration, /revoke execute on function public\.upsert_system_error_event\(jsonb\) from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function public\.upsert_system_error_event\(jsonb\) to service_role/);
+  assert.match(migration, /alter table public\.system_error_events enable row level security/);
+  assert.match(migration, /using \(public\.is_admin\(auth\.uid\(\)\)\)/);
+  assert.match(migration, /'authorization', 'cookie', 'private_key', 'tx_hash', 'delivery_content'/);
+  assert.match(migration, /revoke all privileges on table public\.system_error_events from public, anon, authenticated, service_role/);
+  assert.match(migration, /revoke select \(%s\) on table public\.system_error_events from public, anon, authenticated, service_role/);
+  assert.match(migration, /grant update \(status, resolution_note, updated_at\) on table public\.system_error_events to authenticated/);
+  assert.match(migration, /grant select, insert, update, delete on table public\.system_error_events to service_role/);
+  assert.match(migration, /aclexplode\(a\.attacl\)/);
+  assert.doesNotMatch(migration, /grant\s+(?:all|insert).*to authenticated/i);
+
+  assert.match(logger, /MONITORING_WRITE_TIMEOUT_MS = 1500/);
+  assert.match(logger, /withMonitoringTimeout\(/);
+  assert.match(logger, /sanitizeForLog\(input\.metadata/);
+  assert.match(logger, /\[redacted-jwt\]/);
+  assert.match(logger, /\[redacted-chain-value\]/);
+  assert.match(logger, /uuidOrNull\(input\.userId\)/);
+  assert.match(logger, /system_error_event_write_failed/);
+  assert.doesNotMatch(logger, /recordSystemError\([\s\S]{0,120}system_error_event_write_failed/);
+
+  assert.match(pageView, /telemetryUnavailable\("service_role_unavailable"\)/);
+  assert.match(pageView, /telemetryUnavailable\("database_write_failed", error\)/);
+  assert.match(pageView, /stored: false/);
+  assert.match(pageView, /reason: "telemetry_unavailable"/);
+  assert.match(pageView, /}, 202\)/);
+  assert.doesNotMatch(pageView, /recordSystemError|recordApiError|upsert_system_error_event/);
+  assert.match(pageView, /return json\(\{ ok: false, error: "访问标识无效" \}, 400\)/);
+  assert.match(pageView, /MAX_BODY_BYTES\) return json\([\s\S]{0,80}, 413\)/);
+});
+
 test("account profile initialization never grants admin role from ordinary user API", () => {
   const route = file("app/api/account/profile/route.ts");
   const sharedProfile = file("lib/supabase/profiles.ts");
