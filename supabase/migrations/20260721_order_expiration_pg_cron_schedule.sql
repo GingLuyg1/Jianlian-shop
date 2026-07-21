@@ -125,8 +125,19 @@ declare
   v_endpoint_job_count integer;
   v_schedule text;
   v_command text;
+  v_command_normalized text;
   v_active boolean;
   v_secret text;
+  v_has_http_post boolean;
+  v_has_expected_url boolean;
+  v_has_vault_reference boolean;
+  v_has_vault_name boolean;
+  v_has_authorization_header boolean;
+  v_has_content_type boolean;
+  v_has_limit_body boolean;
+  v_has_reason_body boolean;
+  v_has_timeout boolean;
+  v_contains_plain_secret boolean;
 begin
   if not exists (select 1 from pg_catalog.pg_extension where extname = 'pg_cron') then
     raise exception 'ORDER_EXPIRATION_CRON_POSTCHECK_PG_CRON_MISSING';
@@ -158,23 +169,71 @@ begin
     raise exception 'ORDER_EXPIRATION_CRON_POSTCHECK_ENDPOINT_JOB_COUNT:%', v_endpoint_job_count;
   end if;
 
-  if position('net.http_post' in v_command) = 0
-     or position('https://jianlian.shop/api/internal/orders/expire?limit=10' in v_command) = 0
-     or position('vault.decrypted_secrets' in v_command) = 0
-     or position('order_expiration_cron_secret' in v_command) = 0
-     or position('jsonb_build_object(''limit'', 10' in v_command) = 0
-     or position('timeout_milliseconds := 15000' in v_command) = 0 then
-    raise exception 'ORDER_EXPIRATION_CRON_POSTCHECK_COMMAND_CONTRACT_FAILED';
-  end if;
-
   select decrypted_secret
   into strict v_secret
   from vault.decrypted_secrets
   where name = v_secret_name
     and nullif(pg_catalog.btrim(decrypted_secret), '') is not null;
 
-  if position(v_secret in v_command) <> 0 then
-    raise exception 'ORDER_EXPIRATION_CRON_POSTCHECK_PLAINTEXT_SECRET_IN_COMMAND';
+  -- pg_cron may preserve or normalize whitespace, casts, schema qualification and
+  -- named-argument formatting. Verify each security property independently instead
+  -- of comparing one formatting-sensitive command fragment. Body keys are checked
+  -- separately, so JSON key ordering does not affect the result.
+  v_command_normalized := pg_catalog.regexp_replace(
+    pg_catalog.lower(v_command),
+    '[[:space:]]+',
+    ' ',
+    'g'
+  );
+
+  v_has_http_post := v_command_normalized ~
+    '(^|[^a-z0-9_])([a-z_][a-z0-9_]*[[:space:]]*\.[[:space:]]*)*http_post[[:space:]]*\(';
+  v_has_expected_url := position(
+    'https://jianlian.shop/api/internal/orders/expire?limit=10'
+    in v_command_normalized
+  ) <> 0;
+  v_has_vault_reference := v_command_normalized ~
+    'vault[[:space:]]*\.[[:space:]]*decrypted_secrets';
+  v_has_vault_name := position('''order_expiration_cron_secret''' in v_command_normalized) <> 0;
+  v_has_authorization_header :=
+    position('''authorization''' in v_command_normalized) <> 0
+    and position('''bearer ''' in v_command_normalized) <> 0;
+  v_has_content_type :=
+    position('''content-type''' in v_command_normalized) <> 0
+    and position('''application/json''' in v_command_normalized) <> 0;
+  v_has_limit_body := v_command_normalized ~
+    '''limit''[[:space:]]*,[[:space:]]*10([^0-9]|$)';
+  v_has_reason_body := v_command_normalized ~
+    '''reason''[[:space:]]*,[[:space:]]*''payment_timeout''';
+  v_has_timeout := v_command_normalized ~
+    'timeout_milliseconds[[:space:]]*(:=|=>)[[:space:]]*15000([^0-9]|$)';
+  v_contains_plain_secret := position(v_secret in v_command) <> 0;
+
+  if not v_has_http_post
+     or not v_has_expected_url
+     or not v_has_vault_reference
+     or not v_has_vault_name
+     or not v_has_authorization_header
+     or not v_has_content_type
+     or not v_has_limit_body
+     or not v_has_reason_body
+     or not v_has_timeout
+     or v_contains_plain_secret then
+    raise exception using
+      message = 'ORDER_EXPIRATION_CRON_POSTCHECK_COMMAND_CONTRACT_FAILED',
+      detail = pg_catalog.format(
+        'has_http_post=%s, has_expected_url=%s, has_vault_reference=%s, has_vault_name=%s, has_authorization_header=%s, has_content_type=%s, has_limit_body=%s, has_reason_body=%s, has_timeout=%s, contains_plain_secret=%s',
+        v_has_http_post,
+        v_has_expected_url,
+        v_has_vault_reference,
+        v_has_vault_name,
+        v_has_authorization_header,
+        v_has_content_type,
+        v_has_limit_body,
+        v_has_reason_body,
+        v_has_timeout,
+        v_contains_plain_secret
+      );
   end if;
 end
 $postcheck$;
