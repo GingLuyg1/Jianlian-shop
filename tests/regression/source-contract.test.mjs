@@ -2295,6 +2295,67 @@ test("system error monitoring is service-only, deduplicated, sanitized, and best
   assert.match(pageView, /MAX_BODY_BYTES\) return json\([\s\S]{0,80}, 413\)/);
 });
 
+test("page-view baseline matches the privacy-minimized service-role ingest contract", () => {
+  const migration = file("supabase/migrations/20260726_page_visit_events_baseline.sql");
+  const route = file("app/api/analytics/page-view/route.ts");
+  const tracker = file("components/analytics/PageViewTracker.tsx");
+  const audit = file("docs/audits/production-page-visit-events-readonly-audit.sql");
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /create table if not exists public\.page_visit_events/);
+  for (const column of [
+    "id", "visit_date", "page_path", "referrer_path", "visitor_key", "user_id",
+    "session_key", "user_agent_hash", "ip_hash", "metadata", "created_at",
+  ]) {
+    assert.match(migration, new RegExp(`\\b${column}\\b`));
+  }
+  assert.match(migration, /page_visit_events_page_path_check/);
+  assert.match(migration, /char_length\(page_path\) between 1 and 512/);
+  assert.match(migration, /page_visit_events_referrer_path_check/);
+  assert.match(migration, /char_length\(referrer_path\) between 1 and 120/);
+  assert.match(migration, /visitor_key ~ '\^anon:\[0-9a-f\]\{64\}\$'/);
+  assert.match(migration, /alter table public\.page_visit_events enable row level security/);
+  assert.match(migration, /for select\s+to authenticated\s+using \(public\.is_admin\(auth\.uid\(\)\)\)/);
+  assert.match(migration, /revoke all privileges on table public\.page_visit_events from public, anon, authenticated, service_role/);
+  assert.match(migration, /grant select on table public\.page_visit_events to authenticated/);
+  assert.match(migration, /grant select, insert on table public\.page_visit_events to service_role/);
+  assert.doesNotMatch(migration, /grant\s+(?:all|insert|update|delete).*to (?:anon|authenticated)/i);
+  assert.match(migration, /page_visit_events_visit_date_idx/);
+  assert.match(migration, /page_visit_events_visitor_path_date_idx/);
+  assert.match(migration, /page_visit_events_path_date_idx/);
+  assert.match(migration, /Retain detailed rows for up to 90 days/);
+  assert.doesNotMatch(migration, /delete\s+from\s+public\.page_visit_events/i);
+
+  const insertContract = route.match(/\.from\("page_visit_events"\)\.insert\(\{[\s\S]*?\n  \}\);/)?.[0] ?? "";
+  for (const field of [
+    "page_path", "referrer_path", "visitor_key", "user_id", "session_key",
+    "user_agent_hash", "ip_hash", "metadata",
+  ]) {
+    assert.match(insertContract, new RegExp(`\\b${field}\\s*:`));
+  }
+  assert.doesNotMatch(insertContract, /(?:raw_ip|ip_address|user_agent|authorization|cookie|tx_hash|delivery_content)\s*:/i);
+  assert.match(route, /return json\(\{ ok: true, stored: true \}\)/);
+  assert.match(route, /stored: false/);
+  assert.match(route, /}, 202\)/);
+  assert.match(route, /MAX_BODY_BYTES = 4096/);
+  assert.match(route, /rawVisitorKey\.length > 128/);
+  assert.match(route, /SENSITIVE_QUERY_KEYS/);
+  assert.match(route, /if \(value\.length > 80\) return/);
+  assert.match(route, /url\.hostname\.slice\(0, 120\)/);
+  assert.match(route, /user_agent_hash: userAgent \? hash\(userAgent\)/);
+  assert.match(route, /ip_hash: ip \? hash\(ip\)/);
+  assert.doesNotMatch(route, /recordSystemError|recordApiError|upsert_system_error_event/);
+  assert.match(tracker, /visitorKey/);
+  assert.match(tracker, /sessionKey/);
+
+  assert.match(audit, /01_table_columns/);
+  assert.match(audit, /04_rls_policies/);
+  assert.match(audit, /05_acl_summary/);
+  assert.match(audit, /06_recent_safe_summary/);
+  assert.doesNotMatch(audit, /select\s+[^;]*(?:ip_hash|user_agent_hash|session_key|user_id)[^;]*from\s+public\.page_visit_events/is);
+});
+
 test("account profile initialization never grants admin role from ordinary user API", () => {
   const route = file("app/api/account/profile/route.ts");
   const sharedProfile = file("lib/supabase/profiles.ts");

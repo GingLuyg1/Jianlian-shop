@@ -162,5 +162,5 @@ export async function POST(request: Request) {
   });
 
   if (error) return telemetryUnavailable("database_write_failed", error);
-  return json({ ok: true });
+  return json({ ok: true, stored: true });
 }
