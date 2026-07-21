@@ -91,6 +91,7 @@ export type OrderRecord = {
   user_note?: string | null;
   admin_note: string | null;
   delivery_type: string | null;
+  fulfillment_status?: string | null;
   paid_at: string | null;
   processed_at: string | null;
   completed_at: string | null;

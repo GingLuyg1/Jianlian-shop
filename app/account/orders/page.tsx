@@ -25,6 +25,22 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
 
+type UserDeliveryContent = {
+  id: string;
+  delivery_type: string | null;
+  delivery_status: string | null;
+  content: string | null;
+  masked_content: string | null;
+  delivered_at: string | null;
+  delivery_note: string | null;
+};
+
+type UserDeliveryResponse = {
+  status?: string;
+  deliveries?: UserDeliveryContent[];
+  error?: string;
+};
+
 function formatMoney(value: number | string | null | undefined) {
   return `¥${Number(value ?? 0).toFixed(2)}`;
 }
@@ -96,6 +112,16 @@ export default function MyOrdersPage() {
 
   useEffect(() => {
     loadOrders();
+  }, [loadOrders]);
+
+  const refreshSelectedOrder = useCallback(async (orderNo: string) => {
+    const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`, { cache: "no-store" });
+    const result = (await response.json().catch(() => null)) as { order?: OrderRecord; error?: string } | null;
+    if (!response.ok || !result?.order) {
+      throw new Error(result?.error ?? "订单状态刷新失败");
+    }
+    setSelectedOrder(result.order);
+    await loadOrders();
   }, [loadOrders]);
 
   const rows = useMemo(() => orders, [orders]);
@@ -265,6 +291,7 @@ export default function MyOrdersPage() {
         order={selectedOrder}
         onClose={() => setSelectedOrder(null)}
         onCopyOrderNo={copyOrderNo}
+        onOrderUpdated={refreshSelectedOrder}
       />
     </div>
   );
@@ -561,12 +588,33 @@ function UserOrderDrawer({
   order,
   onClose,
   onCopyOrderNo,
+  onOrderUpdated,
 }: {
   order: OrderRecord | null;
   onClose: () => void;
   onCopyOrderNo: (orderNo: string) => void;
+  onOrderUpdated: (orderNo: string) => Promise<void>;
 }) {
   const [showDelivery, setShowDelivery] = useState(false);
+  const [secureDeliveries, setSecureDeliveries] = useState<UserDeliveryContent[]>([]);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [deliveryError, setDeliveryError] = useState("");
+
+  const loadDelivery = useCallback(async (orderNo: string) => {
+    setDeliveryLoading(true);
+    setDeliveryError("");
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}/delivery`, { cache: "no-store" });
+      const result = (await response.json().catch(() => null)) as UserDeliveryResponse | null;
+      if (!response.ok) throw new Error(result?.error ?? "交付信息加载失败，请刷新后重试");
+      setSecureDeliveries(result?.deliveries ?? []);
+    } catch (error) {
+      setSecureDeliveries([]);
+      setDeliveryError(getOrderErrorMessage(error, "交付信息加载失败，请刷新后重试"));
+    } finally {
+      setDeliveryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!order) return;
@@ -586,6 +634,13 @@ function UserOrderDrawer({
     };
   }, [onClose, order]);
 
+  useEffect(() => {
+    setSecureDeliveries([]);
+    setDeliveryError("");
+    if (!order || normalizePaymentStatus(order.payment_status) !== "paid") return;
+    void loadDelivery(order.order_no);
+  }, [loadDelivery, order?.order_no, order?.payment_status, order?.updated_at]);
+
   if (!order) return null;
 
   const orderStatus = normalizeOrderStatus(order.status);
@@ -596,8 +651,13 @@ function UserOrderDrawer({
   const displayStatus = getUserOrderDisplayStatus(order);
   const firstItem = order.order_items?.[0];
   const isShippingOrder = normalizeOrderItemDeliveryType(order.delivery_type ?? firstItem?.delivery_type) === "physical";
-  const delivery = order.order_deliveries?.[0];
-  const deliveryContent = delivery?.delivery_content ?? "";
+  const secureDelivery = secureDeliveries.find((item) => item.delivery_status === "delivered") ?? secureDeliveries[0];
+  const delivery = order.order_deliveries?.find((item) => item.delivery_status === "delivered") ?? order.order_deliveries?.[0];
+  const deliveryContent = secureDelivery?.content ?? "";
+  const delivered = order.fulfillment_status === "delivered"
+    || orderStatus === "delivered"
+    || delivery?.delivery_status === "delivered"
+    || secureDelivery?.delivery_status === "delivered";
   const cancelled = orderStatus === "cancelled";
   const failed = orderStatus === "failed" || delivery?.delivery_status === "failed";
 
@@ -689,7 +749,14 @@ function UserOrderDrawer({
             </div>
           </section>
 
-          <Bep20OrderPaymentSummary order={order} compact />
+          <Bep20OrderPaymentSummary
+            order={order}
+            compact
+            onUpdated={async () => {
+              await onOrderUpdated(order.order_no);
+              await loadDelivery(order.order_no);
+            }}
+          />
 
           <section className="rounded-xl border p-4 text-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -715,13 +782,24 @@ function UserOrderDrawer({
               <div className="rounded-lg bg-amber-50 p-3 text-amber-700">
                 交付处理中，请联系管理员。
               </div>
-            ) : deliveryContent ? (
+            ) : deliveryError ? (
+              <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-red-700">
+                交付信息加载失败，请刷新后重试
+              </div>
+            ) : deliveryLoading ? (
+              <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">正在读取交付信息...</div>
+            ) : delivered ? (
               <div className="rounded-lg bg-slate-50 p-3 leading-6">
-                <div className="whitespace-pre-wrap break-words">
-                  {showDelivery ? deliveryContent : maskSecret(deliveryContent)}
-                </div>
+                <div className="mb-2 font-medium text-emerald-700">状态：已交付</div>
+                {deliveryContent ? (
+                  <div className="whitespace-pre-wrap break-words">
+                    {showDelivery ? deliveryContent : secureDelivery?.masked_content || maskSecret(deliveryContent)}
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground">交付已完成，暂无可显示的交付正文。</div>
+                )}
                 <div className="mt-2 text-xs text-muted-foreground">
-                  交付时间：{formatDate(delivery?.delivered_at ?? delivery?.updated_at)}
+                  交付时间：{formatDate(secureDelivery?.delivered_at ?? delivery?.delivered_at ?? delivery?.updated_at)}
                 </div>
               </div>
             ) : (

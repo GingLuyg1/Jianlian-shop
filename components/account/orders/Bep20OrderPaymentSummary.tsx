@@ -17,7 +17,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
-import { getBep20PaymentAction, getBep20PaymentNotice } from "@/lib/orders/order-status";
+import {
+  getBep20PaymentAction,
+  getBep20PaymentNotice,
+  normalizeOrderStatus,
+  normalizePaymentStatus,
+} from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
 
@@ -170,9 +175,21 @@ export function Bep20OrderPaymentSummary({
   const remainingSeconds = secondsLeft(session?.expiresAt) + nowTick * 0;
   const fullPaymentHref = `/payment?order=${encodeURIComponent(order.order_no)}`;
   const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
-  const canSubmitTxHash = Boolean(session && (session.paymentAction === "continue_active_payment" || session.canSubmitLateTransaction));
-  const canShowTxInput = Boolean(session && (session.paymentAction === "continue_active_payment" || session.canSubmitLateTransaction));
-  const canRenew = Boolean(session?.canRenewPaymentSession);
+  const submittedTxHashValid = /^0x[0-9a-fA-F]{64}$/.test(session?.submittedTxHash ?? "");
+  const orderStatus = normalizeOrderStatus(order.status);
+  const paymentStatus = normalizePaymentStatus(order.payment_status);
+  const paymentCompleted = paymentStatus === "paid"
+    || ["paid", "processing", "delivered", "completed"].includes(orderStatus)
+    || session?.status === "paid"
+    || session?.paymentAction === "paid";
+  const orderClosed = ["cancelled", "expired", "failed"].includes(orderStatus);
+  const sessionAllowsTxHash = Boolean(
+    session && (session.paymentAction === "continue_active_payment" || session.canSubmitLateTransaction)
+  );
+  const canSubmitTxHash = !paymentCompleted && !orderClosed && sessionAllowsTxHash;
+  const canShowTxInput = canSubmitTxHash;
+  const canRenew = !paymentCompleted && !orderClosed && Boolean(session?.canRenewPaymentSession);
+  const canOpenOriginalPayment = canSubmitTxHash;
   const notice = useMemo(() => noticeForSession(session, order), [order, session]);
 
   const loadSession = useCallback(
@@ -329,17 +346,19 @@ export function Bep20OrderPaymentSummary({
             </AlertDialogContent>
           </AlertDialog>
         ) : null}
-        <Button asChild size="sm" variant="outline">
-          <Link href={fullPaymentHref}>
-            <ExternalLink className="mr-2 h-4 w-4" />
-            提交原订单支付凭证
-          </Link>
-        </Button>
-        {session?.paymentAction === "paid" && session.submittedTxHash ? (
+        {canOpenOriginalPayment ? (
           <Button asChild size="sm" variant="outline">
-            <a href={`https://bscscan.com/tx/${session.submittedTxHash}`} target="_blank" rel="noreferrer">
+            <Link href={fullPaymentHref}>
               <ExternalLink className="mr-2 h-4 w-4" />
-              BscScan
+              提交原订单支付凭证
+            </Link>
+          </Button>
+        ) : null}
+        {submittedTxHashValid ? (
+          <Button asChild size="sm" variant="outline">
+            <a href={`https://bscscan.com/tx/${session?.submittedTxHash}`} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              查看链上交易
             </a>
           </Button>
         ) : null}

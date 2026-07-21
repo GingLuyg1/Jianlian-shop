@@ -109,6 +109,7 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
   }, [loadOrder]);
 
   const mergedDeliveries = useMemo(() => {
+    if (deliveries.length) return deliveries;
     const map = new Map<string, DeliveryContent>();
     (order?.order_deliveries ?? []).forEach((delivery) => {
       map.set(delivery.id, {
@@ -121,7 +122,6 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
         delivery_note: delivery.delivery_note ?? null,
       });
     });
-    deliveries.forEach((delivery) => map.set(delivery.id, delivery));
     return Array.from(map.values());
   }, [deliveries, order?.order_deliveries]);
 
@@ -132,6 +132,9 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
   const paymentNotice = order ? getBep20PaymentNotice(order) : null;
   const isBep20Order = String(order?.payment_method ?? "").toLowerCase() === "usdt_bep20";
   const displayStatus = order ? getUserOrderDisplayStatus(order) : null;
+  const delivered = order?.fulfillment_status === "delivered"
+    || orderStatus === "delivered"
+    || mergedDeliveries.some((delivery) => delivery.delivery_status === "delivered");
 
   async function cancelOrder() {
     if (!order || !canCancel || canceling) return;
@@ -158,7 +161,7 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
     }
   }
 
-  async function fetchDeliveryContent() {
+  const fetchDeliveryContent = useCallback(async () => {
     if (!order || deliveryLoading) return;
     setDeliveryLoading(true);
     setDeliveryError(null);
@@ -174,13 +177,18 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
         toast.info(data.status === "processing" ? "订单正在处理，请稍后查看" : "暂无交付内容");
       }
     } catch (err) {
-      const message = getOrderErrorMessage(err);
+      const message = "交付信息加载失败，请刷新后重试";
       setDeliveryError(message);
       toast.error(message);
     } finally {
       setDeliveryLoading(false);
     }
-  }
+  }, [deliveryLoading, order]);
+
+  useEffect(() => {
+    if (!order || deliveryRequested || paymentStatus !== "paid" || !delivered) return;
+    void fetchDeliveryContent();
+  }, [delivered, deliveryRequested, fetchDeliveryContent, order, paymentStatus]);
 
   async function copyOrderNo() {
     if (!order) return;
@@ -324,7 +332,9 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                                 <div className="font-medium text-slate-900">{delivery.delivery_type || "交付内容"}</div>
                                 <div className="mt-1 text-sm text-muted-foreground">交付时间：{formatDate(delivery.delivered_at)}</div>
                               </div>
-                              <Badge variant="outline">{delivery.delivery_status || "—"}</Badge>
+                              <Badge variant="outline">
+                                {delivery.delivery_status === "delivered" ? "已交付" : delivery.delivery_status || "—"}
+                              </Badge>
                             </div>
                             <div className="mt-3 rounded-lg bg-white p-3 font-mono text-sm text-slate-900 break-all">
                               {displayContent}
@@ -352,7 +362,9 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                       })
                     ) : (
                       <div className="rounded-xl border border-dashed border-orange-200 p-8 text-center text-sm text-muted-foreground">
-                        {["manual", "manual_delivery"].includes(String(order.delivery_type ?? order.order_items?.[0]?.delivery_type ?? ""))
+                        {delivered
+                          ? "状态：已交付，暂无可显示的交付正文。"
+                          : ["manual", "manual_delivery"].includes(String(order.delivery_type ?? order.order_items?.[0]?.delivery_type ?? ""))
                           ? orderStatus === "processing" ? "人工处理中。" : "待人工处理。"
                           : deliveryRequested ? "暂无交付内容，请联系客服确认。" : "交付内容默认隐藏，点击后单独请求服务端。"}
                       </div>

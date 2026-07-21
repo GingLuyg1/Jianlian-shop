@@ -70,7 +70,7 @@ test("user order drawer owns viewport scrolling without changing payment behavio
   assert.match(paymentSummary, /min-w-0 max-w-full overflow-hidden/);
   assert.match(ordersPage, /document\.body\.style\.overflow = "hidden"/);
   assert.match(ordersPage, /document\.documentElement\.style\.overflow = "hidden"/);
-  assert.match(ordersPage, /<Bep20OrderPaymentSummary order=\{order\} compact \/>/);
+  assert.match(ordersPage, /<Bep20OrderPaymentSummary[\s\S]{0,180}order=\{order\}[\s\S]{0,180}compact/);
 });
 
 test("account overview omits internal identity and unfinished-order summary cards", () => {
@@ -1394,7 +1394,7 @@ test("BEP20 order details render a compact payment summary without creating sess
 
   assert.match(orderList, /import \{ Bep20OrderPaymentSummary \}/);
   assert.match(orderDetail, /import \{ Bep20OrderPaymentSummary \}/);
-  assert.match(orderList, /<Bep20OrderPaymentSummary order=\{order\} compact \/>/);
+  assert.match(orderList, /<Bep20OrderPaymentSummary[\s\S]{0,180}order=\{order\}[\s\S]{0,180}compact/);
   assert.match(orderDetail, /<Bep20OrderPaymentSummary order=\{order\} onUpdated=\{loadOrder\} \/>/);
   assert.match(summary, /String\(order\.payment_method \?\? ""\)\.toLowerCase\(\) === "usdt_bep20"/);
 
@@ -1427,11 +1427,47 @@ test("BEP20 order details render a compact payment summary without creating sess
   assert.match(summary, /shortHash\(session\.receiveAddress\)/);
   assert.match(summary, /shortHash\(session\.submittedTxHash\)/);
   assert.match(summary, /truncate/);
-  assert.match(summary, /BscScan/);
+  assert.match(summary, /查看链上交易/);
   assert.doesNotMatch(summary, /LocalAddressQr|qrCode|QRCode|Chain ID|exchangeRate|tokenContract/);
   assert.doesNotMatch(orderList, /paymentAction && !isBep20Order[\s\S]{0,140}<Bep20OrderPaymentSummary order=\{order\} compact \/>[\s\S]{0,140}paymentAction && isBep20Order/);
   assert.match(orderList, /paymentAction && !isBep20Order/);
   assert.match(orderDetail, /paymentAction && !isBep20Order/);
+});
+
+test("paid order details hide payment proof and load delivered content through the owned-user RPC", () => {
+  const summary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
+  const orderList = file("app/account/orders/page.tsx");
+  const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+  const deliveryRoute = file("app/api/orders/[orderNo]/delivery/route.ts");
+  const queries = file("lib/orders/order-queries.ts");
+
+  assert.match(summary, /paymentStatus === "paid"/);
+  assert.match(summary, /\["paid", "processing", "delivered", "completed"\]\.includes\(orderStatus\)/);
+  assert.match(summary, /session\?\.status === "paid"/);
+  assert.match(summary, /!paymentCompleted && !orderClosed && sessionAllowsTxHash/);
+  assert.match(summary, /canOpenOriginalPayment \? \(/);
+  assert.match(summary, /submittedTxHashValid \? \(/);
+  assert.match(summary, /https:\/\/bscscan\.com\/tx\//);
+  assert.match(summary, /target="_blank" rel="noopener noreferrer"/);
+  assert.doesNotMatch(summary, />\s*BscScan\s*</);
+
+  assert.match(queries, /fulfillment_status,paid_at/);
+  assert.match(queries, /fulfillment_status: row\.fulfillment_status/);
+  assert.match(deliveryRoute, /rpc\("get_order_delivery_for_user"/);
+  assert.match(deliveryRoute, /p_order_no: context\.params\.orderNo/);
+  assert.match(deliveryRoute, /id: row\.delivery_id \?\? `\$\{context\.params\.orderNo\}:\$\{index\}`/);
+  assert.doesNotMatch(deliveryRoute, /from\("(?:order_deliveries|digital_delivery_secrets)"\)/);
+
+  assert.match(orderList, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(orderNo\)\}\/delivery`, \{ cache: "no-store" \}\)/);
+  assert.match(orderList, /order\.fulfillment_status === "delivered"/);
+  assert.match(orderList, /secureDelivery\?\.delivery_status === "delivered"/);
+  assert.match(orderList, /交付信息加载失败，请刷新后重试/);
+  assert.match(orderList, /状态：已交付/);
+  assert.match(orderList, /onUpdated=\{async \(\) => \{[\s\S]{0,200}onOrderUpdated\(order\.order_no\)[\s\S]{0,200}loadDelivery\(order\.order_no\)/);
+
+  assert.match(orderDetail, /deliveryRequested \|\| paymentStatus !== "paid" \|\| !delivered/);
+  assert.match(orderDetail, /交付信息加载失败，请刷新后重试/);
+  assert.match(orderDetail, /delivery\.delivery_status === "delivered" \? "已交付"/);
 });
 
 test("account order details use a single user-facing status card and compact item rows", () => {

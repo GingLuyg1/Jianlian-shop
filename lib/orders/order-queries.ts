@@ -17,7 +17,7 @@ import type {
 const orderSelect = `
   id,order_no,user_id,status,payment_status,payment_method,subtotal,discount_amount,total_amount,currency,
   customer_email,customer_name,customer_phone,shipping_address,customer_note,admin_note,delivery_type,
-  paid_at,processed_at,completed_at,cancelled_at,created_at,updated_at,
+  fulfillment_status,paid_at,processed_at,completed_at,cancelled_at,created_at,updated_at,
   order_items(*),
   order_status_logs(*),
   order_deliveries(id,order_id,order_item_id,delivery_type,delivery_status,delivered_at,created_at,updated_at)
@@ -151,6 +151,7 @@ export function normalizeOrder(row: Record<string, unknown>): OrderRecord {
     customer_note: row.customer_note ? String(row.customer_note) : null,
     admin_note: row.admin_note ? String(row.admin_note) : null,
     delivery_type: row.delivery_type ? String(row.delivery_type) : null,
+    fulfillment_status: row.fulfillment_status ? String(row.fulfillment_status) : null,
     paid_at: row.paid_at ? String(row.paid_at) : null,
     processed_at: row.processed_at ? String(row.processed_at) : null,
     completed_at: row.completed_at ? String(row.completed_at) : null,

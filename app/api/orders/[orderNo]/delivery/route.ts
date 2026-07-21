@@ -92,7 +92,8 @@ export async function GET(_request: Request, context: RouteContext) {
 
     return json({
       status: rows.some((row) => row.delivery_status === "delivered") ? "delivered" : "pending",
-      deliveries: rows.map((row) => ({
+      deliveries: rows.map((row, index) => ({
+        id: row.delivery_id ?? `${context.params.orderNo}:${index}`,
         product_name: row.product_name ?? "—",
         delivery_status: row.delivery_status ?? "pending",
         delivery_type: row.delivery_type ?? "—",
