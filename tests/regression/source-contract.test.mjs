@@ -2313,3 +2313,26 @@ test("privacy anonymization compatibility only updates deployed profile columns"
   assert.doesNotMatch(migration, /shipping_address\s*=\s*null/i);
   assert.match(migration, /revoke all on function public\.anonymize_user_account\(uuid,uuid,text\)/);
 });
+
+test("production order expiration cron is idempotent and reads its bearer secret from Vault", () => {
+  const migration = file("supabase/migrations/20260721_order_expiration_pg_cron_schedule.sql");
+
+  assert.match(migration, /create extension if not exists pg_cron with schema pg_catalog/);
+  assert.match(migration, /create extension if not exists pg_net with schema extensions/);
+  assert.match(migration, /order_expiration_cron_secret/);
+  assert.match(migration, /from vault\.decrypted_secrets/);
+  assert.match(migration, /ORDER_EXPIRATION_CRON_PREFLIGHT_SECRET_COUNT/);
+  assert.match(migration, /expire-unpaid-orders-every-5-minutes/);
+  assert.match(migration, /'\*\/5 \* \* \* \*'/);
+  assert.match(migration, /perform cron\.unschedule\(v_job_id\)/);
+  assert.match(migration, /perform cron\.schedule\(/);
+  assert.match(migration, /net\.http_post\(/);
+  assert.match(migration, /https:\/\/jianlian\.shop\/api\/internal\/orders\/expire\?limit=10/);
+  assert.match(migration, /'Authorization', 'Bearer ' \|\|/);
+  assert.match(migration, /'Content-Type', 'application\/json'/);
+  assert.match(migration, /body := jsonb_build_object\(\s*'limit', 10,/);
+  assert.match(migration, /timeout_milliseconds := 15000/);
+  assert.match(migration, /ORDER_EXPIRATION_CRON_POSTCHECK_PLAINTEXT_SECRET_IN_COMMAND/);
+  assert.match(migration, /Complete rollback/);
+  assert.doesNotMatch(migration, /Bearer\s+[A-Za-z0-9._~-]{20,}/);
+});
