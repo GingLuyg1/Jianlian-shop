@@ -1623,6 +1623,53 @@ test("order expiration internal job is protected and has a local readiness check
   assert.match(pkg, /"check:order-expiration-readiness": "node scripts\/check-order-expiration-readiness\.mjs"/);
 });
 
+test("order expiration reports atomic release counts and expires only idle chain sessions", () => {
+  const service = file("lib/orders/order-expiration.ts");
+  const resultNormalizer = file("lib/orders/order-expiration-result.mjs");
+  const migration = file("supabase/migrations/20260724_order_expiration_chain_session_consistency.sql");
+  const bep20Service = file("lib/payments/bep20-chain-service.ts");
+  const orderQueries = file("lib/orders/order-queries.ts");
+  const paymentSummary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
+  const expireFunction = migration.match(
+    /create or replace function public\.expire_unpaid_order[\s\S]*?revoke execute on function public\.expire_unpaid_order/
+  )?.[0] ?? "";
+
+  assert.match(service, /normalizeOrderExpirationRpcResult/);
+  assert.doesNotMatch(service, /Number\(row\.released_(?:normal|sku|digital) \?\? 0\)/);
+  assert.match(resultNormalizer, /const release = objectOrNull\(row\.release\)/);
+  assert.match(resultNormalizer, /releaseCount\(row, "released_normal"\)/);
+  assert.match(resultNormalizer, /releaseCount\(row, "released_sku"\)/);
+  assert.match(resultNormalizer, /releaseCount\(row, "released_digital"\)/);
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.ok(expireFunction, "expire_unpaid_order replacement must be present");
+  assert.match(expireFunction, /'release', v_release/);
+  assert.match(expireFunction, /update public\.chain_payment_sessions as cps/);
+  assert.match(expireFunction, /cps\.status = 'waiting_payment'/);
+  assert.match(expireFunction, /cps\.submitted_tx_hash/);
+  assert.match(expireFunction, /status = 'expired'/);
+  assert.match(expireFunction, /then 'order_payment_expired'/);
+  assert.match(expireFunction, /'expired_chain_sessions', v_expired_chain_sessions/);
+  for (const evidenceColumn of ["submitted_tx_hash", "manual_review_reason", "completion_error", "last_checked_at"]) {
+    assert.doesNotMatch(
+      expireFunction,
+      new RegExp(`set\\s+${evidenceColumn}\\s*=`, "i"),
+      `${evidenceColumn} must not be cleared or overwritten during expiration`
+    );
+  }
+  assert.match(migration, /revoke execute on function public\.expire_unpaid_order\(uuid, text\) from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function public\.expire_unpaid_order\(uuid, text\) to service_role/);
+
+  assert.match(bep20Service, /allowExpiredOrder: Boolean\(input\.chainSessionId\)/);
+  assert.match(bep20Service, /chainSessionId && !allowRecovery && session\.status !== "expired"/);
+  assert.match(bep20Service, /session\.status === "expired" && !allowRecovery\s*\? "manual_review"/);
+  assert.match(bep20Service, /if \(session\.status === "expired"\) return "submit_late_transaction"/);
+  assert.match(orderQueries, /order\.status === "expired" && status === "expired"\) return "submit_late_transaction"/);
+  assert.match(paymentSummary, /orderStatus === "expired" && !session\?\.canSubmitLateTransaction/);
+  assert.match(paymentSummary, /chain_session_id: session\.canSubmitLateTransaction \? session\.chainSessionId : undefined/);
+});
+
 test("order payment completion does not mutate inventory after order creation", () => {
   const migration = file("supabase/migrations/20260710_order_payment_inventory_idempotency_fix.sql");
   assert.match(migration, /create or replace function public\.complete_order_payment/);

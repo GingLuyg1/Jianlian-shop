@@ -185,12 +185,15 @@ function deriveBep20PaymentState(order: OrderRecord, session?: Bep20SessionSumma
   if (order.payment_status === "paid" || order.status === "paid") return "paid";
   if (["cancelled", "refunded", "failed"].includes(order.status)) return "closed";
 
+  const status = String(session?.status ?? "").trim();
+  const decision = String(session?.manual_review_decision ?? "").trim();
+  if (order.status === "expired" && decision === "rejected") return "rejected";
+  if (order.status === "expired" && status === "expired") return "submit_late_transaction";
+
   const stillUnpaid = order.status === "pending_payment" && order.payment_status === "unpaid";
   if (!stillUnpaid) return "closed";
   if (!session) return "renew_payment_session";
 
-  const status = String(session.status ?? "").trim();
-  const decision = String(session.manual_review_decision ?? "").trim();
   if (decision === "rejected") return "rejected";
   if (status === "paid") return "paid";
   if (status === "manual_review") return "manual_review_pending";
@@ -198,7 +201,7 @@ function deriveBep20PaymentState(order: OrderRecord, session?: Bep20SessionSumma
   if (status === "payment_failed") return "payment_failed";
   if (status === "underpaid") return "underpaid";
   if (["verified", "completing"].includes(status)) return "view_status";
-  if (status === "expired") return "renew_payment_session";
+  if (status === "expired") return "submit_late_transaction";
   if (["waiting_payment", "submitted", "failed"].includes(status)) {
     const expiresAt = Date.parse(String(session.expires_at ?? ""));
     return Number.isFinite(expiresAt) && expiresAt > Date.now() ? "continue_active_payment" : "renew_payment_session";

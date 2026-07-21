@@ -182,13 +182,17 @@ export function Bep20OrderPaymentSummary({
     || ["paid", "processing", "delivered", "completed"].includes(orderStatus)
     || session?.status === "paid"
     || session?.paymentAction === "paid";
-  const orderClosed = ["cancelled", "expired", "failed"].includes(orderStatus);
+  const orderClosed = ["cancelled", "failed"].includes(orderStatus)
+    || (orderStatus === "expired" && !session?.canSubmitLateTransaction);
   const sessionAllowsTxHash = Boolean(
     session && (session.paymentAction === "continue_active_payment" || session.canSubmitLateTransaction)
   );
   const canSubmitTxHash = !paymentCompleted && !orderClosed && sessionAllowsTxHash;
   const canShowTxInput = canSubmitTxHash;
-  const canRenew = !paymentCompleted && !orderClosed && Boolean(session?.canRenewPaymentSession);
+  const canRenew = orderStatus !== "expired"
+    && !paymentCompleted
+    && !orderClosed
+    && Boolean(session?.canRenewPaymentSession);
   const canOpenOriginalPayment = canSubmitTxHash;
   const notice = useMemo(() => noticeForSession(session, order), [order, session]);
 

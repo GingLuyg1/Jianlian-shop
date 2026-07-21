@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { normalizeOrderExpirationRpcResult } from "@/lib/orders/order-expiration-result.mjs";
 
 export const ORDER_PAYMENT_TIMEOUT_MINUTES = Number(process.env.ORDER_PAYMENT_TIMEOUT_MINUTES ?? 30);
 export const ORDER_EXPIRATION_BATCH_LIMIT = Number(process.env.ORDER_EXPIRATION_BATCH_LIMIT ?? 50);
@@ -54,18 +55,7 @@ function requireServiceClient() {
 }
 
 function normalizeRpcResult(value: unknown, requestId: string): ExpireOrderResult {
-  const row = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-  return {
-    ok: row.ok !== false,
-    code: String(row.code ?? "UNKNOWN"),
-    orderId: typeof row.order_id === "string" ? row.order_id : undefined,
-    orderNo: typeof row.order_no === "string" ? row.order_no : null,
-    releasedNormal: Number(row.released_normal ?? 0),
-    releasedSku: Number(row.released_sku ?? 0),
-    releasedDigital: Number(row.released_digital ?? 0),
-    message: typeof row.message === "string" ? row.message : undefined,
-    requestId,
-  };
+  return normalizeOrderExpirationRpcResult(value, requestId) as ExpireOrderResult;
 }
 
 export async function expireUnpaidOrder(orderId: string, reason = "payment_timeout") {

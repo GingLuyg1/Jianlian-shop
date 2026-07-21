@@ -351,7 +351,7 @@ export async function getBep20PaymentSession(orderNo: string, userId: string): P
   const order = await loadOwnedOrder(service, orderNo, userId);
   const session = await getLatestChainSession(service, order.id);
   if (!session) return toBep20SessionResponse(order.order_no, null, config, order);
-  return toBep20SessionResponse(order.order_no, session, config);
+  return toBep20SessionResponse(order.order_no, session, config, order);
 }
 
 export async function verifyBep20TxHash(input: { orderNo: string; txHash: string; userId: string; chainSessionId?: string | null }): Promise<Bep20VerifyResponse> {
@@ -360,7 +360,7 @@ export async function verifyBep20TxHash(input: { orderNo: string; txHash: string
   await assertConfiguredTokenDecimals(config);
   const txHash = normalizeTxHash(input.txHash);
   const order = await loadOwnedOrder(service, input.orderNo, input.userId);
-  ensureOrderAllowsBep20(order);
+  ensureOrderAllowsBep20(order, { allowExpiredOrder: Boolean(input.chainSessionId) });
   return verifyBep20TxHashForOrder({ service, config, order, txHash, allowRecovery: false, chainSessionId: input.chainSessionId ?? null });
 }
 
@@ -712,7 +712,7 @@ async function verifyBep20TxHashForOrder(input: {
   }
 
   const expectedRaw = BigInt(String(session.expected_raw_amount).split(".")[0]);
-  const status = decideBep20TransferStatus({
+  const transferStatus = decideBep20TransferStatus({
     rawAmount: transfer.rawAmount.toString(),
     expectedRawAmount: expectedRaw.toString(),
     confirmations: transfer.confirmations,
@@ -721,6 +721,9 @@ async function verifyBep20TxHashForOrder(input: {
     sessionExpiresAt: session.expires_at,
     exchangeRateExpiresAt: session.exchange_rate_expires_at,
   });
+  const status = session.status === "expired" && !allowRecovery
+    ? "manual_review"
+    : transferStatus;
   const claim = await claimChainTransaction(service, {
     sessionId: session.id,
     orderId: order.id,
@@ -739,7 +742,11 @@ async function verifyBep20TxHashForOrder(input: {
     confirmed_raw_amount: transfer.rawAmount.toString(),
     last_checked_at: new Date().toISOString(),
     failure_reason: status === "underpaid" ? "链上到账金额不足。" : null,
-    manual_review_reason: status === "manual_review" ? "链上到账金额或时间需要人工审核。" : null,
+    manual_review_reason: status === "manual_review"
+      ? session.status === "expired"
+        ? "订单支付已过期，迟到账交易需要人工审核。"
+        : "链上到账金额或时间需要人工审核。"
+      : null,
     manual_review_decision: status === "manual_review" ? "pending" : null,
   };
   let updated: ChainSessionRow;
@@ -966,10 +973,11 @@ async function loadOwnedOrder(service: SupabaseClient, orderNo: string, userId: 
   return data as OrderRow;
 }
 
-function ensureOrderAllowsBep20(order: OrderRow) {
+function ensureOrderAllowsBep20(order: OrderRow, options: { allowExpiredOrder?: boolean } = {}) {
   if (order.payment_method !== "usdt_bep20") throw new Bep20PaymentError("PAYMENT_METHOD_INVALID", "该订单不是 USDT-BEP20 支付订单。", 400);
   if (order.payment_status === "paid" || order.status === "paid") throw new Bep20PaymentError("ORDER_ALREADY_PAID", "订单已支付，不能重复创建链上支付单。", 409);
-  if (["cancelled", "closed", "expired", "refunded", "failed"].includes(order.status)) {
+  if (["cancelled", "closed", "refunded", "failed"].includes(order.status)
+      || (order.status === "expired" && !options.allowExpiredOrder)) {
     throw new Bep20PaymentError("ORDER_STATUS_INVALID", "当前订单状态不允许链上支付。", 400);
   }
 }
@@ -1434,7 +1442,9 @@ function toBep20SessionResponse(orderNo: string, session: ChainSessionRow | null
       failureReason: session.failure_reason,
     }),
     paymentAction,
-    canRenewPaymentSession: paymentAction === "renew_payment_session",
+    canRenewPaymentSession: paymentAction === "renew_payment_session"
+      && order?.status === "pending_payment"
+      && order.payment_status !== "paid",
     canSubmitLateTransaction: session.status === "expired" && session.manual_review_decision !== "rejected",
     requiredConfirmations: config.requiredConfirmations,
     tokenContract: String(session.token_contract),
@@ -1445,7 +1455,7 @@ function toBep20SessionResponse(orderNo: string, session: ChainSessionRow | null
 function getBep20UserPaymentAction(session: ChainSessionRow): Bep20SessionResponse["paymentAction"] {
   if (session.status === "paid") return "paid";
   if (session.manual_review_decision === "rejected") return "rejected";
-  if (session.status === "expired") return "renew_payment_session";
+  if (session.status === "expired") return "submit_late_transaction";
   if (["manual_review", "confirming", "verified", "completing", "payment_failed", "underpaid"].includes(session.status)) {
     return "view_status";
   }
