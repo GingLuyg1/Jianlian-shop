@@ -1224,6 +1224,47 @@ test("admin delivery routes use hardened RPCs and reject the unsafe legacy inven
   assert.doesNotMatch(route, /rpc\("admin_append_manual_delivery"/);
 });
 
+test("digital delivery service-role claim compatibility preserves least privilege and retry cleanup", () => {
+  const migration = file("supabase/migrations/20260722_digital_delivery_service_role_claim_compatibility.sql");
+  const deliveryBaseline = file("supabase/migrations/20260709_digital_delivery_reserved_fulfillment_hardening.sql");
+  const completion = file("lib/payments/complete-payment-service.ts");
+  const bep20 = file("lib/payments/bep20-chain-service.ts");
+  const adminPayment = file("app/api/admin/payments/[paymentId]/route.ts");
+  const adminOrder = file("app/api/admin/orders/[orderId]/route.ts");
+
+  assert.match(adminPayment, /getServerSuperAdminContext\(\)/);
+  assert.ok(adminPayment.indexOf("getServerSuperAdminContext()") < adminPayment.indexOf("approveLateBep20PaymentSession("));
+  assert.match(bep20, /approveLateBep20PaymentSession[\s\S]{0,300}requiredServiceClient\(\)/);
+  assert.match(bep20, /status === "manual_review" && allowLateApproval \? "verified" : status/);
+  assert.match(bep20, /verifyBep20TxHashForOrder\([\s\S]{0,250}service/);
+  assert.match(bep20, /completePayment\([\s\S]{0,500}service/);
+  assert.match(completion, /deliverDigitalOrder\(service, result\.businessId, input\.source\)/);
+
+  for (const signature of [
+    "deliver_digital_order\\(uuid,text\\)",
+    "admin_deliver_order_item_manual\\(uuid,uuid,text,text\\)",
+  ]) {
+    assert.match(migration, new RegExp(`revoke execute on function public\\.${signature}[\\s\\S]{0,80}from public, anon, authenticated`, "i"));
+    assert.match(migration, new RegExp(`grant execute on function public\\.${signature}[\\s\\S]{0,60}to service_role`, "i"));
+  }
+  assert.match(migration, /coalesce\(auth\.role\(\), ''''\)/);
+  assert.match(migration, /DIGITAL_DELIVERY_ROLE_CLAIM_POSTCHECK_EXECUTE_ACL_FAILED/);
+  assert.match(migration, /payment_status <> ''paid''/);
+  assert.match(migration, /digital_delivery_secrets/);
+  assert.match(migration, /status = ''reserved''/);
+  assert.match(migration, /order_item_id = p_order_item_id/);
+  assert.match(deliveryBaseline, /greatest\(coalesce\(v_item\.quantity, 1\) - count\(\*\)::integer, 0\)/);
+  assert.match(deliveryBaseline, /status = 'reserved'[\s\S]{0,300}coalesce\(reserved_order_id, order_id\) = p_order_id/);
+  assert.match(deliveryBaseline, /insert into public\.order_deliveries[\s\S]{0,900}on conflict do nothing/);
+  assert.match(deliveryBaseline, /insert into public\.digital_delivery_secrets[\s\S]{0,180}on conflict \(delivery_id\) do nothing/);
+  assert.match(deliveryBaseline, /update public\.digital_inventory[\s\S]{0,500}status = 'delivered'/);
+  assert.match(completion, /catch \(deliveryError\)[\s\S]{0,500}update\(\{ last_error: deliveryMessage \}\)/);
+
+  assert.match(adminOrder, /deliverDigitalOrder\(serviceClient, context\.params\.orderId, "admin_retry"\)/);
+  assert.match(adminOrder, /from\("payment_sessions"\)[\s\S]{0,300}update\(\{ last_error: null \}\)[\s\S]{0,300}eq\("business_id", context\.params\.orderId\)[\s\S]{0,120}eq\("status", "paid"\)/);
+  assert.doesNotMatch(`${adminPayment}\n${adminOrder}`, /SUPABASE_(?:SERVICE_ROLE|SECRET|SERVICE_KEY)/);
+});
+
 test("admin order manual expiration uses unified service and audit log", () => {
   const route = file("app/api/admin/orders/[orderId]/route.ts");
   assert.match(route, /expireUnpaidOrder/);

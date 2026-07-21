@@ -283,6 +283,17 @@ export async function POST(request: Request, context: RouteContext) {
       }
       try {
         const result = await deliverDigitalOrder(serviceClient, context.params.orderId, "admin_retry");
+        const { error: paymentErrorCleanupError } = await serviceClient
+          .from("payment_sessions")
+          .update({ last_error: null })
+          .eq("business_type", "order")
+          .eq("business_id", context.params.orderId)
+          .eq("status", "paid");
+        if (paymentErrorCleanupError) {
+          console.warn("[Admin Orders] paid payment delivery error cleanup skipped", {
+            code: paymentErrorCleanupError.code ?? null,
+          });
+        }
         await writeAdminAuditLog({
           request,
           admin: auditAdmin,
