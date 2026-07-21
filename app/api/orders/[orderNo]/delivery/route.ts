@@ -34,23 +34,45 @@ function json(body: unknown, init?: ResponseInit) {
   return response;
 }
 
-function sanitizeDeliveryError(error: unknown) {
+function getDeliveryErrorCode(error: unknown) {
+  return typeof (error as { code?: unknown } | null)?.code === "string"
+    ? String((error as { code: string }).code)
+    : "UNKNOWN";
+}
+
+function classifyDeliveryError(error: unknown) {
   const message = getOrderErrorMessage(error, "交付内容读取失败");
-  if (
-    message.includes("Could not find") ||
-    message.includes("schema cache") ||
-    message.includes("PGRST") ||
-    message.includes("42883") ||
-    message.includes("42P01")
-  ) {
-    return "数字发货功能尚未完成数据库初始化，请管理员执行数字发货 migration。";
+  const normalized = message.toLowerCase();
+  if (normalized.includes("please sign in")) {
+    return { status: 401, message: "请先登录" };
   }
-  if (message.includes("未支付")) return "订单未支付，不能查看交付内容";
-  if (message.includes("无权") || message.includes("不存在")) return "订单不存在或无权查看";
-  return message;
+  if (normalized.includes("not paid") || message.includes("未支付")) {
+    return { status: 403, message: "订单未支付，不能查看交付内容" };
+  }
+  if (normalized.includes("does not allow delivery access")) {
+    return { status: 403, message: "当前订单状态不允许查看交付内容" };
+  }
+  if (
+    normalized.includes("access denied") ||
+    normalized.includes("not found") ||
+    message.includes("无权") ||
+    message.includes("不存在")
+  ) {
+    return { status: 404, message: "订单不存在或无权查看" };
+  }
+  return { status: 500, message: "交付信息加载失败，请稍后重试" };
+}
+
+function logDeliveryDatabaseError(requestId: string, error: unknown) {
+  console.error("[Orders] delivery RPC failed", {
+    requestId,
+    code: getDeliveryErrorCode(error),
+    message: getOrderErrorMessage(error, "Unknown delivery database error"),
+  });
 }
 
 export async function GET(_request: Request, context: RouteContext) {
+  const requestId = crypto.randomUUID();
   try {
     if (!hasSupabaseServerConfig()) {
       return json({ error: "Supabase 环境变量未配置" }, { status: 500 });
@@ -80,9 +102,9 @@ export async function GET(_request: Request, context: RouteContext) {
     });
 
     if (error) {
-      const message = sanitizeDeliveryError(error);
-      const status = message.includes("未支付") ? 403 : message.includes("无权") ? 404 : 400;
-      return json({ error: message }, { status });
+      logDeliveryDatabaseError(requestId, error);
+      const classified = classifyDeliveryError(error);
+      return json({ error: classified.message, request_id: requestId }, { status: classified.status });
     }
 
     const rows = (data ?? []) as DeliveryRow[];
@@ -105,8 +127,8 @@ export async function GET(_request: Request, context: RouteContext) {
       })),
     });
   } catch (error) {
-    console.error("[Orders] delivery content failed");
-    return json({ error: sanitizeDeliveryError(error) }, { status: 500 });
+    logDeliveryDatabaseError(requestId, error);
+    return json({ error: "交付信息加载失败，请稍后重试", request_id: requestId }, { status: 500 });
   }
 }
 

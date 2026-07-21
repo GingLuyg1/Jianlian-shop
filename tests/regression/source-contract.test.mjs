@@ -1470,6 +1470,35 @@ test("paid order details hide payment proof and load delivered content through t
   assert.match(orderDetail, /delivery\.delivery_status === "delivered" \? "已交付"/);
 });
 
+test("owned-user delivery RPCs qualify order identifiers and hide database failures", () => {
+  const migration = file("supabase/migrations/20260723_user_delivery_rpc_order_no_ambiguity_fix.sql");
+  const deliveryRoute = file("app/api/orders/[orderNo]/delivery/route.ts");
+
+  assert.match(migration, /create or replace function public\.get_order_fulfillment_for_user\(p_order_no text\)/i);
+  assert.match(migration, /create or replace function public\.get_order_delivery_for_user\(p_order_no text\)/i);
+  assert.match(migration, /security definer\s+set search_path = public/gi);
+  assert.match(migration, /from public\.orders as o\s+where o\.order_no = p_order_no\s+and o\.user_id = auth\.uid\(\)/i);
+  assert.doesNotMatch(migration, /where\s+order_no\s*=\s*p_order_no/i);
+  assert.match(migration, /od\.order_id = v_order\.id/);
+  assert.match(migration, /od\.user_id = auth\.uid\(\)/);
+  assert.match(migration, /od\.delivery_status = 'delivered'/);
+  assert.match(migration, /v_order\.payment_status <> 'paid'/);
+  assert.match(migration, /v_order\.status in \('cancelled', 'expired', 'failed'\)/);
+  assert.match(migration, /join public\.digital_delivery_secrets as ds\s+on ds\.delivery_id = od\.id/i);
+  assert.match(migration, /set viewed_at = coalesce\(od\.viewed_at, clock_timestamp\(\)\)/);
+  assert.match(migration, /revoke execute on function public\.get_order_fulfillment_for_user\(text\) from public, anon/);
+  assert.match(migration, /revoke execute on function public\.get_order_delivery_for_user\(text\) from public, anon/);
+  assert.match(migration, /grant execute on function public\.get_order_fulfillment_for_user\(text\) to authenticated, service_role/);
+  assert.match(migration, /grant execute on function public\.get_order_delivery_for_user\(text\) to authenticated, service_role/);
+
+  assert.match(deliveryRoute, /const requestId = crypto\.randomUUID\(\)/);
+  assert.match(deliveryRoute, /console\.error\("\[Orders\] delivery RPC failed", \{[\s\S]*requestId,[\s\S]*code: getDeliveryErrorCode\(error\),[\s\S]*message:/);
+  assert.match(deliveryRoute, /return \{ status: 500, message: "交付信息加载失败，请稍后重试" \}/);
+  assert.match(deliveryRoute, /request_id: requestId/);
+  assert.doesNotMatch(deliveryRoute, /return json\(\{ error: (?:message|getOrderErrorMessage\()/);
+  assert.match(deliveryRoute, /return json\(\{ error: classified\.message, request_id: requestId \}, \{ status: classified\.status \}\)/);
+});
+
 test("account order details use a single user-facing status card and compact item rows", () => {
   const orderList = file("app/account/orders/page.tsx");
   const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
