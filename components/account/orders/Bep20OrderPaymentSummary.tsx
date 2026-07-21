@@ -103,7 +103,7 @@ function noticeForSession(session: Bep20Session | null, order: OrderRecord) {
       ? "当前没有有效支付单，你可以重新生成新的支付单。"
       : orderNotice || "正在读取当前支付信息。";
   }
-  if (session.paymentAction === "paid") return "该订单已完成支付。";
+  if (session.paymentAction === "paid") return null;
   if (session.paymentAction === "rejected") return "该支付审核已结束，如有疑问请联系客服。";
   if (session.status === "manual_review") return "链上交易已收到，当前正在人工核验，请勿重复付款。";
   if (session.status === "confirming") return "链上确认中，请勿重复付款。";
@@ -282,9 +282,11 @@ export function Bep20OrderPaymentSummary({
         </Badge>
       </div>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 leading-6 text-amber-900">
-        {notice}
-      </div>
+      {notice ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 leading-6 text-amber-900">
+          {notice}
+        </div>
+      ) : null}
 
       {error ? <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-red-700">{error}</div> : null}
 

@@ -363,7 +363,7 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                     ) : (
                       <div className="rounded-xl border border-dashed border-orange-200 p-8 text-center text-sm text-muted-foreground">
                         {delivered
-                          ? "状态：已交付，暂无可显示的交付正文。"
+                          ? "交付已完成，暂无可显示的交付正文。"
                           : ["manual", "manual_delivery"].includes(String(order.delivery_type ?? order.order_items?.[0]?.delivery_type ?? ""))
                           ? orderStatus === "processing" ? "人工处理中。" : "待人工处理。"
                           : deliveryRequested ? "暂无交付内容，请联系客服确认。" : "交付内容默认隐藏，点击后单独请求服务端。"}

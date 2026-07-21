@@ -790,7 +790,6 @@ function UserOrderDrawer({
               <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">正在读取交付信息...</div>
             ) : delivered ? (
               <div className="rounded-lg bg-slate-50 p-3 leading-6">
-                <div className="mb-2 font-medium text-emerald-700">状态：已交付</div>
                 {deliveryContent ? (
                   <div className="whitespace-pre-wrap break-words">
                     {showDelivery ? deliveryContent : secureDelivery?.masked_content || maskSecret(deliveryContent)}

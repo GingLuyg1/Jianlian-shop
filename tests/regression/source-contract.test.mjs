@@ -1462,12 +1462,36 @@ test("paid order details hide payment proof and load delivered content through t
   assert.match(orderList, /order\.fulfillment_status === "delivered"/);
   assert.match(orderList, /secureDelivery\?\.delivery_status === "delivered"/);
   assert.match(orderList, /交付信息加载失败，请刷新后重试/);
-  assert.match(orderList, /状态：已交付/);
+  assert.doesNotMatch(orderList, /状态：已交付/);
   assert.match(orderList, /onUpdated=\{async \(\) => \{[\s\S]{0,200}onOrderUpdated\(order\.order_no\)[\s\S]{0,200}loadDelivery\(order\.order_no\)/);
 
   assert.match(orderDetail, /deliveryRequested \|\| paymentStatus !== "paid" \|\| !delivered/);
   assert.match(orderDetail, /交付信息加载失败，请刷新后重试/);
   assert.match(orderDetail, /delivery\.delivery_status === "delivered" \? "已交付"/);
+});
+
+test("paid and delivered order details omit redundant completion notices", () => {
+  const summary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
+  const orderList = file("app/account/orders/page.tsx");
+  const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+
+  assert.match(summary, /if \(session\.paymentAction === "paid"\) return null/);
+  assert.doesNotMatch(summary, /该订单已完成支付/);
+  assert.match(summary, /status\.label/);
+  assert.match(summary, /session\.paymentAction === "paid"/);
+  assert.match(summary, /\{notice \? \(/);
+  assert.match(summary, /session\.status === "underpaid"/);
+  assert.match(summary, /session\.status === "payment_failed"/);
+
+  for (const source of [orderList, orderDetail]) {
+    assert.doesNotMatch(source, /状态：已交付/);
+    assert.match(source, /交付信息加载失败，请刷新后重试/);
+  }
+  assert.match(orderList, /等待交付/);
+  assert.match(orderList, /交付处理/);
+  assert.match(orderList, /copyDeliveryContent/);
+  assert.match(orderDetail, /显示完整内容/);
+  assert.match(orderDetail, /复制内容/);
 });
 
 test("owned-user delivery RPCs qualify order identifiers and hide database failures", () => {
