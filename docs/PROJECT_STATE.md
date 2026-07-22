@@ -1,5 +1,13 @@
 # Jianlian Shop 当前项目状态
 
+## 2026-07-23：BEP20 欠额确认状态 Hotfix（本地待发布）
+
+- 根因：链上状态判断先比较欠额、后检查确认数，导致未达到要求确认数的交易提前进入 `underpaid`；服务层同时没有为最终欠额状态持久化 `confirmed_at`，与欠额候选和结算 RPC 的非空契约冲突。
+- 修复后的顺序：无效区块时间 → 迟到账 → 确认数不足 → 欠额 → 超额 → 精确足额。
+- `confirmed_at` 现在表示服务端首次达到确认要求并完成核验的 UTC 时间；重复核验保留旧值，`block_timestamp` 继续作为链上交易和截止时间证据。
+- 新增 `20260730_bep20_underpayment_confirmation_state.sql`，仅为证据唯一且严格匹配的历史安全记录补写 `confirmed_at`；Migration 尚未执行。
+- 正式目标订单尚未结算、余额未修改、库存未释放。欠额自动 Cron 尚未配置，管理员前端操作入口尚未完成；部署、Migration 和正式处理仍需人工授权。
+
 更新日期：2026-07-19
 代码基线：`main` / `f43c841d087960b91a8cf6b25c386551b64bb992`
 状态口径：代码事实来自仓库只读核对；正式库事实来自用户在目标项目人工执行只读审计、Migration 和 Postcheck 后提供的执行记录及 `docs/audits/postcheck-results/*.csv`。审计未覆盖的对象仍不得视为已确认。

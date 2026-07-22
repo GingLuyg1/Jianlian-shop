@@ -233,10 +233,188 @@ begin
   from public.list_expirable_bep20_underpayments(10) x
   where x.session_id = v_chain_session_id;
   if v_candidates <> 0 then raise exception 'TEST_FAILED_02B_NULL_CONFIRMED_AT_CANDIDATE'; end if;
+
+  -- Mirror the 20260730 migration's strict evidence selector in a rollback-only
+  -- temporary view so synthetic historical rows can exercise the backfill behavior.
+  execute $view$
+    create temporary view bep20_underpayment_confirmation_test_candidates as
+    select cps.id as session_id, tx.evidence_created_at as confirmation_time
+    from public.chain_payment_sessions cps
+    join public.orders o on o.id = cps.order_id
+    join public.payment_sessions ps on ps.id = cps.payment_session_id
+    join public.order_payments op on op.id = cps.payment_id
+    join lateral (
+      select count(*)::integer as match_count
+      from public.chain_transaction_claims ctc
+      where ctc.chain_id = cps.chain_id
+        and ctc.order_id = cps.order_id
+        and ctc.chain_payment_session_id = cps.id
+        and lower(ctc.tx_hash) = lower(cps.submitted_tx_hash)
+    ) claim on claim.match_count = 1
+    join lateral (
+      select count(*)::integer as match_count, min(ct.created_at) as evidence_created_at
+      from public.chain_transactions ct
+      where ct.chain_payment_session_id = cps.id
+        and ct.order_id = cps.order_id
+        and ct.chain_id = 56
+        and lower(ct.tx_hash) = lower(cps.submitted_tx_hash)
+        and ct.status = 'underpaid'
+        and lower(ct.token_contract) = lower(cps.token_contract)
+        and lower(ct.to_address) = lower(cps.receive_address)
+        and ct.raw_amount is not distinct from cps.confirmed_raw_amount
+        and ct.normalized_amount is not distinct from cps.confirmed_amount
+        and ct.confirmation_count >= 12
+        and ct.block_timestamp is not null
+        and ct.created_at is not null
+        and ct.block_timestamp <= least(o.payment_expires_at, ps.expires_at, cps.expires_at)
+    ) tx on tx.match_count = 1
+    where cps.status = 'underpaid'
+      and cps.confirmed_at is null
+      and cps.manual_review_decision is null
+      and cps.chain_id = 56
+      and upper(cps.network) = 'BEP20'
+      and upper(cps.asset) = 'USDT'
+      and upper(cps.payment_currency) = 'USDT'
+      and upper(cps.order_currency) = 'CNY'
+      and cps.confirmed_raw_amount > 0
+      and cps.confirmed_raw_amount < cps.expected_raw_amount
+      and cps.confirmed_amount > 0
+      and cps.confirmed_amount < cps.expected_amount
+      and o.status = 'pending_payment'
+      and o.payment_status = 'unpaid'
+      and o.reservation_released_at is null
+      and ps.status in ('pending', 'processing')
+      and op.status = 'under_review'
+      and o.payment_expires_at is not null
+      and ps.expires_at is not null
+      and cps.expires_at is not null
+      and least(o.payment_expires_at, ps.expires_at, cps.expires_at) < transaction_timestamp()
+      and not exists (
+        select 1 from public.bep20_underpayment_dispositions bud
+        where bud.chain_session_id = cps.id
+      )
+  $view$;
+
+  update public.chain_transactions
+  set block_timestamp = now() - interval '3 minutes', confirmation_count = 11
+  where chain_id = 56 and tx_hash = v_tx_hash and log_index = 0;
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  if exists (select 1 from public.chain_payment_sessions where id = v_chain_session_id and confirmed_at is not null) then
+    raise exception 'TEST_FAILED_02B_LOW_CONFIRMATIONS_BACKFILLED';
+  end if;
+
+  update public.chain_transactions
+  set confirmation_count = 12, block_timestamp = now() - interval '1 minute'
+  where chain_id = 56 and tx_hash = v_tx_hash and log_index = 0;
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  if exists (select 1 from public.chain_payment_sessions where id = v_chain_session_id and confirmed_at is not null) then
+    raise exception 'TEST_FAILED_02B_LATE_TRANSFER_BACKFILLED';
+  end if;
+
+  update public.chain_transactions
+  set block_timestamp = now() - interval '3 minutes', tx_hash = '0x' || repeat('e', 64)
+  where chain_id = 56 and tx_hash = v_tx_hash and log_index = 0;
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  if exists (select 1 from public.chain_payment_sessions where id = v_chain_session_id and confirmed_at is not null) then
+    raise exception 'TEST_FAILED_02B_TX_HASH_MISMATCH_BACKFILLED';
+  end if;
+
+  update public.chain_transactions
+  set tx_hash = v_tx_hash, order_id = v_other_order_id
+  where chain_id = 56 and tx_hash = '0x' || repeat('e', 64) and log_index = 0;
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  if exists (select 1 from public.chain_payment_sessions where id = v_chain_session_id and confirmed_at is not null) then
+    raise exception 'TEST_FAILED_02B_ORDER_MISMATCH_BACKFILLED';
+  end if;
+
+  update public.chain_transactions
+  set order_id = v_order_id, chain_payment_session_id = null
+  where chain_id = 56 and tx_hash = v_tx_hash and log_index = 0;
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  if exists (select 1 from public.chain_payment_sessions where id = v_chain_session_id and confirmed_at is not null) then
+    raise exception 'TEST_FAILED_02B_SESSION_MISMATCH_BACKFILLED';
+  end if;
+
+  update public.chain_transactions
+  set chain_payment_session_id = v_chain_session_id, normalized_amount = 2.989999
+  where chain_id = 56 and tx_hash = v_tx_hash and log_index = 0;
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  if exists (select 1 from public.chain_payment_sessions where id = v_chain_session_id and confirmed_at is not null) then
+    raise exception 'TEST_FAILED_02B_AMOUNT_MISMATCH_BACKFILLED';
+  end if;
+
+  update public.chain_transactions
+  set normalized_amount = 2.990000
+  where chain_id = 56 and tx_hash = v_tx_hash and log_index = 0;
+  insert into public.chain_transactions(
+    chain_payment_session_id, order_id, chain_id, tx_hash, log_index,
+    block_number, block_hash, block_timestamp, token_contract, from_address,
+    to_address, raw_amount, normalized_amount, confirmation_count, status
+  ) values (
+    v_chain_session_id, v_order_id, 56, v_tx_hash, 1, 12345679,
+    '0x' || repeat('f', 64), now() - interval '3 minutes', v_token_contract,
+    v_from_address, v_receive_address, 2990000000000000000, 2.990000, 12, 'underpaid'
+  );
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  if exists (select 1 from public.chain_payment_sessions where id = v_chain_session_id and confirmed_at is not null) then
+    raise exception 'TEST_FAILED_02B_MULTIPLE_TRANSACTIONS_BACKFILLED';
+  end if;
+  delete from public.chain_transactions
+  where chain_id = 56 and tx_hash = v_tx_hash and log_index = 1;
+
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  select count(*) into v_candidates
+  from public.list_expirable_bep20_underpayments(10) x
+  where x.session_id = v_chain_session_id;
+  if v_candidates <> 1 then raise exception 'TEST_FAILED_02B_SAFE_BACKFILL_NOT_CANDIDATE'; end if;
+  if not exists (
+    select 1
+    from public.chain_payment_sessions cps
+    join public.chain_transactions ct on ct.chain_payment_session_id = cps.id
+    where cps.id = v_chain_session_id and cps.confirmed_at = ct.created_at
+      and ct.tx_hash = v_tx_hash and ct.log_index = 0
+  ) then raise exception 'TEST_FAILED_02B_BACKFILL_TIME_NOT_EVIDENCE_CREATED_AT'; end if;
+
+  select confirmed_at::text into v_error
+  from public.chain_payment_sessions where id = v_chain_session_id;
+  update public.chain_payment_sessions cps set confirmed_at = candidate.confirmation_time
+  from bep20_underpayment_confirmation_test_candidates candidate
+  where cps.id = candidate.session_id and cps.confirmed_at is null;
+  if (select confirmed_at::text from public.chain_payment_sessions where id = v_chain_session_id) is distinct from v_error then
+    raise exception 'TEST_FAILED_02B_BACKFILL_NOT_IDEMPOTENT';
+  end if;
+  if (select balance from public.profiles where id = v_user_id) <> v_balance_before
+     or exists (select 1 from public.balance_transactions where business_id = v_chain_session_id::text)
+     or exists (select 1 from public.bep20_underpayment_dispositions where chain_session_id = v_chain_session_id)
+     or not exists (select 1 from public.orders where id = v_order_id and status = 'pending_payment' and payment_status = 'unpaid')
+     or not exists (select 1 from public.payment_sessions where id = v_payment_session_id and status = 'processing')
+     or not exists (select 1 from public.order_payments where id = v_order_payment_id and status = 'under_review')
+     or not exists (select 1 from public.digital_inventory where id = v_inventory_id and status = 'reserved') then
+    raise exception 'TEST_FAILED_02B_BACKFILL_CHANGED_BUSINESS_STATE';
+  end if;
+
   update public.orders set payment_expires_at = v_deadline where id = v_order_id;
   update public.payment_sessions set expires_at = v_deadline where id = v_payment_session_id;
   update public.chain_payment_sessions set expires_at = v_deadline, confirmed_at = now() where id = v_chain_session_id;
-  raise notice 'PASS 02B: null confirmed_at is never a candidate';
+  update public.chain_transactions set block_timestamp = now()
+  where chain_id = 56 and tx_hash = v_tx_hash and log_index = 0;
+  raise notice 'PASS 02B: strict confirmation backfill is fail-closed, side-effect free, and idempotent';
 
   -- The production chain-session deadline is NOT NULL. This rollback-only test
   -- temporarily relaxes that schema guard so the RPC's own fail-closed deadline

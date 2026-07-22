@@ -751,12 +751,13 @@ async function verifyBep20TxHashForOrder(input: {
   const effectiveStatus = approvedManualCompletion && ["manual_review", "overpaid"].includes(status)
     ? "verified"
     : status;
+  const verificationTime = new Date().toISOString();
   const patch: Record<string, unknown> = {
     status: effectiveStatus,
     submitted_tx_hash: txHash,
     confirmed_amount: transfer.normalizedAmount,
     confirmed_raw_amount: transfer.rawAmount.toString(),
-    last_checked_at: new Date().toISOString(),
+    last_checked_at: verificationTime,
     failure_reason: status === "underpaid" ? "链上到账金额不足。" : null,
     manual_review_reason: status === "manual_review"
       ? session.status === "expired"
@@ -765,6 +766,11 @@ async function verifyBep20TxHashForOrder(input: {
       : null,
     manual_review_decision: status === "manual_review" ? "pending" : null,
   };
+  if (status === "underpaid") {
+    // confirmed_at is the first server verification time after reaching the
+    // confirmation threshold. block_timestamp remains the deadline evidence.
+    patch.confirmed_at = session.confirmed_at ?? verificationTime;
+  }
   let updated: ChainSessionRow = session;
 
   if (["verified", "overpaid"].includes(effectiveStatus) && !session.payment_session_id) {

@@ -1,5 +1,11 @@
 # Jianlian Shop 仓库协作规则
 
+## BEP20 欠额确认状态 Hotfix（2026-07-23）
+
+- `confirmed_at` 表示服务端在达到要求确认数后完成链上核验的首次时间；链上实际发生时间继续只使用 `chain_transactions.block_timestamp`。
+- 金额分类必须晚于区块时间、支付截止时间和确认数检查；未达到确认数时不得提前进入 `underpaid` 或 `overpaid`。
+- 历史补录只能由独立 Migration 对证据唯一、金额和归属精确匹配、确认数达标且未迟到账的记录补写 `confirmed_at`，不得顺带结算、入账、释放库存或改变订单/支付状态。
+
 ## 项目结构与技术栈
 
 - `app/`：Next.js 13 App Router 页面与 Route Handlers。

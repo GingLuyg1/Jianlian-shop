@@ -398,8 +398,23 @@ test("BEP20 underpayment and confirmation thresholds cannot complete early", () 
   const approvalMigration = file("supabase/migrations/20260715_bep20_approved_overpayment_completion.sql");
   const claimMigration = file("supabase/migrations/20260708_bep20_phase1_completion_hardening.sql");
 
-  assert.match(logic, /if \(raw < expected\) return "underpaid"/);
-  assert.match(logic, /if \(Number\(input\.confirmations\) < Number\(input\.requiredConfirmations\)\) return "confirming"/);
+  const invalidTimestamp = logic.indexOf('if (!Number.isFinite(transferTime)) return "manual_review"');
+  const lateTransfer = logic.indexOf('if (Number.isFinite(deadline) && transferTime > deadline) return "manual_review"');
+  const confirmationGate = logic.indexOf('if (Number(input.confirmations) < Number(input.requiredConfirmations)) return "confirming"');
+  const underpaid = logic.indexOf('if (raw < expected) return "underpaid"');
+  const overpaid = logic.indexOf('if (raw > expected) return "overpaid"');
+  const verified = logic.indexOf('return "verified"');
+  assert.ok(invalidTimestamp >= 0 && invalidTimestamp < lateTransfer);
+  assert.ok(lateTransfer < confirmationGate && confirmationGate < underpaid);
+  assert.ok(underpaid < overpaid && overpaid < verified);
+  assert.match(service, /const verificationTime = new Date\(\)\.toISOString\(\)/);
+  assert.match(service, /if \(status === "underpaid"\)[\s\S]*?patch\.confirmed_at = session\.confirmed_at \?\? verificationTime/);
+  assert.ok(
+    service.indexOf('if (status === "underpaid")') < service.indexOf('updateNonFinalChainSession(service, session.id, patch)'),
+    "underpaid confirmed_at must be included in the persisted non-final patch"
+  );
+  assert.doesNotMatch(service, /if \(status === "confirming"\)[\s\S]{0,200}?confirmed_at/);
+  assert.doesNotMatch(service, /if \(status === "manual_review"\)[\s\S]{0,200}?confirmed_at/);
   assert.match(service, /approvedManualCompletion[\s\S]*?\["manual_review", "overpaid"\][\s\S]*?"verified"/);
   assert.match(approvalMigration, /approved manual review cannot complete an underpaid transfer/);
   assert.match(approvalMigration, /p_confirmed_amount < v_session\.expected_amount/);
@@ -420,7 +435,7 @@ test("BEP20 valid overpayment uses one service-role atomic settlement and existi
   const topBar = file("components/layout/PublicTopInfoBar.tsx");
   const balanceEvents = file("lib/account/balance-events.ts");
 
-  assert.match(logic, /if \(raw < expected\) return "underpaid";[\s\S]*?confirmations[\s\S]*?return "confirming";[\s\S]*?if \(raw > expected\) return "overpaid"/);
+  assert.match(logic, /confirmations[\s\S]*?return "confirming";[\s\S]*?if \(raw < expected\) return "underpaid";[\s\S]*?if \(raw > expected\) return "overpaid"/);
   assert.match(service, /settle_bep20_automatic_overpayment/);
   assert.match(service, /effectiveStatus === "overpaid"/);
   assert.match(service, /await updateNonFinalChainSession\(service, session\.id, patch\)[\s\S]*?settleAutomaticOverpayment/);
@@ -3295,6 +3310,18 @@ test("BEP20 underpayment database verification is guarded, synthetic, and rollba
   assert.ok(deadlineLoop < deadlineSetNotNull && deadlineSetNotNull < deadlinePassNotice);
   assert.match(verification, /BEP20_UNDERPAYMENT_DEADLINE_INVALID/);
   assert.match(verification, /confirmed_at = null/);
+  assert.match(verification, /bep20_underpayment_confirmation_test_candidates/);
+  assert.match(verification, /confirmation_count >= 12/);
+  assert.match(verification, /TEST_FAILED_02B_LOW_CONFIRMATIONS_BACKFILLED/);
+  assert.match(verification, /TEST_FAILED_02B_LATE_TRANSFER_BACKFILLED/);
+  assert.match(verification, /TEST_FAILED_02B_TX_HASH_MISMATCH_BACKFILLED/);
+  assert.match(verification, /TEST_FAILED_02B_ORDER_MISMATCH_BACKFILLED/);
+  assert.match(verification, /TEST_FAILED_02B_SESSION_MISMATCH_BACKFILLED/);
+  assert.match(verification, /TEST_FAILED_02B_AMOUNT_MISMATCH_BACKFILLED/);
+  assert.match(verification, /TEST_FAILED_02B_MULTIPLE_TRANSACTIONS_BACKFILLED/);
+  assert.match(verification, /TEST_FAILED_02B_SAFE_BACKFILL_NOT_CANDIDATE/);
+  assert.match(verification, /TEST_FAILED_02B_BACKFILL_NOT_IDEMPOTENT/);
+  assert.match(verification, /TEST_FAILED_02B_BACKFILL_CHANGED_BUSINESS_STATE/);
   assert.match(verification, /v_error is distinct from 'BEP20_UNDERPAYMENT_SNAPSHOT_INVALID'/);
   assert.match(verification, /v_error is distinct from 'BEP20_UNDERPAYMENT_OWNERSHIP_INVALID'/);
   assert.match(verification, /v_error is distinct from 'BEP20_UNDERPAYMENT_TRANSFER_INVALID'/);
@@ -3318,4 +3345,31 @@ test("BEP20 underpayment database verification is guarded, synthetic, and rollba
   assert.match(verification, /v_sqlstate is distinct from '23505'/);
   assert.match(verification, /rollback;\s*$/i);
   assert.doesNotMatch(verification, /JL\d{18}/);
+});
+
+test("BEP20 underpayment confirmation-state migration backfills only strict unique evidence", () => {
+  const migration = file("supabase/migrations/20260730_bep20_underpayment_confirmation_state.sql");
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /commit;/i);
+  assert.match(migration, /create temporary table bep20_underpayment_confirmation_candidates/i);
+  assert.match(migration, /claim\.match_count = 1/i);
+  assert.match(migration, /tx\.match_count = 1/i);
+  assert.match(migration, /ct\.confirmation_count >= 12/i);
+  assert.match(migration, /ct\.block_timestamp <= least\(o\.payment_expires_at, ps\.expires_at, cps\.expires_at\)/i);
+  assert.match(migration, /ct\.raw_amount is not distinct from cps\.confirmed_raw_amount/i);
+  assert.match(migration, /ct\.normalized_amount is not distinct from cps\.confirmed_amount/i);
+  assert.match(migration, /set confirmed_at = candidate\.confirmation_time/i);
+  assert.match(migration, /min\(ct\.created_at\) as evidence_created_at/i);
+  assert.match(migration, /and cps\.confirmed_at is null/i);
+  assert.match(migration, /v_second_update_count <> 0/i);
+  assert.match(migration, /BEP20_UNDERPAYMENT_CONFIRMATION_POSTCHECK_UNSAFE_BACKFILL/i);
+  assert.match(migration, /BEP20_UNDERPAYMENT_CONFIRMATION_POSTCHECK_RPC_CONTRACT_CHANGED/i);
+  assert.match(migration, /list_expirable_bep20_underpayments\(integer\)/i);
+  assert.match(migration, /settle_bep20_underpayment_to_wallet\(uuid,integer,text,text,text,uuid,boolean\)/i);
+  assert.doesNotMatch(migration, /(?:perform|select)\s+public\.settle_bep20_underpayment_to_wallet\s*\(/i);
+  assert.doesNotMatch(migration, /insert into public\.balance_transactions/i);
+  assert.doesNotMatch(migration, /insert into public\.bep20_underpayment_dispositions/i);
+  assert.doesNotMatch(migration, /release_order_inventory\s*\(/i);
+  assert.doesNotMatch(migration, /update public\.(orders|payment_sessions|order_payments|profiles|digital_inventory)/i);
 });
