@@ -1569,7 +1569,16 @@ begin
        where c.oid = 'public.profiles'::regclass
          and c.relrowsecurity
      )
-     or has_table_privilege('PUBLIC', 'public.profiles', 'UPDATE')
+     or exists (
+       select 1
+       from pg_catalog.pg_class c
+       cross join lateral pg_catalog.aclexplode(
+         coalesce(c.relacl, pg_catalog.acldefault('r', c.relowner))
+       ) acl
+       where c.oid = 'public.profiles'::regclass
+         and acl.grantee = 0
+         and acl.privilege_type = 'UPDATE'
+     )
      or has_table_privilege('anon', 'public.profiles', 'UPDATE')
      or has_table_privilege('authenticated', 'public.profiles', 'UPDATE') then
     raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_TABLE_ACL_FAILED';
@@ -1603,13 +1612,25 @@ begin
      )
      or exists (
        select 1
+       from (
+         select a.attacl
+         from pg_catalog.pg_attribute a
+         where a.attrelid = 'public.profiles'::regclass
+           and a.attnum > 0
+           and not a.attisdropped
+           and a.attacl is not null
+           and cardinality(a.attacl) > 0
+       ) a
+       cross join lateral pg_catalog.aclexplode(a.attacl) acl
+       where acl.grantee = 0
+         and acl.privilege_type = 'UPDATE'
+     )
+     or exists (
+       select 1
        from information_schema.columns c
        where c.table_schema = 'public'
          and c.table_name = 'profiles'
-         and (
-           has_column_privilege('PUBLIC', 'public.profiles', c.column_name, 'UPDATE')
-           or has_column_privilege('anon', 'public.profiles', c.column_name, 'UPDATE')
-         )
+         and has_column_privilege('anon', 'public.profiles', c.column_name, 'UPDATE')
      ) then
     raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_COLUMN_ACL_FAILED';
   end if;
@@ -1668,17 +1689,40 @@ begin
        where c.oid = 'public.orders'::regclass
          and c.relrowsecurity
      )
-     or has_table_privilege('PUBLIC', 'public.orders', 'UPDATE')
+     or exists (
+       select 1
+       from pg_catalog.pg_class c
+       cross join lateral pg_catalog.aclexplode(
+         coalesce(c.relacl, pg_catalog.acldefault('r', c.relowner))
+       ) acl
+       where c.oid = 'public.orders'::regclass
+         and acl.grantee = 0
+         and acl.privilege_type = 'UPDATE'
+     )
      or has_table_privilege('anon', 'public.orders', 'UPDATE')
      or has_table_privilege('authenticated', 'public.orders', 'UPDATE')
+     or exists (
+       select 1
+       from (
+         select a.attacl
+         from pg_catalog.pg_attribute a
+         where a.attrelid = 'public.orders'::regclass
+           and a.attnum > 0
+           and not a.attisdropped
+           and a.attacl is not null
+           and cardinality(a.attacl) > 0
+       ) a
+       cross join lateral pg_catalog.aclexplode(a.attacl) acl
+       where acl.grantee = 0
+         and acl.privilege_type = 'UPDATE'
+     )
      or exists (
        select 1
        from information_schema.columns c
        where c.table_schema = 'public'
          and c.table_name = 'orders'
          and (
-           has_column_privilege('PUBLIC', 'public.orders', c.column_name, 'UPDATE')
-           or has_column_privilege('anon', 'public.orders', c.column_name, 'UPDATE')
+           has_column_privilege('anon', 'public.orders', c.column_name, 'UPDATE')
            or has_column_privilege('authenticated', 'public.orders', c.column_name, 'UPDATE')
          )
      ) then
@@ -1711,7 +1755,16 @@ begin
          and p.proconfig @> array['search_path=public']::text[]
          and pg_get_userbyid(p.proowner) = 'postgres'
      )
-     or has_function_privilege('PUBLIC', v_cancel_oid, 'EXECUTE')
+     or exists (
+       select 1
+       from pg_catalog.pg_proc p
+       cross join lateral pg_catalog.aclexplode(
+         coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+       ) acl
+       where p.oid = v_cancel_oid
+         and acl.grantee = 0
+         and acl.privilege_type = 'EXECUTE'
+     )
      or has_function_privilege('anon', v_cancel_oid, 'EXECUTE')
      or not has_function_privilege('authenticated', v_cancel_oid, 'EXECUTE')
      or not has_function_privilege('service_role', v_cancel_oid, 'EXECUTE')
@@ -1747,7 +1800,16 @@ begin
   ) then
     raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_SECURITY_FAILED';
   end if;
-  if has_function_privilege('PUBLIC', v_oid, 'EXECUTE')
+  if exists (
+       select 1
+       from pg_catalog.pg_proc p
+       cross join lateral pg_catalog.aclexplode(
+         coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+       ) acl
+       where p.oid = v_oid
+         and acl.grantee = 0
+         and acl.privilege_type = 'EXECUTE'
+     )
      or has_function_privilege('anon', v_oid, 'EXECUTE')
      or has_function_privilege('authenticated', v_oid, 'EXECUTE')
      or not has_function_privilege('service_role', v_oid, 'EXECUTE') then
@@ -1762,7 +1824,16 @@ begin
          and p.proconfig @> array['search_path=public']::text[]
          and pg_get_userbyid(p.proowner) = 'postgres'
      )
-     or has_function_privilege('PUBLIC', v_manual_oid, 'EXECUTE')
+     or exists (
+       select 1
+       from pg_catalog.pg_proc p
+       cross join lateral pg_catalog.aclexplode(
+         coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+       ) acl
+       where p.oid = v_manual_oid
+         and acl.grantee = 0
+         and acl.privilege_type = 'EXECUTE'
+     )
      or has_function_privilege('anon', v_manual_oid, 'EXECUTE')
      or has_function_privilege('authenticated', v_manual_oid, 'EXECUTE')
      or not has_function_privilege('service_role', v_manual_oid, 'EXECUTE')
@@ -1778,7 +1849,16 @@ begin
          and p.proconfig @> array['search_path=public']::text[]
          and pg_get_userbyid(p.proowner) = 'postgres'
      )
-     or has_function_privilege('PUBLIC', v_configure_oid, 'EXECUTE')
+     or exists (
+       select 1
+       from pg_catalog.pg_proc p
+       cross join lateral pg_catalog.aclexplode(
+         coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+       ) acl
+       where p.oid = v_configure_oid
+         and acl.grantee = 0
+         and acl.privilege_type = 'EXECUTE'
+     )
      or has_function_privilege('anon', v_configure_oid, 'EXECUTE')
      or has_function_privilege('authenticated', v_configure_oid, 'EXECUTE')
      or not has_function_privilege('service_role', v_configure_oid, 'EXECUTE') then
@@ -1792,7 +1872,16 @@ begin
          and p.proconfig @> array['search_path=public']::text[]
          and pg_get_userbyid(p.proowner) = 'postgres'
      )
-     or has_function_privilege('PUBLIC', v_protect_oid, 'EXECUTE')
+     or exists (
+       select 1
+       from pg_catalog.pg_proc p
+       cross join lateral pg_catalog.aclexplode(
+         coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+       ) acl
+       where p.oid = v_protect_oid
+         and acl.grantee = 0
+         and acl.privilege_type = 'EXECUTE'
+     )
      or has_function_privilege('anon', v_protect_oid, 'EXECUTE')
      or has_function_privilege('authenticated', v_protect_oid, 'EXECUTE')
      or has_function_privilege('service_role', v_protect_oid, 'EXECUTE')
@@ -1809,7 +1898,16 @@ begin
          and p.proconfig @> array['search_path=public']::text[]
          and pg_get_userbyid(p.proowner) = 'postgres'
      )
-     or has_function_privilege('PUBLIC', v_txhash_guard_oid, 'EXECUTE')
+     or exists (
+       select 1
+       from pg_catalog.pg_proc p
+       cross join lateral pg_catalog.aclexplode(
+         coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+       ) acl
+       where p.oid = v_txhash_guard_oid
+         and acl.grantee = 0
+         and acl.privilege_type = 'EXECUTE'
+     )
      or has_function_privilege('anon', v_txhash_guard_oid, 'EXECUTE')
      or has_function_privilege('authenticated', v_txhash_guard_oid, 'EXECUTE')
      or has_function_privilege('service_role', v_txhash_guard_oid, 'EXECUTE')
@@ -1908,7 +2006,13 @@ commit;
 
 -- Postcheck (read-only):
 -- select p.oid::regprocedure, p.prosecdef, p.proconfig,
---   has_function_privilege('PUBLIC', p.oid, 'EXECUTE') as public_execute,
+--   exists (
+--     select 1
+--     from pg_catalog.aclexplode(
+--       coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+--     ) acl
+--     where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+--   ) as public_execute,
 --   has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute,
 --   has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute,
 --   has_function_privilege('service_role', p.oid, 'EXECUTE') as service_role_execute

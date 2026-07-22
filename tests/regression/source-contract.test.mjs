@@ -459,7 +459,7 @@ test("BEP20 valid overpayment uses one service-role atomic settlement and existi
   assert.match(migration, /v_claim\.order_id <> v_order\.id/i);
   assert.match(migration, /revoke all on function public\.settle_bep20_automatic_overpayment\(uuid,text,integer,text\)[\s\S]*?from public, anon, authenticated/i);
   assert.match(migration, /grant execute on function public\.settle_bep20_automatic_overpayment\(uuid,text,integer,text\)[\s\S]*?to service_role/i);
-  assert.match(migration, /has_function_privilege\('PUBLIC'/i);
+  assert.match(migration, /aclexplode\([\s\S]*?acldefault\('f', p\.proowner\)[\s\S]*?acl\.grantee = 0[\s\S]*?acl\.privilege_type = 'EXECUTE'/i);
   assert.match(migration, /has_function_privilege\('authenticated'/i);
   assert.match(migration, /has_function_privilege\('service_role'/i);
   assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_BALANCE_TYPE_INCOMPATIBLE/i);
@@ -2694,6 +2694,22 @@ test("20260727 hardens profile and order writes before financial settlement", ()
   assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_TRIGGER_FAILED/i);
   assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_ORDER_ACL_FAILED/i);
   assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_ORDER_CANCEL_RPC_FAILED/i);
+  const forbiddenPublicPseudoRoleCall =
+    /(?:has_(?:table|column|function|schema|sequence|database)_privilege|to_regrole)\(\s*['"]PUBLIC['"]/i;
+  assert.doesNotMatch(migration, forbiddenPublicPseudoRoleCall);
+  assert.match(
+    migration,
+    /aclexplode\(\s*coalesce\(c\.relacl, pg_catalog\.acldefault\('r', c\.relowner\)\)\s*\)[\s\S]*?acl\.grantee = 0[\s\S]*?acl\.privilege_type = 'UPDATE'/i
+  );
+  assert.match(
+    migration,
+    /a\.attacl is not null[\s\S]*?cardinality\(a\.attacl\) > 0[\s\S]*?aclexplode\(a\.attacl\)[\s\S]*?acl\.grantee = 0[\s\S]*?acl\.privilege_type = 'UPDATE'/i
+  );
+  assert.doesNotMatch(migration, /aclexplode\(\s*coalesce\(a\.attacl, '\{\}'::aclitem\[\]\)\s*\)/i);
+  assert.match(
+    migration,
+    /aclexplode\(\s*coalesce\(p\.proacl, pg_catalog\.acldefault\('f', p\.proowner\)\)\s*\)[\s\S]*?acl\.grantee = 0[\s\S]*?acl\.privilege_type = 'EXECUTE'/i
+  );
 
   assert.match(audit, /profiles_authenticated_table_update/i);
   assert.match(audit, /profiles_legacy_broad_update_policy/i);
@@ -2705,6 +2721,15 @@ test("20260727 hardens profile and order writes before financial settlement", ()
   assert.match(audit, /orders_direct_user_cancel_update_policy/i);
   assert.match(audit, /MIGRATION_WILL_HARDEN/i);
   assert.match(audit, /BLOCKER/i);
+  assert.doesNotMatch(audit, forbiddenPublicPseudoRoleCall);
+  assert.match(audit, /'PUBLIC'::text as role_name[\s\S]*?acl\.grantee = 0[\s\S]*?acl\.privilege_type = 'EXECUTE'/i);
+  assert.match(audit, /with\s+target_functions\s*\(function_name\)\s+as/i);
+  assert.match(audit, /left\s+join\s+pg_catalog\.pg_proc/i);
+  assert.match(audit, /public\.%I\(<missing>\)/i);
+  assert.match(
+    audit,
+    /coalesce\(\s*has_function_privilege\([\s\S]*?false\s*\)\s+as\s+can_execute/i,
+  );
   assert.doesNotMatch(audit, /\b(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\s+(?:into|from|table|policy|function|procedure|on)\b/i);
 
   const profileWhitelist = profileRoute.match(/const PROFILE_UPDATE_ALLOWED_FIELDS = \[[\s\S]*?\] as const;/)?.[0] ?? "";

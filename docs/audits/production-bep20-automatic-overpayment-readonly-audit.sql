@@ -179,31 +179,59 @@ where n.nspname = 'public'
 order by p.oid::regprocedure::text;
 
 -- Query 06 - Effective EXECUTE permissions for application roles.
-with functions as (
-  select p.oid, p.oid::regprocedure::text as function_signature
-  from pg_catalog.pg_proc p
-  join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public'
-    and p.proname in (
-      'settle_bep20_automatic_overpayment',
-      'credit_bep20_overpayment_to_wallet',
-      'complete_payment_session',
-      'claim_bep20_chain_transaction',
-      'deliver_digital_order',
-      'configure_bep20_automatic_overpayment_limits',
-      'protect_bep20_overpayment_risk_settings'
-    )
+-- Missing target functions remain visible with can_execute=false for every role.
+with target_functions(function_name) as (
+  values
+    ('settle_bep20_automatic_overpayment'::name),
+    ('credit_bep20_overpayment_to_wallet'::name),
+    ('complete_payment_session'::name),
+    ('claim_bep20_chain_transaction'::name),
+    ('deliver_digital_order'::name),
+    ('enforce_bep20_txhash_business_uniqueness'::name),
+    ('configure_bep20_automatic_overpayment_limits'::name),
+    ('protect_bep20_overpayment_risk_settings'::name)
+), functions as (
+  select
+    tf.function_name,
+    p.oid,
+    coalesce(
+      p.oid::regprocedure::text,
+      format('public.%I(<missing>)', tf.function_name)
+    ) as function_signature
+  from target_functions tf
+  left join pg_catalog.pg_proc p
+    on p.pronamespace = 'public'::regnamespace
+   and p.proname = tf.function_name
 ), roles(role_name) as (
-  values ('PUBLIC'), ('anon'), ('authenticated'), ('service_role')
+  values ('anon'), ('authenticated'), ('service_role')
 )
 select
   '06_function_permissions'::text as query_id,
   f.function_signature,
+  'PUBLIC'::text as role_name,
+  exists (
+    select 1
+    from pg_catalog.pg_proc p
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+    ) acl
+    where p.oid = f.oid
+      and acl.grantee = 0
+      and acl.privilege_type = 'EXECUTE'
+  ) as can_execute
+from functions f
+union all
+select
+  '06_function_permissions',
+  f.function_signature,
   r.role_name,
-  has_function_privilege(r.role_name, f.oid, 'EXECUTE') as can_execute
+  coalesce(
+    has_function_privilege(r.role_name, f.oid, 'EXECUTE'),
+    false
+  ) as can_execute
 from functions f
 cross join roles r
-order by f.function_signature, r.role_name;
+order by function_signature, role_name;
 
 -- Query 07 - RLS and table ACL summaries. No business rows are read.
 with targets(table_name) as (
