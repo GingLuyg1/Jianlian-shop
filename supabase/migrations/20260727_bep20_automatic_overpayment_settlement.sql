@@ -93,6 +93,7 @@ begin
       ('payment_sessions.currency'),
       ('payment_sessions.expires_at'),
       ('payment_sessions.status'),
+      ('payment_sessions.closed_at'),
       ('payment_sessions.metadata'),
       ('payment_sessions.updated_at'),
       ('order_payments.id'),
@@ -108,7 +109,13 @@ begin
       ('orders.status'),
       ('orders.payment_status'),
       ('orders.payment_expires_at'),
+      ('orders.cancelled_at'),
       ('profiles.id'),
+      ('profiles.display_name'),
+      ('profiles.phone'),
+      ('profiles.recipient_name'),
+      ('profiles.shipping_address'),
+      ('profiles.avatar_url'),
       ('profiles.balance'),
       ('profiles.updated_at'),
       ('balance_transactions.id'),
@@ -170,6 +177,12 @@ begin
 
   if v_missing is not null then
     raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_COLUMNS_MISSING: %', v_missing;
+  end if;
+
+  if to_regprocedure('public.cancel_unpaid_order(uuid,text)') is null
+     or to_regprocedure('public.release_order_inventory(uuid,text)') is null
+     or to_regprocedure('public.is_admin(uuid)') is null then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_ORDER_CANCEL_CONTRACT_MISSING';
   end if;
 
   -- transaction_reference is part of the recharge-review application contract
@@ -294,6 +307,298 @@ begin
   end if;
 end;
 $$;
+
+-- Harden two pre-existing authenticated write paths before creating any of the
+-- financial settlement functions below. The legacy state is expected on the
+-- first deployment, so precheck reports it without aborting; the final
+-- postcheck is strict and rolls the whole transaction back if any broad write
+-- path remains.
+do $$
+declare
+  v_profile_table_update boolean := has_table_privilege('authenticated', 'public.profiles', 'UPDATE');
+  v_order_table_update boolean := has_table_privilege('authenticated', 'public.orders', 'UPDATE');
+  v_legacy_profile_policy_count integer;
+  v_direct_order_policy_count integer;
+begin
+  select count(*) into v_legacy_profile_policy_count
+  from pg_catalog.pg_policies p
+  where p.schemaname = 'public'
+    and p.tablename = 'profiles'
+    and p.policyname in (
+      'Users can update own profile',
+      'Users can update own non-role profile'
+    );
+
+  select count(*) into v_direct_order_policy_count
+  from pg_catalog.pg_policies p
+  where p.schemaname = 'public'
+    and p.tablename = 'orders'
+    and p.policyname = 'users can cancel own pending orders';
+
+  raise notice
+    'BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_WRITE_HARDENING: profiles_table_update=%, legacy_profile_policies=%, orders_table_update=%, direct_order_cancel_policies=%',
+    v_profile_table_update,
+    v_legacy_profile_policy_count,
+    v_order_table_update,
+    v_direct_order_policy_count;
+end;
+$$;
+
+alter table public.profiles enable row level security;
+
+revoke update on table public.profiles from public, anon, authenticated;
+
+do $$
+declare
+  v_columns text;
+begin
+  select string_agg(format('%I', a.attname), ', ' order by a.attnum)
+    into v_columns
+  from pg_catalog.pg_attribute a
+  where a.attrelid = 'public.profiles'::regclass
+    and a.attnum > 0
+    and not a.attisdropped;
+
+  if v_columns is not null then
+    execute format(
+      'revoke update (%s) on table public.profiles from public, anon, authenticated',
+      v_columns
+    );
+  end if;
+end;
+$$;
+
+grant update (display_name, phone, recipient_name, shipping_address, avatar_url)
+  on table public.profiles to authenticated;
+
+drop policy if exists "Users can update own profile" on public.profiles;
+drop policy if exists "Users can update own non-role profile" on public.profiles;
+drop policy if exists "Users can update own safe profile fields" on public.profiles;
+create policy "Users can update own safe profile fields"
+on public.profiles
+for update
+to authenticated
+using (auth.uid() = id)
+with check (auth.uid() = id);
+
+create or replace function public.protect_profile_sensitive_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(auth.role(), '') = 'service_role'
+     or public.is_super_admin(auth.uid()) then
+    return new;
+  end if;
+
+  -- Compare every deployed or future column except the five user-editable
+  -- profile fields. This is NULL-safe and prevents a later broad grant from
+  -- exposing financial, authorization, referral, risk or audit columns.
+  if (
+    to_jsonb(new) - array[
+      'display_name',
+      'phone',
+      'recipient_name',
+      'shipping_address',
+      'avatar_url'
+    ]::text[]
+  ) is distinct from (
+    to_jsonb(old) - array[
+      'display_name',
+      'phone',
+      'recipient_name',
+      'shipping_address',
+      'avatar_url'
+    ]::text[]
+  ) then
+    raise exception 'PROFILE_SENSITIVE_FIELD_UPDATE_DENIED';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.protect_profile_sensitive_fields()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists profiles_protect_sensitive_fields on public.profiles;
+create trigger profiles_protect_sensitive_fields
+before update on public.profiles
+for each row execute function public.protect_profile_sensitive_fields();
+
+alter table public.orders enable row level security;
+
+revoke update on table public.orders from public, anon, authenticated;
+
+do $$
+declare
+  v_columns text;
+begin
+  select string_agg(format('%I', a.attname), ', ' order by a.attnum)
+    into v_columns
+  from pg_catalog.pg_attribute a
+  where a.attrelid = 'public.orders'::regclass
+    and a.attnum > 0
+    and not a.attisdropped;
+
+  if v_columns is not null then
+    execute format(
+      'revoke update (%s) on table public.orders from public, anon, authenticated',
+      v_columns
+    );
+  end if;
+end;
+$$;
+
+drop policy if exists "users can cancel own pending orders" on public.orders;
+
+create or replace function public.cancel_unpaid_order(
+  p_order_id uuid,
+  p_reason text default 'user_cancelled'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_is_service_role boolean := coalesce(auth.role(), '') = 'service_role';
+  v_is_admin boolean := false;
+  v_order public.orders;
+  v_release jsonb;
+  v_now timestamptz := now();
+  v_reason text := coalesce(nullif(btrim(p_reason), ''), 'user_cancelled');
+begin
+  v_is_admin := coalesce(public.is_admin(v_user_id), false);
+
+  select o.* into v_order
+  from public.orders o
+  where o.id = p_order_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'code', 'ORDER_NOT_FOUND', 'message', 'order not found');
+  end if;
+
+  if v_user_id is null and not v_is_admin and not v_is_service_role then
+    return jsonb_build_object('ok', false, 'code', 'UNAUTHENTICATED', 'message', 'please sign in first');
+  end if;
+
+  if not v_is_admin and not v_is_service_role and v_order.user_id <> v_user_id then
+    return jsonb_build_object('ok', false, 'code', 'ORDER_NOT_FOUND', 'message', 'order not found');
+  end if;
+
+  if v_order.status = 'cancelled' then
+    return jsonb_build_object(
+      'ok', true,
+      'code', 'ALREADY_CANCELLED',
+      'order_id', p_order_id,
+      'order_no', v_order.order_no
+    );
+  end if;
+
+  if v_order.status <> 'pending_payment'
+     or v_order.payment_status <> 'unpaid' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'ORDER_NOT_CANCELLABLE',
+      'message', 'only unpaid pending payment orders can be cancelled'
+    );
+  end if;
+
+  if exists (
+       select 1
+       from public.payment_sessions ps
+       where ps.business_type = 'order'
+         and ps.business_id = p_order_id
+         and ps.status = 'paid'
+     )
+     or exists (
+       select 1
+       from public.chain_payment_sessions cps
+       where cps.order_id = p_order_id
+         and (
+           cps.submitted_tx_hash is not null
+           or cps.manual_review_decision is not null
+           or cps.status not in ('waiting_payment', 'expired', 'failed')
+         )
+     )
+     or exists (
+       select 1
+       from public.chain_transaction_claims ctc
+       where ctc.order_id = p_order_id
+     )
+     or exists (
+       select 1
+       from public.chain_transactions ct
+       where ct.order_id = p_order_id
+     ) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'PAYMENT_ACTIVITY_PRESENT',
+      'message', 'payment activity exists; this order cannot be cancelled automatically'
+    );
+  end if;
+
+  v_release := public.release_order_inventory(p_order_id, 'cancel:' || left(v_reason, 120));
+
+  update public.payment_sessions ps
+     set status = 'closed',
+         closed_at = coalesce(ps.closed_at, v_now),
+         updated_at = v_now
+   where ps.business_type = 'order'
+     and ps.business_id = p_order_id
+     and ps.status in ('pending', 'processing', 'failed');
+
+  update public.chain_payment_sessions cps
+     set status = 'expired',
+         failure_reason = coalesce(cps.failure_reason, 'order_cancelled'),
+         updated_at = v_now
+   where cps.order_id = p_order_id
+     and cps.status = 'waiting_payment'
+     and cps.submitted_tx_hash is null;
+
+  update public.orders o
+     set status = 'cancelled',
+         cancelled_at = coalesce(o.cancelled_at, v_now),
+         updated_at = v_now
+   where o.id = p_order_id
+     and o.status = 'pending_payment'
+     and o.payment_status = 'unpaid'
+   returning o.* into v_order;
+
+  if not found then
+    return jsonb_build_object('ok', true, 'code', 'STATE_CHANGED', 'order_id', p_order_id);
+  end if;
+
+  insert into public.order_status_logs(
+    order_id, from_status, to_status, operator_id, operator_type, note
+  ) values (
+    p_order_id,
+    'pending_payment',
+    'cancelled',
+    v_user_id,
+    case when v_is_service_role then 'service' when v_is_admin then 'admin' else 'user' end,
+    'cancelled order: ' || left(v_reason, 160)
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'code', 'CANCELLED',
+    'order_id', p_order_id,
+    'order_no', v_order.order_no,
+    'release', v_release
+  );
+end;
+$$;
+
+revoke all on function public.cancel_unpaid_order(uuid, text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.cancel_unpaid_order(uuid, text)
+  to authenticated, service_role;
 
 -- 20260704 established transaction_reference as the user-submitted recharge
 -- proof reference. Some production environments missed that compatibility
@@ -1245,6 +1550,181 @@ revoke all on function public.settle_bep20_automatic_overpayment(uuid,text,integ
   from public, anon, authenticated;
 grant execute on function public.settle_bep20_automatic_overpayment(uuid,text,integer,text)
   to service_role;
+
+do $$
+declare
+  v_profile_guard_oid oid := to_regprocedure('public.protect_profile_sensitive_fields()');
+  v_cancel_oid oid := to_regprocedure('public.cancel_unpaid_order(uuid,text)');
+  v_allowed_profile_columns constant text[] := array[
+    'display_name',
+    'phone',
+    'recipient_name',
+    'shipping_address',
+    'avatar_url'
+  ]::text[];
+begin
+  if not exists (
+       select 1
+       from pg_catalog.pg_class c
+       where c.oid = 'public.profiles'::regclass
+         and c.relrowsecurity
+     )
+     or has_table_privilege('PUBLIC', 'public.profiles', 'UPDATE')
+     or has_table_privilege('anon', 'public.profiles', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.profiles', 'UPDATE') then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_TABLE_ACL_FAILED';
+  end if;
+
+  if exists (
+       select 1
+       from information_schema.columns c
+       where c.table_schema = 'public'
+         and c.table_name = 'profiles'
+         and c.column_name = any(v_allowed_profile_columns)
+         and not has_column_privilege(
+           'authenticated',
+           'public.profiles',
+           c.column_name,
+           'UPDATE'
+         )
+     )
+     or exists (
+       select 1
+       from information_schema.columns c
+       where c.table_schema = 'public'
+         and c.table_name = 'profiles'
+         and c.column_name <> all(v_allowed_profile_columns)
+         and has_column_privilege(
+           'authenticated',
+           'public.profiles',
+           c.column_name,
+           'UPDATE'
+         )
+     )
+     or exists (
+       select 1
+       from information_schema.columns c
+       where c.table_schema = 'public'
+         and c.table_name = 'profiles'
+         and (
+           has_column_privilege('PUBLIC', 'public.profiles', c.column_name, 'UPDATE')
+           or has_column_privilege('anon', 'public.profiles', c.column_name, 'UPDATE')
+         )
+     ) then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_COLUMN_ACL_FAILED';
+  end if;
+
+  if exists (
+       select 1
+       from pg_catalog.pg_policies p
+       where p.schemaname = 'public'
+         and p.tablename = 'profiles'
+         and p.policyname in (
+           'Users can update own profile',
+           'Users can update own non-role profile'
+         )
+     )
+     or (
+       select count(*)
+       from pg_catalog.pg_policies p
+       where p.schemaname = 'public'
+         and p.tablename = 'profiles'
+         and p.policyname = 'Users can update own safe profile fields'
+         and p.cmd = 'UPDATE'
+         and p.roles = array['authenticated']::name[]
+         and coalesce(p.qual, '') ilike '%auth.uid()%id%'
+         and coalesce(p.with_check, '') ilike '%auth.uid()%id%'
+     ) <> 1 then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_RLS_FAILED';
+  end if;
+
+  if v_profile_guard_oid is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_proc p
+       where p.oid = v_profile_guard_oid
+         and p.prosecdef
+         and p.proconfig @> array['search_path=public']::text[]
+         and pg_get_userbyid(p.proowner) = 'postgres'
+     )
+     or pg_get_functiondef(v_profile_guard_oid) not ilike '%to_jsonb(new)%is distinct from%to_jsonb(old)%'
+     or pg_get_functiondef(v_profile_guard_oid) not ilike '%is_super_admin(auth.uid())%'
+     or pg_get_functiondef(v_profile_guard_oid) not ilike '%service_role%'
+     or not exists (
+       select 1
+       from pg_catalog.pg_trigger t
+       where t.tgrelid = 'public.profiles'::regclass
+         and t.tgname = 'profiles_protect_sensitive_fields'
+         and not t.tgisinternal
+         and t.tgenabled <> 'D'
+         and t.tgfoid = v_profile_guard_oid
+     ) then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_TRIGGER_FAILED';
+  end if;
+
+  if not exists (
+       select 1
+       from pg_catalog.pg_class c
+       where c.oid = 'public.orders'::regclass
+         and c.relrowsecurity
+     )
+     or has_table_privilege('PUBLIC', 'public.orders', 'UPDATE')
+     or has_table_privilege('anon', 'public.orders', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.orders', 'UPDATE')
+     or exists (
+       select 1
+       from information_schema.columns c
+       where c.table_schema = 'public'
+         and c.table_name = 'orders'
+         and (
+           has_column_privilege('PUBLIC', 'public.orders', c.column_name, 'UPDATE')
+           or has_column_privilege('anon', 'public.orders', c.column_name, 'UPDATE')
+           or has_column_privilege('authenticated', 'public.orders', c.column_name, 'UPDATE')
+         )
+     ) then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_ORDER_ACL_FAILED';
+  end if;
+
+  if exists (
+       select 1
+       from pg_catalog.pg_policies p
+       where p.schemaname = 'public'
+         and p.tablename = 'orders'
+         and (
+           p.policyname = 'users can cancel own pending orders'
+           or (
+             p.cmd in ('UPDATE', 'ALL')
+             and coalesce(p.qual, '') ilike '%auth.uid()%'
+             and coalesce(p.qual, '') not ilike '%is_admin%'
+           )
+         )
+     ) then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_ORDER_RLS_FAILED';
+  end if;
+
+  if v_cancel_oid is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_proc p
+       where p.oid = v_cancel_oid
+         and p.prosecdef
+         and p.proconfig @> array['search_path=public']::text[]
+         and pg_get_userbyid(p.proowner) = 'postgres'
+     )
+     or has_function_privilege('PUBLIC', v_cancel_oid, 'EXECUTE')
+     or has_function_privilege('anon', v_cancel_oid, 'EXECUTE')
+     or not has_function_privilege('authenticated', v_cancel_oid, 'EXECUTE')
+     or not has_function_privilege('service_role', v_cancel_oid, 'EXECUTE')
+     or pg_get_functiondef(v_cancel_oid) not ilike '%payment_status <> ''unpaid''%'
+     or pg_get_functiondef(v_cancel_oid) not ilike '%chain_transaction_claims%'
+     or pg_get_functiondef(v_cancel_oid) not ilike '%chain_transactions%'
+     or pg_get_functiondef(v_cancel_oid) not ilike '%submitted_tx_hash is not null%'
+     or pg_get_functiondef(v_cancel_oid) not ilike '%release_order_inventory%'
+     or pg_get_functiondef(v_cancel_oid) not ilike '%ALREADY_CANCELLED%' then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_ORDER_CANCEL_RPC_FAILED';
+  end if;
+end;
+$$;
 
 do $$
 declare

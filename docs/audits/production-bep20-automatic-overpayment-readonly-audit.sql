@@ -225,19 +225,115 @@ left join pg_catalog.pg_namespace n on n.nspname = 'public'
 left join pg_catalog.pg_class c on c.relnamespace = n.oid and c.relname = t.table_name
 order by t.table_name;
 
--- Query 08 - Policies and trigger installation state.
+-- Query 08 - Policies, triggers and direct-write exposure.
+-- Before 20260727, an unsafe result is labelled MIGRATION_WILL_HARDEN. Once
+-- the migration's exact profile whitelist guard is installed, any remaining
+-- unsafe ACL or legacy policy is a BLOCKER.
+with hardening_marker as (
+  select exists (
+    select 1
+    from pg_catalog.pg_proc p
+    where p.oid = to_regprocedure('public.protect_profile_sensitive_fields()')
+      and pg_get_functiondef(p.oid) ilike '%to_jsonb(new)%is distinct from%to_jsonb(old)%'
+      and pg_get_functiondef(p.oid) ilike '%display_name%phone%recipient_name%shipping_address%avatar_url%'
+  ) as installed
+), security_checks(check_name, table_name, unsafe) as (
+  values
+    (
+      'profiles_authenticated_table_update',
+      'profiles',
+      has_table_privilege('authenticated', 'public.profiles', 'UPDATE')
+    ),
+    (
+      'profiles_legacy_broad_update_policy',
+      'profiles',
+      exists (
+        select 1
+        from pg_catalog.pg_policies p
+        where p.schemaname = 'public'
+          and p.tablename = 'profiles'
+          and p.policyname in (
+            'Users can update own profile',
+            'Users can update own non-role profile'
+          )
+      )
+    ),
+    (
+      'profiles_balance_column_update',
+      'profiles',
+      has_column_privilege('authenticated', 'public.profiles', 'balance', 'UPDATE')
+    ),
+    (
+      'profiles_role_column_update',
+      'profiles',
+      has_column_privilege('authenticated', 'public.profiles', 'role', 'UPDATE')
+    ),
+    (
+      'profiles_account_status_column_update',
+      'profiles',
+      has_column_privilege('authenticated', 'public.profiles', 'account_status', 'UPDATE')
+    ),
+    (
+      'profiles_risk_status_column_update',
+      'profiles',
+      has_column_privilege('authenticated', 'public.profiles', 'risk_status', 'UPDATE')
+    ),
+    (
+      'orders_authenticated_table_update',
+      'orders',
+      has_table_privilege('authenticated', 'public.orders', 'UPDATE')
+    ),
+    (
+      'orders_direct_user_cancel_update_policy',
+      'orders',
+      exists (
+        select 1
+        from pg_catalog.pg_policies p
+        where p.schemaname = 'public'
+          and p.tablename = 'orders'
+          and (
+            p.policyname = 'users can cancel own pending orders'
+            or (
+              p.cmd in ('UPDATE', 'ALL')
+              and coalesce(p.qual, '') ilike '%auth.uid()%'
+              and coalesce(p.qual, '') not ilike '%is_admin%'
+            )
+          )
+      )
+    )
+)
 select
-  '08_policies_and_triggers'::text as query_id,
-  'policy'::text as object_type,
-  p.tablename as table_name,
-  p.policyname as object_name,
-  concat_ws(' | ', p.cmd, array_to_string(p.roles, ','), p.qual, p.with_check) as definition
-from pg_catalog.pg_policies p
-where p.schemaname = 'public'
-  and p.tablename in ('profiles','balance_transactions','bep20_overpayment_dispositions','site_settings','site_setting_logs')
+  '08_policies_triggers_write_exposure'::text as query_id,
+  'security_check'::text as object_type,
+  sc.table_name,
+  sc.check_name as object_name,
+  case
+    when sc.unsafe and hm.installed then 'BLOCKER'
+    when sc.unsafe then 'MIGRATION_WILL_HARDEN'
+    else 'HARDENED_OR_NOT_PRESENT'
+  end as definition
+from security_checks sc
+cross join hardening_marker hm
 union all
 select
-  '08_policies_and_triggers',
+  '08_policies_triggers_write_exposure',
+  'policy',
+  p.tablename,
+  p.policyname,
+  concat_ws(' | ', p.cmd, array_to_string(p.roles, ','), p.qual, p.with_check)
+from pg_catalog.pg_policies p
+where p.schemaname = 'public'
+  and p.tablename in (
+    'profiles',
+    'orders',
+    'balance_transactions',
+    'bep20_overpayment_dispositions',
+    'site_settings',
+    'site_setting_logs'
+  )
+union all
+select
+  '08_policies_triggers_write_exposure',
   'trigger',
   c.relname,
   t.tgname,
@@ -247,10 +343,13 @@ join pg_catalog.pg_class c on c.oid = t.tgrelid
 join pg_catalog.pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public'
   and not t.tgisinternal
-  and t.tgname in (
-    'trg_chain_claim_reject_completed_recharge_tx',
-    'trg_recharge_reject_claimed_bep20_tx',
-    'trg_protect_bep20_overpayment_risk_settings'
+  and (
+    c.relname in ('profiles', 'orders')
+    or t.tgname in (
+      'trg_chain_claim_reject_completed_recharge_tx',
+      'trg_recharge_reject_claimed_bep20_tx',
+      'trg_protect_bep20_overpayment_risk_settings'
+    )
   )
 order by table_name, object_type, object_name;
 

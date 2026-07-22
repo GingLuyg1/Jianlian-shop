@@ -2644,6 +2644,78 @@ test("account profile initialization never grants admin role from ordinary user 
   assert.doesNotMatch(sharedProfile, /gac000189@gmail\.com/i);
 });
 
+test("20260727 hardens profile and order writes before financial settlement", () => {
+  const migration = file("supabase/migrations/20260727_bep20_automatic_overpayment_settlement.sql");
+  const audit = file("docs/audits/production-bep20-automatic-overpayment-readonly-audit.sql");
+  const profileRoute = file("app/api/account/profile/route.ts");
+  const orderRoute = file("app/api/orders/[orderNo]/route.ts");
+  const hardeningStart = migration.indexOf("revoke update on table public.profiles");
+  const financeStart = migration.indexOf("alter table public.account_recharges");
+
+  assert.ok(hardeningStart >= 0 && hardeningStart < financeStart, "write hardening must precede financial DDL and RPCs");
+  assert.match(migration, /revoke update on table public\.profiles from public, anon, authenticated/i);
+  assert.match(migration, /revoke update \(%s\) on table public\.profiles from public, anon, authenticated/i);
+  assert.match(
+    migration,
+    /grant update \(display_name, phone, recipient_name, shipping_address, avatar_url\)\s+on table public\.profiles to authenticated/i
+  );
+  assert.match(migration, /drop policy if exists "Users can update own profile" on public\.profiles/i);
+  assert.match(migration, /drop policy if exists "Users can update own non-role profile" on public\.profiles/i);
+  assert.match(migration, /create policy "Users can update own safe profile fields"[\s\S]*?using \(auth\.uid\(\) = id\)[\s\S]*?with check \(auth\.uid\(\) = id\)/i);
+  assert.match(migration, /create or replace function public\.protect_profile_sensitive_fields\(\)[\s\S]*?security definer[\s\S]*?set search_path = public/i);
+  assert.match(migration, /to_jsonb\(new\) - array\[[\s\S]*?'display_name'[\s\S]*?'avatar_url'[\s\S]*?is distinct from/i);
+  assert.match(migration, /coalesce\(auth\.role\(\), ''\) = 'service_role'[\s\S]*?is_super_admin\(auth\.uid\(\)\)/i);
+  assert.match(migration, /create trigger profiles_protect_sensitive_fields\s+before update on public\.profiles/i);
+  for (const sensitive of ["id", "balance", "role", "account_status", "risk_status", "referred_by", "created_at"]) {
+    assert.doesNotMatch(
+      migration.match(/grant update \([^)]+\)\s+on table public\.profiles to authenticated/i)?.[0] ?? "",
+      new RegExp(`\\b${sensitive}\\b`, "i")
+    );
+  }
+
+  assert.match(migration, /revoke update on table public\.orders from public, anon, authenticated/i);
+  assert.match(migration, /revoke update \(%s\) on table public\.orders from public, anon, authenticated/i);
+  assert.match(migration, /drop policy if exists "users can cancel own pending orders" on public\.orders/i);
+  assert.match(migration, /create or replace function public\.cancel_unpaid_order\([\s\S]*?security definer[\s\S]*?set search_path = public/i);
+  assert.match(migration, /v_order\.user_id <> v_user_id/i);
+  assert.match(migration, /v_order\.status <> 'pending_payment'[\s\S]*?v_order\.payment_status <> 'unpaid'/i);
+  assert.match(migration, /submitted_tx_hash is not null/i);
+  assert.match(migration, /from public\.chain_transaction_claims/i);
+  assert.match(migration, /from public\.chain_transactions/i);
+  assert.match(migration, /public\.release_order_inventory\(p_order_id/i);
+  assert.match(migration, /status = 'closed'[\s\S]*?closed_at = coalesce/i);
+  assert.match(migration, /status = 'expired'[\s\S]*?failure_reason = coalesce\(cps\.failure_reason, 'order_cancelled'\)/i);
+  assert.match(migration, /'code', 'ALREADY_CANCELLED'/i);
+  assert.match(migration, /revoke all on function public\.cancel_unpaid_order\(uuid, text\)[\s\S]*?from public, anon, authenticated, service_role/i);
+  assert.match(migration, /grant execute on function public\.cancel_unpaid_order\(uuid, text\)[\s\S]*?to authenticated, service_role/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_TABLE_ACL_FAILED/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_COLUMN_ACL_FAILED/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_RLS_FAILED/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_PROFILE_TRIGGER_FAILED/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_ORDER_ACL_FAILED/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_ORDER_CANCEL_RPC_FAILED/i);
+
+  assert.match(audit, /profiles_authenticated_table_update/i);
+  assert.match(audit, /profiles_legacy_broad_update_policy/i);
+  assert.match(audit, /profiles_balance_column_update/i);
+  assert.match(audit, /profiles_role_column_update/i);
+  assert.match(audit, /profiles_account_status_column_update/i);
+  assert.match(audit, /profiles_risk_status_column_update/i);
+  assert.match(audit, /orders_authenticated_table_update/i);
+  assert.match(audit, /orders_direct_user_cancel_update_policy/i);
+  assert.match(audit, /MIGRATION_WILL_HARDEN/i);
+  assert.match(audit, /BLOCKER/i);
+  assert.doesNotMatch(audit, /\b(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\s+(?:into|from|table|policy|function|procedure|on)\b/i);
+
+  const profileWhitelist = profileRoute.match(/const PROFILE_UPDATE_ALLOWED_FIELDS = \[[\s\S]*?\] as const;/)?.[0] ?? "";
+  for (const allowed of ["display_name", "phone", "recipient_name", "shipping_address", "avatar_url"]) {
+    assert.match(profileWhitelist, new RegExp(`"${allowed}"`));
+  }
+  assert.doesNotMatch(profileWhitelist, /balance|role|account_status|risk_status|referred_by/i);
+  assert.match(orderRoute, /assertBep20OrderCancelable\(order\)[\s\S]*?supabase\.rpc\("cancel_unpaid_order"/i);
+  assert.doesNotMatch(orderRoute, /\.from\("orders"\)[\s\S]{0,160}\.update\(/i);
+});
+
 test("two-user order isolation verification is read-only and matches ownership contracts", () => {
   const guide = file("docs/two-user-order-isolation-verification.md");
   const readonlySql = file("docs/two-user-order-isolation-readonly.sql");
