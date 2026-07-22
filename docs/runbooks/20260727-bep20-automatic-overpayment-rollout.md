@@ -6,7 +6,7 @@
 
 - 正式 Supabase：`Jianlian-shop` / Project ref `qvbovrvybirscaurwuov`。
 - Migration：`supabase/migrations/20260727_bep20_automatic_overpayment_settlement.sql`。
-- 本轮发布前审计基准 SHA-256：`5144D2456B731B882E3159F230A893F9C1CE80C2495E39CB4DDF5ED9EB22907A`。任何后续修改都会使该值失效，正式执行前必须重新计算并逐字核对。
+- 本轮发布前审计基准 SHA-256：`781E13D1FEDAE804107F4B59BC179F57B925269538BA0CE164A1E05069E130F2`。任何后续修改都会使该值失效，正式执行前必须重新计算并逐字核对。
 - 功能：有效期内、单一匹配 Transfer、达到确认数的 BEP20 超额付款，原子完成订单并按订单冻结汇率把超额 CNY 记入既有余额账本。
 - 不改变：少付、迟到账、错误网络/合约/地址、多 Transfer 的人工处理边界；过期订单不恢复用户自助 TxHash 提交。
 - 不自动处理历史超额订单，不回填历史余额。

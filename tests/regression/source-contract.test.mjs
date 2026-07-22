@@ -540,6 +540,47 @@ test("BEP20 automatic overpayment risk limits fail closed and manual credit elev
   assert.doesNotMatch(manualRoute, /admin\.supabase\.rpc\("credit_bep20_overpayment_to_wallet"/);
 });
 
+test("BEP20 automatic overpayment migration tolerates the production recharge reference drift", () => {
+  const migration = file("supabase/migrations/20260727_bep20_automatic_overpayment_settlement.sql");
+  const audit = file("docs/audits/production-bep20-automatic-overpayment-readonly-audit.sql");
+  const rechargeBaseline = file("supabase/migrations/20260704_recharge_review_flow.sql");
+  const rechargeProofRoute = file("app/api/recharges/[rechargeNo]/proof/route.ts");
+  const precheck = migration.slice(0, migration.indexOf("alter table public.account_recharges"));
+
+  assert.match(rechargeBaseline, /add column if not exists transaction_reference text/i);
+  assert.match(rechargeProofRoute, /transaction_reference/);
+
+  assert.doesNotMatch(precheck, /\('account_recharges\.transaction_reference'\)/i);
+  assert.doesNotMatch(precheck, /\('bep20_overpayment_dispositions\.settlement_source'\)/i);
+  assert.match(precheck, /to_jsonb\(ar\) ->> 'transaction_reference'/i);
+  assert.match(precheck, /BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_RECHARGE_REFERENCE_INCOMPATIBLE/i);
+  assert.match(precheck, /BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_SETTLEMENT_SOURCE_INCOMPATIBLE/i);
+
+  assert.match(migration, /alter table public\.account_recharges\s+add column if not exists transaction_reference text/i);
+  assert.doesNotMatch(migration, /add column if not exists transaction_reference text\s+(?:not null|default)/i);
+  assert.match(migration, /alter table public\.bep20_overpayment_dispositions[\s\S]*?add column if not exists settlement_source text not null default 'manual_admin'/i);
+  assert.ok(
+    migration.indexOf("add column if not exists transaction_reference text")
+      < migration.indexOf("before insert or update of status, provider_trade_no, transaction_reference"),
+    "the compatibility column must exist before the recharge trigger is created"
+  );
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_RECHARGE_REFERENCE_FAILED/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_DISPOSITION_SCHEMA_FAILED/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_TXHASH_GUARD_FAILED/i);
+
+  assert.match(audit, /'settlement_source','migration_expected_new'/i);
+  assert.match(audit, /'transaction_reference','optional_compatibility'/i);
+  assert.match(audit, /ABSENT_EXPECTED_BEFORE_MIGRATION/i);
+  assert.match(audit, /ABSENT_MIGRATION_WILL_ADD/i);
+  assert.match(audit, /to_jsonb\(d\) ->> 'settlement_source'/i);
+  assert.match(audit, /to_jsonb\(ar\) ->> 'transaction_reference'/i);
+  assert.doesNotMatch(audit, /where\s+settlement_source\s*=/i);
+
+  assert.match(migration, /regexp_replace\(lower\(nullif\(btrim\(ar\.provider_trade_no\)/i);
+  assert.match(migration, /v_provider_hash[\s\S]*?v_reference_hash/i);
+  assert.match(migration, /trg_recharge_reject_claimed_bep20_tx/i);
+});
+
 test("BEP20 automatic overpayment remains idempotent across verify, delivery retry and manual follow-up", () => {
   const migration = file("supabase/migrations/20260727_bep20_automatic_overpayment_settlement.sql");
   const service = file("lib/payments/bep20-chain-service.ts");

@@ -126,7 +126,6 @@ begin
       ('balance_transactions.metadata'),
       ('account_recharges.status'),
       ('account_recharges.provider_trade_no'),
-      ('account_recharges.transaction_reference'),
       ('site_settings.setting_key'),
       ('site_settings.setting_value'),
       ('site_settings.setting_type'),
@@ -173,6 +172,60 @@ begin
     raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_COLUMNS_MISSING: %', v_missing;
   end if;
 
+  -- transaction_reference is part of the recharge-review application contract
+  -- (20260704), but production environments that missed that compatibility
+  -- migration may not have it yet. This migration adds it below. If it is
+  -- already present, fail before mutation unless its nullable text contract is
+  -- compatible.
+  if exists (
+    select 1
+    from information_schema.columns c
+    where c.table_schema = 'public'
+      and c.table_name = 'account_recharges'
+      and c.column_name = 'transaction_reference'
+      and (
+        c.data_type <> 'text'
+        or c.is_nullable <> 'YES'
+        or c.column_default is not null
+      )
+  ) then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_RECHARGE_REFERENCE_INCOMPATIBLE';
+  end if;
+
+  -- settlement_source is created by this migration. A missing column is the
+  -- expected pre-migration state; an existing but incompatible column is a
+  -- blocker because ADD COLUMN IF NOT EXISTS must not conceal schema drift.
+  if exists (
+    select 1
+    from information_schema.columns c
+    where c.table_schema = 'public'
+      and c.table_name = 'bep20_overpayment_dispositions'
+      and c.column_name = 'settlement_source'
+      and (
+        c.data_type <> 'text'
+        or c.is_nullable <> 'NO'
+        or coalesce(c.column_default, '') not ilike '%manual_admin%'
+      )
+  ) then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_SETTLEMENT_SOURCE_INCOMPATIBLE';
+  end if;
+  if exists (
+       select 1
+       from pg_constraint c
+       where c.conrelid = 'public.bep20_overpayment_dispositions'::regclass
+         and c.conname = 'bep20_overpayment_settlement_source_check'
+     )
+     and not exists (
+       select 1
+       from pg_constraint c
+       where c.conrelid = 'public.bep20_overpayment_dispositions'::regclass
+         and c.conname = 'bep20_overpayment_settlement_source_check'
+         and pg_get_constraintdef(c.oid) ilike '%manual_admin%'
+         and pg_get_constraintdef(c.oid) ilike '%automatic_service%'
+     ) then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_SETTLEMENT_SOURCE_CONSTRAINT_INCOMPATIBLE';
+  end if;
+
   if not exists (
     select 1
     from information_schema.columns c
@@ -193,7 +246,11 @@ begin
       on ar.status in ('paid', 'succeeded')
      and (
        regexp_replace(lower(nullif(btrim(ar.provider_trade_no), '')), ':[0-9]+$', '') = lower(ctc.tx_hash)
-       or regexp_replace(lower(nullif(btrim(ar.transaction_reference), '')), ':[0-9]+$', '') = lower(ctc.tx_hash)
+       or regexp_replace(
+         lower(nullif(btrim(to_jsonb(ar) ->> 'transaction_reference'), '')),
+         ':[0-9]+$',
+         ''
+       ) = lower(ctc.tx_hash)
      )
   ) then
     raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_CROSS_BUSINESS_TX_CONFLICT';
@@ -237,6 +294,17 @@ begin
   end if;
 end;
 $$;
+
+-- 20260704 established transaction_reference as the user-submitted recharge
+-- proof reference. Some production environments missed that compatibility
+-- migration. Add the nullable text field without a default and without
+-- fabricating historical values. Existing compatible environments are left
+-- unchanged.
+alter table public.account_recharges
+  add column if not exists transaction_reference text;
+
+comment on column public.account_recharges.transaction_reference is
+  'Optional user-submitted recharge transaction reference; no historical value is inferred.';
 
 alter table public.bep20_overpayment_dispositions
   alter column processed_by drop not null,
@@ -1184,6 +1252,7 @@ declare
   v_manual_oid oid := to_regprocedure('public.credit_bep20_overpayment_to_wallet(uuid,text,text,uuid)');
   v_configure_oid oid := to_regprocedure('public.configure_bep20_automatic_overpayment_limits(numeric,numeric,uuid,text)');
   v_protect_oid oid := to_regprocedure('public.protect_bep20_overpayment_risk_settings()');
+  v_txhash_guard_oid oid := to_regprocedure('public.enforce_bep20_txhash_business_uniqueness()');
   v_source_nullable text;
 begin
   if v_oid is null then
@@ -1252,6 +1321,23 @@ begin
      or pg_get_functiondef(v_protect_oid) not ilike '%service_role%' then
     raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_RISK_CONFIG_PROTECTION_FAILED';
   end if;
+  if v_txhash_guard_oid is null
+     or not exists (
+       select 1 from pg_proc p
+       where p.oid = v_txhash_guard_oid
+         and p.prosecdef
+         and p.proconfig @> array['search_path=public']::text[]
+         and pg_get_userbyid(p.proowner) = 'postgres'
+     )
+     or has_function_privilege('PUBLIC', v_txhash_guard_oid, 'EXECUTE')
+     or has_function_privilege('anon', v_txhash_guard_oid, 'EXECUTE')
+     or has_function_privilege('authenticated', v_txhash_guard_oid, 'EXECUTE')
+     or has_function_privilege('service_role', v_txhash_guard_oid, 'EXECUTE')
+     or pg_get_functiondef(v_txhash_guard_oid) not ilike '%provider_trade_no%'
+     or pg_get_functiondef(v_txhash_guard_oid) not ilike '%transaction_reference%'
+     or pg_get_functiondef(v_txhash_guard_oid) not ilike '%chain_transaction_claims%' then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_TXHASH_GUARD_FAILED';
+  end if;
   select c.is_nullable into v_source_nullable
   from information_schema.columns c
   where c.table_schema = 'public'
@@ -1263,8 +1349,23 @@ begin
        where c.table_schema = 'public'
          and c.table_name = 'bep20_overpayment_dispositions'
          and c.column_name = 'settlement_source'
+         and c.data_type = 'text'
+         and c.is_nullable = 'NO'
+         and coalesce(c.column_default, '') ilike '%manual_admin%'
      ) then
     raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_DISPOSITION_SCHEMA_FAILED';
+  end if;
+  if not exists (
+    select 1
+    from information_schema.columns c
+    where c.table_schema = 'public'
+      and c.table_name = 'account_recharges'
+      and c.column_name = 'transaction_reference'
+      and c.data_type = 'text'
+      and c.is_nullable = 'YES'
+      and c.column_default is null
+  ) then
+    raise exception 'BEP20_AUTOMATIC_OVERPAYMENT_POSTCHECK_RECHARGE_REFERENCE_FAILED';
   end if;
   if not exists (
        select 1 from pg_constraint c
@@ -1344,6 +1445,9 @@ commit;
 -- drop function if exists public.configure_bep20_automatic_overpayment_limits(numeric,numeric,uuid,text);
 -- drop function if exists public.settle_bep20_automatic_overpayment(uuid,text,integer,text);
 -- drop function if exists public.credit_bep20_overpayment_to_wallet(uuid,text,text,uuid);
+-- transaction_reference is an established recharge-review application column
+-- and is intentionally retained even when this migration added it. Do not drop
+-- it during rollback or discard proof references written after deployment.
 -- Reapply the approved 20260715 credit_bep20_overpayment_to_wallet definition
 -- before removing settlement_source or restoring processed_by NOT NULL.
 -- alter table public.bep20_overpayment_dispositions drop constraint if exists bep20_overpayment_settlement_source_check;

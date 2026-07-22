@@ -6,9 +6,10 @@
 -- This file reads metadata and aggregate safety summaries only. It does not
 -- return full TxHash, wallet addresses, customer data, or delivery secrets.
 
--- Query 01 - Required tables and columns, including exact numeric contracts.
-with required(table_name, column_name) as (
-  values
+-- Query 01 - Baseline, migration-created and compatibility columns.
+with required(table_name, column_name, requirement) as (
+  select b.table_name, b.column_name, 'baseline_required'::text
+  from (values
     ('orders','id'), ('orders','order_no'), ('orders','user_id'),
     ('orders','status'), ('orders','payment_status'), ('orders','payment_expires_at'),
     ('payment_sessions','id'), ('payment_sessions','business_type'),
@@ -36,24 +37,58 @@ with required(table_name, column_name) as (
     ('bep20_overpayment_dispositions','chain_session_id'),
     ('bep20_overpayment_dispositions','payment_id'),
     ('bep20_overpayment_dispositions','balance_transaction_id'),
-    ('bep20_overpayment_dispositions','settlement_source'),
     ('account_recharges','status'), ('account_recharges','provider_trade_no'),
-    ('account_recharges','transaction_reference'),
     ('site_settings','setting_key'), ('site_settings','setting_value'),
     ('site_settings','setting_type'), ('site_settings','setting_group'),
     ('site_settings','is_public'), ('site_settings','updated_by')
+  ) as b(table_name, column_name)
+  union all
+  values
+    ('bep20_overpayment_dispositions','settlement_source','migration_expected_new'),
+    ('account_recharges','transaction_reference','optional_compatibility')
 )
 select
   '01_required_columns'::text as query_id,
   r.table_name,
   r.column_name,
+  r.requirement,
   (c.column_name is not null) as exists,
   c.data_type,
   c.udt_name,
   c.is_nullable,
   c.column_default,
   c.numeric_precision,
-  c.numeric_scale
+  c.numeric_scale,
+  case
+    when r.requirement = 'baseline_required' and c.column_name is null
+      then 'MISSING_BASELINE_BLOCKER'
+    when r.table_name = 'profiles' and r.column_name = 'balance'
+         and not (
+           c.data_type = 'numeric'
+           and c.numeric_precision = 12
+           and c.numeric_scale = 2
+         )
+      then 'INCOMPATIBLE_BASELINE_BLOCKER'
+    when r.requirement = 'migration_expected_new' and c.column_name is null
+      then 'ABSENT_EXPECTED_BEFORE_MIGRATION'
+    when r.requirement = 'migration_expected_new'
+         and not (
+           c.data_type = 'text'
+           and c.is_nullable = 'NO'
+           and coalesce(c.column_default, '') ilike '%manual_admin%'
+         )
+      then 'EXISTING_NEW_COLUMN_INCOMPATIBLE_BLOCKER'
+    when r.requirement = 'optional_compatibility' and c.column_name is null
+      then 'ABSENT_MIGRATION_WILL_ADD'
+    when r.requirement = 'optional_compatibility'
+         and not (
+           c.data_type = 'text'
+           and c.is_nullable = 'YES'
+           and c.column_default is null
+         )
+      then 'OPTIONAL_COLUMN_INCOMPATIBLE_BLOCKER'
+    else 'COMPATIBLE'
+  end as preflight_status
 from required r
 left join information_schema.columns c
   on c.table_schema = 'public'
@@ -223,8 +258,12 @@ order by table_name, object_type, object_name;
 select
   '09_integrity_summary'::text as query_id,
   (select count(*) from public.bep20_overpayment_dispositions) as disposition_count,
-  (select count(*) from public.bep20_overpayment_dispositions where settlement_source = 'automatic_service') as automatic_disposition_count,
-  (select count(*) from public.bep20_overpayment_dispositions where settlement_source = 'manual_admin') as manual_disposition_count,
+  (select count(*)
+   from public.bep20_overpayment_dispositions d
+   where to_jsonb(d) ->> 'settlement_source' = 'automatic_service') as automatic_disposition_count,
+  (select count(*)
+   from public.bep20_overpayment_dispositions d
+   where coalesce(to_jsonb(d) ->> 'settlement_source', 'manual_admin') = 'manual_admin') as manual_disposition_count,
   (select count(*) from (
      select payment_id from public.bep20_overpayment_dispositions group by payment_id having count(*) > 1
    ) duplicates) as duplicate_payment_disposition_groups,
@@ -251,7 +290,11 @@ select
      on ar.status in ('paid', 'succeeded')
     and (
       regexp_replace(lower(nullif(btrim(ar.provider_trade_no), '')), ':[0-9]+$', '') = lower(ctc.tx_hash)
-      or regexp_replace(lower(nullif(btrim(ar.transaction_reference), '')), ':[0-9]+$', '') = lower(ctc.tx_hash)
+      or regexp_replace(
+        lower(nullif(btrim(to_jsonb(ar) ->> 'transaction_reference'), '')),
+        ':[0-9]+$',
+        ''
+      ) = lower(ctc.tx_hash)
     )) as completed_recharge_order_tx_conflicts,
   (select count(*)
    from public.chain_payment_sessions cps
