@@ -27,9 +27,37 @@ test("transfer one second before expiry can complete after confirmations", () =>
     confirmations: 12,
     requiredConfirmations: 12,
     transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
     sessionExpiresAt: "2026-07-08T12:00:00.000Z",
     exchangeRateExpiresAt: "2026-07-08T12:00:00.000Z",
   }), "verified");
+});
+
+test("exact frozen amount completes after quote TTL when the block time is before payment expiry", () => {
+  assert.equal(decideBep20TransferStatus({
+    rawAmount: "5138889000000000000",
+    expectedRawAmount: "5138889000000000000",
+    confirmations: 12,
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-21T16:10:40.000Z",
+    orderPaymentExpiresAt: "2026-07-21T16:34:28.000Z",
+    sessionExpiresAt: "2026-07-21T16:34:29.000Z",
+    exchangeRateExpiresAt: "2026-07-21T16:09:29.000Z",
+    confirmedAt: "2026-07-21T16:40:00.000Z",
+  }), "verified");
+});
+
+test("an exact pre-expiry transfer can become verified after confirmations arrive later", () => {
+  const input = {
+    rawAmount: "5138889000000000000",
+    expectedRawAmount: "5138889000000000000",
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-21T16:34:27.000Z",
+    orderPaymentExpiresAt: "2026-07-21T16:34:28.000Z",
+    sessionExpiresAt: "2026-07-21T16:34:29.000Z",
+  };
+  assert.equal(decideBep20TransferStatus({ ...input, confirmations: 2 }), "confirming");
+  assert.equal(decideBep20TransferStatus({ ...input, confirmations: 12 }), "verified");
 });
 
 test("transfer one second after expiry requires manual review", () => {
@@ -39,6 +67,7 @@ test("transfer one second after expiry requires manual review", () => {
     confirmations: 12,
     requiredConfirmations: 12,
     transferTimestamp: "2026-07-08T12:00:01.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
     sessionExpiresAt: "2026-07-08T12:00:00.000Z",
     exchangeRateExpiresAt: "2026-07-08T12:00:00.000Z",
   }), "manual_review");
@@ -51,6 +80,7 @@ test("late underpaid transfer after expiry remains a manual exception, not paid"
     confirmations: 12,
     requiredConfirmations: 12,
     transferTimestamp: "2026-07-08T12:00:01.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
     sessionExpiresAt: "2026-07-08T12:00:00.000Z",
     exchangeRateExpiresAt: "2026-07-08T12:00:00.000Z",
   }), "manual_review");
@@ -63,6 +93,7 @@ test("pre-expiry transfer remains confirming until enough confirmations", () => 
     confirmations: 3,
     requiredConfirmations: 12,
     transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
     sessionExpiresAt: "2026-07-08T12:00:00.000Z",
     exchangeRateExpiresAt: "2026-07-08T12:00:00.000Z",
   }), "confirming");
@@ -75,9 +106,94 @@ test("underpaid transfer never reaches verified", () => {
     confirmations: 12,
     requiredConfirmations: 12,
     transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
     sessionExpiresAt: "2026-07-08T12:00:00.000Z",
     exchangeRateExpiresAt: "2026-07-08T12:00:00.000Z",
   }), "underpaid");
+});
+
+test("valid in-window overpayment becomes eligible for atomic settlement", () => {
+  assert.equal(decideBep20TransferStatus({
+    rawAmount: "9583335",
+    expectedRawAmount: "9583334",
+    confirmations: 12,
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:00:00.000Z",
+  }), "overpaid");
+});
+
+test("missing trusted block timestamp never auto-completes", () => {
+  assert.equal(decideBep20TransferStatus({
+    rawAmount: "9583334",
+    expectedRawAmount: "9583334",
+    confirmations: 12,
+    requiredConfirmations: 12,
+    transferTimestamp: null,
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:05:00.000Z",
+  }), "manual_review");
+});
+
+test("payment validity uses the earliest order or chain-session deadline", () => {
+  const base = {
+    rawAmount: "9583334",
+    expectedRawAmount: "9583334",
+    confirmations: 12,
+    requiredConfirmations: 12,
+    orderPaymentExpiresAt: "2026-07-08T12:05:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:00:00.000Z",
+  };
+  assert.equal(decideBep20TransferStatus({ ...base, transferTimestamp: "2026-07-08T11:59:59.000Z" }), "verified");
+  assert.equal(decideBep20TransferStatus({ ...base, transferTimestamp: "2026-07-08T12:00:01.000Z" }), "manual_review");
+});
+
+test("base payment-session deadline participates in the earliest safe cutoff", () => {
+  assert.equal(decideBep20TransferStatus({
+    rawAmount: "9583334",
+    expectedRawAmount: "9583334",
+    confirmations: 12,
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-08T12:00:01.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:05:00.000Z",
+    paymentSessionExpiresAt: "2026-07-08T12:00:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:10:00.000Z",
+  }), "manual_review");
+});
+
+test("raw amount comparison remains exact beyond JavaScript safe integers", () => {
+  const expected = "999999999999999999999999999999999999999999999999";
+  assert.equal(decideBep20TransferStatus({
+    rawAmount: expected,
+    expectedRawAmount: expected,
+    confirmations: 12,
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:00:00.000Z",
+  }), "verified");
+  assert.equal(decideBep20TransferStatus({
+    rawAmount: (BigInt(expected) + 1n).toString(),
+    expectedRawAmount: expected,
+    confirmations: 12,
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:00:00.000Z",
+  }), "overpaid");
+});
+
+test("overpaid transfer remains confirming until the required confirmations arrive", () => {
+  assert.equal(decideBep20TransferStatus({
+    rawAmount: "10583334",
+    expectedRawAmount: "9583334",
+    confirmations: 11,
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:00:00.000Z",
+  }), "confirming");
 });
 
 test("same transfer advances from confirming only after required confirmations", () => {
@@ -86,6 +202,7 @@ test("same transfer advances from confirming only after required confirmations",
     expectedRawAmount: "9583334",
     requiredConfirmations: 12,
     transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
     sessionExpiresAt: "2026-07-08T12:00:00.000Z",
     exchangeRateExpiresAt: "2026-07-08T12:00:00.000Z",
   };

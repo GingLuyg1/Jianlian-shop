@@ -145,7 +145,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     if (chainPayment && overpaymentWallet.authorized) {
       const dispositionResult = await admin.supabase
         .from("bep20_overpayment_dispositions")
-        .select("chain_session_id,order_id,payment_id,overpaid_usdt,exchange_rate,credited_cny,processed_at,reason")
+        .select("chain_session_id,order_id,payment_id,overpaid_usdt,exchange_rate,credited_cny,processed_at,reason,settlement_source")
         .eq("chain_session_id", chainPayment.sessionId)
         .maybeSingle();
 
@@ -166,6 +166,7 @@ export async function GET(request: Request, { params }: RouteContext) {
           creditedCny: String(row.credited_cny ?? "0"),
           processedAt: String(row.processed_at ?? ""),
           reason: String(row.reason ?? ""),
+          settlementSource: row.settlement_source === "automatic_service" ? "automatic_service" : "manual_admin",
         };
       }
     }

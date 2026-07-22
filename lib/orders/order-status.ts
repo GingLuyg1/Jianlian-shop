@@ -188,9 +188,6 @@ export function getBep20PaymentAction(order: {
   if (state === "renew_payment_session") {
     return { kind: "renew" as const, label: "重新生成支付单" };
   }
-  if (state === "submit_late_transaction") {
-    return { kind: "late" as const, label: "提交旧交易哈希" };
-  }
   if (
     state === "view_status" ||
     state === "confirming" ||

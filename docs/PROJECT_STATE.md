@@ -200,3 +200,17 @@
 6. 验证订单状态、付款状态、过期时间、预留释放和库存恢复全部正确后，才评估安装 `pg_cron`、`pg_net` 并创建调度。
 
 真实 `limit=1` 是数据库写操作且不能依赖自动回滚；若候选身份、付款状态、链上会话或库存基线有任何不确定，必须停止。
+
+## 2026-07-22 BEP20 支付发布前总审计（本地未提交、未部署）
+
+- 当前 HEAD / `origin/main` 均为 `88b64e40b41e26a80218f9b993d1a6f8fc75896a`；本节功能仍只存在于未提交工作区。
+- 精确付款与合法超额付款以可信链上区块时间比较 `orders.payment_expires_at`、`chain_payment_sessions.expires_at` 和基础支付会话截止时间的最早值；汇率 TTL 只限制创建新快照。
+- 关键金额分类使用 JavaScript `BigInt` 和 PostgreSQL `numeric` 原始最小单位；多笔匹配 Transfer、错误网络/合约/地址、reverted、缺失区块时间不会自动完成。
+- 未执行的 `20260727_bep20_automatic_overpayment_settlement.sql` 复用 `profiles.balance`、`balance_transactions` 与 `bep20_overpayment_dispositions`，在一个数据库事务中完成付款和超额余额入账；数字交付只在事务成功后触发。
+- 发布前最后财务加固已复用现有私有 `site_settings`：`max_auto_overpayment_usdt` 与 `max_auto_overpayment_ratio` 必须同时为可信正数，绝对值和比例任一超限或配置不可用时均原子转 `manual_review`，不付款、不入账、不交付。Migration 不静默填入建议阈值。
+- 人工超额入账已改为 Cookie super-admin 鉴权后显式使用 service-role client；新四参数财务 RPC 仅 `service_role` 可执行，PUBLIC/anon/authenticated 均无执行权，并继续在函数内复核 operator、状态、锁、幂等和审计。
+- 审计补强：显式验证 `profiles.balance numeric(12,2)` 并在溢出前失败；自动和人工超额路径使用同一 chain-session advisory lock；订单链 claim 与已完成账户充值之间增加跨业务 TxHash 数据库保护。
+- 响应丢失恢复：自动 disposition 或基础 payment session 已持久化成功时，应用读取数据库事实并继续安全交付，不把已付款结果降级为失败。
+- 用户端：过期订单不再渲染自助 TxHash 入口；paid/delivered/manual_review/expired 隐藏无效倒计时和确认进度；支付页、订单详情和抽屉复用 `SecureOrderDelivery`。
+- 管理员端：disposition 读取 `settlement_source`，自动结算显示为自动来源，已有 disposition 时不再提供人工余额入账。
+- 新增正式只读审计 SQL与上线手册；20260727 Migration、生产部署、精确付款、超额付款和重复 TxHash 正式验收均尚未执行。

@@ -400,7 +400,7 @@ test("BEP20 underpayment and confirmation thresholds cannot complete early", () 
 
   assert.match(logic, /if \(raw < expected\) return "underpaid"/);
   assert.match(logic, /if \(Number\(input\.confirmations\) < Number\(input\.requiredConfirmations\)\) return "confirming"/);
-  assert.match(service, /const effectiveStatus = status === "manual_review" && allowLateApproval \? "verified" : status/);
+  assert.match(service, /approvedManualCompletion[\s\S]*?\["manual_review", "overpaid"\][\s\S]*?"verified"/);
   assert.match(approvalMigration, /approved manual review cannot complete an underpaid transfer/);
   assert.match(approvalMigration, /p_confirmed_amount < v_session\.expected_amount/);
   assert.match(approvalMigration, /p_confirmed_raw_amount\) < trunc\(v_session\.expected_raw_amount/);
@@ -409,16 +409,193 @@ test("BEP20 underpayment and confirmation thresholds cannot complete early", () 
   assert.match(claimMigration, /status = p_status/);
 });
 
+test("BEP20 valid overpayment uses one service-role atomic settlement and existing wallet ledger", () => {
+  const service = file("lib/payments/bep20-chain-service.ts");
+  const logic = file("lib/payments/bep20-chain-logic.mjs");
+  const migration = file("supabase/migrations/20260727_bep20_automatic_overpayment_settlement.sql");
+  const paymentPage = file("app/payment/page.tsx");
+  const orderSummary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
+  const adminRoute = file("app/api/admin/payments/[paymentId]/route.ts");
+  const adminPage = file("components/admin/payments/AdminPaymentRecordsPage.tsx");
+  const topBar = file("components/layout/PublicTopInfoBar.tsx");
+  const balanceEvents = file("lib/account/balance-events.ts");
+
+  assert.match(logic, /if \(raw < expected\) return "underpaid";[\s\S]*?confirmations[\s\S]*?return "confirming";[\s\S]*?if \(raw > expected\) return "overpaid"/);
+  assert.match(service, /settle_bep20_automatic_overpayment/);
+  assert.match(service, /effectiveStatus === "overpaid"/);
+  assert.match(service, /await updateNonFinalChainSession\(service, session\.id, patch\)[\s\S]*?settleAutomaticOverpayment/);
+  assert.match(service, /await deliverDigitalOrder\(service, settlement\.businessId, "callback"\)/);
+  assert.ok(
+    service.indexOf("settleAutomaticOverpayment(service") < service.indexOf("await deliverDigitalOrder(service, settlement.businessId"),
+    "delivery must run only after the atomic payment and balance settlement"
+  );
+  assert.match(service, /BEP20_OVERPAYMENT_SETTLEMENT_FAILED/);
+  assert.match(service, /status: "payment_failed"/);
+  assert.match(service, /approvedManualCompletion[\s\S]*?\["manual_review", "overpaid"\]/);
+
+  assert.match(migration, /^begin;/im);
+  assert.match(migration, /commit;/i);
+  assert.match(migration, /create or replace function public\.settle_bep20_automatic_overpayment\(/i);
+  assert.match(migration, /security definer[\s\S]*?set search_path = public/i);
+  assert.match(migration, /auth\.role\(\)[\s\S]*?'service_role'/i);
+  assert.match(migration, /from public\.chain_payment_sessions[\s\S]*?for update/i);
+  assert.match(migration, /from public\.payment_sessions[\s\S]*?for update/i);
+  assert.match(migration, /from public\.orders[\s\S]*?for update/i);
+  assert.match(migration, /from public\.profiles[\s\S]*?for update/i);
+  assert.match(migration, /v_excess_raw := v_confirmed_raw - v_expected_raw/i);
+  assert.match(migration, /v_chain\.confirmed_raw_amount is null/i);
+  assert.match(migration, /v_confirmed_raw <> trunc\(v_chain\.confirmed_raw_amount\)/i);
+  assert.match(migration, /v_excess_usdt := v_excess_raw \/ v_power/i);
+  assert.match(migration, /v_credited_cny := round\(v_excess_usdt \* v_chain\.exchange_rate, 2\)/i);
+  assert.doesNotMatch(migration, /Math\.round|Number\(/);
+  assert.match(migration, /public\.complete_payment_session\(/i);
+  assert.match(migration, /insert into public\.balance_transactions/i);
+  assert.match(migration, /insert into public\.bep20_overpayment_dispositions/i);
+  assert.match(migration, /settlement_source[\s\S]*?'automatic_service'/i);
+  assert.match(migration, /'BT-BEP20-' \|\| replace\(v_chain\.id::text, '-', ''\)/i);
+  assert.match(migration, /v_transaction_count <> 1/i);
+  assert.match(migration, /v_transaction\.block_timestamp > v_deadline/i);
+  assert.match(migration, /v_transaction\.confirmation_count < p_required_confirmations/i);
+  assert.match(migration, /v_claim\.order_id <> v_order\.id/i);
+  assert.match(migration, /revoke all on function public\.settle_bep20_automatic_overpayment\(uuid,text,integer,text\)[\s\S]*?from public, anon, authenticated/i);
+  assert.match(migration, /grant execute on function public\.settle_bep20_automatic_overpayment\(uuid,text,integer,text\)[\s\S]*?to service_role/i);
+  assert.match(migration, /has_function_privilege\('PUBLIC'/i);
+  assert.match(migration, /has_function_privilege\('authenticated'/i);
+  assert.match(migration, /has_function_privilege\('service_role'/i);
+  assert.match(migration, /BEP20_AUTOMATIC_OVERPAYMENT_PREFLIGHT_BALANCE_TYPE_INCOMPATIBLE/i);
+  assert.match(migration, /v_balance_max constant numeric\(12, 2\) := 9999999999\.99/i);
+  assert.match(migration, /v_balance_after > v_balance_max/i);
+  assert.match(migration, /v_chain\.token_decimals <> 18/i);
+  assert.match(migration, /\('chain_transactions\.log_index'\)/i);
+  assert.match(migration, /\('chain_payment_sessions\.confirmed_at'\)/i);
+  assert.match(migration, /pg_advisory_xact_lock\(pg_catalog\.hashtextextended\(p_session_id::text, 0\)\)/i);
+  assert.match(migration, /create function public\.credit_bep20_overpayment_to_wallet/i);
+  assert.match(migration, /settlement_source', 'manual_admin'/i);
+  assert.match(migration, /create trigger trg_chain_claim_reject_completed_recharge_tx/i);
+  assert.match(migration, /create trigger trg_recharge_reject_claimed_bep20_tx/i);
+  assert.match(migration, /BEP20_TX_HASH_ALREADY_USED_BY_RECHARGE/i);
+  assert.match(migration, /BEP20_TX_HASH_ALREADY_USED_BY_ORDER/i);
+  assert.match(migration, /bep20-business-tx:/i);
+  assert.match(migration, /pg_advisory_xact_lock[\s\S]*?bep20-business-tx:/i);
+  assert.match(migration, /v_provider_hash[\s\S]*?v_reference_hash/i);
+  assert.match(migration, /unnest\(array\[v_provider_hash, v_reference_hash\]\)/i);
+  assert.match(migration, /lower\(ctc\.tx_hash\) in \(v_provider_hash, v_reference_hash\)/i);
+
+  assert.match(paymentPage, /session\.overpaymentCredit\.overpaidUsdt/);
+  assert.match(paymentPage, /session\.overpaymentCredit\.creditedCny/);
+  assert.match(paymentPage, /notifyAccountBalanceUpdated\(\)/);
+  assert.match(topBar, /ACCOUNT_BALANCE_UPDATED_EVENT/);
+  assert.match(topBar, /getCurrentProfile\(\)/);
+  assert.match(balanceEvents, /window\.dispatchEvent\(new Event\(ACCOUNT_BALANCE_UPDATED_EVENT\)\)/);
+  assert.match(orderSummary, /session\?\.overpaymentCredit/);
+  assert.match(adminRoute, /settlement_source/);
+  assert.match(adminPage, /自动原子结算/);
+});
+
+test("BEP20 automatic overpayment risk limits fail closed and manual credit elevates after super-admin auth", () => {
+  const migration = file("supabase/migrations/20260727_bep20_automatic_overpayment_settlement.sql");
+  const service = file("lib/payments/bep20-chain-service.ts");
+  const verifyRoute = file("app/api/payments/bep20/verify/route.ts");
+  const manualRoute = file("app/api/admin/payments/[paymentId]/overpayment-credit/route.ts");
+
+  assert.match(migration, /insert into public\.site_settings[\s\S]*?'max_auto_overpayment_usdt'[\s\S]*?'null'::jsonb/);
+  assert.match(migration, /'max_auto_overpayment_ratio'[\s\S]*?'null'::jsonb/);
+  assert.match(migration, /create trigger trg_protect_bep20_overpayment_risk_settings/i);
+  assert.match(migration, /BEP20_OVERPAYMENT_RISK_SETTINGS_SERVICE_ROLE_REQUIRED/i);
+  assert.match(migration, /create or replace function public\.configure_bep20_automatic_overpayment_limits/i);
+  assert.match(migration, /revoke all on function public\.configure_bep20_automatic_overpayment_limits\(numeric,numeric,uuid,text\)[\s\S]*?from public, anon, authenticated/i);
+  assert.match(migration, /grant execute on function public\.configure_bep20_automatic_overpayment_limits\(numeric,numeric,uuid,text\)[\s\S]*?to service_role/i);
+  assert.match(migration, /jsonb_typeof\(ss\.setting_value -> 'value'\) = 'number'/i);
+  assert.match(migration, /v_max_auto_overpayment_usdt is null[\s\S]*?v_max_auto_overpayment_ratio <= 0/i);
+  assert.match(migration, /v_excess_usdt > v_max_auto_overpayment_usdt[\s\S]*?v_excess_ratio > v_max_auto_overpayment_ratio/i);
+  assert.match(migration, /auto_overpayment_limit_unavailable/i);
+  assert.match(migration, /auto_overpayment_limit_exceeded/i);
+  assert.match(migration, /status = 'manual_review'[\s\S]*?manual_review_decision = 'pending'/i);
+  const automaticSettlement = migration.slice(migration.indexOf("create or replace function public.settle_bep20_automatic_overpayment"));
+  assert.ok(
+    automaticSettlement.indexOf("v_excess_usdt > v_max_auto_overpayment_usdt") < automaticSettlement.indexOf("public.complete_payment_session("),
+    "risk limits must be enforced before payment completion and wallet credit"
+  );
+
+  assert.match(service, /result === "manual_review"/);
+  assert.match(service, /settlement\.manualReviewReason/);
+  assert.match(service, /updated = await getChainSessionById\(service, session\.id\)/);
+  assert.doesNotMatch(verifyRoute, /max_auto_overpayment|maxAutoOverpayment/i);
+
+  assert.match(migration, /drop function if exists public\.credit_bep20_overpayment_to_wallet\(uuid,text,text\)/i);
+  assert.match(migration, /create function public\.credit_bep20_overpayment_to_wallet\([\s\S]*?p_operator_user_id uuid/i);
+  assert.match(migration, /BEP20_OVERPAYMENT_SERVICE_ROLE_REQUIRED/i);
+  assert.match(migration, /revoke all on function public\.credit_bep20_overpayment_to_wallet\(uuid,text,text,uuid\)[\s\S]*?from public, anon, authenticated/i);
+  assert.match(migration, /grant execute on function public\.credit_bep20_overpayment_to_wallet\(uuid,text,text,uuid\)[\s\S]*?to service_role/i);
+  assert.match(migration, /has_function_privilege\('authenticated', v_manual_oid, 'EXECUTE'\)/i);
+  assert.ok(
+    manualRoute.indexOf("await requireApiSuperAdmin()") < manualRoute.indexOf("getSupabaseServiceRoleClient()"),
+    "manual credit must authenticate the cookie super-admin before acquiring service-role capability"
+  );
+  assert.ok(
+    manualRoute.indexOf("getSupabaseServiceRoleClient()") < manualRoute.indexOf('.rpc("credit_bep20_overpayment_to_wallet"'),
+    "manual credit must invoke the financial RPC with the service-role client"
+  );
+  assert.match(manualRoute, /p_operator_user_id: admin\.user\.id/);
+  assert.doesNotMatch(manualRoute, /admin\.supabase\.rpc\("credit_bep20_overpayment_to_wallet"/);
+});
+
+test("BEP20 automatic overpayment remains idempotent across verify, delivery retry and manual follow-up", () => {
+  const migration = file("supabase/migrations/20260727_bep20_automatic_overpayment_settlement.sql");
+  const service = file("lib/payments/bep20-chain-service.ts");
+
+  assert.match(migration, /where bod\.chain_session_id = v_chain\.id/i);
+  assert.match(migration, /'result', 'already_settled'/i);
+  assert.match(migration, /balance_transaction_id uuid not null unique|balance_transaction_id/i);
+  assert.match(migration, /v_chain\.payment_id is null/i);
+  assert.match(migration, /v_order_payment\.payment_session_id <> v_payment_session\.id/i);
+  assert.match(migration, /chain_transaction_claims[\s\S]*?for update/i);
+  assert.match(migration, /v_chain\.status = 'paid'[\s\S]*?PAID_WITHOUT_DISPOSITION/i);
+  assert.ok(
+    migration.indexOf("BEP20_AUTOMATIC_OVERPAYMENT_TX_HASH_MISMATCH") < migration.indexOf("'result', 'already_settled'"),
+    "idempotent settlement must still bind the request to the original TxHash"
+  );
+  assert.match(service, /\["settled", "already_settled"\]/);
+  assert.match(service, /const recoveredCredit = await loadOverpaymentCredit/);
+  assert.match(service, /if \(await isPaymentSessionPaid\(service, session\.payment_session_id\)\)/);
+  assert.match(service, /deliveryError[\s\S]*?last_error/);
+  assert.ok(
+    service.indexOf("BEP20_OVERPAYMENT_SETTLEMENT_FAILED") < service.indexOf("A post-settlement read failure must never downgrade"),
+    "only the atomic settlement call belongs to the payment_failed recovery branch"
+  );
+  assert.doesNotMatch(service, /credit_bep20_overpayment_to_wallet/);
+});
+
+test("BEP20 terminal UI removes self-service submission and polling uses one visibility-aware timer", () => {
+  const paymentPage = file("app/payment/page.tsx");
+  const delivery = file("components/account/orders/SecureOrderDelivery.tsx");
+
+  assert.match(paymentPage, /\{canSubmitTxHash \? <Button[^>]*onClick=\{onVerify\}/s);
+  assert.doesNotMatch(paymentPage, /<Button[^>]*onClick=\{onVerify\}[^>]*disabled=\{[^}]*!canSubmitTxHash/s);
+  assert.match(paymentPage, /document\.addEventListener\("visibilitychange", handleVisibilityChange\)/);
+  assert.match(paymentPage, /document\.removeEventListener\("visibilitychange", handleVisibilityChange\)/);
+  assert.match(paymentPage, /if \(bep20PollTimer\.current !== null\) window\.clearTimeout/);
+  assert.match(delivery, /document\.addEventListener\("visibilitychange", handleVisibilityChange\)/);
+  assert.match(delivery, /if \(timer !== null\) window\.clearTimeout\(timer\)/);
+});
+
 test("BEP20 verification uses block timestamp and contract decimals check", () => {
   const service = file("lib/payments/bep20-chain-service.ts");
   const logic = file("lib/payments/bep20-chain-logic.mjs");
 
   assert.match(service, /eth_getBlockByNumber/);
   assert.match(service, /blockTimestamp/);
-  assert.match(service, /exchangeRateExpiresAt/);
+  assert.match(service, /orderPaymentExpiresAt: order\.payment_expires_at/);
+  assert.match(service, /paymentSessionExpiresAt/);
+  assert.match(service, /sessionExpiresAt: session\.expires_at/);
+  assert.doesNotMatch(logic, /input\.exchangeRateExpiresAt/);
+  assert.match(logic, /\[input\.orderPaymentExpiresAt, input\.paymentSessionExpiresAt, input\.sessionExpiresAt\]/);
+  assert.match(logic, /cache TTL only limits creating new snapshots/);
   assert.match(logic, /eth_call/);
   assert.match(logic, /0x313ce567/);
   assert.match(service, /tokenDecimalsCache/);
+  assert.match(service, /if \(matchingTransfers\.length > 1\)/);
+  assert.match(service, /BEP20_TRANSFER_AMBIGUOUS/);
   assert.match(logic, /transferTime > deadline/);
   assert.match(logic, /validateTokenDecimalsResult/);
 });
@@ -1235,7 +1412,7 @@ test("digital delivery service-role claim compatibility preserves least privileg
   assert.match(adminPayment, /getServerSuperAdminContext\(\)/);
   assert.ok(adminPayment.indexOf("getServerSuperAdminContext()") < adminPayment.indexOf("approveLateBep20PaymentSession("));
   assert.match(bep20, /approveLateBep20PaymentSession[\s\S]{0,300}requiredServiceClient\(\)/);
-  assert.match(bep20, /status === "manual_review" && allowLateApproval \? "verified" : status/);
+  assert.match(bep20, /approvedManualCompletion[\s\S]*?\["manual_review", "overpaid"\][\s\S]*?"verified"/);
   assert.match(bep20, /verifyBep20TxHashForOrder\([\s\S]{0,250}service/);
   assert.match(bep20, /completePayment\([\s\S]{0,500}service/);
   assert.match(completion, /deliverDigitalOrder\(service, result\.businessId, input\.source\)/);
@@ -1333,15 +1510,15 @@ test("paid orders never render as waiting for payment and manual delivery has ex
   const paymentPage = file("app/payment/page.tsx");
   const orderList = file("app/account/orders/page.tsx");
   const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+  const secureDelivery = file("components/account/orders/SecureOrderDelivery.tsx");
 
   assert.match(paymentPage, /const currentStatus = normalizedPaymentStatus === "paid"\s*\? "paid"/);
-  assert.match(orderList, /paymentStatus !== "paid"\s*\? "等待支付。"/);
-  assert.match(orderList, /\["manual", "manual_delivery"\]/);
-  assert.match(orderList, /"待人工处理。"/);
-  assert.match(orderList, /"人工处理中。"/);
-  assert.match(orderDetail, /\["manual", "manual_delivery"\]/);
-  assert.match(orderDetail, /"待人工处理。"/);
-  assert.match(orderDetail, /"人工处理中。"/);
+  assert.match(orderList, /<SecureOrderDelivery/);
+  assert.match(orderDetail, /<SecureOrderDelivery/);
+  assert.match(secureDelivery, /normalizedPaymentStatus !== "paid"/);
+  assert.match(secureDelivery, /\["manual", "manual_delivery"\]/);
+  assert.match(secureDelivery, /支付已完成，等待人工交付。/);
+  assert.match(secureDelivery, /支付已完成，正在准备交付内容……/);
 });
 
 test("account order tables use one centered user-facing status column", () => {
@@ -1413,17 +1590,14 @@ test("BEP20 order details render a compact payment summary without creating sess
 
   assert.match(summary, /paymentAction === "continue_active_payment"/);
   assert.match(summary, /paymentAction === "renew_payment_session"/);
-  assert.match(summary, /canSubmitLateTransaction/);
   assert.match(summary, /status === "manual_review"/);
   assert.match(summary, /paymentAction === "rejected"/);
   assert.match(summary, /paymentAction === "paid"/);
   assert.match(summary, /status === "underpaid"/);
   assert.match(summary, /status === "payment_failed"/);
-  assert.match(summary, /chain_session_id: session\.canSubmitLateTransaction \? session\.chainSessionId : undefined/);
   assert.match(summary, /disabled=\{!txHashValid \|\| verifying\}/);
-  assert.match(summary, /提交原订单支付凭证/);
+  assert.doesNotMatch(summary, /提交原订单支付凭证|提交旧交易哈希|提交人工核验/);
   assert.doesNotMatch(summary, /查看完整支付页/);
-  assert.match(summary, /href=\{fullPaymentHref\}/);
   assert.match(summary, /shortHash\(session\.receiveAddress\)/);
   assert.match(summary, /shortHash\(session\.submittedTxHash\)/);
   assert.match(summary, /truncate/);
@@ -1439,13 +1613,14 @@ test("paid order details hide payment proof and load delivered content through t
   const orderList = file("app/account/orders/page.tsx");
   const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
   const deliveryRoute = file("app/api/orders/[orderNo]/delivery/route.ts");
+  const secureDelivery = file("components/account/orders/SecureOrderDelivery.tsx");
   const queries = file("lib/orders/order-queries.ts");
 
   assert.match(summary, /paymentStatus === "paid"/);
   assert.match(summary, /\["paid", "processing", "delivered", "completed"\]\.includes\(orderStatus\)/);
   assert.match(summary, /session\?\.status === "paid"/);
   assert.match(summary, /!paymentCompleted && !orderClosed && sessionAllowsTxHash/);
-  assert.match(summary, /canOpenOriginalPayment \? \(/);
+  assert.doesNotMatch(summary, /canOpenOriginalPayment|提交原订单支付凭证/);
   assert.match(summary, /submittedTxHashValid \? \(/);
   assert.match(summary, /https:\/\/bscscan\.com\/tx\//);
   assert.match(summary, /target="_blank" rel="noopener noreferrer"/);
@@ -1458,22 +1633,23 @@ test("paid order details hide payment proof and load delivered content through t
   assert.match(deliveryRoute, /id: row\.delivery_id \?\? `\$\{context\.params\.orderNo\}:\$\{index\}`/);
   assert.doesNotMatch(deliveryRoute, /from\("(?:order_deliveries|digital_delivery_secrets)"\)/);
 
-  assert.match(orderList, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(orderNo\)\}\/delivery`, \{ cache: "no-store" \}\)/);
-  assert.match(orderList, /order\.fulfillment_status === "delivered"/);
-  assert.match(orderList, /secureDelivery\?\.delivery_status === "delivered"/);
-  assert.match(orderList, /交付信息加载失败，请刷新后重试/);
+  assert.match(secureDelivery, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(orderNo\)\}\/delivery`, \{ cache: "no-store" \}\)/);
+  assert.match(secureDelivery, /fulfillmentStatus === "delivered"/);
+  assert.match(secureDelivery, /delivery\.delivery_status === "delivered"/);
+  assert.match(secureDelivery, /交付信息加载失败，请刷新后重试/);
   assert.doesNotMatch(orderList, /状态：已交付/);
-  assert.match(orderList, /onUpdated=\{async \(\) => \{[\s\S]{0,200}onOrderUpdated\(order\.order_no\)[\s\S]{0,200}loadDelivery\(order\.order_no\)/);
+  assert.match(orderList, /onUpdated=\{async \(\) => \{[\s\S]{0,160}onOrderUpdated\(order\.order_no\)/);
+  assert.match(orderList, /<SecureOrderDelivery/);
 
-  assert.match(orderDetail, /deliveryRequested \|\| paymentStatus !== "paid" \|\| !delivered/);
-  assert.match(orderDetail, /交付信息加载失败，请刷新后重试/);
-  assert.match(orderDetail, /delivery\.delivery_status === "delivered" \? "已交付"/);
+  assert.match(orderDetail, /<SecureOrderDelivery/);
+  assert.match(orderDetail, /deliveryStatus=\{order\.order_deliveries\?\.\[0\]\?\.delivery_status\}/);
 });
 
 test("paid and delivered order details omit redundant completion notices", () => {
   const summary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
   const orderList = file("app/account/orders/page.tsx");
   const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+  const secureDelivery = file("components/account/orders/SecureOrderDelivery.tsx");
 
   assert.match(summary, /if \(session\.paymentAction === "paid"\) return null/);
   assert.doesNotMatch(summary, /该订单已完成支付/);
@@ -1483,15 +1659,56 @@ test("paid and delivered order details omit redundant completion notices", () =>
   assert.match(summary, /session\.status === "underpaid"/);
   assert.match(summary, /session\.status === "payment_failed"/);
 
-  for (const source of [orderList, orderDetail]) {
+  for (const source of [orderList, orderDetail, secureDelivery]) {
     assert.doesNotMatch(source, /状态：已交付/);
-    assert.match(source, /交付信息加载失败，请刷新后重试/);
   }
-  assert.match(orderList, /等待交付/);
-  assert.match(orderList, /交付处理/);
-  assert.match(orderList, /copyDeliveryContent/);
-  assert.match(orderDetail, /显示完整内容/);
-  assert.match(orderDetail, /复制内容/);
+  assert.match(secureDelivery, /交付信息加载失败，请刷新后重试/);
+  assert.match(secureDelivery, /正在准备交付内容/);
+  assert.match(secureDelivery, /copyContent/);
+  assert.match(secureDelivery, /显示完整内容/);
+  assert.match(secureDelivery, />\s*复制\s*</);
+});
+
+test("BEP20 terminal timing and secure delivery refresh share one guarded presentation contract", () => {
+  const paymentPage = file("app/payment/page.tsx");
+  const summary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
+  const visibility = file("lib/payments/bep20-presentation.mjs");
+  const secureDelivery = file("components/account/orders/SecureOrderDelivery.tsx");
+  const orderList = file("app/account/orders/page.tsx");
+  const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+
+  assert.match(summary, /timingVisibility\.showCountdown/);
+  assert.match(summary, /timingVisibility\.showConfirmationProgress/);
+  assert.match(paymentPage, /timingVisibility\.showCountdown/);
+  assert.match(paymentPage, /timingVisibility\.showConfirmationProgress/);
+  assert.match(visibility, /COUNTDOWN_STATUSES = new Set\(\["waiting_payment", "submitted", "confirming"\]\)/);
+  assert.match(visibility, /CONFIRMATION_STATUSES = new Set\(\["submitted", "confirming"\]\)/);
+  assert.match(visibility, /hasSubmittedTxHash && CONFIRMATION_STATUSES\.has\(chainStatus\)/);
+  assert.match(visibility, /manualReview = chainStatus === "manual_review"/);
+  assert.match(visibility, /paymentStatus === "paid"/);
+  assert.match(paymentPage, /交易已收到，正在人工核验，请勿重复付款。/);
+  assert.doesNotMatch(paymentPage, /该订单已完成支付。/);
+  assert.match(paymentPage, /查看链上交易/);
+  assert.match(paymentPage, /target="_blank" rel="noopener noreferrer"/);
+
+  assert.match(paymentPage, /<SecureOrderDelivery/);
+  assert.match(paymentPage, /pollUntilDelivered/);
+  assert.match(paymentPage, /Promise\.all\(\[loadOrder\(\{ silent: true \}\), loadBep20Session\(\{ silent: true \}\)\]\)/);
+  assert.match(paymentPage, /\["delivered", "completed", "expired", "failed", "cancelled"\]\.includes\(liveOrderStatus\)/);
+  assert.match(paymentPage, /document\.hidden \? 15000 : elapsed < 120000 \? 4000 : 10000/);
+  assert.match(paymentPage, /window\.clearTimeout\(bep20PollTimer\.current\)/);
+  assert.match(secureDelivery, /cache: "no-store"/);
+  assert.match(secureDelivery, /if \(normalizedPaymentStatus === "paid"\) void loadDelivery\(\)/);
+  assert.match(secureDelivery, /document\.hidden \? 15000 : elapsed < 120000 \? 4000 : 10000/);
+  assert.match(secureDelivery, /if \(!pollUntilDelivered \|\| normalizedPaymentStatus !== "paid" \|\| delivered \|\| cancelled \|\| failed\) return/);
+  assert.match(secureDelivery, /window\.clearTimeout\(timer\)/);
+  assert.match(secureDelivery, /重新加载交付信息/);
+  assert.match(secureDelivery, /显示完整内容/);
+  assert.match(secureDelivery, /navigator\.clipboard\.writeText\(content\)/);
+  assert.doesNotMatch(secureDelivery, /from\("(?:order_deliveries|digital_delivery_secrets)"\)/);
+  assert.doesNotMatch(secureDelivery, /service[_-]?role/i);
+  assert.doesNotMatch(secureDelivery, /console\.(?:log|error).*content/);
+  for (const source of [paymentPage, orderList, orderDetail]) assert.match(source, /SecureOrderDelivery/);
 });
 
 test("owned-user delivery RPCs qualify order identifiers and hide database failures", () => {
@@ -1661,13 +1878,16 @@ test("order expiration reports atomic release counts and expires only idle chain
   assert.match(migration, /revoke execute on function public\.expire_unpaid_order\(uuid, text\) from public, anon, authenticated/);
   assert.match(migration, /grant execute on function public\.expire_unpaid_order\(uuid, text\) to service_role/);
 
-  assert.match(bep20Service, /allowExpiredOrder: Boolean\(input\.chainSessionId\)/);
-  assert.match(bep20Service, /chainSessionId && !allowRecovery && session\.status !== "expired"/);
+  assert.match(bep20Service, /assertUserOrderAcceptsTxHash\(order\)/);
+  assert.match(bep20Service, /!allowRecovery[\s\S]*?assertUserSessionAcceptsTxHash\(service, session, txHash\)/);
+  assert.match(bep20Service, /\["expired", "failed", "cancelled"\]\.includes\(session\.status\)/);
+  assert.match(bep20Service, /PAYMENT_SESSION_EXPIRED/);
+  assert.match(bep20Service, /联系客服并提供订单号和交易哈希/);
   assert.match(bep20Service, /session\.status === "expired" && !allowRecovery\s*\? "manual_review"/);
-  assert.match(bep20Service, /if \(session\.status === "expired"\) return "submit_late_transaction"/);
-  assert.match(orderQueries, /order\.status === "expired" && status === "expired"\) return "submit_late_transaction"/);
-  assert.match(paymentSummary, /orderStatus === "expired" && !session\?\.canSubmitLateTransaction/);
-  assert.match(paymentSummary, /chain_session_id: session\.canSubmitLateTransaction \? session\.chainSessionId : undefined/);
+  assert.match(bep20Service, /if \(session\.status === "expired"\) return "closed"/);
+  assert.match(orderQueries, /order\.status === "expired" && status === "expired"\) return "closed"/);
+  assert.match(paymentSummary, /\["cancelled", "expired", "failed"\]\.includes\(orderStatus\)/);
+  assert.doesNotMatch(paymentSummary, /chain_session_id|canSubmitLateTransaction|submit_late_transaction/);
 });
 
 test("order payment completion does not mutate inventory after order creation", () => {
@@ -2517,17 +2737,19 @@ test("BEP20 payment page uses current session API data and guards duplicate requ
   assert.match(page, /setBep20Session\(result\)/);
   assert.match(page, /prefillSubmittedTxHash/);
   assert.match(page, /setTxHash\(result\?\.prefillSubmittedTxHash \? result\.submittedTxHash \?\? "" : ""\)/);
-  assert.match(page, /"continue_active_payment"[\s\S]*?"renew_payment_session"[\s\S]*?"submit_late_transaction"[\s\S]*?"view_status"[\s\S]*?"rejected"[\s\S]*?"paid"[\s\S]*?"closed"/);
-  assert.match(page, /const canSubmitTxHash = session\.paymentAction === "continue_active_payment" \|\| session\.canSubmitLateTransaction/);
+  assert.match(page, /"continue_active_payment"[\s\S]*?"renew_payment_session"[\s\S]*?"view_status"[\s\S]*?"rejected"[\s\S]*?"paid"[\s\S]*?"closed"/);
+  assert.match(page, /const canSubmitTxHash = session\.paymentAction === "continue_active_payment"/);
   assert.match(page, /canRenewPaymentSession/);
-  assert.match(page, /canSubmitLateTransaction/);
-  assert.match(page, /chain_session_id: bep20Session\?\.canSubmitLateTransaction \? bep20Session\.chainSessionId : undefined/);
-  assert.match(page, /disabled=\{!txHashValid \|\| verifying \|\| !canSubmitTxHash\}/);
-  assert.match(page, /支付会话已过期。如果你已完成转账，可以提交交易哈希进行人工核验；请不要再次转账。/);
+  assert.doesNotMatch(page, /canSubmitLateTransaction|submit_late_transaction|chain_session_id/);
+  assert.match(page, /\{canSubmitTxHash \? <Button[^>]*onClick=\{onVerify\} disabled=\{!txHashValid \|\| verifying\}/s);
+  assert.match(page, /本订单的链上支付会话已过期，请勿继续转账/);
   assert.match(page, /该支付审核已结束，如有疑问请联系客服。/);
   assert.match(page, /getBep20SessionStatusText/);
   assert.match(page, /if \(!order\?\.order_no \|\| creatingSession\) return/);
-  assert.match(page, /if \(!order\?\.order_no \|\| verifyingTx\) return/);
+  assert.match(page, /bep20VerifyInFlight\.current/);
+  assert.match(page, /shouldRecheckSubmittedTransaction/);
+  assert.match(page, /\["submitted", "confirming"\]\.includes\(bep20Session\.status\)/);
+  assert.match(page, /verifyBep20TxHash\(\{ txHash: submittedTxHash, silent: true \}\)/);
   assert.match(page, /setCreatingSession\(true\)[\s\S]*?setCreatingSession\(false\)/);
   assert.match(page, /setVerifyingTx\(true\)[\s\S]*?setVerifyingTx\(false\)/);
   assert.doesNotMatch(page, /fetch\("\/api\/orders"[\s\S]{0,120}loadBep20Session/);
@@ -2543,6 +2765,49 @@ test("BEP20 payment page uses current session API data and guards duplicate requ
   assert.match(service, /if \(raced\) return toBep20SessionResponse/);
   assert.match(service, /prefillSubmittedTxHash: shouldPrefillBep20TxHash/);
   assert.match(service, /failureReason: session\.failure_reason/);
+});
+
+test("expired BEP20 sessions close user TxHash recovery while preserving support and chain evidence", () => {
+  const page = file("app/payment/page.tsx");
+  const summary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
+  const verifyRoute = file("app/api/payments/bep20/verify/route.ts");
+  const service = file("lib/payments/bep20-chain-service.ts");
+  const orderQueries = file("lib/orders/order-queries.ts");
+  const orderStatus = file("lib/orders/order-status.ts");
+
+  assert.match(verifyRoute, /verifyBep20TxHash\(\{ orderNo, txHash, userId: userContext\.user\.id \}\)/);
+  assert.doesNotMatch(verifyRoute, /chain_session_id|chainSessionId/);
+  assert.match(service, /USER_EXPIRED_PAYMENT_MESSAGE = "支付会话已过期。如您已完成链上转账，请联系客服并提供订单号和交易哈希。"/);
+  assert.match(service, /new Bep20PaymentError\("PAYMENT_SESSION_EXPIRED", USER_EXPIRED_PAYMENT_MESSAGE, 410\)/);
+  assert.match(service, /continuesSubmittedTransaction = \["submitted", "confirming"\]\.includes\(session\.status\)/);
+  assert.match(service, /submitted_tx_hash \?\? ""/);
+  assert.match(service, /Date\.parse\(session\.expires_at\) <= Date\.now\(\) && !continuesSubmittedTransaction/);
+  assert.match(service, /\["expired", "failed", "cancelled"\]\.includes\(session\.status\)/);
+  assert.match(service, /\.from\("payment_sessions"\)[\s\S]*?\.select\("status,expires_at"\)/);
+  assert.doesNotMatch(service, /canSubmitLateTransaction|submit_late_transaction/);
+  assert.doesNotMatch(orderQueries, /submit_late_transaction/);
+  assert.doesNotMatch(orderStatus, /提交旧交易哈希|submit_late_transaction/);
+  assert.doesNotMatch(page, /提交旧交易哈希|提交原订单支付凭证|提交人工核验|提交晚到账核验/);
+  assert.doesNotMatch(summary, /提交旧交易哈希|提交原订单支付凭证|提交人工核验|提交晚到账核验/);
+  assert.match(page, /联系在线客服并提供订单号和 TxHash/);
+  assert.match(summary, /联系在线客服并提供订单号和 TxHash/);
+  assert.match(summary, /shortHash\(session\.submittedTxHash\)/);
+  assert.match(summary, /查看链上交易/);
+});
+
+test("BEP20 payment notice explains locked pricing, exact receipt amount, fees, overpayment and supported network", () => {
+  const page = file("app/payment/page.tsx");
+
+  assert.match(page, /链上支付须知/);
+  assert.match(page, /实际到账金额与页面应付金额完全一致/);
+  assert.match(page, /手续费需由付款方另行承担，不能从应付金额中扣除/);
+  assert.match(page, /订单创建时会锁定本单汇率、应付 USDT 和付款期限/);
+  assert.match(page, /超额到账部分将在核验后按订单规则转换为站内余额/);
+  assert.match(page, /请勿通过 ERC20、TRC20、opBNB 或其他网络付款/);
+  assert.match(page, /订单锁定汇率/);
+  assert.match(page, /锁定应付 USDT/);
+  assert.match(page, /支付截止时间/);
+  assert.match(page, /lg:col-span-2/);
 });
 
 test("BEP20 payment page does not prefill retryable failed TxHash on resume", () => {

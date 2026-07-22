@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { CheckCircle2, Clipboard, ExternalLink, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Clipboard, ExternalLink, Headphones, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -24,12 +23,12 @@ import {
   normalizePaymentStatus,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
+import { getBep20TimingVisibility } from "@/lib/payments/bep20-presentation.mjs";
 import { cn } from "@/lib/utils";
 
 type Bep20PaymentAction =
   | "continue_active_payment"
   | "renew_payment_session"
-  | "submit_late_transaction"
   | "view_status"
   | "rejected"
   | "paid"
@@ -47,11 +46,16 @@ type Bep20Session = {
   prefillSubmittedTxHash: boolean;
   paymentAction: Bep20PaymentAction;
   canRenewPaymentSession: boolean;
-  canSubmitLateTransaction: boolean;
   requiredConfirmations: number;
   confirmationCount?: number;
   confirmedAmount?: string | null;
   message?: string;
+  overpaymentCredit: {
+    overpaidUsdt: string;
+    creditedCny: string;
+    processedAt: string;
+    settlementSource: "automatic_service" | "manual_admin";
+  } | null;
 };
 
 type ApiError = {
@@ -85,7 +89,7 @@ function statusCopy(session: Bep20Session | null) {
   if (!session) return { label: "未生成支付单", className: "border-amber-200 bg-amber-50 text-amber-700" };
   if (session.paymentAction === "paid") return { label: "已支付", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
   if (session.paymentAction === "rejected") return { label: "审核已结束", className: "border-slate-200 bg-slate-50 text-slate-600" };
-  if (session.canSubmitLateTransaction) return { label: "可提交晚到账", className: "border-amber-200 bg-amber-50 text-amber-700" };
+  if (session.status === "expired" || session.paymentAction === "closed") return { label: "已过期", className: "border-slate-200 bg-slate-50 text-slate-600" };
   if (session.status === "manual_review") return { label: "人工审核中", className: "border-blue-200 bg-blue-50 text-blue-700" };
   if (session.status === "confirming") return { label: "确认中", className: "border-blue-200 bg-blue-50 text-blue-700" };
   if (session.status === "underpaid") return { label: "到账金额不足", className: "border-red-200 bg-red-50 text-red-700" };
@@ -97,6 +101,13 @@ function statusCopy(session: Bep20Session | null) {
 function noticeForSession(session: Bep20Session | null, order: OrderRecord) {
   const orderAction = getBep20PaymentAction(order);
   const orderNotice = getBep20PaymentNotice(order);
+  const orderStatus = normalizeOrderStatus(order.status);
+  if (normalizePaymentStatus(order.payment_status) === "paid" || ["paid", "processing", "delivered", "completed"].includes(orderStatus)) {
+    return null;
+  }
+  if (orderStatus === "expired") {
+    return "本订单的链上支付会话已过期，请勿继续转账。如您已完成转账，请联系在线客服并提供订单号和 TxHash，由客服人工核验。";
+  }
 
   if (!session) {
     return orderAction?.kind === "renew"
@@ -105,16 +116,16 @@ function noticeForSession(session: Bep20Session | null, order: OrderRecord) {
   }
   if (session.paymentAction === "paid") return null;
   if (session.paymentAction === "rejected") return "该支付审核已结束，如有疑问请联系客服。";
-  if (session.status === "manual_review") return "链上交易已收到，当前正在人工核验，请勿重复付款。";
+  if (session.status === "manual_review") return "交易已收到，正在人工核验，请勿重复付款。";
   if (session.status === "confirming") return "链上确认中，请勿重复付款。";
-  if (session.canSubmitLateTransaction) {
-    return "原支付会话已过期。如果你已经完成转账，可以提交原交易哈希进行人工核验；请不要再次转账。";
+  if (session.status === "expired" || session.paymentAction === "closed") {
+    return "本订单的链上支付会话已过期，请勿继续转账。如您已完成转账，请联系在线客服并提供订单号和 TxHash，由客服人工核验。";
   }
   if (session.paymentAction === "renew_payment_session") {
     return "当前没有有效支付单，你可以重新生成新的支付单。";
   }
   if (session.status === "underpaid") return "到账金额不足，不能按足额支付处理。";
-  if (session.status === "payment_failed") return "支付处理失败，请提交原订单支付凭证或联系客服。";
+  if (session.status === "payment_failed") return "支付处理失败，请联系客服核查。";
   return "当前有有效支付信息，请仅通过 BNB Smart Chain (BEP20) 转账。";
 }
 
@@ -171,9 +182,7 @@ export function Bep20OrderPaymentSummary({
   const [renewConfirmOpen, setRenewConfirmOpen] = useState(false);
 
   const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
-  const status = statusCopy(session);
   const remainingSeconds = secondsLeft(session?.expiresAt) + nowTick * 0;
-  const fullPaymentHref = `/payment?order=${encodeURIComponent(order.order_no)}`;
   const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
   const submittedTxHashValid = /^0x[0-9a-fA-F]{64}$/.test(session?.submittedTxHash ?? "");
   const orderStatus = normalizeOrderStatus(order.status);
@@ -182,10 +191,14 @@ export function Bep20OrderPaymentSummary({
     || ["paid", "processing", "delivered", "completed"].includes(orderStatus)
     || session?.status === "paid"
     || session?.paymentAction === "paid";
-  const orderClosed = ["cancelled", "failed"].includes(orderStatus)
-    || (orderStatus === "expired" && !session?.canSubmitLateTransaction);
+  const status = orderStatus === "expired"
+    ? { label: "已过期", className: "border-slate-200 bg-slate-50 text-slate-600" }
+    : paymentCompleted
+    ? { label: "已支付", className: "border-emerald-200 bg-emerald-50 text-emerald-700" }
+    : statusCopy(session);
+  const orderClosed = ["cancelled", "expired", "failed"].includes(orderStatus);
   const sessionAllowsTxHash = Boolean(
-    session && (session.paymentAction === "continue_active_payment" || session.canSubmitLateTransaction)
+    session && session.paymentAction === "continue_active_payment"
   );
   const canSubmitTxHash = !paymentCompleted && !orderClosed && sessionAllowsTxHash;
   const canShowTxInput = canSubmitTxHash;
@@ -193,8 +206,15 @@ export function Bep20OrderPaymentSummary({
     && !paymentCompleted
     && !orderClosed
     && Boolean(session?.canRenewPaymentSession);
-  const canOpenOriginalPayment = canSubmitTxHash;
+  const isExpired = orderStatus === "expired" || session?.status === "expired" || session?.paymentAction === "closed";
   const notice = useMemo(() => noticeForSession(session, order), [order, session]);
+  const timingVisibility = getBep20TimingVisibility({
+    chainStatus: session?.status,
+    paymentAction: session?.paymentAction,
+    submittedTxHash: session?.submittedTxHash,
+    orderStatus,
+    paymentStatus,
+  });
 
   const loadSession = useCallback(
     async (options: { create?: boolean } = {}) => {
@@ -257,7 +277,6 @@ export function Bep20OrderPaymentSummary({
         body: JSON.stringify({
           order: order.order_no,
           tx_hash: txHash,
-          chain_session_id: session.canSubmitLateTransaction ? session.chainSessionId : undefined,
         }),
       });
       const result = (await response.json().catch(() => null)) as (Bep20Session & ApiError) | null;
@@ -292,17 +311,31 @@ export function Bep20OrderPaymentSummary({
         </div>
       ) : null}
 
+      {session?.overpaymentCredit ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 leading-6 text-emerald-900">
+          <div className="font-medium">超额到账已转入站内余额</div>
+          <div>
+            超额 {session.overpaymentCredit.overpaidUsdt} USDT，已入账 ¥{session.overpaymentCredit.creditedCny}
+          </div>
+        </div>
+      ) : null}
+
       {error ? <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-red-700">{error}</div> : null}
 
       {loading ? (
         <div className="rounded-lg bg-slate-50 px-3 py-4 text-center text-muted-foreground">正在读取支付信息...</div>
-      ) : session && session.paymentAction !== "renew_payment_session" ? (
+      ) : session
+        && session.paymentAction !== "renew_payment_session"
+        && !timingVisibility.manualReview
+        && (!timingVisibility.terminal || isExpired) ? (
         <div className="space-y-2 rounded-lg bg-slate-50 p-3">
           <DetailRow label="支付网络" value="BNB Smart Chain (BEP20)" />
           <DetailRow label="应付金额" value={`${session.expectedAmount || "—"} USDT`} copyValue={session.expectedAmount || null} strong />
           <DetailRow label="收款地址" value={shortHash(session.receiveAddress)} copyValue={session.receiveAddress} />
-          <DetailRow label="支付时效" value={session.canSubmitLateTransaction ? "已过期" : formatDuration(remainingSeconds)} />
-          <DetailRow label="确认进度" value={`${session.confirmationCount ?? 0} / ${session.requiredConfirmations} 个区块确认`} />
+          {timingVisibility.showCountdown ? <DetailRow label="支付时效" value={formatDuration(remainingSeconds)} /> : null}
+          {timingVisibility.showConfirmationProgress ? (
+            <DetailRow label="确认进度" value={`${session.confirmationCount ?? 0} / ${session.requiredConfirmations} 个区块确认`} />
+          ) : null}
           {session.submittedTxHash ? <DetailRow label="TxHash" value={shortHash(session.submittedTxHash)} copyValue={session.submittedTxHash} /> : null}
           {session.confirmedAmount ? <DetailRow label="实收金额" value={`${session.confirmedAmount} USDT`} /> : null}
         </div>
@@ -326,7 +359,7 @@ export function Bep20OrderPaymentSummary({
         {canSubmitTxHash ? (
           <Button type="button" size="sm" onClick={verifyTxHash} disabled={!txHashValid || verifying}>
             {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {session?.canSubmitLateTransaction ? "提交人工核验" : "提交链上校验"}
+            提交链上校验
           </Button>
         ) : null}
         {canRenew ? (
@@ -339,7 +372,7 @@ export function Bep20OrderPaymentSummary({
               <AlertDialogHeader>
                 <AlertDialogTitle>确认重新生成支付单？</AlertDialogTitle>
                 <AlertDialogDescription className="leading-6">
-                  重新生成后将创建新的 30 分钟支付会话。请按新支付单显示的金额和信息付款。如果你已经完成原支付单转账，请取消并选择“提交原订单支付凭证”，避免重复付款。
+                  重新生成后将创建新的 30 分钟支付会话。请按新支付单显示的金额和信息付款。如果你已经完成原支付单转账，请取消并联系在线客服，避免重复付款。
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -352,12 +385,15 @@ export function Bep20OrderPaymentSummary({
             </AlertDialogContent>
           </AlertDialog>
         ) : null}
-        {canOpenOriginalPayment ? (
-          <Button asChild size="sm" variant="outline">
-            <Link href={fullPaymentHref}>
-              <ExternalLink className="mr-2 h-4 w-4" />
-              提交原订单支付凭证
-            </Link>
+        {isExpired ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            {...({ popovertarget: "support-popover" } as Record<string, string>)}
+          >
+            <Headphones className="mr-2 h-4 w-4" />
+            联系在线客服
           </Button>
         ) : null}
         {submittedTxHashValid ? (

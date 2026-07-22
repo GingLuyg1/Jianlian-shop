@@ -4,7 +4,6 @@ export type Bep20PaymentState =
   | "not_applicable"
   | "continue_active_payment"
   | "renew_payment_session"
-  | "submit_late_transaction"
   | "confirming"
   | "manual_review_pending"
   | "payment_failed"

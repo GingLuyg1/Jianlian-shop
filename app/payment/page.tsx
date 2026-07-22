@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Clock3, Copy, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { Clock3, Copy, ExternalLink, Headphones, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 
+import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { notifyAccountBalanceUpdated } from "@/lib/account/balance-events";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
   getOrderStatusLabel,
@@ -19,6 +21,7 @@ import {
   PAYMENT_STATUS_STYLES,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
+import { getBep20TimingVisibility } from "@/lib/payments/bep20-presentation.mjs";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/i18n/money";
 
@@ -77,13 +80,11 @@ type Bep20ChainSession = {
   paymentAction:
     | "continue_active_payment"
     | "renew_payment_session"
-    | "submit_late_transaction"
     | "view_status"
     | "rejected"
     | "paid"
     | "closed";
   canRenewPaymentSession: boolean;
-  canSubmitLateTransaction: boolean;
   requiredConfirmations: number;
   tokenContract: string;
   pricingStatus: string;
@@ -91,6 +92,13 @@ type Bep20ChainSession = {
   confirmationCount?: number;
   confirmedAmount?: string | null;
   message?: string;
+  overpaymentCredit: {
+    overpaidUsdt: string;
+    exchangeRate: string;
+    creditedCny: string;
+    processedAt: string;
+    settlementSource: "automatic_service" | "manual_admin";
+  } | null;
 };
 
 function formatMoney(value: number | string | null | undefined, currency = "CNY") {
@@ -114,7 +122,7 @@ function getStatusText(status: string) {
 function getBep20SessionStatusText(session: Bep20ChainSession) {
   if (session.paymentAction === "paid") return "支付成功";
   if (session.paymentAction === "rejected") return "审核已结束";
-  if (session.canSubmitLateTransaction) return "已过期，可提交晚到账核验";
+  if (session.status === "expired" || session.paymentAction === "closed") return "已过期";
   if (session.status === "manual_review") return "人工核验中";
   if (session.status === "confirming") return "等待区块确认";
   if (session.status === "verified" || session.status === "completing") return "支付处理中";
@@ -433,6 +441,11 @@ export default function PaymentPage() {
   const [error, setError] = useState("");
   const [nowTick, setNowTick] = useState(0);
   const pollTimer = useRef<number | null>(null);
+  const bep20PollTimer = useRef<number | null>(null);
+  const bep20PollStartedAt = useRef(0);
+  const bep20PollInFlight = useRef(false);
+  const bep20VerifyInFlight = useRef(false);
+  const refreshedOverpaymentCredit = useRef<string | null>(null);
 
   const firstItem = order?.order_items?.[0] ?? null;
   const orderStatus = normalizeOrderStatus(order?.status);
@@ -449,15 +462,17 @@ export default function PaymentPage() {
   const isBep20Order = order?.payment_method === "usdt_bep20";
   const bep20RemainingSeconds = secondsLeft(bep20Session?.expiresAt) + nowTick * 0;
 
-  const loadOrder = useCallback(async () => {
+  const loadOrder = useCallback(async (options: { silent?: boolean } = {}) => {
     if (!orderNo) {
       setError("缺少订单编号");
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setError("");
+    if (!options.silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`, { cache: "no-store" });
       const result = (await response.json().catch(() => null)) as
@@ -473,9 +488,9 @@ export default function PaymentPage() {
       setOrder(result?.order ?? null);
       if (result?.order?.payment_method === "usdt_bep20") setSelectedChannel("usdt_bep20");
     } catch (loadError) {
-      setError(getOrderErrorMessage(loadError, "订单读取失败"));
+      if (!options.silent) setError(getOrderErrorMessage(loadError, "订单读取失败"));
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   }, [orderNo, router]);
 
@@ -535,10 +550,12 @@ export default function PaymentPage() {
     }
   }
 
-  async function loadBep20Session(options: { create?: boolean } = {}) {
-    if (!order?.order_no || creatingSession) return;
-    setCreatingSession(true);
-    setError("");
+  const loadBep20Session = useCallback(async (options: { create?: boolean; silent?: boolean } = {}) => {
+    if (!order?.order_no || creatingSession) return false;
+    if (!options.silent) {
+      setCreatingSession(true);
+      setError("");
+    }
     try {
       const response = options.create
         ? await fetch("/api/payments/bep20/session", {
@@ -550,41 +567,54 @@ export default function PaymentPage() {
       const result = (await response.json().catch(() => null)) as (Bep20ChainSession & { error?: string }) | null;
       if (!response.ok) throw new Error(result?.error ?? "USDT-BEP20 支付单创建失败");
       setBep20Session(result);
-      setTxHash(result?.prefillSubmittedTxHash ? result.submittedTxHash ?? "" : "");
+      if (options.silent) {
+        if (result?.prefillSubmittedTxHash && result.submittedTxHash) {
+          setTxHash((current) => current || result.submittedTxHash || "");
+        }
+      } else {
+        setTxHash(result?.prefillSubmittedTxHash ? result.submittedTxHash ?? "" : "");
+      }
+      return true;
     } catch (sessionError) {
-      setError(getOrderErrorMessage(sessionError, "USDT-BEP20 支付单创建失败"));
+      if (!options.silent) setError(getOrderErrorMessage(sessionError, "USDT-BEP20 支付单创建失败"));
+      return false;
     } finally {
-      setCreatingSession(false);
+      if (!options.silent) setCreatingSession(false);
     }
-  }
+  }, [creatingSession, order?.order_no]);
 
-  async function verifyBep20TxHash() {
-    if (!order?.order_no || verifyingTx) return;
-    setVerifyingTx(true);
-    setError("");
+  const verifyBep20TxHash = useCallback(async (options: { txHash?: string; silent?: boolean } = {}) => {
+    const candidateTxHash = String(options.txHash ?? txHash).trim();
+    if (!order?.order_no || bep20VerifyInFlight.current || !/^0x[0-9a-fA-F]{64}$/.test(candidateTxHash)) return false;
+    bep20VerifyInFlight.current = true;
+    if (!options.silent) {
+      setVerifyingTx(true);
+      setError("");
+    }
     try {
       const response = await fetch("/api/payments/bep20/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           order: order.order_no,
-          tx_hash: txHash,
-          chain_session_id: bep20Session?.canSubmitLateTransaction ? bep20Session.chainSessionId : undefined,
+          tx_hash: candidateTxHash,
         }),
       });
       const result = (await response.json().catch(() => null)) as (Bep20ChainSession & { error?: string }) | null;
       if (!response.ok) throw new Error(result?.error ?? "链上交易校验失败");
       setBep20Session(result);
       if (result?.status === "paid") {
-        await loadOrder();
-        router.push(`/order-success?order=${encodeURIComponent(orderNo)}`);
+        await loadOrder({ silent: true });
       }
+      return true;
     } catch (verifyError) {
-      setError(getOrderErrorMessage(verifyError, "链上交易校验失败"));
+      if (!options.silent) setError(getOrderErrorMessage(verifyError, "链上交易校验失败"));
+      return false;
     } finally {
-      setVerifyingTx(false);
+      bep20VerifyInFlight.current = false;
+      if (!options.silent) setVerifyingTx(false);
     }
-  }
+  }, [loadOrder, order?.order_no, txHash]);
 
   async function queryStatus(sessionNo: string) {
     const response = await fetch(`/api/payments/status/${encodeURIComponent(sessionNo)}`, { cache: "no-store" });
@@ -633,6 +663,77 @@ export default function PaymentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBep20Order, order?.order_no, loading]);
 
+  useEffect(() => {
+    if (!isBep20Order || !order?.order_no || !bep20Session) return;
+    const liveOrderStatus = normalizeOrderStatus(order.status);
+    const livePaymentStatus = normalizePaymentStatus(order.payment_status);
+    if (["delivered", "completed", "expired", "failed", "cancelled"].includes(liveOrderStatus)) return;
+
+    let stopped = false;
+    bep20PollStartedAt.current = Date.now();
+
+    const schedule = () => {
+      if (stopped) return;
+      if (bep20PollTimer.current !== null) window.clearTimeout(bep20PollTimer.current);
+      const elapsed = Date.now() - bep20PollStartedAt.current;
+      const delay = document.hidden ? 15000 : elapsed < 120000 ? 4000 : 10000;
+      bep20PollTimer.current = window.setTimeout(tick, delay);
+    };
+    const tick = async () => {
+      if (stopped) return;
+      if (!document.hidden && !bep20PollInFlight.current) {
+        bep20PollInFlight.current = true;
+        try {
+          const submittedTxHash = String(bep20Session.submittedTxHash ?? "").trim();
+          const shouldRecheckSubmittedTransaction = ["submitted", "confirming"].includes(bep20Session.status)
+            && /^0x[0-9a-fA-F]{64}$/.test(submittedTxHash);
+          if (shouldRecheckSubmittedTransaction) {
+            await verifyBep20TxHash({ txHash: submittedTxHash, silent: true });
+          }
+          await Promise.all([loadOrder({ silent: true }), loadBep20Session({ silent: true })]);
+        } finally {
+          bep20PollInFlight.current = false;
+        }
+      }
+      schedule();
+    };
+
+    const handleVisibilityChange = () => {
+      if (stopped || document.hidden) return;
+      if (bep20PollTimer.current !== null) window.clearTimeout(bep20PollTimer.current);
+      void tick();
+    };
+
+    // Keep polling through waiting, confirmation, manual review, and paid-but-not-delivered states.
+    if (livePaymentStatus !== "paid" || liveOrderStatus !== "delivered") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      schedule();
+    }
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (bep20PollTimer.current !== null) window.clearTimeout(bep20PollTimer.current);
+    };
+  }, [
+    bep20Session?.chainSessionId,
+    bep20Session?.paymentAction,
+    bep20Session?.status,
+    isBep20Order,
+    loadBep20Session,
+    loadOrder,
+    order?.order_no,
+    order?.payment_status,
+    order?.status,
+    verifyBep20TxHash,
+  ]);
+
+  useEffect(() => {
+    const processedAt = bep20Session?.overpaymentCredit?.processedAt ?? null;
+    if (!processedAt || refreshedOverpaymentCredit.current === processedAt) return;
+    refreshedOverpaymentCredit.current = processedAt;
+    notifyAccountBalanceUpdated();
+  }, [bep20Session?.overpaymentCredit?.processedAt]);
+
   async function copyText(value: string) {
     await navigator.clipboard.writeText(value);
   }
@@ -668,7 +769,7 @@ export default function PaymentPage() {
           <Card>
             <CardContent className="space-y-4 p-6 text-center">
               <div className="text-sm text-muted-foreground">订单不存在或无权访问。</div>
-              <Button variant="outline" onClick={loadOrder}>
+              <Button variant="outline" onClick={() => void loadOrder()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 重新加载
               </Button>
@@ -687,13 +788,15 @@ export default function PaymentPage() {
                 {isBep20Order ? (
                   <Bep20PaymentPanel
                     session={bep20Session}
+                    orderStatus={order.status}
+                    paymentStatus={order.payment_status}
                     loading={creatingSession}
                     txHash={txHash}
                     verifying={verifyingTx}
                     remainingSeconds={bep20RemainingSeconds}
                     onCreate={() => loadBep20Session({ create: true })}
                     onTxHashChange={setTxHash}
-                    onVerify={verifyBep20TxHash}
+                    onVerify={() => void verifyBep20TxHash()}
                     onCopy={copyText}
                   />
                 ) : !canPay ? (
@@ -828,6 +931,24 @@ export default function PaymentPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {isBep20Order ? (
+              <Bep20PaymentNoticeCard />
+            ) : null}
+
+            {isBep20Order ? (
+              <SecureOrderDelivery
+                className="lg:col-span-2"
+                orderNo={order.order_no}
+                paymentStatus={order.payment_status}
+                orderStatus={order.status}
+                fulfillmentStatus={order.fulfillment_status}
+                deliveryStatus={order.order_deliveries?.[0]?.delivery_status}
+                deliveryType={order.delivery_type ?? firstItem?.delivery_type}
+                pollUntilDelivered
+                onDelivered={() => loadOrder({ silent: true })}
+              />
+            ) : null}
           </div>
         )}
       </div>
@@ -837,6 +958,8 @@ export default function PaymentPage() {
 
 function Bep20PaymentPanel({
   session,
+  orderStatus,
+  paymentStatus,
   loading,
   txHash,
   verifying,
@@ -847,6 +970,8 @@ function Bep20PaymentPanel({
   onCopy,
 }: {
   session: Bep20ChainSession | null;
+  orderStatus: string | null | undefined;
+  paymentStatus: string | null | undefined;
   loading: boolean;
   txHash: string;
   verifying: boolean;
@@ -857,8 +982,30 @@ function Bep20PaymentPanel({
   onCopy: (value: string) => void;
 }) {
   const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
+  const normalizedOrderStatus = normalizeOrderStatus(orderStatus);
 
   if (!session) {
+    if (["expired", "failed", "cancelled"].includes(normalizedOrderStatus)) {
+      return (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+          <div className="font-semibold">{normalizedOrderStatus === "expired" ? "已过期" : "支付已结束"}</div>
+          <div>
+            {normalizedOrderStatus === "expired"
+              ? "本订单的链上支付会话已过期，请勿继续转账。如您已完成转账，请联系在线客服并提供订单号和 TxHash，由客服人工核验。"
+              : "当前订单不能继续付款，如有疑问请联系在线客服。"}
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            {...({ popovertarget: "support-popover" } as Record<string, string>)}
+          >
+            <Headphones className="mr-2 h-4 w-4" />
+            联系在线客服
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
         <div className="font-semibold">USDT-BEP20 支付暂未准备好</div>
@@ -871,43 +1018,75 @@ function Bep20PaymentPanel({
     );
   }
 
-  const canSubmitTxHash = session.paymentAction === "continue_active_payment" || session.canSubmitLateTransaction;
-  const isLateSubmission = session.canSubmitLateTransaction;
-  const isReviewPending = session.status === "manual_review" && session.paymentAction === "view_status";
+  const canSubmitTxHash = session.paymentAction === "continue_active_payment";
+  const isReviewPending = session.status === "manual_review";
   const isRejected = session.paymentAction === "rejected";
-  const isPaid = session.paymentAction === "paid";
   const isRenewable = session.paymentAction === "renew_payment_session";
+  const normalizedPaymentStatus = normalizePaymentStatus(paymentStatus);
+  const timingVisibility = getBep20TimingVisibility({
+    chainStatus: session.status,
+    paymentAction: session.paymentAction,
+    submittedTxHash: session.submittedTxHash,
+    orderStatus,
+    paymentStatus,
+  });
+  const showTransferInstructions = !timingVisibility.terminal
+    && !timingVisibility.manualReview
+    && !isRejected
+    && !isRenewable;
+  const terminalNotice = normalizedOrderStatus === "cancelled"
+    ? "订单已取消，不能继续付款。"
+    : normalizedOrderStatus === "expired" || session.status === "expired" || session.paymentAction === "closed"
+      ? "本订单的链上支付会话已过期，请勿继续转账。如您已完成转账，请联系在线客服并提供订单号和 TxHash，由客服人工核验。"
+      : normalizedOrderStatus === "failed" || session.status === "payment_failed"
+        ? "支付处理失败，请联系客服核查。"
+        : normalizedPaymentStatus === "paid" ? null : null;
 
   return (
     <div className="space-y-4 rounded-xl border bg-slate-50 p-4">
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-        <div className="font-semibold">仅支持 USDT 通过 BNB Smart Chain（BEP20）转账。</div>
-        <div>请勿通过 ERC20、TRC20、opBNB 或其他网络转账。转错网络或错误代币可能无法自动处理。</div>
-      </div>
-
       {isRenewable ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-          当前没有有效的支付会话。你可以重新生成支付单；如果已按旧支付单完成转账，也可以在下方提交旧交易哈希进行人工核验。
-        </div>
-      ) : isLateSubmission ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-          支付会话已过期。如果你已完成转账，可以提交交易哈希进行人工核验；请不要再次转账。
+          当前没有有效的支付会话。你可以重新生成支付单；如果已按旧支付单完成转账，请勿重复付款，并联系在线客服人工核验。
         </div>
       ) : isReviewPending ? (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
-          已收到链上交易，当前正在人工核验，请勿重复付款。
+          交易已收到，正在人工核验，请勿重复付款。
         </div>
       ) : isRejected ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
           该支付审核已结束，如有疑问请联系客服。
         </div>
-      ) : isPaid ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm leading-6 text-emerald-800">
-          该订单已完成支付。
+      ) : terminalNotice ? (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+          <div>{terminalNotice}</div>
+          {normalizedOrderStatus === "expired" || session.status === "expired" || session.paymentAction === "closed" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              {...({ popovertarget: "support-popover" } as Record<string, string>)}
+            >
+              <Headphones className="mr-2 h-4 w-4" />
+              联系在线客服
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
-      {session.paymentAction !== "renew_payment_session" ? <div className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
+      {session.overpaymentCredit ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm leading-6 text-emerald-900">
+          <div className="font-semibold">支付已完成</div>
+          <div>
+            超额到账 {session.overpaymentCredit.overpaidUsdt} USDT，已按本订单锁定汇率折算为
+            ¥{session.overpaymentCredit.creditedCny} 站内余额。
+          </div>
+          <div className="mt-1 text-xs text-emerald-700">
+            入账时间：{formatDate(session.overpaymentCredit.processedAt)}
+          </div>
+        </div>
+      ) : null}
+
+      {showTransferInstructions ? <div className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
         <div className="rounded-xl bg-white p-3 text-center">
           <LocalAddressQr value={session.receiveAddress} />
           <div className="mt-2 text-xs text-muted-foreground">本地生成，仅包含公开收款地址</div>
@@ -917,13 +1096,15 @@ function Bep20PaymentPanel({
           <Info label="Chain ID" value={String(session.chainId)} />
           <Info label="支付币种" value={session.asset} />
           <Info label="订单金额" value={`${session.orderAmount} ${session.orderCurrency}`} />
-          <Info label="USDT 汇率" value={`${session.exchangeRate} (${session.exchangeRateSource})`} />
-          <Info label="汇率有效期" value={formatDate(session.exchangeRateExpiresAt)} />
-          <Info label="应付金额" value={session.expectedAmount} strong copyable onCopy={() => onCopy(session.expectedAmount)} />
+          <Info label="订单锁定汇率" value={`${session.exchangeRate} (${session.exchangeRateSource})`} />
+          <Info label="汇率锁定有效期" value={formatDate(session.exchangeRateExpiresAt)} />
+          <Info label="锁定应付 USDT" value={session.expectedAmount} strong copyable onCopy={() => onCopy(session.expectedAmount)} />
           <Info label="收款地址" value={session.receiveAddress} copyable onCopy={() => onCopy(session.receiveAddress)} />
-          <Info label="截止时间" value={formatDate(session.expiresAt)} />
-          <Info label="确认数要求" value={`${session.requiredConfirmations} 个区块确认`} />
-          {!isLateSubmission ? (
+          <Info label="支付截止时间" value={formatDate(session.expiresAt)} />
+          {timingVisibility.showConfirmationProgress ? (
+            <Info label="确认进度" value={`${session.confirmationCount ?? 0} / ${session.requiredConfirmations} 个区块确认`} />
+          ) : null}
+          {timingVisibility.showCountdown ? (
             <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-muted-foreground">
               <Clock3 className="h-4 w-4" />
               剩余 {Math.floor(remainingSeconds / 60)} 分 {remainingSeconds % 60} 秒
@@ -932,7 +1113,7 @@ function Bep20PaymentPanel({
         </div>
       </div> : null}
 
-      <div className="space-y-2">
+      {canSubmitTxHash ? <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">交易哈希 TxHash</label>
         <input
           value={txHash}
@@ -941,24 +1122,53 @@ function Bep20PaymentPanel({
           className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-sm outline-none focus:border-primary"
         />
         {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
-      </div>
+      </div> : null}
 
-      {session.message ? (
+      {session.message && !isReviewPending && normalizedPaymentStatus !== "paid" ? (
         <div className="rounded-lg border bg-white px-3 py-2 text-sm text-muted-foreground">{session.message}</div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={onVerify} disabled={!txHashValid || verifying || !canSubmitTxHash}>
+        {canSubmitTxHash ? <Button type="button" onClick={onVerify} disabled={!txHashValid || verifying}>
           {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {isLateSubmission ? "提交晚到账核验" : "提交链上校验"}
-        </Button>
+          提交链上校验
+        </Button> : null}
         {session.canRenewPaymentSession ? <Button type="button" variant="outline" onClick={onCreate} disabled={loading}>
           <RefreshCw className="mr-2 h-4 w-4" />
           重新生成支付单
         </Button> : null}
+        {timingVisibility.hasSubmittedTxHash ? (
+          <Button asChild type="button" variant="outline">
+            <a href={`https://bscscan.com/tx/${session.submittedTxHash}`} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              查看链上交易
+            </a>
+          </Button>
+        ) : null}
         <Badge variant="outline">{getBep20SessionStatusText(session)}</Badge>
       </div>
     </div>
+  );
+}
+
+function Bep20PaymentNoticeCard() {
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">链上支付须知</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
+          <li>仅支持 USDT 通过 BNB Smart Chain（BEP20）转账。</li>
+          <li>请保证收款地址实际到账金额与页面应付金额完全一致。</li>
+          <li>交易所或钱包可能收取提现费、网络费，相关手续费需由付款方另行承担，不能从应付金额中扣除。</li>
+          <li>订单创建时会锁定本单汇率、应付 USDT 和付款期限，请在有效期内完成转账。</li>
+          <li>超额到账部分将在核验后按订单规则转换为站内余额。</li>
+          <li>订单过期后请勿继续转账；如已转账或遇到异常，请联系在线客服并提供订单号和 TxHash。</li>
+          <li>请勿通过 ERC20、TRC20、opBNB 或其他网络付款。</li>
+        </ol>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -20,6 +20,28 @@
 
 ---
 
+## 2026-07-22 — BEP20 支付与超额自动结算发布前总审计
+
+- 保护现场：确认 `main` 与 `origin/main` 同为 `88b64e40b41e26a80218f9b993d1a6f8fc75896a`，无 stash，不 reset/restore/clean/stash；保留全部支付、UI、Migration 与测试未提交改动。
+- 调用链：复核用户 verify、BSC Provider、Transfer 解析、TxHash claim、精确/少付/超额/迟到账分类、付款完成、余额入账、数字交付、用户安全读取与管理员审计。
+- 时间与金额：付款判断改用可信 block timestamp 与最早付款截止时间；汇率 TTL 不参与已冻结订单付款否决；金额分类保持 BigInt/numeric 原始单位。
+- 财务加固：完善未执行的 `20260727_bep20_automatic_overpayment_settlement.sql`，加入余额字段精度 precheck、`numeric(12,2)` 溢出前保护、自动/人工路径 advisory lock 和人工 RPC 兼容定义。
+- 跨业务幂等：新增数据库触发保护，禁止同一 BEP20 TxHash 同时完成订单支付与账户充值；precheck 对既有冲突计数非零时整体失败。
+- 恢复边界：RPC 成功但 HTTP 响应丢失时先读取持久化 disposition/payment session；已提交成功的付款不再被错误降级，交付可安全重试且不重复入账。
+- 前端：终态不再渲染禁用的 TxHash 提交按钮；支付轮询与安全交付轮询增加单定时器清理及标签页恢复可见后的立即刷新。
+- 新增：`docs/audits/production-bep20-automatic-overpayment-readonly-audit.sql` 与 `docs/runbooks/20260727-bep20-automatic-overpayment-rollout.md`。
+- 更新：`docs/PROJECT_STATE.md`、`docs/CURRENT_TASK.md`、`docs/TASK_LOG.md` 以及支付相关回归/单元测试。
+- 未执行：任何 SQL、Migration、RPC、生产 API、订单、付款、审核、交付、环境变量/Vault/Cron 修改、commit、push 或部署。
+
+## 2026-07-22 — 自动超额结算财务风险上限与人工 RPC 收权
+
+- 复用既有私有 `site_settings`，新增两个 null 占位风险 key；没有静默写入建议阈值。数据库自动结算事务严格解析两项 number 配置，缺失/错误使用 `auto_overpayment_limit_unavailable`，任一超限使用 `auto_overpayment_limit_exceeded`，两者都持久化为 `manual_review` 且不触碰订单付款、余额、账变、disposition 或交付。
+- 新增保护触发器和 service-role 配置 RPC；普通 authenticated 不能直接改动两个财务阈值，配置操作还需 active super-admin operator 并写设置日志及管理员审计。
+- 人工超额入账从 Cookie authenticated RPC 改为：先验证 active super-admin，再创建 service-role client；旧三参数 RPC 被未执行的 `20260727` Migration 替换为四参数 service-role-only 签名，原有 chain-session lock、财务幂等、状态校验和审计保留。
+- 未执行：任何 SQL、Migration、RPC、生产 API、阈值配置、订单、付款、审核、入账、交付、环境变量/Vault/Cron 修改、commit、push 或部署。
+
+---
+
 ## 2026-07-18 — 交接文档初始化
 
 - 目标：在不修改业务代码的前提下，建立长期协作规则、项目实际状态、当前生产阶段任务和任务日志。

@@ -3,10 +3,11 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clipboard, ClipboardList, Eye, EyeOff, Search, X } from "lucide-react";
+import { Clipboard, ClipboardList, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
+import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,29 +18,11 @@ import {
   getBep20PaymentAction,
   getBep20PaymentNotice,
   getUserOrderDisplayStatus,
-  normalizeOrderStatus,
-  normalizePaymentStatus,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
-
-type UserDeliveryContent = {
-  id: string;
-  delivery_type: string | null;
-  delivery_status: string | null;
-  content: string | null;
-  masked_content: string | null;
-  delivered_at: string | null;
-  delivery_note: string | null;
-};
-
-type UserDeliveryResponse = {
-  status?: string;
-  deliveries?: UserDeliveryContent[];
-  error?: string;
-};
 
 function formatMoney(value: number | string | null | undefined) {
   return `¥${Number(value ?? 0).toFixed(2)}`;
@@ -56,11 +39,6 @@ function getDeliveryLabel(deliveryType: string | null | undefined) {
   if (deliveryType === "card") return "卡密交付";
   if (deliveryType === "account") return "账号交付";
   return "人工处理";
-}
-
-function maskSecret(value: string) {
-  if (value.length <= 8) return "••••••";
-  return `${value.slice(0, 4)}••••••${value.slice(-4)}`;
 }
 
 export default function MyOrdersPage() {
@@ -595,30 +573,8 @@ function UserOrderDrawer({
   onCopyOrderNo: (orderNo: string) => void;
   onOrderUpdated: (orderNo: string) => Promise<void>;
 }) {
-  const [showDelivery, setShowDelivery] = useState(false);
-  const [secureDeliveries, setSecureDeliveries] = useState<UserDeliveryContent[]>([]);
-  const [deliveryLoading, setDeliveryLoading] = useState(false);
-  const [deliveryError, setDeliveryError] = useState("");
-
-  const loadDelivery = useCallback(async (orderNo: string) => {
-    setDeliveryLoading(true);
-    setDeliveryError("");
-    try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}/delivery`, { cache: "no-store" });
-      const result = (await response.json().catch(() => null)) as UserDeliveryResponse | null;
-      if (!response.ok) throw new Error(result?.error ?? "交付信息加载失败，请刷新后重试");
-      setSecureDeliveries(result?.deliveries ?? []);
-    } catch (error) {
-      setSecureDeliveries([]);
-      setDeliveryError(getOrderErrorMessage(error, "交付信息加载失败，请刷新后重试"));
-    } finally {
-      setDeliveryLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     if (!order) return;
-    setShowDelivery(false);
     const bodyOverflow = document.body.style.overflow;
     const htmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
@@ -634,38 +590,15 @@ function UserOrderDrawer({
     };
   }, [onClose, order]);
 
-  useEffect(() => {
-    setSecureDeliveries([]);
-    setDeliveryError("");
-    if (!order || normalizePaymentStatus(order.payment_status) !== "paid") return;
-    void loadDelivery(order.order_no);
-  }, [loadDelivery, order?.order_no, order?.payment_status, order?.updated_at]);
-
   if (!order) return null;
 
-  const orderStatus = normalizeOrderStatus(order.status);
-  const paymentStatus = normalizePaymentStatus(order.payment_status);
   const paymentAction = getBep20PaymentAction(order);
   const paymentNotice = getBep20PaymentNotice(order);
   const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
   const displayStatus = getUserOrderDisplayStatus(order);
   const firstItem = order.order_items?.[0];
   const isShippingOrder = normalizeOrderItemDeliveryType(order.delivery_type ?? firstItem?.delivery_type) === "physical";
-  const secureDelivery = secureDeliveries.find((item) => item.delivery_status === "delivered") ?? secureDeliveries[0];
   const delivery = order.order_deliveries?.find((item) => item.delivery_status === "delivered") ?? order.order_deliveries?.[0];
-  const deliveryContent = secureDelivery?.content ?? "";
-  const delivered = order.fulfillment_status === "delivered"
-    || orderStatus === "delivered"
-    || delivery?.delivery_status === "delivered"
-    || secureDelivery?.delivery_status === "delivered";
-  const cancelled = orderStatus === "cancelled";
-  const failed = orderStatus === "failed" || delivery?.delivery_status === "failed";
-
-  async function copyDeliveryContent() {
-    if (!deliveryContent) return;
-    await navigator.clipboard.writeText(deliveryContent);
-    toast.success("交付内容已复制");
-  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/30" onClick={onClose}>
@@ -754,63 +687,17 @@ function UserOrderDrawer({
             compact
             onUpdated={async () => {
               await onOrderUpdated(order.order_no);
-              await loadDelivery(order.order_no);
             }}
           />
 
-          <section className="rounded-xl border p-4 text-sm">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="font-semibold">交付信息</div>
-              {deliveryContent ? (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowDelivery((value) => !value)}>
-                    {showDelivery ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                    {showDelivery ? "隐藏完整内容" : "显示完整内容"}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={copyDeliveryContent}>
-                    <Clipboard className="mr-2 h-4 w-4" />
-                    复制
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-            {cancelled ? (
-              <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">
-                订单已取消，不显示交付内容。
-              </div>
-            ) : failed ? (
-              <div className="rounded-lg bg-amber-50 p-3 text-amber-700">
-                交付处理中，请联系管理员。
-              </div>
-            ) : deliveryError ? (
-              <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-red-700">
-                交付信息加载失败，请刷新后重试
-              </div>
-            ) : deliveryLoading ? (
-              <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">正在读取交付信息...</div>
-            ) : delivered ? (
-              <div className="rounded-lg bg-slate-50 p-3 leading-6">
-                {deliveryContent ? (
-                  <div className="whitespace-pre-wrap break-words">
-                    {showDelivery ? deliveryContent : secureDelivery?.masked_content || maskSecret(deliveryContent)}
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground">交付已完成，暂无可显示的交付正文。</div>
-                )}
-                <div className="mt-2 text-xs text-muted-foreground">
-                  交付时间：{formatDate(secureDelivery?.delivered_at ?? delivery?.delivered_at ?? delivery?.updated_at)}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">
-                {paymentStatus !== "paid"
-                  ? "等待支付。"
-                  : ["manual", "manual_delivery"].includes(String(order.delivery_type ?? firstItem?.delivery_type ?? ""))
-                    ? orderStatus === "processing" ? "人工处理中。" : "待人工处理。"
-                    : orderStatus === "processing" ? "交付处理中。" : "等待交付。"}
-              </div>
-            )}
-          </section>
+          <SecureOrderDelivery
+            orderNo={order.order_no}
+            paymentStatus={order.payment_status}
+            orderStatus={order.status}
+            fulfillmentStatus={order.fulfillment_status}
+            deliveryStatus={delivery?.delivery_status}
+            deliveryType={order.delivery_type ?? firstItem?.delivery_type}
+          />
         </div>
       </aside>
     </div>

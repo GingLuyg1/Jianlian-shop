@@ -11,6 +11,7 @@ import {
   normalizeBep20TxHash,
   shouldPrefillBep20TxHash,
 } from "@/lib/payments/bep20-chain-logic.mjs";
+import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
 import { completePayment } from "@/lib/payments/complete-payment-service";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -63,6 +64,7 @@ type OrderRow = {
   status: string;
   payment_status: string | null;
   payment_method: string | null;
+  payment_expires_at: string | null;
   total_amount: number | string;
   currency: string | null;
 };
@@ -175,16 +177,23 @@ export type Bep20SessionResponse = {
   paymentAction:
     | "continue_active_payment"
     | "renew_payment_session"
-    | "submit_late_transaction"
     | "view_status"
     | "rejected"
     | "paid"
     | "closed";
   canRenewPaymentSession: boolean;
-  canSubmitLateTransaction: boolean;
   requiredConfirmations: number;
   tokenContract: string;
   pricingStatus: string;
+  overpaymentCredit: Bep20OverpaymentCredit | null;
+};
+
+export type Bep20OverpaymentCredit = {
+  overpaidUsdt: string;
+  exchangeRate: string;
+  creditedCny: string;
+  processedAt: string;
+  settlementSource: "automatic_service" | "manual_admin";
 };
 
 export type Bep20VerifyResponse = Bep20SessionResponse & {
@@ -351,17 +360,19 @@ export async function getBep20PaymentSession(orderNo: string, userId: string): P
   const order = await loadOwnedOrder(service, orderNo, userId);
   const session = await getLatestChainSession(service, order.id);
   if (!session) return toBep20SessionResponse(order.order_no, null, config, order);
-  return toBep20SessionResponse(order.order_no, session, config, order);
+  const overpaymentCredit = await loadOverpaymentCredit(service, session.id, order.id);
+  return toBep20SessionResponse(order.order_no, session, config, order, overpaymentCredit);
 }
 
-export async function verifyBep20TxHash(input: { orderNo: string; txHash: string; userId: string; chainSessionId?: string | null }): Promise<Bep20VerifyResponse> {
+export async function verifyBep20TxHash(input: { orderNo: string; txHash: string; userId: string }): Promise<Bep20VerifyResponse> {
   const service = requiredServiceClient();
+  const order = await loadOwnedOrder(service, input.orderNo, input.userId);
+  assertUserOrderAcceptsTxHash(order);
   const config = readBep20Config();
   await assertConfiguredTokenDecimals(config);
   const txHash = normalizeTxHash(input.txHash);
-  const order = await loadOwnedOrder(service, input.orderNo, input.userId);
-  ensureOrderAllowsBep20(order, { allowExpiredOrder: Boolean(input.chainSessionId) });
-  return verifyBep20TxHashForOrder({ service, config, order, txHash, allowRecovery: false, chainSessionId: input.chainSessionId ?? null });
+  ensureOrderAllowsBep20(order);
+  return verifyBep20TxHashForOrder({ service, config, order, txHash, allowRecovery: false });
 }
 
 export async function recheckAdminBep20ChainPaymentSession(sessionId: string, adminId?: string | null, reason?: string | null): Promise<Bep20VerifyResponse> {
@@ -635,12 +646,13 @@ async function verifyBep20TxHashForOrder(input: {
   if (session.order_id !== order.id || session.payment_method !== "usdt_bep20") {
     throw new Bep20PaymentError("CHAIN_SESSION_NOT_FOUND", "链上支付单不存在或无权访问。", 404);
   }
-  if (chainSessionId && !allowRecovery && session.status !== "expired") {
-    throw new Bep20PaymentError("CHAIN_SESSION_NOT_LATE_SUBMITTABLE", "当前支付单状态不允许提交晚到账交易。", 409);
-  }
+  const paymentSessionExpiresAt = !allowRecovery
+    ? await assertUserSessionAcceptsTxHash(service, session, txHash)
+    : await loadPaymentSessionExpiresAt(service, session.payment_session_id);
   if (session.status === "paid") {
+    const overpaymentCredit = await loadOverpaymentCredit(service, session.id, order.id);
     return {
-      ...toBep20SessionResponse(order.order_no, session, config),
+      ...toBep20SessionResponse(order.order_no, session, config, undefined, overpaymentCredit),
       txHash,
       confirmationCount: 0,
       confirmedAmount: session.confirmed_amount ? String(session.confirmed_amount) : null,
@@ -718,8 +730,9 @@ async function verifyBep20TxHashForOrder(input: {
     confirmations: transfer.confirmations,
     requiredConfirmations: config.requiredConfirmations,
     transferTimestamp: transfer.blockTimestamp,
+    orderPaymentExpiresAt: order.payment_expires_at,
+    paymentSessionExpiresAt,
     sessionExpiresAt: session.expires_at,
-    exchangeRateExpiresAt: session.exchange_rate_expires_at,
   });
   const status = session.status === "expired" && !allowRecovery
     ? "manual_review"
@@ -734,7 +747,10 @@ async function verifyBep20TxHashForOrder(input: {
     throw new Bep20PaymentError("TX_HASH_USED", "该链上交易已被其他订单使用，不能重复提交。", 409);
   }
 
-  const effectiveStatus = status === "manual_review" && allowLateApproval ? "verified" : status;
+  const approvedManualCompletion = allowLateApproval && session.manual_review_decision === "approved";
+  const effectiveStatus = approvedManualCompletion && ["manual_review", "overpaid"].includes(status)
+    ? "verified"
+    : status;
   const patch: Record<string, unknown> = {
     status: effectiveStatus,
     submitted_tx_hash: txHash,
@@ -749,9 +765,9 @@ async function verifyBep20TxHashForOrder(input: {
       : null,
     manual_review_decision: status === "manual_review" ? "pending" : null,
   };
-  let updated: ChainSessionRow;
+  let updated: ChainSessionRow = session;
 
-  if (effectiveStatus === "verified" && !session.payment_session_id) {
+  if (["verified", "overpaid"].includes(effectiveStatus) && !session.payment_session_id) {
     throw new Bep20PaymentError(
       "BEP20_PAYMENT_SESSION_LINK_MISSING",
       "链上支付已核验，但支付会话关联缺失，请管理员先修复支付记录关联。",
@@ -759,7 +775,67 @@ async function verifyBep20TxHashForOrder(input: {
     );
   }
 
-  if (effectiveStatus === "verified" && session.payment_session_id) {
+  let overpaymentCredit: Bep20OverpaymentCredit | null = null;
+
+  if (effectiveStatus === "overpaid" && session.payment_session_id) {
+    // Persist the verified evidence first; the following RPC atomically owns payment and credit.
+    await updateNonFinalChainSession(service, session.id, patch);
+    let settlement: Awaited<ReturnType<typeof settleAutomaticOverpayment>>;
+    try {
+      settlement = await settleAutomaticOverpayment(service, {
+        sessionId: session.id,
+        orderId: order.id,
+        txHash,
+        requiredConfirmations: config.requiredConfirmations,
+      });
+    } catch (error) {
+      // The database may have committed even if its HTTP response was lost.
+      // Recover from the durable disposition before declaring the attempt failed.
+      const recoveredCredit = await loadOverpaymentCredit(service, session.id, order.id).catch(() => null);
+      if (recoveredCredit) {
+        settlement = {
+          businessId: order.id,
+          idempotent: true,
+          manualReviewReason: null,
+          overpaymentCredit: recoveredCredit,
+        };
+      } else {
+        await updateNonFinalChainSession(service, session.id, {
+          status: "payment_failed",
+          submitted_tx_hash: txHash,
+          confirmed_amount: transfer.normalizedAmount,
+          confirmed_raw_amount: transfer.rawAmount.toString(),
+          last_checked_at: new Date().toISOString(),
+          failure_reason: "超额支付原子结算失败，等待管理员安全重试。",
+          completion_error: getBep20ErrorMessage(error),
+        });
+        throw new Bep20PaymentError(
+          "BEP20_OVERPAYMENT_SETTLEMENT_FAILED",
+          "链上超额付款已核验，但余额入账与订单完成未能原子提交，请稍后重试或联系客服。",
+          503
+        );
+      }
+    }
+    if (settlement.manualReviewReason) {
+      // The database owns the risk decision. Missing/invalid limits and values
+      // above either limit persist a manual-review state without touching the
+      // order, wallet ledger, disposition, or delivery inventory.
+      updated = await getChainSessionById(service, session.id);
+    } else {
+      overpaymentCredit = settlement.overpaymentCredit;
+      try {
+        await deliverDigitalOrder(service, settlement.businessId, "callback");
+      } catch (deliveryError) {
+        const deliveryMessage = getDeliveryErrorMessage(deliveryError, "自动发货失败，等待安全重试");
+        await service
+          .from("payment_sessions")
+          .update({ last_error: deliveryMessage })
+          .eq("id", session.payment_session_id);
+      }
+      // A post-settlement read failure must never downgrade a paid and credited session.
+      updated = await getChainSessionById(service, session.id);
+    }
+  } else if (effectiveStatus === "verified" && session.payment_session_id) {
     const completion = await preparePaymentCompletion(service, {
       sessionId: session.id,
       txHash,
@@ -770,6 +846,7 @@ async function verifyBep20TxHashForOrder(input: {
     });
     if (completion.result === "acquired" && completion.attemptId) {
       const completionInput = createBep20CompletionInput(decimalString(session.expected_amount), txHash, transfer.logIndex);
+      let completionFinished = false;
       try {
         await completePayment(
           {
@@ -783,11 +860,27 @@ async function verifyBep20TxHashForOrder(input: {
           service
         );
       } catch (error) {
-        await finishPaymentCompletion(service, session.id, completion.attemptId, "payment_failed", getBep20ErrorMessage(error), reviewAttemptId);
-        throw new Bep20PaymentError("BEP20_PAYMENT_COMPLETION_FAILED", "链上交易已核验，但订单支付完成失败，可由管理员安全重试。", 503);
+        // Treat a durable paid payment session as a lost response, not a failed
+        // payment. This keeps the chain state aligned and safely retries delivery.
+        if (await isPaymentSessionPaid(service, session.payment_session_id)) {
+          updated = await finishPaymentCompletion(service, session.id, completion.attemptId, "paid", null, reviewAttemptId);
+          completionFinished = true;
+          await updateClaimedTransactionStatus(service, config.chainId, txHash, order.id, "paid");
+          try {
+            await deliverDigitalOrder(service, order.id, "callback");
+          } catch (deliveryError) {
+            const deliveryMessage = getDeliveryErrorMessage(deliveryError, "自动发货失败，等待安全重试");
+            await service.from("payment_sessions").update({ last_error: deliveryMessage }).eq("id", session.payment_session_id);
+          }
+        } else {
+          await finishPaymentCompletion(service, session.id, completion.attemptId, "payment_failed", getBep20ErrorMessage(error), reviewAttemptId);
+          throw new Bep20PaymentError("BEP20_PAYMENT_COMPLETION_FAILED", "链上交易已核验，但订单支付完成失败，可由管理员安全重试。", 503);
+        }
       }
-      updated = await finishPaymentCompletion(service, session.id, completion.attemptId, "paid", null, reviewAttemptId);
-      await updateClaimedTransactionStatus(service, config.chainId, txHash, order.id, "paid");
+      if (!completionFinished) {
+        updated = await finishPaymentCompletion(service, session.id, completion.attemptId, "paid", null, reviewAttemptId);
+        await updateClaimedTransactionStatus(service, config.chainId, txHash, order.id, "paid");
+      }
     } else {
       updated = await getChainSessionById(service, session.id);
     }
@@ -796,11 +889,13 @@ async function verifyBep20TxHashForOrder(input: {
   }
 
   return {
-    ...toBep20SessionResponse(order.order_no, updated, config),
+    ...toBep20SessionResponse(order.order_no, updated, config, undefined, overpaymentCredit),
     txHash,
     confirmationCount: transfer.confirmations,
     confirmedAmount: transfer.normalizedAmount,
-    message: statusMessage(updated.status || effectiveStatus),
+    message: overpaymentCredit
+      ? `支付已完成。超额到账 ${overpaymentCredit.overpaidUsdt} USDT，已按本订单锁定汇率折算为 ¥${overpaymentCredit.creditedCny} 站内余额。`
+      : statusMessage(updated.status || effectiveStatus),
   };
 }
 
@@ -965,7 +1060,7 @@ function normalizeTxHash(value: unknown) {
 async function loadOwnedOrder(service: SupabaseClient, orderNo: string, userId: string): Promise<OrderRow> {
   const { data, error } = await service
     .from("orders")
-    .select("id,order_no,user_id,status,payment_status,payment_method,total_amount,currency")
+    .select("id,order_no,user_id,status,payment_status,payment_method,payment_expires_at,total_amount,currency")
     .eq("order_no", orderNo.trim())
     .maybeSingle();
   if (error) throw error;
@@ -980,6 +1075,54 @@ function ensureOrderAllowsBep20(order: OrderRow, options: { allowExpiredOrder?: 
       || (order.status === "expired" && !options.allowExpiredOrder)) {
     throw new Bep20PaymentError("ORDER_STATUS_INVALID", "当前订单状态不允许链上支付。", 400);
   }
+}
+
+const USER_EXPIRED_PAYMENT_MESSAGE = "支付会话已过期。如您已完成链上转账，请联系客服并提供订单号和交易哈希。";
+
+function assertUserOrderAcceptsTxHash(order: OrderRow) {
+  if (
+    order.payment_status === "failed"
+    || ["expired", "failed", "cancelled", "closed", "refunded"].includes(order.status)
+  ) {
+    throw new Bep20PaymentError("PAYMENT_SESSION_EXPIRED", USER_EXPIRED_PAYMENT_MESSAGE, 410);
+  }
+}
+
+async function assertUserSessionAcceptsTxHash(service: SupabaseClient, session: ChainSessionRow, txHash: string) {
+  if (["expired", "failed", "cancelled"].includes(session.status)) {
+    throw new Bep20PaymentError("PAYMENT_SESSION_EXPIRED", USER_EXPIRED_PAYMENT_MESSAGE, 410);
+  }
+
+  const continuesSubmittedTransaction = ["submitted", "confirming"].includes(session.status)
+    && String(session.submitted_tx_hash ?? "").trim().toLowerCase() === txHash;
+
+  if (Date.parse(session.expires_at) <= Date.now() && !continuesSubmittedTransaction) {
+    throw new Bep20PaymentError("PAYMENT_SESSION_EXPIRED", USER_EXPIRED_PAYMENT_MESSAGE, 410);
+  }
+
+  if (!session.payment_session_id) return null;
+  const { data, error } = await service
+    .from("payment_sessions")
+    .select("status,expires_at")
+    .eq("id", session.payment_session_id)
+    .maybeSingle();
+  if (error) throw error;
+  const status = String(data?.status ?? "").trim();
+  if (["expired", "failed", "cancelled", "closed"].includes(status) && !continuesSubmittedTransaction) {
+    throw new Bep20PaymentError("PAYMENT_SESSION_EXPIRED", USER_EXPIRED_PAYMENT_MESSAGE, 410);
+  }
+  return typeof data?.expires_at === "string" ? data.expires_at : null;
+}
+
+async function loadPaymentSessionExpiresAt(service: SupabaseClient, paymentSessionId: string | null) {
+  if (!paymentSessionId) return null;
+  const { data, error } = await service
+    .from("payment_sessions")
+    .select("expires_at")
+    .eq("id", paymentSessionId)
+    .maybeSingle();
+  if (error) throw error;
+  return typeof data?.expires_at === "string" ? data.expires_at : null;
 }
 
 async function getReusableChainSession(service: SupabaseClient, orderId: string) {
@@ -1224,6 +1367,7 @@ async function loadReceipt(config: Bep20Config, txHash: string) {
 
 async function findUsdtTransfer(config: Bep20Config, receipt: TransactionReceipt, txHash: string): Promise<ParsedTransfer | null> {
   const logs = Array.isArray(receipt.logs) ? receipt.logs : [];
+  const matchingTransfers: ParsedTransfer[] = [];
   const blockNumber = receipt.blockNumber ? BigInt(receipt.blockNumber) : BigInt(0);
   if (!receipt.blockNumber || blockNumber <= BigInt(0)) {
     throw new Bep20PaymentError("BSC_BLOCK_NUMBER_INVALID", "链上交易缺少有效区块号。", 502);
@@ -1247,7 +1391,7 @@ async function findUsdtTransfer(config: Bep20Config, receipt: TransactionReceipt
     const fromAddress = topicToAddress(topics[1]);
     const rawAmount = BigInt(log.data ?? "0x0");
     const logIndex = Number.parseInt(String(log.logIndex ?? "0x0"), 16);
-    return {
+    matchingTransfers.push({
       txHash,
       logIndex,
       blockNumber,
@@ -1259,9 +1403,16 @@ async function findUsdtTransfer(config: Bep20Config, receipt: TransactionReceipt
       normalizedAmount: rawToDecimal(rawAmount, config.tokenDecimals),
       confirmations,
       blockTimestamp,
-    };
+    });
   }
-  return null;
+  if (matchingTransfers.length > 1) {
+    throw new Bep20PaymentError(
+      "BEP20_TRANSFER_AMBIGUOUS",
+      "该交易包含多笔匹配的 USDT-BEP20 转账，请联系客服人工核验。",
+      409
+    );
+  }
+  return matchingTransfers[0] ?? null;
 }
 
 function topicToAddress(topic: unknown) {
@@ -1387,7 +1538,23 @@ async function getChainSessionById(service: SupabaseClient, sessionId: string) {
   return data as ChainSessionRow;
 }
 
-function toBep20SessionResponse(orderNo: string, session: ChainSessionRow | null, config: Bep20Config, order?: OrderRow): Bep20SessionResponse {
+async function isPaymentSessionPaid(service: SupabaseClient, paymentSessionId: string) {
+  const { data, error } = await service
+    .from("payment_sessions")
+    .select("status")
+    .eq("id", paymentSessionId)
+    .maybeSingle();
+  if (error) return false;
+  return data?.status === "paid";
+}
+
+function toBep20SessionResponse(
+  orderNo: string,
+  session: ChainSessionRow | null,
+  config: Bep20Config,
+  order?: OrderRow,
+  overpaymentCredit: Bep20OverpaymentCredit | null = null
+): Bep20SessionResponse {
   if (!session) {
     return {
       chainSessionId: null,
@@ -1410,10 +1577,10 @@ function toBep20SessionResponse(orderNo: string, session: ChainSessionRow | null
       prefillSubmittedTxHash: false,
       paymentAction: "renew_payment_session",
       canRenewPaymentSession: Boolean(order && order.status === "pending_payment" && order.payment_status !== "paid"),
-      canSubmitLateTransaction: false,
       requiredConfirmations: config.requiredConfirmations,
       tokenContract: config.tokenContract,
       pricingStatus: "not_frozen",
+      overpaymentCredit: null,
     };
   }
 
@@ -1445,17 +1612,82 @@ function toBep20SessionResponse(orderNo: string, session: ChainSessionRow | null
     canRenewPaymentSession: paymentAction === "renew_payment_session"
       && order?.status === "pending_payment"
       && order.payment_status !== "paid",
-    canSubmitLateTransaction: session.status === "expired" && session.manual_review_decision !== "rejected",
     requiredConfirmations: config.requiredConfirmations,
     tokenContract: String(session.token_contract),
     pricingStatus: String(session.pricing_status || "frozen"),
+    overpaymentCredit,
+  };
+}
+
+async function loadOverpaymentCredit(
+  service: SupabaseClient,
+  chainSessionId: string,
+  orderId: string
+): Promise<Bep20OverpaymentCredit | null> {
+  const { data, error } = await service
+    .from("bep20_overpayment_dispositions")
+    .select("order_id,overpaid_usdt,exchange_rate,credited_cny,processed_at,settlement_source")
+    .eq("chain_session_id", chainSessionId)
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    overpaidUsdt: decimalString(data.overpaid_usdt),
+    exchangeRate: decimalString(data.exchange_rate),
+    creditedCny: decimalString(data.credited_cny),
+    processedAt: String(data.processed_at),
+    settlementSource: data.settlement_source === "automatic_service" ? "automatic_service" : "manual_admin",
+  };
+}
+
+async function settleAutomaticOverpayment(
+  service: SupabaseClient,
+  input: { sessionId: string; orderId: string; txHash: string; requiredConfirmations: number }
+) {
+  const { data, error } = await service.rpc("settle_bep20_automatic_overpayment", {
+    p_session_id: input.sessionId,
+    p_tx_hash: input.txHash,
+    p_required_confirmations: input.requiredConfirmations,
+    p_request_id: randomUUID(),
+  });
+  if (error) throw error;
+  const row = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const result = String(row.result ?? "");
+  const businessId = String(row.businessId ?? "");
+  if (result === "manual_review" && businessId === input.orderId) {
+    const reasonCode = String(row.reason_code ?? "");
+    if (!["auto_overpayment_limit_unavailable", "auto_overpayment_limit_exceeded"].includes(reasonCode)) {
+      throw new Bep20PaymentError("BEP20_OVERPAYMENT_RESULT_INVALID", "超额支付风险判定结果无效。", 500);
+    }
+    return {
+      businessId,
+      idempotent: false,
+      overpaymentCredit: null,
+      manualReviewReason: reasonCode,
+    };
+  }
+  if (!["settled", "already_settled"].includes(result) || businessId !== input.orderId) {
+    throw new Bep20PaymentError("BEP20_OVERPAYMENT_RESULT_INVALID", "超额支付原子结算结果无效。", 500);
+  }
+  return {
+    businessId,
+    idempotent: row.idempotent === true,
+    manualReviewReason: null,
+    overpaymentCredit: {
+      overpaidUsdt: decimalString(row.overpaid_usdt),
+      exchangeRate: decimalString(row.exchange_rate),
+      creditedCny: decimalString(row.credited_cny),
+      processedAt: String(row.processed_at ?? ""),
+      settlementSource: row.settlement_source === "manual_admin" ? "manual_admin" : "automatic_service",
+    } satisfies Bep20OverpaymentCredit,
   };
 }
 
 function getBep20UserPaymentAction(session: ChainSessionRow): Bep20SessionResponse["paymentAction"] {
   if (session.status === "paid") return "paid";
   if (session.manual_review_decision === "rejected") return "rejected";
-  if (session.status === "expired") return "submit_late_transaction";
+  if (session.status === "expired") return "closed";
   if (["manual_review", "confirming", "verified", "completing", "payment_failed", "underpaid"].includes(session.status)) {
     return "view_status";
   }

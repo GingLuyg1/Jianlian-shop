@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getAuditRequestId, writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,16 @@ export async function POST(request: Request, { params }: RouteContext) {
   const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
 
+  // Authentication and super-admin authorization must complete with the
+  // cookie client before any service-role capability is acquired.
+  const service = getSupabaseServiceRoleClient();
+  if (!service) {
+    return NextResponse.json(
+      { success: false, error: { code: "SERVICE_ROLE_NOT_CONFIGURED", message: "服务端数据库权限未配置。" }, request_id: requestId },
+      { status: 503 },
+    );
+  }
+
   const body = (await request.json().catch(() => null)) as { reason?: unknown } | null;
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
   if (!reason || reason.length > 500) {
@@ -56,10 +67,11 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   try {
-    const { data, error } = await admin.supabase.rpc("credit_bep20_overpayment_to_wallet", {
+    const { data, error } = await service.rpc("credit_bep20_overpayment_to_wallet", {
       p_payment_id: params.paymentId,
       p_reason: reason,
       p_request_id: requestId,
+      p_operator_user_id: admin.user.id,
     });
     if (error) throw error;
 

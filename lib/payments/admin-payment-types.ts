@@ -142,6 +142,7 @@ export type AdminBep20OverpaymentDisposition = {
   creditedCny: string;
   processedAt: string;
   reason: string;
+  settlementSource: "automatic_service" | "manual_admin";
 };
 
 export type AdminBep20OverpaymentWallet = {

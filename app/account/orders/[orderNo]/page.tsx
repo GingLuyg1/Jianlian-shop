@@ -1,12 +1,13 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Clipboard, Eye, EyeOff, RefreshCcw } from "lucide-react";
+import { ArrowLeft, Clipboard, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
+import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { OrderRefundPanel } from "@/components/refunds/OrderRefundPanel";
 import { Badge } from "@/components/ui/badge";
@@ -18,21 +19,10 @@ import {
   getBep20PaymentAction,
   getBep20PaymentNotice,
   getUserOrderDisplayStatus,
-  normalizeOrderStatus,
   normalizePaymentStatus,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
-
-type DeliveryContent = {
-  id: string;
-  delivery_type: string | null;
-  delivery_status: string | null;
-  content: string | null;
-  masked_content: string | null;
-  delivered_at: string | null;
-  delivery_note: string | null;
-};
 
 type OrderDetailResponse = {
   order?: OrderRecord;
@@ -44,12 +34,6 @@ type OrderActionResponse = {
   error?: string | { message?: string | null } | null;
   message?: string | null;
   code?: string | null;
-};
-
-type DeliveryResponse = {
-  status?: string;
-  deliveries?: DeliveryContent[];
-  error?: string;
 };
 
 function formatMoney(value: number | string | null | undefined, currency = "CNY") {
@@ -80,11 +64,6 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
-  const [deliveryLoading, setDeliveryLoading] = useState(false);
-  const [deliveryError, setDeliveryError] = useState<string | null>(null);
-  const [deliveries, setDeliveries] = useState<DeliveryContent[]>([]);
-  const [deliveryRequested, setDeliveryRequested] = useState(false);
-  const [visibleDeliveryIds, setVisibleDeliveryIds] = useState<Record<string, boolean>>({});
 
   const loadOrder = useCallback(async () => {
     setLoading(true);
@@ -108,33 +87,12 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
     void loadOrder();
   }, [loadOrder]);
 
-  const mergedDeliveries = useMemo(() => {
-    if (deliveries.length) return deliveries;
-    const map = new Map<string, DeliveryContent>();
-    (order?.order_deliveries ?? []).forEach((delivery) => {
-      map.set(delivery.id, {
-        id: delivery.id,
-        delivery_type: delivery.delivery_type ?? null,
-        delivery_status: delivery.delivery_status ?? null,
-        content: null,
-        masked_content: delivery.delivery_content ? "••••••••" : null,
-        delivered_at: delivery.delivered_at ?? null,
-        delivery_note: delivery.delivery_note ?? null,
-      });
-    });
-    return Array.from(map.values());
-  }, [deliveries, order?.order_deliveries]);
-
-  const orderStatus = normalizeOrderStatus(order?.status);
   const paymentStatus = normalizePaymentStatus(order?.payment_status);
   const canCancel = order ? canUserCancelOrder(order.status) && paymentStatus === "unpaid" : false;
   const paymentAction = order ? getBep20PaymentAction(order) : null;
   const paymentNotice = order ? getBep20PaymentNotice(order) : null;
   const isBep20Order = String(order?.payment_method ?? "").toLowerCase() === "usdt_bep20";
   const displayStatus = order ? getUserOrderDisplayStatus(order) : null;
-  const delivered = order?.fulfillment_status === "delivered"
-    || orderStatus === "delivered"
-    || mergedDeliveries.some((delivery) => delivery.delivery_status === "delivered");
 
   async function cancelOrder() {
     if (!order || !canCancel || canceling) return;
@@ -161,50 +119,11 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
     }
   }
 
-  const fetchDeliveryContent = useCallback(async () => {
-    if (!order || deliveryLoading) return;
-    setDeliveryLoading(true);
-    setDeliveryError(null);
-    setDeliveryRequested(true);
-    try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(order.order_no)}/delivery`, { cache: "no-store" });
-      const data = (await response.json().catch(() => ({}))) as DeliveryResponse;
-      if (!response.ok) {
-        throw new Error(data.error || "交付内容加载失败");
-      }
-      setDeliveries(data.deliveries ?? []);
-      if (!data.deliveries?.length) {
-        toast.info(data.status === "processing" ? "订单正在处理，请稍后查看" : "暂无交付内容");
-      }
-    } catch (err) {
-      const message = "交付信息加载失败，请刷新后重试";
-      setDeliveryError(message);
-      toast.error(message);
-    } finally {
-      setDeliveryLoading(false);
-    }
-  }, [deliveryLoading, order]);
-
-  useEffect(() => {
-    if (!order || deliveryRequested || paymentStatus !== "paid" || !delivered) return;
-    void fetchDeliveryContent();
-  }, [delivered, deliveryRequested, fetchDeliveryContent, order, paymentStatus]);
-
   async function copyOrderNo() {
     if (!order) return;
     try {
       await navigator.clipboard.writeText(order.order_no);
       toast.success("订单编号已复制");
-    } catch {
-      toast.error("复制失败，请手动复制");
-    }
-  }
-
-  async function copyDeliveryContent(content: string | null) {
-    if (!content) return;
-    try {
-      await navigator.clipboard.writeText(content);
-      toast.success("交付内容已复制");
     } catch {
       toast.error("复制失败，请手动复制");
     }
@@ -305,72 +224,14 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
 
                 <Bep20OrderPaymentSummary order={order} onUpdated={loadOrder} />
 
-                <Card className="border-orange-100 bg-white">
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <CardTitle>数字交付</CardTitle>
-                      <Button size="sm" onClick={fetchDeliveryContent} disabled={deliveryLoading || paymentStatus !== "paid"}>
-                        {deliveryLoading ? "加载中..." : "查看交付内容"}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {paymentStatus !== "paid" ? (
-                      <div className="rounded-xl border border-dashed border-orange-200 p-8 text-center text-sm text-muted-foreground">
-                        订单支付完成后可查看交付内容。
-                      </div>
-                    ) : deliveryError ? (
-                      <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">{deliveryError}</div>
-                    ) : mergedDeliveries.length ? (
-                      mergedDeliveries.map((delivery) => {
-                        const visible = visibleDeliveryIds[delivery.id];
-                        const displayContent = visible ? delivery.content || delivery.masked_content || "—" : delivery.masked_content || "••••••••";
-                        return (
-                          <div key={delivery.id} className="rounded-xl border border-orange-100 bg-orange-50/20 p-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <div className="font-medium text-slate-900">{delivery.delivery_type || "交付内容"}</div>
-                                <div className="mt-1 text-sm text-muted-foreground">交付时间：{formatDate(delivery.delivered_at)}</div>
-                              </div>
-                              <Badge variant="outline">
-                                {delivery.delivery_status === "delivered" ? "已交付" : delivery.delivery_status || "—"}
-                              </Badge>
-                            </div>
-                            <div className="mt-3 rounded-lg bg-white p-3 font-mono text-sm text-slate-900 break-all">
-                              {displayContent}
-                            </div>
-                            {delivery.delivery_note ? (
-                              <div className="mt-2 text-sm text-muted-foreground">{delivery.delivery_note}</div>
-                            ) : null}
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-2"
-                                onClick={() => setVisibleDeliveryIds((prev) => ({ ...prev, [delivery.id]: !visible }))}
-                              >
-                                {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                {visible ? "隐藏" : "显示完整内容"}
-                              </Button>
-                              <Button size="sm" variant="outline" className="gap-2" onClick={() => copyDeliveryContent(delivery.content)} disabled={!delivery.content}>
-                                <Clipboard className="h-4 w-4" />
-                                复制内容
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="rounded-xl border border-dashed border-orange-200 p-8 text-center text-sm text-muted-foreground">
-                        {delivered
-                          ? "交付已完成，暂无可显示的交付正文。"
-                          : ["manual", "manual_delivery"].includes(String(order.delivery_type ?? order.order_items?.[0]?.delivery_type ?? ""))
-                          ? orderStatus === "processing" ? "人工处理中。" : "待人工处理。"
-                          : deliveryRequested ? "暂无交付内容，请联系客服确认。" : "交付内容默认隐藏，点击后单独请求服务端。"}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                <SecureOrderDelivery
+                  orderNo={order.order_no}
+                  paymentStatus={order.payment_status}
+                  orderStatus={order.status}
+                  fulfillmentStatus={order.fulfillment_status}
+                  deliveryStatus={order.order_deliveries?.[0]?.delivery_status}
+                  deliveryType={order.delivery_type ?? order.order_items?.[0]?.delivery_type}
+                />
 
                 <OrderRefundPanel
                   orderNo={order.order_no}

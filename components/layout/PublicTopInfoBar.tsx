@@ -17,6 +17,7 @@ import {
 import type { User } from "@supabase/supabase-js";
 
 import { Button } from "@/components/ui/button";
+import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -183,6 +184,28 @@ export default function PublicTopInfoBar({
     return () => {
       mounted = false;
       subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshBalance = () => {
+      const currentUser = cachedAuthState.user;
+      if (!currentUser) return;
+      void getCurrentProfile()
+        .then((nextProfile) => {
+          if (active && cachedAuthState.user?.id === currentUser.id) {
+            updateAuthState(currentUser, nextProfile, true);
+          }
+        })
+        .catch(() => {
+          // Balance refresh is best-effort and must not disturb the payment result.
+        });
+    };
+    window.addEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
+    return () => {
+      active = false;
+      window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
     };
   }, []);
 
