@@ -1,5 +1,13 @@
 # 当前任务：BEP20 支付与超额自动结算发布前验收
 
+## 2026-07-23：BEP20 欠额支付确认状态缺口 Hotfix
+
+- 分支：`fix/bep20-underpayment-confirmation-state`
+- 基线：`af2b77b862ec5466a88a6e0ada68adac79a42a58`
+- 运行时目标：确认数检查必须早于欠额/超额分类；最终 `underpaid` 首次写入服务端核验时间 `confirmed_at`。
+- 数据修复目标：新增严格、幂等、fail-closed 的 `20260730` Migration，仅补 `confirmed_at`，不调用结算 RPC、不改变订单/支付/余额/库存/处置记录。
+- 状态：Migration 未执行，正式目标订单未处理，欠额自动 Cron 未配置，管理员前端入口未完成；正式发布与数据处理等待人工授权。
+
 更新日期：2026-07-22
 目标项目：Jianlian-shop / `qvbovrvybirscaurwuov`
 

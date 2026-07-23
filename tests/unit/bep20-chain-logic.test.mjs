@@ -60,6 +60,39 @@ test("an exact pre-expiry transfer can become verified after confirmations arriv
   assert.equal(decideBep20TransferStatus({ ...input, confirmations: 12 }), "verified");
 });
 
+test("amount classification waits for the required confirmation threshold", () => {
+  const input = {
+    expectedRawAmount: "1000000",
+    requiredConfirmations: 12,
+    transferTimestamp: "2026-07-08T11:59:59.000Z",
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
+    paymentSessionExpiresAt: "2026-07-08T12:00:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:00:00.000Z",
+  };
+
+  assert.equal(decideBep20TransferStatus({ ...input, rawAmount: "999999", confirmations: 11 }), "confirming");
+  assert.equal(decideBep20TransferStatus({ ...input, rawAmount: "999999", confirmations: 12 }), "underpaid");
+  assert.equal(decideBep20TransferStatus({ ...input, rawAmount: "1000001", confirmations: 11 }), "confirming");
+  assert.equal(decideBep20TransferStatus({ ...input, rawAmount: "1000001", confirmations: 12 }), "overpaid");
+  assert.equal(decideBep20TransferStatus({ ...input, rawAmount: "1000000", confirmations: 11 }), "confirming");
+  assert.equal(decideBep20TransferStatus({ ...input, rawAmount: "1000000", confirmations: 12 }), "verified");
+});
+
+test("deadline and timestamp validation precede confirmation classification", () => {
+  const input = {
+    rawAmount: "999999",
+    expectedRawAmount: "1000000",
+    confirmations: 0,
+    requiredConfirmations: 12,
+    orderPaymentExpiresAt: "2026-07-08T12:00:00.000Z",
+    paymentSessionExpiresAt: "2026-07-08T12:00:00.000Z",
+    sessionExpiresAt: "2026-07-08T12:00:00.000Z",
+  };
+
+  assert.equal(decideBep20TransferStatus({ ...input, transferTimestamp: "2026-07-08T12:00:01.000Z" }), "manual_review");
+  assert.equal(decideBep20TransferStatus({ ...input, transferTimestamp: "not-a-timestamp" }), "manual_review");
+});
+
 test("transfer one second after expiry requires manual review", () => {
   assert.equal(decideBep20TransferStatus({
     rawAmount: "9583334",
