@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { formatDateTime } from "@/lib/i18n/datetime";
+import { canSubmitAdminUnderpaymentSettlement } from "@/lib/payments/bep20-underpayment-admin-runtime.mjs";
 
 type UnderpaymentPreview = {
   sessionId: string;
@@ -160,16 +161,15 @@ export default function AdminBep20UnderpaymentPanel() {
     }
   };
 
-  const canSettle = useMemo(() => Boolean(
-    selected
-    && prechecked
-    && selected.eligible
-    && reason.trim().length >= 1
-    && reason.trim().length <= 500
-    && confirmationText.trim() === selected.orderNo
-    && irreversible
-    && !settling
-  ), [confirmationText, irreversible, prechecked, reason, selected, settling]);
+  const canSettle = useMemo(() => Boolean(selected) && canSubmitAdminUnderpaymentSettlement({
+    previewed: prechecked,
+    eligible: Boolean(selected?.eligible),
+    reason: reason.length <= 500 ? reason : "",
+    confirmationText,
+    orderNo: selected?.orderNo,
+    irreversibleConfirmed: irreversible,
+    submitting: settling,
+  }), [confirmationText, irreversible, prechecked, reason, selected, settling]);
 
   const settle = async () => {
     if (!selected || !canSettle) return;
@@ -185,7 +185,7 @@ export default function AdminBep20UnderpaymentPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "settle",
-          dryRun: false,
+          dry_run: false,
           sessionId: selected.sessionId,
           reason: reason.trim(),
           requestId,
