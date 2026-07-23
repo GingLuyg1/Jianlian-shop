@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,7 +9,8 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const script = path.join(repoRoot, "scripts", "db", "run-migration.ps1");
-const projectRef = "abcdefghijklmnopqrst";
+const testRef = "czuoivbfxzachiobdohw";
+const productionRef = "qvbovrvybirscaurwuov";
 const powerShell = process.platform === "win32" ? "powershell.exe" : "pwsh";
 
 function sha256(content) {
@@ -20,111 +21,183 @@ function invoke(args, env = {}) {
   return spawnSync(
     powerShell,
     ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, ...args],
-    {
-      cwd: repoRoot,
-      encoding: "utf8",
-      env: { ...process.env, ...env },
-    },
+    { cwd: repoRoot, encoding: "utf8", env: { ...process.env, ...env } },
   );
 }
 
-test("single-session migration runner fails closed before psql execution", () => {
+function baseArgs(file, sha, environment = "test", projectRef = testRef) {
+  return [
+    "-File", file,
+    "-Environment", environment,
+    "-ProjectRef", projectRef,
+    "-ExpectedSha256", sha,
+  ];
+}
+
+function makeFakePsql(directory, exitCode = 0) {
+  const argsLog = path.join(directory, "psql-args.txt");
+  const fakePsql = process.platform === "win32"
+    ? path.join(directory, "fake-psql.cmd")
+    : path.join(directory, "fake-psql.sh");
+  writeFileSync(
+    fakePsql,
+    process.platform === "win32"
+      ? `@echo %*>>"${argsLog}"\r\n@exit /b ${exitCode}\r\n`
+      : `#!/bin/sh\nprintf '%s\\n' "$*" >> "${argsLog}"\nexit ${exitCode}\n`,
+    "utf8",
+  );
+  if (process.platform !== "win32") chmodSync(fakePsql, 0o755);
+  return { fakePsql, argsLog };
+}
+
+test("migration runner validates immutable inputs and exact environment refs", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "jianlian-migration-runner-"));
   try {
-    const validSql = "begin;\nselect 1;\ncommit;\n";
-    const validFile = path.join(directory, "valid.sql");
-    writeFileSync(validFile, validSql, "utf8");
-    const validSha = sha256(validSql);
+    const sql = "-- header\nbegin;\nselect 1;\ncommit;\n";
+    const file = path.join(directory, "valid.sql");
+    writeFileSync(file, sql, "utf8");
+    const sha = sha256(sql);
 
-    const validated = invoke([
-      "-File", validFile,
-      "-Environment", "test",
-      "-ProjectRef", projectRef,
-      "-ExpectedSha256", validSha,
-      "-ValidateOnly",
-      "-PsqlCommand", "definitely-not-a-real-psql-command",
-    ]);
-    assert.equal(validated.status, 0, validated.stderr);
-    assert.match(validated.stdout, /"result":\s*"validated"/);
+    const valid = invoke([...baseArgs(file, sha), "-ValidateOnly", "-PsqlCommand", "missing"]);
+    assert.equal(valid.status, 0, valid.stderr);
 
-    const missing = invoke([
-      "-File", path.join(directory, "missing.sql"),
-      "-Environment", "test",
-      "-ProjectRef", projectRef,
-      "-ExpectedSha256", validSha,
-      "-ValidateOnly",
-    ]);
-    assert.notEqual(missing.status, 0);
-    assert.match(missing.stderr, /MIGRATION_FILE_NOT_FOUND/);
+    for (const [environment, projectRef] of [
+      ["test", productionRef],
+      ["production", testRef],
+    ]) {
+      const result = invoke([...baseArgs(file, sha, environment, projectRef), "-ValidateOnly"]);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /ENVIRONMENT_PROJECT_REF_MISMATCH/);
+    }
 
-    const mismatched = invoke([
-      "-File", validFile,
-      "-Environment", "test",
-      "-ProjectRef", projectRef,
-      "-ExpectedSha256", "A".repeat(64),
+    const conflicting = invoke([...baseArgs(file, sha), "-Execute", "-ValidateOnly"]);
+    assert.notEqual(conflicting.status, 0);
+    assert.match(conflicting.stderr, /MIGRATION_MODE_CONFLICT/);
+
+    const afterCommit = "begin;\nselect 1;\ncommit;\nselect 2;\n";
+    const afterCommitFile = path.join(directory, "after-commit.sql");
+    writeFileSync(afterCommitFile, afterCommit, "utf8");
+    const invalidBoundary = invoke([
+      ...baseArgs(afterCommitFile, sha256(afterCommit)),
       "-ValidateOnly",
     ]);
-    assert.notEqual(mismatched.status, 0);
-    assert.match(mismatched.stderr, /MIGRATION_SHA256_MISMATCH/);
-
-    const unsafeSql = "select 1;\n";
-    const unsafeFile = path.join(directory, "unsafe.sql");
-    writeFileSync(unsafeFile, unsafeSql, "utf8");
-    const missingBoundary = invoke([
-      "-File", unsafeFile,
-      "-Environment", "test",
-      "-ProjectRef", projectRef,
-      "-ExpectedSha256", sha256(unsafeSql),
-      "-ValidateOnly",
-    ]);
-    assert.notEqual(missingBoundary.status, 0);
-    assert.match(missingBoundary.stderr, /MIGRATION_TRANSACTION_BOUNDARY_REQUIRED/);
-
-    const productionWithoutConfirmation = invoke([
-      "-File", validFile,
-      "-Environment", "production",
-      "-ProjectRef", projectRef,
-      "-ExpectedSha256", validSha,
-      "-Execute",
-      "-ValidateOnly",
-    ]);
-    assert.notEqual(productionWithoutConfirmation.status, 0);
-    assert.match(productionWithoutConfirmation.stderr, /PRODUCTION_CONFIRMATION_TEXT_INVALID/);
+    assert.notEqual(invalidBoundary.status, 0);
+    assert.match(invalidBoundary.stderr, /MIGRATION_TRANSACTION_BOUNDARY_REQUIRED/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("migration runner preserves psql failure status and never prints the database password", () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "jianlian-migration-psql-"));
-  const passwordMarker = "DO_NOT_PRINT_THIS_PASSWORD";
+test("migration runner only accepts exact official direct and pooler targets", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "jianlian-migration-targets-"));
   try {
     const sql = "begin;\nselect 1;\ncommit;\n";
-    const sqlFile = path.join(directory, "valid.sql");
-    writeFileSync(sqlFile, sql, "utf8");
-    const fakePsql = process.platform === "win32"
-      ? path.join(directory, "fake-psql.cmd")
-      : path.join(directory, "fake-psql.sh");
-    writeFileSync(
-      fakePsql,
-      process.platform === "win32" ? "@exit /b 7\r\n" : "#!/bin/sh\nexit 7\n",
-      "utf8",
-    );
-    if (process.platform !== "win32") chmodSync(fakePsql, 0o755);
+    const file = path.join(directory, "valid.sql");
+    writeFileSync(file, sql, "utf8");
+    const sha = sha256(sql);
+    const { fakePsql } = makeFakePsql(directory);
+    const args = [...baseArgs(file, sha), "-PsqlCommand", fakePsql, "-DatabaseUrlEnvironmentVariable", "RUNNER_DB_URL"];
 
-    const result = invoke([
-      "-File", sqlFile,
-      "-Environment", "test",
-      "-ProjectRef", projectRef,
-      "-ExpectedSha256", sha256(sql),
-      "-DatabaseUrlEnvironmentVariable", "JIANLIAN_TEST_DATABASE_URL",
+    for (const url of [
+      `postgresql://postgres:secret@db.${testRef}.supabase.co:5432/postgres`,
+      `postgresql://postgres.${testRef}:secret@aws-0-us-east-1.pooler.supabase.com:6543/postgres`,
+    ]) {
+      const accepted = invoke(args, { RUNNER_DB_URL: url });
+      assert.equal(accepted.status, 0, accepted.stderr);
+    }
+
+    for (const [url, code] of [
+      [`postgresql://postgres:secret@evil-${testRef}.example.com/postgres`, "DATABASE_HOST_NOT_ALLOWED"],
+      [`postgresql://postgres.wrongprojectref0000:secret@aws-0-us-east-1.pooler.supabase.com/postgres`, "DATABASE_POOLER_USERNAME_PROJECT_REF_MISMATCH"],
+    ]) {
+      const rejected = invoke(args, { RUNNER_DB_URL: url });
+      assert.notEqual(rejected.status, 0);
+      assert.match(rejected.stderr, new RegExp(code));
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("migration runner dry-run only checks identity and execute alone uses --file", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "jianlian-migration-modes-"));
+  try {
+    const sql = "begin;\nselect 1;\ncommit;\n";
+    const file = path.join(directory, "valid.sql");
+    writeFileSync(file, sql, "utf8");
+    const sha = sha256(sql);
+    const { fakePsql, argsLog } = makeFakePsql(directory);
+    const common = [
+      ...baseArgs(file, sha),
       "-PsqlCommand", fakePsql,
-    ], {
-      JIANLIAN_TEST_DATABASE_URL: `postgresql://test:${passwordMarker}@${projectRef}.example.com:5432/postgres`,
-    });
+      "-DatabaseUrlEnvironmentVariable", "RUNNER_DB_URL",
+    ];
+    const env = {
+      RUNNER_DB_URL: `postgresql://postgres:secret@db.${testRef}.supabase.co:5432/postgres`,
+    };
 
+    const dryRun = invoke(common, env);
+    assert.equal(dryRun.status, 0, dryRun.stderr);
+    const dryArgs = readFileSync(argsLog, "utf8");
+    assert.match(dryArgs, /current_database\(\), current_user/);
+    assert.doesNotMatch(dryArgs, /--file/);
+
+    writeFileSync(argsLog, "", "utf8");
+    const execute = invoke([...common, "-Execute"], env);
+    assert.equal(execute.status, 0, execute.stderr);
+    assert.match(readFileSync(argsLog, "utf8"), /--file/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("production execution requires the exact confirmation text", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "jianlian-migration-production-"));
+  try {
+    const sql = "begin;\nselect 1;\ncommit;\n";
+    const file = path.join(directory, "valid.sql");
+    writeFileSync(file, sql, "utf8");
+    const sha = sha256(sql);
+    const { fakePsql } = makeFakePsql(directory);
+    const common = [
+      ...baseArgs(file, sha, "production", productionRef),
+      "-Execute",
+      "-PsqlCommand", fakePsql,
+      "-DatabaseUrlEnvironmentVariable", "RUNNER_DB_URL",
+    ];
+    const env = {
+      RUNNER_DB_URL: `postgresql://postgres:secret@db.${productionRef}.supabase.co:5432/postgres`,
+    };
+    const missing = invoke(common, env);
+    assert.notEqual(missing.status, 0);
+    assert.match(missing.stderr, /PRODUCTION_CONFIRMATION_TEXT_INVALID/);
+
+    const confirmation = `EXECUTE PRODUCTION MIGRATION ${productionRef} valid.sql ${sha}`;
+    const accepted = invoke([...common, "-ConfirmationText", confirmation], env);
+    assert.equal(accepted.status, 0, accepted.stderr);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("migration runner preserves psql failure status and never prints credentials", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "jianlian-migration-exit-"));
+  const password = "DO_NOT_PRINT_THIS_PASSWORD";
+  try {
+    const sql = "begin;\nselect 1;\ncommit;\n";
+    const file = path.join(directory, "valid.sql");
+    writeFileSync(file, sql, "utf8");
+    const { fakePsql } = makeFakePsql(directory, 7);
+    const result = invoke([
+      ...baseArgs(file, sha256(sql)),
+      "-PsqlCommand", fakePsql,
+      "-DatabaseUrlEnvironmentVariable", "RUNNER_DB_URL",
+    ], {
+      RUNNER_DB_URL: `postgresql://postgres:${password}@db.${testRef}.supabase.co:5432/postgres`,
+    });
     assert.equal(result.status, 7);
-    assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, new RegExp(passwordMarker));
+    assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, new RegExp(password));
+    assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /postgresql:\/\//);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

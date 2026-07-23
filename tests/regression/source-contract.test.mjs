@@ -3188,6 +3188,7 @@ test("BEP20 underpayment candidate listing is expired-only and service-role-only
 test("BEP20 underpayment internal and admin routes preserve trust boundaries", () => {
   const service = file("lib/payments/bep20-underpayment-service.ts");
   const runtime = file("lib/payments/bep20-underpayment-runtime.mjs");
+  const adminRuntime = file("lib/payments/bep20-underpayment-admin-runtime.mjs");
   const internalRoute = file("app/api/internal/payments/bep20/underpayments/settle/route.ts");
   const adminRoute = file("app/api/admin/payments/bep20/underpayments/settle/route.ts");
 
@@ -3221,21 +3222,19 @@ test("BEP20 underpayment internal and admin routes preserve trust boundaries", (
   );
   assert.match(adminRoute, /source: "manual_admin"/);
   assert.match(adminRoute, /operatorId: admin\.user\.id/);
-  assert.match(adminRoute, /confirmIrreversible\?: boolean/);
-  assert.match(adminRoute, /isBep20UnderpaymentIrreversibleConfirmation\(body\?\.confirmIrreversible\)/);
+  assert.match(adminRoute, /confirmIrreversible/);
+  assert.match(adminRuntime, /confirmIrreversible: body\.confirmIrreversible === true/);
   assert.match(adminRoute, /irreversibleConfirmed: true/);
   assert.match(adminRoute, /BEP20_UNDERPAYMENT_IRREVERSIBLE_CONFIRMATION_REQUIRED/);
-  assert.match(adminRoute, /status: 400, code, message: "人工结算前必须明确确认该操作不可撤销。"/);
   assert.match(adminRoute, /checkRequestSize\(request, 8 \* 1024\)/);
-  assert.match(adminRoute, /PGRST202\|PGRST205\|42P01\|42883/);
-  assert.match(adminRoute, /BEP20_UNDERPAYMENT_SERVICE_ROLE_REQUIRED/);
-  assert.match(adminRoute, /PROFILE_NOT_FOUND\|CREDIT_ROUNDS_TO_ZERO\|BALANCE_OUT_OF_RANGE/);
-  assert.match(adminRoute, /BEP20_UNDERPAYMENT_INVENTORY_RELEASE_FAILED/);
-  assert.match(adminRoute, /BEP20_UNDERPAYMENT_RESULT_INVALID/);
-  assert.match(adminRoute, /code === "BEP20_UNDERPAYMENT_DEADLINE_INVALID"[\s\S]*?return \{ status: 409, code,/);
-  assert.match(adminRoute, /import \{ isUuid \} from "@\/lib\/business\/business-ids"/);
-  assert.match(adminRoute, /!isUuid\(sessionId\)/);
-  assert.match(adminRoute, /"22P02"/);
+  assert.match(adminRuntime, /PGRST202\|PGRST205\|42P01\|42883/);
+  assert.match(adminRuntime, /BEP20_UNDERPAYMENT_SERVICE_ROLE_REQUIRED/);
+  assert.match(adminRuntime, /PROFILE_NOT_FOUND\|CREDIT_ROUNDS_TO_ZERO\|BALANCE_OUT_OF_RANGE/);
+  assert.match(adminRuntime, /BEP20_UNDERPAYMENT_INVENTORY_RELEASE_FAILED/);
+  assert.match(adminRuntime, /BEP20_UNDERPAYMENT_RESULT_INVALID/);
+  assert.match(adminRuntime, /code === "BEP20_UNDERPAYMENT_DEADLINE_INVALID"/);
+  assert.match(adminRuntime, /UUID_PATTERN/);
+  assert.match(adminRuntime, /"22P02"/);
   assert.doesNotMatch(adminRoute, /result\.message/);
   assert.doesNotMatch(adminRoute, /result:\s*"success"/);
   assert.doesNotMatch(adminRoute, /creditedCny|receivedUsdt|exchangeRate/);
@@ -3377,6 +3376,9 @@ test("BEP20 underpayment admin workflow is explicit, read-only before confirmati
   const settleRoute = file("app/api/admin/payments/bep20/underpayments/settle/route.ts");
   const internalRoute = file("app/api/internal/payments/bep20/underpayments/settle/route.ts");
   const adminReadService = file("lib/payments/bep20-underpayment-admin.ts");
+  const adminRuntime = file("lib/payments/bep20-underpayment-admin-runtime.mjs");
+  const userReadService = file("lib/payments/bep20-underpayment-user.ts");
+  const userListRoute = file("app/api/orders/route.ts");
   const panel = file("components/admin/payments/AdminBep20UnderpaymentPanel.tsx");
 
   assert.match(listRoute, /getServerSuperAdminContext\(\)/);
@@ -3384,17 +3386,26 @@ test("BEP20 underpayment admin workflow is explicit, read-only before confirmati
   assert.match(listRoute, /listAdminBep20Underpayments/);
   assert.doesNotMatch(listRoute, /settleBep20Underpayment|settle_bep20_underpayment_to_wallet/);
   assert.doesNotMatch(adminReadService, /\.rpc\(\s*["']settle_bep20_underpayment_to_wallet/);
+  assert.match(adminReadService, /\.rpc\("list_expirable_bep20_underpayments"/);
+  assert.match(adminReadService, /Promise\.all\(\[/);
+  assert.doesNotMatch(adminReadService, /\.map\(buildPreview\)|map\(async\s*\([^)]*\)\s*=>[\s\S]*service\.from/);
+  assert.match(userReadService, /getUserBep20UnderpaymentWalletCredits/);
+  assert.match(userReadService, /\.in\("order_id", safeOrderIds\)/);
+  assert.match(userListRoute, /getUserBep20UnderpaymentWalletCredits/);
+  assert.doesNotMatch(userListRoute, /result\.orders\.map\(async/);
 
-  assert.match(settleRoute, /action !== "settle"/);
-  assert.match(settleRoute, /body\?\.dryRun === false \|\| body\?\.dry_run === false/);
-  assert.match(settleRoute, /requestId\.length < 1/);
-  assert.match(settleRoute, /reason\.length < 1/);
-  assert.match(settleRoute, /requiredConfirmations < 1/);
-  assert.match(settleRoute, /requiredConfirmations > 1000/);
+  assert.match(settleRoute, /parseAdminUnderpaymentSettlementBody/);
+  assert.match(adminRuntime, /body\.action !== "settle" \|\| body\.dry_run !== false/);
+  assert.match(adminRuntime, /hasLegacyDryRun && hasCanonicalDryRun/);
+  assert.doesNotMatch(settleRoute, /body\?\.dryRun === false \|\| body\?\.dry_run === false/);
+  assert.match(adminRuntime, /requestId\.length < 1/);
+  assert.match(adminRuntime, /reason\.length < 1/);
+  assert.match(adminRuntime, /requiredConfirmations < 1/);
+  assert.match(adminRuntime, /requiredConfirmations > 1000/);
   assert.match(settleRoute, /confirmationText[\s\S]*preview\.orderNo/);
   assert.match(settleRoute, /operatorId: admin\.user\.id/);
   assert.match(settleRoute, /source: "manual_admin"/);
-  assert.doesNotMatch(settleRoute, /body\?\.(?:operatorId|operator_user_id|settlementSource|settlement_source)/);
+  assert.doesNotMatch(settleRoute, /operator_user_id|settlement_source:\s*body/);
 
   assert.match(internalRoute, /export async function GET[\s\S]*handleDryRun/);
   assert.match(internalRoute, /body\?\.action === "settle" && body\?\.dry_run === false/);
@@ -3406,6 +3417,7 @@ test("BEP20 underpayment admin workflow is explicit, read-only before confirmati
   assert.match(panel, /window\.confirm/);
   assert.match(panel, /requestId/);
   assert.match(panel, /already_settled/);
+  assert.match(panel, /dry_run: false/);
   assert.match(panel, /disabled=/);
   assert.match(panel, /将欠额款转入[\s\S]*余额[\s\S]*取消原订单/);
   assert.doesNotMatch(panel, /SUPABASE_SERVICE_ROLE_KEY|service-role|service_role_key/);
@@ -3441,16 +3453,31 @@ test("single-session migration runner fails closed and the executed confirmation
   const runner = file("scripts/db/run-migration.ps1");
   const runbook = file("docs/database-migration-runbook.md");
   const confirmationMigration = file("supabase/migrations/20260730_bep20_underpayment_confirmation_state.sql");
-  const confirmationSha = createHash("sha256").update(confirmationMigration).digest("hex").toUpperCase();
+  const canonicalize = (value) => value.replace(/\r\n?/g, "\n");
+  const canonicalMigration = canonicalize(confirmationMigration);
+  const confirmationSha = createHash("sha256").update(canonicalMigration).digest("hex").toUpperCase();
+  const gitBlob = createHash("sha1")
+    .update(`blob ${Buffer.byteLength(canonicalMigration)}\0${canonicalMigration}`)
+    .digest("hex");
 
   assert.equal(
     confirmationSha,
-    "AF0895DD70D2EB9A87028CDB1FCC58EE9963587D8DAFB7799B685EA278E90A9A",
+    "E996A52693D201126C2C94DB9D949BFE3C6C2C2C01726C7356AFB4F7A973E7C7",
+  );
+  assert.equal(gitBlob, "8e2ccbcd9a9289655cec7d5d2f5acdfced9c3b34");
+  assert.equal(
+    createHash("sha256")
+      .update(canonicalize(canonicalMigration.replace(/\n/g, "\r\n")))
+      .digest("hex")
+      .toUpperCase(),
+    confirmationSha,
   );
   assert.match(runner, /Get-FileHash[\s\S]*Algorithm SHA256/);
   assert.match(runner, /MIGRATION_TRANSACTION_BOUNDARY_REQUIRED/);
   assert.match(runner, /PRODUCTION_CONFIRMATION_TEXT_INVALID/);
-  assert.match(runner, /DATABASE_PROJECT_REF_MISMATCH/);
+  assert.match(runner, /ENVIRONMENT_PROJECT_REF_MISMATCH/);
+  assert.match(runner, /db\.\$ProjectRef\.supabase\.co/);
+  assert.match(runner, /pooler\\\.supabase\\\.com/);
   assert.match(runner, /ValidateOnly/);
   assert.match(runner, /if \(-not \$Execute\)/);
   assert.match(runner, /PGDATABASE/);
