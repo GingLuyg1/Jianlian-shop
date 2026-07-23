@@ -23,6 +23,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$TestProjectRef = "czuoivbfxzachiobdohw"
+$ProductionProjectRef = "qvbovrvybirscaurwuov"
 $startedAt = [DateTimeOffset]::UtcNow
 $resolvedFile = $null
 $actualSha256 = $null
@@ -49,7 +51,60 @@ function Write-SafeRunRecord {
   $record | ConvertTo-Json
 }
 
+function Assert-SqlTransactionEnvelope {
+  param([string]$Sql)
+  $withoutBlockComments = [Regex]::Replace($Sql, "(?s)/\*.*?\*/", " ")
+  $withoutLineComments = [Regex]::Replace($withoutBlockComments, "(?m)--[^\r\n]*", " ")
+  $statements = @(
+    $withoutLineComments.Split(";") |
+      ForEach-Object { $_.Trim() } |
+      Where-Object { $_.Length -gt 0 }
+  )
+  if (
+    $statements.Count -lt 2 -or
+    $statements[0] -notmatch "(?is)^begin(?:\s+transaction)?$" -or
+    $statements[$statements.Count - 1] -notmatch "(?is)^commit(?:\s+transaction)?$"
+  ) {
+    throw "MIGRATION_TRANSACTION_BOUNDARY_REQUIRED"
+  }
+}
+
+function Assert-DatabaseTarget {
+  param([string]$DatabaseUrl)
+  try {
+    $uri = [Uri]$DatabaseUrl
+  } catch {
+    throw "DATABASE_URL_INVALID"
+  }
+  if ($uri.Scheme -notin @("postgres", "postgresql")) {
+    throw "DATABASE_URL_INVALID"
+  }
+  $hostName = $uri.DnsSafeHost.ToLowerInvariant()
+  $directHost = "db.$ProjectRef.supabase.co"
+  $isDirect = $hostName -ceq $directHost
+  $isOfficialPooler = $hostName -match "^[a-z0-9-]+\.pooler\.supabase\.com$"
+
+  if (-not $isDirect -and -not $isOfficialPooler) {
+    throw "DATABASE_HOST_NOT_ALLOWED"
+  }
+  if ($isOfficialPooler) {
+    $userInfo = $uri.UserInfo
+    $encodedUserName = if ($userInfo.Contains(":")) { $userInfo.Split(":", 2)[0] } else { $userInfo }
+    $userName = [Uri]::UnescapeDataString($encodedUserName)
+    if ($userName -cne "postgres.$ProjectRef") {
+      throw "DATABASE_POOLER_USERNAME_PROJECT_REF_MISMATCH"
+    }
+  }
+}
+
 try {
+  if ($Execute -and $ValidateOnly) {
+    throw "MIGRATION_MODE_CONFLICT"
+  }
+  $expectedRef = if ($Environment -eq "production") { $ProductionProjectRef } else { $TestProjectRef }
+  if ($ProjectRef -cne $expectedRef) {
+    throw "ENVIRONMENT_PROJECT_REF_MISMATCH"
+  }
   if (-not (Test-Path -LiteralPath $File -PathType Leaf)) {
     throw "MIGRATION_FILE_NOT_FOUND"
   }
@@ -60,21 +115,10 @@ try {
   }
 
   $sql = Get-Content -LiteralPath $resolvedFile -Raw -Encoding UTF8
-  if ($sql -notmatch "(?im)^\s*begin\s*;" -or $sql -notmatch "(?im)^\s*commit\s*;") {
-    throw "MIGRATION_TRANSACTION_BOUNDARY_REQUIRED"
-  }
+  Assert-SqlTransactionEnvelope -Sql $sql
   if ($sql -match "(?m)^\s*\\") {
     throw "MIGRATION_PSQL_META_COMMAND_NOT_SUPPORTED"
   }
-
-  $databaseUrlVariable = if ($DatabaseUrlEnvironmentVariable) {
-    $DatabaseUrlEnvironmentVariable
-  } elseif ($Environment -eq "production") {
-    "SUPABASE_DB_URL_PRODUCTION"
-  } else {
-    "SUPABASE_DB_URL_TEST"
-  }
-  $databaseUrl = [Environment]::GetEnvironmentVariable($databaseUrlVariable)
 
   if ($Execute -and $Environment -eq "production") {
     $expectedConfirmation = "EXECUTE PRODUCTION MIGRATION $ProjectRef $([IO.Path]::GetFileName($resolvedFile)) $actualSha256"
@@ -95,18 +139,22 @@ try {
     exit $exitCode
   }
 
+  $databaseUrlVariable = if ($DatabaseUrlEnvironmentVariable) {
+    $DatabaseUrlEnvironmentVariable
+  } elseif ($Environment -eq "production") {
+    "SUPABASE_DB_URL_PRODUCTION"
+  } else {
+    "SUPABASE_DB_URL_TEST"
+  }
+  $databaseUrl = [Environment]::GetEnvironmentVariable($databaseUrlVariable)
   if (-not $databaseUrl) {
     throw "DATABASE_URL_ENVIRONMENT_VARIABLE_MISSING"
   }
-  $databaseUri = [Uri]$databaseUrl
-  if ($databaseUri.Host -notmatch [Regex]::Escape($ProjectRef)) {
-    throw "DATABASE_PROJECT_REF_MISMATCH"
-  }
+  Assert-DatabaseTarget -DatabaseUrl $databaseUrl
 
-  # PGDATABASE carries the connection string in the child process environment,
-  # keeping credentials out of command arguments and logs.
+  # Credentials remain in the child process environment, never in arguments or logs.
   $env:PGDATABASE = $databaseUrl
-  & $PsqlCommand -X --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --quiet --command="select 1;"
+  & $PsqlCommand -X --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --quiet --command="select current_database(), current_user;"
   if ($LASTEXITCODE -ne 0) {
     $exitCode = $LASTEXITCODE
     throw "DATABASE_CONNECTION_TEST_FAILED"
