@@ -1,5 +1,13 @@
 # Jianlian Shop 任务日志
 
+## 2026-07-23 — clean-clone 回归测试与 CI Hotfix
+
+- 发布构建发现源码契约测试读取两个未跟踪且被忽略的一次性 BEP20 生产修复 SQL，导致干净 checkout 出现两个 `ENOENT`；产品代码和相关安全契约测试本身未失败。
+- 回归测试已移除对具体生产修复脚本、订单号和金额的依赖，继续验证被跟踪 Migration、服务、API 与管理员 UI 的支付关联和超额入账安全契约。
+- 两类一次性脚本继续由 `.gitignore` 排除，不加入仓库；新增干净克隆契约防止其再次成为测试依赖。
+- GitHub CI 从三个指定单元测试改为执行完整 `npm test`，并继续保留 `npm ci`、typecheck 和 build。
+- 正式部署、SQL、Migration 和订单处理仍未执行。
+
 ## 2026-07-23 — BEP20 欠额确认状态 Hotfix
 
 - 从 `af2b77b862ec5466a88a6e0ada68adac79a42a58` 创建 `fix/bep20-underpayment-confirmation-state`。

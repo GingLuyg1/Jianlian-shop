@@ -751,7 +751,6 @@ test("BEP20 manual review sessions have durable admin payment linkage", () => {
   const service = file("lib/payments/bep20-chain-service.ts");
   const queries = file("lib/payments/admin-payment-queries.ts");
   const migration = file("supabase/migrations/20260715_bep20_manual_review_payment_linkage.sql");
-  const repair = file("supabase/tests/repair_bep20_manual_review_JL202607150716073678.sql");
 
   assert.match(migration, /add column if not exists payment_session_id uuid/i);
   assert.match(migration, /foreign key \(payment_session_id\) references public\.payment_sessions\(id\)/i);
@@ -770,14 +769,6 @@ test("BEP20 manual review sessions have durable admin payment linkage", () => {
   assert.match(service, /payable_currency: pricing\.paymentCurrency/);
   assert.match(queries, /payable_currency/);
   assert.match(queries, /stringOrNull\(row\.payable_currency\) \?\? stringOrNull\(row\.currency\)/);
-
-  assert.match(repair, /v_confirm_test_database boolean := false/);
-  assert.match(repair, /JL202607150716073678/);
-  assert.match(repair, /87902c08-3f31-4482-a3cf-b80746677cce/);
-  assert.match(repair, /status = 'manual_review'/);
-  assert.match(repair, /payment_session_id = v_payment_session\.id,[\s\S]{0,100}payment_id = v_order_payment_id/);
-  assert.doesNotMatch(repair, /update public\.orders\s+set/i);
-  assert.doesNotMatch(repair, /set\s+paid_at\s*=/i);
 });
 
 test("BEP20 approved overpayment completion preserves the real received amount", () => {
@@ -810,7 +801,6 @@ test("BEP20 approved overpayment completion preserves the real received amount",
 
 test("BEP20 approved overpayment wallet credit is atomic, super-admin-only, and idempotent", () => {
   const migration = file("supabase/migrations/20260715_bep20_overpayment_wallet_credit.sql");
-  const repair = file("supabase/tests/credit_bep20_overpayment_JL202607150716073678.sql");
   const api = file("app/api/admin/payments/[paymentId]/overpayment-credit/route.ts");
   const detailRoute = file("app/api/admin/payments/[paymentId]/route.ts");
   const component = file("components/admin/payments/AdminPaymentRecordsPage.tsx");
@@ -846,12 +836,19 @@ test("BEP20 approved overpayment wallet credit is atomic, super-admin-only, and 
   assert.match(component, /超额转入余额/);
   assert.match(component, /method: "POST"/);
   assert.match(component, /body: JSON\.stringify\(\{ reason \}\)/);
+});
 
-  assert.match(repair, /v_confirm_test_database boolean := false/i);
-  assert.match(repair, /JL202607150716073678/);
-  assert.match(repair, /credit_bep20_overpayment_to_wallet/i);
-  assert.match(repair, /4\.976111 USDT x 7\.2 = 35\.83 CNY/i);
-  assert.doesNotMatch(repair, /update\s+public\.profiles|insert\s+into\s+public\.balance_transactions/i);
+test("one-off BEP20 production repair scripts stay ignored and are not clean-clone test dependencies", () => {
+  const gitignore = file(".gitignore");
+  const sourceContract = file("tests/regression/source-contract.test.mjs");
+  const testDirectory = "supabase/tests/";
+  const manualRepairName = ["repair_bep20_manual_review_", "JL", "202607150716073678.sql"].join("");
+  const overpaymentRepairName = ["credit_bep20_overpayment_", "JL", "202607150716073678.sql"].join("");
+
+  assert.match(gitignore, /^\/supabase\/tests\/credit_bep20_overpayment_\*\.sql$/m);
+  assert.match(gitignore, /^\/supabase\/tests\/repair_bep20_manual_review_\*\.sql$/m);
+  assert.equal(sourceContract.includes(`${testDirectory}${manualRepairName}`), false);
+  assert.equal(sourceContract.includes(`${testDirectory}${overpaymentRepairName}`), false);
 });
 
 test("payment readiness separates general readiness from BEP20 three-state config", () => {
@@ -2642,7 +2639,7 @@ test("account profile initialization never grants admin role from ordinary user 
   assert.doesNotMatch(route, /role:\s*.*admin/);
   assert.doesNotMatch(route, /gac000189@gmail\.com/i);
 
-  const createProfileBlock = route.match(/async function createProfileOnce[\s\S]*?return \{ profile: null, error: created\.error \};\n}/)?.[0] ?? "";
+  const createProfileBlock = route.match(/async function createProfileOnce[\s\S]*?return \{ profile: null, error: created\.error \};\r?\n\}/)?.[0] ?? "";
   assert.ok(createProfileBlock, "createProfileOnce block must be present");
   assert.doesNotMatch(createProfileBlock, /email[\s\S]{0,160}admin/i);
   assert.doesNotMatch(createProfileBlock, /role:\s*body\.|role:\s*payload\.|role:\s*request/i);
