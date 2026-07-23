@@ -7,7 +7,11 @@ import {
   subtractBep20UnderpaymentDecimal,
   summarizeBep20UnderpaymentSessionId,
 } from "@/lib/payments/bep20-underpayment-runtime.mjs";
-import { compareUnsignedDecimal } from "@/lib/payments/bep20-underpayment-admin-runtime.mjs";
+import {
+  compareUnsignedDecimal,
+  evaluateAdminUnderpaymentEligibility,
+  rawAmountMatchesDecimal,
+} from "@/lib/payments/bep20-underpayment-admin-runtime.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type AdminBep20UnderpaymentPreview = {
@@ -49,6 +53,9 @@ export type AdminBep20UnderpaymentPreview = {
   claimCount: number;
   transactionCount: number;
   eligible: boolean;
+  automaticEligible: boolean;
+  manualEligible: boolean;
+  manualBeforeDeadline: boolean;
   blockingReasons: string[];
   expectedResult: "wallet_credit_and_cancel" | "already_settled" | "blocked";
   idempotencyState: "not_settled" | "already_settled";
@@ -285,7 +292,6 @@ async function buildPreviews(chains: Row[], includeFullTxHash: boolean) {
     if (disposition) {
       blockingReasons.push("该链上会话已经完成处置");
     } else {
-      if (!authorityIds.has(sessionId)) blockingReasons.push("权威候选 RPC 未返回该会话");
       if (!order || !paymentSession || !orderPayment) blockingReasons.push("订单支付关联不完整");
       if (!profile) blockingReasons.push("用户余额资料不存在");
       if (text(chain.status) !== "underpaid") blockingReasons.push("链上会话不是欠额状态");
@@ -377,18 +383,23 @@ async function buildPreviews(chains: Row[], includeFullTxHash: boolean) {
         || normalized(transaction.to_address) !== normalized(chain.receive_address)
         || !exact(transaction.raw_amount, chain.confirmed_raw_amount)
         || !exact(transaction.normalized_amount, receivedUsdt)
-        || !["underpaid", "confirmed"].includes(normalized(transaction.status))) {
+        || normalized(transaction.status) !== "underpaid") {
         blockingReasons.push("链上交易证据不唯一或快照不匹配");
+      }
+      if (
+        !rawAmountMatchesDecimal(chain.confirmed_raw_amount, receivedUsdt, chain.token_decimals)
+        || !rawAmountMatchesDecimal(chain.expected_raw_amount, expectedUsdt, chain.token_decimals)
+      ) {
+        blockingReasons.push("链上原始金额与标准化金额不匹配");
       }
       const confirmationCount = numberOrNull(transaction?.confirmation_count);
       if (confirmationCount === null || confirmationCount < requiredConfirmations) {
         blockingReasons.push("链上确认数不足");
       }
       const blockTimestamp = nullableText(transaction?.block_timestamp);
-      if (!deadline || Date.now() <= Date.parse(deadline)) {
-        blockingReasons.push("付款期限尚未结束或截止时间不完整");
-      }
-      if (!deadline || !blockTimestamp || Date.parse(blockTimestamp) > Date.parse(deadline)) {
+      if (!deadline) {
+        blockingReasons.push("付款截止时间不完整");
+      } else if (!blockTimestamp || Date.parse(blockTimestamp) > Date.parse(deadline)) {
         blockingReasons.push("链上转账晚于付款截止时间");
       }
       const paymentProviderRef = normalized(paymentSession?.provider_transaction_id);
@@ -408,9 +419,16 @@ async function buildPreviews(chains: Row[], includeFullTxHash: boolean) {
       ) {
         blockingReasons.push("用户余额超出数据库安全范围");
       }
+      if (!positive(creditedCny)) blockingReasons.push("折算人民币金额小于最小记账单位");
       if (order?.reservation_released_at) blockingReasons.push("订单库存已释放");
     }
 
+    const expired = Boolean(deadline && Date.now() > Date.parse(deadline));
+    const eligibility = evaluateAdminUnderpaymentEligibility({
+      expired,
+      authorityCandidate: authorityIds.has(sessionId),
+      checks: Object.fromEntries(blockingReasons.map((reason) => [reason, false])),
+    });
     const confirmationCount = numberOrNull(transaction?.confirmation_count);
     const blockTimestamp = nullableText(transaction?.block_timestamp);
     return {
@@ -451,7 +469,10 @@ async function buildPreviews(chains: Row[], includeFullTxHash: boolean) {
       },
       claimCount: matchingClaims.length,
       transactionCount: matchingTransactions.length,
-      eligible: blockingReasons.length === 0,
+      eligible: eligibility.manualEligible,
+      automaticEligible: eligibility.automaticEligible,
+      manualEligible: eligibility.manualEligible,
+      manualBeforeDeadline: eligibility.manualBeforeDeadline,
       blockingReasons,
       expectedResult: disposition
         ? "already_settled"

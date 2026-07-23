@@ -3387,6 +3387,13 @@ test("BEP20 underpayment admin workflow is explicit, read-only before confirmati
   assert.doesNotMatch(listRoute, /settleBep20Underpayment|settle_bep20_underpayment_to_wallet/);
   assert.doesNotMatch(adminReadService, /\.rpc\(\s*["']settle_bep20_underpayment_to_wallet/);
   assert.match(adminReadService, /\.rpc\("list_expirable_bep20_underpayments"/);
+  assert.match(adminReadService, /automaticEligible/);
+  assert.match(adminReadService, /manualEligible/);
+  assert.match(adminReadService, /manualBeforeDeadline/);
+  assert.match(adminReadService, /normalized\(transaction\.status\) !== "underpaid"/);
+  assert.match(adminReadService, /rawAmountMatchesDecimal\(chain\.confirmed_raw_amount/);
+  assert.match(adminReadService, /rawAmountMatchesDecimal\(chain\.expected_raw_amount/);
+  assert.match(settleRoute, /!preview\.manualEligible/);
   assert.match(adminReadService, /Promise\.all\(\[/);
   assert.doesNotMatch(adminReadService, /\.map\(buildPreview\)|map\(async\s*\([^)]*\)\s*=>[\s\S]*service\.from/);
   assert.match(userReadService, /getUserBep20UnderpaymentWalletCredits/);
@@ -3418,6 +3425,8 @@ test("BEP20 underpayment admin workflow is explicit, read-only before confirmati
   assert.match(panel, /requestId/);
   assert.match(panel, /already_settled/);
   assert.match(panel, /dry_run: false/);
+  assert.match(panel, /selected\.manualBeforeDeadline/);
+  assert.match(panel, /订单尚未到期，正在提前人工结算/);
   assert.match(panel, /disabled=/);
   assert.match(panel, /将欠额款转入[\s\S]*余额[\s\S]*取消原订单/);
   assert.doesNotMatch(panel, /SUPABASE_SERVICE_ROLE_KEY|service-role|service_role_key/);

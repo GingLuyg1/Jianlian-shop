@@ -30,7 +30,21 @@ $resolvedFile = $null
 $actualSha256 = $null
 $outcome = "failed"
 $exitCode = 1
-$originalPgDatabase = $env:PGDATABASE
+$libpqEnvironmentVariables = @(
+  "PGHOST", "PGHOSTADDR", "PGPORT", "PGUSER", "PGPASSWORD",
+  "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE", "PGOPTIONS",
+  "PGSSLMODE", "PGREQUIRESSL", "PGCHANNELBINDING", "PGSSLCOMPRESSION",
+  "PGSSLCERT", "PGSSLKEY", "PGSSLROOTCERT", "PGSSLCRL", "PGSSLCRLDIR",
+  "PGREQUIREPEER", "PGCLIENTENCODING", "PGKRBSRVNAME", "PGGSSLIB",
+  "PGTARGETSESSIONATTRS", "PGDATABASE", "PGCONNECT_TIMEOUT", "PGAPPNAME"
+)
+$originalLibpqEnvironment = @{}
+foreach ($name in $libpqEnvironmentVariables) {
+  $originalLibpqEnvironment[$name] = [ordered]@{
+    existed = [Environment]::GetEnvironmentVariable($name, "Process") -ne $null
+    value = [Environment]::GetEnvironmentVariable($name, "Process")
+  }
+}
 
 function Write-SafeRunRecord {
   param([string]$Result, [int]$Code)
@@ -79,6 +93,12 @@ function Assert-DatabaseTarget {
   if ($uri.Scheme -notin @("postgres", "postgresql")) {
     throw "DATABASE_URL_INVALID"
   }
+  if ($uri.Query -or $uri.Fragment) {
+    throw "DATABASE_URL_OPTIONS_NOT_ALLOWED"
+  }
+  if ($uri.AbsolutePath -cne "/postgres") {
+    throw "DATABASE_NAME_NOT_ALLOWED"
+  }
   $hostName = $uri.DnsSafeHost.ToLowerInvariant()
   $directHost = "db.$ProjectRef.supabase.co"
   $isDirect = $hostName -ceq $directHost
@@ -87,10 +107,20 @@ function Assert-DatabaseTarget {
   if (-not $isDirect -and -not $isOfficialPooler) {
     throw "DATABASE_HOST_NOT_ALLOWED"
   }
-  if ($isOfficialPooler) {
-    $userInfo = $uri.UserInfo
-    $encodedUserName = if ($userInfo.Contains(":")) { $userInfo.Split(":", 2)[0] } else { $userInfo }
-    $userName = [Uri]::UnescapeDataString($encodedUserName)
+  $userInfo = $uri.UserInfo
+  $encodedUserName = if ($userInfo.Contains(":")) { $userInfo.Split(":", 2)[0] } else { $userInfo }
+  $userName = [Uri]::UnescapeDataString($encodedUserName)
+  if ($isDirect) {
+    if ($uri.Port -ne 5432) {
+      throw "DATABASE_PORT_NOT_ALLOWED"
+    }
+    if ($userName -cne "postgres") {
+      throw "DATABASE_USERNAME_PROJECT_REF_MISMATCH"
+    }
+  } else {
+    if ($uri.Port -notin @(5432, 6543)) {
+      throw "DATABASE_PORT_NOT_ALLOWED"
+    }
     if ($userName -cne "postgres.$ProjectRef") {
       throw "DATABASE_POOLER_USERNAME_PROJECT_REF_MISMATCH"
     }
@@ -152,8 +182,15 @@ try {
   }
   Assert-DatabaseTarget -DatabaseUrl $databaseUrl
 
+  # Remove every inherited libpq override before setting the validated target.
+  foreach ($name in $libpqEnvironmentVariables) {
+    [Environment]::SetEnvironmentVariable($name, $null, "Process")
+  }
   # Credentials remain in the child process environment, never in arguments or logs.
   $env:PGDATABASE = $databaseUrl
+  $env:PGSSLMODE = "require"
+  $env:PGCONNECT_TIMEOUT = "15"
+  $env:PGAPPNAME = "jianlian-migration-runner"
   & $PsqlCommand -X --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --quiet --command="select current_database(), current_user;"
   if ($LASTEXITCODE -ne 0) {
     $exitCode = $LASTEXITCODE
@@ -186,5 +223,12 @@ try {
   Write-SafeRunRecord -Result $outcome -Code $exitCode
   exit $exitCode
 } finally {
-  $env:PGDATABASE = $originalPgDatabase
+  foreach ($name in $libpqEnvironmentVariables) {
+    $saved = $originalLibpqEnvironment[$name]
+    if ($saved.existed) {
+      [Environment]::SetEnvironmentVariable($name, [string]$saved.value, "Process")
+    } else {
+      [Environment]::SetEnvironmentVariable($name, $null, "Process")
+    }
+  }
 }

@@ -36,18 +36,19 @@ function baseArgs(file, sha, environment = "test", projectRef = testRef) {
 
 function makeFakePsql(directory, exitCode = 0) {
   const argsLog = path.join(directory, "psql-args.txt");
+  const envLog = path.join(directory, "psql-env.txt");
   const fakePsql = process.platform === "win32"
     ? path.join(directory, "fake-psql.cmd")
     : path.join(directory, "fake-psql.sh");
   writeFileSync(
     fakePsql,
     process.platform === "win32"
-      ? `@echo %*>>"${argsLog}"\r\n@exit /b ${exitCode}\r\n`
-      : `#!/bin/sh\nprintf '%s\\n' "$*" >> "${argsLog}"\nexit ${exitCode}\n`,
+      ? `@echo %*>>"${argsLog}"\r\n@echo PGHOSTADDR=%PGHOSTADDR%;PGSERVICE=%PGSERVICE%;PGSERVICEFILE=%PGSERVICEFILE%;PGSSLMODE=%PGSSLMODE%;PGCONNECT_TIMEOUT=%PGCONNECT_TIMEOUT%;PGAPPNAME=%PGAPPNAME%>>"${envLog}"\r\n@exit /b ${exitCode}\r\n`
+      : `#!/bin/sh\nprintf '%s\\n' "$*" >> "${argsLog}"\nprintf 'PGHOSTADDR=%s;PGSERVICE=%s;PGSERVICEFILE=%s;PGSSLMODE=%s;PGCONNECT_TIMEOUT=%s;PGAPPNAME=%s\\n' "$PGHOSTADDR" "$PGSERVICE" "$PGSERVICEFILE" "$PGSSLMODE" "$PGCONNECT_TIMEOUT" "$PGAPPNAME" >> "${envLog}"\nexit ${exitCode}\n`,
     "utf8",
   );
   if (process.platform !== "win32") chmodSync(fakePsql, 0o755);
-  return { fakePsql, argsLog };
+  return { fakePsql, argsLog, envLog };
 }
 
 test("migration runner validates immutable inputs and exact environment refs", () => {
@@ -108,7 +109,15 @@ test("migration runner only accepts exact official direct and pooler targets", (
 
     for (const [url, code] of [
       [`postgresql://postgres:secret@evil-${testRef}.example.com/postgres`, "DATABASE_HOST_NOT_ALLOWED"],
-      [`postgresql://postgres.wrongprojectref0000:secret@aws-0-us-east-1.pooler.supabase.com/postgres`, "DATABASE_POOLER_USERNAME_PROJECT_REF_MISMATCH"],
+      [`postgresql://postgres.wrongprojectref0000:secret@aws-0-us-east-1.pooler.supabase.com:6543/postgres`, "DATABASE_POOLER_USERNAME_PROJECT_REF_MISMATCH"],
+      [`postgresql://postgres:secret@db.${testRef}.supabase.co:6543/postgres`, "DATABASE_PORT_NOT_ALLOWED"],
+      [`postgresql://postgres.${testRef}:secret@aws-0-us-east-1.pooler.supabase.com:7777/postgres`, "DATABASE_PORT_NOT_ALLOWED"],
+      [`postgresql://postgres:secret@db.${testRef}.supabase.co:5432/other`, "DATABASE_NAME_NOT_ALLOWED"],
+      [`postgresql://postgres:secret@db.${testRef}.supabase.co:5432/postgres#fragment`, "DATABASE_URL_OPTIONS_NOT_ALLOWED"],
+      [`postgresql://postgres:secret@db.${testRef}.supabase.co:5432/postgres?hostaddr=127.0.0.1`, "DATABASE_URL_OPTIONS_NOT_ALLOWED"],
+      [`postgresql://postgres:secret@db.${testRef}.supabase.co:5432/postgres?host=evil.example.com`, "DATABASE_URL_OPTIONS_NOT_ALLOWED"],
+      [`postgresql://postgres:secret@db.${testRef}.supabase.co:5432/postgres?service=override`, "DATABASE_URL_OPTIONS_NOT_ALLOWED"],
+      [`postgresql://postgres:secret@db.${testRef}.supabase.co:5432/postgres?sslmode=disable`, "DATABASE_URL_OPTIONS_NOT_ALLOWED"],
     ]) {
       const rejected = invoke(args, { RUNNER_DB_URL: url });
       assert.notEqual(rejected.status, 0);
@@ -146,6 +155,41 @@ test("migration runner dry-run only checks identity and execute alone uses --fil
     const execute = invoke([...common, "-Execute"], env);
     assert.equal(execute.status, 0, execute.stderr);
     assert.match(readFileSync(argsLog, "utf8"), /--file/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("migration runner clears inherited libpq overrides and applies safe connection settings", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "jianlian-migration-libpq-"));
+  try {
+    const sql = "begin;\nselect 1;\ncommit;\n";
+    const file = path.join(directory, "valid.sql");
+    writeFileSync(file, sql, "utf8");
+    const { fakePsql, envLog } = makeFakePsql(directory);
+    const inherited = {
+      RUNNER_DB_URL: `postgresql://postgres:secret@db.${testRef}.supabase.co:5432/postgres`,
+      PGHOSTADDR: "127.0.0.1",
+      PGSERVICE: "unsafe-service",
+      PGSERVICEFILE: "unsafe-service-file",
+      PGSSLMODE: "disable",
+    };
+    const result = invoke([
+      ...baseArgs(file, sha256(sql)),
+      "-PsqlCommand", fakePsql,
+      "-DatabaseUrlEnvironmentVariable", "RUNNER_DB_URL",
+    ], inherited);
+    assert.equal(result.status, 0, result.stderr);
+    const childEnvironment = readFileSync(envLog, "utf8");
+    assert.match(childEnvironment, /PGHOSTADDR=;/);
+    assert.match(childEnvironment, /PGSERVICE=;/);
+    assert.match(childEnvironment, /PGSERVICEFILE=;/);
+    assert.match(childEnvironment, /PGSSLMODE=require/);
+    assert.match(childEnvironment, /PGCONNECT_TIMEOUT=15/);
+    assert.match(childEnvironment, /PGAPPNAME=jianlian-migration-runner/);
+    assert.equal(inherited.PGHOSTADDR, "127.0.0.1");
+    assert.equal(inherited.PGSERVICE, "unsafe-service");
+    assert.equal(inherited.PGSSLMODE, "disable");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

@@ -52,6 +52,9 @@ type UnderpaymentPreview = {
   claimCount: number;
   transactionCount: number;
   eligible: boolean;
+  automaticEligible: boolean;
+  manualEligible: boolean;
+  manualBeforeDeadline: boolean;
   blockingReasons: string[];
   expectedResult: "wallet_credit_and_cancel" | "already_settled" | "blocked";
   idempotencyState: "not_settled" | "already_settled";
@@ -163,7 +166,7 @@ export default function AdminBep20UnderpaymentPanel() {
 
   const canSettle = useMemo(() => Boolean(selected) && canSubmitAdminUnderpaymentSettlement({
     previewed: prechecked,
-    eligible: Boolean(selected?.eligible),
+    eligible: Boolean(selected?.manualEligible),
     reason: reason.length <= 500 ? reason : "",
     confirmationText,
     orderNo: selected?.orderNo,
@@ -174,7 +177,9 @@ export default function AdminBep20UnderpaymentPanel() {
   const settle = async () => {
     if (!selected || !canSettle) return;
     const confirmed = window.confirm(
-      `不可撤销操作：将订单 ${selected.orderNo} 的实收欠额款折算为余额，并取消原订单。是否继续？`,
+      selected.manualBeforeDeadline
+        ? `订单 ${selected.orderNo} 尚未到期，正在提前人工结算。该操作不可撤销，将实收欠额款折算为余额并取消原订单。是否继续？`
+        : `不可撤销操作：将订单 ${selected.orderNo} 的实收欠额款折算为余额，并取消原订单。是否继续？`,
     );
     if (!confirmed) return;
 
@@ -361,6 +366,11 @@ export default function AdminBep20UnderpaymentPanel() {
 
               <div className="space-y-3 rounded-xl border border-red-200 bg-red-50/40 p-4">
                 <div className="font-semibold text-red-800">不可撤销人工结算</div>
+                {selected.manualBeforeDeadline ? (
+                  <div className="rounded-lg border border-orange-300 bg-orange-100 px-3 py-2 text-sm font-semibold text-orange-900">
+                    订单尚未到期，正在提前人工结算。请再次核对链上证据和用户诉求。
+                  </div>
+                ) : null}
                 <div>
                   <label className="text-sm font-medium">处理原因（1–500 字）</label>
                   <textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} className="mt-1 min-h-[88px] w-full rounded-md border bg-white px-3 py-2 text-sm" disabled={settling} />

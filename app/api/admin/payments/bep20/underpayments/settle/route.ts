@@ -126,7 +126,7 @@ export async function POST(request: Request) {
       400,
     );
   }
-  if (!preview.eligible && preview.idempotencyState !== "already_settled") {
+  if (!preview.manualEligible && preview.idempotencyState !== "already_settled") {
     return jsonFailure(
       "BEP20_UNDERPAYMENT_PRECHECK_BLOCKED",
       "当前记录未通过只读预检查，请刷新后核对阻断原因。",
