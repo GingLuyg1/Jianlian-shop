@@ -140,4 +140,3 @@ try {
 } finally {
   $env:PGDATABASE = $originalPgDatabase
 }
-

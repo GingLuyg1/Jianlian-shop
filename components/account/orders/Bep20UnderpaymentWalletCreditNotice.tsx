@@ -36,7 +36,6 @@ export function Bep20UnderpaymentWalletCreditNotice({
     </section>
   );
 }
-
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2">
@@ -45,4 +44,3 @@ function Info({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

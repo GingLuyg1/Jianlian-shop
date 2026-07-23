@@ -85,4 +85,3 @@ EXECUTE PRODUCTION MIGRATION <project-ref> <migration-file-name> <SHA256>
 3. 执行只读 postcheck，确认事务是否整体回滚、对象是否已存在、数据证据是否已写入。
 4. 已有财务或链上证据时，不得删除、回填或覆盖以“恢复干净状态”。
 5. 仅在明确证明原 Migration 未成功执行且重试安全时，才重新授权执行。
-

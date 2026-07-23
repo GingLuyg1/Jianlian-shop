@@ -53,4 +53,3 @@ export async function getUserBep20UnderpaymentWalletCredit(
     tx_hash_summary: maskTxHash(chainResult.data?.submitted_tx_hash),
   };
 }
-

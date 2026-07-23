@@ -17,4 +17,3 @@ test("underpayment preview uses exact decimal strings and PostgreSQL-compatible 
     /欠额结算预览金额顺序无效/,
   );
 });
-
