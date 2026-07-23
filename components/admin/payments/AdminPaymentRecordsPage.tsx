@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminBep20UnderpaymentPanel from "@/components/admin/payments/AdminBep20UnderpaymentPanel";
 import AdminReconciliationPanel from "@/components/admin/payments/AdminReconciliationPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [sort, setSort] = useState("created_desc");
-  const [view, setView] = useState<"all" | "exceptions" | "reconciliations">("all");
+  const [view, setView] = useState<"all" | "exceptions" | "reconciliations" | "underpayments">("all");
   const [exceptionType, setExceptionType] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -118,7 +119,15 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     setSort(params.get("sort") ?? "created_desc");
     if (!isRechargePage) {
       setBusinessType(params.get("businessType") ?? "all");
-      setView(params.get("view") === "exceptions" ? "exceptions" : params.get("view") === "reconciliations" ? "reconciliations" : "all");
+      setView(
+        params.get("view") === "exceptions"
+          ? "exceptions"
+          : params.get("view") === "reconciliations"
+            ? "reconciliations"
+            : params.get("view") === "underpayments"
+              ? "underpayments"
+              : "all",
+      );
       setExceptionType(params.get("exceptionType") ?? "all");
     }
   }, [isRechargePage]);
@@ -141,7 +150,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     setLoading(true);
     setError("");
     try {
-      if (!isRechargePage && view === "reconciliations") { setLoading(false); return; }
+      if (!isRechargePage && ["reconciliations", "underpayments"].includes(view)) { setLoading(false); return; }
       const params = buildParams();
       const endpoint = isRechargePage ? "/api/admin/recharges" : "/api/admin/payments";
       const response = await fetch(`${endpoint}?${params.toString()}`, { cache: "no-store" });
@@ -203,8 +212,8 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   return (
     <AdminPageShell title={isRechargePage ? "充值管理" : "支付管理"} description={isRechargePage ? "查看账户充值支付记录。管理员不能在此直接给用户余额入账。" : "统一查看商品订单和账户充值支付记录，异常支付仅做只读追踪。"} actions={<Button variant="outline" size="sm" onClick={loadPayments} disabled={loading}><RefreshCcw className="mr-2 h-4 w-4" />刷新</Button>}>
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-        {!isRechargePage ? <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => { setView("exceptions"); setPage(1); }}>异常支付</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "outline"} onClick={() => { setView("reconciliations"); setPage(1); }}>对账记录</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div> : null}
-        {view === "reconciliations" ? <AdminReconciliationPanel /> : <>
+        {!isRechargePage ? <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => { setView("exceptions"); setPage(1); }}>异常支付</Button><Button size="sm" variant={view === "underpayments" ? "default" : "outline"} onClick={() => { setView("underpayments"); setPage(1); }}>欠额转余额</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "outline"} onClick={() => { setView("reconciliations"); setPage(1); }}>对账记录</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div> : null}
+        {view === "reconciliations" ? <AdminReconciliationPanel /> : view === "underpayments" ? <AdminBep20UnderpaymentPanel /> : <>
         <div className="grid shrink-0 gap-2 border-b px-4 py-3 min-[1200px]:grid-cols-[minmax(180px,1.2fr)_150px_150px_145px_145px_140px_86px] min-[1600px]:grid-cols-[minmax(220px,1.35fr)_140px_145px_145px_145px_140px_86px_86px]">
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="支付单号 / 业务单号 / 用户邮箱" className="h-9 pl-9" /></div>
           {!isRechargePage ? <select value={businessType} onChange={(event) => { setBusinessType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部业务</option><option value="order">商品订单</option><option value="recharge">账户充值</option></select> : null}
@@ -229,7 +238,36 @@ function PaymentTable({ isRechargePage, loading, payments, copyText, loadDetail 
 }
 
 function PaymentDrawer({ selected, detail, callbacks, callbackError, chainPayment, chainPaymentError, overpaymentWallet, detailLoading, detailError, onClose, onRetry, onChanged, copyText }: { selected: AdminPaymentRecord; detail: AdminPaymentRecord | null; callbacks: AdminPaymentCallback[]; callbackError: string; chainPayment: AdminBep20ChainPayment | null; chainPaymentError: string; overpaymentWallet: AdminBep20OverpaymentWallet; detailLoading: boolean; detailError: string; onClose: () => void; onRetry: () => void; onChanged: () => Promise<void>; copyText: (value: string | null | undefined) => void }) {
-  return <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" onClick={onClose}><aside className="flex h-full w-full max-w-[760px] flex-col bg-white shadow-xl" onClick={(event) => event.stopPropagation()}><div className="flex shrink-0 items-start justify-between border-b px-5 py-4"><div><h2 className="text-lg font-semibold text-slate-950">支付详情</h2><p className="mt-1 text-xs text-slate-500">{selected.payment_no}</p></div><Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button></div><div className="min-h-0 flex-1 overflow-y-auto p-5">{detailLoading ? <DetailSkeleton /> : null}{detailError ? <AdminErrorState description={detailError} onRetry={onRetry} /> : null}{!detailLoading && !detailError && detail ? <div className="space-y-4"><DetailGroup title="基础信息" rows={[["支付单号", detail.payment_no], ["业务类型", getBusinessTypeLabel(detail.business_type)], ["支付状态", getUnifiedPaymentStatusLabel(detail.status)], ["创建时间", formatDate(detail.created_at)], ["支付时间", formatDate(detail.paid_at)]]} /><DetailGroup title="关联业务" rows={[["业务单号", detail.business_no ?? "—"], ["用户邮箱", detail.user_email ?? "—"], ["用户备注", detail.user_note ?? "—"], ["管理员备注", detail.admin_note ?? "—"]]} /><DetailGroup title="金额明细" rows={[["业务金额", formatPaymentMoney(detail.business_amount, detail.business_currency)], ["手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency ?? detail.business_currency)], ["应付金额", formatPaymentMoney(detail.payable_amount, detail.payable_currency)], ["到账金额", formatPaymentMoney(detail.received_amount, detail.received_currency)], ["平台净额", formatPaymentMoney(detail.platform_net_amount, detail.received_currency)]]} /><DetailGroup title="渠道信息" rows={[["支付渠道", getPaymentChannelLabel(detail.channel)], ["网络", detail.channel === "alipay" || detail.channel === "wechat" ? "—" : detail.network ?? "—"], ["渠道交易号", detail.provider_trade_no ?? "—", detail.provider_trade_no ? () => copyText(detail.provider_trade_no) : undefined], ["交易参考号", detail.transaction_reference ?? "—"], ["钱包地址", maskWallet(null)]]} />{chainPayment || chainPaymentError ? <Bep20ChainPaymentPanel detail={detail} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} copyText={copyText} onChanged={onChanged} /> : null}<DetailGroup title="回调状态" rows={[["回调状态", detail.callback_status ?? "—"], ["回调原文", "仅显示脱敏摘要，不展示完整请求体"]]} /><CallbackRecords callbacks={callbacks} callbackError={callbackError} /><DetailGroup title="状态变更记录" rows={[["当前版本", "暂未接入独立支付状态日志，保留订单状态日志。"]]} /><DetailGroup title="错误信息" rows={[["异常类型", detail.exception_type ? getExceptionTypeLabel(detail.exception_type) : "—"], ["错误摘要", detail.error_summary ?? "—"]]} />{detail.exception_type ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />重新查询渠道状态</div><p className="mt-1 text-xs">真实支付 Provider 尚未配置，当前操作不可用。</p></div> : null}</div> : null}</div></aside></div>;
+  const underpaymentCredited = detail?.exception_type === "underpayment_credited_to_wallet";
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" onClick={onClose}>
+      <aside className="flex h-full w-full max-w-[760px] flex-col bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+        <div className="flex shrink-0 items-start justify-between border-b px-5 py-4">
+          <div><h2 className="text-lg font-semibold text-slate-950">支付详情</h2><p className="mt-1 text-xs text-slate-500">{selected.payment_no}</p></div>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {detailLoading ? <DetailSkeleton /> : null}
+          {detailError ? <AdminErrorState description={detailError} onRetry={onRetry} /> : null}
+          {!detailLoading && !detailError && detail ? (
+            <div className="space-y-4">
+              {underpaymentCredited ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">欠额款已转入用户余额，原订单已取消</div> : null}
+              <DetailGroup title="基础信息" rows={[["支付单号", detail.payment_no], ["业务类型", getBusinessTypeLabel(detail.business_type)], ["支付状态", underpaymentCredited ? "欠额已转余额" : getUnifiedPaymentStatusLabel(detail.status)], ["创建时间", formatDate(detail.created_at)], ["支付时间", formatDate(detail.paid_at)]]} />
+              <DetailGroup title="关联业务" rows={[["业务单号", detail.business_no ?? "—"], ["用户邮箱", detail.user_email ?? "—"], ["用户备注", detail.user_note ?? "—"], ["管理员备注", detail.admin_note ?? "—"]]} />
+              <DetailGroup title="金额明细" rows={[["业务金额", formatPaymentMoney(detail.business_amount, detail.business_currency)], ["手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency ?? detail.business_currency)], ["应付金额", formatPaymentMoney(detail.payable_amount, detail.payable_currency)], ["到账金额", formatPaymentMoney(detail.received_amount, detail.received_currency)], ["平台净额", formatPaymentMoney(detail.platform_net_amount, detail.received_currency)]]} />
+              <DetailGroup title="渠道信息" rows={[["支付渠道", getPaymentChannelLabel(detail.channel)], ["网络", detail.channel === "alipay" || detail.channel === "wechat" ? "—" : detail.network ?? "—"], ["渠道交易号", detail.provider_trade_no ?? "—", detail.provider_trade_no ? () => copyText(detail.provider_trade_no) : undefined], ["交易参考号", detail.transaction_reference ?? "—"], ["钱包地址", maskWallet(null)]]} />
+              {chainPayment || chainPaymentError ? <Bep20ChainPaymentPanel detail={detail} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} copyText={copyText} onChanged={onChanged} /> : null}
+              <DetailGroup title="回调状态" rows={[["回调状态", detail.callback_status ?? "—"], ["回调原文", "仅显示脱敏摘要，不展示完整请求体"]]} />
+              <CallbackRecords callbacks={callbacks} callbackError={callbackError} />
+              <DetailGroup title="状态变更记录" rows={[["当前版本", "暂未接入独立支付状态日志，保留订单状态日志。"]]} />
+              <DetailGroup title="错误信息" rows={[["异常类型", detail.exception_type ? getExceptionTypeLabel(detail.exception_type) : "—"], ["错误摘要", detail.error_summary ?? "—"]]} />
+              {!underpaymentCredited && detail.exception_type ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />重新查询渠道状态</div><p className="mt-1 text-xs">真实支付 Provider 尚未配置，当前操作不可用。</p></div> : null}
+            </div>
+          ) : null}
+        </div>
+      </aside>
+    </div>
+  );
 }
 
 function Bep20ChainPaymentPanel({ detail, chainPayment, chainPaymentError, overpaymentWallet, copyText, onChanged }: { detail: AdminPaymentRecord; chainPayment: AdminBep20ChainPayment | null; chainPaymentError: string; overpaymentWallet: AdminBep20OverpaymentWallet; copyText: (value: string | null | undefined) => void; onChanged: () => Promise<void> }) {

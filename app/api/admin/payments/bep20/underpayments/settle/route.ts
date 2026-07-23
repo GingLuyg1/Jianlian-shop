@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/business/business-ids";
-import { settleBep20Underpayment } from "@/lib/payments/bep20-underpayment-service";
+import { getAdminBep20UnderpaymentPreview } from "@/lib/payments/bep20-underpayment-admin";
+import {
+  getBep20UnderpaymentRequiredConfirmations,
+  settleBep20Underpayment,
+} from "@/lib/payments/bep20-underpayment-service";
 import {
   Bep20UnderpaymentRuntimeError,
   isBep20UnderpaymentIrreversibleConfirmation,
@@ -11,6 +15,23 @@ import {
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+function logSettlementAction(input: {
+  requestId: string;
+  sessionId: string;
+  operatorId: string;
+  result: string;
+  durationMs: number;
+}) {
+  console.info("[BEP20 underpayment admin]", {
+    request_id: input.requestId,
+    session_id: input.sessionId,
+    operator_id: input.operatorId,
+    action: "settle",
+    result: input.result,
+    duration_ms: input.durationMs,
+  });
+}
 
 function safeSettlementError(code: string) {
   if (/^(PGRST202|PGRST205|42P01|42883)$/.test(code)) {
@@ -48,6 +69,7 @@ function safeSettlementError(code: string) {
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   const admin = await getServerSuperAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({
@@ -71,20 +93,86 @@ export async function POST(request: Request) {
   if (sizeError) return sizeError;
 
   const body = await request.json().catch(() => null) as {
+    action?: string;
+    dryRun?: boolean;
+    dry_run?: boolean;
     sessionId?: string;
     reason?: string;
     requestId?: string;
+    requiredConfirmations?: number;
     confirmIrreversible?: boolean;
+    confirmationText?: string;
   } | null;
+  const action = String(body?.action ?? "").trim();
   const sessionId = String(body?.sessionId ?? "").trim();
   const reason = String(body?.reason ?? "").trim();
   const requestId = String(body?.requestId ?? "").trim();
-  if (!isUuid(sessionId) || !reason || reason.length > 500 || requestId.length > 200) {
-    return NextResponse.json({ error: "链上支付会话、处理原因或请求编号无效" }, { status: 400 });
+  const requiredConfirmations = Number(body?.requiredConfirmations);
+  const explicitlyWrites = body?.dryRun === false || body?.dry_run === false;
+  if (action !== "settle" || !explicitlyWrites) {
+    return NextResponse.json(
+      { success: false, code: "BEP20_UNDERPAYMENT_EXPLICIT_SETTLEMENT_REQUIRED", message: "真实结算必须明确声明操作类型。" },
+      { status: 400 },
+    );
+  }
+  if (
+    !isUuid(sessionId)
+    || reason.length < 1
+    || reason.length > 500
+    || requestId.length < 1
+    || requestId.length > 200
+    || !Number.isInteger(requiredConfirmations)
+    || requiredConfirmations < 1
+    || requiredConfirmations > 1000
+  ) {
+    return NextResponse.json(
+      { success: false, code: "BEP20_UNDERPAYMENT_INPUT_INVALID", message: "链上支付会话、处理原因、请求编号或确认数无效。" },
+      { status: 400 },
+    );
+  }
+  let configuredConfirmations: number;
+  try {
+    configuredConfirmations = getBep20UnderpaymentRequiredConfirmations();
+  } catch {
+    const safe = safeSettlementError("BEP20_UNDERPAYMENT_CONFIRMATION_CONFIG_INVALID");
+    return NextResponse.json({ success: false, code: safe.code, message: safe.message }, { status: safe.status });
+  }
+  if (requiredConfirmations !== configuredConfirmations) {
+    return NextResponse.json(
+      { success: false, code: "BEP20_UNDERPAYMENT_CONFIRMATION_MISMATCH", message: "确认数与服务端安全配置不一致，请刷新预检查。" },
+      { status: 409 },
+    );
+  }
+  let preview;
+  try {
+    preview = await getAdminBep20UnderpaymentPreview(sessionId);
+  } catch {
+    return NextResponse.json(
+      { success: false, code: "BEP20_UNDERPAYMENT_PREVIEW_FAILED", message: "结算前预检查失败，请刷新后重试。" },
+      { status: 503 },
+    );
+  }
+  if (!preview) {
+    return NextResponse.json(
+      { success: false, code: "BEP20_UNDERPAYMENT_SESSION_NOT_FOUND", message: "欠额支付记录不存在。" },
+      { status: 404 },
+    );
+  }
+  if (String(body?.confirmationText ?? "").trim() !== preview.orderNo) {
+    return NextResponse.json(
+      { success: false, code: "BEP20_UNDERPAYMENT_CONFIRMATION_TEXT_INVALID", message: "请输入完整订单号确认本次不可撤销操作。" },
+      { status: 400 },
+    );
+  }
+  if (!preview.eligible && preview.idempotencyState !== "already_settled") {
+    return NextResponse.json(
+      { success: false, code: "BEP20_UNDERPAYMENT_PRECHECK_BLOCKED", message: "当前记录未通过只读预检查，请刷新后核对阻断原因。" },
+      { status: 409 },
+    );
   }
   if (!isBep20UnderpaymentIrreversibleConfirmation(body?.confirmIrreversible)) {
     const safe = safeSettlementError("BEP20_UNDERPAYMENT_IRREVERSIBLE_CONFIRMATION_REQUIRED");
-    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
+    return NextResponse.json({ success: false, message: safe.message, code: safe.code }, { status: safe.status });
   }
 
   try {
@@ -98,7 +186,23 @@ export async function POST(request: Request) {
       requestId: requestId || undefined,
     });
 
-    if (result.ok) return NextResponse.json({ result });
+    if (result.ok) {
+      const resultName = result.idempotent ? "already_settled" : "settled";
+      logSettlementAction({
+        requestId,
+        sessionId,
+        operatorId: admin.user.id,
+        result: resultName,
+        durationMs: Date.now() - startedAt,
+      });
+      return NextResponse.json({
+        success: true,
+        dry_run: false,
+        result: resultName,
+        idempotent: Boolean(result.idempotent),
+        settlement: result,
+      });
+    }
 
     const safe = safeSettlementError(result.code);
     await writeAdminAuditLog({
@@ -113,7 +217,14 @@ export async function POST(request: Request) {
       errorMessage: safe.message,
       metadata: { settlement_source: "manual_admin", request_id: result.requestId },
     });
-    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
+    logSettlementAction({
+      requestId,
+      sessionId,
+      operatorId: admin.user.id,
+      result: safe.code,
+      durationMs: Date.now() - startedAt,
+    });
+    return NextResponse.json({ success: false, message: safe.message, code: safe.code }, { status: safe.status });
   } catch (error) {
     const code = error instanceof Bep20UnderpaymentRuntimeError
       ? error.code
@@ -131,6 +242,13 @@ export async function POST(request: Request) {
       errorMessage: safe.message,
       metadata: { settlement_source: "manual_admin" },
     });
-    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
+    logSettlementAction({
+      requestId,
+      sessionId,
+      operatorId: admin.user.id,
+      result: safe.code,
+      durationMs: Date.now() - startedAt,
+    });
+    return NextResponse.json({ success: false, message: safe.message, code: safe.code }, { status: safe.status });
   }
 }
