@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -3233,7 +3234,7 @@ test("BEP20 underpayment internal and admin routes preserve trust boundaries", (
   assert.match(adminRoute, /BEP20_UNDERPAYMENT_RESULT_INVALID/);
   assert.match(adminRoute, /code === "BEP20_UNDERPAYMENT_DEADLINE_INVALID"[\s\S]*?return \{ status: 409, code,/);
   assert.match(adminRoute, /import \{ isUuid \} from "@\/lib\/business\/business-ids"/);
-  assert.match(adminRoute, /if \(!isUuid\(sessionId\)/);
+  assert.match(adminRoute, /!isUuid\(sessionId\)/);
   assert.match(adminRoute, /"22P02"/);
   assert.doesNotMatch(adminRoute, /result\.message/);
   assert.doesNotMatch(adminRoute, /result:\s*"success"/);
@@ -3369,4 +3370,93 @@ test("BEP20 underpayment confirmation-state migration backfills only strict uniq
   assert.doesNotMatch(migration, /insert into public\.bep20_underpayment_dispositions/i);
   assert.doesNotMatch(migration, /release_order_inventory\s*\(/i);
   assert.doesNotMatch(migration, /update public\.(orders|payment_sessions|order_payments|profiles|digital_inventory)/i);
+});
+
+test("BEP20 underpayment admin workflow is explicit, read-only before confirmation, and server-authorized", () => {
+  const listRoute = file("app/api/admin/payments/bep20/underpayments/route.ts");
+  const settleRoute = file("app/api/admin/payments/bep20/underpayments/settle/route.ts");
+  const internalRoute = file("app/api/internal/payments/bep20/underpayments/settle/route.ts");
+  const adminReadService = file("lib/payments/bep20-underpayment-admin.ts");
+  const panel = file("components/admin/payments/AdminBep20UnderpaymentPanel.tsx");
+
+  assert.match(listRoute, /getServerSuperAdminContext\(\)/);
+  assert.match(listRoute, /getAdminBep20UnderpaymentPreview/);
+  assert.match(listRoute, /listAdminBep20Underpayments/);
+  assert.doesNotMatch(listRoute, /settleBep20Underpayment|settle_bep20_underpayment_to_wallet/);
+  assert.doesNotMatch(adminReadService, /\.rpc\(\s*["']settle_bep20_underpayment_to_wallet/);
+
+  assert.match(settleRoute, /action !== "settle"/);
+  assert.match(settleRoute, /body\?\.dryRun === false \|\| body\?\.dry_run === false/);
+  assert.match(settleRoute, /requestId\.length < 1/);
+  assert.match(settleRoute, /reason\.length < 1/);
+  assert.match(settleRoute, /requiredConfirmations < 1/);
+  assert.match(settleRoute, /requiredConfirmations > 1000/);
+  assert.match(settleRoute, /confirmationText[\s\S]*preview\.orderNo/);
+  assert.match(settleRoute, /operatorId: admin\.user\.id/);
+  assert.match(settleRoute, /source: "manual_admin"/);
+  assert.doesNotMatch(settleRoute, /body\?\.(?:operatorId|operator_user_id|settlementSource|settlement_source)/);
+
+  assert.match(internalRoute, /export async function GET[\s\S]*handleDryRun/);
+  assert.match(internalRoute, /body\?\.action === "settle" && body\?\.dry_run === false/);
+  assert.match(internalRoute, /handleDryRun\(request, body\?\.limit\)/);
+
+  assert.match(panel, /运行只读预检查/);
+  assert.match(panel, /confirmIrreversible/);
+  assert.match(panel, /confirmationText/);
+  assert.match(panel, /window\.confirm/);
+  assert.match(panel, /requestId/);
+  assert.match(panel, /already_settled/);
+  assert.match(panel, /disabled=/);
+  assert.match(panel, /将欠额款转入[\s\S]*余额[\s\S]*取消原订单/);
+  assert.doesNotMatch(panel, /SUPABASE_SERVICE_ROLE_KEY|service-role|service_role_key/);
+});
+
+test("BEP20 underpayment wallet-credit disposition has explicit user and admin presentation", () => {
+  const orderNotice = file("components/account/orders/Bep20UnderpaymentWalletCreditNotice.tsx");
+  const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
+  const orderDrawer = file("app/account/orders/page.tsx");
+  const accountPage = file("app/account/page.tsx");
+  const accountAssets = file("app/api/account/assets/route.ts");
+  const orderStatus = file("lib/orders/order-status.ts");
+  const adminTypes = file("lib/payments/admin-payment-types.ts");
+
+  assert.match(orderNotice, /欠额支付已转入账户余额/);
+  assert.match(orderNotice, /原商品订单已取消，不会继续履约或交付/);
+  assert.match(orderNotice, /received_usdt/);
+  assert.match(orderNotice, /credited_cny/);
+  assert.match(orderNotice, /transaction_no/);
+  assert.match(orderDetail, /Bep20UnderpaymentWalletCreditNotice/);
+  assert.match(orderDrawer, /Bep20UnderpaymentWalletCreditNotice/);
+  assert.match(accountAssets, /metadata\.subtype/);
+  assert.match(accountAssets, /orderNo/);
+  assert.match(accountPage, /bep20_underpayment_wallet_credit/);
+  assert.match(accountPage, /BEP20 欠额转余额/);
+  assert.match(accountPage, /balanceBefore/);
+  assert.match(accountPage, /balanceAfter/);
+  assert.match(orderStatus, /欠额已转余额/);
+  assert.match(adminTypes, /欠额款已转入用户余额，原订单已取消/);
+});
+
+test("single-session migration runner fails closed and the executed confirmation migration stays immutable", () => {
+  const runner = file("scripts/db/run-migration.ps1");
+  const runbook = file("docs/database-migration-runbook.md");
+  const confirmationMigration = file("supabase/migrations/20260730_bep20_underpayment_confirmation_state.sql");
+  const confirmationSha = createHash("sha256").update(confirmationMigration).digest("hex").toUpperCase();
+
+  assert.equal(
+    confirmationSha,
+    "AF0895DD70D2EB9A87028CDB1FCC58EE9963587D8DAFB7799B685EA278E90A9A",
+  );
+  assert.match(runner, /Get-FileHash[\s\S]*Algorithm SHA256/);
+  assert.match(runner, /MIGRATION_TRANSACTION_BOUNDARY_REQUIRED/);
+  assert.match(runner, /PRODUCTION_CONFIRMATION_TEXT_INVALID/);
+  assert.match(runner, /DATABASE_PROJECT_REF_MISMATCH/);
+  assert.match(runner, /ValidateOnly/);
+  assert.match(runner, /if \(-not \$Execute\)/);
+  assert.match(runner, /PGDATABASE/);
+  assert.doesNotMatch(runner, /Write-Host\s+["']?\$databaseUrl/);
+  assert.match(runbook, /单一 `psql` 会话/);
+  assert.match(runbook, /已经在任一环境成功执行的 Migration/);
+  assert.match(runbook, /只读 postcheck/);
+  assert.match(runbook, /业务结算/);
 });
