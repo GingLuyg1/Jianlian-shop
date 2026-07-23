@@ -49,7 +49,7 @@ test("archive re-reads and rejects records that are not published", () => {
 
 test("failure log contains only safe protocol error metadata", () => {
   const route = file("app/api/admin/legal/route.ts");
-  const failureAudit = route.match(/function logLegalFailure[\s\S]*?return classified;\n\}/)?.[0] ?? "";
+  const failureAudit = route.match(/function logLegalFailure[\s\S]*?return classified;\r?\n\}/)?.[0] ?? "";
 
   assert.match(failureAudit, /database_error_code: classified\.code/);
   assert.match(failureAudit, /constraint_summary/);
