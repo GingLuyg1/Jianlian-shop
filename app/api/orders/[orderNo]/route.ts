@@ -5,6 +5,7 @@ import { canUserCancelOrder } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getUserBep20UnderpaymentWalletCredit } from "@/lib/payments/bep20-underpayment-user";
 
 export const dynamic = "force-dynamic";
 
@@ -122,7 +123,13 @@ export async function GET(_request: Request, context: RouteContext) {
       return jsonError("Order does not exist or you do not have permission to view it.", 404);
     }
 
-    return NextResponse.json({ order });
+    const walletCredit = await getUserBep20UnderpaymentWalletCredit(order.id, user.id);
+    return NextResponse.json({
+      order: {
+        ...order,
+        bep20_underpayment_wallet_credit: walletCredit,
+      },
+    });
   } catch (error) {
     console.error("[Orders] detail failed", error);
     return jsonError(getOrderErrorMessage(error, "Order details could not be loaded."), 500);

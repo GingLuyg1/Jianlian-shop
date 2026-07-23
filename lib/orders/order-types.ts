@@ -68,6 +68,18 @@ export type OrderDeliveryRecord = {
   updated_at: string;
 };
 
+export type Bep20UnderpaymentWalletCreditSummary = {
+  disposition: "wallet_credit";
+  received_usdt: string;
+  expected_usdt: string;
+  shortfall_usdt: string;
+  exchange_rate: string;
+  credited_cny: string;
+  processed_at: string;
+  transaction_no: string | null;
+  tx_hash_summary: string | null;
+};
+
 export type OrderRecord = {
   id: string;
   order_no: string;
@@ -101,6 +113,7 @@ export type OrderRecord = {
   order_status_logs?: OrderLogRecord[];
   order_deliveries?: OrderDeliveryRecord[];
   bep20_payment_state?: Bep20PaymentState;
+  bep20_underpayment_wallet_credit?: Bep20UnderpaymentWalletCreditSummary | null;
 };
 
 export type OrderListResult = {

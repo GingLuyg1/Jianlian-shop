@@ -7,6 +7,7 @@ import { Clipboard, ClipboardList, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
+import { Bep20UnderpaymentWalletCreditNotice } from "@/components/account/orders/Bep20UnderpaymentWalletCreditNotice";
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -689,6 +690,8 @@ function UserOrderDrawer({
               await onOrderUpdated(order.order_no);
             }}
           />
+
+          <Bep20UnderpaymentWalletCreditNotice summary={order.bep20_underpayment_wallet_credit} />
 
           <SecureOrderDelivery
             orderNo={order.order_no}
