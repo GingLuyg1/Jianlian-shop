@@ -61,6 +61,10 @@ function requiredConfirmations() {
   return readBep20UnderpaymentConfirmations(process.env.BSC_REQUIRED_CONFIRMATIONS);
 }
 
+export function getBep20UnderpaymentRequiredConfirmations() {
+  return requiredConfirmations();
+}
+
 export function assertBep20UnderpaymentSettlementConfigured() {
   requireServiceClient();
   return requiredConfirmations();
@@ -204,8 +208,12 @@ export async function listExpirableBep20UnderpaymentsDryRun(limit = DEFAULT_BATC
   };
 }
 
-export async function processExpiredBep20Underpayments(limit = DEFAULT_BATCH_LIMIT, reason = "payment_timeout_underpayment") {
-  const requestId = randomUUID();
+export async function processExpiredBep20Underpayments(
+  limit = DEFAULT_BATCH_LIMIT,
+  reason = "payment_timeout_underpayment",
+  requestedBatchId?: string | null,
+) {
+  const requestId = requestedBatchId?.trim() || randomUUID();
   const readResult = await readBep20UnderpaymentCandidatesSafely(
     () => listCandidates(safeLimit(limit)),
   );
@@ -235,6 +243,7 @@ export async function processExpiredBep20Underpayments(limit = DEFAULT_BATCH_LIM
       operatorId: null,
       irreversibleConfirmed: false,
       reason,
+      requestId: `${requestId}:${sessionId}`,
       }),
     (sessionId: string, error: unknown) => ({
         ok: false,

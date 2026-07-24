@@ -7,6 +7,7 @@ import { ArrowLeft, Clipboard, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
+import { Bep20UnderpaymentWalletCreditNotice } from "@/components/account/orders/Bep20UnderpaymentWalletCreditNotice";
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { OrderRefundPanel } from "@/components/refunds/OrderRefundPanel";
@@ -223,6 +224,8 @@ export default function AccountOrderDetailPage({ params }: { params: { orderNo: 
                 </Card>
 
                 <Bep20OrderPaymentSummary order={order} onUpdated={loadOrder} />
+
+                <Bep20UnderpaymentWalletCreditNotice summary={order.bep20_underpayment_wallet_credit} />
 
                 <SecureOrderDelivery
                   orderNo={order.order_no}

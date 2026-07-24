@@ -57,6 +57,14 @@ type BalanceTransactionView = {
   currency: string;
   status: string;
   remark: string | null;
+  subtype: string | null;
+  orderId: string | null;
+  orderNo: string | null;
+  receivedUsdt: string | null;
+  expectedUsdt: string | null;
+  shortfallUsdt: string | null;
+  exchangeRate: string | null;
+  txHashSummary: string | null;
   createdAt: string | null;
 };
 
@@ -112,6 +120,12 @@ function balanceTypeLabel(type: string) {
       system: "系统处理",
     }[type] ?? type
   );
+}
+
+function balanceTransactionLabel(item: BalanceTransactionView) {
+  return item.subtype === "bep20_underpayment_wallet_credit"
+    ? "BEP20 欠额转余额"
+    : balanceTypeLabel(item.businessType);
 }
 
 export default function AccountOverviewPage() {
@@ -277,7 +291,7 @@ export default function AccountOverviewPage() {
                   {data?.recentBalanceTransactions.map((item) => (
                     <div key={item.transactionNo} className="rounded-xl border bg-slate-50 px-3 py-2 text-sm">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="truncate">{balanceTypeLabel(item.businessType)}</span>
+                        <span className="truncate">{balanceTransactionLabel(item)}</span>
                         <span className={item.direction === "credit" ? "font-semibold text-emerald-600" : "font-semibold text-red-600"}>
                           {item.direction === "credit" ? "+" : "-"}
                           {formatMoney(item.amount, item.currency)}
@@ -287,6 +301,14 @@ export default function AccountOverviewPage() {
                         <span className="truncate">{item.remark || item.transactionNo}</span>
                         <span>{formatDate(item.createdAt)}</span>
                       </div>
+                      {item.subtype === "bep20_underpayment_wallet_credit" ? (
+                        <div className="mt-2 grid gap-1 border-t pt-2 text-xs text-slate-600">
+                          <span>对应订单：{item.orderNo ?? "—"}</span>
+                          <span>实收 / 应付 / 欠额：{item.receivedUsdt ?? "—"} / {item.expectedUsdt ?? "—"} / {item.shortfallUsdt ?? "—"} USDT</span>
+                          <span>冻结汇率：{item.exchangeRate ?? "—"} · 链上交易：{item.txHashSummary ?? "—"}</span>
+                          <span>余额：{item.balanceBefore == null ? "—" : formatMoney(item.balanceBefore)} → {item.balanceAfter == null ? "—" : formatMoney(item.balanceAfter)}</span>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>

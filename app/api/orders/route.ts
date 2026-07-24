@@ -5,6 +5,7 @@ import { getBalancePaymentErrorMessage, payOrderWithBalance } from "@/lib/orders
 import { recordOrderAgreementAcceptances, verifyCheckoutAgreements, type AgreementInput } from "@/lib/legal/legal-service";
 import { normalizePaymentMethod } from "@/lib/payments/payment-methods";
 import { createBep20PaymentSession, getBep20ErrorMessage } from "@/lib/payments/bep20-chain-service";
+import { getUserBep20UnderpaymentWalletCredits } from "@/lib/payments/bep20-underpayment-user";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
@@ -215,7 +216,16 @@ export async function GET(request: Request) {
       skuSearch,
     });
 
-    return NextResponse.json(result);
+    const walletCredits = await getUserBep20UnderpaymentWalletCredits(
+      result.orders.map((order) => String(order.id)),
+      user.id,
+    );
+    const orders = result.orders.map((order) => ({
+      ...order,
+      bep20_underpayment_wallet_credit: walletCredits.get(String(order.id)) ?? null,
+    }));
+
+    return NextResponse.json({ ...result, orders });
   } catch (error) {
     console.error("[Orders] list failed", getOrderErrorMessage(error, "Order list failed"));
     return NextResponse.json(

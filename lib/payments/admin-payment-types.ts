@@ -232,6 +232,7 @@ export function getExceptionTypeLabel(value: string | null | undefined) {
     duplicate_trade_no: "重复交易号",
     balance_credit_failed: "余额入账失败",
     order_status_update_failed: "订单状态更新失败",
+    underpayment_credited_to_wallet: "欠额款已转入用户余额，原订单已取消",
   };
   return value ? labels[value] ?? value : "—";
 }

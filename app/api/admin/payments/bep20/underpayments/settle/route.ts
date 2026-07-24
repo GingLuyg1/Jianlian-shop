@@ -2,52 +2,44 @@ import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
-import { isUuid } from "@/lib/business/business-ids";
-import { settleBep20Underpayment } from "@/lib/payments/bep20-underpayment-service";
+import { getAdminBep20UnderpaymentPreview } from "@/lib/payments/bep20-underpayment-admin";
 import {
-  Bep20UnderpaymentRuntimeError,
-  isBep20UnderpaymentIrreversibleConfirmation,
-} from "@/lib/payments/bep20-underpayment-runtime.mjs";
+  mapAdminUnderpaymentAuthorizationFailure,
+  mapAdminUnderpaymentSettlementError,
+  parseAdminUnderpaymentSettlementBody,
+} from "@/lib/payments/bep20-underpayment-admin-runtime.mjs";
+import {
+  getBep20UnderpaymentRequiredConfirmations,
+  settleBep20Underpayment,
+} from "@/lib/payments/bep20-underpayment-service";
+import { Bep20UnderpaymentRuntimeError } from "@/lib/payments/bep20-underpayment-runtime.mjs";
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-function safeSettlementError(code: string) {
-  if (/^(PGRST202|PGRST205|42P01|42883)$/.test(code)) {
-    return { status: 503, code: "BEP20_UNDERPAYMENT_MIGRATION_REQUIRED", message: "欠额支付结算功能尚未初始化。" };
-  }
-  if ([
-    "BEP20_UNDERPAYMENT_SERVICE_ROLE_NOT_CONFIGURED",
-    "BEP20_UNDERPAYMENT_SERVICE_ROLE_REQUIRED",
-    "BEP20_UNDERPAYMENT_CONFIRMATION_CONFIG_INVALID",
-  ].includes(code)) {
-    return { status: 503, code, message: "欠额支付结算服务配置不可用。" };
-  }
-  if (code === "BEP20_UNDERPAYMENT_SESSION_NOT_FOUND") {
-    return { status: 404, code, message: "链上支付会话不存在。" };
-  }
-  if (["22P02", "SESSION_ID_REQUIRED", "BEP20_UNDERPAYMENT_INPUT_INVALID"].includes(code)) {
-    return { status: 400, code, message: "欠额支付结算请求无效。" };
-  }
-  if (code === "BEP20_UNDERPAYMENT_IRREVERSIBLE_CONFIRMATION_REQUIRED") {
-    return { status: 400, code, message: "人工结算前必须明确确认该操作不可撤销。" };
-  }
-  if (
-    code === "BEP20_UNDERPAYMENT_DEADLINE_INVALID"
-    || /^BEP20_UNDERPAYMENT_(?:NOT_EXPIRED|STATE_INVALID|PAYMENT_STATE_INVALID|SNAPSHOT_INVALID|ORDER_SNAPSHOT_MISMATCH|PAYMENT_SNAPSHOT_MISMATCH|OWNERSHIP_INVALID|CLAIM_INVALID|TRANSFER_COUNT_INVALID|TRANSFER_INVALID|TRANSACTION_REFERENCE_MISMATCH|LATE_TRANSFER|RAW_AMOUNT_INVALID|AMOUNT_MISMATCH|AUTOMATIC_OPERATOR_FORBIDDEN|SUPER_ADMIN_REQUIRED|PROFILE_NOT_FOUND|CREDIT_ROUNDS_TO_ZERO|BALANCE_OUT_OF_RANGE|ORDER_STATE_CHANGED|PAYMENT_LINK_LOST)$/.test(code)
-  ) {
-    return { status: 409, code, message: "当前欠额支付状态不允许结算，请刷新后核对。" };
-  }
-  if (code === "BEP20_UNDERPAYMENT_INVENTORY_RELEASE_FAILED") {
-    return { status: 503, code, message: "库存释放暂时不可用，欠额结算未生效，请稍后重试。" };
-  }
-  if (code === "BEP20_UNDERPAYMENT_RESULT_INVALID") {
-    return { status: 500, code, message: "欠额支付结算返回异常，请稍后重试。" };
-  }
-  return { status: 500, code: "BEP20_UNDERPAYMENT_SETTLEMENT_FAILED", message: "欠额支付结算失败，请稍后重试。" };
+function jsonFailure(code: string, message: string, status: number, headers?: Headers) {
+  return NextResponse.json({ success: false, code, message }, { status, headers });
+}
+
+function logSettlementAction(input: {
+  requestId: string;
+  sessionId: string;
+  operatorId: string;
+  result: string;
+  durationMs: number;
+}) {
+  console.info("[BEP20 underpayment admin]", {
+    request_id: input.requestId,
+    session_id: input.sessionId,
+    operator_id: input.operatorId,
+    action: "settle",
+    result: input.result,
+    duration_ms: input.durationMs,
+  });
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   const admin = await getServerSuperAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({
@@ -58,49 +50,125 @@ export async function POST(request: Request) {
       result: "denied",
       errorMessage: admin.message,
     });
-    return NextResponse.json({ error: admin.message }, { status: admin.status });
+    const safe = mapAdminUnderpaymentAuthorizationFailure(admin.status, admin.message);
+    return jsonFailure(safe.code, safe.message, safe.status);
   }
 
   const rateLimit = checkRateLimit(
     "admin_write",
     getAdminRateLimitKey(admin.user.id, "bep20_underpayment_settlement"),
   );
-  if (!rateLimit.allowed) return rateLimit.response!;
+  if (!rateLimit.allowed) {
+    return jsonFailure(
+      "RATE_LIMITED",
+      "请求过于频繁，请稍后重试。",
+      rateLimit.response?.status ?? 429,
+      rateLimit.response?.headers,
+    );
+  }
 
   const sizeError = checkRequestSize(request, 8 * 1024);
-  if (sizeError) return sizeError;
-
-  const body = await request.json().catch(() => null) as {
-    sessionId?: string;
-    reason?: string;
-    requestId?: string;
-    confirmIrreversible?: boolean;
-  } | null;
-  const sessionId = String(body?.sessionId ?? "").trim();
-  const reason = String(body?.reason ?? "").trim();
-  const requestId = String(body?.requestId ?? "").trim();
-  if (!isUuid(sessionId) || !reason || reason.length > 500 || requestId.length > 200) {
-    return NextResponse.json({ error: "链上支付会话、处理原因或请求编号无效" }, { status: 400 });
+  if (sizeError) {
+    return jsonFailure("REQUEST_TOO_LARGE", "请求体过大。", sizeError.status || 413);
   }
-  if (!isBep20UnderpaymentIrreversibleConfirmation(body?.confirmIrreversible)) {
-    const safe = safeSettlementError("BEP20_UNDERPAYMENT_IRREVERSIBLE_CONFIRMATION_REQUIRED");
-    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
+
+  const parsed = parseAdminUnderpaymentSettlementBody(await request.json().catch(() => null));
+  if (!parsed.ok || !parsed.value) {
+    return jsonFailure(
+      parsed.code ?? "BEP20_UNDERPAYMENT_INPUT_INVALID",
+      parsed.message ?? "欠额支付结算请求无效。",
+      parsed.status ?? 400,
+    );
+  }
+  const {
+    sessionId,
+    reason,
+    requestId,
+    requiredConfirmations,
+    confirmationText,
+    confirmIrreversible,
+  } = parsed.value;
+
+  let configuredConfirmations: number;
+  try {
+    configuredConfirmations = getBep20UnderpaymentRequiredConfirmations();
+  } catch {
+    const safe = mapAdminUnderpaymentSettlementError(
+      "BEP20_UNDERPAYMENT_CONFIRMATION_CONFIG_INVALID",
+    );
+    return jsonFailure(safe.code, safe.message, safe.status);
+  }
+  if (requiredConfirmations !== configuredConfirmations) {
+    return jsonFailure(
+      "BEP20_UNDERPAYMENT_CONFIRMATION_MISMATCH",
+      "确认数与服务端安全配置不一致，请刷新预检查。",
+      409,
+    );
+  }
+
+  let preview;
+  try {
+    preview = await getAdminBep20UnderpaymentPreview(sessionId);
+  } catch {
+    return jsonFailure(
+      "BEP20_UNDERPAYMENT_PREVIEW_FAILED",
+      "结算前预检查失败，请刷新后重试。",
+      503,
+    );
+  }
+  if (!preview) {
+    return jsonFailure("BEP20_UNDERPAYMENT_SESSION_NOT_FOUND", "欠额支付记录不存在。", 404);
+  }
+  if (confirmationText !== preview.orderNo) {
+    return jsonFailure(
+      "BEP20_UNDERPAYMENT_CONFIRMATION_TEXT_INVALID",
+      "请输入完整订单号确认本次不可撤销操作。",
+      400,
+    );
+  }
+  if (!preview.manualEligible && preview.idempotencyState !== "already_settled") {
+    return jsonFailure(
+      "BEP20_UNDERPAYMENT_PRECHECK_BLOCKED",
+      "当前记录未通过只读预检查，请刷新后核对阻断原因。",
+      409,
+    );
+  }
+  if (!confirmIrreversible) {
+    const safe = mapAdminUnderpaymentSettlementError(
+      "BEP20_UNDERPAYMENT_IRREVERSIBLE_CONFIRMATION_REQUIRED",
+    );
+    return jsonFailure(safe.code, safe.message, safe.status);
   }
 
   try {
-    // The service-role client is obtained only inside the server settlement
-    // service after cookie authentication and super-admin authorization pass.
+    // The server-authenticated operator always overrides any client-supplied identity.
     const result = await settleBep20Underpayment(sessionId, {
       source: "manual_admin",
       operatorId: admin.user.id,
       irreversibleConfirmed: true,
       reason,
-      requestId: requestId || undefined,
+      requestId,
     });
 
-    if (result.ok) return NextResponse.json({ result });
+    if (result.ok) {
+      const resultName = result.idempotent ? "already_settled" : "settled";
+      logSettlementAction({
+        requestId,
+        sessionId,
+        operatorId: admin.user.id,
+        result: resultName,
+        durationMs: Date.now() - startedAt,
+      });
+      return NextResponse.json({
+        success: true,
+        dry_run: false,
+        result: resultName,
+        idempotent: Boolean(result.idempotent),
+        settlement: result,
+      });
+    }
 
-    const safe = safeSettlementError(result.code);
+    const safe = mapAdminUnderpaymentSettlementError(result.code);
     await writeAdminAuditLog({
       request,
       admin: { id: admin.user.id, email: admin.user.email },
@@ -113,12 +181,19 @@ export async function POST(request: Request) {
       errorMessage: safe.message,
       metadata: { settlement_source: "manual_admin", request_id: result.requestId },
     });
-    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
+    logSettlementAction({
+      requestId,
+      sessionId,
+      operatorId: admin.user.id,
+      result: safe.code,
+      durationMs: Date.now() - startedAt,
+    });
+    return jsonFailure(safe.code, safe.message, safe.status);
   } catch (error) {
     const code = error instanceof Bep20UnderpaymentRuntimeError
       ? error.code
       : "BEP20_UNDERPAYMENT_SETTLEMENT_FAILED";
-    const safe = safeSettlementError(code);
+    const safe = mapAdminUnderpaymentSettlementError(code);
     await writeAdminAuditLog({
       request,
       admin: { id: admin.user.id, email: admin.user.email },
@@ -131,6 +206,13 @@ export async function POST(request: Request) {
       errorMessage: safe.message,
       metadata: { settlement_source: "manual_admin" },
     });
-    return NextResponse.json({ error: safe.message, code: safe.code }, { status: safe.status });
+    logSettlementAction({
+      requestId,
+      sessionId,
+      operatorId: admin.user.id,
+      result: safe.code,
+      durationMs: Date.now() - startedAt,
+    });
+    return jsonFailure(safe.code, safe.message, safe.status);
   }
 }

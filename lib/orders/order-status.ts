@@ -97,6 +97,7 @@ export function getUserOrderDisplayStatus(order: {
   status?: unknown;
   payment_status?: unknown;
   bep20_payment_state?: unknown;
+  bep20_underpayment_wallet_credit?: unknown;
 }) {
   const status = String(order.status ?? "").trim();
   const paymentStatus = String(order.payment_status ?? "").trim();
@@ -104,6 +105,9 @@ export function getUserOrderDisplayStatus(order: {
   const normalizedStatus = normalizeOrderStatus(status);
   const normalizedPaymentStatus = normalizePaymentStatus(paymentStatus);
 
+  if (order.bep20_underpayment_wallet_credit) {
+    return { label: "欠额已转余额", className: ORDER_STATUS_STYLES.cancelled };
+  }
   if (status === "cancelled") {
     return { label: "已取消", className: ORDER_STATUS_STYLES.cancelled };
   }

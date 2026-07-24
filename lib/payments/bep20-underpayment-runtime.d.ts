@@ -6,6 +6,9 @@ export class Bep20UnderpaymentRuntimeError extends Error {
 export function readBep20UnderpaymentConfirmations(value: unknown): number;
 export function isBep20UnderpaymentIrreversibleConfirmation(value: unknown): value is true;
 export function summarizeBep20UnderpaymentSessionId(value: unknown): string;
+export function subtractBep20UnderpaymentDecimal(left: unknown, right: unknown): string;
+export function addBep20UnderpaymentDecimal(left: unknown, right: unknown): string;
+export function multiplyBep20UnderpaymentDecimalToCny(amount: unknown, exchangeRate: unknown): string;
 export function readBep20UnderpaymentCandidatesSafely(
   readCandidates: () => Promise<string[]>,
 ): Promise<
