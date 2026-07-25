@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
 
 type ServiceRoleKeyType = "secret" | "jwt" | "unknown";
 
@@ -63,6 +64,9 @@ export function getSupabaseServiceRoleClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    realtime: {
+      transport: ws as any,
     },
   });
 }
