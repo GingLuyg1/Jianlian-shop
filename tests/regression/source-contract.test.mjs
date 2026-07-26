@@ -3432,6 +3432,34 @@ test("BEP20 underpayment admin workflow is explicit, read-only before confirmati
   assert.doesNotMatch(panel, /SUPABASE_SERVICE_ROLE_KEY|service-role|service_role_key/);
 });
 
+test("BEP20 underpayment preview selects only deployed disposition columns", () => {
+  const adminReadService = file("lib/payments/bep20-underpayment-admin.ts");
+  const settlementService = file("lib/payments/bep20-underpayment-service.ts");
+  const dispositionSelect = adminReadService.match(
+    /from\("bep20_underpayment_dispositions"\)\s*\.select\("([^"]+)"\)/,
+  )?.[1];
+
+  assert.ok(dispositionSelect, "admin preview disposition select must exist");
+  const selectedColumns = dispositionSelect.split(",");
+  assert.doesNotMatch(dispositionSelect, /(?:^|,)id(?:,|$)/);
+  assert.deepEqual(selectedColumns, [
+    "chain_session_id",
+    "order_id",
+    "user_id",
+    "balance_transaction_id",
+    "received_usdt",
+    "expected_usdt",
+    "shortfall_usdt",
+    "exchange_rate",
+    "credited_cny",
+    "disposition",
+    "settlement_source",
+    "processed_at",
+    "request_id",
+  ]);
+  assert.match(settlementService, /\.rpc\("settle_bep20_underpayment_to_wallet"/);
+});
+
 test("BEP20 underpayment wallet-credit disposition has explicit user and admin presentation", () => {
   const orderNotice = file("components/account/orders/Bep20UnderpaymentWalletCreditNotice.tsx");
   const orderDetail = file("app/account/orders/[orderNo]/page.tsx");

@@ -198,7 +198,7 @@ async function buildPreviews(chains: Row[], includeFullTxHash: boolean) {
     ),
     rows(
       service.from("bep20_underpayment_dispositions")
-        .select("id,chain_session_id,order_id,user_id,balance_transaction_id,received_usdt,expected_usdt,shortfall_usdt,exchange_rate,credited_cny,disposition,settlement_source,processed_at,request_id")
+        .select("chain_session_id,order_id,user_id,balance_transaction_id,received_usdt,expected_usdt,shortfall_usdt,exchange_rate,credited_cny,disposition,settlement_source,processed_at,request_id")
         .in("chain_session_id", sessionIds),
       "BEP20_UNDERPAYMENT_DISPOSITION_READ_FAILED",
     ),
