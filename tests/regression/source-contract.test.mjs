@@ -3462,26 +3462,58 @@ test("BEP20 underpayment preview selects only deployed disposition columns", () 
 
 test("BEP20 underpayment wallet-credit disposition has explicit user and admin presentation", () => {
   const orderNotice = file("components/account/orders/Bep20UnderpaymentWalletCreditNotice.tsx");
-  const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
-  const orderDrawer = file("app/account/orders/page.tsx");
+  const paymentSummary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
   const accountPage = file("app/account/page.tsx");
   const accountAssets = file("app/api/account/assets/route.ts");
+  const balanceRoute = file("app/api/account/balance-transactions/route.ts");
+  const balancePage = file("components/account/AccountRechargeContent.tsx");
+  const userDisposition = file("lib/payments/bep20-underpayment-user.ts");
   const orderStatus = file("lib/orders/order-status.ts");
   const adminTypes = file("lib/payments/admin-payment-types.ts");
+  const settlementMigration = file("supabase/migrations/20260729_bep20_underpayment_manual_early_confirmation.sql");
 
-  assert.match(orderNotice, /欠额支付已转入账户余额/);
+  assert.match(orderNotice, /历史链上支付信息/);
+  assert.match(orderNotice, /欠额已转余额/);
   assert.match(orderNotice, /原商品订单已取消，不会继续履约或交付/);
   assert.match(orderNotice, /received_usdt/);
+  assert.match(orderNotice, /expected_usdt/);
+  assert.match(orderNotice, /shortfall_usdt/);
+  assert.match(orderNotice, /exchange_rate/);
   assert.match(orderNotice, /credited_cny/);
-  assert.match(orderNotice, /transaction_no/);
-  assert.match(orderDetail, /Bep20UnderpaymentWalletCreditNotice/);
-  assert.match(orderDrawer, /Bep20UnderpaymentWalletCreditNotice/);
-  assert.match(accountAssets, /metadata\.subtype/);
+  assert.match(orderNotice, /processed_at/);
+  assert.match(orderNotice, /查看链上交易/);
+  assert.doesNotMatch(orderNotice, /收款地址|receiveAddress/);
+  assert.match(paymentSummary, /if \(order\.bep20_underpayment_wallet_credit\)/);
+  assert.match(paymentSummary, /Bep20UnderpaymentWalletCreditNotice/);
+  assert.match(paymentSummary, /submittedTxHash=\{session\?\.submittedTxHash\}/);
+
+  assert.match(userDisposition, /getUserBep20UnderpaymentBalanceDispositions/);
+  assert.match(userDisposition, /from\("bep20_underpayment_dispositions"\)/);
+  assert.match(userDisposition, /\.in\("chain_session_id", safeChainSessionIds\)/);
+  assert.match(userDisposition, /\.eq\("user_id", userId\)/);
+  assert.match(userDisposition, /\.eq\("disposition", "wallet_credit"\)/);
+  assert.match(accountAssets, /getUserBep20UnderpaymentBalanceDispositions/);
+  assert.match(accountAssets, /underpaymentDispositions\.get\(transaction\.businessId\)/);
+  assert.match(balanceRoute, /getUserBep20UnderpaymentBalanceDispositions/);
+  assert.match(balanceRoute, /dispositions\.get\(businessId\)/);
+  assert.doesNotMatch(accountAssets, /metadata\.(?:subtype|received_usdt|expected_usdt|shortfall_usdt|exchange_rate)/);
+  assert.doesNotMatch(balanceRoute, /remark[\s\S]{0,80}(?:split|match|parse)/);
   assert.match(accountAssets, /orderNo/);
   assert.match(accountPage, /bep20_underpayment_wallet_credit/);
   assert.match(accountPage, /BEP20 欠额转余额/);
   assert.match(accountPage, /balanceBefore/);
   assert.match(accountPage, /balanceAfter/);
+  assert.match(balancePage, /BEP20 欠额转余额/);
+  assert.match(balancePage, /实收 USDT/);
+  assert.match(balancePage, /应付 USDT/);
+  assert.match(balancePage, /欠额 USDT/);
+  assert.match(balancePage, /冻结汇率/);
+  assert.match(balancePage, /链上交易/);
+
+  assert.match(settlementMigration, /set status = 'cancelled', payment_status = 'failed'/i);
+  assert.match(settlementMigration, /update public\.payment_sessions[\s\S]*?set status = 'closed'/i);
+  assert.match(settlementMigration, /update public\.order_payments[\s\S]*?set status = 'closed'/i);
+  assert.match(settlementMigration, /update public\.chain_payment_sessions[\s\S]*?set status = 'expired'/i);
   assert.match(orderStatus, /欠额已转余额/);
   assert.match(adminTypes, /欠额款已转入用户余额，原订单已取消/);
 });

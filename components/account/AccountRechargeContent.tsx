@@ -30,6 +30,15 @@ type BalanceTransactionRecord = {
   currency: PaymentCurrency | string;
   status: string;
   remark: string | null;
+  subtype: string | null;
+  orderNo: string | null;
+  receivedUsdt: string | null;
+  expectedUsdt: string | null;
+  shortfallUsdt: string | null;
+  exchangeRate: string | null;
+  creditedCny: string | null;
+  txHashSummary: string | null;
+  processedAt: string | null;
   createdAt: string | null;
 };
 
@@ -444,11 +453,12 @@ function BalanceRecords({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
         {records.map((record) => {
           const positive = record.direction === "credit";
+          const underpaymentCredit = record.subtype === "bep20_underpayment_wallet_credit";
           return (
             <div key={record.transactionNo} className="rounded-xl bg-slate-50 p-4 text-sm">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <span className="truncate font-semibold text-slate-800" title={record.transactionNo}>
-                  {balanceTypeLabel(record.businessType)}
+                  {underpaymentCredit ? "BEP20 欠额转余额" : balanceTypeLabel(record.businessType)}
                 </span>
                 <span className={cn("shrink-0 font-semibold", positive ? "text-emerald-600" : "text-red-600")}>
                   {positive ? "+" : "-"}{formatPaymentAmount(record.amount, record.currency as PaymentCurrency)}
@@ -456,11 +466,25 @@ function BalanceRecords({
               </div>
               <dl className="grid gap-2 text-muted-foreground">
                 <RecordLine label="流水号" value={record.transactionNo} />
-                <RecordLine label="关联业务" value={record.businessId || "—"} />
+                <RecordLine label={underpaymentCredit ? "对应订单" : "关联业务"} value={record.businessId || "—"} />
+                {underpaymentCredit ? (
+                  <>
+                    <RecordLine label="实收 USDT" value={record.receivedUsdt ?? "—"} />
+                    <RecordLine label="应付 USDT" value={record.expectedUsdt ?? "—"} />
+                    <RecordLine label="欠额 USDT" value={record.shortfallUsdt ?? "—"} />
+                    <RecordLine label="冻结汇率" value={record.exchangeRate ?? "—"} />
+                    <RecordLine label="链上交易" value={record.txHashSummary ?? "—"} />
+                  </>
+                ) : null}
                 <RecordLine label="变动前余额" value={formatOptionalBalance(record.balanceBefore, record.currency)} />
                 <RecordLine label="变动后余额" value={formatOptionalBalance(record.balanceAfter, record.currency)} />
-                <RecordLine label="备注" value={record.remark || "—"} />
-                <RecordLine label="创建时间" value={record.createdAt ? formatDateTime(record.createdAt) : "—"} />
+                {!underpaymentCredit ? <RecordLine label="备注" value={record.remark || "—"} /> : null}
+                <RecordLine
+                  label={underpaymentCredit ? "处理时间" : "创建时间"}
+                  value={(underpaymentCredit ? record.processedAt : record.createdAt)
+                    ? formatDateTime((underpaymentCredit ? record.processedAt : record.createdAt) as string)
+                    : "—"}
+                />
               </dl>
             </div>
           );
