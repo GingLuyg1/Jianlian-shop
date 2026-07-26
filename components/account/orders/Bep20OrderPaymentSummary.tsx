@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clipboard, ExternalLink, Headphones, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
+import { Bep20UnderpaymentWalletCreditNotice } from "@/components/account/orders/Bep20UnderpaymentWalletCreditNotice";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -292,6 +293,14 @@ export function Bep20OrderPaymentSummary({
   }
 
   if (!isBep20Order) return null;
+  if (order.bep20_underpayment_wallet_credit) {
+    return (
+      <Bep20UnderpaymentWalletCreditNotice
+        summary={order.bep20_underpayment_wallet_credit}
+        submittedTxHash={session?.submittedTxHash}
+      />
+    );
+  }
 
   return (
     <section className={cn("min-w-0 max-w-full overflow-hidden rounded-xl border border-orange-100 bg-white p-4 text-sm", compact ? "space-y-3" : "space-y-4")}>

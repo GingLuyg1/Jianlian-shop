@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { normalizeOrderStatus } from "@/lib/orders/order-status";
+import { getUserBep20UnderpaymentBalanceDispositions } from "@/lib/payments/bep20-underpayment-user";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -44,11 +45,34 @@ export async function GET() {
 
   const orders = orderResult.orders;
   const recharges = rechargeResult.recharges;
+  const underpaymentDispositions = await getUserBep20UnderpaymentBalanceDispositions(
+    balanceResult.transactions.map((transaction) => transaction.businessId),
+    user.id,
+  );
   const orderNoById = new Map(orders.map((order) => [order.id, order.orderNo]));
-  const balanceTransactions = balanceResult.transactions.map((transaction) => ({
-    ...transaction,
-    orderNo: transaction.orderId ? orderNoById.get(transaction.orderId) ?? null : null,
-  }));
+  const balanceTransactions = balanceResult.transactions.map((transaction) => {
+    const disposition = underpaymentDispositions.get(transaction.businessId);
+    if (!disposition) {
+      return {
+        ...transaction,
+        orderNo: transaction.orderId ? orderNoById.get(transaction.orderId) ?? null : null,
+      };
+    }
+    return {
+      ...transaction,
+      businessId: disposition.order_no,
+      subtype: "bep20_underpayment_wallet_credit",
+      orderId: null,
+      orderNo: disposition.order_no,
+      receivedUsdt: disposition.received_usdt,
+      expectedUsdt: disposition.expected_usdt,
+      shortfallUsdt: disposition.shortfall_usdt,
+      exchangeRate: disposition.exchange_rate,
+      creditedCny: disposition.credited_cny,
+      txHashSummary: disposition.tx_hash_summary,
+      processedAt: disposition.processed_at,
+    };
+  });
 
   const transactionSpend = balanceTransactions
     .filter((item) => item.direction === "debit" && item.status === "completed")
@@ -170,7 +194,7 @@ async function loadRecharges(supabase: ReturnType<typeof getSupabaseServerClient
 async function loadBalanceTransactions(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string) {
   const { data, error } = await supabase
     .from("balance_transactions")
-    .select("transaction_no,business_type,business_id,direction,amount,balance_before,balance_after,currency,status,remark,metadata,created_at")
+    .select("transaction_no,business_type,business_id,direction,amount,balance_before,balance_after,currency,status,remark,created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -204,10 +228,6 @@ function normalizeProfile(row: Record<string, unknown> | null, fallback: { email
 
 function normalizeBalanceTransaction(row: Record<string, unknown>) {
   const direction = row.direction === "debit" ? "debit" : "credit";
-  const metadata = row.metadata && typeof row.metadata === "object"
-    ? row.metadata as Record<string, unknown>
-    : {};
-  const txHash = textOrNull(metadata.tx_hash);
   return {
     transactionNo: String(row.transaction_no ?? ""),
     businessType: String(row.business_type ?? "system"),
@@ -219,15 +239,15 @@ function normalizeBalanceTransaction(row: Record<string, unknown>) {
     currency: String(row.currency ?? "CNY"),
     status: String(row.status ?? "completed"),
     remark: textOrNull(row.remark),
-    subtype: textOrNull(metadata.subtype),
-    orderId: textOrNull(metadata.order_id),
-    receivedUsdt: textOrNull(metadata.received_usdt),
-    expectedUsdt: textOrNull(metadata.expected_usdt),
-    shortfallUsdt: textOrNull(metadata.shortfall_usdt),
-    exchangeRate: textOrNull(metadata.exchange_rate),
-    txHashSummary: txHash && txHash.length > 22
-      ? `${txHash.slice(0, 12)}...${txHash.slice(-8)}`
-      : txHash,
+    subtype: null,
+    orderId: null,
+    receivedUsdt: null,
+    expectedUsdt: null,
+    shortfallUsdt: null,
+    exchangeRate: null,
+    creditedCny: null,
+    txHashSummary: null,
+    processedAt: null,
     createdAt: textOrNull(row.created_at),
   };
 }

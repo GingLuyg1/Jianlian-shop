@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getUserBep20UnderpaymentBalanceDispositions } from "@/lib/payments/bep20-underpayment-user";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -37,20 +38,39 @@ export async function GET(request: Request) {
     const { data, error, count } = await query;
     if (error) throw error;
 
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const dispositions = await getUserBep20UnderpaymentBalanceDispositions(
+      rows.map((row) => String(row.business_id ?? "")),
+      authData.user.id,
+    );
+
     return NextResponse.json({
-      data: ((data ?? []) as Record<string, unknown>[]).map((row) => ({
-        transactionNo: String(row.transaction_no ?? ""),
-        businessType: String(row.business_type ?? "system"),
-        businessId: String(row.business_id ?? ""),
-        direction: row.direction === "debit" ? "debit" : "credit",
-        amount: finiteNumber(row.amount),
-        balanceBefore: numberOrNull(row.balance_before),
-        balanceAfter: numberOrNull(row.balance_after),
-        currency: String(row.currency ?? "CNY"),
-        status: String(row.status ?? "completed"),
-        remark: textOrNull(row.remark),
-        createdAt: textOrNull(row.created_at),
-      })),
+      data: rows.map((row) => {
+        const businessId = String(row.business_id ?? "");
+        const disposition = dispositions.get(businessId);
+        return {
+          transactionNo: String(row.transaction_no ?? ""),
+          businessType: String(row.business_type ?? "system"),
+          businessId: disposition?.order_no ?? businessId,
+          direction: row.direction === "debit" ? "debit" : "credit",
+          amount: finiteNumber(row.amount),
+          balanceBefore: numberOrNull(row.balance_before),
+          balanceAfter: numberOrNull(row.balance_after),
+          currency: String(row.currency ?? "CNY"),
+          status: String(row.status ?? "completed"),
+          remark: textOrNull(row.remark),
+          subtype: disposition ? "bep20_underpayment_wallet_credit" : null,
+          orderNo: disposition?.order_no ?? null,
+          receivedUsdt: disposition?.received_usdt ?? null,
+          expectedUsdt: disposition?.expected_usdt ?? null,
+          shortfallUsdt: disposition?.shortfall_usdt ?? null,
+          exchangeRate: disposition?.exchange_rate ?? null,
+          creditedCny: disposition?.credited_cny ?? null,
+          txHashSummary: disposition?.tx_hash_summary ?? null,
+          processedAt: disposition?.processed_at ?? null,
+          createdAt: textOrNull(row.created_at),
+        };
+      }),
       count: count ?? 0,
       page,
       pageSize,
