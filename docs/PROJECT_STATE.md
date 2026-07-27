@@ -1,5 +1,13 @@
 # Jianlian Shop 当前项目状态
 
+## 2026-07-27：BEP20 Phase 2B 邮件告警开发
+
+- 基线：`origin/main` / `6e4a3ac9a56084892ff0909948199c688217e4bb`，已包含 Phase 2A PR #8。
+- 当前分支：`feat/bep20-underpayment-email-alert`。
+- Phase 2A 每小时 GET-only 巡检设计保持不变；Phase 2B 仅复用其安全摘要增加 Resend 邮件告警。
+- 当前状态：本地开发与 mock 测试中；未配置服务器环境、Cron 或真实 Resend 请求。
+- 自动结算：Disabled。候选告警只提示管理员进入后台人工复核。
+
 ## 2026-07-27：BEP20 Phase 2A 只读巡检
 
 - BEP20 Phase 1：Completed。

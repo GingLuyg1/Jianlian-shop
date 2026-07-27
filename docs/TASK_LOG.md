@@ -1,5 +1,13 @@
 # Jianlian Shop 任务日志
 
+## 2026-07-27 — BEP20 Phase 2B 只读邮件告警
+
+- 基线：`origin/main` / `6e4a3ac9a56084892ff0909948199c688217e4bb`，工作区干净后创建 `feat/bep20-underpayment-email-alert`。
+- 目标：复用 Phase 2A GET-only `runMonitor()`，以 Resend 原生 HTTP API发送候选与巡检故障安全摘要。
+- 安全设计：单行脱敏日志、15 秒邮件超时、Idempotency-Key、基于安全 fingerprint 的 cooldown，以及权限 `0600` 的无敏感状态文件。
+- 运维边界：现有 Phase 2A Cron 保持不变；只有 PR 合并、新 release 通过 Canary 并投入生产、三类手动模拟及 Gmail 收件确认后，才允许切换 Cron。
+- 自动结算：Disabled；未执行 SQL、Migration、结算 POST、真实邮件、生产环境或服务器配置操作。
+
 ## 2026-07-23 — BEP20 欠额转余额后台与用户展示收尾
 
 - 基于正式应用代码 `ae2e24a7952407e194f312718b69566253d824ab` 创建功能分支。
