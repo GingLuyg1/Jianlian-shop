@@ -3571,3 +3571,50 @@ test("BEP20 underpayment dry-run monitor operations guide uses production-safe s
   assert.match(operationsGuide, /command -v node/);
   assert.match(operationsGuide, /自动结算：\*\*Disabled\*\*/);
 });
+
+test("BEP20 underpayment email alerts reuse the GET-only monitor and stay deployment-gated", () => {
+  const alertScript = file("scripts/ops/bep20-underpayment-email-alert.mjs");
+  const operationsGuide = file("docs/operations/bep20-underpayment-email-alert.md");
+
+  assert.match(
+    alertScript,
+    /from "\.\/bep20-underpayment-dry-run-monitor\.mjs"/,
+  );
+  assert.match(alertScript, /runMonitorImpl = runMonitor/);
+  assert.doesNotMatch(alertScript, /action=settle|dry_run=false/);
+  assert.match(alertScript, /https:\/\/api\.resend\.com\/emails/);
+  assert.match(alertScript, /method: "POST"/);
+  assert.match(alertScript, /"idempotency-key"/);
+  assert.match(alertScript, /AbortSignal\.timeout\(resendTimeoutMs\)/);
+  assert.match(
+    alertScript,
+    /\/var\/lib\/jianlian\/bep20-underpayment-email-alert-state\.json/,
+  );
+  assert.match(alertScript, /mode: 0o600/);
+  assert.match(alertScript, /chmod\(stateFile, 0o600\)/);
+  assert.doesNotMatch(alertScript, /@notify\.jianlian\.shop/);
+
+  assert.match(operationsGuide, /Phase 2A[^。\n]*Cron[^。\n]*保持不变/);
+  assert.match(operationsGuide, /\/etc\/jianlian\/resend-alert\.env/);
+  assert.match(
+    operationsGuide,
+    /Jianlian Alert <alerts@notify\.jianlian\.shop>/,
+  );
+  assert.match(
+    operationsGuide,
+    /BEP20_ALERT_RECIPIENT='REPLACE_WITH_ALERT_RECIPIENT'/,
+  );
+  assert.match(operationsGuide, /PR 合并[\s\S]*新 release[\s\S]*投入生产/);
+  assert.match(operationsGuide, /Gmail[\s\S]*确认[\s\S]*才允许替换现有 Cron/);
+  assert.match(
+    operationsGuide,
+    /JIANLIAN_INTERNAL_BASE_URL='http:\/\/127\.0\.0\.1:REPLACE_WITH_MOCK_PORT'/,
+  );
+  assert.match(
+    operationsGuide,
+    /BEP20_ALERT_STATE_FILE='\/var\/lib\/jianlian\/bep20-underpayment-email-alert-canary-state\.json'/,
+  );
+  assert.match(operationsGuide, /17 \* \* \* \* root/);
+  assert.doesNotMatch(operationsGuide, /\n0 \* \* \* \* root/);
+  assert.match(operationsGuide, /自动结算(?:仍为|始终保持).*\*\*Disabled\*\*/);
+});
