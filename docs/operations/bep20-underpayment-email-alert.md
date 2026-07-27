@@ -76,34 +76,98 @@ node --version
 
 ## 上线前手动验证
 
-Phase 2A Cron 在整个验证期间保持不变。先在仓库或 release 中运行本地 mock 测试：
+Phase 2A Cron 在整个验证期间保持原有的每小时第 17 分钟计划，不修改其命令。先在仓库
+或 release 中运行本地 mock 测试：
 
 ```bash
 npm test -- --test-name-pattern='BEP20 underpayment'
 ```
 
-随后由服务器管理员使用短期、仅监听 `127.0.0.1` 的批准 mock 服务，依次模拟：
-
-1. HTTP 200 且无候选：不发送邮件，退出 `0`。
-2. HTTP 200 且有候选：发送候选告警，退出 `2`。
-3. 401、403、429、5xx、超时或格式错误：发送故障告警，退出 `3`。
-
-模拟期间不得调用真实结算 POST，不得在 mock 响应中使用真实订单、用户、Session、
-钱包地址或 TxHash。手动执行方式：
+随后由服务器管理员使用短期、仅监听 `127.0.0.1` 的批准 mock 服务。mock 响应不得
+包含真实订单、用户、Session、钱包地址或 TxHash。可在独立终端启动以下临时服务，
+将端口占位符替换为一个空闲本机端口：
 
 ```bash
-/bin/sh -c '
-  set -a
-  . /etc/jianlian/bep20-underpayment-monitor.env
-  . /etc/jianlian/resend-alert.env
-  set +a
-  /ABSOLUTE/PATH/TO/node /opt/jianlian/ops/bep20-underpayment-email-alert.mjs --limit=10
-'
+MOCK_PORT='REPLACE_WITH_MOCK_PORT'
+MOCK_SCENARIO='REPLACE_WITH_NO_CANDIDATE_CANDIDATE_OR_FAILURE'
+
+MOCK_PORT="$MOCK_PORT" MOCK_SCENARIO="$MOCK_SCENARIO" \
+  /ABSOLUTE/PATH/TO/node --input-type=module <<'NODE'
+import { createServer } from "node:http";
+
+const port = Number(process.env.MOCK_PORT);
+const scenario = process.env.MOCK_SCENARIO;
+const responses = {
+  no_candidate: {
+    status: 200,
+    body: {
+      success: true,
+      preview: { candidate_count: 0, candidates: [], request_id: "mock-no-candidate" },
+    },
+  },
+  candidate: {
+    status: 200,
+    body: {
+      success: true,
+      preview: { candidate_count: 1, candidates: [], request_id: "mock-candidate" },
+    },
+  },
+  failure: {
+    status: 503,
+    body: { success: false },
+  },
+};
+const selected = responses[scenario];
+if (!selected || !Number.isInteger(port) || port < 1 || port > 65535) {
+  throw new Error("INVALID_LOCAL_MOCK_CONFIGURATION");
+}
+
+createServer((request, response) => {
+  if (request.method !== "GET") {
+    response.writeHead(405).end();
+    return;
+  }
+  response.writeHead(selected.status, { "content-type": "application/json" });
+  response.end(JSON.stringify(selected.body));
+}).listen(port, "127.0.0.1", () => {
+  process.stdout.write(`mock listening on 127.0.0.1:${port}\n`);
+});
+NODE
+```
+
+依次将 `MOCK_SCENARIO` 设为：
+
+1. `no_candidate`：HTTP 200 且 `candidate_count=0`，不发送邮件，退出 `0`。
+2. `candidate`：HTTP 200 且 `candidate_count>0`，发送候选告警，退出 `2`。
+3. `failure`：HTTP 503，发送故障告警，退出 `3`。格式错误也应产生相同故障告警；
+   如需验证格式错误，只把临时 mock 的 `body` 改成不符合巡检契约的无敏感 JSON。
+
+每个场景均在另一个终端执行以下命令。必须先加载两个 root-only 文件，再显式覆盖
+内部地址为本机 mock；不要打印、替换或重新生成真实
+`BEP20_UNDERPAYMENT_JOB_SECRET`：
+
+```bash
+set -a
+. /etc/jianlian/bep20-underpayment-monitor.env
+. /etc/jianlian/resend-alert.env
+set +a
+
+JIANLIAN_INTERNAL_BASE_URL='http://127.0.0.1:REPLACE_WITH_MOCK_PORT'
+BEP20_ALERT_STATE_FILE='/var/lib/jianlian/bep20-underpayment-email-alert-canary-state.json'
+export JIANLIAN_INTERNAL_BASE_URL BEP20_ALERT_STATE_FILE
+
+/ABSOLUTE/PATH/TO/node /opt/jianlian/ops/bep20-underpayment-email-alert.mjs --limit=10
 echo $?
 ```
 
 命令只会输出一行安全 JSON，不打印密钥或完整业务标识。必须在 Gmail 中确认候选告警
 和故障告警均成功收件，并核对正文只含安全摘要后，才允许替换现有 Cron 命令。
+
+三类测试完成后停止临时 mock，并安全删除独立 canary 状态文件：
+
+```bash
+rm -f -- /var/lib/jianlian/bep20-underpayment-email-alert-canary-state.json
+```
 
 ## Cron 切换模板
 
@@ -114,11 +178,11 @@ echo $?
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-0 * * * * root /bin/sh -c 'set -a; . /etc/jianlian/bep20-underpayment-monitor.env; . /etc/jianlian/resend-alert.env; set +a; /ABSOLUTE/PATH/TO/node /opt/jianlian/ops/bep20-underpayment-email-alert.mjs --limit=10 >> /var/log/jianlian/bep20-underpayment-email-alert.log 2>&1'
+17 * * * * root /bin/sh -c 'set -a; . /etc/jianlian/bep20-underpayment-monitor.env; . /etc/jianlian/resend-alert.env; set +a; /ABSOLUTE/PATH/TO/node /opt/jianlian/ops/bep20-underpayment-email-alert.mjs --limit=10 >> /var/log/jianlian/bep20-underpayment-email-alert.log 2>&1'
 ```
 
-将 `/ABSOLUTE/PATH/TO/node` 替换为 `command -v node` 返回值。Cron 仍为每小时一次，
-内部巡检仍为 GET-only，`--limit=10`，自动结算仍为 **Disabled**。
+将 `/ABSOLUTE/PATH/TO/node` 替换为 `command -v node` 返回值。Cron 保持每小时第 17
+分钟执行，内部巡检仍为 GET-only，`--limit=10`，自动结算仍为 **Disabled**。
 
 ```bash
 chown root:root /etc/cron.d/jianlian-bep20-underpayment-monitor

@@ -3606,5 +3606,15 @@ test("BEP20 underpayment email alerts reuse the GET-only monitor and stay deploy
   );
   assert.match(operationsGuide, /PR 合并[\s\S]*新 release[\s\S]*投入生产/);
   assert.match(operationsGuide, /Gmail[\s\S]*确认[\s\S]*才允许替换现有 Cron/);
+  assert.match(
+    operationsGuide,
+    /JIANLIAN_INTERNAL_BASE_URL='http:\/\/127\.0\.0\.1:REPLACE_WITH_MOCK_PORT'/,
+  );
+  assert.match(
+    operationsGuide,
+    /BEP20_ALERT_STATE_FILE='\/var\/lib\/jianlian\/bep20-underpayment-email-alert-canary-state\.json'/,
+  );
+  assert.match(operationsGuide, /17 \* \* \* \* root/);
+  assert.doesNotMatch(operationsGuide, /\n0 \* \* \* \* root/);
   assert.match(operationsGuide, /自动结算(?:仍为|始终保持).*\*\*Disabled\*\*/);
 });

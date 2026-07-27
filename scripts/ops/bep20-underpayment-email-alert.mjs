@@ -133,7 +133,10 @@ function buildEmail({ alertType, timestamp, monitorSummary }) {
   const title = isCandidateAlert
     ? "发现 BEP20 欠额候选"
     : "BEP20 欠额巡检故障";
-  const candidateCount = monitorSummary.candidateCount ?? 0;
+  const candidateCount = Number.isInteger(monitorSummary.candidateCount)
+    && monitorSummary.candidateCount >= 0
+    ? monitorSummary.candidateCount
+    : "不可用";
   const requestId = monitorSummary.maskedRequestId ?? "不可用";
   const duration = monitorSummary.durationMs ?? 0;
 

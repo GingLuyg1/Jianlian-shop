@@ -75,6 +75,17 @@ function options(baseUrl, stateFile, overrides = {}) {
   };
 }
 
+async function readRequestJson(request) {
+  let body = "";
+  for await (const chunk of request) body += chunk;
+  return JSON.parse(body);
+}
+
+function assertUnavailableCandidateCount(payload) {
+  assert.match(payload.text, /candidate_count：不可用/);
+  assert.doesNotMatch(payload.text, /candidate_count：0(?:\D|$)/);
+}
+
 test("email alert imports the GET-only monitor and never enables settlement", () => {
   assert.match(
     alertSource,
@@ -164,12 +175,14 @@ test("candidate monitor result sends one safe email and exits two", async () => 
 test("monitor failures send one fault email and exit three", async (t) => {
   for (const status of [401, 403, 429, 503]) {
     await t.test(`monitor HTTP ${status}`, async () => {
-      await withTemporaryState((stateFile) => withServer((request, response) => {
+      let emailPayload;
+      await withTemporaryState((stateFile) => withServer(async (request, response) => {
         if (request.url?.startsWith("/api/internal/")) {
           response.writeHead(status, { "content-type": "application/json" });
           response.end(JSON.stringify({ error: "internal detail" }));
           return;
         }
+        emailPayload = await readRequestJson(request);
         response.writeHead(200, { "content-type": "application/json" });
         response.end("{}");
       }, async (baseUrl) => {
@@ -177,13 +190,16 @@ test("monitor failures send one fault email and exit three", async (t) => {
           resendFetchImpl: fetch,
         }));
         assert.equal(result.exitCode, 3);
+        assertUnavailableCandidateCount(emailPayload);
       }));
     });
   }
 
   await t.test("monitor timeout", async () => {
-    await withTemporaryState((stateFile) => withServer((request, response) => {
+    let emailPayload;
+    await withTemporaryState((stateFile) => withServer(async (request, response) => {
       if (request.url?.startsWith("/api/internal/")) return;
+      emailPayload = await readRequestJson(request);
       response.writeHead(200);
       response.end("{}");
     }, async (baseUrl) => {
@@ -192,16 +208,19 @@ test("monitor failures send one fault email and exit three", async (t) => {
         resendFetchImpl: fetch,
       }));
       assert.equal(result.exitCode, 3);
+      assertUnavailableCandidateCount(emailPayload);
     }));
   });
 
   await t.test("invalid monitor response", async () => {
-    await withTemporaryState((stateFile) => withServer((request, response) => {
+    let emailPayload;
+    await withTemporaryState((stateFile) => withServer(async (request, response) => {
       if (request.url?.startsWith("/api/internal/")) {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({ success: true, preview: { candidate_count: "1" } }));
         return;
       }
+      emailPayload = await readRequestJson(request);
       response.writeHead(200);
       response.end("{}");
     }, async (baseUrl) => {
@@ -209,6 +228,7 @@ test("monitor failures send one fault email and exit three", async (t) => {
         resendFetchImpl: fetch,
       }));
       assert.equal(result.exitCode, 3);
+      assertUnavailableCandidateCount(emailPayload);
     }));
   });
 });
