@@ -3556,3 +3556,18 @@ test("single-session migration runner fails closed and the executed confirmation
   assert.match(runbook, /只读 postcheck/);
   assert.match(runbook, /业务结算/);
 });
+
+test("BEP20 underpayment dry-run monitor operations guide uses production-safe stable paths", () => {
+  const operationsGuide = file("docs/operations/bep20-underpayment-dry-run-monitor.md");
+
+  assert.doesNotMatch(operationsGuide, /JIANLIAN_INTERNAL_BASE_URL=</);
+  assert.doesNotMatch(operationsGuide, /\/www\/jianlian-shop\/scripts\/ops\//);
+  assert.match(
+    operationsGuide,
+    /\/opt\/jianlian\/ops\/bep20-underpayment-dry-run-monitor\.mjs/,
+  );
+  assert.match(operationsGuide, /install -d -m 700 -o root -g root \/var\/log\/jianlian/);
+  assert.match(operationsGuide, /chmod 600/);
+  assert.match(operationsGuide, /command -v node/);
+  assert.match(operationsGuide, /自动结算：\*\*Disabled\*\*/);
+});

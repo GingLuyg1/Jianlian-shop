@@ -1,5 +1,14 @@
 # Jianlian Shop 当前项目状态
 
+## 2026-07-27：BEP20 Phase 2A 只读巡检
+
+- BEP20 Phase 1：Completed。
+- Production commit：`4e233b2852d71615cc9db47dca27fff4c2032b52`。
+- Production Build ID：`kxnh_oFUqA-dVrrh0PO6p`。
+- 真实欠额转余额生产验证：Passed。
+- Phase 2A：Dry-run monitoring in progress。
+- 自动结算：Disabled。当前阶段只允许定时 GET dry-run 统计候选；发现候选后必须进入后台人工复核。
+
 ## 2026-07-23：BEP20 欠额转余额管理流程（本地开发）
 
 - 正式应用基线为 `ae2e24a7952407e194f312718b69566253d824ab`，已由用户确认部署并通过 readiness/liveness 核对。
