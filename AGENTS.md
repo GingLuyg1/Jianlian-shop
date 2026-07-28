@@ -1,5 +1,13 @@
 # Jianlian Shop 仓库协作规则
 
+## BEP20 Phase 1 权限加固基线（2026-07-29）
+
+- PR #14 已合并：原始提交为 `53b2b87333fd16c74c4e67fbfcd6c4f3a971ddf7`，merge commit 为 `0a76d1051057d2bac6524a9eb5018f226f198ad8`。
+- `supabase/migrations/20260728230700_bep20_phase1_privilege_hardening.sql` 已由用户在测试项目 Jianlian-shop-test / `czuoivbfxzachiobdohw` 和正式项目 Jianlian-shop / `qvbovrvybirscaurwuov` 通过 SQL Editor 手动执行；两个环境均返回 `Success. No rows returned`，最终只读 postcheck 均通过。
+- 本次权限加固未修改订单、余额、支付状态或链上交易业务数据，未部署，也未开启自动结算。
+- 不应重复执行该 Migration。SQL Editor 手动执行不会写入 Supabase Migration History；禁止对已手动执行的 Migration 使用 `supabase db push`、`migration up`、`migration repair` 或 `db reset --linked`。
+- 下一任务仅对后续 BEP20 自动结算相关 Migration 做只读代码和数据库依赖审计，暂不执行。
+
 ## BEP20 欠额确认状态 Hotfix（2026-07-23）
 
 - `confirmed_at` 表示服务端在达到要求确认数后完成链上核验的首次时间；链上实际发生时间继续只使用 `chain_transactions.block_timestamp`。

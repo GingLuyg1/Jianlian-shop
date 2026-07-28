@@ -1,5 +1,31 @@
 # Jianlian Shop 当前项目状态
 
+## 2026-07-29：BEP20 Phase 1 权限加固完成
+
+- PR #14 已合并；原始提交为 `53b2b87333fd16c74c4e67fbfcd6c4f3a971ddf7`，merge commit 为 `0a76d1051057d2bac6524a9eb5018f226f198ad8`。
+- Migration：`supabase/migrations/20260728230700_bep20_phase1_privilege_hardening.sql`。
+- 用户已在测试项目 Jianlian-shop-test / `czuoivbfxzachiobdohw` 手动执行，结果为 `Success. No rows returned`。
+- 用户已在正式项目 Jianlian-shop / `qvbovrvybirscaurwuov` 手动执行，结果为 `Success. No rows returned`。
+- 两个环境的最终 postcheck 一致通过：
+  - `target_table_count = 2`
+  - `rls_disabled_table_count = 0`
+  - `unexpected_public_or_anon_table_privilege_count = 0`
+  - `unexpected_authenticated_nonselect_count = 0`
+  - `missing_authenticated_select_count = 0`
+  - `missing_service_role_table_privilege_count = 0`
+  - `unexpected_client_column_acl_count = 0`
+  - `target_function_count = 1`
+  - `unexpected_function_owner_count = 0`
+  - `not_security_definer_count = 0`
+  - `unexpected_search_path_count = 0`
+  - `public_can_execute = false`
+  - `anon_can_execute = false`
+  - `authenticated_can_execute = false`
+  - `service_role_can_execute = true`
+- 本次权限加固未修改订单、余额、支付状态或链上交易业务数据；未部署；自动结算仍为 Disabled。
+- 该 Migration 不应重复执行。SQL Editor 手动执行不会写入 Supabase Migration History；禁止使用 `supabase db push`、`migration up`、`migration repair` 或 `db reset --linked` 处理该已手动执行的 Migration。
+- 下一任务：对后续 BEP20 自动结算相关 Migration 做只读代码和数据库依赖审计，暂不执行。
+
 ## 2026-07-27：BEP20 Phase 2B 邮件告警开发
 
 - 基线：`origin/main` / `6e4a3ac9a56084892ff0909948199c688217e4bb`，已包含 Phase 2A PR #8。
