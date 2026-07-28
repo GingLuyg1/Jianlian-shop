@@ -1414,6 +1414,104 @@ test("digital delivery security hardening closes direct reads and unsafe RPC ent
   assert.doesNotMatch(migration, /add column[^;]*order_deliveries[^;]*user_id/i);
 });
 
+test("digital delivery private tables use least-privilege grants without changing delivery RPC contracts", () => {
+  const migration = file("supabase/migrations/20260731_digital_delivery_table_privilege_hardening.sql");
+  const tablePostcheck = file("docs/audits/20260731-digital-delivery-table-privilege-postcheck.sql");
+  const functionPostcheck = file("docs/audits/20260731-digital-delivery-function-privilege-postcheck.sql");
+  const deliveryService = file("lib/delivery/delivery-service.ts");
+  const adminOrderRoute = file("app/api/admin/orders/[orderId]/route.ts");
+  const adminItemRoute = file("app/api/admin/orders/[orderId]/items/[itemId]/deliver/route.ts");
+  const userDeliveryRoute = file("app/api/orders/[orderNo]/delivery/route.ts");
+  const userFulfillmentRoute = file("app/api/orders/[orderNo]/fulfillment/route.ts");
+  const inventoryRoute = file("app/api/admin/inventory/route.ts");
+  const executableMigration = migration.replace(/--.*$/gm, "");
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(
+    migration,
+    /revoke all privileges\s+on table public\.digital_inventory\s+from anon, authenticated;/i,
+  );
+  assert.match(
+    migration,
+    /revoke all privileges\s+on table public\.digital_delivery_secrets\s+from anon, authenticated;/i,
+  );
+  assert.match(
+    migration,
+    /revoke all privileges\s+on table public\.digital_inventory_batches\s+from anon, authenticated;/i,
+  );
+  assert.match(
+    migration,
+    /grant select\s+on table public\.digital_inventory_batches\s+to authenticated;/i,
+  );
+  assert.match(migration, /pg_catalog\.pg_attribute/);
+  assert.match(migration, /a\.attnum > 0/);
+  assert.match(migration, /not a\.attisdropped/);
+  assert.match(
+    migration,
+    /revoke select \(%1\$s\), insert \(%1\$s\), update \(%1\$s\), references \(%1\$s\)/i,
+  );
+
+  assert.doesNotMatch(executableMigration, /\border_deliveries\b/i);
+  assert.doesNotMatch(executableMigration, /\b(?:create|alter|drop)\s+(?:or\s+replace\s+)?function\b/i);
+  assert.doesNotMatch(executableMigration, /\b(?:grant|revoke)\s+execute\b/i);
+  assert.doesNotMatch(executableMigration, /\b(?:grant|revoke)[\s\S]{0,160}\bservice_role\b/i);
+  assert.doesNotMatch(executableMigration, /\b(?:grant|revoke)[\s\S]{0,160}\bpostgres\b/i);
+  assert.doesNotMatch(executableMigration, /\b(?:create|alter|drop)\s+policy\b/i);
+  assert.doesNotMatch(executableMigration, /\b(?:insert\s+into|update\s+public\.|delete\s+from|truncate\s+table)\b/i);
+
+  for (const role of ["anon", "authenticated", "service_role"]) {
+    assert.match(tablePostcheck, new RegExp(`'${role}'::text`));
+  }
+  for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]) {
+    assert.match(tablePostcheck, new RegExp(`has_table_privilege\\([^\\n]+[\\s\\S]{0,100}'${privilege}'\\)`));
+  }
+  for (const table of ["digital_inventory", "digital_delivery_secrets", "digital_inventory_batches"]) {
+    assert.match(tablePostcheck, new RegExp(`'${table}'::text`));
+  }
+  assert.match(tablePostcheck, /pg_catalog\.pg_attribute/);
+  assert.match(tablePostcheck, /pg_catalog\.aclexplode\(a\.attacl\)/);
+  assert.match(tablePostcheck, /a\.attacl is not null/);
+  assert.match(tablePostcheck, /pg_catalog\.cardinality\(a\.attacl\) > 0/);
+  assert.match(tablePostcheck, /in \('anon', 'authenticated'\)/);
+
+  for (const signature of [
+    "public.deliver_digital_order(uuid,text)",
+    "public.admin_deliver_order_item_manual(uuid,uuid,text,text)",
+    "public.refresh_order_fulfillment_status(uuid)",
+    "public.get_order_delivery_for_user(text)",
+    "public.get_order_fulfillment_for_user(text)",
+  ]) {
+    assert.match(functionPostcheck, new RegExp(signature.replace(/[().]/g, "\\$&")));
+  }
+  assert.match(functionPostcheck, /pg_catalog\.pg_get_userbyid\(p\.proowner\)/);
+  assert.match(functionPostcheck, /p\.prosecdef as security_definer/);
+  assert.match(functionPostcheck, /search_path=%/);
+  assert.match(functionPostcheck, /pg_catalog\.aclexplode/);
+  assert.match(functionPostcheck, /acl\.grantee = 0/);
+  assert.match(functionPostcheck, /has_function_privilege\('anon'/);
+  assert.match(functionPostcheck, /has_function_privilege\('authenticated'/);
+  assert.match(functionPostcheck, /has_function_privilege\('service_role'/);
+
+  for (const postcheck of [tablePostcheck, functionPostcheck]) {
+    const executablePostcheck = postcheck.replace(/--.*$/gm, "");
+    assert.doesNotMatch(
+      executablePostcheck,
+      /^\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\b/im,
+    );
+  }
+
+  assert.match(deliveryService, /rpc\("deliver_digital_order"/);
+  assert.match(adminOrderRoute, /getSupabaseServiceRoleClient\(\)[\s\S]*deliverDigitalOrder\(/);
+  assert.match(adminItemRoute, /getSupabaseServiceRoleClient\(\)[\s\S]*rpc\("admin_deliver_order_item_manual"/);
+  assert.match(userDeliveryRoute, /rpc\("get_order_delivery_for_user"/);
+  assert.match(userFulfillmentRoute, /rpc\("get_order_fulfillment_for_user"/);
+  assert.doesNotMatch(userDeliveryRoute, /from\("(?:digital_inventory|digital_delivery_secrets)"\)/);
+  assert.doesNotMatch(userFulfillmentRoute, /from\("(?:digital_inventory|digital_delivery_secrets)"\)/);
+  assert.match(inventoryRoute, /rpc\("admin_list_digital_inventory_batches"/);
+  assert.match(inventoryRoute, /getSupabaseServiceRoleClient\(\)/);
+});
+
 test("digital delivery writes elevate only after cookie administrator authorization", () => {
   const balance = file("lib/orders/balance-payment-service.ts");
   const completion = file("lib/payments/complete-payment-service.ts");
