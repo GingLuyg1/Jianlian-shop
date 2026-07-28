@@ -344,7 +344,14 @@ risk_setting_state as (
       where c.table_schema = 'public'
         and c.table_name = 'site_settings'
         and c.column_name = 'setting_value'
-    ) as setting_value_exists
+    ) as setting_value_exists,
+    (
+      select c.udt_name
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and c.table_name = 'site_settings'
+        and c.column_name = 'setting_value'
+    ) as setting_value_udt_name
 ),
 risk_setting_document as (
   select
@@ -362,27 +369,30 @@ risk_setting_document as (
               'value_is_null',
                 ss.setting_key is null
                 or ss.setting_value is null
-                or ss.setting_value = 'null'::jsonb
+                or normalized.setting_json = 'null'::jsonb
                 or (
-                  jsonb_typeof(ss.setting_value) = 'object'
+                  jsonb_typeof(normalized.setting_json) = 'object'
                   and (
-                    ss.setting_value -> 'value' is null
-                    or ss.setting_value -> 'value' = 'null'::jsonb
+                    normalized.setting_json -> 'value' is null
+                    or normalized.setting_json -> 'value' = 'null'::jsonb
                   )
                 ),
               'value_is_positive',
                 case
-                  when jsonb_typeof(ss.setting_value) = 'number'
-                    then (ss.setting_value #>> '{}')::numeric > 0
-                  when jsonb_typeof(ss.setting_value -> 'value') = 'number'
-                    then (ss.setting_value ->> 'value')::numeric > 0
+                  when jsonb_typeof(normalized.setting_json) = 'number'
+                    then (normalized.setting_json #>> '{}')::numeric > 0
+                  when jsonb_typeof(normalized.setting_json -> 'value') = 'number'
+                    then (normalized.setting_json ->> 'value')::numeric > 0
                   else false
                 end,
               'value_json_type',
                 case
-                  when jsonb_typeof(ss.setting_value) = 'object'
-                    then coalesce(jsonb_typeof(ss.setting_value -> 'value'), 'missing')
-                  else coalesce(jsonb_typeof(ss.setting_value), 'missing')
+                  when jsonb_typeof(normalized.setting_json) = 'object'
+                    then coalesce(
+                      jsonb_typeof(normalized.setting_json -> 'value'),
+                      'missing'
+                    )
+                  else coalesce(jsonb_typeof(normalized.setting_json), 'missing')
                 end
             )
             order by expected.setting_key
@@ -393,6 +403,9 @@ risk_setting_document as (
               ('max_auto_overpayment_usdt'::text)
           ) expected(setting_key)
           left join public.site_settings ss using (setting_key)
+          left join lateral (
+            select to_jsonb(ss.setting_value) as setting_json
+          ) normalized on true
         $audit$,
         true,
         false,
@@ -465,7 +478,11 @@ function_catalog as (
         end
     ) as unexpected_execute_grantee_count,
     case
-      when p.oid is null or tf.expected_state like 'expected_absent%' then 0::bigint
+      when p.oid is null and tf.expected_state in (
+        'service_role_execute',
+        'authenticated_and_service_role_execute'
+      ) then null::bigint
+      when tf.expected_state like 'expected_absent%' then 0::bigint
       when tf.expected_state = 'service_role_execute' then
         (
           to_regrole('service_role') is null
@@ -507,6 +524,40 @@ function_catalog as (
   from target_functions tf
   left join pg_catalog.pg_proc p on p.oid = to_regprocedure(tf.signature)
   left join pg_catalog.pg_namespace pn on pn.oid = p.pronamespace
+),
+function_assessment as (
+  select
+    fc.*,
+    case
+      when fc.expected_state like 'expected_absent%' and fc.oid is null
+        then 'PASS'
+      when fc.expected_state like 'expected_absent%' and fc.oid is not null
+        then 'REVIEW_REQUIRED'
+      when fc.expected_state in (
+        'service_role_execute',
+        'authenticated_and_service_role_execute'
+      ) and fc.oid is null
+        then 'MISSING_FUNCTION'
+      when fc.expected_state in (
+        'service_role_execute',
+        'authenticated_and_service_role_execute'
+      ) and (
+        fc.security_definer is not true
+        or fc.search_path_setting is distinct from 'search_path=public'
+        or fc.unexpected_execute_grantee_count <> 0
+        or fc.missing_expected_execute_grantee_count <> 0
+      )
+        then 'REVIEW_REQUIRED'
+      when fc.expected_state in (
+        'service_role_execute',
+        'authenticated_and_service_role_execute'
+      )
+        then 'PASS'
+      when fc.oid is null
+        then 'MISSING_FUNCTION'
+      else 'REVIEW_REQUIRED'
+    end as function_contract_status
+  from function_catalog fc
 )
 select
   'bep20_settlement_schema_permission_audit'::text as audit_name,
@@ -558,13 +609,15 @@ select
     when (select public_can_update_profiles_balance from profiles_balance_acl) is null
       or (select anon_can_update_profiles_balance from profiles_balance_acl) is null
       or (select authenticated_can_update_profiles_balance from profiles_balance_acl) is null
+      or (select service_role_can_update_profiles_balance from profiles_balance_acl) is null
       then 'NOT_CHECKED_MISSING_OBJECTS'
     when (select public_can_update_profiles_balance from profiles_balance_acl)
       or (select anon_can_update_profiles_balance from profiles_balance_acl)
       or (select authenticated_can_update_profiles_balance from profiles_balance_acl)
+      or not (select service_role_can_update_profiles_balance from profiles_balance_acl)
       then 'REVIEW_REQUIRED'
     else 'PASS'
-  end as profiles_balance_client_update_status,
+  end as profiles_balance_acl_status,
   (
     select jsonb_agg(
       jsonb_build_object(
@@ -584,16 +637,18 @@ select
         'service_role_execute', fc.service_role_can_execute,
         'unexpected_execute_grantee_count', fc.unexpected_execute_grantee_count,
         'missing_expected_execute_grantee_count',
-          fc.missing_expected_execute_grantee_count
+          fc.missing_expected_execute_grantee_count,
+        'function_contract_status', fc.function_contract_status
       )
       order by fc.function_name
     )
-    from function_catalog fc
+    from function_assessment fc
   ) as function_summary,
   jsonb_build_object(
     'site_settings_exists', rss.table_exists,
     'setting_key_exists', rss.setting_key_exists,
-    'setting_value_exists', rss.setting_value_exists
+    'setting_value_exists', rss.setting_value_exists,
+    'setting_value_udt_name', rss.setting_value_udt_name
   ) as risk_setting_object_state,
   case
     when (select document from risk_setting_document) is null then null::jsonb

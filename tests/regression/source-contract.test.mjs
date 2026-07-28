@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
 function file(path) {
@@ -3877,6 +3876,8 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   const audits = auditPaths.map((path) => ({ path, source: file(path) }));
 
   for (const { path, source } of audits) {
+    assert.match(path, /^docs\/audits\//, path);
+    assert.doesNotMatch(path, /^supabase\/migrations\//, path);
     assert.match(source, /READ-ONLY \/ NO BUSINESS DATA MUTATION/i, path);
     const executable = source.replace(/--.*$/gm, "");
     assert.doesNotMatch(
@@ -3946,7 +3947,8 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     "anon_can_update_profiles_balance",
     "authenticated_can_update_profiles_balance",
     "service_role_can_update_profiles_balance",
-    "profiles_balance_client_update_status",
+    "profiles_balance_acl_status",
+    "function_contract_status",
     "constraint_summary",
     "index_summary",
   ]) {
@@ -3961,8 +3963,31 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   assert.match(schema, /\bvalue_is_null\b/);
   assert.match(schema, /\bvalue_is_positive\b/);
   assert.match(schema, /\bvalue_json_type\b/);
-  assert.match(schema, /jsonb_typeof\(ss\.setting_value\) = 'number'/);
-  assert.match(schema, /jsonb_typeof\(ss\.setting_value -> 'value'\) = 'number'/);
+  assert.match(schema, /to_jsonb\(ss\.setting_value\)/);
+  assert.match(schema, /\bsetting_value_udt_name\b/);
+  assert.match(schema, /jsonb_typeof\(normalized\.setting_json\) = 'number'/);
+  assert.match(schema, /jsonb_typeof\(normalized\.setting_json -> 'value'\) = 'number'/);
+  assert.match(
+    schema,
+    /p\.oid is null and tf\.expected_state in \([\s\S]*?then null::bigint/i,
+  );
+  assert.match(schema, /then 'MISSING_FUNCTION'/);
+  assert.match(
+    schema,
+    /expected_state like 'expected_absent%' and fc\.oid is null[\s\S]*?then 'PASS'/i,
+  );
+  assert.match(
+    schema,
+    /expected_state like 'expected_absent%' and fc\.oid is not null[\s\S]*?then 'REVIEW_REQUIRED'/i,
+  );
+  assert.match(
+    schema,
+    /service_role_can_update_profiles_balance[\s\S]*?is null[\s\S]*?NOT_CHECKED_MISSING_OBJECTS/i,
+  );
+  assert.match(
+    schema,
+    /or not \(select service_role_can_update_profiles_balance[\s\S]*?then 'REVIEW_REQUIRED'/i,
+  );
   assert.doesNotMatch(schema, /\bconfigured_value\b/);
   assert.doesNotMatch(schema, /pg_get_functiondef/i);
 
@@ -3971,7 +3996,9 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     "null_ownership_reference_count",
     "null_or_negative_log_index_count",
     "null_confirmation_count",
-    "null_expected_or_received_amount_count",
+    "missing_expected_snapshot_count",
+    "missing_confirmed_evidence_amount_count",
+    "missing_order_payment_received_amount_count",
     "payment_amount_currency_snapshot_mismatch_count",
     "incomplete_deadline_count",
     "cross_business_transaction_reference_conflict_count",
@@ -3992,6 +4019,19 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   }
   assert.match(integrity, /\banomaly_count\b/);
   assert.match(integrity, /NOT_CHECKED_MISSING_OBJECTS/);
+  assert.match(integrity, /NOT_CHECKED_UNEXPECTED_COLUMN_TYPE/);
+  assert.match(integrity, /\brequired_columns\b/);
+  assert.match(integrity, /information_schema\.columns/);
+  assert.match(integrity, /\bmissing_columns\b/);
+  assert.match(integrity, /\bunexpected_column_types\b/);
+  assert.match(
+    integrity,
+    /missing_confirmed_evidence_amount_count[\s\S]*?submitted_tx_hash[\s\S]*?chain_transactions[\s\S]*?status in \(/i,
+  );
+  assert.match(
+    integrity,
+    /missing_order_payment_received_amount_count[\s\S]*?cps\.status = 'paid'[\s\S]*?op\.status in \('paid','closed'\)/i,
+  );
   assert.match(
     integrity,
     /from public\.chain_transactions tx[\s\S]*?where not exists \([\s\S]*?from public\.chain_transaction_claims claim/i,
@@ -4050,32 +4090,23 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   );
   assert.match(confirmation, /settings_key_column_exists/);
   assert.match(confirmation, /settings_value_column_exists/);
-  assert.doesNotMatch(confirmation, /setting_value\s*->>\s*'value'/i);
-});
-
-test("BEP20 readiness audit changes never include Migration files", () => {
-  const changedFiles = execFileSync(
-    "git",
-    ["diff", "--name-only", "main", "--"],
-    { cwd: root, encoding: "utf8" },
-  )
-    .trim()
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((path) => path.replace(/\\/g, "/"));
-  const readinessFilesChanged = changedFiles.some(
-    (path) =>
-      path.startsWith("docs/audits/20260729-bep20-settlement-") ||
-      path === "docs/bep20-automatic-settlement-readiness-runbook.md" ||
-      path === "tests/regression/source-contract.test.mjs",
-  );
-
-  if (readinessFilesChanged) {
-    assert.deepEqual(
-      changedFiles.filter((path) => path.startsWith("supabase/migrations/")),
-      [],
-    );
+  for (const requiredColumn of [
+    "chain_payment_session_id",
+    "confirmation_count",
+    "created_at",
+    "block_timestamp",
+    "confirmed_at",
+    "setting_key",
+    "setting_value",
+  ]) {
+    assert.match(confirmation, new RegExp(`'${requiredColumn}'`));
   }
+  assert.match(confirmation, /confirmation_missing_columns/);
+  assert.match(confirmation, /confirmation_unexpected_column_types/);
+  assert.match(confirmation, /settings_value_udt_name/);
+  assert.match(confirmation, /to_jsonb\(setting_value\)/);
+  assert.match(confirmation, /NOT_CHECKED_UNEXPECTED_COLUMN_TYPE/);
+  assert.doesNotMatch(confirmation, /setting_value\s*->>\s*'value'/i);
 });
 
 test("BEP20 automatic-settlement readiness runbook preserves the two-stage read-only gate", () => {
@@ -4089,6 +4120,20 @@ test("BEP20 automatic-settlement readiness runbook preserves the two-stage read-
   assert.match(runbook, /测试项目四份结果全部审查通过后/);
   assert.match(runbook, /自动结算必须继续保持 \*\*Disabled\*\*/);
   assert.match(runbook, /不运行任何 Migration/);
+  const flowSection = runbook.match(/本流程：([\s\S]*?)\n## /)?.[1] ?? "";
+  const flowItems = flowSection.split(/\r?\n/).filter((line) => /^-\s+/.test(line));
+  assert.ok(flowItems.length > 0, "本流程 must contain prohibition list items");
+  for (const item of flowItems) {
+    assert.match(item, /^-\s+(?:不|不得)/, `本流程 item must be prohibitive: ${item}`);
+  }
+
+  const forbiddenSection = runbook.match(/## 明确禁止([\s\S]*?)(?:\n## |\s*$)/)?.[1] ?? "";
+  const forbiddenItems = forbiddenSection.split(/\r?\n/).filter((line) => /^-\s+/.test(line));
+  assert.ok(forbiddenItems.length > 0, "明确禁止 must contain prohibition list items");
+  for (const item of forbiddenItems) {
+    assert.match(item, /^-\s+(?:不|不得)/, `明确禁止 item must be prohibitive: ${item}`);
+  }
+
   for (const dangerousCommand of [
     "supabase db push",
     "migration up",

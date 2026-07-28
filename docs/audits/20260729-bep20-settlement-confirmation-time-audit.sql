@@ -2,7 +2,23 @@
 -- Jianlian Shop BEP20 confirmation-time and historical-threshold audit.
 -- This query returns aggregate timing and configuration-shape evidence only.
 
-with object_state as (
+with column_requirements(
+  requirement_group,
+  table_name,
+  column_name,
+  allowed_udt_names
+) as (
+  values
+    ('confirmation'::text, 'chain_transactions'::text, 'chain_payment_session_id'::text, array['uuid']::text[]),
+    ('confirmation', 'chain_transactions', 'confirmation_count', array['int2','int4','int8','numeric']),
+    ('confirmation', 'chain_transactions', 'created_at', array['timestamp','timestamptz']),
+    ('confirmation', 'chain_transactions', 'block_timestamp', array['timestamp','timestamptz']),
+    ('confirmation', 'chain_payment_sessions', 'id', array['uuid']),
+    ('confirmation', 'chain_payment_sessions', 'confirmed_at', array['timestamp','timestamptz']),
+    ('settings', 'site_settings', 'setting_key', array['text','varchar']),
+    ('settings', 'site_settings', 'setting_value', null::text[])
+),
+object_state as (
   select
     to_regclass('public.chain_transactions') is not null as transactions_exist,
     to_regclass('public.chain_payment_sessions') is not null as sessions_exist,
@@ -20,12 +36,81 @@ with object_state as (
       where c.table_schema = 'public'
         and c.table_name = 'site_settings'
         and c.column_name = 'setting_value'
-    ) as settings_value_column_exists
+    ) as settings_value_column_exists,
+    array(
+      select format('%I.%I', cr.table_name, cr.column_name)
+      from column_requirements cr
+      left join information_schema.columns c
+        on c.table_schema = 'public'
+       and c.table_name = cr.table_name
+       and c.column_name = cr.column_name
+      where cr.requirement_group = 'confirmation'
+        and c.column_name is null
+      order by cr.table_name, cr.column_name
+    ) as confirmation_missing_columns,
+    array(
+      select format(
+        '%I.%I expected %s actual %s',
+        cr.table_name,
+        cr.column_name,
+        array_to_string(cr.allowed_udt_names, '|'),
+        c.udt_name
+      )
+      from column_requirements cr
+      join information_schema.columns c
+        on c.table_schema = 'public'
+       and c.table_name = cr.table_name
+       and c.column_name = cr.column_name
+      where cr.requirement_group = 'confirmation'
+        and cr.allowed_udt_names is not null
+        and not (c.udt_name = any(cr.allowed_udt_names))
+      order by cr.table_name, cr.column_name
+    ) as confirmation_unexpected_column_types,
+    array(
+      select format('%I.%I', cr.table_name, cr.column_name)
+      from column_requirements cr
+      left join information_schema.columns c
+        on c.table_schema = 'public'
+       and c.table_name = cr.table_name
+       and c.column_name = cr.column_name
+      where cr.requirement_group = 'settings'
+        and c.column_name is null
+      order by cr.table_name, cr.column_name
+    ) as settings_missing_columns,
+    array(
+      select format(
+        '%I.%I expected %s actual %s',
+        cr.table_name,
+        cr.column_name,
+        array_to_string(cr.allowed_udt_names, '|'),
+        c.udt_name
+      )
+      from column_requirements cr
+      join information_schema.columns c
+        on c.table_schema = 'public'
+       and c.table_name = cr.table_name
+       and c.column_name = cr.column_name
+      where cr.requirement_group = 'settings'
+        and cr.allowed_udt_names is not null
+        and not (c.udt_name = any(cr.allowed_udt_names))
+      order by cr.table_name, cr.column_name
+    ) as settings_unexpected_column_types,
+    (
+      select c.udt_name
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and c.table_name = 'site_settings'
+        and c.column_name = 'setting_value'
+    ) as settings_value_udt_name
 ),
 confirmation_document as (
   select
     case
-      when os.transactions_exist and os.sessions_exist then query_to_xml(
+      when os.transactions_exist
+        and os.sessions_exist
+        and cardinality(os.confirmation_missing_columns) = 0
+        and cardinality(os.confirmation_unexpected_column_types) = 0
+        then query_to_xml(
         $audit$
           with session_evidence as (
             select
@@ -139,34 +224,53 @@ settings_document as (
       when os.settings_exist
         and os.settings_key_column_exists
         and os.settings_value_column_exists
+        and cardinality(os.settings_missing_columns) = 0
+        and cardinality(os.settings_unexpected_column_types) = 0
         then query_to_xml(
         $audit$
+          with normalized_settings as (
+            select
+              lower(setting_key::text) as normalized_key,
+              to_jsonb(setting_value) as setting_json
+            from public.site_settings
+          )
           select
             count(*)::bigint as confirmation_setting_record_count,
             count(*) filter (
-              where setting_value is null
-                 or setting_value = 'null'::jsonb
-                 or setting_value -> 'value' is null
-                 or setting_value -> 'value' = 'null'::jsonb
+              where setting_json is null
+                 or setting_json = 'null'::jsonb
+                 or (
+                   jsonb_typeof(setting_json) = 'object'
+                   and (
+                     setting_json -> 'value' is null
+                     or setting_json -> 'value' = 'null'::jsonb
+                   )
+                 )
             )::bigint as confirmation_setting_null_count,
             coalesce(
               string_agg(
                 distinct coalesce(
-                  jsonb_typeof(setting_value -> 'value'),
-                  jsonb_typeof(setting_value),
+                  case
+                    when jsonb_typeof(setting_json) = 'object'
+                      then jsonb_typeof(setting_json -> 'value')
+                    else jsonb_typeof(setting_json)
+                  end,
                   'sql_null'
                 ),
                 ','
                 order by coalesce(
-                  jsonb_typeof(setting_value -> 'value'),
-                  jsonb_typeof(setting_value),
+                  case
+                    when jsonb_typeof(setting_json) = 'object'
+                      then jsonb_typeof(setting_json -> 'value')
+                    else jsonb_typeof(setting_json)
+                  end,
                   'sql_null'
                 )
               ),
               'none'
             )::text as confirmation_setting_json_types
-          from public.site_settings
-          where lower(setting_key) in (
+          from normalized_settings
+          where normalized_key in (
             'bsc_required_confirmations',
             'bep20_required_confirmations'
           )
@@ -186,13 +290,31 @@ select
   os.settings_exist,
   os.settings_key_column_exists,
   os.settings_value_column_exists,
+  os.confirmation_missing_columns,
+  os.confirmation_unexpected_column_types,
+  os.settings_missing_columns,
+  os.settings_unexpected_column_types,
+  os.settings_value_udt_name,
   case
-    when cd.document is null then 'NOT_CHECKED_MISSING_OBJECTS'
+    when not os.transactions_exist
+      or not os.sessions_exist
+      or cardinality(os.confirmation_missing_columns) > 0
+      then 'NOT_CHECKED_MISSING_OBJECTS'
+    when cardinality(os.confirmation_unexpected_column_types) > 0
+      then 'NOT_CHECKED_UNEXPECTED_COLUMN_TYPE'
     else (xpath(
       '/table/row/session_timing_evidence_status/text()',
       cd.document
     ))[1]::text
   end as confirmation_timing_status,
+  case
+    when not os.settings_exist
+      or cardinality(os.settings_missing_columns) > 0
+      then 'NOT_CHECKED_MISSING_OBJECTS'
+    when cardinality(os.settings_unexpected_column_types) > 0
+      then 'NOT_CHECKED_UNEXPECTED_COLUMN_TYPE'
+    else 'PASS'
+  end as confirmation_setting_contract_status,
   case
     when cd.document is null then null::jsonb
     else jsonb_build_object(
