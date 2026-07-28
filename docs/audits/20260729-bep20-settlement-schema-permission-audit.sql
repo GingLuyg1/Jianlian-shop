@@ -17,6 +17,7 @@ with target_tables(table_name) as (
     ('site_settings'),
     ('site_setting_logs'),
     ('account_recharges'),
+    ('bep20_admin_review_attempts'),
     ('admin_audit_logs'),
     ('order_status_logs')
 ),
@@ -108,6 +109,9 @@ target_columns(table_name, column_name) as (
     ('account_recharges','user_id'),
     ('account_recharges','provider_trade_no'),
     ('account_recharges','status'),
+    ('bep20_admin_review_attempts','chain_payment_session_id'),
+    ('bep20_admin_review_attempts','action'),
+    ('bep20_admin_review_attempts','result_status'),
     ('admin_audit_logs','target_type'),
     ('admin_audit_logs','target_id'),
     ('admin_audit_logs','result'),
@@ -116,6 +120,9 @@ target_columns(table_name, column_name) as (
 target_functions(function_name, signature, expected_state) as (
   values
     ('complete_payment_session', 'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)', 'service_role_execute'),
+    ('begin_bep20_payment_completion', 'public.begin_bep20_payment_completion(uuid,boolean)', 'service_role_execute'),
+    ('prepare_bep20_payment_completion', 'public.prepare_bep20_payment_completion(uuid,text,numeric,numeric,boolean,uuid)', 'service_role_execute'),
+    ('finish_bep20_payment_completion', 'public.finish_bep20_payment_completion(uuid,uuid,text,text,uuid)', 'service_role_execute'),
     ('release_order_inventory', 'public.release_order_inventory(uuid,text)', 'service_role_execute'),
     ('cancel_unpaid_order', 'public.cancel_unpaid_order(uuid,text)', 'authenticated_and_service_role_execute'),
     ('is_admin', 'public.is_admin(uuid)', 'policy_helper_review'),
@@ -160,7 +167,6 @@ table_acl as (
         or pg_get_userbyid(acl.grantee) in ('anon','authenticated')
       )
       and acl.privilege_type <> 'SELECT'
-      and tc.table_name not in ('profiles')
     ) as unexpected_client_table_write_acl_count
   from table_catalog tc
   left join lateral pg_catalog.aclexplode(
@@ -201,7 +207,10 @@ column_acl as (
         or pg_get_userbyid(acl.grantee) in ('anon','authenticated')
       )
       and acl.privilege_type <> 'SELECT'
-      and cls.relname not in ('profiles')
+      and (
+        cls.relname <> 'profiles'
+        or a.attname = 'balance'
+      )
     ) as unexpected_client_column_write_acl_count
   from pg_catalog.pg_attribute a
   join pg_catalog.pg_class cls on cls.oid = a.attrelid
@@ -218,6 +227,70 @@ column_acl as (
     and not a.attisdropped
     and a.attacl is not null
     and cardinality(a.attacl) > 0
+),
+profiles_balance_acl as (
+  select
+    case
+      when c.oid is null or a.attnum is null then null::boolean
+      else exists (
+        select 1
+        from pg_catalog.aclexplode(
+          coalesce(c.relacl, pg_catalog.acldefault('r', c.relowner))
+        ) acl
+        where acl.grantee = 0
+          and acl.privilege_type = 'UPDATE'
+      )
+      or exists (
+        select 1
+        from pg_catalog.aclexplode(
+          case
+            when a.attacl is not null and cardinality(a.attacl) > 0
+              then a.attacl
+            else null::aclitem[]
+          end
+        ) acl
+        where acl.grantee = 0
+          and acl.privilege_type = 'UPDATE'
+      )
+    end as public_can_update_profiles_balance,
+    case
+      when c.oid is null or a.attnum is null or to_regrole('anon') is null
+        then null::boolean
+      else has_column_privilege(
+        to_regrole('anon'),
+        c.oid,
+        a.attname,
+        'UPDATE'
+      )
+    end as anon_can_update_profiles_balance,
+    case
+      when c.oid is null or a.attnum is null or to_regrole('authenticated') is null
+        then null::boolean
+      else has_column_privilege(
+        to_regrole('authenticated'),
+        c.oid,
+        a.attname,
+        'UPDATE'
+      )
+    end as authenticated_can_update_profiles_balance,
+    case
+      when c.oid is null or a.attnum is null or to_regrole('service_role') is null
+        then null::boolean
+      else has_column_privilege(
+        to_regrole('service_role'),
+        c.oid,
+        a.attname,
+        'UPDATE'
+      )
+    end as service_role_can_update_profiles_balance
+  from (values (1)) seed(value)
+  left join pg_catalog.pg_class c
+    on c.oid = to_regclass('public.profiles')
+  left join pg_catalog.pg_attribute a
+    on a.attrelid = c.oid
+   and a.attname = 'balance'
+   and a.attnum > 0
+   and not a.attisdropped
 ),
 constraint_catalog as (
   select coalesce(
@@ -255,10 +328,31 @@ index_catalog as (
   where schemaname = 'public'
     and tablename in (select table_name from target_tables)
 ),
+risk_setting_state as (
+  select
+    to_regclass('public.site_settings') is not null as table_exists,
+    exists (
+      select 1
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and c.table_name = 'site_settings'
+        and c.column_name = 'setting_key'
+    ) as setting_key_exists,
+    exists (
+      select 1
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and c.table_name = 'site_settings'
+        and c.column_name = 'setting_value'
+    ) as setting_value_exists
+),
 risk_setting_document as (
   select
     case
-      when to_regclass('public.site_settings') is null then null::xml
+      when not rss.table_exists
+        or not rss.setting_key_exists
+        or not rss.setting_value_exists
+        then null::xml
       else query_to_xml(
         $audit$
           select jsonb_agg(
@@ -269,16 +363,27 @@ risk_setting_document as (
                 ss.setting_key is null
                 or ss.setting_value is null
                 or ss.setting_value = 'null'::jsonb
-                or ss.setting_value -> 'value' is null
-                or ss.setting_value -> 'value' = 'null'::jsonb,
+                or (
+                  jsonb_typeof(ss.setting_value) = 'object'
+                  and (
+                    ss.setting_value -> 'value' is null
+                    or ss.setting_value -> 'value' = 'null'::jsonb
+                  )
+                ),
               'value_is_positive',
                 case
+                  when jsonb_typeof(ss.setting_value) = 'number'
+                    then (ss.setting_value #>> '{}')::numeric > 0
                   when jsonb_typeof(ss.setting_value -> 'value') = 'number'
                     then (ss.setting_value ->> 'value')::numeric > 0
                   else false
                 end,
               'value_json_type',
-                coalesce(jsonb_typeof(ss.setting_value -> 'value'), 'missing')
+                case
+                  when jsonb_typeof(ss.setting_value) = 'object'
+                    then coalesce(jsonb_typeof(ss.setting_value -> 'value'), 'missing')
+                  else coalesce(jsonb_typeof(ss.setting_value), 'missing')
+                end
             )
             order by expected.setting_key
           )::text as risk_setting_shape
@@ -294,6 +399,7 @@ risk_setting_document as (
         ''
       )
     end as document
+  from risk_setting_state rss
 ),
 function_catalog as (
   select
@@ -324,24 +430,80 @@ function_catalog as (
       from pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) acl
       where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
     ) as public_can_execute,
-    has_function_privilege('anon', p.oid, 'EXECUTE') as anon_can_execute,
-    has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_can_execute,
-    has_function_privilege('service_role', p.oid, 'EXECUTE') as service_role_can_execute,
+    case
+      when p.oid is null or to_regrole('anon') is null then null::boolean
+      else has_function_privilege(to_regrole('anon'), p.oid, 'EXECUTE')
+    end as anon_can_execute,
+    case
+      when p.oid is null or to_regrole('authenticated') is null then null::boolean
+      else has_function_privilege(to_regrole('authenticated'), p.oid, 'EXECUTE')
+    end as authenticated_can_execute,
+    case
+      when p.oid is null or to_regrole('service_role') is null then null::boolean
+      else has_function_privilege(to_regrole('service_role'), p.oid, 'EXECUTE')
+    end as service_role_can_execute,
     (
       select count(*)
       from pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) acl
       where acl.privilege_type = 'EXECUTE'
         and case
           when tf.expected_state = 'service_role_execute'
-            then acl.grantee = 0 or pg_get_userbyid(acl.grantee) <> 'service_role'
+            then acl.grantee = 0
+              or (
+                acl.grantee <> p.proowner
+                and pg_get_userbyid(acl.grantee) <> 'service_role'
+              )
           when tf.expected_state = 'authenticated_and_service_role_execute'
             then acl.grantee = 0
-              or pg_get_userbyid(acl.grantee) not in ('authenticated','service_role')
+              or (
+                acl.grantee <> p.proowner
+                and pg_get_userbyid(acl.grantee) not in ('authenticated','service_role')
+              )
           when tf.expected_state like 'expected_absent%'
             then true
           else false
         end
-    ) as unexpected_execute_grantee_count
+    ) as unexpected_execute_grantee_count,
+    case
+      when p.oid is null or tf.expected_state like 'expected_absent%' then 0::bigint
+      when tf.expected_state = 'service_role_execute' then
+        (
+          to_regrole('service_role') is null
+          or not exists (
+            select 1
+            from pg_catalog.aclexplode(
+              coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+            ) acl
+            where acl.grantee = to_regrole('service_role')
+              and acl.privilege_type = 'EXECUTE'
+          )
+        )::integer
+      when tf.expected_state = 'authenticated_and_service_role_execute' then
+        (
+          to_regrole('authenticated') is null
+          or not exists (
+            select 1
+            from pg_catalog.aclexplode(
+              coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+            ) acl
+            where acl.grantee = to_regrole('authenticated')
+              and acl.privilege_type = 'EXECUTE'
+          )
+        )::integer
+        +
+        (
+          to_regrole('service_role') is null
+          or not exists (
+            select 1
+            from pg_catalog.aclexplode(
+              coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+            ) acl
+            where acl.grantee = to_regrole('service_role')
+              and acl.privilege_type = 'EXECUTE'
+          )
+        )::integer
+      else 0::bigint
+    end as missing_expected_execute_grantee_count
   from target_functions tf
   left join pg_catalog.pg_proc p on p.oid = to_regprocedure(tf.signature)
   left join pg_catalog.pg_namespace pn on pn.oid = p.pronamespace
@@ -384,6 +546,25 @@ select
   ) as column_summary,
   (select unexpected_client_column_write_acl_count from column_acl)
     as unexpected_client_column_acl_count,
+  (select public_can_update_profiles_balance from profiles_balance_acl)
+    as public_can_update_profiles_balance,
+  (select anon_can_update_profiles_balance from profiles_balance_acl)
+    as anon_can_update_profiles_balance,
+  (select authenticated_can_update_profiles_balance from profiles_balance_acl)
+    as authenticated_can_update_profiles_balance,
+  (select service_role_can_update_profiles_balance from profiles_balance_acl)
+    as service_role_can_update_profiles_balance,
+  case
+    when (select public_can_update_profiles_balance from profiles_balance_acl) is null
+      or (select anon_can_update_profiles_balance from profiles_balance_acl) is null
+      or (select authenticated_can_update_profiles_balance from profiles_balance_acl) is null
+      then 'NOT_CHECKED_MISSING_OBJECTS'
+    when (select public_can_update_profiles_balance from profiles_balance_acl)
+      or (select anon_can_update_profiles_balance from profiles_balance_acl)
+      or (select authenticated_can_update_profiles_balance from profiles_balance_acl)
+      then 'REVIEW_REQUIRED'
+    else 'PASS'
+  end as profiles_balance_client_update_status,
   (
     select jsonb_agg(
       jsonb_build_object(
@@ -401,12 +582,19 @@ select
         'anon_execute', fc.anon_can_execute,
         'authenticated_execute', fc.authenticated_can_execute,
         'service_role_execute', fc.service_role_can_execute,
-        'unexpected_execute_grantee_count', fc.unexpected_execute_grantee_count
+        'unexpected_execute_grantee_count', fc.unexpected_execute_grantee_count,
+        'missing_expected_execute_grantee_count',
+          fc.missing_expected_execute_grantee_count
       )
       order by fc.function_name
     )
     from function_catalog fc
   ) as function_summary,
+  jsonb_build_object(
+    'site_settings_exists', rss.table_exists,
+    'setting_key_exists', rss.setting_key_exists,
+    'setting_value_exists', rss.setting_value_exists
+  ) as risk_setting_object_state,
   case
     when (select document from risk_setting_document) is null then null::jsonb
     else (
@@ -417,4 +605,5 @@ select
     )::jsonb
   end as risk_setting_shape,
   (select definitions from constraint_catalog) as constraint_summary,
-  (select definitions from index_catalog) as index_summary;
+  (select definitions from index_catalog) as index_summary
+from risk_setting_state rss;

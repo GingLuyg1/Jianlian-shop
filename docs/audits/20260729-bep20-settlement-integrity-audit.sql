@@ -13,11 +13,27 @@ with checks(check_name, required_tables, count_query) as (
           (select count(*) from public.chain_payment_sessions
            where order_id is null or payment_session_id is null or payment_id is null)
           +
-          (select count(*) from public.payment_sessions
-           where business_type = 'order' and (business_id is null or user_id is null))
+          (select count(*)
+           from public.chain_payment_sessions cps
+           left join public.payment_sessions ps on ps.id = cps.payment_session_id
+           where cps.payment_session_id is not null
+             and (
+               ps.id is null
+               or ps.business_type is distinct from 'order'
+               or ps.business_id is null
+               or ps.user_id is null
+             ))
           +
-          (select count(*) from public.order_payments
-           where order_id is null or user_id is null or payment_session_id is null)
+          (select count(*)
+           from public.chain_payment_sessions cps
+           left join public.order_payments op on op.id = cps.payment_id
+           where cps.payment_id is not null
+             and (
+               op.id is null
+               or op.order_id is null
+               or op.user_id is null
+               or op.payment_session_id is null
+             ))
         )::bigint as metric_count
       $audit$
     ),
@@ -48,11 +64,15 @@ with checks(check_name, required_tables, count_query) as (
            where expected_amount is null or confirmed_amount is null
               or expected_raw_amount is null or confirmed_raw_amount is null)
           +
-          (select count(*) from public.payment_sessions
-           where business_type = 'order' and payable_amount is null)
+          (select count(*)
+           from public.chain_payment_sessions cps
+           join public.payment_sessions ps on ps.id = cps.payment_session_id
+           where ps.payable_amount is null)
           +
-          (select count(*) from public.order_payments
-           where payable_amount is null or received_amount is null)
+          (select count(*)
+           from public.chain_payment_sessions cps
+           join public.order_payments op on op.id = cps.payment_id
+           where op.payable_amount is null or op.received_amount is null)
         )::bigint as metric_count
       $audit$
     ),
@@ -120,24 +140,60 @@ with checks(check_name, required_tables, count_query) as (
       $audit$
     ),
     (
-      'claim_transaction_missing_duplicate_or_ownership_mismatch_count',
+      'claim_without_unique_transaction_count',
       array['chain_transactions','chain_transaction_claims'],
       $audit$
         select count(*)::bigint as metric_count
         from public.chain_transaction_claims claim
         left join lateral (
           select
-            count(*)::bigint as match_count,
-            count(*) filter (
-              where tx.order_id is distinct from claim.order_id
-                 or tx.chain_payment_session_id is distinct from claim.chain_payment_session_id
-            )::bigint as ownership_mismatch_count
+            count(*)::bigint as match_count
           from public.chain_transactions tx
           where tx.chain_id = claim.chain_id
             and lower(tx.tx_hash) = lower(claim.tx_hash)
         ) evidence on true
         where evidence.match_count <> 1
-           or evidence.ownership_mismatch_count <> 0
+      $audit$
+    ),
+    (
+      'transaction_without_claim_count',
+      array['chain_transactions','chain_transaction_claims'],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_transactions tx
+        where not exists (
+          select 1
+          from public.chain_transaction_claims claim
+          where claim.chain_id = tx.chain_id
+            and lower(claim.tx_hash) = lower(tx.tx_hash)
+        )
+      $audit$
+    ),
+    (
+      'multiple_transactions_per_chain_reference_count',
+      array['chain_transactions'],
+      $audit$
+        select count(*)::bigint as metric_count
+        from (
+          select tx.chain_id, lower(tx.tx_hash)
+          from public.chain_transactions tx
+          group by tx.chain_id, lower(tx.tx_hash)
+          having count(*) > 1
+        ) duplicate_transactions
+      $audit$
+    ),
+    (
+      'claim_transaction_ownership_mismatch_count',
+      array['chain_transactions','chain_transaction_claims'],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_transaction_claims claim
+        join public.chain_transactions tx
+          on tx.chain_id = claim.chain_id
+         and lower(tx.tx_hash) = lower(claim.tx_hash)
+        where tx.order_id is distinct from claim.order_id
+           or tx.chain_payment_session_id
+                is distinct from claim.chain_payment_session_id
       $audit$
     ),
     (
@@ -183,9 +239,23 @@ with checks(check_name, required_tables, count_query) as (
       $audit$
         select (
           (select count(*) from (
-            select business_type, business_id
-            from public.balance_transactions
-            group by business_type, business_id
+            select bt.business_type, bt.business_id
+            from public.balance_transactions bt
+            where bt.metadata ->> 'subtype' in (
+              'bep20_overpayment_wallet_credit',
+              'bep20_underpayment_wallet_credit'
+            )
+               or exists (
+                 select 1
+                 from public.bep20_overpayment_dispositions od
+                 where od.balance_transaction_id = bt.id
+               )
+               or exists (
+                 select 1
+                 from public.bep20_underpayment_dispositions ud
+                 where ud.balance_transaction_id = bt.id
+               )
+            group by bt.business_type, bt.business_id
             having count(*) > 1
           ) duplicate_ledger)
           +
@@ -265,18 +335,43 @@ with checks(check_name, required_tables, count_query) as (
       $audit$
     ),
     (
-      'manual_review_without_terminal_decision_or_audit_count',
-      array['chain_payment_sessions','admin_audit_logs'],
+      'manual_review_missing_decision_count',
+      array['chain_payment_sessions'],
       $audit$
         select count(*)::bigint as metric_count
         from public.chain_payment_sessions cps
         where cps.status = 'manual_review'
           and cps.manual_review_decision is null
+      $audit$
+    ),
+    (
+      'manual_review_missing_audit_count',
+      array['chain_payment_sessions','bep20_admin_review_attempts'],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_payment_sessions cps
+        where cps.status = 'manual_review'
           and not exists (
             select 1
-            from public.admin_audit_logs aal
-            where aal.target_type = 'chain_payment_session'
-              and aal.target_id = cps.id::text
+            from public.bep20_admin_review_attempts attempt
+            where attempt.chain_payment_session_id = cps.id
+          )
+      $audit$
+    ),
+    (
+      'manual_review_missing_decision_or_audit_count',
+      array['chain_payment_sessions','bep20_admin_review_attempts'],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_payment_sessions cps
+        where cps.status = 'manual_review'
+          and (
+            cps.manual_review_decision is null
+            or not exists (
+              select 1
+              from public.bep20_admin_review_attempts attempt
+              where attempt.chain_payment_session_id = cps.id
+            )
           )
       $audit$
     ),

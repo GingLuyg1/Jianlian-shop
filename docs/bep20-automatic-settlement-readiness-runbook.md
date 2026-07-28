@@ -7,7 +7,7 @@
 自动结算必须继续保持 **Disabled**。本流程：
 
 - 不运行任何 Migration 或修复 SQL；
-- 执行 `supabase db push`、`migration up`、`migration repair` 或 `db reset --linked`；
+- 不执行、不使用 `supabase db push`、`migration up`、`migration repair` 或 `db reset --linked`；
 - 配置自动超额阈值、环境变量、Vault、Cron 或内部任务；
 - 调用付款完成、余额入账、订单结算或库存处理 RPC；
 - 部署应用或处理真实订单。

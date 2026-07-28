@@ -8,7 +8,127 @@ with target_versions(version, expected_schema_evidence) as (
     ('20260728'::text, 'bep20_underpayment_dispositions + list_expirable_bep20_underpayments(integer)'::text),
     ('20260729'::text, 'seven-argument underpayment RPC present; six-argument RPC absent'::text),
     ('20260730'::text, 'no unique persistent marker; confirmation column and seven-argument RPC are supporting evidence only'::text),
-    ('20260728230700'::text, 'begin_bep20_payment_completion(uuid,boolean) + phase-1 table privileges'::text)
+    (
+      '20260728230700'::text,
+      'phase-1 table and function permission contract; schema state cannot uniquely identify the migration'::text
+    )
+),
+phase_one_table_acl_state as (
+  select
+    count(*) filter (where c.oid is not null) = 2 as target_tables_exist,
+    coalesce(
+      bool_and(
+        c.oid is not null
+        and c.relrowsecurity
+        and not exists (
+          select 1
+          from pg_catalog.aclexplode(
+            coalesce(c.relacl, pg_catalog.acldefault('r', c.relowner))
+          ) acl
+          where acl.grantee = 0
+        )
+        and not exists (
+          select 1
+          from pg_catalog.pg_attribute a
+          cross join lateral pg_catalog.aclexplode(a.attacl) acl
+          where a.attrelid = c.oid
+            and a.attnum > 0
+            and not a.attisdropped
+            and a.attacl is not null
+            and cardinality(a.attacl) > 0
+            and (
+              acl.grantee = 0
+              or pg_get_userbyid(acl.grantee) in ('anon','authenticated')
+            )
+        )
+        and (
+          to_regrole('anon') is not null
+          and not exists (
+            select 1
+            from unnest(array[
+              'SELECT','INSERT','UPDATE','DELETE',
+              'TRUNCATE','REFERENCES','TRIGGER'
+            ]::text[]) client_privilege(privilege_type)
+            where has_table_privilege(
+              to_regrole('anon'),
+              c.oid,
+              client_privilege.privilege_type
+            )
+          )
+        )
+        and (
+          to_regrole('authenticated') is not null
+          and has_table_privilege(to_regrole('authenticated'), c.oid, 'SELECT')
+          and not exists (
+            select 1
+            from unnest(array[
+              'INSERT','UPDATE','DELETE',
+              'TRUNCATE','REFERENCES','TRIGGER'
+            ]::text[]) write_privilege(privilege_type)
+            where has_table_privilege(
+              to_regrole('authenticated'),
+              c.oid,
+              write_privilege.privilege_type
+            )
+          )
+        )
+        and (
+          to_regrole('service_role') is not null
+          and not exists (
+            select 1
+            from unnest(array[
+              'SELECT','INSERT','UPDATE','DELETE',
+              'TRUNCATE','REFERENCES','TRIGGER'
+            ]::text[]) required_privilege(privilege_type)
+            where not has_table_privilege(
+              to_regrole('service_role'),
+              c.oid,
+              required_privilege.privilege_type
+            )
+          )
+        )
+      ),
+      false
+    ) as table_acl_contract_met
+  from (
+    values
+      ('chain_payment_sessions'::text),
+      ('chain_transactions'::text)
+  ) target(table_name)
+  left join pg_catalog.pg_class c
+    on c.oid = to_regclass(format('public.%I', target.table_name))
+),
+phase_one_function_acl_state as (
+  select
+    p.oid is not null as function_exists,
+    case
+      when p.oid is null then null::boolean
+      else exists (
+        select 1
+        from pg_catalog.aclexplode(
+          coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+        ) acl
+        where acl.grantee = 0
+          and acl.privilege_type = 'EXECUTE'
+      )
+    end as public_can_execute,
+    case
+      when p.oid is null or to_regrole('anon') is null then null::boolean
+      else has_function_privilege(to_regrole('anon'), p.oid, 'EXECUTE')
+    end as anon_can_execute,
+    case
+      when p.oid is null or to_regrole('authenticated') is null then null::boolean
+      else has_function_privilege(to_regrole('authenticated'), p.oid, 'EXECUTE')
+    end as authenticated_can_execute,
+    case
+      when p.oid is null or to_regrole('service_role') is null then null::boolean
+      else has_function_privilege(to_regrole('service_role'), p.oid, 'EXECUTE')
+    end as service_role_can_execute
+  from (values (1)) seed(value)
+  left join pg_catalog.pg_proc p
+    on p.oid = to_regprocedure(
+      'public.begin_bep20_payment_completion(uuid,boolean)'
+    )
 ),
 catalog_state as (
   select
@@ -30,6 +150,12 @@ catalog_state as (
       'public.settle_bep20_underpayment_to_wallet(uuid,integer,text,text,text,uuid)'
     ) as underpayment_six_argument_rpc,
     to_regprocedure('public.begin_bep20_payment_completion(uuid,boolean)') as phase_one_completion_rpc,
+    po.target_tables_exist as phase_one_target_tables_exist,
+    po.table_acl_contract_met as phase_one_table_acl_contract_met,
+    pf.public_can_execute as phase_one_public_execute,
+    pf.anon_can_execute as phase_one_anon_execute,
+    pf.authenticated_can_execute as phase_one_authenticated_execute,
+    pf.service_role_can_execute as phase_one_service_role_execute,
     exists (
       select 1
       from information_schema.columns c
@@ -37,6 +163,8 @@ catalog_state as (
         and c.table_name = 'chain_payment_sessions'
         and c.column_name = 'confirmed_at'
     ) as confirmation_column_exists
+  from phase_one_table_acl_state po
+  cross join phase_one_function_acl_state pf
 ),
 history_document as (
   select
@@ -77,13 +205,39 @@ assessment as (
       when '20260730' then
         cs.confirmation_column_exists
         and cs.underpayment_seven_argument_rpc is not null
-      when '20260728230700' then cs.phase_one_completion_rpc is not null
+      when '20260728230700' then
+        cs.phase_one_target_tables_exist
+        and cs.phase_one_table_acl_contract_met
+        and cs.phase_one_completion_rpc is not null
+        and cs.phase_one_public_execute is false
+        and cs.phase_one_anon_execute is false
+        and cs.phase_one_authenticated_execute is false
+        and cs.phase_one_service_role_execute is true
       else false
     end as schema_evidence_present,
     case tv.version
       when '20260730' then false
+      when '20260728230700' then false
       else true
-    end as schema_evidence_can_identify_migration
+    end as schema_evidence_can_identify_migration,
+    case when tv.version = '20260728230700'
+      then cs.phase_one_target_tables_exist
+    end as phase_one_target_tables_exist,
+    case when tv.version = '20260728230700'
+      then cs.phase_one_table_acl_contract_met
+    end as phase_one_table_acl_contract_met,
+    case when tv.version = '20260728230700'
+      then cs.phase_one_public_execute
+    end as begin_completion_public_execute,
+    case when tv.version = '20260728230700'
+      then cs.phase_one_anon_execute
+    end as begin_completion_anon_execute,
+    case when tv.version = '20260728230700'
+      then cs.phase_one_authenticated_execute
+    end as begin_completion_authenticated_execute,
+    case when tv.version = '20260728230700'
+      then cs.phase_one_service_role_execute
+    end as begin_completion_service_role_execute
   from target_versions tv
   cross join catalog_state cs
   cross join history_document hd
@@ -96,6 +250,12 @@ select
   recorded,
   schema_evidence_present,
   schema_evidence_can_identify_migration,
+  phase_one_target_tables_exist,
+  phase_one_table_acl_contract_met,
+  begin_completion_public_execute,
+  begin_completion_anon_execute,
+  begin_completion_authenticated_execute,
+  begin_completion_service_role_execute,
   expected_schema_evidence,
   case
     when not migration_history_table_exists then 'HISTORY_TABLE_MISSING'

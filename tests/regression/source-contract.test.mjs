@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
 function file(path) {
@@ -3880,13 +3881,14 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     const executable = source.replace(/--.*$/gm, "");
     assert.doesNotMatch(
       executable,
-      /\b(?:insert|update|delete|merge|truncate|alter|create|drop|grant|revoke|call|do)\b/i,
+      /\b(?:insert\s+into|update\s+(?:only\s+)?(?:public\.)?[\w"]+|delete\s+from|merge\s+into|truncate\s+(?:table\s+)?(?:public\.)?[\w"]+|alter\s+(?:table|function|policy|role|schema)|create\s+(?:table|function|or\s+replace\s+function|index|policy|role|schema)|drop\s+(?:table|function|index|policy|role|schema)|grant\s+\w+\s+on|revoke\s+\w+\s+on|call\s+(?:public\.)?[\w"]+\s*\(|do\s+\$|copy\s+(?:public\.)?[\w"]+)\b/i,
       path,
     );
+    assert.doesNotMatch(executable, /\bcopy\b/i, path);
     assert.doesNotMatch(executable, /\b(?:begin|commit|rollback)\s*;/i, path);
     assert.doesNotMatch(
       executable,
-      /\bselect\s+(?:public\.)?(?:settle_bep20_automatic_overpayment|credit_bep20_overpayment_to_wallet|settle_bep20_underpayment_to_wallet|complete_payment_session|release_order_inventory|cancel_unpaid_order)\s*\(/i,
+      /\bselect\s+(?:public\.)?(?:settle_bep20_automatic_overpayment|credit_bep20_overpayment_to_wallet|settle_bep20_underpayment_to_wallet|complete_payment_session|release_order_inventory|cancel_unpaid_order|begin_bep20_payment_completion|prepare_bep20_payment_completion|finish_bep20_payment_completion)\s*\(/i,
       path,
     );
     assert.doesNotMatch(
@@ -3917,6 +3919,15 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   assert.match(history, /HISTORY_SCHEMA_DRIFT/);
   assert.match(history, /to_regclass/);
   assert.match(history, /to_regprocedure/);
+  assert.match(history, /phase_one_table_acl_contract_met/);
+  assert.match(history, /begin_completion_public_execute/);
+  assert.match(history, /begin_completion_anon_execute/);
+  assert.match(history, /begin_completion_authenticated_execute/);
+  assert.match(history, /begin_completion_service_role_execute/);
+  assert.match(
+    history,
+    /when '20260728230700' then false[\s\S]*?schema_evidence_can_identify_migration/i,
+  );
 
   const schema = audits[1].source;
   for (const field of [
@@ -3928,7 +3939,14 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     "anon_execute",
     "authenticated_execute",
     "service_role_execute",
+    "unexpected_execute_grantee_count",
+    "missing_expected_execute_grantee_count",
     "unexpected_client_column_acl_count",
+    "public_can_update_profiles_balance",
+    "anon_can_update_profiles_balance",
+    "authenticated_can_update_profiles_balance",
+    "service_role_can_update_profiles_balance",
+    "profiles_balance_client_update_status",
     "constraint_summary",
     "index_summary",
   ]) {
@@ -3936,11 +3954,15 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   }
   assert.match(schema, /pg_catalog\.aclexplode/);
   assert.match(schema, /acl\.grantee = 0/);
+  assert.match(schema, /acl\.grantee <> p\.proowner/);
+  assert.match(schema, /has_column_privilege/);
   assert.match(schema, /relrowsecurity/);
   assert.match(schema, /\brisk_setting_shape\b/);
   assert.match(schema, /\bvalue_is_null\b/);
   assert.match(schema, /\bvalue_is_positive\b/);
   assert.match(schema, /\bvalue_json_type\b/);
+  assert.match(schema, /jsonb_typeof\(ss\.setting_value\) = 'number'/);
+  assert.match(schema, /jsonb_typeof\(ss\.setting_value -> 'value'\) = 'number'/);
   assert.doesNotMatch(schema, /\bconfigured_value\b/);
   assert.doesNotMatch(schema, /pg_get_functiondef/i);
 
@@ -3953,24 +3975,56 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     "payment_amount_currency_snapshot_mismatch_count",
     "incomplete_deadline_count",
     "cross_business_transaction_reference_conflict_count",
-    "claim_transaction_missing_duplicate_or_ownership_mismatch_count",
+    "claim_without_unique_transaction_count",
+    "transaction_without_claim_count",
+    "multiple_transactions_per_chain_reference_count",
+    "claim_transaction_ownership_mismatch_count",
     "disposition_missing_ledger_link_count",
     "duplicate_ledger_or_disposition_business_key_count",
     "credited_balance_with_inconsistent_terminal_state_count",
     "payment_classification_overlap_count",
-    "manual_review_without_terminal_decision_or_audit_count",
+    "manual_review_missing_decision_count",
+    "manual_review_missing_audit_count",
+    "manual_review_missing_decision_or_audit_count",
     "terminal_order_still_in_settlement_state_count",
   ]) {
     assert.match(integrity, new RegExp(summary));
   }
   assert.match(integrity, /\banomaly_count\b/);
   assert.match(integrity, /NOT_CHECKED_MISSING_OBJECTS/);
+  assert.match(
+    integrity,
+    /from public\.chain_transactions tx[\s\S]*?where not exists \([\s\S]*?from public\.chain_transaction_claims claim/i,
+  );
+  assert.match(
+    integrity,
+    /from public\.chain_transaction_claims claim[\s\S]*?left join lateral[\s\S]*?evidence\.match_count <> 1/i,
+  );
+  assert.match(
+    integrity,
+    /manual_review_missing_decision_or_audit_count[\s\S]*?manual_review_decision is null\s+or not exists/i,
+  );
+  assert.match(
+    integrity,
+    /from public\.chain_payment_sessions cps[\s\S]*?(?:join|left join) public\.payment_sessions ps/i,
+  );
+  assert.match(
+    integrity,
+    /from public\.chain_payment_sessions cps[\s\S]*?(?:join|left join) public\.order_payments op/i,
+  );
+  assert.match(
+    integrity,
+    /duplicate_ledger_or_disposition_business_key_count[\s\S]*?metadata ->> 'subtype'[\s\S]*?bep20_overpayment_dispositions[\s\S]*?bep20_underpayment_dispositions/i,
+  );
 
   const confirmation = audits[3].source;
   for (const summary of [
     "confirmation_count_below_12_count",
     "confirmation_count_equal_12_count",
     "confirmation_count_above_12_count",
+    "distinct_chain_session_count",
+    "multiple_transactions_per_session_count",
+    "session_timing_evidence_status",
     "confirmed_at_null_count",
     "confirmed_to_created_seconds_minimum",
     "confirmed_to_created_seconds_maximum",
@@ -3990,7 +4044,38 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   }
   assert.match(confirmation, /historical_required_confirmation_threshold', 'unknown'/);
   assert.match(confirmation, /configuration_value_exposed', false/);
+  assert.match(
+    confirmation,
+    /multiple_transactions_per_session_count = 0 then 'PASS'[\s\S]*?else 'REVIEW_REQUIRED'/i,
+  );
+  assert.match(confirmation, /settings_key_column_exists/);
+  assert.match(confirmation, /settings_value_column_exists/);
   assert.doesNotMatch(confirmation, /setting_value\s*->>\s*'value'/i);
+});
+
+test("BEP20 readiness audit changes never include Migration files", () => {
+  const changedFiles = execFileSync(
+    "git",
+    ["diff", "--name-only", "main", "--"],
+    { cwd: root, encoding: "utf8" },
+  )
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((path) => path.replace(/\\/g, "/"));
+  const readinessFilesChanged = changedFiles.some(
+    (path) =>
+      path.startsWith("docs/audits/20260729-bep20-settlement-") ||
+      path === "docs/bep20-automatic-settlement-readiness-runbook.md" ||
+      path === "tests/regression/source-contract.test.mjs",
+  );
+
+  if (readinessFilesChanged) {
+    assert.deepEqual(
+      changedFiles.filter((path) => path.startsWith("supabase/migrations/")),
+      [],
+    );
+  }
 });
 
 test("BEP20 automatic-settlement readiness runbook preserves the two-stage read-only gate", () => {
@@ -4004,10 +4089,24 @@ test("BEP20 automatic-settlement readiness runbook preserves the two-stage read-
   assert.match(runbook, /测试项目四份结果全部审查通过后/);
   assert.match(runbook, /自动结算必须继续保持 \*\*Disabled\*\*/);
   assert.match(runbook, /不运行任何 Migration/);
-  assert.match(runbook, /supabase db push/);
-  assert.match(runbook, /migration up/);
-  assert.match(runbook, /migration repair/);
-  assert.match(runbook, /db reset --linked/);
+  for (const dangerousCommand of [
+    "supabase db push",
+    "migration up",
+    "migration repair",
+    "db reset --linked",
+  ]) {
+    const matchingLines = runbook
+      .split(/\r?\n/)
+      .filter((line) => line.includes(dangerousCommand));
+    assert.ok(matchingLines.length > 0, `${dangerousCommand} must be documented`);
+    for (const line of matchingLines) {
+      assert.match(
+        line,
+        /不执行|不使用|禁止/,
+        `${dangerousCommand} must appear only in a prohibition`,
+      );
+    }
+  }
   assert.match(runbook, /不配置自动超额/);
   assert.match(runbook, /不部署、不建立 Cron/);
   assert.match(runbook, /不得现场编写或运行修复 SQL/);
