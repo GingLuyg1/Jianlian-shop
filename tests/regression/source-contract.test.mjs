@@ -1496,22 +1496,34 @@ test("digital delivery private tables use least-privilege grants without changin
   assert.match(tablePostcheck, /p\.polroles = array\[[\s\S]{0,160}rolname = 'authenticated'[\s\S]{0,80}\]::oid\[\]/);
   assert.match(tablePostcheck, /'is_adminauth\.uid'/);
   assert.match(tablePostcheck, /'public\.is_adminauth\.uid'/);
+  assert.match(tablePostcheck, /'false'/);
   assert.doesNotMatch(tablePostcheck, /pg_get_expr\([^;]+~\*\s*'\\mis_admin/);
   assert.match(tablePostcheck, /has_authenticated_admin_select_policy/);
   assert.match(tablePostcheck, /has_public_or_anon_select_policy/);
   assert.match(tablePostcheck, /has_dangerous_client_read_policy/);
   assert.match(tablePostcheck, /is_dangerous_client_read_policy/);
+  assert.match(tablePostcheck, /has_deny_all_using/);
+  assert.match(tablePostcheck, /and not p\.has_deny_all_using/);
 
   const normalizePolicyUsing = (value) => value.toLowerCase().replace(/[\s()]/g, "");
-  const safeAdminExpressions = new Set(["is_adminauth.uid", "public.is_adminauth.uid"]);
-  assert.equal(safeAdminExpressions.has(normalizePolicyUsing("is_admin(auth.uid())")), true);
-  assert.equal(safeAdminExpressions.has(normalizePolicyUsing("public.is_admin(auth.uid())")), true);
+  const strictAdminExpressions = new Set(["is_adminauth.uid", "public.is_adminauth.uid"]);
+  const denyAllExpressions = new Set(["false"]);
+
+  assert.equal(strictAdminExpressions.has(normalizePolicyUsing("is_admin(auth.uid())")), true);
+  assert.equal(strictAdminExpressions.has(normalizePolicyUsing("public.is_admin(auth.uid())")), true);
+  assert.equal(denyAllExpressions.has(normalizePolicyUsing("false")), true);
+  assert.equal(strictAdminExpressions.has(normalizePolicyUsing("false")), false);
+
   for (const unsafeExpression of [
+    "true",
+    "false OR true",
     "is_admin(auth.uid()) OR true",
     "NOT is_admin(auth.uid())",
     "is_admin(auth.uid()) IS NOT TRUE",
   ]) {
-    assert.equal(safeAdminExpressions.has(normalizePolicyUsing(unsafeExpression)), false);
+    const normalizedExpression = normalizePolicyUsing(unsafeExpression);
+    assert.equal(strictAdminExpressions.has(normalizedExpression), false);
+    assert.equal(denyAllExpressions.has(normalizedExpression), false);
   }
 
   for (const signature of [
@@ -2616,7 +2628,7 @@ test("order status labels are valid UTF-8 Chinese and include expired", () => {
   assert.match(status, /expired: "已过期"/);
   assert.match(status, /pending_payment: "待支付"/);
   assert.match(status, /partially_refunded: "部分退款"/);
-  assert.doesNotMatch(status, /寰呮|宸叉|閫|鏈|�/);
+  assert.doesNotMatch(status, /寰呮|宸叉|閫|鏈|锟/);
 });
 
 test("recharge user APIs enforce ownership", () => {
