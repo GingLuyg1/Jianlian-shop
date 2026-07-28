@@ -190,6 +190,7 @@ classified_policies as (
       'is_adminauth.uid',
       'public.is_adminauth.uid'
     ) as has_strict_admin_using,
+    bp.normalized_using_expression = 'false' as has_deny_all_using,
     (
       0::oid = any(bp.polroles)
       or (select oid from pg_catalog.pg_roles where rolname = 'anon') = any(bp.polroles)
@@ -224,6 +225,7 @@ policy_checks as (
         and p.polpermissive
         and p.client_role_can_hit
         and not p.has_strict_admin_using
+        and not p.has_deny_all_using
     ) as has_dangerous_client_read_policy
 )
 select
@@ -275,6 +277,7 @@ select
     'is_adminauth.uid',
     'public.is_adminauth.uid'
   ) as has_strict_admin_using,
+  p.normalized_using_expression = 'false' as has_deny_all_using,
   (
     p.polcmd in ('r', '*')
     and p.polpermissive
@@ -285,7 +288,8 @@ select
     )
     and p.normalized_using_expression not in (
       'is_adminauth.uid',
-      'public.is_adminauth.uid'
+      'public.is_adminauth.uid',
+      'false'
     )
   ) as is_dangerous_client_read_policy,
   pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid) as with_check_expression
