@@ -3865,3 +3865,150 @@ test("BEP20 phase 1 private tables and legacy completion RPC use least-privilege
   );
   assert.doesNotMatch(executablePostcheck, /\b(begin|commit|rollback)\s*;/i);
 });
+
+test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-only", () => {
+  const auditPaths = [
+    "docs/audits/20260729-bep20-settlement-migration-history-audit.sql",
+    "docs/audits/20260729-bep20-settlement-schema-permission-audit.sql",
+    "docs/audits/20260729-bep20-settlement-integrity-audit.sql",
+    "docs/audits/20260729-bep20-settlement-confirmation-time-audit.sql",
+  ];
+  const audits = auditPaths.map((path) => ({ path, source: file(path) }));
+
+  for (const { path, source } of audits) {
+    assert.match(source, /READ-ONLY \/ NO BUSINESS DATA MUTATION/i, path);
+    const executable = source.replace(/--.*$/gm, "");
+    assert.doesNotMatch(
+      executable,
+      /\b(?:insert|update|delete|merge|truncate|alter|create|drop|grant|revoke|call|do)\b/i,
+      path,
+    );
+    assert.doesNotMatch(executable, /\b(?:begin|commit|rollback)\s*;/i, path);
+    assert.doesNotMatch(
+      executable,
+      /\bselect\s+(?:public\.)?(?:settle_bep20_automatic_overpayment|credit_bep20_overpayment_to_wallet|settle_bep20_underpayment_to_wallet|complete_payment_session|release_order_inventory|cancel_unpaid_order)\s*\(/i,
+      path,
+    );
+    assert.doesNotMatch(
+      executable,
+      /jsonb_build_object\(\s*'(?:tx_hash|wallet_address|user_id|email|phone|operator_id|session_id|order_no)'/i,
+      path,
+    );
+    assert.doesNotMatch(
+      executable,
+      /\bas\s+(?:tx_hash|wallet_address|user_id|email|phone|operator_id|session_id|order_no)\b/i,
+      path,
+    );
+  }
+
+  const history = audits[0].source;
+  assert.match(history, /supabase_migrations\.schema_migrations/);
+  for (const version of [
+    "20260727",
+    "20260728",
+    "20260729",
+    "20260730",
+    "20260728230700",
+  ]) {
+    assert.match(history, new RegExp(version));
+  }
+  assert.match(history, /\brecorded\b/);
+  assert.match(history, /\bschema_evidence_present\b/);
+  assert.match(history, /HISTORY_SCHEMA_DRIFT/);
+  assert.match(history, /to_regclass/);
+  assert.match(history, /to_regprocedure/);
+
+  const schema = audits[1].source;
+  for (const field of [
+    "owner",
+    "security_definer",
+    "search_path_public",
+    "source_hash",
+    "public_execute",
+    "anon_execute",
+    "authenticated_execute",
+    "service_role_execute",
+    "unexpected_client_column_acl_count",
+    "constraint_summary",
+    "index_summary",
+  ]) {
+    assert.match(schema, new RegExp(`\\b${field}\\b`, "i"));
+  }
+  assert.match(schema, /pg_catalog\.aclexplode/);
+  assert.match(schema, /acl\.grantee = 0/);
+  assert.match(schema, /relrowsecurity/);
+  assert.match(schema, /\brisk_setting_shape\b/);
+  assert.match(schema, /\bvalue_is_null\b/);
+  assert.match(schema, /\bvalue_is_positive\b/);
+  assert.match(schema, /\bvalue_json_type\b/);
+  assert.doesNotMatch(schema, /\bconfigured_value\b/);
+  assert.doesNotMatch(schema, /pg_get_functiondef/i);
+
+  const integrity = audits[2].source;
+  for (const summary of [
+    "null_ownership_reference_count",
+    "null_or_negative_log_index_count",
+    "null_confirmation_count",
+    "null_expected_or_received_amount_count",
+    "payment_amount_currency_snapshot_mismatch_count",
+    "incomplete_deadline_count",
+    "cross_business_transaction_reference_conflict_count",
+    "claim_transaction_missing_duplicate_or_ownership_mismatch_count",
+    "disposition_missing_ledger_link_count",
+    "duplicate_ledger_or_disposition_business_key_count",
+    "credited_balance_with_inconsistent_terminal_state_count",
+    "payment_classification_overlap_count",
+    "manual_review_without_terminal_decision_or_audit_count",
+    "terminal_order_still_in_settlement_state_count",
+  ]) {
+    assert.match(integrity, new RegExp(summary));
+  }
+  assert.match(integrity, /\banomaly_count\b/);
+  assert.match(integrity, /NOT_CHECKED_MISSING_OBJECTS/);
+
+  const confirmation = audits[3].source;
+  for (const summary of [
+    "confirmation_count_below_12_count",
+    "confirmation_count_equal_12_count",
+    "confirmation_count_above_12_count",
+    "confirmed_at_null_count",
+    "confirmed_to_created_seconds_minimum",
+    "confirmed_to_created_seconds_maximum",
+    "confirmed_to_created_seconds_average",
+    "confirmed_before_created_count",
+    "confirmed_to_block_seconds_minimum",
+    "confirmed_to_block_seconds_maximum",
+    "confirmed_to_block_seconds_average",
+    "confirmed_before_block_count",
+    "created_before_confirmation_threshold_but_backfilled_count",
+    "historical_required_confirmation_threshold",
+    "confirmation_setting_exists",
+    "confirmation_setting_is_null",
+    "confirmation_setting_json_types",
+  ]) {
+    assert.match(confirmation, new RegExp(summary));
+  }
+  assert.match(confirmation, /historical_required_confirmation_threshold', 'unknown'/);
+  assert.match(confirmation, /configuration_value_exposed', false/);
+  assert.doesNotMatch(confirmation, /setting_value\s*->>\s*'value'/i);
+});
+
+test("BEP20 automatic-settlement readiness runbook preserves the two-stage read-only gate", () => {
+  const runbook = file("docs/bep20-automatic-settlement-readiness-runbook.md");
+
+  assert.match(runbook, /Jianlian-shop-test/);
+  assert.match(runbook, /czuoivbfxzachiobdohw/);
+  assert.match(runbook, /Jianlian-shop/);
+  assert.match(runbook, /qvbovrvybirscaurwuov/);
+  assert.match(runbook, /每次只.*一个脚本/);
+  assert.match(runbook, /测试项目四份结果全部审查通过后/);
+  assert.match(runbook, /自动结算必须继续保持 \*\*Disabled\*\*/);
+  assert.match(runbook, /不运行任何 Migration/);
+  assert.match(runbook, /supabase db push/);
+  assert.match(runbook, /migration up/);
+  assert.match(runbook, /migration repair/);
+  assert.match(runbook, /db reset --linked/);
+  assert.match(runbook, /不配置自动超额/);
+  assert.match(runbook, /不部署、不建立 Cron/);
+  assert.match(runbook, /不得现场编写或运行修复 SQL/);
+});
