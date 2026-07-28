@@ -87,13 +87,30 @@ const hasSecret = Boolean(value("CRON_SECRET") || value("ORDER_EXPIRATION_JOB_SE
 if (!hasSecret) warnings.push("CONFIG_NOT_READY: CRON_SECRET or ORDER_EXPIRATION_JOB_SECRET or INTERNAL_JOB_SECRET is missing");
 
 const vercelPath = resolve(process.cwd(), "vercel.json");
-if (!existsSync(vercelPath)) {
-  warnings.push("SCHEDULE_NOT_CONFIGURED: vercel.json is missing");
-} else {
+const pgCronMigrationPath = resolve(
+  process.cwd(),
+  "supabase/migrations/20260721_order_expiration_pg_cron_schedule.sql",
+);
+
+let hasConfiguredSchedule = false;
+
+if (existsSync(vercelPath)) {
   const vercelText = readFileSync(vercelPath, "utf8");
-  if (!/\/api\/internal\/orders\/expire/.test(vercelText)) {
-    warnings.push("SCHEDULE_NOT_CONFIGURED: vercel.json does not reference /api/internal/orders/expire");
-  }
+  hasConfiguredSchedule = /\/api\/internal\/orders\/expire/.test(vercelText);
+}
+
+if (!hasConfiguredSchedule && existsSync(pgCronMigrationPath)) {
+  const pgCronText = readFileSync(pgCronMigrationPath, "utf8");
+  hasConfiguredSchedule =
+    /cron\.schedule\s*\(/.test(pgCronText) &&
+    /expire-unpaid-orders-every-5-minutes/.test(pgCronText) &&
+    /\/api\/internal\/orders\/expire/.test(pgCronText);
+}
+
+if (!hasConfiguredSchedule) {
+  warnings.push(
+    "SCHEDULE_NOT_CONFIGURED: no Vercel or Supabase pg_cron schedule references /api/internal/orders/expire",
+  );
 }
 
 if (failures.length > 0) {
@@ -114,4 +131,4 @@ console.log("Authorization: Bearer secret supported");
 console.log("CRON_SECRET / ORDER_EXPIRATION_JOB_SECRET / INTERNAL_JOB_SECRET: PRESENT");
 console.log("Order expiration service: PRESENT");
 console.log("Order expiration migration: PRESENT");
-console.log("Vercel schedule: PRESENT");
+console.log("Order expiration schedule: PRESENT");
