@@ -1424,32 +1424,41 @@ test("digital delivery private tables use least-privilege grants without changin
   const userDeliveryRoute = file("app/api/orders/[orderNo]/delivery/route.ts");
   const userFulfillmentRoute = file("app/api/orders/[orderNo]/fulfillment/route.ts");
   const inventoryRoute = file("app/api/admin/inventory/route.ts");
+  const globalSearchRoute = file("app/api/admin/global-search/route.ts");
+  const batchBaseline = file("supabase/migrations/20260623_digital_inventory_batches.sql");
   const executableMigration = migration.replace(/--.*$/gm, "");
+  const canonicalize = (value) => value.replace(/\r\n?/g, "\n");
+
+  assert.equal(
+    createHash("sha256").update(canonicalize(migration)).digest("hex").toUpperCase(),
+    "12DC5CFB8BEF7AA4C41E4BEE90AD431762504D4D7C2327DC313DEA12CE0EB5D2",
+  );
+  assert.equal(
+    createHash("sha256").update(canonicalize(functionPostcheck)).digest("hex").toUpperCase(),
+    "48F2AF72B2EF049A7A95C0509996034F6BF854A602FFDDCEA315900D5A58676F",
+  );
 
   assert.match(migration, /^begin;/m);
   assert.match(migration, /^commit;/m);
   assert.match(
     migration,
-    /revoke all privileges\s+on table public\.digital_inventory\s+from anon, authenticated;/i,
+    /revoke all privileges\s+on table public\.digital_inventory\s+from public, anon, authenticated;/i,
   );
   assert.match(
     migration,
-    /revoke all privileges\s+on table public\.digital_delivery_secrets\s+from anon, authenticated;/i,
+    /revoke all privileges\s+on table public\.digital_delivery_secrets\s+from public, anon, authenticated;/i,
   );
   assert.match(
     migration,
-    /revoke all privileges\s+on table public\.digital_inventory_batches\s+from anon, authenticated;/i,
+    /revoke all privileges\s+on table public\.digital_inventory_batches\s+from public, anon, authenticated;/i,
   );
-  assert.match(
-    migration,
-    /grant select\s+on table public\.digital_inventory_batches\s+to authenticated;/i,
-  );
+  assert.doesNotMatch(migration, /grant select\s+on table public\.digital_inventory_batches\s+to authenticated/i);
   assert.match(migration, /pg_catalog\.pg_attribute/);
   assert.match(migration, /a\.attnum > 0/);
   assert.match(migration, /not a\.attisdropped/);
   assert.match(
     migration,
-    /revoke select \(%1\$s\), insert \(%1\$s\), update \(%1\$s\), references \(%1\$s\)/i,
+    /revoke select \(%1\$s\), insert \(%1\$s\), update \(%1\$s\), references \(%1\$s\)[^']+from public, anon, authenticated/i,
   );
 
   assert.doesNotMatch(executableMigration, /\border_deliveries\b/i);
@@ -1457,23 +1466,53 @@ test("digital delivery private tables use least-privilege grants without changin
   assert.doesNotMatch(executableMigration, /\b(?:grant|revoke)\s+execute\b/i);
   assert.doesNotMatch(executableMigration, /\b(?:grant|revoke)[\s\S]{0,160}\bservice_role\b/i);
   assert.doesNotMatch(executableMigration, /\b(?:grant|revoke)[\s\S]{0,160}\bpostgres\b/i);
+  assert.doesNotMatch(executableMigration, /\b(?:create|alter|drop)\s+(?:table|index|constraint)\b/i);
   assert.doesNotMatch(executableMigration, /\b(?:create|alter|drop)\s+policy\b/i);
   assert.doesNotMatch(executableMigration, /\b(?:insert\s+into|update\s+public\.|delete\s+from|truncate\s+table)\b/i);
 
-  for (const role of ["anon", "authenticated", "service_role"]) {
+  for (const role of ["PUBLIC", "anon", "authenticated", "service_role"]) {
     assert.match(tablePostcheck, new RegExp(`'${role}'::text`));
   }
   for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]) {
-    assert.match(tablePostcheck, new RegExp(`has_table_privilege\\([^\\n]+[\\s\\S]{0,100}'${privilege}'\\)`));
+    assert.match(tablePostcheck, new RegExp(`\\('${privilege}'::text\\)`));
   }
   for (const table of ["digital_inventory", "digital_delivery_secrets", "digital_inventory_batches"]) {
     assert.match(tablePostcheck, new RegExp(`'${table}'::text`));
   }
+  assert.match(tablePostcheck, /acl\.grantee = 0/);
+  assert.match(tablePostcheck, /actual_allowed is not distinct from expected_allowed as is_expected/);
   assert.match(tablePostcheck, /pg_catalog\.pg_attribute/);
   assert.match(tablePostcheck, /pg_catalog\.aclexplode\(a\.attacl\)/);
   assert.match(tablePostcheck, /a\.attacl is not null/);
   assert.match(tablePostcheck, /pg_catalog\.cardinality\(a\.attacl\) > 0/);
-  assert.match(tablePostcheck, /in \('anon', 'authenticated'\)/);
+  assert.match(tablePostcheck, /acl\.grantee = 0[\s\S]{0,120}in \('anon', 'authenticated'\)/);
+  assert.match(tablePostcheck, /unexpected_column_acl_count/);
+  assert.match(tablePostcheck, /count\(\*\) = 0 as is_expected/);
+  assert.match(tablePostcheck, /c\.relrowsecurity as rls_enabled/);
+  assert.match(tablePostcheck, /pg_catalog\.pg_policy/);
+  assert.match(tablePostcheck, /Admins can read inventory batches/);
+  assert.match(tablePostcheck, /pg_catalog\.regexp_replace\(/);
+  assert.match(tablePostcheck, /\[\[:space:\]\(\)\]/);
+  assert.match(tablePostcheck, /p\.polroles = array\[[\s\S]{0,160}rolname = 'authenticated'[\s\S]{0,80}\]::oid\[\]/);
+  assert.match(tablePostcheck, /'is_adminauth\.uid'/);
+  assert.match(tablePostcheck, /'public\.is_adminauth\.uid'/);
+  assert.doesNotMatch(tablePostcheck, /pg_get_expr\([^;]+~\*\s*'\\mis_admin/);
+  assert.match(tablePostcheck, /has_authenticated_admin_select_policy/);
+  assert.match(tablePostcheck, /has_public_or_anon_select_policy/);
+  assert.match(tablePostcheck, /has_dangerous_client_read_policy/);
+  assert.match(tablePostcheck, /is_dangerous_client_read_policy/);
+
+  const normalizePolicyUsing = (value) => value.toLowerCase().replace(/[\s()]/g, "");
+  const safeAdminExpressions = new Set(["is_adminauth.uid", "public.is_adminauth.uid"]);
+  assert.equal(safeAdminExpressions.has(normalizePolicyUsing("is_admin(auth.uid())")), true);
+  assert.equal(safeAdminExpressions.has(normalizePolicyUsing("public.is_admin(auth.uid())")), true);
+  for (const unsafeExpression of [
+    "is_admin(auth.uid()) OR true",
+    "NOT is_admin(auth.uid())",
+    "is_admin(auth.uid()) IS NOT TRUE",
+  ]) {
+    assert.equal(safeAdminExpressions.has(normalizePolicyUsing(unsafeExpression)), false);
+  }
 
   for (const signature of [
     "public.deliver_digital_order(uuid,text)",
@@ -1486,12 +1525,16 @@ test("digital delivery private tables use least-privilege grants without changin
   }
   assert.match(functionPostcheck, /pg_catalog\.pg_get_userbyid\(p\.proowner\)/);
   assert.match(functionPostcheck, /p\.prosecdef as security_definer/);
-  assert.match(functionPostcheck, /search_path=%/);
   assert.match(functionPostcheck, /pg_catalog\.aclexplode/);
   assert.match(functionPostcheck, /acl\.grantee = 0/);
   assert.match(functionPostcheck, /has_function_privilege\('anon'/);
   assert.match(functionPostcheck, /has_function_privilege\('authenticated'/);
   assert.match(functionPostcheck, /has_function_privilege\('service_role'/);
+  assert.match(functionPostcheck, /owner_name = 'postgres'/);
+  assert.match(functionPostcheck, /proconfig = array\['search_path=public'\]::text\[\]/);
+  assert.match(functionPostcheck, /authenticated_can_execute = expected_authenticated_execute/);
+  assert.match(functionPostcheck, /\) as is_expected/);
+  assert.match(functionPostcheck, /is_expected_grantee/);
 
   for (const postcheck of [tablePostcheck, functionPostcheck]) {
     const executablePostcheck = postcheck.replace(/--.*$/gm, "");
@@ -1510,6 +1553,8 @@ test("digital delivery private tables use least-privilege grants without changin
   assert.doesNotMatch(userFulfillmentRoute, /from\("(?:digital_inventory|digital_delivery_secrets)"\)/);
   assert.match(inventoryRoute, /rpc\("admin_list_digital_inventory_batches"/);
   assert.match(inventoryRoute, /getSupabaseServiceRoleClient\(\)/);
+  assert.match(batchBaseline, /admin_list_digital_inventory_batches[\s\S]*security definer[\s\S]*is_admin\(auth\.uid\(\)\)/);
+  assert.match(globalSearchRoute, /getSupabaseServiceRoleClient\(\)[\s\S]*runAdminGlobalSearch\(serviceClient/);
 });
 
 test("digital delivery writes elevate only after cookie administrator authorization", () => {

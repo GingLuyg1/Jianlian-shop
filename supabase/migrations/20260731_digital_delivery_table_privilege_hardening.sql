@@ -1,8 +1,9 @@
 -- Digital inventory and private delivery-content table privilege hardening.
 --
 -- Security purpose:
--- - remove direct client-role access to inventory rows and delivery secrets;
--- - keep authenticated read-only access to inventory batch summaries;
+-- - remove direct PUBLIC/client-role access to inventory rows, batch metadata,
+--   and delivery secrets;
+-- - keep administrator batch reads behind the existing SECURITY DEFINER RPC;
 -- - leave service_role/postgres privileges, RLS policies, function grants,
 --   table structures, indexes, constraints, and data unchanged.
 --
@@ -15,15 +16,15 @@ begin;
 
 revoke all privileges
 on table public.digital_inventory
-from anon, authenticated;
+from public, anon, authenticated;
 
 revoke all privileges
 on table public.digital_delivery_secrets
-from anon, authenticated;
+from public, anon, authenticated;
 
 revoke all privileges
 on table public.digital_inventory_batches
-from anon, authenticated;
+from public, anon, authenticated;
 
 do $$
 declare
@@ -48,16 +49,12 @@ begin
     end if;
 
     execute format(
-      'revoke select (%1$s), insert (%1$s), update (%1$s), references (%1$s) on table public.%2$I from anon, authenticated',
+      'revoke select (%1$s), insert (%1$s), update (%1$s), references (%1$s) on table public.%2$I from public, anon, authenticated',
       v_column_list,
       v_table_name
     );
   end loop;
 end
 $$;
-
-grant select
-on table public.digital_inventory_batches
-to authenticated;
 
 commit;
