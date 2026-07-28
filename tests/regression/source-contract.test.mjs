@@ -3773,3 +3773,95 @@ test("BEP20 underpayment email alerts reuse the GET-only monitor and stay deploy
   assert.doesNotMatch(operationsGuide, /\n0 \* \* \* \* root/);
   assert.match(operationsGuide, /自动结算(?:仍为|始终保持).*\*\*Disabled\*\*/);
 });
+
+test("BEP20 phase 1 private tables and legacy completion RPC use least-privilege grants", () => {
+  const migration = file(
+    "supabase/migrations/20260728230700_bep20_phase1_privilege_hardening.sql"
+  );
+  const postcheck = file(
+    "docs/audits/20260728230700-bep20-phase1-privilege-postcheck.sql"
+  );
+  const executableMigration = migration.replace(/--.*$/gm, "");
+  const executablePostcheck = postcheck.replace(/--.*$/gm, "");
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(
+    migration,
+    /revoke all privileges\s+on table\s+public\.chain_payment_sessions,\s+public\.chain_transactions\s+from public, anon, authenticated;/i,
+  );
+  assert.match(
+    migration,
+    /grant select\s+on table\s+public\.chain_payment_sessions,\s+public\.chain_transactions\s+to authenticated;/i,
+  );
+  assert.equal((executableMigration.match(/\bto authenticated;/gi) ?? []).length, 1);
+  assert.match(
+    migration,
+    /grant all privileges\s+on table\s+public\.chain_payment_sessions,\s+public\.chain_transactions\s+to service_role;/i,
+  );
+  assert.match(migration, /aclexplode\(a\.attacl\)/i);
+  assert.match(
+    migration,
+    /revoke select \(%1\$s\), insert \(%1\$s\), update \(%1\$s\), references \(%1\$s\)[^']+from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /revoke execute\s+on function public\.begin_bep20_payment_completion\(uuid, boolean\)\s+from public, anon, authenticated;/i,
+  );
+  assert.match(
+    migration,
+    /grant execute\s+on function public\.begin_bep20_payment_completion\(uuid, boolean\)\s+to service_role;/i,
+  );
+  assert.match(migration, /c\.relname in \('chain_payment_sessions', 'chain_transactions'\)[\s\S]*not c\.relrowsecurity/i);
+  assert.match(migration, /v_function_owner <> 'postgres'/);
+  assert.match(migration, /v_function_security_definer is not true/);
+  assert.match(migration, /array\['search_path=public'\]::text\[\]/);
+  assert.match(migration, /acl\.grantee = 0[\s\S]*acl\.privilege_type = 'EXECUTE'/);
+  assert.match(migration, /has_function_privilege\('anon', v_function_oid, 'EXECUTE'\)/);
+  assert.match(migration, /has_function_privilege\('authenticated', v_function_oid, 'EXECUTE'\)/);
+  assert.match(migration, /has_function_privilege\('service_role', v_function_oid, 'EXECUTE'\)/);
+  assert.match(migration, /BEP20_PRIVILEGE_HARDENING_PUBLIC_OR_ANON_TABLE_PRIVILEGES/);
+  assert.match(migration, /BEP20_PRIVILEGE_HARDENING_FUNCTION_DEFINITION_CONTRACT_FAILED/);
+  assert.doesNotMatch(migration, /pg_catalog\.coalesce/i);
+  assert.doesNotMatch(
+    executableMigration,
+    /\b(?:insert\s+into|update|delete\s+from|merge\s+into|truncate)\s+public\./i,
+  );
+  assert.doesNotMatch(executableMigration, /\b(?:create|alter|drop)\s+(?:table|index|constraint|policy)\b/i);
+  assert.doesNotMatch(executableMigration, /\bcreate\s+or\s+replace\s+function\b/i);
+
+  for (const field of [
+    "target_table_count",
+    "rls_disabled_table_count",
+    "unexpected_public_or_anon_table_privilege_count",
+    "unexpected_authenticated_nonselect_count",
+    "missing_authenticated_select_count",
+    "missing_service_role_table_privilege_count",
+    "unexpected_client_column_acl_count",
+    "target_function_count",
+    "unexpected_function_owner_count",
+    "not_security_definer_count",
+    "unexpected_search_path_count",
+    "public_can_execute",
+    "anon_can_execute",
+    "authenticated_can_execute",
+    "service_role_can_execute",
+  ]) {
+    assert.match(postcheck, new RegExp(`\\bas ${field}\\b`, "i"));
+  }
+
+  assert.match(postcheck, /target_table_count/);
+  assert.match(postcheck, /relrowsecurity/);
+  assert.match(postcheck, /pg_catalog\.aclexplode\(a\.attacl\)/);
+  assert.match(postcheck, /acl\.grantee = 0/);
+  assert.match(postcheck, /owner_name/);
+  assert.match(postcheck, /security_definer/);
+  assert.match(postcheck, /array\['search_path=public'\]::text\[\]/);
+  assert.match(postcheck, /has_function_privilege\(\s*'service_role'/);
+  assert.doesNotMatch(postcheck, /pg_catalog\.coalesce/i);
+  assert.doesNotMatch(
+    executablePostcheck,
+    /^\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\b/im,
+  );
+  assert.doesNotMatch(executablePostcheck, /\b(begin|commit|rollback)\s*;/i);
+});
