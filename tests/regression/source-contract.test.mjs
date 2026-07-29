@@ -4085,6 +4085,7 @@ test("account recharge creation fails closed and writes with the standard servic
 });
 
 test("account recharge forward-fix revokes every direct client INSERT ACL only", () => {
+  const route = file("app/api/recharges/route.ts");
   const migration = file(
     "supabase/migrations/20260729143000_account_recharge_service_write_hardening.sql",
   );
@@ -4097,6 +4098,16 @@ test("account recharge forward-fix revokes every direct client INSERT ACL only",
     createHash("sha256").update(previousMigration).digest("hex"),
     "b5dc8942aecb8132677aed36428fa44c51f92686dc93b0635a8beace0bf398f7",
     "the already-merged 20260729140000 Migration must remain byte-for-byte unchanged",
+  );
+  assert.equal(
+    createHash("sha256").update(migration).digest("hex"),
+    "bd2bb37cbdb5a3e06d7ac8718455dcf2ad8ec8c4af40235ed3a0184d58882463",
+    "the 20260729143000 Migration must remain byte-for-byte unchanged",
+  );
+  assert.equal(
+    createHash("sha256").update(route).digest("hex"),
+    "fbbcaac02a044f609bc3cfd4fe19ab3c18522ec1c09d4777e0e43206e1949265",
+    "the service-write route must remain byte-for-byte unchanged in this follow-up",
   );
   assert.match(migration, /^begin;/m);
   assert.match(migration, /^commit;/m);
@@ -4143,6 +4154,8 @@ test("account recharge service-write postcheck is catalog-only and verifies the 
     "public_column_insert_acl_count",
     "anon_column_insert_acl_count",
     "authenticated_column_insert_acl_count",
+    "anon_effective_column_insert_count",
+    "authenticated_effective_column_insert_count",
     "service_role_update",
     "rls_enabled",
     "users_create_policy_exists",
@@ -4156,6 +4169,22 @@ test("account recharge service-write postcheck is catalog-only and verifies the 
   assert.match(postcheck, /pg_catalog\.pg_attribute/);
   assert.match(postcheck, /pg_catalog\.pg_policy/);
   assert.match(postcheck, /pg_catalog\.pg_get_expr/);
+  assert.match(
+    postcheck,
+    /has_column_privilege\(\s*'anon',\s*o\.table_oid,\s*a\.attnum,\s*'INSERT'\s*\)/i,
+  );
+  assert.match(
+    postcheck,
+    /has_column_privilege\(\s*'authenticated',\s*o\.table_oid,\s*a\.attnum,\s*'INSERT'\s*\)/i,
+  );
+  assert.match(
+    postcheck,
+    /anon_effective_column_insert_count = 0[\s\S]*authenticated_effective_column_insert_count = 0[\s\S]*then 'BLOCKED_BY_ACL'/i,
+  );
+  assert.match(
+    postcheck,
+    /direct_client_insert_path_status = 'BLOCKED_BY_ACL'[\s\S]*anon_effective_column_insert_count = 0[\s\S]*authenticated_effective_column_insert_count = 0[\s\S]*then 'PASS'/i,
+  );
   assert.match(postcheck, /Users can create own recharge records/);
   assert.match(postcheck, /BLOCKED_BY_ACL/);
   assert.match(postcheck, /CLIENT_INSERT_STILL_OPEN/);
@@ -4170,11 +4199,18 @@ test("account recharge service-write postcheck is catalog-only and verifies the 
 
 test("account recharge service-write runbook preserves test-only execution order", () => {
   const runbook = file("docs/account-recharge-service-write-runbook.md");
-  const phaseOne = runbook.indexOf("20260729140000_client_privilege_hardening_phase1.sql");
-  const forwardFix = runbook.indexOf(
+  const orderedSection = runbook.slice(
+    runbook.indexOf("## 测试环境变更顺序"),
+    runbook.indexOf("## Postcheck 通过条件"),
+  );
+  const deployment = orderedSection.indexOf("先将当前 service-role 写入代码部署");
+  const phaseOne = orderedSection.indexOf(
+    "20260729140000_client_privilege_hardening_phase1.sql",
+  );
+  const forwardFix = orderedSection.indexOf(
     "20260729143000_account_recharge_service_write_hardening.sql",
   );
-  const postcheck = runbook.indexOf(
+  const postcheck = orderedSection.indexOf(
     "20260729-account-recharge-service-write-postcheck.sql",
   );
 
@@ -4182,9 +4218,21 @@ test("account recharge service-write runbook preserves test-only execution order
   assert.match(runbook, /尚未在数据库执行/);
   assert.match(runbook, /修复代码部署前，不可在当前 `main` 测试 manual 充值/);
   assert.match(runbook, /czuoivbfxzachiobdohw/);
-  assert.ok(phaseOne >= 0 && forwardFix > phaseOne && postcheck > forwardFix);
+  assert.ok(
+    deployment >= 0
+      && phaseOne > deployment
+      && forwardFix > phaseOne
+      && postcheck > forwardFix,
+  );
+  assert.doesNotMatch(runbook, /应用代码必须在两份权限 Migration 完成后部署/);
+  assert.match(
+    runbook,
+    /先部署 service-role 写入代码，是为了避免撤销 authenticated INSERT 后出现充值创建中断/,
+  );
+  assert.match(runbook, /部署仍需单独明确授权；本任务不授权实际部署/);
+  assert.match(runbook, /不存在回退到 authenticated INSERT 的路径/);
   assert.match(runbook, /每次只执行一个完整文件/);
-  assert.match(runbook, /应用代码必须在两份权限 Migration 完成后部署/);
+  assert.match(runbook, /每一步失败或[\s\S]{0,30}立即停止/);
   assert.match(runbook, /不使用 `supabase db push`/);
   assert.match(runbook, /不使用 `supabase migration up`/);
   assert.match(runbook, /不使用 `supabase migration repair`/);

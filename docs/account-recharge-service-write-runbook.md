@@ -17,18 +17,24 @@
 - 每一步都必须先重新核对项目名和 Project ref。
 - 未取得针对测试项目的明确人工授权时，不执行任何文件。
 
-## 测试库执行顺序
+## 测试环境变更顺序
 
-取得明确授权后，只能按以下顺序在 Supabase SQL Editor 中执行：
+取得各步骤所需的单独明确授权后，只能按以下顺序操作：
 
-1. 完整执行
+1. 先将当前 service-role 写入代码部署到明确连接
+   `Jianlian-shop-test` / `czuoivbfxzachiobdohw` 的测试运行环境。
+2. 部署前确认现有 service-role server helper 配置有效，不输出或复制密钥。
+3. 确认代码不存在回退到 authenticated INSERT 的路径。
+4. 确认应用健康后，在 Supabase SQL Editor 中完整执行
    `supabase/migrations/20260729140000_client_privilege_hardening_phase1.sql`。
-2. 完整执行
+5. 再完整执行
    `supabase/migrations/20260729143000_account_recharge_service_write_hardening.sql`。
-3. 完整执行只读检查
+6. 最后完整执行只读检查
    `docs/audits/20260729-account-recharge-service-write-postcheck.sql`。
 
-每次只执行一个完整文件。前一步失败或结果不明确时停止，不执行下一步。
+先部署 service-role 写入代码，是为了避免撤销 authenticated INSERT 后出现充值创建中断。
+部署仍需单独明确授权；本任务不授权实际部署。每次只执行一个完整文件，每一步失败或
+结果不明确时立即停止，不执行下一步。
 
 ## Postcheck 通过条件
 
@@ -39,6 +45,8 @@
 - `public_column_insert_acl_count = 0`
 - `anon_column_insert_acl_count = 0`
 - `authenticated_column_insert_acl_count = 0`
+- `anon_effective_column_insert_count = 0`
+- `authenticated_effective_column_insert_count = 0`
 - `service_role_insert = true`
 - `service_role_update = true`
 - `rls_enabled = true`
@@ -51,12 +59,12 @@
 INSERT ACL，因此该 Policy 不再形成客户端直接写入通路。Policy 删除或整理必须放在后续
 单独 Migration 中处理。
 
-## 应用部署门禁
+## 部署与执行门禁
 
-- 必须先在测试库依序完成两份权限 Migration，并取得 postcheck 的完整 PASS 结果。
-- 必须确认运行环境已正确配置现有 service-role server helper；不输出或复制密钥。
-- 应用代码必须在两份权限 Migration 完成后部署。
-- 本 Runbook 不授权部署；部署仍需单独明确授权。
+- 测试运行环境必须明确连接 `Jianlian-shop-test` / `czuoivbfxzachiobdohw`。
+- 部署仍需单独明确授权；本 Runbook 和本任务均不授权实际部署。
+- 应用健康检查失败时，不执行任何权限 Migration。
+- 任一 Migration 或 postcheck 失败时立即停止。
 
 ## 明确禁止
 

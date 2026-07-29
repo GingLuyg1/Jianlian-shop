@@ -107,6 +107,38 @@ privilege_state as (
       ), 0)
     end as authenticated_column_insert_acl_count,
     case
+      when o.table_oid is null or to_regrole('anon') is null then null
+      else (
+        select count(*)::integer
+        from pg_catalog.pg_attribute a
+        where a.attrelid = o.table_oid
+          and a.attnum > 0
+          and not a.attisdropped
+          and has_column_privilege(
+            'anon',
+            o.table_oid,
+            a.attnum,
+            'INSERT'
+          )
+      )
+    end as anon_effective_column_insert_count,
+    case
+      when o.table_oid is null or to_regrole('authenticated') is null then null
+      else (
+        select count(*)::integer
+        from pg_catalog.pg_attribute a
+        where a.attrelid = o.table_oid
+          and a.attnum > 0
+          and not a.attisdropped
+          and has_column_privilege(
+            'authenticated',
+            o.table_oid,
+            a.attnum,
+            'INSERT'
+          )
+      )
+    end as authenticated_effective_column_insert_count,
+    case
       when o.table_oid is null or to_regrole('service_role') is null then null
       else has_table_privilege('service_role', o.table_oid, 'UPDATE')
     end as service_role_update
@@ -125,6 +157,8 @@ assessed as (
         and p.public_column_insert_acl_count = 0
         and p.anon_column_insert_acl_count = 0
         and p.authenticated_column_insert_acl_count = 0
+        and p.anon_effective_column_insert_count = 0
+        and p.authenticated_effective_column_insert_count = 0
         then 'BLOCKED_BY_ACL'
       else 'CLIENT_INSERT_STILL_OPEN'
     end as direct_client_insert_path_status
@@ -140,6 +174,8 @@ select
   public_column_insert_acl_count,
   anon_column_insert_acl_count,
   authenticated_column_insert_acl_count,
+  anon_effective_column_insert_count,
+  authenticated_effective_column_insert_count,
   service_role_update,
   rls_enabled,
   users_create_policy_exists,
@@ -152,6 +188,8 @@ select
       or to_regrole('service_role') is null
       then 'NOT_CHECKED_MISSING_ROLE'
     when direct_client_insert_path_status = 'BLOCKED_BY_ACL'
+      and anon_effective_column_insert_count = 0
+      and authenticated_effective_column_insert_count = 0
       and service_role_insert
       and service_role_update
       and rls_enabled
