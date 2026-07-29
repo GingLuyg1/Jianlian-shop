@@ -4197,13 +4197,185 @@ test("account recharge service-write postcheck is catalog-only and verifies the 
   assert.doesNotMatch(executable, /\bfrom\s+(?:public\.)?account_recharges\b/i);
 });
 
+test("account recharge schema compatibility is DDL-only and preserves the exact contract", () => {
+  const migration = file(
+    "supabase/migrations/20260729135500_account_recharge_schema_compatibility.sql",
+  );
+  const executable = migration.replace(/--.*$/gm, "");
+  const statusBody = migration.match(
+    /add constraint account_recharges_status_check[\s\S]*?status in\s*\(([\s\S]*?)\)\s*\)\s*not valid/i,
+  )?.[1];
+  const allowedStatuses = [
+    "pending",
+    "waiting_payment",
+    "submitted",
+    "reviewing",
+    "approved",
+    "processing",
+    "succeeded",
+    "failed",
+    "rejected",
+    "cancelled",
+    "expired",
+    "paid",
+    "closed",
+    "refunded",
+  ];
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /set local search_path = pg_catalog, public;/i);
+  assert.match(
+    migration,
+    /if v_table_oid is null then[\s\S]*raise exception 'ACCOUNT_RECHARGE_SCHEMA_COMPATIBILITY_MISSING_TABLE'/i,
+  );
+  for (const [column, type] of [
+    ["client_request_id", "text"],
+    ["completed_at", "timestamptz"],
+    ["customer_note", "text"],
+    ["payment_method", "text"],
+    ["review_mode", "text"],
+    ["review_reason", "text"],
+  ]) {
+    assert.match(
+      migration,
+      new RegExp(`add column if not exists ${column} ${type}`, "i"),
+    );
+    assert.doesNotMatch(
+      migration,
+      new RegExp(`add column if not exists ${column} ${type}\\s+not null`, "i"),
+    );
+  }
+  assert.ok(statusBody, "the status CHECK body must be statically discoverable");
+  assert.deepEqual(
+    [...statusBody.matchAll(/'([^']+)'/g)].map((match) => match[1]),
+    allowedStatuses,
+  );
+  assert.match(
+    migration,
+    /c\.contype = 'c'[\s\S]*c\.conkey = array\[v_status_attnum\]::smallint\[\]/i,
+  );
+  assert.match(
+    migration,
+    /alter table public\.account_recharges drop constraint %I/i,
+  );
+  assert.doesNotMatch(
+    migration,
+    /drop constraint if exists account_recharges_status_check/i,
+  );
+  assert.match(migration, /add constraint account_recharges_status_check/i);
+  assert.match(migration, /\)\s*not valid;/i);
+  assert.match(
+    migration,
+    /validate constraint account_recharges_status_check/i,
+  );
+  assert.match(
+    migration,
+    /create unique index account_recharges_user_client_request_unique\s+on public\.account_recharges\(user_id, client_request_id\)/i,
+  );
+  assert.match(
+    migration,
+    /where client_request_id is not null\s+and btrim\(client_request_id\) <> ''/i,
+  );
+  assert.doesNotMatch(
+    migration,
+    /unique index[^;\n]*\(client_request_id\)/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /^\s*(?:insert|update|delete|truncate)\b/im,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:create|alter|drop)\s+policy\b|\brow\s+level\s+security\b/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:grant|revoke)\b|\balter\s+default\s+privileges\b/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\bcall\b|\.rpc\s*\(|automatic_settlement|auto_settlement/i,
+  );
+});
+
+test("account recharge schema compatibility postcheck is catalog-only and complete", () => {
+  const postcheck = file(
+    "docs/audits/20260729-account-recharge-schema-compatibility-postcheck.sql",
+  );
+  const executable = postcheck.replace(/--.*$/gm, "");
+
+  assert.equal(
+    postcheck.split(/\r?\n/, 1)[0],
+    "-- READ-ONLY / NO BUSINESS DATA MUTATION",
+  );
+  for (const catalog of [
+    "pg_catalog.pg_class",
+    "pg_catalog.pg_attribute",
+    "pg_catalog.pg_type",
+    "pg_catalog.pg_constraint",
+    "pg_catalog.pg_index",
+  ]) {
+    assert.match(postcheck, new RegExp(catalog.replace(".", "\\."), "i"));
+  }
+  for (const column of [
+    "client_request_id",
+    "completed_at",
+    "customer_note",
+    "payment_method",
+    "review_mode",
+    "review_reason",
+  ]) {
+    assert.match(postcheck, new RegExp(`\\b${column}_exists\\b`, "i"));
+    assert.match(postcheck, new RegExp(`\\b${column}_udt_name\\b`, "i"));
+    assert.match(postcheck, new RegExp(`\\b${column}_is_nullable\\b`, "i"));
+  }
+  for (const field of [
+    "table_exists",
+    "rls_enabled",
+    "missing_column_count",
+    "wrong_type_count",
+    "unexpected_not_null_count",
+    "status_check_exists",
+    "status_check_is_single_column",
+    "status_check_missing_required_value_count",
+    "status_check_preserves_refunded",
+    "client_request_unique_index_exists",
+    "client_request_unique_index_valid",
+    "client_request_unique_index_is_unique",
+    "client_request_unique_index_column_order_correct",
+    "client_request_unique_index_predicate_correct",
+    "assessment",
+  ]) {
+    assert.match(postcheck, new RegExp(`\\b${field}\\b`, "i"));
+  }
+  assert.doesNotMatch(
+    executable,
+    /^\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy)\b/im,
+  );
+  assert.doesNotMatch(executable, /\b(begin|commit|rollback)\s*;/i);
+  assert.doesNotMatch(
+    executable,
+    /\bfrom\s+(?:public\.)?account_recharges\b/i,
+  );
+});
+
 test("account recharge service-write runbook preserves test-only execution order", () => {
   const runbook = file("docs/account-recharge-service-write-runbook.md");
   const orderedSection = runbook.slice(
     runbook.indexOf("## 测试环境变更顺序"),
     runbook.indexOf("## Postcheck 通过条件"),
   );
-  const deployment = orderedSection.indexOf("先将当前 service-role 写入代码部署");
+  const deployment = orderedSection.indexOf("PR #18 Preview");
+  const compatibility = orderedSection.indexOf(
+    "20260729135500_account_recharge_schema_compatibility.sql",
+  );
+  const compatibilityPostcheck = orderedSection.indexOf(
+    "20260729-account-recharge-schema-compatibility-postcheck.sql",
+  );
+  const previewRefresh = orderedSection.indexOf("刷新 PR #18 Preview");
+  const manualRecharge = orderedSection.indexOf("创建一笔不付款的 manual 测试充值");
+  const waitingPayment = orderedSection.indexOf("API 返回 `waiting_payment`");
   const phaseOne = orderedSection.indexOf(
     "20260729140000_client_privilege_hardening_phase1.sql",
   );
@@ -4220,7 +4392,12 @@ test("account recharge service-write runbook preserves test-only execution order
   assert.match(runbook, /czuoivbfxzachiobdohw/);
   assert.ok(
     deployment >= 0
-      && phaseOne > deployment
+      && compatibility > deployment
+      && compatibilityPostcheck > compatibility
+      && previewRefresh > compatibilityPostcheck
+      && manualRecharge > previewRefresh
+      && waitingPayment > manualRecharge
+      && phaseOne > waitingPayment
       && forwardFix > phaseOne
       && postcheck > forwardFix,
   );
@@ -4229,8 +4406,11 @@ test("account recharge service-write runbook preserves test-only execution order
     runbook,
     /先部署 service-role 写入代码，是为了避免撤销 authenticated INSERT 后出现充值创建中断/,
   );
-  assert.match(runbook, /部署仍需单独明确授权；本任务不授权实际部署/);
-  assert.match(runbook, /不存在回退到 authenticated INSERT 的路径/);
+  assert.match(
+    runbook,
+    /本任务不授权实际部署、Migration 或[\s\S]{0,20}postcheck 执行/,
+  );
+  assert.match(runbook, /代码不回退到[\s\S]{0,20}authenticated INSERT/);
   assert.match(runbook, /每次只执行一个完整文件/);
   assert.match(runbook, /每一步失败或[\s\S]{0,30}立即停止/);
   assert.match(runbook, /不使用 `supabase db push`/);
@@ -4239,7 +4419,7 @@ test("account recharge service-write runbook preserves test-only execution order
   assert.match(runbook, /不使用 `supabase db reset`/);
   assert.match(runbook, /不在生产环境执行 Migration 或 postcheck/);
   assert.match(runbook, /不开启或配置自动结算/);
-  assert.match(runbook, /不测试真实付款、余额入账或任何生产财务操作/);
+  assert.match(runbook, /不进行付款、TxHash、审核、余额入账或任何生产财务操作/);
 });
 
 test("client privilege hardening phase 1 runbook keeps execution test-only and deferred", () => {
