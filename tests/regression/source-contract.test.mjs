@@ -3882,7 +3882,7 @@ test("client privilege hardening phase 1 removes the redundant authenticated rec
     /\.from\("account_recharges"\)\.update\(\{\s*status:\s*"waiting_payment"\s*\}\)/,
   );
   assert.match(route, /const retryRow = \{ \.\.\.row \}/);
-  assert.match(route, /supabase\.from\("account_recharges"\)\.insert\(retryRow\)/);
+  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(retryRow\)/);
 });
 
 test("client privilege hardening phase 1 migration is ACL-only and preserves the exact matrix", () => {
@@ -4050,6 +4050,148 @@ test("client privilege hardening phase 1 postcheck is catalog-only and complete"
     executable,
     /\bfrom\s+(?:public\.)?(?:account_recharges|admin_audit_logs|balance_transactions|order_payments|order_status_logs|orders|payment_sessions|profiles|site_setting_logs|site_settings)\b/i,
   );
+});
+
+test("account recharge creation fails closed and writes with the standard service-role client", () => {
+  const route = file("app/api/recharges/route.ts");
+
+  assert.match(route, /import \{ getSupabaseServiceRoleClient \} from "@\/lib\/supabase\/service-role";/);
+  assert.match(
+    route,
+    /const serviceClient = getSupabaseServiceRoleClient\(\);[\s\S]{0,500}if \(!serviceClient\)[\s\S]{0,500}RECHARGE_SERVICE_UNAVAILABLE[\s\S]{0,200}status: 503/,
+  );
+  assert.match(route, /insertRecharge\(serviceClient,\s*\{/);
+  assert.doesNotMatch(route, /insertRecharge\(context\.supabase,\s*\{/);
+  assert.match(
+    route,
+    /async function insertRecharge\(\s*serviceClient: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>/,
+  );
+  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(row\)/);
+  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(retryRow\)/);
+  assert.doesNotMatch(
+    route,
+    /if \(!serviceClient\)[\s\S]{0,800}(?:context\.supabase|supabase)\.from\("account_recharges"\)\.insert/,
+  );
+  assert.match(
+    route,
+    /status:\s*input\.channel\.reviewMode\s*===\s*"manual"\s*\?\s*"waiting_payment"\s*:\s*"pending"/,
+  );
+  assert.doesNotMatch(
+    route,
+    /\.from\("account_recharges"\)\.update\(\{\s*status:\s*"waiting_payment"\s*\}\)/,
+  );
+  assert.match(route, /delete \(retryRow as Partial<typeof row>\)\.client_request_id/);
+  assert.match(route, /code\?: string \}\)\.code === "23505"/);
+});
+
+test("account recharge forward-fix revokes every direct client INSERT ACL only", () => {
+  const migration = file(
+    "supabase/migrations/20260729143000_account_recharge_service_write_hardening.sql",
+  );
+  const executable = migration.replace(/--.*$/gm, "");
+  const previousMigration = file(
+    "supabase/migrations/20260729140000_client_privilege_hardening_phase1.sql",
+  );
+
+  assert.equal(
+    createHash("sha256").update(previousMigration).digest("hex"),
+    "b5dc8942aecb8132677aed36428fa44c51f92686dc93b0635a8beace0bf398f7",
+    "the already-merged 20260729140000 Migration must remain byte-for-byte unchanged",
+  );
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /set local search_path = pg_catalog, public;/i);
+  assert.match(migration, /to_regclass\('public\.account_recharges'\)/i);
+  assert.match(
+    migration,
+    /revoke insert on table public\.account_recharges from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /revoke insert \(%s\) on table public\.account_recharges from public, anon, authenticated/i,
+  );
+  assert.match(migration, /pg_catalog\.pg_attribute/);
+  assert.doesNotMatch(executable, /\b(?:grant|revoke)\b[^;\n']*\bservice_role\b/i);
+  assert.doesNotMatch(
+    executable,
+    /\b(?:create|alter|drop)\s+policy\b|\b(?:enable|disable|force)\s+row\s+level\s+security\b/i,
+  );
+  assert.doesNotMatch(executable, /\balter\s+default\s+privileges\b/i);
+  assert.doesNotMatch(
+    executable,
+    /\b(?:insert\s+into|update\s+public\.|delete\s+from|merge\s+into|truncate\s+table)\b/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:call|perform)\s+public\.|\.rpc\s*\(|automatic_settlement|auto_settlement/i,
+  );
+});
+
+test("account recharge service-write postcheck is catalog-only and verifies the retained policy", () => {
+  const postcheck = file(
+    "docs/audits/20260729-account-recharge-service-write-postcheck.sql",
+  );
+  const executable = postcheck.replace(/--.*$/gm, "");
+
+  assert.equal(postcheck.split(/\r?\n/, 1)[0], "-- READ-ONLY / NO BUSINESS DATA MUTATION");
+  for (const field of [
+    "account_recharges_table_exists",
+    "public_insert",
+    "anon_insert",
+    "authenticated_insert",
+    "service_role_insert",
+    "public_column_insert_acl_count",
+    "anon_column_insert_acl_count",
+    "authenticated_column_insert_acl_count",
+    "service_role_update",
+    "rls_enabled",
+    "users_create_policy_exists",
+    "users_create_policy_status_check_is_pending_only",
+    "direct_client_insert_path_status",
+    "assessment",
+  ]) {
+    assert.match(postcheck, new RegExp(`\\b${field}\\b`, "i"));
+  }
+  assert.match(postcheck, /pg_catalog\.pg_class/);
+  assert.match(postcheck, /pg_catalog\.pg_attribute/);
+  assert.match(postcheck, /pg_catalog\.pg_policy/);
+  assert.match(postcheck, /pg_catalog\.pg_get_expr/);
+  assert.match(postcheck, /Users can create own recharge records/);
+  assert.match(postcheck, /BLOCKED_BY_ACL/);
+  assert.match(postcheck, /CLIENT_INSERT_STILL_OPEN/);
+  assert.match(postcheck, /TABLE_MISSING/);
+  assert.doesNotMatch(
+    executable,
+    /^\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy)\b/im,
+  );
+  assert.doesNotMatch(executable, /\b(begin|commit|rollback)\s*;/i);
+  assert.doesNotMatch(executable, /\bfrom\s+(?:public\.)?account_recharges\b/i);
+});
+
+test("account recharge service-write runbook preserves test-only execution order", () => {
+  const runbook = file("docs/account-recharge-service-write-runbook.md");
+  const phaseOne = runbook.indexOf("20260729140000_client_privilege_hardening_phase1.sql");
+  const forwardFix = runbook.indexOf(
+    "20260729143000_account_recharge_service_write_hardening.sql",
+  );
+  const postcheck = runbook.indexOf(
+    "20260729-account-recharge-service-write-postcheck.sql",
+  );
+
+  assert.match(runbook, /PR #17 已合并/);
+  assert.match(runbook, /尚未在数据库执行/);
+  assert.match(runbook, /修复代码部署前，不可在当前 `main` 测试 manual 充值/);
+  assert.match(runbook, /czuoivbfxzachiobdohw/);
+  assert.ok(phaseOne >= 0 && forwardFix > phaseOne && postcheck > forwardFix);
+  assert.match(runbook, /每次只执行一个完整文件/);
+  assert.match(runbook, /应用代码必须在两份权限 Migration 完成后部署/);
+  assert.match(runbook, /不使用 `supabase db push`/);
+  assert.match(runbook, /不使用 `supabase migration up`/);
+  assert.match(runbook, /不使用 `supabase migration repair`/);
+  assert.match(runbook, /不使用 `supabase db reset`/);
+  assert.match(runbook, /不在生产环境执行 Migration 或 postcheck/);
+  assert.match(runbook, /不开启或配置自动结算/);
+  assert.match(runbook, /不测试真实付款、余额入账或任何生产财务操作/);
 });
 
 test("client privilege hardening phase 1 runbook keeps execution test-only and deferred", () => {

@@ -13,6 +13,7 @@ import {
 import { evaluateRechargeRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 
 export const dynamic = "force-dynamic";
@@ -159,7 +160,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const rechargeNo = await insertRecharge(context.supabase, {
+    const serviceClient = getSupabaseServiceRoleClient();
+    if (!serviceClient) {
+      return NextResponse.json(
+        {
+          error: "Recharge service is temporarily unavailable. Please try again later.",
+          code: "RECHARGE_SERVICE_UNAVAILABLE",
+        },
+        { status: 503 }
+      );
+    }
+
+    const rechargeNo = await insertRecharge(serviceClient, {
       userId: context.user.id,
       userEmail: context.user.email ?? null,
       channel,
@@ -234,7 +246,7 @@ async function findExistingRecharge(
 }
 
 async function insertRecharge(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
+  serviceClient: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>,
   input: {
     userId: string;
     userEmail: string | null;
@@ -273,13 +285,13 @@ async function insertRecharge(
       user_note: input.customerNote || null,
     };
 
-    const insertResult = await supabase.from("account_recharges").insert(row);
+    const insertResult = await serviceClient.from("account_recharges").insert(row);
     if (!insertResult.error) return rechargeNo;
 
     if (isMissingClientRequestColumn(insertResult.error)) {
       const retryRow = { ...row };
       delete (retryRow as Partial<typeof row>).client_request_id;
-      const retry = await supabase.from("account_recharges").insert(retryRow);
+      const retry = await serviceClient.from("account_recharges").insert(retryRow);
       if (!retry.error) return rechargeNo;
       lastError = retry.error;
     } else {
@@ -287,7 +299,7 @@ async function insertRecharge(
     }
 
     if ((lastError as { code?: string }).code === "23505") {
-      const existing = await findExistingRecharge(supabase, input.userId, input.clientRequestId);
+      const existing = await findExistingRecharge(serviceClient, input.userId, input.clientRequestId);
       if (existing?.rechargeNo) return existing.rechargeNo;
       continue;
     }
