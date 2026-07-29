@@ -3929,6 +3929,27 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     history,
     /when '20260728230700' then false[\s\S]*?schema_evidence_can_identify_migration/i,
   );
+  assert.match(
+    history,
+    /when '20260727' then false[\s\S]*?schema_evidence_can_identify_migration/i,
+  );
+  for (const evidence of [
+    "automatic_settlement_exact_signature_exists",
+    "current_wallet_credit_signature_exists",
+    "legacy_wallet_credit_signature_exists",
+    "settlement_source_column_exists",
+    "settlement_source_check_contract_exists",
+    "account_recharge_transaction_reference_exists",
+    "max_auto_overpayment_usdt_setting_exists",
+    "max_auto_overpayment_ratio_setting_exists",
+  ]) {
+    assert.match(history, new RegExp(`\\b${evidence}\\b`));
+  }
+  assert.match(history, /PARTIAL_SCHEMA_EVIDENCE/);
+  assert.doesNotMatch(
+    history,
+    /when '20260727' then true[\s\S]*?schema_evidence_can_identify_migration/i,
+  );
 
   const schema = audits[1].source;
   for (const field of [
@@ -3949,6 +3970,8 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     "service_role_can_update_profiles_balance",
     "profiles_balance_acl_status",
     "function_contract_status",
+    "expected_owner",
+    "owner_matches_contract",
     "constraint_summary",
     "index_summary",
   ]) {
@@ -3974,6 +3997,11 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   assert.match(schema, /then 'MISSING_FUNCTION'/);
   assert.match(
     schema,
+    /'service_role_execute', 'postgres'[\s\S]*?owner_matches_contract is not true[\s\S]*?then 'REVIEW_REQUIRED'/i,
+  );
+  assert.match(schema, /policy_helper_review','trigger_function_review'[\s\S]*?then 'MANUAL_REVIEW'/i);
+  assert.match(
+    schema,
     /expected_state like 'expected_absent%' and fc\.oid is null[\s\S]*?then 'PASS'/i,
   );
   assert.match(
@@ -3993,6 +4021,10 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
 
   const integrity = audits[2].source;
   for (const summary of [
+    "null_chain_session_ownership_count",
+    "null_chain_transaction_ownership_count",
+    "null_chain_claim_ownership_count",
+    "null_payment_link_ownership_count",
     "null_ownership_reference_count",
     "null_or_negative_log_index_count",
     "null_confirmation_count",
@@ -4006,13 +4038,15 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     "transaction_without_claim_count",
     "multiple_transactions_per_chain_reference_count",
     "claim_transaction_ownership_mismatch_count",
-    "disposition_missing_ledger_link_count",
+    "disposition_missing_business_link_count",
     "duplicate_ledger_or_disposition_business_key_count",
     "credited_balance_with_inconsistent_terminal_state_count",
     "payment_classification_overlap_count",
-    "manual_review_missing_decision_count",
-    "manual_review_missing_audit_count",
-    "manual_review_missing_decision_or_audit_count",
+    "manual_review_missing_final_decision_count",
+    "manual_review_missing_any_attempt_count",
+    "manual_review_missing_terminal_attempt_count",
+    "manual_review_decision_attempt_mismatch_count",
+    "manual_review_missing_decision_or_valid_audit_count",
     "terminal_order_still_in_settlement_state_count",
   ]) {
     assert.match(integrity, new RegExp(summary));
@@ -4042,7 +4076,27 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   );
   assert.match(
     integrity,
-    /manual_review_missing_decision_or_audit_count[\s\S]*?manual_review_decision is null\s+or not exists/i,
+    /manual_review_missing_final_decision_count[\s\S]*?manual_review_decision is null[\s\S]*?manual_review_decision = 'pending'/i,
+  );
+  assert.match(
+    integrity,
+    /manual_review_missing_terminal_attempt_count[\s\S]*?attempt\.action[\s\S]*?attempt\.result_status in \('succeeded','failed','rejected'\)/i,
+  );
+  assert.match(
+    integrity,
+    /manual_review_decision_attempt_mismatch_count[\s\S]*?approve_late_payment[\s\S]*?reject_late_payment/i,
+  );
+  assert.match(
+    integrity,
+    /disposition_missing_business_link_count[\s\S]*?left join public\.orders[\s\S]*?left join public\.order_payments[\s\S]*?left join public\.chain_payment_sessions[\s\S]*?left join public\.balance_transactions/i,
+  );
+  assert.match(
+    integrity,
+    /null_chain_transaction_ownership_count[\s\S]*?chain_transactions\.order_id[\s\S]*?chain_payment_session_id/i,
+  );
+  assert.match(
+    integrity,
+    /null_chain_claim_ownership_count[\s\S]*?chain_transaction_claims\.order_id[\s\S]*?chain_payment_session_id/i,
   );
   assert.match(
     integrity,
@@ -4084,9 +4138,10 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   }
   assert.match(confirmation, /historical_required_confirmation_threshold', 'unknown'/);
   assert.match(confirmation, /configuration_value_exposed', false/);
+  assert.match(confirmation, /then 'NO_DATA'/);
   assert.match(
     confirmation,
-    /multiple_transactions_per_session_count = 0 then 'PASS'[\s\S]*?else 'REVIEW_REQUIRED'/i,
+    /multiple_transactions_per_session_count\/text\(\)[\s\S]*?> 0[\s\S]*?confirmed_before_created_count\/text\(\)[\s\S]*?> 0[\s\S]*?confirmed_before_block_count\/text\(\)[\s\S]*?> 0[\s\S]*?then 'REVIEW_REQUIRED'/i,
   );
   assert.match(confirmation, /settings_key_column_exists/);
   assert.match(confirmation, /settings_value_column_exists/);

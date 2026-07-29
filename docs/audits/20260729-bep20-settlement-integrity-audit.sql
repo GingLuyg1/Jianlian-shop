@@ -65,15 +65,60 @@ with column_type_contracts(table_name, column_name, allowed_udt_names) as (
     ('bep20_underpayment_dispositions', 'payment_id', array['uuid']),
     ('bep20_underpayment_dispositions', 'payment_session_id', array['uuid']),
     ('bep20_underpayment_dispositions', 'balance_transaction_id', array['uuid']),
-    ('bep20_admin_review_attempts', 'chain_payment_session_id', array['uuid'])
+    ('bep20_admin_review_attempts', 'chain_payment_session_id', array['uuid']),
+    ('bep20_admin_review_attempts', 'action', array['text','varchar']),
+    ('bep20_admin_review_attempts', 'result_status', array['text','varchar'])
 ),
 checks(check_name, required_tables, required_columns, count_query) as (
   values
     (
-      'null_ownership_reference_count'::text,
-      array['chain_payment_sessions','payment_sessions','order_payments']::text[],
+      'null_chain_session_ownership_count'::text,
+      array['chain_payment_sessions']::text[],
       array[
         'chain_payment_sessions.order_id',
+        'chain_payment_sessions.payment_session_id',
+        'chain_payment_sessions.payment_id'
+      ]::text[],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_payment_sessions cps
+        where cps.order_id is null
+           or cps.payment_session_id is null
+           or cps.payment_id is null
+      $audit$
+    ),
+    (
+      'null_chain_transaction_ownership_count',
+      array['chain_transactions'],
+      array[
+        'chain_transactions.order_id',
+        'chain_transactions.chain_payment_session_id'
+      ],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_transactions ct
+        where ct.order_id is null
+           or ct.chain_payment_session_id is null
+      $audit$
+    ),
+    (
+      'null_chain_claim_ownership_count',
+      array['chain_transaction_claims'],
+      array[
+        'chain_transaction_claims.order_id',
+        'chain_transaction_claims.chain_payment_session_id'
+      ],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_transaction_claims claim
+        where claim.order_id is null
+           or claim.chain_payment_session_id is null
+      $audit$
+    ),
+    (
+      'null_payment_link_ownership_count',
+      array['chain_payment_sessions','payment_sessions','order_payments'],
+      array[
         'chain_payment_sessions.payment_session_id',
         'chain_payment_sessions.payment_id',
         'payment_sessions.id',
@@ -87,14 +132,11 @@ checks(check_name, required_tables, required_columns, count_query) as (
       ]::text[],
       $audit$
         select (
-          (select count(*) from public.chain_payment_sessions
-           where order_id is null or payment_session_id is null or payment_id is null)
-          +
           (select count(*)
            from public.chain_payment_sessions cps
            left join public.payment_sessions ps on ps.id = cps.payment_session_id
-           where cps.payment_session_id is not null
-             and (
+           where cps.payment_session_id is null
+              or (
                ps.id is null
                or ps.business_type is distinct from 'order'
                or ps.business_id is null
@@ -104,13 +146,74 @@ checks(check_name, required_tables, required_columns, count_query) as (
           (select count(*)
            from public.chain_payment_sessions cps
            left join public.order_payments op on op.id = cps.payment_id
-           where cps.payment_id is not null
-             and (
+           where cps.payment_id is null
+              or (
                op.id is null
                or op.order_id is null
                or op.user_id is null
                or op.payment_session_id is null
              ))
+        )::bigint as metric_count
+      $audit$
+    ),
+    (
+      'null_ownership_reference_count',
+      array[
+        'chain_payment_sessions','chain_transactions',
+        'chain_transaction_claims','payment_sessions','order_payments'
+      ],
+      array[
+        'chain_payment_sessions.order_id',
+        'chain_payment_sessions.payment_session_id',
+        'chain_payment_sessions.payment_id',
+        'chain_transactions.order_id',
+        'chain_transactions.chain_payment_session_id',
+        'chain_transaction_claims.order_id',
+        'chain_transaction_claims.chain_payment_session_id',
+        'payment_sessions.id',
+        'payment_sessions.business_type',
+        'payment_sessions.business_id',
+        'payment_sessions.user_id',
+        'order_payments.id',
+        'order_payments.order_id',
+        'order_payments.user_id',
+        'order_payments.payment_session_id'
+      ],
+      $audit$
+        select (
+          (select count(*)
+           from public.chain_payment_sessions cps
+           where cps.order_id is null
+              or cps.payment_session_id is null
+              or cps.payment_id is null)
+          +
+          (select count(*)
+           from public.chain_transactions ct
+           where ct.order_id is null
+              or ct.chain_payment_session_id is null)
+          +
+          (select count(*)
+           from public.chain_transaction_claims claim
+           where claim.order_id is null
+              or claim.chain_payment_session_id is null)
+          +
+          (select count(*)
+           from public.chain_payment_sessions cps
+           left join public.payment_sessions ps on ps.id = cps.payment_session_id
+           where cps.payment_session_id is null
+              or ps.id is null
+              or ps.business_type is distinct from 'order'
+              or ps.business_id is null
+              or ps.user_id is null)
+          +
+          (select count(*)
+           from public.chain_payment_sessions cps
+           left join public.order_payments op on op.id = cps.payment_id
+           where cps.payment_id is null
+              or op.id is null
+              or op.order_id is null
+              or op.user_id is null
+              or op.payment_session_id is null)
         )::bigint as metric_count
       $audit$
     ),
@@ -404,28 +507,76 @@ checks(check_name, required_tables, required_columns, count_query) as (
       $audit$
     ),
     (
-      'disposition_missing_ledger_link_count',
+      'disposition_missing_business_link_count',
       array[
+        'orders','payment_sessions','order_payments','chain_payment_sessions',
         'balance_transactions',
         'bep20_overpayment_dispositions',
         'bep20_underpayment_dispositions'
       ],
       array[
+        'orders.id',
+        'payment_sessions.id',
+        'payment_sessions.business_type',
+        'payment_sessions.business_id',
+        'order_payments.id',
+        'order_payments.order_id',
+        'order_payments.payment_session_id',
+        'chain_payment_sessions.id',
+        'chain_payment_sessions.order_id',
+        'chain_payment_sessions.payment_id',
+        'chain_payment_sessions.payment_session_id',
         'balance_transactions.id',
+        'bep20_overpayment_dispositions.order_id',
+        'bep20_overpayment_dispositions.payment_id',
+        'bep20_overpayment_dispositions.chain_session_id',
         'bep20_overpayment_dispositions.balance_transaction_id',
+        'bep20_underpayment_dispositions.order_id',
+        'bep20_underpayment_dispositions.payment_id',
+        'bep20_underpayment_dispositions.payment_session_id',
+        'bep20_underpayment_dispositions.chain_session_id',
         'bep20_underpayment_dispositions.balance_transaction_id'
       ],
       $audit$
         select (
           (select count(*)
            from public.bep20_overpayment_dispositions d
+           left join public.orders o on o.id = d.order_id
+           left join public.order_payments op on op.id = d.payment_id
+           left join public.chain_payment_sessions cps on cps.id = d.chain_session_id
+           left join public.payment_sessions ps on ps.id = cps.payment_session_id
            left join public.balance_transactions bt on bt.id = d.balance_transaction_id
-           where bt.id is null)
+           where o.id is null
+              or op.id is null
+              or cps.id is null
+              or ps.id is null
+              or bt.id is null
+              or op.order_id is distinct from d.order_id
+              or cps.order_id is distinct from d.order_id
+              or cps.payment_id is distinct from d.payment_id
+              or op.payment_session_id is distinct from cps.payment_session_id
+              or ps.business_type is distinct from 'order'
+              or ps.business_id is distinct from d.order_id)
           +
           (select count(*)
            from public.bep20_underpayment_dispositions d
+           left join public.orders o on o.id = d.order_id
+           left join public.payment_sessions ps on ps.id = d.payment_session_id
+           left join public.order_payments op on op.id = d.payment_id
+           left join public.chain_payment_sessions cps on cps.id = d.chain_session_id
            left join public.balance_transactions bt on bt.id = d.balance_transaction_id
-           where bt.id is null)
+           where o.id is null
+              or ps.id is null
+              or op.id is null
+              or cps.id is null
+              or bt.id is null
+              or op.order_id is distinct from d.order_id
+              or cps.order_id is distinct from d.order_id
+              or cps.payment_id is distinct from d.payment_id
+              or op.payment_session_id is distinct from d.payment_session_id
+              or cps.payment_session_id is distinct from d.payment_session_id
+              or ps.business_type is distinct from 'order'
+              or ps.business_id is distinct from d.order_id)
         )::bigint as metric_count
       $audit$
     ),
@@ -519,29 +670,41 @@ checks(check_name, required_tables, required_columns, count_query) as (
       ],
       array[
         'bep20_overpayment_dispositions.order_id',
+        'bep20_overpayment_dispositions.payment_id',
         'bep20_overpayment_dispositions.chain_session_id',
+        'bep20_overpayment_dispositions.balance_transaction_id',
         'bep20_underpayment_dispositions.order_id',
         'bep20_underpayment_dispositions.payment_id',
         'bep20_underpayment_dispositions.payment_session_id',
         'bep20_underpayment_dispositions.chain_session_id',
+        'bep20_underpayment_dispositions.balance_transaction_id',
         'orders.id',
         'orders.status',
         'orders.payment_status',
+        'payment_sessions.business_type',
+        'payment_sessions.business_id',
         'payment_sessions.id',
         'payment_sessions.status',
         'order_payments.id',
+        'order_payments.order_id',
+        'order_payments.payment_session_id',
         'order_payments.status',
         'chain_payment_sessions.id',
+        'chain_payment_sessions.order_id',
+        'chain_payment_sessions.payment_id',
         'chain_payment_sessions.payment_session_id',
-        'chain_payment_sessions.status'
+        'chain_payment_sessions.status',
+        'balance_transactions.id'
       ],
       $audit$
         select (
           (select count(*)
            from public.bep20_overpayment_dispositions d
            join public.orders o on o.id = d.order_id
+           join public.order_payments op on op.id = d.payment_id
            join public.chain_payment_sessions cps on cps.id = d.chain_session_id
            join public.payment_sessions ps on ps.id = cps.payment_session_id
+           join public.balance_transactions bt on bt.id = d.balance_transaction_id
            where o.payment_status <> 'paid'
               or o.status not in ('paid','processing','delivered','completed')
               or ps.status <> 'paid'
@@ -553,6 +716,7 @@ checks(check_name, required_tables, required_columns, count_query) as (
            join public.payment_sessions ps on ps.id = d.payment_session_id
            join public.order_payments op on op.id = d.payment_id
            join public.chain_payment_sessions cps on cps.id = d.chain_session_id
+           join public.balance_transactions bt on bt.id = d.balance_transaction_id
            where o.status <> 'cancelled'
               or o.payment_status <> 'failed'
               or ps.status <> 'closed'
@@ -603,7 +767,7 @@ checks(check_name, required_tables, required_columns, count_query) as (
       $audit$
     ),
     (
-      'manual_review_missing_decision_count',
+      'manual_review_missing_final_decision_count',
       array['chain_payment_sessions'],
       array[
         'chain_payment_sessions.status',
@@ -613,30 +777,14 @@ checks(check_name, required_tables, required_columns, count_query) as (
         select count(*)::bigint as metric_count
         from public.chain_payment_sessions cps
         where cps.status = 'manual_review'
-          and cps.manual_review_decision is null
-      $audit$
-    ),
-    (
-      'manual_review_missing_audit_count',
-      array['chain_payment_sessions','bep20_admin_review_attempts'],
-      array[
-        'chain_payment_sessions.id',
-        'chain_payment_sessions.status',
-        'bep20_admin_review_attempts.chain_payment_session_id'
-      ],
-      $audit$
-        select count(*)::bigint as metric_count
-        from public.chain_payment_sessions cps
-        where cps.status = 'manual_review'
-          and not exists (
-            select 1
-            from public.bep20_admin_review_attempts attempt
-            where attempt.chain_payment_session_id = cps.id
+          and (
+            cps.manual_review_decision is null
+            or cps.manual_review_decision = 'pending'
           )
       $audit$
     ),
     (
-      'manual_review_missing_decision_or_audit_count',
+      'manual_review_missing_any_attempt_count',
       array['chain_payment_sessions','bep20_admin_review_attempts'],
       array[
         'chain_payment_sessions.id',
@@ -647,13 +795,122 @@ checks(check_name, required_tables, required_columns, count_query) as (
       $audit$
         select count(*)::bigint as metric_count
         from public.chain_payment_sessions cps
-        where cps.status = 'manual_review'
+        where (
+          cps.status = 'manual_review'
+          or cps.manual_review_decision in ('approved','rejected')
+        )
+          and not exists (
+            select 1
+            from public.bep20_admin_review_attempts attempt
+            where attempt.chain_payment_session_id = cps.id
+          )
+      $audit$
+    ),
+    (
+      'manual_review_missing_terminal_attempt_count',
+      array['chain_payment_sessions','bep20_admin_review_attempts'],
+      array[
+        'chain_payment_sessions.id',
+        'chain_payment_sessions.status',
+        'chain_payment_sessions.manual_review_decision',
+        'bep20_admin_review_attempts.chain_payment_session_id',
+        'bep20_admin_review_attempts.action',
+        'bep20_admin_review_attempts.result_status'
+      ],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_payment_sessions cps
+        where (
+          cps.status = 'manual_review'
+          or cps.manual_review_decision in ('approved','rejected')
+        )
+          and not exists (
+            select 1
+            from public.bep20_admin_review_attempts attempt
+            where attempt.chain_payment_session_id = cps.id
+              and attempt.action in (
+                'recheck','approve_late_payment','reject_late_payment'
+              )
+              and attempt.result_status in ('succeeded','failed','rejected')
+          )
+      $audit$
+    ),
+    (
+      'manual_review_decision_attempt_mismatch_count',
+      array['chain_payment_sessions','bep20_admin_review_attempts'],
+      array[
+        'chain_payment_sessions.id',
+        'chain_payment_sessions.manual_review_decision',
+        'bep20_admin_review_attempts.chain_payment_session_id',
+        'bep20_admin_review_attempts.action',
+        'bep20_admin_review_attempts.result_status'
+      ],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_payment_sessions cps
+        where cps.manual_review_decision in ('approved','rejected')
+          and exists (
+            select 1
+            from public.bep20_admin_review_attempts attempt
+            where attempt.chain_payment_session_id = cps.id
+              and attempt.result_status in ('succeeded','failed','rejected')
+          )
+          and not exists (
+            select 1
+            from public.bep20_admin_review_attempts attempt
+            where attempt.chain_payment_session_id = cps.id
+              and (
+                (
+                  cps.manual_review_decision = 'approved'
+                  and attempt.action = 'approve_late_payment'
+                  and attempt.result_status = 'succeeded'
+                )
+                or (
+                  cps.manual_review_decision = 'rejected'
+                  and attempt.action = 'reject_late_payment'
+                  and attempt.result_status = 'rejected'
+                )
+              )
+          )
+      $audit$
+    ),
+    (
+      'manual_review_missing_decision_or_valid_audit_count',
+      array['chain_payment_sessions','bep20_admin_review_attempts'],
+      array[
+        'chain_payment_sessions.id',
+        'chain_payment_sessions.status',
+        'chain_payment_sessions.manual_review_decision',
+        'bep20_admin_review_attempts.chain_payment_session_id',
+        'bep20_admin_review_attempts.action',
+        'bep20_admin_review_attempts.result_status'
+      ],
+      $audit$
+        select count(*)::bigint as metric_count
+        from public.chain_payment_sessions cps
+        where (
+          cps.status = 'manual_review'
+          or cps.manual_review_decision in ('approved','rejected')
+        )
           and (
             cps.manual_review_decision is null
+            or cps.manual_review_decision = 'pending'
             or not exists (
               select 1
               from public.bep20_admin_review_attempts attempt
               where attempt.chain_payment_session_id = cps.id
+                and (
+                  (
+                    cps.manual_review_decision = 'approved'
+                    and attempt.action = 'approve_late_payment'
+                    and attempt.result_status = 'succeeded'
+                  )
+                  or (
+                    cps.manual_review_decision = 'rejected'
+                    and attempt.action = 'reject_late_payment'
+                    and attempt.result_status = 'rejected'
+                  )
+                )
             )
           )
       $audit$

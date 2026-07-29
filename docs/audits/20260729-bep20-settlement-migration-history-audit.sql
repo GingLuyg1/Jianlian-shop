@@ -4,7 +4,10 @@
 
 with target_versions(version, expected_schema_evidence) as (
   values
-    ('20260727'::text, 'settle_bep20_automatic_overpayment(uuid,text,integer,text)'::text),
+    (
+      '20260727'::text,
+      'multi-object automatic-overpayment schema contract; schema state cannot uniquely identify the migration'::text
+    ),
     ('20260728'::text, 'bep20_underpayment_dispositions + list_expirable_bep20_underpayments(integer)'::text),
     ('20260729'::text, 'seven-argument underpayment RPC present; six-argument RPC absent'::text),
     ('20260730'::text, 'no unique persistent marker; confirmation column and seven-argument RPC are supporting evidence only'::text),
@@ -130,6 +133,71 @@ phase_one_function_acl_state as (
       'public.begin_bep20_payment_completion(uuid,boolean)'
     )
 ),
+automatic_overpayment_schema_state as (
+  select
+    to_regprocedure(
+      'public.settle_bep20_automatic_overpayment(uuid,text,integer,text)'
+    ) is not null as automatic_settlement_exact_signature_exists,
+    to_regprocedure(
+      'public.credit_bep20_overpayment_to_wallet(uuid,text,text,uuid)'
+    ) is not null as current_wallet_credit_signature_exists,
+    to_regprocedure(
+      'public.credit_bep20_overpayment_to_wallet(uuid,text,text)'
+    ) is not null as legacy_wallet_credit_signature_exists,
+    exists (
+      select 1
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and c.table_name = 'bep20_overpayment_dispositions'
+        and c.column_name = 'settlement_source'
+    ) as settlement_source_column_exists,
+    exists (
+      select 1
+      from pg_catalog.pg_constraint c
+      where c.conrelid = to_regclass('public.bep20_overpayment_dispositions')
+        and pg_get_constraintdef(c.oid) ilike '%settlement_source%'
+        and pg_get_constraintdef(c.oid) ilike '%manual_admin%'
+        and pg_get_constraintdef(c.oid) ilike '%automatic_service%'
+    ) as settlement_source_check_contract_exists,
+    exists (
+      select 1
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and c.table_name = 'account_recharges'
+        and c.column_name = 'transaction_reference'
+    ) as account_recharge_transaction_reference_exists,
+    to_regclass('public.site_settings') is not null as site_settings_exists,
+    exists (
+      select 1
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and c.table_name = 'site_settings'
+        and c.column_name = 'setting_key'
+    ) as site_settings_key_column_exists
+),
+automatic_overpayment_risk_settings_document as (
+  select
+    case
+      when aos.site_settings_exists and aos.site_settings_key_column_exists
+        then query_to_xml(
+          $audit$
+            select
+              count(*) filter (
+                where setting_key = 'max_auto_overpayment_usdt'
+              ) > 0 as max_auto_overpayment_usdt_setting_exists,
+              count(*) filter (
+                where setting_key = 'max_auto_overpayment_ratio'
+              ) > 0 as max_auto_overpayment_ratio_setting_exists
+            from public.site_settings
+          $audit$,
+          true,
+          false,
+          ''
+        )
+      else null::xml
+    end as document
+  from automatic_overpayment_schema_state aos
+),
 catalog_state as (
   select
     to_regclass('supabase_migrations.schema_migrations') as history_relation,
@@ -142,6 +210,30 @@ catalog_state as (
     ) as history_version_column_exists,
     to_regclass('public.bep20_underpayment_dispositions') as underpayment_disposition_relation,
     to_regprocedure('public.settle_bep20_automatic_overpayment(uuid,text,integer,text)') as automatic_overpayment_rpc,
+    aos.automatic_settlement_exact_signature_exists,
+    aos.current_wallet_credit_signature_exists,
+    aos.legacy_wallet_credit_signature_exists,
+    aos.settlement_source_column_exists,
+    aos.settlement_source_check_contract_exists,
+    aos.account_recharge_transaction_reference_exists,
+    case
+      when ard.document is null then null::boolean
+      else (
+        (xpath(
+          '/table/row/max_auto_overpayment_usdt_setting_exists/text()',
+          ard.document
+        ))[1]::text
+      )::boolean
+    end as max_auto_overpayment_usdt_setting_exists,
+    case
+      when ard.document is null then null::boolean
+      else (
+        (xpath(
+          '/table/row/max_auto_overpayment_ratio_setting_exists/text()',
+          ard.document
+        ))[1]::text
+      )::boolean
+    end as max_auto_overpayment_ratio_setting_exists,
     to_regprocedure('public.list_expirable_bep20_underpayments(integer)') as underpayment_list_rpc,
     to_regprocedure(
       'public.settle_bep20_underpayment_to_wallet(uuid,integer,text,text,text,uuid,boolean)'
@@ -165,6 +257,8 @@ catalog_state as (
     ) as confirmation_column_exists
   from phase_one_table_acl_state po
   cross join phase_one_function_acl_state pf
+  cross join automatic_overpayment_schema_state aos
+  cross join automatic_overpayment_risk_settings_document ard
 ),
 history_document as (
   select
@@ -195,7 +289,15 @@ assessment as (
       ) > 0
     end as recorded,
     case tv.version
-      when '20260727' then cs.automatic_overpayment_rpc is not null
+      when '20260727' then
+        cs.automatic_settlement_exact_signature_exists
+        and cs.current_wallet_credit_signature_exists
+        and not cs.legacy_wallet_credit_signature_exists
+        and cs.settlement_source_column_exists
+        and cs.settlement_source_check_contract_exists
+        and cs.account_recharge_transaction_reference_exists
+        and cs.max_auto_overpayment_usdt_setting_exists is true
+        and cs.max_auto_overpayment_ratio_setting_exists is true
       when '20260728' then
         cs.underpayment_disposition_relation is not null
         and cs.underpayment_list_rpc is not null
@@ -216,10 +318,54 @@ assessment as (
       else false
     end as schema_evidence_present,
     case tv.version
+      when '20260727' then false
       when '20260730' then false
       when '20260728230700' then false
       else true
     end as schema_evidence_can_identify_migration,
+    case when tv.version = '20260727'
+      then cs.automatic_settlement_exact_signature_exists
+    end as automatic_settlement_exact_signature_exists,
+    case when tv.version = '20260727'
+      then cs.current_wallet_credit_signature_exists
+    end as current_wallet_credit_signature_exists,
+    case when tv.version = '20260727'
+      then cs.legacy_wallet_credit_signature_exists
+    end as legacy_wallet_credit_signature_exists,
+    case when tv.version = '20260727'
+      then cs.settlement_source_column_exists
+    end as settlement_source_column_exists,
+    case when tv.version = '20260727'
+      then cs.settlement_source_check_contract_exists
+    end as settlement_source_check_contract_exists,
+    case when tv.version = '20260727'
+      then cs.account_recharge_transaction_reference_exists
+    end as account_recharge_transaction_reference_exists,
+    case when tv.version = '20260727'
+      then cs.max_auto_overpayment_usdt_setting_exists
+    end as max_auto_overpayment_usdt_setting_exists,
+    case when tv.version = '20260727'
+      then cs.max_auto_overpayment_ratio_setting_exists
+    end as max_auto_overpayment_ratio_setting_exists,
+    case when tv.version = '20260727' then (
+      cs.automatic_settlement_exact_signature_exists::integer
+      + cs.current_wallet_credit_signature_exists::integer
+      + (not cs.legacy_wallet_credit_signature_exists)::integer
+      + cs.settlement_source_column_exists::integer
+      + cs.settlement_source_check_contract_exists::integer
+      + cs.account_recharge_transaction_reference_exists::integer
+      + coalesce(cs.max_auto_overpayment_usdt_setting_exists, false)::integer
+      + coalesce(cs.max_auto_overpayment_ratio_setting_exists, false)::integer
+    ) end as automatic_overpayment_evidence_component_count,
+    case when tv.version = '20260727' then (
+      cs.automatic_settlement_exact_signature_exists::integer
+      + cs.current_wallet_credit_signature_exists::integer
+      + cs.settlement_source_column_exists::integer
+      + cs.settlement_source_check_contract_exists::integer
+      + cs.account_recharge_transaction_reference_exists::integer
+      + coalesce(cs.max_auto_overpayment_usdt_setting_exists, false)::integer
+      + coalesce(cs.max_auto_overpayment_ratio_setting_exists, false)::integer
+    ) end as automatic_overpayment_positive_evidence_component_count,
     case when tv.version = '20260728230700'
       then cs.phase_one_target_tables_exist
     end as phase_one_target_tables_exist,
@@ -250,6 +396,14 @@ select
   recorded,
   schema_evidence_present,
   schema_evidence_can_identify_migration,
+  automatic_settlement_exact_signature_exists,
+  current_wallet_credit_signature_exists,
+  legacy_wallet_credit_signature_exists,
+  settlement_source_column_exists,
+  settlement_source_check_contract_exists,
+  account_recharge_transaction_reference_exists,
+  max_auto_overpayment_usdt_setting_exists,
+  max_auto_overpayment_ratio_setting_exists,
   phase_one_target_tables_exist,
   phase_one_table_acl_contract_met,
   begin_completion_public_execute,
@@ -260,6 +414,10 @@ select
   case
     when not migration_history_table_exists then 'HISTORY_TABLE_MISSING'
     when not history_version_column_exists then 'HISTORY_VERSION_COLUMN_MISSING'
+    when version = '20260727'
+      and automatic_overpayment_positive_evidence_component_count > 0
+      and schema_evidence_present is not true
+      then 'PARTIAL_SCHEMA_EVIDENCE'
     when not schema_evidence_can_identify_migration and recorded is true
       then 'RECORDED_SCHEMA_EVIDENCE_NON_UNIQUE'
     when not schema_evidence_can_identify_migration and recorded is false

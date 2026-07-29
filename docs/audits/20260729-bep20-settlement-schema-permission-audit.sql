@@ -117,23 +117,23 @@ target_columns(table_name, column_name) as (
     ('admin_audit_logs','result'),
     ('order_status_logs','order_id')
 ),
-target_functions(function_name, signature, expected_state) as (
+target_functions(function_name, signature, expected_state, expected_owner) as (
   values
-    ('complete_payment_session', 'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)', 'service_role_execute'),
-    ('begin_bep20_payment_completion', 'public.begin_bep20_payment_completion(uuid,boolean)', 'service_role_execute'),
-    ('prepare_bep20_payment_completion', 'public.prepare_bep20_payment_completion(uuid,text,numeric,numeric,boolean,uuid)', 'service_role_execute'),
-    ('finish_bep20_payment_completion', 'public.finish_bep20_payment_completion(uuid,uuid,text,text,uuid)', 'service_role_execute'),
-    ('release_order_inventory', 'public.release_order_inventory(uuid,text)', 'service_role_execute'),
-    ('cancel_unpaid_order', 'public.cancel_unpaid_order(uuid,text)', 'authenticated_and_service_role_execute'),
-    ('is_admin', 'public.is_admin(uuid)', 'policy_helper_review'),
-    ('is_super_admin', 'public.is_super_admin(uuid)', 'policy_helper_review'),
-    ('sync_bep20_chain_order_payment', 'public.sync_bep20_chain_order_payment()', 'trigger_function_review'),
-    ('settle_bep20_automatic_overpayment', 'public.settle_bep20_automatic_overpayment(uuid,text,integer,text)', 'service_role_execute'),
-    ('credit_bep20_overpayment_to_wallet_legacy', 'public.credit_bep20_overpayment_to_wallet(uuid,text,text)', 'expected_absent_after_20260727'),
-    ('credit_bep20_overpayment_to_wallet_current', 'public.credit_bep20_overpayment_to_wallet(uuid,text,text,uuid)', 'service_role_execute'),
-    ('list_expirable_bep20_underpayments', 'public.list_expirable_bep20_underpayments(integer)', 'service_role_execute'),
-    ('settle_bep20_underpayment_to_wallet_current', 'public.settle_bep20_underpayment_to_wallet(uuid,integer,text,text,text,uuid,boolean)', 'service_role_execute'),
-    ('settle_bep20_underpayment_to_wallet_legacy', 'public.settle_bep20_underpayment_to_wallet(uuid,integer,text,text,text,uuid)', 'expected_absent_after_20260729')
+    ('complete_payment_session', 'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)', 'service_role_execute', 'postgres'::text),
+    ('begin_bep20_payment_completion', 'public.begin_bep20_payment_completion(uuid,boolean)', 'service_role_execute', 'postgres'),
+    ('prepare_bep20_payment_completion', 'public.prepare_bep20_payment_completion(uuid,text,numeric,numeric,boolean,uuid)', 'service_role_execute', 'postgres'),
+    ('finish_bep20_payment_completion', 'public.finish_bep20_payment_completion(uuid,uuid,text,text,uuid)', 'service_role_execute', 'postgres'),
+    ('release_order_inventory', 'public.release_order_inventory(uuid,text)', 'service_role_execute', 'postgres'),
+    ('cancel_unpaid_order', 'public.cancel_unpaid_order(uuid,text)', 'authenticated_and_service_role_execute', 'postgres'),
+    ('is_admin', 'public.is_admin(uuid)', 'policy_helper_review', null),
+    ('is_super_admin', 'public.is_super_admin(uuid)', 'policy_helper_review', null),
+    ('sync_bep20_chain_order_payment', 'public.sync_bep20_chain_order_payment()', 'trigger_function_review', null),
+    ('settle_bep20_automatic_overpayment', 'public.settle_bep20_automatic_overpayment(uuid,text,integer,text)', 'service_role_execute', 'postgres'),
+    ('credit_bep20_overpayment_to_wallet_legacy', 'public.credit_bep20_overpayment_to_wallet(uuid,text,text)', 'expected_absent_after_20260727', null),
+    ('credit_bep20_overpayment_to_wallet_current', 'public.credit_bep20_overpayment_to_wallet(uuid,text,text,uuid)', 'service_role_execute', 'postgres'),
+    ('list_expirable_bep20_underpayments', 'public.list_expirable_bep20_underpayments(integer)', 'service_role_execute', 'postgres'),
+    ('settle_bep20_underpayment_to_wallet_current', 'public.settle_bep20_underpayment_to_wallet(uuid,integer,text,text,text,uuid,boolean)', 'service_role_execute', 'postgres'),
+    ('settle_bep20_underpayment_to_wallet_legacy', 'public.settle_bep20_underpayment_to_wallet(uuid,integer,text,text,text,uuid)', 'expected_absent_after_20260729', null)
 ),
 table_catalog as (
   select
@@ -419,6 +419,7 @@ function_catalog as (
     tf.function_name,
     tf.signature,
     tf.expected_state,
+    tf.expected_owner,
     p.oid,
     case
       when p.oid is null then null
@@ -430,6 +431,10 @@ function_catalog as (
       )
     end as actual_signature,
     pg_get_userbyid(p.proowner) as owner_name,
+    case
+      when p.oid is null or tf.expected_owner is null then null::boolean
+      else pg_get_userbyid(p.proowner) = tf.expected_owner
+    end as owner_matches_contract,
     p.prosecdef as security_definer,
     (
       select setting
@@ -542,6 +547,8 @@ function_assessment as (
         'service_role_execute',
         'authenticated_and_service_role_execute'
       ) and (
+        fc.owner_matches_contract is not true
+        or
         fc.security_definer is not true
         or fc.search_path_setting is distinct from 'search_path=public'
         or fc.unexpected_execute_grantee_count <> 0
@@ -555,6 +562,8 @@ function_assessment as (
         then 'PASS'
       when fc.oid is null
         then 'MISSING_FUNCTION'
+      when fc.expected_state in ('policy_helper_review','trigger_function_review')
+        then 'MANUAL_REVIEW'
       else 'REVIEW_REQUIRED'
     end as function_contract_status
   from function_catalog fc
@@ -625,8 +634,10 @@ select
         'signature', fc.signature,
         'actual_signature', fc.actual_signature,
         'expected_state', fc.expected_state,
+        'expected_owner', fc.expected_owner,
         'function_exists', fc.oid is not null,
         'owner', fc.owner_name,
+        'owner_matches_contract', fc.owner_matches_contract,
         'security_definer', fc.security_definer,
         'search_path', fc.search_path_setting,
         'search_path_public', fc.search_path_setting = 'search_path=public',

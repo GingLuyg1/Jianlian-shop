@@ -302,10 +302,44 @@ select
       then 'NOT_CHECKED_MISSING_OBJECTS'
     when cardinality(os.confirmation_unexpected_column_types) > 0
       then 'NOT_CHECKED_UNEXPECTED_COLUMN_TYPE'
-    else (xpath(
-      '/table/row/session_timing_evidence_status/text()',
-      cd.document
-    ))[1]::text
+    when (
+      (xpath('/table/row/transaction_count/text()', cd.document))[1]::text
+    )::bigint = 0
+      or (
+        (xpath(
+          '/table/row/distinct_chain_session_count/text()',
+          cd.document
+        ))[1]::text
+      )::bigint = 0
+      then 'NO_DATA'
+    when (
+      (xpath(
+        '/table/row/multiple_transactions_per_session_count/text()',
+        cd.document
+      ))[1]::text
+    )::bigint > 0
+      or coalesce(
+        nullif(
+          (xpath(
+            '/table/row/confirmed_before_created_count/text()',
+            cd.document
+          ))[1]::text,
+          ''
+        )::bigint,
+        0
+      ) > 0
+      or coalesce(
+        nullif(
+          (xpath(
+            '/table/row/confirmed_before_block_count/text()',
+            cd.document
+          ))[1]::text,
+          ''
+        )::bigint,
+        0
+      ) > 0
+      then 'REVIEW_REQUIRED'
+    else 'PASS'
   end as confirmation_timing_status,
   case
     when not os.settings_exist
