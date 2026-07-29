@@ -3865,3 +3865,211 @@ test("BEP20 phase 1 private tables and legacy completion RPC use least-privilege
   );
   assert.doesNotMatch(executablePostcheck, /\b(begin|commit|rollback)\s*;/i);
 });
+
+test("client privilege hardening phase 1 removes the redundant authenticated recharge update", () => {
+  const route = file("app/api/recharges/route.ts");
+
+  assert.match(
+    route,
+    /status:\s*input\.channel\.reviewMode\s*===\s*"manual"\s*\?\s*"waiting_payment"\s*:\s*"pending"/,
+  );
+  assert.match(
+    route,
+    /if\s*\(channel\.reviewMode\s*===\s*"manual"\)[\s\S]{0,300}status:\s*"waiting_payment"[\s\S]{0,300}reviewMode:\s*"manual"/,
+  );
+  assert.doesNotMatch(
+    route,
+    /\.from\("account_recharges"\)\.update\(\{\s*status:\s*"waiting_payment"\s*\}\)/,
+  );
+  assert.match(route, /const retryRow = \{ \.\.\.row \}/);
+  assert.match(route, /supabase\.from\("account_recharges"\)\.insert\(retryRow\)/);
+});
+
+test("client privilege hardening phase 1 migration is ACL-only and preserves the exact matrix", () => {
+  const migrationPath =
+    "supabase/migrations/20260729140000_client_privilege_hardening_phase1.sql";
+  const migration = file(migrationPath);
+  const executable = migration.replace(/--.*$/gm, "");
+  const targetTables = [
+    "account_recharges",
+    "admin_audit_logs",
+    "balance_transactions",
+    "order_payments",
+    "order_status_logs",
+    "orders",
+    "payment_sessions",
+    "profiles",
+    "site_setting_logs",
+    "site_settings",
+  ];
+  const expectedMatrix = {
+    account_recharges: [true, false, false],
+    admin_audit_logs: [false, false, false],
+    balance_transactions: [false, false, false],
+    order_payments: [false, false, false],
+    order_status_logs: [false, false, false],
+    orders: [false, true, false],
+    payment_sessions: [false, false, false],
+    profiles: [true, false, false],
+    site_setting_logs: [true, false, false],
+    site_settings: [true, true, false],
+  };
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /set local search_path = pg_catalog, public;/i);
+  assert.match(migration, /to_regclass\(format\('public\.%I'/i);
+  assert.match(migration, /current_setting\('server_version_num'\)::integer/);
+  assert.match(migration, /v_server_version_num >= 170000/);
+  assert.match(
+    migration,
+    /revoke truncate, references, trigger on table public\.%I from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /revoke maintain on table public\.%I from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /revoke insert, update, delete on table public\.%I from anon/i,
+  );
+  assert.match(
+    migration,
+    /revoke insert, update, delete on table public\.%I from authenticated/i,
+  );
+  assert.match(migration, /revoke update \(%s\) on table public\.%I from authenticated/i);
+
+  for (const table of targetTables) {
+    assert.match(migration, new RegExp(`'${table}'::text`));
+    const [insert, update, remove] = expectedMatrix[table];
+    assert.match(
+      migration,
+      new RegExp(
+        `\\('${table}'::text,\\s*${insert},\\s*${update},\\s*${remove}\\)`,
+        "i",
+      ),
+    );
+  }
+
+  const safeProfileFields = [
+    "display_name",
+    "phone",
+    "recipient_name",
+    "shipping_address",
+    "avatar_url",
+  ];
+  for (const field of safeProfileFields) {
+    assert.match(migration, new RegExp(`'${field}'`));
+  }
+  assert.match(
+    migration,
+    /grant update \(%s\) on table public\.profiles to authenticated/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:insert\s+into|update\s+public\.|delete\s+from|merge\s+into|truncate\s+table)\b/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:create|alter|drop)\s+policy\b|\b(?:enable|disable|force)\s+row\s+level\s+security\b/i,
+  );
+  assert.doesNotMatch(executable, /\balter\s+default\s+privileges\b/i);
+  assert.doesNotMatch(
+    executable,
+    /\b(?:call|perform)\s+public\.|\.rpc\s*\(|\b(?:verify|settle|complete_account_recharge|complete_payment_session)\s*\(/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /max_auto_overpayment|automatic_overpayment|automatic_settlement|auto_settlement/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:grant|revoke)\b[^;\n]*\bservice_role\b/i,
+  );
+
+  const phaseMigrationFiles = readdirSync(
+    join(root, "supabase", "migrations"),
+  ).filter((name) => name.includes("client_privilege_hardening_phase1"));
+  assert.deepEqual(phaseMigrationFiles, [
+    "20260729140000_client_privilege_hardening_phase1.sql",
+  ]);
+});
+
+test("client privilege hardening phase 1 postcheck is catalog-only and complete", () => {
+  const postcheck = file(
+    "docs/audits/20260729-client-privilege-hardening-phase1-postcheck.sql",
+  );
+  const executable = postcheck.replace(/--.*$/gm, "");
+  const firstLine = postcheck.split(/\r?\n/, 1)[0];
+
+  assert.equal(firstLine, "-- READ-ONLY / NO BUSINESS DATA MUTATION");
+  assert.match(postcheck, /pg_catalog\.pg_class/);
+  assert.match(postcheck, /pg_catalog\.pg_attribute/);
+  assert.match(postcheck, /pg_catalog\.aclexplode/);
+  assert.match(postcheck, /pg_catalog\.pg_default_acl/);
+  assert.match(postcheck, /OPTIONAL_TABLE_MISSING/);
+  assert.match(postcheck, /default_acl_hardening_status/);
+  assert.match(postcheck, /DEFERRED_TO_PHASE_2/);
+
+  for (const role of ["public", "anon", "authenticated", "service_role"]) {
+    for (const privilege of ["insert", "update", "delete"]) {
+      assert.match(postcheck, new RegExp(`\\b${role}_${privilege}\\b`, "i"));
+    }
+  }
+  for (const role of ["public", "anon", "authenticated"]) {
+    for (const privilege of ["truncate", "references", "trigger", "maintain"]) {
+      assert.match(postcheck, new RegExp(`\\b${role}_${privilege}\\b`, "i"));
+    }
+  }
+  for (const field of [
+    "authenticated_has_any_column_update",
+    "profiles_display_name_update",
+    "profiles_phone_update",
+    "profiles_recipient_name_update",
+    "profiles_shipping_address_update",
+    "profiles_avatar_url_update",
+    "profiles_sensitive_column_abnormal_update_count",
+    "orders_authenticated_update_retained",
+    "account_recharges_authenticated_insert_retained",
+    "account_recharges_authenticated_update_revoked",
+    "account_recharges_authenticated_delete_revoked",
+    "unexpected_client_ddl_like_privilege_count",
+    "unexpected_anon_write_privilege_count",
+    "unexpected_authenticated_write_privilege_count",
+    "assessment",
+  ]) {
+    assert.match(postcheck, new RegExp(`\\b${field}\\b`, "i"));
+  }
+
+  assert.doesNotMatch(
+    executable,
+    /^\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\b/im,
+  );
+  assert.doesNotMatch(executable, /\b(begin|commit|rollback)\s*;/i);
+  assert.doesNotMatch(
+    executable,
+    /\bfrom\s+(?:public\.)?(?:account_recharges|admin_audit_logs|balance_transactions|order_payments|order_status_logs|orders|payment_sessions|profiles|site_setting_logs|site_settings)\b/i,
+  );
+});
+
+test("client privilege hardening phase 1 runbook keeps execution test-only and deferred", () => {
+  const runbook = file("docs/client-privilege-hardening-phase1-runbook.md");
+
+  assert.match(runbook, /Migration 尚未在任何数据库执行/);
+  assert.match(runbook, /Jianlian-shop-test/);
+  assert.match(runbook, /czuoivbfxzachiobdohw/);
+  assert.match(runbook, /precheck/);
+  assert.match(runbook, /postcheck/);
+  assert.match(runbook, /不使用 `supabase db push`/);
+  assert.match(runbook, /不使用 `supabase migration up`/);
+  assert.match(runbook, /不使用 `supabase migration repair`/);
+  assert.match(runbook, /不使用 `supabase db reset`/);
+  assert.match(runbook, /不在生产执行/);
+  assert.match(runbook, /不执行 `ALTER DEFAULT PRIVILEGES`/);
+  assert.match(runbook, /不调用任何支付、verify、settle、余额入账或生产财务接口/);
+  assert.match(runbook, /orders.*authenticated UPDATE 暂时保留/);
+  assert.match(runbook, /profiles.*authenticated INSERT 暂时保留/);
+  assert.match(runbook, /site_settings.*authenticated INSERT\/UPDATE 暂时保留/);
+  assert.match(runbook, /不是最终权限状态/);
+  assert.match(runbook, /不得据此开启自动结算/);
+});
