@@ -3870,6 +3870,7 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   const auditPaths = [
     "docs/audits/20260729-bep20-settlement-migration-history-audit.sql",
     "docs/audits/20260729-bep20-settlement-schema-permission-audit.sql",
+    "docs/audits/20260729-bep20-settlement-rls-policy-audit.sql",
     "docs/audits/20260729-bep20-settlement-integrity-audit.sql",
     "docs/audits/20260729-bep20-settlement-confirmation-time-audit.sql",
   ];
@@ -4019,7 +4020,106 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
   assert.doesNotMatch(schema, /\bconfigured_value\b/);
   assert.doesNotMatch(schema, /pg_get_functiondef/i);
 
-  const integrity = audits[2].source;
+  const rlsPolicy = audits[2].source;
+  assert.equal(
+    rlsPolicy.split(/\r?\n/, 1)[0],
+    "-- READ-ONLY / NO BUSINESS DATA MUTATION",
+  );
+  for (const table of [
+    "account_recharges",
+    "admin_audit_logs",
+    "balance_transactions",
+    "order_payments",
+    "order_status_logs",
+    "orders",
+    "payment_sessions",
+    "profiles",
+    "site_setting_logs",
+    "site_settings",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`'${table}'`));
+  }
+  for (const role of ["PUBLIC", "anon", "authenticated", "service_role"]) {
+    assert.match(rlsPolicy, new RegExp(`'${role}'`, "i"));
+    for (const privilege of [
+      "select",
+      "insert",
+      "update",
+      "delete",
+      "truncate",
+      "references",
+      "trigger",
+      "maintain",
+    ]) {
+      assert.match(rlsPolicy, new RegExp(`\\b${role}_${privilege}\\b`, "i"));
+    }
+  }
+  assert.match(rlsPolicy, /pg_catalog\.pg_policy|pg_policies/i);
+  for (const field of [
+    "table_exists",
+    "owner",
+    "rls_enabled",
+    "rls_forced",
+    "table_acl_summary",
+    "client_column_acl_summary",
+    "policy_count",
+    "public_applicable_write_policy_count",
+    "anon_applicable_insert_policy_count",
+    "anon_applicable_update_policy_count",
+    "anon_applicable_delete_policy_count",
+    "authenticated_applicable_insert_policy_count",
+    "authenticated_applicable_update_policy_count",
+    "authenticated_applicable_delete_policy_count",
+    "all_policy_count",
+    "insert_update_policy_without_with_check_count",
+    "update_delete_policy_without_using_count",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`\\b${field}\\b`, "i"));
+  }
+  assert.match(rlsPolicy, /\bpolqual\b/);
+  assert.match(rlsPolicy, /\bpolwithcheck\b/);
+  assert.match(rlsPolicy, /\bqual_hash\b/);
+  assert.match(rlsPolicy, /\bwith_check_hash\b/);
+  assert.match(rlsPolicy, /0::oid = any\(pc\.polroles\)/i);
+  assert.match(rlsPolicy, /pg_catalog\.pg_default_acl/);
+  assert.match(rlsPolicy, /client_column_acl_summary/);
+  for (const assessment of [
+    "MISSING_TABLE",
+    "RLS_DISABLED",
+    "CLIENT_TRUNCATE_OR_DDL_LIKE_PRIVILEGE",
+    "CLIENT_WRITE_GRANT_WITH_APPLICABLE_POLICY",
+    "CLIENT_WRITE_GRANT_WITHOUT_APPLICABLE_POLICY",
+    "CLIENT_READ_ONLY",
+    "SERVICE_ROLE_ONLY",
+    "REVIEW_REQUIRED",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`'${assessment}'`));
+  }
+  for (const field of [
+    "max_auto_overpayment_usdt_record_exists",
+    "max_auto_overpayment_usdt_value_is_null",
+    "max_auto_overpayment_usdt_value_is_positive",
+    "max_auto_overpayment_ratio_record_exists",
+    "max_auto_overpayment_ratio_value_is_null",
+    "max_auto_overpayment_ratio_value_is_positive",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`\\b${field}\\b`));
+  }
+  for (const status of [
+    "FAIL_CLOSED",
+    "CONFIGURED_POSITIVE",
+    "MISSING_SETTING",
+    "UNEXPECTED_TYPE",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`'${status}'`));
+  }
+  assert.match(rlsPolicy, /to_jsonb\(ss\.setting_value\)/);
+  assert.doesNotMatch(
+    rlsPolicy,
+    /\b(?:configured_value|actual_value|setting_value_output)\b/i,
+  );
+
+  const integrity = audits[3].source;
   for (const summary of [
     "null_chain_session_ownership_count",
     "null_chain_transaction_ownership_count",
@@ -4111,7 +4211,7 @@ test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-o
     /duplicate_ledger_or_disposition_business_key_count[\s\S]*?metadata ->> 'subtype'[\s\S]*?bep20_overpayment_dispositions[\s\S]*?bep20_underpayment_dispositions/i,
   );
 
-  const confirmation = audits[3].source;
+  const confirmation = audits[4].source;
   for (const summary of [
     "confirmation_count_below_12_count",
     "confirmation_count_equal_12_count",
@@ -4171,8 +4271,26 @@ test("BEP20 automatic-settlement readiness runbook preserves the two-stage read-
   assert.match(runbook, /czuoivbfxzachiobdohw/);
   assert.match(runbook, /Jianlian-shop/);
   assert.match(runbook, /qvbovrvybirscaurwuov/);
+  const schemaAuditPosition = runbook.indexOf(
+    "20260729-bep20-settlement-schema-permission-audit.sql",
+  );
+  const rlsPolicyAuditPosition = runbook.indexOf(
+    "20260729-bep20-settlement-rls-policy-audit.sql",
+  );
+  const integrityAuditPosition = runbook.indexOf(
+    "20260729-bep20-settlement-integrity-audit.sql",
+  );
+  assert.ok(
+    schemaAuditPosition >= 0
+      && rlsPolicyAuditPosition > schemaAuditPosition
+      && integrityAuditPosition > rlsPolicyAuditPosition,
+    "RLS policy audit must run after schema audit and before integrity audit",
+  );
+  assert.match(runbook, /CONFIGURED_POSITIVE/);
+  assert.match(runbook, /\u5ba2\u6237\u7aef\u5199 ACL/);
+  assert.match(runbook, /\u4e0d\u8fd0\u884c\u5b8c\u6574\u6027\u5ba1\u8ba1/);
   assert.match(runbook, /每次只.*一个脚本/);
-  assert.match(runbook, /测试项目四份结果全部审查通过后/);
+  assert.match(runbook, /测试项目五份结果全部审查通过后/);
   assert.match(runbook, /自动结算必须继续保持 \*\*Disabled\*\*/);
   assert.match(runbook, /不运行任何 Migration/);
   const flowSection = runbook.match(/本流程：([\s\S]*?)\n## /)?.[1] ?? "";

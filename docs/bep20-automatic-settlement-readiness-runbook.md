@@ -2,7 +2,7 @@
 
 ## 目的与边界
 
-本手册仅用于核对 BEP20 自动超额结算、欠额转余额和历史确认时间的数据库依赖。四份审计文件均为 `READ-ONLY / NO BUSINESS DATA MUTATION`，只返回系统目录信息或聚合计数。
+本手册仅用于核对 BEP20 自动超额结算、欠额转余额和历史确认时间的数据库依赖。五份审计文件均为 `READ-ONLY / NO BUSINESS DATA MUTATION`，只返回系统目录信息或聚合计数。
 
 自动结算必须继续保持 **Disabled**。本流程：
 
@@ -22,10 +22,13 @@
 2. `docs/audits/20260729-bep20-settlement-schema-permission-audit.sql`
    - 核对表、字段、约束、索引、RLS、ACL、函数签名与源码 hash。
    - 发现对象或关键字段缺失时停止，不继续运行后续数据聚合脚本。
-3. `docs/audits/20260729-bep20-settlement-integrity-audit.sql`
+3. `docs/audits/20260729-bep20-settlement-rls-policy-audit.sql`
+   - 核对十张关联表的 RLS policy、客户端实际表/列权限、默认表权限和自动超额风险配置布尔状态。
+   - 发现任何客户端写 ACL，或风险配置状态为 `CONFIGURED_POSITIVE` 时立即停止，不运行完整性审计。
+4. `docs/audits/20260729-bep20-settlement-integrity-audit.sql`
    - 仅输出归属、链上证据、幂等关联和状态一致性的异常计数。
    - 所有异常计数应由代码与数据库负责人逐项解释；不能据此直接修复数据。
-4. `docs/audits/20260729-bep20-settlement-confirmation-time-audit.sql`
+5. `docs/audits/20260729-bep20-settlement-confirmation-time-audit.sql`
    - 输出确认数分桶、确认时间差和确认数配置形状。
    - 历史确认阈值没有可验证历史事件时保持 `unknown`，不得把 12 假定为历史唯一配置。
 
@@ -44,13 +47,13 @@
 
 - Migration History 和真实对象是否漂移；
 - 必需对象、字段、索引和约束是否齐全；
-- owner、`SECURITY DEFINER`、`search_path` 和角色权限是否符合预期；
+- owner、`SECURITY DEFINER`、`search_path`、RLS policy 和角色实际权限是否符合预期；
 - 完整性异常计数是否均为 0，或是否已有经书面确认的解释；
 - 确认时间差和历史确认阈值是否存在无法证明的风险。
 
 ### 第二步：正式项目
 
-只有测试项目四份结果全部审查通过后，才允许进入：
+只有测试项目五份结果全部审查通过后，才允许进入：
 
 - 项目：`Jianlian-shop`
 - Project ref：`qvbovrvybirscaurwuov`
@@ -65,7 +68,7 @@
 - SQL 文本与仓库已审查版本不一致；
 - Migration History 表缺失，或记录和对象状态发生漂移；
 - 关键对象、字段、唯一约束、外键、RLS 或权限不符合合同；
-- schema 审计提示客户端具有非预期财务写权限；
+- RLS policy 审计发现任何客户端写 ACL，或自动超额风险配置状态为 `CONFIGURED_POSITIVE`；此时不得运行完整性审计；
 - 数据完整性异常计数非 0 且尚无书面解释；
 - 确认时间出现负值、来源语义无法确认或历史确认阈值无法证明；
 - 查询意外返回具体业务标识或敏感内容。
