@@ -171,7 +171,6 @@ export async function POST(request: Request) {
     });
 
     if (channel.reviewMode === "manual") {
-      await context.supabase.from("account_recharges").update({ status: "waiting_payment" }).eq("recharge_no", rechargeNo).eq("user_id", context.user.id);
       return NextResponse.json({ rechargeNo, status: "waiting_payment", amount: summary.amount, fee: summary.fee, payableAmount: summary.payableAmount, reviewMode: "manual" }, { status: 201 });
     }
 
@@ -266,7 +265,7 @@ async function insertRecharge(
       payable_amount: input.payableAmount,
       received_amount: 0,
       credited_amount: 0,
-      status: "pending",
+      status: input.channel.reviewMode === "manual" ? "waiting_payment" : "pending",
       client_request_id: input.clientRequestId,
       payment_method: input.channel.code,
       review_mode: input.channel.reviewMode ?? "provider",
