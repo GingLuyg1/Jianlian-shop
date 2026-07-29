@@ -3865,3 +3865,467 @@ test("BEP20 phase 1 private tables and legacy completion RPC use least-privilege
   );
   assert.doesNotMatch(executablePostcheck, /\b(begin|commit|rollback)\s*;/i);
 });
+
+test("BEP20 automatic-settlement readiness audits stay aggregate-only and read-only", () => {
+  const auditPaths = [
+    "docs/audits/20260729-bep20-settlement-migration-history-audit.sql",
+    "docs/audits/20260729-bep20-settlement-schema-permission-audit.sql",
+    "docs/audits/20260729-bep20-settlement-rls-policy-audit.sql",
+    "docs/audits/20260729-bep20-settlement-integrity-audit.sql",
+    "docs/audits/20260729-bep20-settlement-confirmation-time-audit.sql",
+  ];
+  const audits = auditPaths.map((path) => ({ path, source: file(path) }));
+
+  for (const { path, source } of audits) {
+    assert.match(path, /^docs\/audits\//, path);
+    assert.doesNotMatch(path, /^supabase\/migrations\//, path);
+    assert.match(source, /READ-ONLY \/ NO BUSINESS DATA MUTATION/i, path);
+    const executable = source.replace(/--.*$/gm, "");
+    assert.doesNotMatch(
+      executable,
+      /\b(?:insert\s+into|update\s+(?:only\s+)?(?:public\.)?[\w"]+|delete\s+from|merge\s+into|truncate\s+(?:table\s+)?(?:public\.)?[\w"]+|alter\s+(?:table|function|policy|role|schema)|create\s+(?:table|function|or\s+replace\s+function|index|policy|role|schema)|drop\s+(?:table|function|index|policy|role|schema)|grant\s+\w+\s+on|revoke\s+\w+\s+on|call\s+(?:public\.)?[\w"]+\s*\(|do\s+\$|copy\s+(?:public\.)?[\w"]+)\b/i,
+      path,
+    );
+    assert.doesNotMatch(executable, /\bcopy\b/i, path);
+    assert.doesNotMatch(executable, /\b(?:begin|commit|rollback)\s*;/i, path);
+    assert.doesNotMatch(
+      executable,
+      /\bselect\s+(?:public\.)?(?:settle_bep20_automatic_overpayment|credit_bep20_overpayment_to_wallet|settle_bep20_underpayment_to_wallet|complete_payment_session|release_order_inventory|cancel_unpaid_order|begin_bep20_payment_completion|prepare_bep20_payment_completion|finish_bep20_payment_completion)\s*\(/i,
+      path,
+    );
+    assert.doesNotMatch(
+      executable,
+      /jsonb_build_object\(\s*'(?:tx_hash|wallet_address|user_id|email|phone|operator_id|session_id|order_no)'/i,
+      path,
+    );
+    assert.doesNotMatch(
+      executable,
+      /\bas\s+(?:tx_hash|wallet_address|user_id|email|phone|operator_id|session_id|order_no)\b/i,
+      path,
+    );
+  }
+
+  const history = audits[0].source;
+  assert.match(history, /supabase_migrations\.schema_migrations/);
+  for (const version of [
+    "20260727",
+    "20260728",
+    "20260729",
+    "20260730",
+    "20260728230700",
+  ]) {
+    assert.match(history, new RegExp(version));
+  }
+  assert.match(history, /\brecorded\b/);
+  assert.match(history, /\bschema_evidence_present\b/);
+  assert.match(history, /HISTORY_SCHEMA_DRIFT/);
+  assert.match(history, /to_regclass/);
+  assert.match(history, /to_regprocedure/);
+  assert.match(history, /phase_one_table_acl_contract_met/);
+  assert.match(history, /begin_completion_public_execute/);
+  assert.match(history, /begin_completion_anon_execute/);
+  assert.match(history, /begin_completion_authenticated_execute/);
+  assert.match(history, /begin_completion_service_role_execute/);
+  assert.match(
+    history,
+    /when '20260728230700' then false[\s\S]*?schema_evidence_can_identify_migration/i,
+  );
+  assert.match(
+    history,
+    /when '20260727' then false[\s\S]*?schema_evidence_can_identify_migration/i,
+  );
+  for (const evidence of [
+    "automatic_settlement_exact_signature_exists",
+    "current_wallet_credit_signature_exists",
+    "legacy_wallet_credit_signature_exists",
+    "settlement_source_column_exists",
+    "settlement_source_check_contract_exists",
+    "account_recharge_transaction_reference_exists",
+    "max_auto_overpayment_usdt_setting_exists",
+    "max_auto_overpayment_ratio_setting_exists",
+  ]) {
+    assert.match(history, new RegExp(`\\b${evidence}\\b`));
+  }
+  assert.match(history, /PARTIAL_SCHEMA_EVIDENCE/);
+  assert.doesNotMatch(
+    history,
+    /when '20260727' then true[\s\S]*?schema_evidence_can_identify_migration/i,
+  );
+
+  const schema = audits[1].source;
+  for (const field of [
+    "owner",
+    "security_definer",
+    "search_path_public",
+    "source_hash",
+    "public_execute",
+    "anon_execute",
+    "authenticated_execute",
+    "service_role_execute",
+    "unexpected_execute_grantee_count",
+    "missing_expected_execute_grantee_count",
+    "unexpected_client_column_acl_count",
+    "public_can_update_profiles_balance",
+    "anon_can_update_profiles_balance",
+    "authenticated_can_update_profiles_balance",
+    "service_role_can_update_profiles_balance",
+    "profiles_balance_acl_status",
+    "function_contract_status",
+    "expected_owner",
+    "owner_matches_contract",
+    "constraint_summary",
+    "index_summary",
+  ]) {
+    assert.match(schema, new RegExp(`\\b${field}\\b`, "i"));
+  }
+  assert.match(schema, /pg_catalog\.aclexplode/);
+  assert.match(schema, /acl\.grantee = 0/);
+  assert.match(schema, /acl\.grantee <> p\.proowner/);
+  assert.match(schema, /has_column_privilege/);
+  assert.match(schema, /relrowsecurity/);
+  assert.match(schema, /\brisk_setting_shape\b/);
+  assert.match(schema, /\bvalue_is_null\b/);
+  assert.match(schema, /\bvalue_is_positive\b/);
+  assert.match(schema, /\bvalue_json_type\b/);
+  assert.match(schema, /to_jsonb\(ss\.setting_value\)/);
+  assert.match(schema, /\bsetting_value_udt_name\b/);
+  assert.match(schema, /jsonb_typeof\(normalized\.setting_json\) = 'number'/);
+  assert.match(schema, /jsonb_typeof\(normalized\.setting_json -> 'value'\) = 'number'/);
+  assert.match(
+    schema,
+    /p\.oid is null and tf\.expected_state in \([\s\S]*?then null::bigint/i,
+  );
+  assert.match(schema, /then 'MISSING_FUNCTION'/);
+  assert.match(
+    schema,
+    /'service_role_execute', 'postgres'[\s\S]*?owner_matches_contract is not true[\s\S]*?then 'REVIEW_REQUIRED'/i,
+  );
+  assert.match(schema, /policy_helper_review','trigger_function_review'[\s\S]*?then 'MANUAL_REVIEW'/i);
+  assert.match(
+    schema,
+    /expected_state like 'expected_absent%' and fc\.oid is null[\s\S]*?then 'PASS'/i,
+  );
+  assert.match(
+    schema,
+    /expected_state like 'expected_absent%' and fc\.oid is not null[\s\S]*?then 'REVIEW_REQUIRED'/i,
+  );
+  assert.match(
+    schema,
+    /service_role_can_update_profiles_balance[\s\S]*?is null[\s\S]*?NOT_CHECKED_MISSING_OBJECTS/i,
+  );
+  assert.match(
+    schema,
+    /or not \(select service_role_can_update_profiles_balance[\s\S]*?then 'REVIEW_REQUIRED'/i,
+  );
+  assert.doesNotMatch(schema, /\bconfigured_value\b/);
+  assert.doesNotMatch(schema, /pg_get_functiondef/i);
+
+  const rlsPolicy = audits[2].source;
+  assert.equal(
+    rlsPolicy.split(/\r?\n/, 1)[0],
+    "-- READ-ONLY / NO BUSINESS DATA MUTATION",
+  );
+  for (const table of [
+    "account_recharges",
+    "admin_audit_logs",
+    "balance_transactions",
+    "order_payments",
+    "order_status_logs",
+    "orders",
+    "payment_sessions",
+    "profiles",
+    "site_setting_logs",
+    "site_settings",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`'${table}'`));
+  }
+  for (const role of ["PUBLIC", "anon", "authenticated", "service_role"]) {
+    assert.match(rlsPolicy, new RegExp(`'${role}'`, "i"));
+    for (const privilege of [
+      "select",
+      "insert",
+      "update",
+      "delete",
+      "truncate",
+      "references",
+      "trigger",
+      "maintain",
+    ]) {
+      assert.match(rlsPolicy, new RegExp(`\\b${role}_${privilege}\\b`, "i"));
+    }
+  }
+  assert.match(rlsPolicy, /pg_catalog\.pg_policy|pg_policies/i);
+  for (const field of [
+    "table_exists",
+    "owner",
+    "rls_enabled",
+    "rls_forced",
+    "table_acl_summary",
+    "client_column_acl_summary",
+    "policy_count",
+    "public_applicable_write_policy_count",
+    "anon_applicable_insert_policy_count",
+    "anon_applicable_update_policy_count",
+    "anon_applicable_delete_policy_count",
+    "authenticated_applicable_insert_policy_count",
+    "authenticated_applicable_update_policy_count",
+    "authenticated_applicable_delete_policy_count",
+    "all_policy_count",
+    "insert_update_policy_without_with_check_count",
+    "update_delete_policy_without_using_count",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`\\b${field}\\b`, "i"));
+  }
+  assert.match(rlsPolicy, /\bpolqual\b/);
+  assert.match(rlsPolicy, /\bpolwithcheck\b/);
+  assert.match(rlsPolicy, /\bqual_hash\b/);
+  assert.match(rlsPolicy, /\bwith_check_hash\b/);
+  assert.match(rlsPolicy, /0::oid = any\(pc\.polroles\)/i);
+  assert.match(rlsPolicy, /pg_catalog\.pg_default_acl/);
+  assert.match(rlsPolicy, /client_column_acl_summary/);
+  for (const assessment of [
+    "MISSING_TABLE",
+    "RLS_DISABLED",
+    "CLIENT_TRUNCATE_OR_DDL_LIKE_PRIVILEGE",
+    "CLIENT_WRITE_GRANT_WITH_APPLICABLE_POLICY",
+    "CLIENT_WRITE_GRANT_WITHOUT_APPLICABLE_POLICY",
+    "CLIENT_READ_ONLY",
+    "SERVICE_ROLE_ONLY",
+    "REVIEW_REQUIRED",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`'${assessment}'`));
+  }
+  for (const field of [
+    "max_auto_overpayment_usdt_record_exists",
+    "max_auto_overpayment_usdt_value_is_null",
+    "max_auto_overpayment_usdt_value_is_positive",
+    "max_auto_overpayment_ratio_record_exists",
+    "max_auto_overpayment_ratio_value_is_null",
+    "max_auto_overpayment_ratio_value_is_positive",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`\\b${field}\\b`));
+  }
+  for (const status of [
+    "FAIL_CLOSED",
+    "CONFIGURED_POSITIVE",
+    "MISSING_SETTING",
+    "UNEXPECTED_TYPE",
+  ]) {
+    assert.match(rlsPolicy, new RegExp(`'${status}'`));
+  }
+  assert.match(rlsPolicy, /to_jsonb\(ss\.setting_value\)/);
+  assert.doesNotMatch(
+    rlsPolicy,
+    /\b(?:configured_value|actual_value|setting_value_output)\b/i,
+  );
+
+  const integrity = audits[3].source;
+  for (const summary of [
+    "null_chain_session_ownership_count",
+    "null_chain_transaction_ownership_count",
+    "null_chain_claim_ownership_count",
+    "null_payment_link_ownership_count",
+    "null_ownership_reference_count",
+    "null_or_negative_log_index_count",
+    "null_confirmation_count",
+    "missing_expected_snapshot_count",
+    "missing_confirmed_evidence_amount_count",
+    "missing_order_payment_received_amount_count",
+    "payment_amount_currency_snapshot_mismatch_count",
+    "incomplete_deadline_count",
+    "cross_business_transaction_reference_conflict_count",
+    "claim_without_unique_transaction_count",
+    "transaction_without_claim_count",
+    "multiple_transactions_per_chain_reference_count",
+    "claim_transaction_ownership_mismatch_count",
+    "disposition_missing_business_link_count",
+    "duplicate_ledger_or_disposition_business_key_count",
+    "credited_balance_with_inconsistent_terminal_state_count",
+    "payment_classification_overlap_count",
+    "manual_review_missing_final_decision_count",
+    "manual_review_missing_any_attempt_count",
+    "manual_review_missing_terminal_attempt_count",
+    "manual_review_decision_attempt_mismatch_count",
+    "manual_review_missing_decision_or_valid_audit_count",
+    "terminal_order_still_in_settlement_state_count",
+  ]) {
+    assert.match(integrity, new RegExp(summary));
+  }
+  assert.match(integrity, /\banomaly_count\b/);
+  assert.match(integrity, /NOT_CHECKED_MISSING_OBJECTS/);
+  assert.match(integrity, /NOT_CHECKED_UNEXPECTED_COLUMN_TYPE/);
+  assert.match(integrity, /\brequired_columns\b/);
+  assert.match(integrity, /information_schema\.columns/);
+  assert.match(integrity, /\bmissing_columns\b/);
+  assert.match(integrity, /\bunexpected_column_types\b/);
+  assert.match(
+    integrity,
+    /missing_confirmed_evidence_amount_count[\s\S]*?submitted_tx_hash[\s\S]*?chain_transactions[\s\S]*?status in \(/i,
+  );
+  assert.match(
+    integrity,
+    /missing_order_payment_received_amount_count[\s\S]*?cps\.status = 'paid'[\s\S]*?op\.status in \('paid','closed'\)/i,
+  );
+  assert.match(
+    integrity,
+    /from public\.chain_transactions tx[\s\S]*?where not exists \([\s\S]*?from public\.chain_transaction_claims claim/i,
+  );
+  assert.match(
+    integrity,
+    /from public\.chain_transaction_claims claim[\s\S]*?left join lateral[\s\S]*?evidence\.match_count <> 1/i,
+  );
+  assert.match(
+    integrity,
+    /manual_review_missing_final_decision_count[\s\S]*?manual_review_decision is null[\s\S]*?manual_review_decision = 'pending'/i,
+  );
+  assert.match(
+    integrity,
+    /manual_review_missing_terminal_attempt_count[\s\S]*?attempt\.action[\s\S]*?attempt\.result_status in \('succeeded','failed','rejected'\)/i,
+  );
+  assert.match(
+    integrity,
+    /manual_review_decision_attempt_mismatch_count[\s\S]*?approve_late_payment[\s\S]*?reject_late_payment/i,
+  );
+  assert.match(
+    integrity,
+    /disposition_missing_business_link_count[\s\S]*?left join public\.orders[\s\S]*?left join public\.order_payments[\s\S]*?left join public\.chain_payment_sessions[\s\S]*?left join public\.balance_transactions/i,
+  );
+  assert.match(
+    integrity,
+    /null_chain_transaction_ownership_count[\s\S]*?chain_transactions\.order_id[\s\S]*?chain_payment_session_id/i,
+  );
+  assert.match(
+    integrity,
+    /null_chain_claim_ownership_count[\s\S]*?chain_transaction_claims\.order_id[\s\S]*?chain_payment_session_id/i,
+  );
+  assert.match(
+    integrity,
+    /from public\.chain_payment_sessions cps[\s\S]*?(?:join|left join) public\.payment_sessions ps/i,
+  );
+  assert.match(
+    integrity,
+    /from public\.chain_payment_sessions cps[\s\S]*?(?:join|left join) public\.order_payments op/i,
+  );
+  assert.match(
+    integrity,
+    /duplicate_ledger_or_disposition_business_key_count[\s\S]*?metadata ->> 'subtype'[\s\S]*?bep20_overpayment_dispositions[\s\S]*?bep20_underpayment_dispositions/i,
+  );
+
+  const confirmation = audits[4].source;
+  for (const summary of [
+    "confirmation_count_below_12_count",
+    "confirmation_count_equal_12_count",
+    "confirmation_count_above_12_count",
+    "distinct_chain_session_count",
+    "multiple_transactions_per_session_count",
+    "session_timing_evidence_status",
+    "confirmed_at_null_count",
+    "confirmed_to_created_seconds_minimum",
+    "confirmed_to_created_seconds_maximum",
+    "confirmed_to_created_seconds_average",
+    "confirmed_before_created_count",
+    "confirmed_to_block_seconds_minimum",
+    "confirmed_to_block_seconds_maximum",
+    "confirmed_to_block_seconds_average",
+    "confirmed_before_block_count",
+    "created_before_confirmation_threshold_but_backfilled_count",
+    "historical_required_confirmation_threshold",
+    "confirmation_setting_exists",
+    "confirmation_setting_is_null",
+    "confirmation_setting_json_types",
+  ]) {
+    assert.match(confirmation, new RegExp(summary));
+  }
+  assert.match(confirmation, /historical_required_confirmation_threshold', 'unknown'/);
+  assert.match(confirmation, /configuration_value_exposed', false/);
+  assert.match(confirmation, /then 'NO_DATA'/);
+  assert.match(
+    confirmation,
+    /multiple_transactions_per_session_count\/text\(\)[\s\S]*?> 0[\s\S]*?confirmed_before_created_count\/text\(\)[\s\S]*?> 0[\s\S]*?confirmed_before_block_count\/text\(\)[\s\S]*?> 0[\s\S]*?then 'REVIEW_REQUIRED'/i,
+  );
+  assert.match(confirmation, /settings_key_column_exists/);
+  assert.match(confirmation, /settings_value_column_exists/);
+  for (const requiredColumn of [
+    "chain_payment_session_id",
+    "confirmation_count",
+    "created_at",
+    "block_timestamp",
+    "confirmed_at",
+    "setting_key",
+    "setting_value",
+  ]) {
+    assert.match(confirmation, new RegExp(`'${requiredColumn}'`));
+  }
+  assert.match(confirmation, /confirmation_missing_columns/);
+  assert.match(confirmation, /confirmation_unexpected_column_types/);
+  assert.match(confirmation, /settings_value_udt_name/);
+  assert.match(confirmation, /to_jsonb\(setting_value\)/);
+  assert.match(confirmation, /NOT_CHECKED_UNEXPECTED_COLUMN_TYPE/);
+  assert.doesNotMatch(confirmation, /setting_value\s*->>\s*'value'/i);
+});
+
+test("BEP20 automatic-settlement readiness runbook preserves the two-stage read-only gate", () => {
+  const runbook = file("docs/bep20-automatic-settlement-readiness-runbook.md");
+
+  assert.match(runbook, /Jianlian-shop-test/);
+  assert.match(runbook, /czuoivbfxzachiobdohw/);
+  assert.match(runbook, /Jianlian-shop/);
+  assert.match(runbook, /qvbovrvybirscaurwuov/);
+  const schemaAuditPosition = runbook.indexOf(
+    "20260729-bep20-settlement-schema-permission-audit.sql",
+  );
+  const rlsPolicyAuditPosition = runbook.indexOf(
+    "20260729-bep20-settlement-rls-policy-audit.sql",
+  );
+  const integrityAuditPosition = runbook.indexOf(
+    "20260729-bep20-settlement-integrity-audit.sql",
+  );
+  assert.ok(
+    schemaAuditPosition >= 0
+      && rlsPolicyAuditPosition > schemaAuditPosition
+      && integrityAuditPosition > rlsPolicyAuditPosition,
+    "RLS policy audit must run after schema audit and before integrity audit",
+  );
+  assert.match(runbook, /CONFIGURED_POSITIVE/);
+  assert.match(runbook, /\u5ba2\u6237\u7aef\u5199 ACL/);
+  assert.match(runbook, /\u4e0d\u8fd0\u884c\u5b8c\u6574\u6027\u5ba1\u8ba1/);
+  assert.match(runbook, /每次只.*一个脚本/);
+  assert.match(runbook, /测试项目五份结果全部审查通过后/);
+  assert.match(runbook, /自动结算必须继续保持 \*\*Disabled\*\*/);
+  assert.match(runbook, /不运行任何 Migration/);
+  const flowSection = runbook.match(/本流程：([\s\S]*?)\n## /)?.[1] ?? "";
+  const flowItems = flowSection.split(/\r?\n/).filter((line) => /^-\s+/.test(line));
+  assert.ok(flowItems.length > 0, "本流程 must contain prohibition list items");
+  for (const item of flowItems) {
+    assert.match(item, /^-\s+(?:不|不得)/, `本流程 item must be prohibitive: ${item}`);
+  }
+
+  const forbiddenSection = runbook.match(/## 明确禁止([\s\S]*?)(?:\n## |\s*$)/)?.[1] ?? "";
+  const forbiddenItems = forbiddenSection.split(/\r?\n/).filter((line) => /^-\s+/.test(line));
+  assert.ok(forbiddenItems.length > 0, "明确禁止 must contain prohibition list items");
+  for (const item of forbiddenItems) {
+    assert.match(item, /^-\s+(?:不|不得)/, `明确禁止 item must be prohibitive: ${item}`);
+  }
+
+  for (const dangerousCommand of [
+    "supabase db push",
+    "migration up",
+    "migration repair",
+    "db reset --linked",
+  ]) {
+    const matchingLines = runbook
+      .split(/\r?\n/)
+      .filter((line) => line.includes(dangerousCommand));
+    assert.ok(matchingLines.length > 0, `${dangerousCommand} must be documented`);
+    for (const line of matchingLines) {
+      assert.match(
+        line,
+        /不执行|不使用|禁止/,
+        `${dangerousCommand} must appear only in a prohibition`,
+      );
+    }
+  }
+  assert.match(runbook, /不配置自动超额/);
+  assert.match(runbook, /不部署、不建立 Cron/);
+  assert.match(runbook, /不得现场编写或运行修复 SQL/);
+});
