@@ -4084,8 +4084,66 @@ test("account recharge creation fails closed and writes with the standard servic
   assert.match(route, /code\?: string \}\)\.code === "23505"/);
 });
 
-test("account recharge forward-fix revokes every direct client INSERT ACL only", () => {
+test("account recharge list exposes only stable safe diagnostics", () => {
+  const utilities = file("lib/payments/recharge-utils.ts");
   const route = file("app/api/recharges/route.ts");
+  const page = file("components/account/AccountRechargeContent.tsx");
+  const schemaClassifier = utilities.slice(
+    utilities.indexOf("export function isPaymentSchemaUnavailable"),
+    utilities.indexOf("export function normalizeChannelRow"),
+  );
+  const listFailure = route.slice(
+    route.indexOf("function rechargeListFailure"),
+    route.indexOf("function generateRechargeNo"),
+  );
+
+  assert.match(utilities, /export function classifyRechargeDatabaseError\(error: unknown\)/);
+  assert.match(
+    utilities,
+    /code === "42501" \|\| \/permission denied\/i\.test\(message\)[\s\S]{0,220}RECHARGE_DB_PERMISSION_DENIED/,
+  );
+  assert.match(
+    utilities,
+    /code === "42P01" \|\| code === "PGRST205"[\s\S]{0,240}RECHARGE_DB_TABLE_MISSING/,
+  );
+  assert.match(
+    utilities,
+    /code === "42703"[\s\S]{0,180}RECHARGE_DB_COLUMN_MISSING/,
+  );
+  assert.match(
+    utilities,
+    /\/schema cache\/i\.test\(message\)[\s\S]{0,200}RECHARGE_DB_SCHEMA_CACHE_STALE/,
+  );
+  assert.match(
+    utilities,
+    /return \{\s*code: "RECHARGE_DB_QUERY_FAILED",\s*message: "充值记录读取失败"/,
+  );
+  assert.doesNotMatch(schemaClassifier, /account_recharges|payment_channels/);
+
+  assert.match(route, /catch \(error\) \{\s*return rechargeListFailure\(error\);\s*\}/);
+  assert.match(listFailure, /const requestId = randomUUID\(\)/);
+  assert.match(listFailure, /const diagnostic = classifyRechargeDatabaseError\(error\)/);
+  assert.match(
+    listFailure,
+    /console\.error\(\s*"\[Recharge API\]",[\s\S]*requestId=\$\{requestId\}[\s\S]*code=\$\{diagnostic\.code\}[\s\S]*getPaymentErrorMessage/,
+  );
+  assert.match(
+    listFailure,
+    /error: diagnostic\.message,\s*code: diagnostic\.code,\s*requestId/,
+  );
+  assert.doesNotMatch(listFailure, /error:\s*getPaymentErrorMessage/);
+  assert.doesNotMatch(route, /permission denied/i);
+
+  assert.match(page, /type RechargeListError = \{[\s\S]*message: string;[\s\S]*code: string;[\s\S]*requestId: string;/);
+  assert.match(page, /诊断码：\{error\.code\}/);
+  assert.match(page, /诊断编号：\{error\.requestId\}/);
+  assert.match(page, /disabled=\{loading\}/);
+  assert.match(page, /\{loading \? "正在重新加载…" : "重新加载"\}/);
+  assert.match(page, /result\?\.code \?\? "RECHARGE_DB_QUERY_FAILED"/);
+  assert.match(page, /result\?\.requestId \?\? "未生成"/);
+});
+
+test("account recharge forward-fix revokes every direct client INSERT ACL only", () => {
   const migration = file(
     "supabase/migrations/20260729143000_account_recharge_service_write_hardening.sql",
   );
@@ -4104,10 +4162,28 @@ test("account recharge forward-fix revokes every direct client INSERT ACL only",
     "bd2bb37cbdb5a3e06d7ac8718455dcf2ad8ec8c4af40235ed3a0184d58882463",
     "the 20260729143000 Migration must remain byte-for-byte unchanged",
   );
-  assert.equal(
-    createHash("sha256").update(route).digest("hex"),
-    "fbbcaac02a044f609bc3cfd4fe19ab3c18522ec1c09d4777e0e43206e1949265",
-    "the service-write route must remain byte-for-byte unchanged in this follow-up",
+  assert.deepEqual(
+    readdirSync(join(root, "supabase/migrations"))
+      .filter((name) => /^20260729.*\.sql$/.test(name))
+      .sort(),
+    [
+      "20260729135500_account_recharge_schema_compatibility.sql",
+      "20260729140000_client_privilege_hardening_phase1.sql",
+      "20260729143000_account_recharge_service_write_hardening.sql",
+      "20260729_bep20_underpayment_manual_early_confirmation.sql",
+    ],
+    "safe diagnostics must not add a Migration",
+  );
+  assert.deepEqual(
+    readdirSync(join(root, "docs/audits"))
+      .filter((name) => /^20260729.*\.sql$/.test(name))
+      .sort(),
+    [
+      "20260729-account-recharge-schema-compatibility-postcheck.sql",
+      "20260729-account-recharge-service-write-postcheck.sql",
+      "20260729-client-privilege-hardening-phase1-postcheck.sql",
+    ],
+    "safe diagnostics must not add an audit SQL file",
   );
   assert.match(migration, /^begin;/m);
   assert.match(migration, /^commit;/m);

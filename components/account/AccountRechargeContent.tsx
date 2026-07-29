@@ -19,6 +19,20 @@ import { cn } from "@/lib/utils";
 
 type RecordTab = "recharge" | "funds";
 
+type RechargeListError = {
+  message: string;
+  code: string;
+  requestId: string;
+};
+
+type RechargeListResponse = {
+  data?: RechargeRecord[];
+  count?: number;
+  error?: string;
+  code?: string;
+  requestId?: string;
+};
+
 type BalanceTransactionRecord = {
   transactionNo: string;
   businessType: string;
@@ -56,7 +70,7 @@ export default function AccountRechargeContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [records, setRecords] = useState<RechargeRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(true);
-  const [recordsError, setRecordsError] = useState<string | null>(null);
+  const [recordsError, setRecordsError] = useState<RechargeListError | null>(null);
   const [recordPage, setRecordPage] = useState(1);
   const [recordCount, setRecordCount] = useState(0);
   const [fundRecords, setFundRecords] = useState<BalanceTransactionRecord[]>([]);
@@ -79,17 +93,28 @@ export default function AccountRechargeContent() {
 
   const loadRecords = useCallback(async (page: number) => {
     setRecordsLoading(true);
-    setRecordsError(null);
     try {
       const response = await fetch(`/api/recharges?page=${page}&pageSize=10`, { cache: "no-store" });
       const result = (await response.json().catch(() => null)) as
-        | { data?: RechargeRecord[]; count?: number; error?: string }
+        | RechargeListResponse
         | null;
-      if (!response.ok) throw new Error(result?.error ?? "充值记录加载失败，请稍后重试");
+      if (!response.ok) {
+        setRecordsError({
+          message: result?.error ?? "充值记录加载失败，请稍后重试",
+          code: result?.code ?? "RECHARGE_DB_QUERY_FAILED",
+          requestId: result?.requestId ?? "未生成",
+        });
+        return;
+      }
       setRecords(result?.data ?? []);
       setRecordCount(result?.count ?? 0);
-    } catch (error) {
-      setRecordsError(getClientErrorMessage(error, "充值记录加载失败，请稍后重试"));
+      setRecordsError(null);
+    } catch {
+      setRecordsError({
+        message: "充值记录加载失败，请稍后重试",
+        code: "RECHARGE_DB_QUERY_FAILED",
+        requestId: "未生成",
+      });
     } finally {
       setRecordsLoading(false);
     }
@@ -535,14 +560,19 @@ function RecordLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RechargeRecords({ records, loading, error, page, count, onRetry, onPageChange, onProofSubmitted }: { records: RechargeRecord[]; loading: boolean; error: string | null; page: number; count: number; onRetry: () => void; onPageChange: (page: number) => void; onProofSubmitted: () => void }) {
+function RechargeRecords({ records, loading, error, page, count, onRetry, onPageChange, onProofSubmitted }: { records: RechargeRecord[]; loading: boolean; error: RechargeListError | null; page: number; count: number; onRetry: () => void; onPageChange: (page: number) => void; onProofSubmitted: () => void }) {
   const totalPages = Math.max(1, Math.ceil(count / 10));
-  if (loading) return <div className="mt-6 h-44 animate-pulse rounded-xl bg-slate-100" />;
   if (error) return (
     <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-      <p>{error}</p><Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>重新加载</Button>
+      <p>{error.message}</p>
+      <p className="mt-2 text-xs">诊断码：{error.code}</p>
+      <p className="mt-1 text-xs">诊断编号：{error.requestId}</p>
+      <Button variant="outline" size="sm" className="mt-3" disabled={loading} onClick={onRetry}>
+        {loading ? "正在重新加载…" : "重新加载"}
+      </Button>
     </div>
   );
+  if (loading) return <div className="mt-6 h-44 animate-pulse rounded-xl bg-slate-100" />;
   if (records.length === 0) return (
     <div className="mt-6 flex flex-1 items-center justify-center rounded-xl bg-slate-50 p-6 text-center text-sm text-muted-foreground">
       暂无充值记录

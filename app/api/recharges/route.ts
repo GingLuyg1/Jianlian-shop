@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { calculateRechargeAmounts } from "@/lib/payments/channels";
@@ -5,6 +6,7 @@ import type { PaymentChannel, RechargeStatus } from "@/lib/payments/channel-type
 import { getPaymentProvider } from "@/lib/payments/providers";
 import {
   RECHARGE_STATUSES,
+  classifyRechargeDatabaseError,
   getPaymentErrorMessage,
   isPaymentSchemaUnavailable,
   normalizeChannelRow,
@@ -61,7 +63,7 @@ export async function GET(request: Request) {
       pageSize,
     });
   } catch (error) {
-    return paymentFailure(error, "Recharge records loading failed. Please try again later.", "RECHARGE_LIST_READ_FAILED");
+    return rechargeListFailure(error);
   }
 }
 
@@ -330,6 +332,25 @@ function paymentFailure(error: unknown, fallback: string, code: string) {
       code,
     },
     { status: isPaymentSchemaUnavailable(error) ? 503 : 500 }
+  );
+}
+
+function rechargeListFailure(error: unknown) {
+  const requestId = randomUUID();
+  const diagnostic = classifyRechargeDatabaseError(error);
+  console.error(
+    "[Recharge API]",
+    `requestId=${requestId}`,
+    `code=${diagnostic.code}`,
+    getPaymentErrorMessage(error, "Recharge list query failed")
+  );
+  return NextResponse.json(
+    {
+      error: diagnostic.message,
+      code: diagnostic.code,
+      requestId,
+    },
+    { status: diagnostic.code === "RECHARGE_AUTH_CONTEXT_FAILED" ? 401 : 503 }
   );
 }
 
