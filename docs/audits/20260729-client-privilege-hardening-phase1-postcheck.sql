@@ -247,11 +247,11 @@ assessed as (
         then 'UNEXPECTED_AUTHENTICATED_WRITE_PRIVILEGE'
       when p.table_name = 'profiles'
         and (
-          p.profiles_display_name_update is distinct from true
-          or p.profiles_phone_update is distinct from true
-          or p.profiles_recipient_name_update is distinct from true
-          or p.profiles_shipping_address_update is distinct from true
-          or p.profiles_avatar_url_update is distinct from true
+          p.profiles_display_name_update is false
+          or p.profiles_phone_update is false
+          or p.profiles_recipient_name_update is false
+          or p.profiles_shipping_address_update is false
+          or p.profiles_avatar_url_update is false
           or p.profiles_sensitive_column_abnormal_update_count <> 0
         )
         then 'UNEXPECTED_PROFILE_COLUMN_UPDATE_PRIVILEGE'
@@ -405,29 +405,25 @@ checks as (
       else (
         (
           select count(*)::integer
-          from unnest(
-            array[
-              'display_name',
-              'phone',
-              'recipient_name',
-              'shipping_address',
-              'avatar_url'
-            ]::text[]
-          ) expected(attname)
-          where not exists (
-            select 1
-            from pg_catalog.pg_attribute a
-            where a.attrelid = o.table_oid
-              and a.attnum > 0
-              and not a.attisdropped
-              and a.attname = expected.attname
-              and has_column_privilege(
-                'authenticated',
-                o.table_oid,
-                a.attnum,
-                'UPDATE'
-              )
-          )
+          from pg_catalog.pg_attribute a
+          where a.attrelid = o.table_oid
+            and a.attnum > 0
+            and not a.attisdropped
+            and a.attname = any (
+              array[
+                'display_name',
+                'phone',
+                'recipient_name',
+                'shipping_address',
+                'avatar_url'
+              ]::text[]
+            )
+            and not has_column_privilege(
+              'authenticated',
+              o.table_oid,
+              a.attnum,
+              'UPDATE'
+            )
         )
         + (
           select count(*)::integer
