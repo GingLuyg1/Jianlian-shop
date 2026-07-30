@@ -4151,14 +4151,15 @@ test("account recharge forward-fix revokes every direct client INSERT ACL only",
   const previousMigration = file(
     "supabase/migrations/20260729140000_client_privilege_hardening_phase1.sql",
   );
+  const canonicalize = (value) => value.replace(/\r\n?/g, "\n");
 
   assert.equal(
-    createHash("sha256").update(previousMigration).digest("hex"),
+    createHash("sha256").update(canonicalize(previousMigration)).digest("hex"),
     "b5dc8942aecb8132677aed36428fa44c51f92686dc93b0635a8beace0bf398f7",
     "the already-merged 20260729140000 Migration must remain byte-for-byte unchanged",
   );
   assert.equal(
-    createHash("sha256").update(migration).digest("hex"),
+    createHash("sha256").update(canonicalize(migration)).digest("hex"),
     "bd2bb37cbdb5a3e06d7ac8718455dcf2ad8ec8c4af40235ed3a0184d58882463",
     "the 20260729143000 Migration must remain byte-for-byte unchanged",
   );
@@ -4529,4 +4530,342 @@ test("client privilege hardening phase 1 runbook keeps execution test-only and d
   assert.match(runbook, /site_settings.*authenticated INSERT\/UPDATE 暂时保留/);
   assert.match(runbook, /不是最终权限状态/);
   assert.match(runbook, /不得据此开启自动结算/);
+});
+
+test("account recharge production database precheck is read-only and fail-closed", () => {
+  const precheckPath =
+    "docs/audits/20260730-account-recharge-production-readonly-precheck.sql";
+  assert.equal(existsSync(join(root, precheckPath)), true);
+
+  const precheck = file(precheckPath);
+  const executable = precheck
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/--[^\r\n]*/g, "");
+
+  assert.equal(
+    precheck.split(/\r?\n/, 1)[0],
+    "-- READ-ONLY / NO BUSINESS DATA MUTATION",
+  );
+  assert.match(executable, /^\s*begin\s*;/im);
+  assert.match(executable, /^\s*set\s+transaction\s+read\s+only\s*;/im);
+  assert.match(executable, /^\s*set\s+local\s+lock_timeout\s*=/im);
+  assert.match(executable, /^\s*set\s+local\s+statement_timeout\s*=/im);
+  assert.match(
+    executable,
+    /^\s*set\s+local\s+idle_in_transaction_session_timeout\s*=/im,
+  );
+  assert.match(executable, /^\s*rollback\s*;/im);
+
+  assert.doesNotMatch(
+    executable,
+    /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy|vacuum|analyze|refresh)\b/im,
+  );
+  assert.doesNotMatch(executable, /\bsecurity\s+definer\b/i);
+  assert.doesNotMatch(
+    executable,
+    /\b(?:pg_terminate_backend|pg_cancel_backend|setval|nextval)\s*\(/i,
+  );
+
+  for (const column of [
+    "id",
+    "user_id",
+    "recharge_no",
+    "channel_code",
+    "amount",
+    "payable_amount",
+    "credited_amount",
+    "received_amount",
+    "status",
+    "client_request_id",
+    "completed_at",
+    "paid_at",
+    "provider_trade_no",
+    "transaction_reference",
+    "created_at",
+    "updated_at",
+    "customer_note",
+    "payment_method",
+    "review_mode",
+    "review_reason",
+  ]) {
+    assert.match(precheck, new RegExp(`['"]${column}['"]`, "i"));
+  }
+
+  const expectedStatuses = [
+    "pending",
+    "waiting_payment",
+    "submitted",
+    "reviewing",
+    "approved",
+    "processing",
+    "succeeded",
+    "failed",
+    "rejected",
+    "cancelled",
+    "expired",
+    "paid",
+    "closed",
+    "refunded",
+  ];
+  for (const status of expectedStatuses) {
+    assert.match(precheck, new RegExp(`['"]${status}['"]`, "i"));
+  }
+  const allowedStatusBlock = precheck.match(
+    /allowed_statuses\s*\([^)]*\)\s+as\s*\(\s*values([\s\S]*?)\n\),\ntarget_columns/i,
+  )?.[1] ?? "";
+  const allowedStatusValues = [
+    ...allowedStatusBlock.matchAll(/\('([^']+)'::text\)/g),
+  ].map((match) => match[1]);
+  assert.deepEqual(allowedStatusValues, expectedStatuses);
+  assert.equal(new Set(allowedStatusValues).size, expectedStatuses.length);
+
+  const dynamicStatusQuery =
+    precheck.match(/\$status_query\$([\s\S]*?)\$status_query\$/)?.[1] ?? "";
+  const dynamicAllowedBlock =
+    dynamicStatusQuery.match(
+      /where\s+status_value\s+not\s+in\s*\(([\s\S]*?)\)\s*\)/i,
+    )?.[1] ?? "";
+  const dynamicAllowedStatuses = [
+    ...dynamicAllowedBlock.matchAll(/'([^']+)'/g),
+  ].map((match) => match[1]);
+  assert.deepEqual(dynamicAllowedStatuses, expectedStatuses);
+  assert.equal(new Set(dynamicAllowedStatuses).size, expectedStatuses.length);
+
+  const dynamicWriteStatement =
+    /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy|vacuum|analyze|refresh)\b/im;
+  for (const queryTag of [
+    "status_query",
+    "idempotency_query",
+    "channel_query",
+  ]) {
+    const dynamicQuery =
+      precheck.match(
+        new RegExp(`\\$${queryTag}\\$([\\s\\S]*?)\\$${queryTag}\\$`, "i"),
+      )?.[1] ?? "";
+    const executableDynamicQuery = dynamicQuery
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/--[^\r\n]*/g, "")
+      .trim();
+    assert.notEqual(executableDynamicQuery, "");
+    assert.match(executableDynamicQuery, /^(?:select|with)\b/i);
+    assert.doesNotMatch(executableDynamicQuery, dynamicWriteStatement);
+  }
+
+  assert.match(precheck, /status_counts/);
+  assert.match(precheck, /invalid_status_count/);
+  assert.match(precheck, /nonempty_client_request_count/);
+  assert.match(precheck, /duplicate_client_request_group_count/);
+  assert.match(precheck, /duplicate_client_request_record_count/);
+  assert.match(precheck, /pg_catalog\.pg_constraint/);
+  assert.match(precheck, /pg_catalog\.pg_get_constraintdef/);
+  assert.match(precheck, /account_recharges_user_client_request_unique/);
+  assert.match(precheck, /conflicting_index_count/);
+  assert.match(precheck, /pg_catalog\.pg_locks/);
+  assert.match(precheck, /pg_catalog\.pg_stat_activity/);
+  const relationActivityBlock =
+    precheck.match(
+      /relation_activity\s+as\s*\(([\s\S]*?)\n\),\nlong_transactions\s+as/i,
+    )?.[1] ?? "";
+  assert.notEqual(relationActivityBlock, "");
+  assert.match(
+    relationActivityBlock,
+    /lock_state\.locktype\s*=\s*'relation'/i,
+  );
+  assert.match(
+    relationActivityBlock,
+    /lock_state\.pid\s*<>\s*pg_catalog\.pg_backend_pid\(\)/i,
+  );
+  assert.match(relationActivityBlock, /lock_state\.granted/i);
+  assert.match(
+    relationActivityBlock,
+    /ddl_conflicting_granted_lock_count/i,
+  );
+  assert.doesNotMatch(relationActivityBlock, /\bmode\s+in\s*\(/i);
+  assert.doesNotMatch(relationActivityBlock, /AccessExclusiveLock/i);
+  assert.doesNotMatch(relationActivityBlock, /ShareRowExclusiveLock/i);
+  assert.match(
+    precheck,
+    /relation\.ungranted_lock_count\s*\+\s*relation\.ddl_conflicting_granted_lock_count\s*\)\s*::integer\s+as\s+active_lock_blocker_count/i,
+  );
+  assert.match(
+    precheck,
+    /relation\.ddl_conflicting_granted_lock_count\s*,\s*relation\.account_recharges_active_session_count/i,
+  );
+  assert.match(precheck, /long_transaction_blocker_count/);
+  assert.match(precheck, /effective_table_acl/);
+  assert.match(precheck, /explicit_column_acl_summary/);
+  assert.match(precheck, /rls_policy_metadata/);
+  assert.match(precheck, /account_recharges_rls_enabled/);
+  assert.match(precheck, /account_recharges_authenticated_insert_retained/);
+  assert.match(precheck, /account_recharges_service_role_insert/);
+  assert.match(precheck, /account_recharges_service_role_update/);
+  assert.match(precheck, /total_channel_count/);
+  assert.match(precheck, /enabled_channel_count/);
+  assert.match(precheck, /configured_channel_count/);
+  assert.match(precheck, /manual_channel_count/);
+  assert.match(precheck, /enabled_configured_channel_count/);
+
+  for (const sensitiveChannelField of [
+    "secret_config",
+    "private_config",
+    "provider_config",
+    "api_key",
+    "access_token",
+    "wallet_address",
+    "payment_address",
+    "qr_code",
+    "merchant_id",
+    "app_id",
+  ]) {
+    assert.doesNotMatch(
+      precheck,
+      new RegExp(`\\b${sensitiveChannelField}\\b`, "i"),
+    );
+  }
+  assert.doesNotMatch(precheck, /\bas\s+(?:user_id|client_request_id)\b/i);
+  assert.doesNotMatch(
+    precheck,
+    /\bselect\s+user_id\s*,\s*(?:btrim\s*\()?client_request_id\b/i,
+  );
+
+  for (const summaryField of [
+    "schema_blocker_count",
+    "invalid_status_count",
+    "duplicate_client_request_group_count",
+    "conflicting_index_count",
+    "missing_role_count",
+    "rls_blocker_count",
+    "acl_blocker_count",
+    "active_lock_blocker_count",
+    "long_transaction_blocker_count",
+    "activity_visibility_blocker_count",
+    "account_recharges_visibility_blocker_count",
+    "payment_channels_visibility_blocker_count",
+    "assessment",
+  ]) {
+    assert.match(precheck, new RegExp(`\\b${summaryField}\\b`));
+  }
+  const assessmentBlock =
+    precheck.match(
+      /case\s+when\s+summary\.schema_blocker_count[\s\S]*?then\s+'PASS'[\s\S]*?end\s+as\s+assessment/i,
+    )?.[0] ?? "";
+  for (const requiredZeroField of [
+    "schema_blocker_count",
+    "invalid_status_count",
+    "duplicate_client_request_group_count",
+    "conflicting_index_count",
+    "missing_role_count",
+    "rls_blocker_count",
+    "acl_blocker_count",
+    "active_lock_blocker_count",
+    "long_transaction_blocker_count",
+    "activity_visibility_blocker_count",
+    "account_recharges_visibility_blocker_count",
+    "payment_channels_visibility_blocker_count",
+  ]) {
+    assert.match(
+      assessmentBlock,
+      new RegExp(`summary\\.${requiredZeroField}\\s*=\\s*0`, "i"),
+    );
+  }
+  assert.match(precheck, /then 'PASS'/);
+  assert.match(precheck, /else 'BLOCKED'/);
+});
+
+test("account recharge production server precheck exposes no secret values or write actions", () => {
+  const checklistPath =
+    "docs/account-recharge-production-server-readonly-precheck.md";
+  assert.equal(existsSync(join(root, checklistPath)), true);
+
+  const checklist = file(checklistPath);
+  for (const fixedValue of [
+    "/www/jianlian-shop",
+    "jianlian-shop",
+    "3001",
+    "60d05591a21ce9c309e9e440888c86bb6415f960",
+    "qvbovrvybirscaurwuov",
+  ]) {
+    assert.match(checklist, new RegExp(fixedValue.replaceAll("/", "\\/")));
+  }
+
+  for (const variableName of [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_ROLE",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_SECRET",
+    "SUPABASE_SERVICE_KEY",
+  ]) {
+    assert.match(checklist, new RegExp(`\\b${variableName}\\b`));
+  }
+  assert.match(checklist, /输出只能为 `PRESENT` 或 `MISSING`/);
+  assert.match(checklist, /不得打印完整 Supabase URL/);
+  assert.match(checklist, /不得打印[\s\S]{0,80}key、JWT、Cookie、Authorization/);
+  assert.match(checklist, /不得将任何环境变量发送到外部接口验证/);
+  assert.match(checklist, /Project ref[\s\S]{0,100}`qvbovrvybirscaurwuov`/);
+  assert.match(checklist, /至少一个为 `PRESENT`/);
+
+  for (const prohibitedAction of [
+    "git pull",
+    "git reset",
+    "npm install",
+    "npm run build",
+    "pm2 restart",
+    "pm2 reload",
+    "pm2 delete",
+    "systemctl restart",
+    "修改环境变量",
+    "修改 Nginx",
+    "修改任何文件",
+    "执行数据库 SQL",
+    "调用充值 POST",
+    "创建测试充值",
+    "部署或切换发布目录",
+  ]) {
+    assert.match(
+      checklist,
+      new RegExp(prohibitedAction.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
+  }
+
+  assert.match(checklist, /当前服务器 Git 分支/);
+  assert.match(checklist, /工作区是否干净/);
+  assert.match(checklist, /磁盘(?:可用)?空间/);
+  assert.match(checklist, /Node\.js 版本/);
+  assert.match(checklist, /npm 版本/);
+  assert.match(checklist, /PM2 cwd/);
+  assert.match(checklist, /restart count/);
+  assert.match(checklist, /3001.*监听/s);
+  assert.match(checklist, /本机 HTTP/);
+  assert.match(checklist, /旧版本备份目录/);
+  assert.match(checklist, /`\.next`/);
+  assert.match(checklist, /当前服务器 commit/);
+  assert.match(checklist, /目标 main commit/);
+  assert.match(checklist, /部署前[\s\S]{0,100}不同[\s\S]{0,80}预期状态/);
+  assert.match(checklist, /不因版本不同单独判定 `BLOCKED`/);
+  assert.match(
+    checklist,
+    /相同[\s\S]{0,100}ALREADY_DEPLOYED_UNEXPECTEDLY[\s\S]{0,100}未记录部署/,
+  );
+  const currentCommitRow =
+    checklist.split(/\r?\n/).find((line) =>
+      line.startsWith("| 当前服务器 commit |")
+    ) ?? "";
+  const targetCommitRow =
+    checklist.split(/\r?\n/).find((line) =>
+      line.startsWith("| 目标 main commit |")
+    ) ?? "";
+  assert.match(currentCommitRow, /记录完整 SHA/);
+  assert.doesNotMatch(
+    currentCommitRow,
+    /60d05591a21ce9c309e9e440888c86bb6415f960/,
+  );
+  assert.match(
+    targetCommitRow,
+    /60d05591a21ce9c309e9e440888c86bb6415f960/,
+  );
+  assert.match(checklist, /PENDING_DEPLOYMENT/);
+  assert.match(checklist, /ALREADY_DEPLOYED_UNEXPECTEDLY/);
+  assert.match(checklist, /检查项 \| 期望值 \| 实际值 \| PASS\/BLOCKED \| 备注/);
 });
