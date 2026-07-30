@@ -4436,10 +4436,10 @@ test("account recharge schema compatibility postcheck is catalog-only and comple
   );
 });
 
-test("account recharge service-write runbook preserves test-only execution order", () => {
+test("account recharge service-write runbook records completed test rollout and preserves production gates", () => {
   const runbook = file("docs/account-recharge-service-write-runbook.md");
   const orderedSection = runbook.slice(
-    runbook.indexOf("## 测试环境变更顺序"),
+    runbook.indexOf("## 测试环境已完成记录"),
     runbook.indexOf("## Postcheck 通过条件"),
   );
   const deployment = orderedSection.indexOf("PR #18 Preview");
@@ -4449,8 +4449,9 @@ test("account recharge service-write runbook preserves test-only execution order
   const compatibilityPostcheck = orderedSection.indexOf(
     "20260729-account-recharge-schema-compatibility-postcheck.sql",
   );
-  const previewRefresh = orderedSection.indexOf("刷新 PR #18 Preview");
-  const manualRecharge = orderedSection.indexOf("创建一笔不付款的 manual 测试充值");
+  const firstManualRecharge = orderedSection.indexOf(
+    "第一笔不付款的 manual 测试充值",
+  );
   const waitingPayment = orderedSection.indexOf("API 返回 `waiting_payment`");
   const phaseOne = orderedSection.indexOf(
     "20260729140000_client_privilege_hardening_phase1.sql",
@@ -4461,41 +4462,51 @@ test("account recharge service-write runbook preserves test-only execution order
   const postcheck = orderedSection.indexOf(
     "20260729-account-recharge-service-write-postcheck.sql",
   );
+  const secondManualRecharge = orderedSection.indexOf(
+    "第二笔不付款的 manual 测试充值",
+  );
+  const cleanupPostcheck = orderedSection.indexOf("Cleanup Postcheck");
 
   assert.match(runbook, /PR #17 已合并/);
-  assert.match(runbook, /尚未在数据库执行/);
-  assert.match(runbook, /修复代码部署前，不可在当前 `main` 测试 manual 充值/);
+  assert.match(runbook, /Jianlian-shop-test/);
   assert.match(runbook, /czuoivbfxzachiobdohw/);
+  assert.match(runbook, /测试环境已经完成并通过/);
+  assert.match(runbook, /正式 Supabase 尚未执行上述 Migration/);
+  assert.match(runbook, /正式数据库未发生本流程相关变更/);
+  assert.match(runbook, /`jianlian\.shop` 尚未部署本 PR/);
+  assert.match(runbook, /自建服务器尚未同步、构建或重启/);
+  assert.match(runbook, /自动结算仍保持关闭/);
+  assert.match(
+    runbook,
+    /任何生产部署、Migration 或 postcheck 执行仍需单独明确授权/,
+  );
   assert.ok(
     deployment >= 0
       && compatibility > deployment
       && compatibilityPostcheck > compatibility
-      && previewRefresh > compatibilityPostcheck
-      && manualRecharge > previewRefresh
-      && waitingPayment > manualRecharge
+      && firstManualRecharge > compatibilityPostcheck
+      && waitingPayment > firstManualRecharge
       && phaseOne > waitingPayment
       && forwardFix > phaseOne
-      && postcheck > forwardFix,
+      && postcheck > forwardFix
+      && secondManualRecharge > postcheck
+      && cleanupPostcheck > secondManualRecharge,
   );
   assert.doesNotMatch(runbook, /应用代码必须在两份权限 Migration 完成后部署/);
   assert.match(
     runbook,
     /先部署 service-role 写入代码，是为了避免撤销 authenticated INSERT 后出现充值创建中断/,
   );
-  assert.match(
-    runbook,
-    /本任务不授权实际部署、Migration 或[\s\S]{0,20}postcheck 执行/,
-  );
   assert.match(runbook, /代码不回退到[\s\S]{0,20}authenticated INSERT/);
-  assert.match(runbook, /每次只执行一个完整文件/);
-  assert.match(runbook, /每一步失败或[\s\S]{0,30}立即停止/);
+  assert.match(runbook, /任一 Migration 或 postcheck 失败时立即停止/);
+  assert.match(runbook, /每次只能执行一个经核对的完整文件/);
+  assert.match(runbook, /不得批量执行 Migration/);
   assert.match(runbook, /不使用 `supabase db push`/);
   assert.match(runbook, /不使用 `supabase migration up`/);
   assert.match(runbook, /不使用 `supabase migration repair`/);
   assert.match(runbook, /不使用 `supabase db reset`/);
-  assert.match(runbook, /不在生产环境执行 Migration 或 postcheck/);
   assert.match(runbook, /不开启或配置自动结算/);
-  assert.match(runbook, /不进行付款、TxHash、审核、余额入账或任何生产财务操作/);
+  assert.match(runbook, /不进行付款、TxHash、审核或余额入账测试/);
 });
 
 test("client privilege hardening phase 1 runbook keeps execution test-only and deferred", () => {
