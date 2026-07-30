@@ -3882,7 +3882,7 @@ test("client privilege hardening phase 1 removes the redundant authenticated rec
     /\.from\("account_recharges"\)\.update\(\{\s*status:\s*"waiting_payment"\s*\}\)/,
   );
   assert.match(route, /const retryRow = \{ \.\.\.row \}/);
-  assert.match(route, /supabase\.from\("account_recharges"\)\.insert\(retryRow\)/);
+  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(retryRow\)/);
 });
 
 test("client privilege hardening phase 1 migration is ACL-only and preserves the exact matrix", () => {
@@ -4050,6 +4050,463 @@ test("client privilege hardening phase 1 postcheck is catalog-only and complete"
     executable,
     /\bfrom\s+(?:public\.)?(?:account_recharges|admin_audit_logs|balance_transactions|order_payments|order_status_logs|orders|payment_sessions|profiles|site_setting_logs|site_settings)\b/i,
   );
+});
+
+test("account recharge creation fails closed and writes with the standard service-role client", () => {
+  const route = file("app/api/recharges/route.ts");
+
+  assert.match(route, /import \{ getSupabaseServiceRoleClient \} from "@\/lib\/supabase\/service-role";/);
+  assert.match(
+    route,
+    /const serviceClient = getSupabaseServiceRoleClient\(\);[\s\S]{0,500}if \(!serviceClient\)[\s\S]{0,500}RECHARGE_SERVICE_UNAVAILABLE[\s\S]{0,200}status: 503/,
+  );
+  assert.match(route, /insertRecharge\(serviceClient,\s*\{/);
+  assert.doesNotMatch(route, /insertRecharge\(context\.supabase,\s*\{/);
+  assert.match(
+    route,
+    /async function insertRecharge\(\s*serviceClient: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>/,
+  );
+  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(row\)/);
+  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(retryRow\)/);
+  assert.doesNotMatch(
+    route,
+    /if \(!serviceClient\)[\s\S]{0,800}(?:context\.supabase|supabase)\.from\("account_recharges"\)\.insert/,
+  );
+  assert.match(
+    route,
+    /status:\s*input\.channel\.reviewMode\s*===\s*"manual"\s*\?\s*"waiting_payment"\s*:\s*"pending"/,
+  );
+  assert.doesNotMatch(
+    route,
+    /\.from\("account_recharges"\)\.update\(\{\s*status:\s*"waiting_payment"\s*\}\)/,
+  );
+  assert.match(route, /delete \(retryRow as Partial<typeof row>\)\.client_request_id/);
+  assert.match(route, /code\?: string \}\)\.code === "23505"/);
+});
+
+test("account recharge list exposes only stable safe diagnostics", () => {
+  const utilities = file("lib/payments/recharge-utils.ts");
+  const route = file("app/api/recharges/route.ts");
+  const page = file("components/account/AccountRechargeContent.tsx");
+  const schemaClassifier = utilities.slice(
+    utilities.indexOf("export function isPaymentSchemaUnavailable"),
+    utilities.indexOf("export function normalizeChannelRow"),
+  );
+  const listFailure = route.slice(
+    route.indexOf("function rechargeListFailure"),
+    route.indexOf("function generateRechargeNo"),
+  );
+
+  assert.match(utilities, /export function classifyRechargeDatabaseError\(error: unknown\)/);
+  assert.match(
+    utilities,
+    /code === "42501" \|\| \/permission denied\/i\.test\(message\)[\s\S]{0,220}RECHARGE_DB_PERMISSION_DENIED/,
+  );
+  assert.match(
+    utilities,
+    /code === "42P01" \|\| code === "PGRST205"[\s\S]{0,240}RECHARGE_DB_TABLE_MISSING/,
+  );
+  assert.match(
+    utilities,
+    /code === "42703"[\s\S]{0,180}RECHARGE_DB_COLUMN_MISSING/,
+  );
+  assert.match(
+    utilities,
+    /\/schema cache\/i\.test\(message\)[\s\S]{0,200}RECHARGE_DB_SCHEMA_CACHE_STALE/,
+  );
+  assert.match(
+    utilities,
+    /return \{\s*code: "RECHARGE_DB_QUERY_FAILED",\s*message: "充值记录读取失败"/,
+  );
+  assert.doesNotMatch(schemaClassifier, /account_recharges|payment_channels/);
+
+  assert.match(route, /catch \(error\) \{\s*return rechargeListFailure\(error\);\s*\}/);
+  assert.match(listFailure, /const requestId = randomUUID\(\)/);
+  assert.match(listFailure, /const diagnostic = classifyRechargeDatabaseError\(error\)/);
+  assert.match(
+    listFailure,
+    /console\.error\(\s*"\[Recharge API\]",[\s\S]*requestId=\$\{requestId\}[\s\S]*code=\$\{diagnostic\.code\}[\s\S]*getPaymentErrorMessage/,
+  );
+  assert.match(
+    listFailure,
+    /error: diagnostic\.message,\s*code: diagnostic\.code,\s*requestId/,
+  );
+  assert.doesNotMatch(listFailure, /error:\s*getPaymentErrorMessage/);
+  assert.doesNotMatch(route, /permission denied/i);
+
+  assert.match(page, /type RechargeListError = \{[\s\S]*message: string;[\s\S]*code: string;[\s\S]*requestId: string;/);
+  assert.match(page, /诊断码：\{error\.code\}/);
+  assert.match(page, /诊断编号：\{error\.requestId\}/);
+  assert.match(page, /disabled=\{loading\}/);
+  assert.match(page, /\{loading \? "正在重新加载…" : "重新加载"\}/);
+  assert.match(page, /result\?\.code \?\? "RECHARGE_DB_QUERY_FAILED"/);
+  assert.match(page, /result\?\.requestId \?\? "未生成"/);
+});
+
+test("account recharge forward-fix revokes every direct client INSERT ACL only", () => {
+  const migration = file(
+    "supabase/migrations/20260729143000_account_recharge_service_write_hardening.sql",
+  );
+  const executable = migration.replace(/--.*$/gm, "");
+  const previousMigration = file(
+    "supabase/migrations/20260729140000_client_privilege_hardening_phase1.sql",
+  );
+
+  assert.equal(
+    createHash("sha256").update(previousMigration).digest("hex"),
+    "b5dc8942aecb8132677aed36428fa44c51f92686dc93b0635a8beace0bf398f7",
+    "the already-merged 20260729140000 Migration must remain byte-for-byte unchanged",
+  );
+  assert.equal(
+    createHash("sha256").update(migration).digest("hex"),
+    "bd2bb37cbdb5a3e06d7ac8718455dcf2ad8ec8c4af40235ed3a0184d58882463",
+    "the 20260729143000 Migration must remain byte-for-byte unchanged",
+  );
+  assert.deepEqual(
+    readdirSync(join(root, "supabase/migrations"))
+      .filter((name) => /^20260729.*\.sql$/.test(name))
+      .sort(),
+    [
+      "20260729135500_account_recharge_schema_compatibility.sql",
+      "20260729140000_client_privilege_hardening_phase1.sql",
+      "20260729143000_account_recharge_service_write_hardening.sql",
+      "20260729_bep20_underpayment_manual_early_confirmation.sql",
+    ],
+    "safe diagnostics must not add a Migration",
+  );
+  assert.deepEqual(
+    readdirSync(join(root, "docs/audits"))
+      .filter((name) => /^20260729.*\.sql$/.test(name))
+      .sort(),
+    [
+      "20260729-account-recharge-schema-compatibility-postcheck.sql",
+      "20260729-account-recharge-service-write-postcheck.sql",
+      "20260729-client-privilege-hardening-phase1-postcheck.sql",
+    ],
+    "safe diagnostics must not add an audit SQL file",
+  );
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /set local search_path = pg_catalog, public;/i);
+  assert.match(migration, /to_regclass\('public\.account_recharges'\)/i);
+  assert.match(
+    migration,
+    /revoke insert on table public\.account_recharges from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /revoke insert \(%s\) on table public\.account_recharges from public, anon, authenticated/i,
+  );
+  assert.match(migration, /pg_catalog\.pg_attribute/);
+  assert.doesNotMatch(executable, /\b(?:grant|revoke)\b[^;\n']*\bservice_role\b/i);
+  assert.doesNotMatch(
+    executable,
+    /\b(?:create|alter|drop)\s+policy\b|\b(?:enable|disable|force)\s+row\s+level\s+security\b/i,
+  );
+  assert.doesNotMatch(executable, /\balter\s+default\s+privileges\b/i);
+  assert.doesNotMatch(
+    executable,
+    /\b(?:insert\s+into|update\s+public\.|delete\s+from|merge\s+into|truncate\s+table)\b/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:call|perform)\s+public\.|\.rpc\s*\(|automatic_settlement|auto_settlement/i,
+  );
+});
+
+test("account recharge service-write postcheck is catalog-only and verifies the retained policy", () => {
+  const postcheck = file(
+    "docs/audits/20260729-account-recharge-service-write-postcheck.sql",
+  );
+  const executable = postcheck.replace(/--.*$/gm, "");
+
+  assert.equal(postcheck.split(/\r?\n/, 1)[0], "-- READ-ONLY / NO BUSINESS DATA MUTATION");
+  for (const field of [
+    "account_recharges_table_exists",
+    "public_insert",
+    "anon_insert",
+    "authenticated_insert",
+    "service_role_insert",
+    "public_column_insert_acl_count",
+    "anon_column_insert_acl_count",
+    "authenticated_column_insert_acl_count",
+    "anon_effective_column_insert_count",
+    "authenticated_effective_column_insert_count",
+    "service_role_update",
+    "rls_enabled",
+    "users_create_policy_exists",
+    "users_create_policy_status_check_is_pending_only",
+    "direct_client_insert_path_status",
+    "assessment",
+  ]) {
+    assert.match(postcheck, new RegExp(`\\b${field}\\b`, "i"));
+  }
+  assert.match(postcheck, /pg_catalog\.pg_class/);
+  assert.match(postcheck, /pg_catalog\.pg_attribute/);
+  assert.match(postcheck, /pg_catalog\.pg_policy/);
+  assert.match(postcheck, /pg_catalog\.pg_get_expr/);
+  assert.match(
+    postcheck,
+    /has_column_privilege\(\s*'anon',\s*o\.table_oid,\s*a\.attnum,\s*'INSERT'\s*\)/i,
+  );
+  assert.match(
+    postcheck,
+    /has_column_privilege\(\s*'authenticated',\s*o\.table_oid,\s*a\.attnum,\s*'INSERT'\s*\)/i,
+  );
+  assert.match(
+    postcheck,
+    /anon_effective_column_insert_count = 0[\s\S]*authenticated_effective_column_insert_count = 0[\s\S]*then 'BLOCKED_BY_ACL'/i,
+  );
+  assert.match(
+    postcheck,
+    /direct_client_insert_path_status = 'BLOCKED_BY_ACL'[\s\S]*anon_effective_column_insert_count = 0[\s\S]*authenticated_effective_column_insert_count = 0[\s\S]*then 'PASS'/i,
+  );
+  assert.match(postcheck, /Users can create own recharge records/);
+  assert.match(postcheck, /BLOCKED_BY_ACL/);
+  assert.match(postcheck, /CLIENT_INSERT_STILL_OPEN/);
+  assert.match(postcheck, /TABLE_MISSING/);
+  assert.doesNotMatch(
+    executable,
+    /^\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy)\b/im,
+  );
+  assert.doesNotMatch(executable, /\b(begin|commit|rollback)\s*;/i);
+  assert.doesNotMatch(executable, /\bfrom\s+(?:public\.)?account_recharges\b/i);
+});
+
+test("account recharge schema compatibility is DDL-only and preserves the exact contract", () => {
+  const migration = file(
+    "supabase/migrations/20260729135500_account_recharge_schema_compatibility.sql",
+  );
+  const executable = migration.replace(/--.*$/gm, "");
+  const statusBody = migration.match(
+    /add constraint account_recharges_status_check[\s\S]*?status in\s*\(([\s\S]*?)\)\s*\)\s*not valid/i,
+  )?.[1];
+  const allowedStatuses = [
+    "pending",
+    "waiting_payment",
+    "submitted",
+    "reviewing",
+    "approved",
+    "processing",
+    "succeeded",
+    "failed",
+    "rejected",
+    "cancelled",
+    "expired",
+    "paid",
+    "closed",
+    "refunded",
+  ];
+
+  assert.match(migration, /^begin;/m);
+  assert.match(migration, /^commit;/m);
+  assert.match(migration, /set local search_path = pg_catalog, public;/i);
+  assert.match(
+    migration,
+    /if v_table_oid is null then[\s\S]*raise exception 'ACCOUNT_RECHARGE_SCHEMA_COMPATIBILITY_MISSING_TABLE'/i,
+  );
+  for (const [column, type] of [
+    ["client_request_id", "text"],
+    ["completed_at", "timestamptz"],
+    ["customer_note", "text"],
+    ["payment_method", "text"],
+    ["review_mode", "text"],
+    ["review_reason", "text"],
+  ]) {
+    assert.match(
+      migration,
+      new RegExp(`add column if not exists ${column} ${type}`, "i"),
+    );
+    assert.doesNotMatch(
+      migration,
+      new RegExp(`add column if not exists ${column} ${type}\\s+not null`, "i"),
+    );
+  }
+  assert.ok(statusBody, "the status CHECK body must be statically discoverable");
+  assert.deepEqual(
+    [...statusBody.matchAll(/'([^']+)'/g)].map((match) => match[1]),
+    allowedStatuses,
+  );
+  assert.match(
+    migration,
+    /c\.contype = 'c'[\s\S]*c\.conkey = array\[v_status_attnum\]::smallint\[\]/i,
+  );
+  assert.match(
+    migration,
+    /alter table public\.account_recharges drop constraint %I/i,
+  );
+  assert.doesNotMatch(
+    migration,
+    /drop constraint if exists account_recharges_status_check/i,
+  );
+  assert.match(migration, /add constraint account_recharges_status_check/i);
+  assert.match(migration, /\)\s*not valid;/i);
+  assert.match(
+    migration,
+    /validate constraint account_recharges_status_check/i,
+  );
+  assert.match(
+    migration,
+    /create unique index account_recharges_user_client_request_unique\s+on public\.account_recharges\(user_id, client_request_id\)/i,
+  );
+  assert.match(
+    migration,
+    /where client_request_id is not null\s+and btrim\(client_request_id\) <> ''/i,
+  );
+  assert.doesNotMatch(
+    migration,
+    /unique index[^;\n]*\(client_request_id\)/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /^\s*(?:insert|update|delete|truncate)\b/im,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:create|alter|drop)\s+policy\b|\brow\s+level\s+security\b/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\b(?:grant|revoke)\b|\balter\s+default\s+privileges\b/i,
+  );
+  assert.doesNotMatch(
+    executable,
+    /\bcall\b|\.rpc\s*\(|automatic_settlement|auto_settlement/i,
+  );
+});
+
+test("account recharge schema compatibility postcheck is catalog-only and complete", () => {
+  const postcheck = file(
+    "docs/audits/20260729-account-recharge-schema-compatibility-postcheck.sql",
+  );
+  const executable = postcheck.replace(/--.*$/gm, "");
+
+  assert.equal(
+    postcheck.split(/\r?\n/, 1)[0],
+    "-- READ-ONLY / NO BUSINESS DATA MUTATION",
+  );
+  for (const catalog of [
+    "pg_catalog.pg_class",
+    "pg_catalog.pg_attribute",
+    "pg_catalog.pg_type",
+    "pg_catalog.pg_constraint",
+    "pg_catalog.pg_index",
+  ]) {
+    assert.match(postcheck, new RegExp(catalog.replace(".", "\\."), "i"));
+  }
+  for (const column of [
+    "client_request_id",
+    "completed_at",
+    "customer_note",
+    "payment_method",
+    "review_mode",
+    "review_reason",
+  ]) {
+    assert.match(postcheck, new RegExp(`\\b${column}_exists\\b`, "i"));
+    assert.match(postcheck, new RegExp(`\\b${column}_udt_name\\b`, "i"));
+    assert.match(postcheck, new RegExp(`\\b${column}_is_nullable\\b`, "i"));
+  }
+  for (const field of [
+    "table_exists",
+    "rls_enabled",
+    "missing_column_count",
+    "wrong_type_count",
+    "unexpected_not_null_count",
+    "status_check_exists",
+    "status_check_is_single_column",
+    "status_check_missing_required_value_count",
+    "status_check_preserves_refunded",
+    "client_request_unique_index_exists",
+    "client_request_unique_index_valid",
+    "client_request_unique_index_is_unique",
+    "client_request_unique_index_column_order_correct",
+    "client_request_unique_index_predicate_correct",
+    "assessment",
+  ]) {
+    assert.match(postcheck, new RegExp(`\\b${field}\\b`, "i"));
+  }
+  assert.doesNotMatch(
+    executable,
+    /^\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy)\b/im,
+  );
+  assert.doesNotMatch(executable, /\b(begin|commit|rollback)\s*;/i);
+  assert.doesNotMatch(
+    executable,
+    /\bfrom\s+(?:public\.)?account_recharges\b/i,
+  );
+});
+
+test("account recharge service-write runbook records completed test rollout and preserves production gates", () => {
+  const runbook = file("docs/account-recharge-service-write-runbook.md");
+  const orderedSection = runbook.slice(
+    runbook.indexOf("## 测试环境已完成记录"),
+    runbook.indexOf("## Postcheck 通过条件"),
+  );
+  const deployment = orderedSection.indexOf("PR #18 Preview");
+  const compatibility = orderedSection.indexOf(
+    "20260729135500_account_recharge_schema_compatibility.sql",
+  );
+  const compatibilityPostcheck = orderedSection.indexOf(
+    "20260729-account-recharge-schema-compatibility-postcheck.sql",
+  );
+  const firstManualRecharge = orderedSection.indexOf(
+    "第一笔不付款的 manual 测试充值",
+  );
+  const waitingPayment = orderedSection.indexOf("API 返回 `waiting_payment`");
+  const phaseOne = orderedSection.indexOf(
+    "20260729140000_client_privilege_hardening_phase1.sql",
+  );
+  const forwardFix = orderedSection.indexOf(
+    "20260729143000_account_recharge_service_write_hardening.sql",
+  );
+  const postcheck = orderedSection.indexOf(
+    "20260729-account-recharge-service-write-postcheck.sql",
+  );
+  const secondManualRecharge = orderedSection.indexOf(
+    "第二笔不付款的 manual 测试充值",
+  );
+  const cleanupPostcheck = orderedSection.indexOf("Cleanup Postcheck");
+
+  assert.match(runbook, /PR #17 已合并/);
+  assert.match(runbook, /Jianlian-shop-test/);
+  assert.match(runbook, /czuoivbfxzachiobdohw/);
+  assert.match(runbook, /测试环境已经完成并通过/);
+  assert.match(runbook, /正式 Supabase 尚未执行上述 Migration/);
+  assert.match(runbook, /正式数据库未发生本流程相关变更/);
+  assert.match(runbook, /`jianlian\.shop` 尚未部署本 PR/);
+  assert.match(runbook, /自建服务器尚未同步、构建或重启/);
+  assert.match(runbook, /自动结算仍保持关闭/);
+  assert.match(
+    runbook,
+    /任何生产部署、Migration 或 postcheck 执行仍需单独明确授权/,
+  );
+  assert.ok(
+    deployment >= 0
+      && compatibility > deployment
+      && compatibilityPostcheck > compatibility
+      && firstManualRecharge > compatibilityPostcheck
+      && waitingPayment > firstManualRecharge
+      && phaseOne > waitingPayment
+      && forwardFix > phaseOne
+      && postcheck > forwardFix
+      && secondManualRecharge > postcheck
+      && cleanupPostcheck > secondManualRecharge,
+  );
+  assert.doesNotMatch(runbook, /应用代码必须在两份权限 Migration 完成后部署/);
+  assert.match(
+    runbook,
+    /先部署 service-role 写入代码，是为了避免撤销 authenticated INSERT 后出现充值创建中断/,
+  );
+  assert.match(runbook, /代码不回退到[\s\S]{0,20}authenticated INSERT/);
+  assert.match(runbook, /任一 Migration 或 postcheck 失败时立即停止/);
+  assert.match(runbook, /每次只能执行一个经核对的完整文件/);
+  assert.match(runbook, /不得批量执行 Migration/);
+  assert.match(runbook, /不使用 `supabase db push`/);
+  assert.match(runbook, /不使用 `supabase migration up`/);
+  assert.match(runbook, /不使用 `supabase migration repair`/);
+  assert.match(runbook, /不使用 `supabase db reset`/);
+  assert.match(runbook, /不开启或配置自动结算/);
+  assert.match(runbook, /不进行付款、TxHash、审核或余额入账测试/);
 });
 
 test("client privilege hardening phase 1 runbook keeps execution test-only and deferred", () => {

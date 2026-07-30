@@ -26,6 +26,19 @@ export const RECHARGE_STATUSES: RechargeStatus[] = [
 
 export type PublicPaymentChannel = Omit<PaymentChannel, "configured">;
 
+export type RechargeDatabaseDiagnosticCode =
+  | "RECHARGE_DB_PERMISSION_DENIED"
+  | "RECHARGE_DB_TABLE_MISSING"
+  | "RECHARGE_DB_COLUMN_MISSING"
+  | "RECHARGE_DB_SCHEMA_CACHE_STALE"
+  | "RECHARGE_AUTH_CONTEXT_FAILED"
+  | "RECHARGE_DB_QUERY_FAILED";
+
+export type RechargeDatabaseDiagnostic = {
+  code: RechargeDatabaseDiagnosticCode;
+  message: string;
+};
+
 export type RechargeRecord = {
   rechargeNo: string;
   channelCode: string;
@@ -58,9 +71,57 @@ export function getPaymentErrorMessage(
 }
 
 export function isPaymentSchemaUnavailable(error: unknown) {
-  return /account_recharges|payment_channels|schema cache|PGRST205|42P01|42703/i.test(
-    getPaymentErrorMessage(error, "")
-  );
+  const diagnostic = classifyRechargeDatabaseError(error);
+  return [
+    "RECHARGE_DB_TABLE_MISSING",
+    "RECHARGE_DB_COLUMN_MISSING",
+    "RECHARGE_DB_SCHEMA_CACHE_STALE",
+  ].includes(diagnostic.code);
+}
+
+export function classifyRechargeDatabaseError(error: unknown): RechargeDatabaseDiagnostic {
+  const code = getErrorProperty(error, "code").toUpperCase();
+  const status = getErrorProperty(error, "status");
+  const message = getPaymentErrorMessage(error, "");
+
+  if (code === "42501" || /permission denied/i.test(message)) {
+    return {
+      code: "RECHARGE_DB_PERMISSION_DENIED",
+      message: "充值记录读取权限不足",
+    };
+  }
+  if (code === "42P01" || code === "PGRST205" || /\b(?:42P01|PGRST205)\b/i.test(message)) {
+    return {
+      code: "RECHARGE_DB_TABLE_MISSING",
+      message: "充值数据表不存在或尚未加载",
+    };
+  }
+  if (code === "42703" || /\b42703\b/i.test(message)) {
+    return {
+      code: "RECHARGE_DB_COLUMN_MISSING",
+      message: "充值数据字段不完整",
+    };
+  }
+  if (/schema cache/i.test(message)) {
+    return {
+      code: "RECHARGE_DB_SCHEMA_CACHE_STALE",
+      message: "数据库结构缓存尚未刷新",
+    };
+  }
+  if (
+    status === "401"
+    || code === "401"
+    || /(?:\bjwt\b|authentication|not authenticated|unauthorized)/i.test(message)
+  ) {
+    return {
+      code: "RECHARGE_AUTH_CONTEXT_FAILED",
+      message: "登录状态或数据库认证上下文异常",
+    };
+  }
+  return {
+    code: "RECHARGE_DB_QUERY_FAILED",
+    message: "充值记录读取失败",
+  };
 }
 
 export function normalizeChannelRow(row: AnyRow): PaymentChannel | null {
@@ -185,4 +246,10 @@ function finiteNumber(value: unknown, fallback = 0) {
 
 function textOrNull(value: unknown) {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function getErrorProperty(error: unknown, property: "code" | "status") {
+  if (!error || typeof error !== "object" || !(property in error)) return "";
+  const value = (error as Record<string, unknown>)[property];
+  return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
 }
