@@ -20,10 +20,20 @@ const TRANSITIONS: Record<RechargeFlowStatus, readonly RechargeFlowStatus[]> = {
   expired: [],
 };
 
-export function normalizeRechargeStatus(value: unknown): RechargeFlowStatus {
-  const status = String(value ?? "pending").trim().toLowerCase();
+export function parseRechargeStatusStrict(value: unknown): RechargeFlowStatus | null {
+  if (typeof value !== "string") return null;
+  const status = value.trim().toLowerCase();
+  if (!status) return null;
   if (status in LEGACY_STATUS_MAP) return LEGACY_STATUS_MAP[status];
-  return RECHARGE_STATUS_VALUES.includes(status as RechargeFlowStatus) ? (status as RechargeFlowStatus) : "pending";
+  return RECHARGE_STATUS_VALUES.includes(status as RechargeFlowStatus)
+    ? (status as RechargeFlowStatus)
+    : null;
+}
+
+export function normalizeRechargeStatus(value: unknown): RechargeFlowStatus {
+  const status = parseRechargeStatusStrict(value);
+  if (!status) throw new Error("Unknown recharge status");
+  return status;
 }
 
 export function canTransitionRecharge(from: unknown, to: RechargeFlowStatus) {

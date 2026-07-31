@@ -6,6 +6,14 @@ import type {
   PaymentProviderCode,
   RechargeStatus,
 } from "@/lib/payments/channel-types";
+import {
+  getCanonicalPaymentChannelCode,
+  getPaymentChannelPairValidationError,
+  getPaymentChannelValidationError,
+  getSafePublicManualPaymentForRow,
+  isPublicPaymentChannelReady,
+  paymentReviewMode,
+} from "@/lib/payments/manual-channel-readiness.mjs";
 import { normalizeRechargeStatus, rechargeFlowStatusLabel } from "@/lib/recharges/status-machine";
 
 export const RECHARGE_STATUSES: RechargeStatus[] = [
@@ -125,18 +133,72 @@ export function classifyRechargeDatabaseError(error: unknown): RechargeDatabaseD
 }
 
 export function normalizeChannelRow(row: AnyRow): PaymentChannel | null {
-  const code = String(row.code ?? row.channel ?? "") as PaymentChannelCode;
+  const code = getCanonicalPaymentChannelCode(row);
   if (!isKnownChannel(code)) return null;
+  if (getPaymentChannelPairValidationError({
+    channel: row.channel,
+    code: row.code,
+    provider: row.provider,
+    provider_name: row.provider_name,
+    min_amount: row.min_amount,
+    minimum_amount: row.minimum_amount,
+  })) return null;
 
-  const currency: PaymentCurrency = row.currency === "USDT" ? "USDT" : "CNY";
-  const provider = normalizeProvider(row.provider ?? row.provider_name, code);
+  if (row.currency !== "USDT" && row.currency !== "CNY") return null;
+  const currency: PaymentCurrency = row.currency;
+  const providerValue = row.provider;
+  if (
+    providerValue !== "generic_api"
+    && providerValue !== "binance"
+    && providerValue !== "crypto_address"
+  ) return null;
+  const provider = providerValue;
+  const enabled = row.enabled === true;
+  const publicConfig = row.public_config && typeof row.public_config === "object" ? row.public_config as Record<string, unknown> : {};
+  const maximumAmountInput = publicConfig.maximum_amount
+    ?? (currency === "USDT" ? 100000 : 1000000);
+  const validationError = getPaymentChannelValidationError({
+    channel: code,
+    currency,
+    provider,
+    feeRate: row.fee_rate,
+    minimumAmount: row.minimum_amount ?? row.min_amount,
+    maximumAmount: maximumAmountInput,
+    network: row.network,
+  });
+  if (validationError) return null;
   const network = normalizeNetwork(row.network, code);
   const minimumAmount = finiteNumber(row.minimum_amount ?? row.min_amount);
   const feeRate = finiteNumber(row.fee_rate);
-  const enabled = row.enabled === true;
-  const publicConfig = row.public_config && typeof row.public_config === "object" ? row.public_config as Record<string, unknown> : {};
   const configured = row.configured === true;
-  const reviewMode = publicConfig.review_mode === "manual" || publicConfig.payment_mode === "manual" ? "manual" : "provider";
+  const reviewMode = paymentReviewMode(publicConfig);
+  const paymentAddress = textOrNull(publicConfig.payment_address);
+  const tokenContract = textOrNull(
+    publicConfig.token_contract,
+  );
+  const paymentInstructions = textOrNull(
+    publicConfig.payment_instructions,
+  );
+  const available = isPublicPaymentChannelReady({
+    channel: code,
+    provider: row.provider ?? row.provider_name,
+    enabled,
+    configured,
+    reviewMode,
+    paymentAddress,
+    tokenContract,
+    paymentInstructions,
+  });
+  const manualPayment = getSafePublicManualPaymentForRow(row, {
+    channel: code,
+    provider: row.provider ?? row.provider_name,
+    enabled,
+    configured,
+    reviewMode,
+    paymentAddress,
+    tokenContract,
+    paymentInstructions,
+  });
 
   return {
     channel_code: code,
@@ -151,14 +213,15 @@ export function normalizeChannelRow(row: AnyRow): PaymentChannel | null {
     minimumAmount,
     fee_rate: feeRate,
     feeRate,
-    status: enabled && configured ? "active" : "disabled",
-    enabled,
+    status: available ? "active" : "disabled",
+    enabled: available,
     configured,
     reviewMode,
-    maximumAmount: finiteNumber(publicConfig.maximum_amount, currency === "USDT" ? 100000 : 1000000),
+    maximumAmount: finiteNumber(maximumAmountInput),
     provider,
     sort_order: Math.trunc(finiteNumber(row.sort_order, 100)),
     iconSrc: channelIcon(code),
+    manualPayment,
   };
 }
 

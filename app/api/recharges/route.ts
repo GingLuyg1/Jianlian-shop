@@ -2,13 +2,24 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { calculateRechargeAmounts } from "@/lib/payments/channels";
+import {
+  buildRechargePublicFailure,
+  buildRechargeSafeLogFields,
+} from "@/lib/payments/recharge-api-failure.mjs";
 import type { PaymentChannel, RechargeStatus } from "@/lib/payments/channel-types";
 import { getPaymentProvider } from "@/lib/payments/providers";
 import {
+  classifyPublicRechargeAmountRange,
+  isKnownPaymentChannelCode,
+  parsePublicRechargeAmount,
+  paymentChannelMatchesRequest,
+} from "@/lib/payments/manual-channel-readiness.mjs";
+import {
+  isRechargeChannelAvailable,
+} from "@/lib/payments/manual-channel-readiness.mjs";
+import {
   RECHARGE_STATUSES,
-  classifyRechargeDatabaseError,
   getPaymentErrorMessage,
-  isPaymentSchemaUnavailable,
   normalizeChannelRow,
   normalizeRechargeRow,
 } from "@/lib/payments/recharge-utils";
@@ -17,6 +28,7 @@ import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/sec
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
+import { parseRechargeStatusStrict } from "@/lib/recharges/status-machine";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +56,15 @@ export async function GET(request: Request) {
   const pageSize = Math.min(100, positiveInteger(searchParams.get("pageSize"), 10));
   const status = searchParams.get("status") ?? "all";
   const channel = searchParams.get("channel") ?? "all";
+  if (channel !== "all" && !isKnownPaymentChannelCode(channel)) {
+    return NextResponse.json(
+      {
+        error: "请选择有效的充值渠道。",
+        code: "RECHARGE_CHANNEL_INVALID",
+      },
+      { status: 400 },
+    );
+  }
 
   try {
     let query = context.supabase
@@ -63,7 +84,7 @@ export async function GET(request: Request) {
       pageSize,
     });
   } catch (error) {
-    return rechargeListFailure(error);
+    return paymentFailure(error, "list");
   }
 }
 
@@ -82,7 +103,7 @@ export async function POST(request: Request) {
     if (isAccountRestrictionError(guardError)) {
       return NextResponse.json({ error: guardError.message, code: guardError.code }, { status: guardError.status });
     }
-    throw guardError;
+    return paymentFailure(guardError, "risk");
   }
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -94,43 +115,79 @@ export async function POST(request: Request) {
   const channelCode = typeof channelValue === "string" ? channelValue.trim() : "";
   const currency = typeof body.currency === "string" ? body.currency.trim().toUpperCase() : "";
   const customerNote = typeof body.customer_note === "string" ? body.customer_note.trim() : "";
-  const rawAmount = typeof body.amount === "number" ? body.amount : Number(body.amount);
+  const rawAmount = parsePublicRechargeAmount(body.amount, 6);
   const clientRequestId = normalizeRequestId(body.client_request_id ?? body.clientRequestId);
-  if (!channelCode) return NextResponse.json({ error: "Please select a payment channel." }, { status: 400 });
-  if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
-    return NextResponse.json({ error: "Please enter a valid recharge amount." }, { status: 400 });
+  if (!isKnownPaymentChannelCode(channelCode)) {
+    return NextResponse.json(
+      {
+        error: "Please select a valid payment channel.",
+        code: "RECHARGE_CHANNEL_INVALID",
+      },
+      { status: 400 },
+    );
+  }
+  if (rawAmount === null) {
+    return NextResponse.json(
+      {
+        error: "充值金额格式无效",
+        code: "RECHARGE_AMOUNT_INVALID",
+      },
+      { status: 400 },
+    );
   }
   if (!clientRequestId) {
     return NextResponse.json({ error: "Missing valid recharge request id." }, { status: 400 });
   }
   if (customerNote.length > 500) return NextResponse.json({ error: "Recharge note cannot exceed 500 characters." }, { status: 400 });
 
+  let failureOperation: "channel" | "risk" | "create" = "create";
   try {
     const existing = await findExistingRecharge(context.supabase, context.user.id, clientRequestId);
     if (existing) return NextResponse.json(existing, { status: 200 });
 
+    failureOperation = "channel";
     const { data: channelData, error: channelError } = await context.supabase
       .from("payment_channels")
       .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")
       .or(`code.eq.${channelCode},channel.eq.${channelCode}`)
       .eq("enabled", true)
+      .eq("configured", true)
       .maybeSingle();
     if (channelError) throw channelError;
     const channel = channelData ? normalizeChannelRow(channelData as Record<string, unknown>) : null;
-    if (!channel || !channel.enabled || !channel.configured) return NextResponse.json({ error: "Payment channel is not available." }, { status: 400 });
+    if (
+      !channel
+      || !paymentChannelMatchesRequest(
+        channelCode,
+        channelData as Record<string, unknown>,
+        channel.channel_code,
+      )
+      || !isRechargeChannelAvailable(channel)
+    ) {
+      return NextResponse.json(
+        { error: "Payment channel is not available." },
+        { status: 400 },
+      );
+    }
     if (currency && currency !== channel.currency) return NextResponse.json({ error: "Recharge currency does not match payment channel." }, { status: 400 });
 
     const summary = calculateRechargeAmounts(channel, rawAmount);
-    if (summary.amount < channel.minimumAmount) {
+    const amountRange = classifyPublicRechargeAmountRange(
+      summary.amount,
+      channel.minimumAmount,
+      channel.maximumAmount,
+    );
+    if (amountRange === "below_minimum") {
       return NextResponse.json(
         { error: `Minimum recharge amount for this channel is ${channel.minimumAmount} ${channel.currency}.` },
         { status: 400 }
       );
     }
-    if (channel.maximumAmount && summary.amount > channel.maximumAmount) {
+    if (amountRange === "above_maximum") {
       return NextResponse.json({ error: `Single recharge amount cannot exceed ${channel.maximumAmount} ${channel.currency}.` }, { status: 400 });
     }
 
+    failureOperation = "risk";
     const risk = await evaluateRechargeRisk({
       supabase: context.supabase,
       request,
@@ -162,15 +219,10 @@ export async function POST(request: Request) {
       );
     }
 
+    failureOperation = "create";
     const serviceClient = getSupabaseServiceRoleClient();
     if (!serviceClient) {
-      return NextResponse.json(
-        {
-          error: "Recharge service is temporarily unavailable. Please try again later.",
-          code: "RECHARGE_SERVICE_UNAVAILABLE",
-        },
-        { status: 503 }
-      );
+      return paymentFailure(null, "service");
     }
 
     const rechargeNo = await insertRecharge(serviceClient, {
@@ -199,21 +251,19 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(result, { status: 201 });
     } catch (providerError) {
-      console.error("[Recharge provider]", getPaymentErrorMessage(providerError, "Provider is not configured"));
+      const providerRequestId = randomUUID();
+      logRechargeFailure("create", providerRequestId, 503, providerError);
       return NextResponse.json(
         {
-          error: "Payment channel is not configured. The recharge request is retained as pending payment.",
-          rechargeNo,
-          status: "pending",
-          amount: summary.amount,
-          fee: summary.fee,
-          payableAmount: summary.payableAmount,
+          error: "充值支付服务暂时不可用；申请可能已保留，请先刷新充值记录，勿重复提交。",
+          code: "RECHARGE_SERVICE_UNAVAILABLE",
+          requestId: providerRequestId,
         },
         { status: 503 }
       );
     }
   } catch (error) {
-    return paymentFailure(error, "Recharge creation failed. Please try again later.", "RECHARGE_CREATE_FAILED");
+    return paymentFailure(error, failureOperation);
   }
 }
 
@@ -237,9 +287,11 @@ async function findExistingRecharge(
     throw error;
   }
   if (!data) return null;
+  const status = parseRechargeStatusStrict(data.status);
+  if (!status) throw new Error("invalid recharge status");
   return {
     rechargeNo: String(data.recharge_no ?? ""),
-    status: String(data.status ?? "pending"),
+    status,
     amount: finiteNumber(data.requested_amount ?? data.amount),
     fee: finiteNumber(data.fee_amount),
     payableAmount: finiteNumber(data.payable_amount),
@@ -322,35 +374,30 @@ async function requireUser() {
   return { ok: true as const, supabase, user: data.user };
 }
 
-function paymentFailure(error: unknown, fallback: string, code: string) {
-  console.error("[Recharge API]", getPaymentErrorMessage(error, fallback));
-  return NextResponse.json(
-    {
-      error: isPaymentSchemaUnavailable(error)
-        ? "Payment database is not initialized. Please apply the payment management migration."
-        : getPaymentErrorMessage(error, fallback),
-      code,
-    },
-    { status: isPaymentSchemaUnavailable(error) ? 503 : 500 }
-  );
+function paymentFailure(
+  error: unknown,
+  operation: "list" | "channel" | "risk" | "create" | "service",
+) {
+  const requestId = randomUUID();
+  const failure = buildRechargePublicFailure(operation, requestId);
+  logRechargeFailure(operation, requestId, failure.status, error);
+  return NextResponse.json(failure.body, { status: failure.status });
 }
 
-function rechargeListFailure(error: unknown) {
-  const requestId = randomUUID();
-  const diagnostic = classifyRechargeDatabaseError(error);
+function logRechargeFailure(
+  operation: string,
+  requestId: string,
+  status: number,
+  error: unknown,
+) {
   console.error(
     "[Recharge API]",
-    `requestId=${requestId}`,
-    `code=${diagnostic.code}`,
-    getPaymentErrorMessage(error, "Recharge list query failed")
-  );
-  return NextResponse.json(
-    {
-      error: diagnostic.message,
-      code: diagnostic.code,
+    JSON.stringify(buildRechargeSafeLogFields({
+      operation,
       requestId,
-    },
-    { status: diagnostic.code === "RECHARGE_AUTH_CONTEXT_FAILED" ? 401 : 503 }
+      status,
+      error,
+    })),
   );
 }
 

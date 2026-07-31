@@ -21,6 +21,12 @@ export type PaymentSessionStatus = "pending" | "processing" | "paid" | "failed" 
 export type PaymentBusinessType = "order" | "recharge" | "account_recharge";
 export type PaymentResultType = "redirect" | "qrcode" | "address";
 
+export type ManualPaymentInstructions = {
+  payment_address: string;
+  token_contract: string | null;
+  payment_instructions: string | null;
+};
+
 export type PaymentChannel = {
   channel_code: PaymentChannelCode;
   code: PaymentChannelCode;
@@ -42,6 +48,7 @@ export type PaymentChannel = {
   sort_order: number;
   iconSrc?: string;
   description?: string;
+  manualPayment?: ManualPaymentInstructions;
 };
 
 export type RechargeAmountSummary = {
