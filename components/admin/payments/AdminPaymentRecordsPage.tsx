@@ -30,6 +30,8 @@ import {
 } from "@/lib/payments/admin-payment-types";
 import { formatDateTime } from "@/lib/i18n/datetime";
 import { formatCurrency } from "@/lib/i18n/money";
+import { decideRechargeReviewActionResponse } from "@/lib/recharges/review-ui-state.mjs";
+import { parseRechargeStatusStrict } from "@/lib/recharges/status-machine";
 import { cn } from "@/lib/utils";
 
 type Props = { mode: "payments" | "recharges" };
@@ -334,6 +336,9 @@ function RechargeReviewOverlay({ rechargeId, onChanged }: { rechargeId: string; 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [reconciliationRequired, setReconciliationRequired] = useState(false);
+  const [lastDiagnosticRequestId, setLastDiagnosticRequestId] = useState("");
+  const [actionOutcome, setActionOutcome] = useState("");
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
@@ -341,8 +346,11 @@ function RechargeReviewOverlay({ rechargeId, onChanged }: { rechargeId: string; 
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || "充值审核信息读取失败。");
       setData(payload);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "充值审核信息读取失败。"); }
-    finally { setLoading(false); }
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "充值审核信息读取失败。");
+      return false;
+    } finally { setLoading(false); }
   }, [rechargeId]);
   useEffect(() => { void load(); }, [load]);
   async function action(name: string, needsReason = true) {
@@ -353,15 +361,48 @@ function RechargeReviewOverlay({ rechargeId, onChanged }: { rechargeId: string; 
     try {
       const response = await fetch(`/api/admin/recharges/${rechargeId}/actions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: name, reason }) });
       const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.error || "充值审核操作失败。");
-      toast.success(payload.idempotent ? "该充值已处理，本次未重复入账" : "充值审核操作已完成");
-      await load(); await onChanged();
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : "充值审核操作失败。"); }
+      const decision = decideRechargeReviewActionResponse({
+        ok: response.ok,
+        status: response.status,
+        payload,
+      });
+      setActionOutcome(decision.outcome);
+      if (decision.requestId) setLastDiagnosticRequestId(decision.requestId);
+      if (decision.reconciliationRequired) {
+        setReconciliationRequired(true);
+        toast.warning(`${decision.message} 禁止重复操作。`);
+      } else if (decision.kind === "conflict") {
+        toast.warning(decision.message);
+      } else if (decision.kind === "idempotent") {
+        toast.success(decision.message);
+      } else if (decision.kind === "completed") {
+        toast.success(decision.message);
+      } else {
+        toast.error(decision.message);
+      }
+      if (decision.shouldReload) {
+        const refreshed = await load();
+        if (!refreshed) {
+          setReconciliationRequired(true);
+          setActionOutcome(decision.outcome || "uncertain");
+        }
+        await onChanged();
+      }
+    } catch {
+      toast.error("充值审核请求失败。结果无法确认时请先刷新核对，禁止盲目重试。");
+      setReconciliationRequired(true);
+      setActionOutcome("uncertain");
+      await load();
+      await onChanged();
+    }
     finally { setActing(false); }
   }
   const recharge = data?.recharge;
   const status = String(recharge?.status ?? "");
-  return <div className="fixed bottom-4 right-5 z-[60] max-h-[48vh] w-[min(640px,calc(100vw-2rem))] overflow-auto rounded-xl border bg-white p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between"><div><div className="font-semibold text-slate-950">充值审核</div><div className="text-xs text-slate-500">{recharge?.recharge_no ?? rechargeId}</div></div><Button size="sm" variant="ghost" onClick={() => void load()} disabled={loading}>刷新</Button></div>{error ? <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div> : loading ? <div className="py-6 text-center text-sm text-slate-500">正在读取审核信息...</div> : <div className="space-y-3"><div className="grid grid-cols-2 gap-2 text-xs text-slate-600"><div>状态：{status || "—"}</div><div>历史充值：{data?.historyCount ?? 0} 笔</div><div>交易流水号：{recharge?.transaction_reference ?? "—"}</div><div>付款时间：{formatDate(recharge?.payment_time)}</div><div className="col-span-2">付款账号摘要：{recharge?.payer_account_summary ?? "—"}</div></div><div className="flex flex-wrap gap-2">{(data?.proofs ?? []).map((proof: any) => <Button key={proof.url} asChild size="sm" variant="outline"><a href={proof.url} target="_blank" rel="noreferrer">{proof.name}</a></Button>)}</div><div className="flex flex-wrap gap-2">{status === "submitted" ? <Button size="sm" disabled={acting} onClick={() => void action("start_review", false)}>开始审核</Button> : null}{status === "reviewing" ? <><Button size="sm" disabled={acting} onClick={() => void action("approve")}>审核通过并入账</Button><Button size="sm" variant="outline" disabled={acting} onClick={() => void action("request_more_proof")}>要求补充凭证</Button><Button size="sm" variant="destructive" disabled={acting} onClick={() => void action("reject")}>驳回</Button></> : null}{["approved", "failed"].includes(status) ? <Button size="sm" disabled={acting} onClick={() => void action("retry_credit")}>重新处理入账</Button> : null}{["pending", "waiting_payment", "submitted", "reviewing", "rejected", "failed"].includes(status) ? <Button size="sm" variant="outline" disabled={acting} onClick={() => void action("cancel")}>取消充值</Button> : null}</div></div>}</div>;
+  const parsedStatus = parseRechargeStatusStrict(status);
+  const statusIsUnknown = Boolean(status) && parsedStatus === null;
+  const writesDisabled = acting || reconciliationRequired || statusIsUnknown;
+  return <div className="fixed bottom-4 right-5 z-[60] max-h-[48vh] w-[min(640px,calc(100vw-2rem))] overflow-auto rounded-xl border bg-white p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between"><div><div className="font-semibold text-slate-950">充值审核</div><div className="text-xs text-slate-500">{recharge?.recharge_no ?? rechargeId}</div></div><Button size="sm" variant="ghost" onClick={() => void load()} disabled={loading}>刷新</Button></div>{reconciliationRequired ? <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><div className="font-semibold">处理结果需要人工核对，禁止重复操作。</div><div className="mt-1">已刷新最新记录；请核对充值状态、余额流水和账户余额。</div>{lastDiagnosticRequestId ? <div className="mt-1 font-mono text-xs">诊断编号：{lastDiagnosticRequestId}</div> : null}{actionOutcome ? <div className="mt-1 text-xs">结果：{actionOutcome}</div> : null}</div> : null}{statusIsUnknown ? <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">充值状态异常，写操作已禁用，请人工核对。</div> : null}{error ? <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div> : loading ? <div className="py-6 text-center text-sm text-slate-500">正在读取审核信息...</div> : <div className="space-y-3"><div className="grid grid-cols-2 gap-2 text-xs text-slate-600"><div>状态：{status || "—"}</div><div>历史充值：{data?.historyCount ?? 0} 笔</div><div>交易流水号：{recharge?.transaction_reference ?? "—"}</div><div>付款时间：{formatDate(recharge?.payment_time)}</div><div className="col-span-2">付款账号摘要：{recharge?.payer_account_summary ?? "—"}</div></div><div className="flex flex-wrap gap-2">{(data?.proofs ?? []).map((proof: any) => <Button key={proof.url} asChild size="sm" variant="outline"><a href={proof.url} target="_blank" rel="noreferrer">{proof.name}</a></Button>)}</div><div className="flex flex-wrap gap-2">{status === "submitted" ? <Button size="sm" disabled={writesDisabled} onClick={() => void action("start_review", false)}>开始审核</Button> : null}{status === "reviewing" ? <><Button size="sm" disabled={writesDisabled} onClick={() => void action("approve")}>审核通过并入账</Button><Button size="sm" variant="outline" disabled={writesDisabled} onClick={() => void action("request_more_proof")}>要求补充凭证</Button><Button size="sm" variant="destructive" disabled={writesDisabled} onClick={() => void action("reject")}>驳回</Button></> : null}{["approved", "failed"].includes(status) ? <Button size="sm" disabled={writesDisabled} onClick={() => void action("retry_credit")}>重新处理入账</Button> : null}{["pending", "waiting_payment", "submitted", "reviewing", "rejected", "failed"].includes(status) ? <Button size="sm" variant="outline" disabled={writesDisabled} onClick={() => void action("cancel")}>取消充值</Button> : null}</div></div>}</div>;
 }
 
 function CallbackRecords({ callbacks, callbackError }: { callbacks: AdminPaymentCallback[]; callbackError: string }) {

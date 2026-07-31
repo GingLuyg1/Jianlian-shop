@@ -1,3 +1,7 @@
+import type {
+  PaymentChannelCode,
+  PaymentProviderCode,
+} from "@/lib/payments/channel-types";
 export const PAYMENT_BUSINESS_TYPES = ["order", "recharge"] as const;
 export type PaymentBusinessType = (typeof PAYMENT_BUSINESS_TYPES)[number];
 
@@ -154,15 +158,24 @@ export type AdminBep20OverpaymentWallet = {
 
 export type PaymentChannelConfig = {
   id: string;
-  channel: string;
+  channel: PaymentChannelCode;
+  code: PaymentChannelCode;
   enabled: boolean;
+  configured: boolean;
   display_name: string;
   min_amount: number;
+  minimum_amount: number;
   fee_rate: number;
   currency: string;
   network: string | null;
   sort_order: number;
   provider_name: string | null;
+  provider: PaymentProviderCode;
+  review_mode: "provider" | "manual";
+  maximum_amount: number;
+  payment_address: string | null;
+  token_contract: string | null;
+  payment_instructions: string | null;
   api_url: string | null;
   merchant_id_masked: string | null;
   app_id_masked: string | null;
@@ -171,6 +184,9 @@ export type PaymentChannelConfig = {
   secret_status: string;
   secret_last4: string | null;
   updated_at: string | null;
+  compatibility_issue?: "legacy_provider_field_missing" | null;
+  compatibility_needs_sync?: boolean;
+  compatibility_read_only?: boolean;
 };
 
 export function normalizeUnifiedPaymentStatus(value: unknown): UnifiedPaymentStatus {

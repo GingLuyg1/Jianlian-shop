@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 
 import {
-  getPaymentErrorMessage,
+  getSafePublicPaymentChannelError,
+  getSafePublicPaymentChannelLog,
+} from "@/lib/payments/manual-channel-readiness.mjs";
+
+import {
   isPaymentSchemaUnavailable,
   normalizeChannelRow,
 } from "@/lib/payments/recharge-utils";
@@ -10,8 +15,20 @@ import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const requestId = randomUUID();
   if (!hasSupabaseServerConfig()) {
-    return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 503 });
+    const publicError = getSafePublicPaymentChannelError(
+      "service_unavailable",
+    );
+    console.error(
+      "[Recharge channels]",
+      getSafePublicPaymentChannelLog({
+        code: publicError.code,
+        requestId,
+        status: 503,
+      }),
+    );
+    return NextResponse.json(publicError, { status: 503 });
   }
   try {
     const supabase = getSupabaseServerClient();
@@ -19,17 +36,40 @@ export async function GET() {
       .from("payment_channels")
       .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")
       .eq("enabled", true)
+      .eq("configured", true)
       .order("sort_order", { ascending: true });
     if (error) throw error;
     const channels = ((data ?? []) as Record<string, unknown>[])
       .map(normalizeChannelRow)
-      .filter((channel): channel is NonNullable<typeof channel> => Boolean(channel));
+      .filter(
+        (
+          channel,
+        ): channel is NonNullable<typeof channel> =>
+          Boolean(
+            channel
+            && channel.enabled
+            && channel.status === "active",
+          ),
+      );
     return NextResponse.json({ channels });
   } catch (error) {
-    console.error("[Recharge channels]", error);
+    const schemaMissing = isPaymentSchemaUnavailable(error);
+    const publicError = getSafePublicPaymentChannelError(
+      schemaMissing
+        ? "schema_unavailable"
+        : "read_failed",
+    );
+    console.error(
+      "[Recharge channels]",
+      getSafePublicPaymentChannelLog({
+        code: publicError.code,
+        requestId,
+        status: schemaMissing ? 503 : 500,
+      }),
+    );
     return NextResponse.json(
-      { error: isPaymentSchemaUnavailable(error) ? "支付数据库尚未初始化，请先执行支付管理 migration。" : getPaymentErrorMessage(error, "支付渠道加载失败，请稍后重试") },
-      { status: isPaymentSchemaUnavailable(error) ? 503 : 500 }
+      publicError,
+      { status: schemaMissing ? 503 : 500 }
     );
   }
 }

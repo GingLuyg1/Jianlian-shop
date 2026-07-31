@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -239,7 +239,7 @@ export default function AccountRechargeContent() {
                 <ol className="mt-2 grid gap-1.5 text-sm leading-6 text-muted-foreground">
                   <li>1. 请足额支付，否则可能无法自动到账。</li>
                   <li>2. 支付渠道未配置前不会生成付款二维码或钱包地址。</li>
-                  <li>3. 支付成功只能由服务端回调确认，未确认前保持待支付。</li>
+                  <li>3. 自动渠道由服务端回调确认，人工渠道由管理员核验到账后确认。</li>
                   <li className="font-semibold text-primary">
                     4. 未到账、失败或金额异常时，请联系左下角在线客服。
                   </li>
@@ -334,6 +334,56 @@ export default function AccountRechargeContent() {
                   );
                 })}
               </div>
+
+              {selectedChannel?.manualPayment ? (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold text-emerald-950">
+                      人工付款信息
+                    </h3>
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
+                      付款后人工审核
+                    </span>
+                  </div>
+
+                  <div className="mt-3 grid gap-3 text-sm">
+                    <div>
+                      <div className="text-xs font-medium text-emerald-800">
+                        付款地址 / 收款地址
+                      </div>
+                      <div className="mt-1 break-all rounded-lg border border-emerald-200 bg-white px-3 py-2 font-mono text-xs text-slate-800">
+                        {selectedChannel.manualPayment.payment_address}
+                      </div>
+                    </div>
+
+                    {selectedChannel.manualPayment.token_contract ? (
+                      <div>
+                        <div className="text-xs font-medium text-emerald-800">
+                          Token 合约
+                        </div>
+                        <div className="mt-1 break-all rounded-lg border border-emerald-200 bg-white px-3 py-2 font-mono text-xs text-slate-800">
+                          {selectedChannel.manualPayment.token_contract}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {selectedChannel.manualPayment.payment_instructions ? (
+                      <div>
+                        <div className="text-xs font-medium text-emerald-800">
+                          付款说明
+                        </div>
+                        <div className="mt-1 whitespace-pre-wrap rounded-lg border border-emerald-200 bg-white px-3 py-2 leading-6 text-slate-700">
+                          {selectedChannel.manualPayment.payment_instructions}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <p className="text-xs leading-5 text-amber-700">
+                      请严格核对币种和网络，按实际支付金额足额转账。不要向其他网络或其他合约地址转账。
+                    </p>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-auto border-t border-border/70 pt-5">
                 <label className="mb-1.5 block text-sm font-medium">

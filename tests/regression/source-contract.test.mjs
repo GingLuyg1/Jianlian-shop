@@ -2671,10 +2671,37 @@ test("recharge completion compatibility adds only the real final workflow timest
   assert.doesNotMatch(migration, /update\s+public\.account_recharges/i);
   assert.doesNotMatch(migration, /create\s+(?:unique\s+)?index/i);
   assert.match(userRoute, /paid_at,completed_at/);
-  assert.match(reviewService, /status: "succeeded", completed_at: new Date\(\)\.toISOString\(\)/);
-  assert.match(reviewService, /rpc\("complete_account_recharge"/);
+  assert.match(
+    reviewService,
+    /updateRechargeExact\([\s\S]{0,220}"paid"[\s\S]{0,220}status:\s*"succeeded"[\s\S]{0,180}completed_at:/,
+  );
+  assert.match(
+    reviewService,
+    /if \(result\.kind === "uncertain_succeeded"\) \{\s*throw new RechargeReviewUncertainOutcomeError\("succeeded"\);\s*\}/,
+  );
+  assert.match(reviewService, /completion 审计可能缺失/);
+  assert.match(reviewService, /禁止重复入账、重复修复或补写成功事件/);
+  assert.match(reviewService, /rpc\(\s*"complete_account_recharge"/);
   assert.match(completionService, /if \(result\.businessType === "order"\)/);
   assert.doesNotMatch(completionService, /result\.businessType === "recharge"[\s\S]{0,120}deliverDigitalOrder/);
+});
+
+test("public recharge amount and credit RPC results use strict production parsers", () => {
+  const rechargeRoute = file("app/api/recharges/route.ts");
+  const readiness = file("lib/payments/manual-channel-readiness.mjs");
+  const workflow = file("lib/recharges/review-workflow.mjs");
+  const reviewService = file("lib/recharges/review-service.ts");
+
+  assert.match(rechargeRoute, /parsePublicRechargeAmount\(body\.amount, 6\)/);
+  assert.doesNotMatch(rechargeRoute, /Number\(body\.amount\)/);
+  assert.match(rechargeRoute, /RECHARGE_AMOUNT_INVALID/);
+  assert.match(readiness, /export function parsePublicRechargeAmount/);
+  assert.match(workflow, /parseRechargeCreditRpcResult\(response\?\.data\)/);
+  assert.match(workflow, /alreadyCompleted !== "boolean"/);
+  assert.match(workflow, /rechargeNo !== "string"/);
+  assert.match(workflow, /transactionNo !== "string"/);
+  assert.match(reviewService, /classifyUnknownRechargeCreditOutcome/);
+  assert.doesNotMatch(reviewService, /as RechargeCreditRpcResult/);
 });
 
 test("system error monitoring is service-only, deduplicated, sanitized, and best-effort", () => {
@@ -4058,8 +4085,11 @@ test("account recharge creation fails closed and writes with the standard servic
   assert.match(route, /import \{ getSupabaseServiceRoleClient \} from "@\/lib\/supabase\/service-role";/);
   assert.match(
     route,
-    /const serviceClient = getSupabaseServiceRoleClient\(\);[\s\S]{0,500}if \(!serviceClient\)[\s\S]{0,500}RECHARGE_SERVICE_UNAVAILABLE[\s\S]{0,200}status: 503/,
+    /const serviceClient = getSupabaseServiceRoleClient\(\);[\s\S]{0,300}if \(!serviceClient\) \{[\s\S]{0,100}paymentFailure\(null, "service"\)/,
   );
+  const failureHelper = file("lib/payments/recharge-api-failure.mjs");
+  assert.match(failureHelper, /RECHARGE_SERVICE_UNAVAILABLE/);
+  assert.match(failureHelper, /status:\s*503/);
   assert.match(route, /insertRecharge\(serviceClient,\s*\{/);
   assert.doesNotMatch(route, /insertRecharge\(context\.supabase,\s*\{/);
   assert.match(
@@ -4092,10 +4122,7 @@ test("account recharge list exposes only stable safe diagnostics", () => {
     utilities.indexOf("export function isPaymentSchemaUnavailable"),
     utilities.indexOf("export function normalizeChannelRow"),
   );
-  const listFailure = route.slice(
-    route.indexOf("function rechargeListFailure"),
-    route.indexOf("function generateRechargeNo"),
-  );
+  const failureHelper = file("lib/payments/recharge-api-failure.mjs");
 
   assert.match(utilities, /export function classifyRechargeDatabaseError\(error: unknown\)/);
   assert.match(
@@ -4120,18 +4147,13 @@ test("account recharge list exposes only stable safe diagnostics", () => {
   );
   assert.doesNotMatch(schemaClassifier, /account_recharges|payment_channels/);
 
-  assert.match(route, /catch \(error\) \{\s*return rechargeListFailure\(error\);\s*\}/);
-  assert.match(listFailure, /const requestId = randomUUID\(\)/);
-  assert.match(listFailure, /const diagnostic = classifyRechargeDatabaseError\(error\)/);
-  assert.match(
-    listFailure,
-    /console\.error\(\s*"\[Recharge API\]",[\s\S]*requestId=\$\{requestId\}[\s\S]*code=\$\{diagnostic\.code\}[\s\S]*getPaymentErrorMessage/,
-  );
-  assert.match(
-    listFailure,
-    /error: diagnostic\.message,\s*code: diagnostic\.code,\s*requestId/,
-  );
-  assert.doesNotMatch(listFailure, /error:\s*getPaymentErrorMessage/);
+  assert.match(route, /catch \(error\) \{\s*return paymentFailure\(error, "list"\);\s*\}/);
+  assert.match(route, /const requestId = randomUUID\(\)/);
+  assert.match(route, /buildRechargePublicFailure\(operation, requestId\)/);
+  assert.match(failureHelper, /RECHARGE_LIST_READ_FAILED/);
+  assert.match(failureHelper, /error: contract\.message,\s*code: contract\.code,\s*requestId/);
+  assert.doesNotMatch(failureHelper, /message\s*:\s*error\.(?:message|details|hint)/);
+  assert.doesNotMatch(route, /console\.error\([^)]*getPaymentErrorMessage/);
   assert.doesNotMatch(route, /permission denied/i);
 
   assert.match(page, /type RechargeListError = \{[\s\S]*message: string;[\s\S]*code: string;[\s\S]*requestId: string;/);
@@ -4611,7 +4633,7 @@ test("account recharge production database precheck is read-only and fail-closed
     assert.match(precheck, new RegExp(`['"]${status}['"]`, "i"));
   }
   const allowedStatusBlock = precheck.match(
-    /allowed_statuses\s*\([^)]*\)\s+as\s*\(\s*values([\s\S]*?)\n\),\ntarget_columns/i,
+    /allowed_statuses\s*\([^)]*\)\s+as\s*\(\s*values([\s\S]*?)\r?\n\),\r?\ntarget_columns/i,
   )?.[1] ?? "";
   const allowedStatusValues = [
     ...allowedStatusBlock.matchAll(/\('([^']+)'::text\)/g),
@@ -4664,7 +4686,7 @@ test("account recharge production database precheck is read-only and fail-closed
   assert.match(precheck, /pg_catalog\.pg_stat_activity/);
   const relationActivityBlock =
     precheck.match(
-      /relation_activity\s+as\s*\(([\s\S]*?)\n\),\nlong_transactions\s+as/i,
+      /relation_activity\s+as\s*\(([\s\S]*?)\r?\n\),\r?\nlong_transactions\s+as/i,
     )?.[1] ?? "";
   assert.notEqual(relationActivityBlock, "");
   assert.match(
