@@ -3,6 +3,7 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -54,6 +55,15 @@ import {
 } from "@/lib/payments/payment-methods";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
+import {
+  classifyCheckoutOrderResponse,
+  createCheckoutSubmissionGuard,
+  evaluateCheckoutBalance,
+  formatCnyFromCents,
+  getBalanceSubmissionBlockReason,
+  parseAccountAssetsBalance,
+} from "@/lib/checkout/balance-flow.mjs";
 
 const PRICE_LABELS: Record<string, string> = {
   "gift-apple-us": "¥14.84-¥742.00",
@@ -76,6 +86,13 @@ type LegalDocument = {
   title: string;
   content: string;
   content_hash: string;
+};
+
+type BalanceLoadStatus = "loading" | "ready" | "error";
+
+type PendingBalanceOrder = {
+  orderNo: string;
+  requestId: string;
 };
 
 const REQUIRED_AGREEMENT_TYPES = ["terms_of_service", "refund_policy", "digital_delivery_policy", "purchase_notice"];
@@ -178,8 +195,57 @@ export default function CheckoutPage() {
   const [productLoading, setProductLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
+  const [balanceStatus, setBalanceStatus] = useState<BalanceLoadStatus>("loading");
+  const [availableBalance, setAvailableBalance] = useState<number | null>(null);
+  const [balanceError, setBalanceError] = useState("");
+  const [balanceRequiresLogin, setBalanceRequiresLogin] = useState(false);
+  const [pendingBalanceOrder, setPendingBalanceOrder] = useState<PendingBalanceOrder | null>(null);
   const paymentDropdownRef = useRef<HTMLDivElement | null>(null);
   const clientRequestIdRef = useRef("");
+  const balanceRequestVersionRef = useRef(0);
+  const submissionGuardRef = useRef(createCheckoutSubmissionGuard());
+
+  const checkoutSessionKey = useMemo(
+    () => `jianlian:checkout-balance:${productId || "unknown"}`,
+    [productId]
+  );
+
+  const loadAccountBalance = useCallback(async () => {
+    const requestVersion = balanceRequestVersionRef.current + 1;
+    balanceRequestVersionRef.current = requestVersion;
+    setBalanceStatus("loading");
+    setBalanceError("");
+    setBalanceRequiresLogin(false);
+
+    try {
+      const response = await fetch("/api/account/assets", { cache: "no-store" });
+      const payload = await response.json().catch(() => null) as unknown;
+      if (requestVersion !== balanceRequestVersionRef.current) return;
+      if (!response.ok) {
+        setAvailableBalance(null);
+        setBalanceStatus("error");
+        setBalanceRequiresLogin(response.status === 401);
+        setBalanceError(response.status === 401 ? "请先登录后查看账户余额" : "账户余额读取失败，请重新加载");
+        return;
+      }
+
+      const parsed = parseAccountAssetsBalance(payload);
+      if (parsed.kind !== "ready") {
+        setAvailableBalance(null);
+        setBalanceStatus("error");
+        setBalanceError("账户余额暂时无法确认，请重新加载");
+        return;
+      }
+      setAvailableBalance(parsed.balance);
+      setBalanceStatus("ready");
+    } catch {
+      if (requestVersion !== balanceRequestVersionRef.current) return;
+      setAvailableBalance(null);
+      setBalanceStatus("error");
+      setBalanceRequiresLogin(false);
+      setBalanceError("账户余额读取失败，请重新加载");
+    }
+  }, []);
 
   useEffect(() => {
     if (!paymentDropdownOpen) return;
@@ -204,6 +270,42 @@ export default function CheckoutPage() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [paymentDropdownOpen]);
+
+  useEffect(() => {
+    clientRequestIdRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setPendingBalanceOrder(null);
+    try {
+      const raw = window.sessionStorage.getItem(checkoutSessionKey);
+      if (!raw) return;
+      const stored = JSON.parse(raw) as { requestId?: unknown; orderNo?: unknown };
+      if (typeof stored.requestId !== "string" || !stored.requestId.trim()) return;
+      clientRequestIdRef.current = stored.requestId.trim();
+      if (typeof stored.orderNo === "string" && stored.orderNo.trim()) {
+        setPendingBalanceOrder({
+          requestId: stored.requestId.trim(),
+          orderNo: stored.orderNo.trim(),
+        });
+        setPaymentMethod("balance");
+      }
+    } catch {
+      window.sessionStorage.removeItem(checkoutSessionKey);
+    }
+  }, [checkoutSessionKey]);
+
+  useEffect(() => {
+    void loadAccountBalance();
+    const refreshBalance = () => void loadAccountBalance();
+    window.addEventListener("focus", refreshBalance);
+    window.addEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
+    return () => {
+      window.removeEventListener("focus", refreshBalance);
+      window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
+      balanceRequestVersionRef.current += 1;
+    };
+  }, [loadAccountBalance]);
 
   useEffect(() => {
     let active = true;
@@ -305,11 +407,33 @@ export default function CheckoutPage() {
         ? "该商品目前不可购买"
         : "";
   const unitPrice = product ? (hasSku ? selectedSku?.rmb ?? product.price : product.price) : 0;
+  const orderAmount = unitPrice * quantity;
   const priceLabel = product ? getPriceLabel(product, selectedSku) : "";
+  const balanceSummary = useMemo(
+    () => evaluateCheckoutBalance(orderAmount, availableBalance),
+    [availableBalance, orderAmount]
+  );
+  const balanceSubmissionBlockReason = getBalanceSubmissionBlockReason({
+    paymentMethod,
+    balanceStatus,
+    balanceSummary,
+  });
+  const orderConfigurationLocked = submitLoading || Boolean(pendingBalanceOrder);
+  const submitButtonLabel = submitLoading
+    ? "正在提交订单..."
+    : pendingBalanceOrder
+      ? "继续支付原订单"
+      : balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT"
+        ? "余额不足"
+        : balanceSubmissionBlockReason
+          ? "余额未确认"
+          : !isPurchasable
+            ? "不可购买"
+            : "提交订单";
   const amountLabel = useMemo(() => {
     if (!product) return "";
-    return `¥${(unitPrice * quantity).toFixed(2)}`;
-  }, [product, quantity, unitPrice]);
+    return `¥${orderAmount.toFixed(2)}`;
+  }, [orderAmount, product]);
 
   if (productLoading) {
     return (
@@ -339,7 +463,7 @@ export default function CheckoutPage() {
   }
 
   const handleSubmit = async () => {
-    if (!productRow || submitLoading) return;
+    if (!productRow || submitLoading || submissionGuardRef.current.isActive()) return;
     setError("");
 
     if (!isPurchasable) {
@@ -362,6 +486,17 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (balanceSubmissionBlockReason) {
+      if (balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT" && balanceSummary.kind === "ready") {
+        setError(`余额不足，还需充值 ¥${formatCnyFromCents(balanceSummary.shortfallCents)}`);
+      } else if (balanceSubmissionBlockReason === "BALANCE_LOADING") {
+        setError("正在读取账户余额，请稍候");
+      } else {
+        setError(balanceError || "账户余额暂时无法确认，请重新加载");
+      }
+      return;
+    }
+
     if (!email.trim()) {
       setError("请填写联系邮箱");
       return;
@@ -377,6 +512,7 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!submissionGuardRef.current.tryStart()) return;
     setSubmitLoading(true);
 
     try {
@@ -386,6 +522,13 @@ export default function CheckoutPage() {
             ? crypto.randomUUID()
             : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       }
+      window.sessionStorage.setItem(
+        checkoutSessionKey,
+        JSON.stringify({
+          requestId: clientRequestIdRef.current,
+          orderNo: pendingBalanceOrder?.orderNo ?? null,
+        })
+      );
 
       const response = await fetch("/api/orders", {
         method: "POST",
@@ -433,11 +576,27 @@ export default function CheckoutPage() {
         | null;
 
       const orderNo = result?.order?.order_no ?? result?.order_no ?? null;
+      const responseClassification = classifyCheckoutOrderResponse(response.status, result);
 
       if (!response.ok) {
         const message = result?.error ?? "订单创建失败，请稍后重试";
         if (response.status === 401) {
           router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`);
+          return;
+        }
+        if (responseClassification.kind === "balance_insufficient_existing_order") {
+          const requestId = responseClassification.requestId ?? clientRequestIdRef.current;
+          const existingOrder = {
+            orderNo: responseClassification.orderNo,
+            requestId,
+          };
+          clientRequestIdRef.current = requestId;
+          setPendingBalanceOrder(existingOrder);
+          setPaymentDropdownOpen(false);
+          setPaymentMethod("balance");
+          window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(existingOrder));
+          setError(`余额不足，订单 ${existingOrder.orderNo} 已保留。充值后请返回本页继续支付原订单，请勿重复下单。`);
+          void loadAccountBalance();
           return;
         }
         // Once the API confirms an order number, the idempotent order exists.
@@ -451,10 +610,12 @@ export default function CheckoutPage() {
 
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
+      window.sessionStorage.removeItem(checkoutSessionKey);
       router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
     } catch (submitError) {
       setError(getErrorText(submitError, "订单创建失败，请稍后重试"));
     } finally {
+      submissionGuardRef.current.finish();
       setSubmitLoading(false);
     }
   };
@@ -484,6 +645,7 @@ export default function CheckoutPage() {
                   options={skuOptions}
                   selectedSkuId={selectedSku.id}
                   onSelectSku={setSelectedSkuId}
+                  disabled={orderConfigurationLocked}
                 />
               ) : null}
                 <div className="space-y-3 pt-2">
@@ -508,6 +670,7 @@ export default function CheckoutPage() {
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="请输入接收卡密的邮箱"
                   className="h-10 bg-slate-50 text-sm"
+                  disabled={orderConfigurationLocked}
                 />
               </div>
 
@@ -584,6 +747,7 @@ export default function CheckoutPage() {
                   rootRef={paymentDropdownRef}
                   onOpenChange={setPaymentDropdownOpen}
                   onSelect={setPaymentMethod}
+                  disabled={orderConfigurationLocked}
                 />
                 {selectedPaymentUnavailable ? (
                   <p className="mt-2 text-xs text-amber-700">
@@ -591,6 +755,72 @@ export default function CheckoutPage() {
                   </p>
                 ) : null}
               </div>
+
+              {paymentMethod === "balance" ? (
+                <div className="space-y-2 rounded-xl border border-[#ead9cc] bg-[#fffaf6] px-3 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-muted-foreground">订单金额</span>
+                    <span className="font-semibold">¥{orderAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-muted-foreground">账户余额</span>
+                    <span className="font-semibold">
+                      {balanceStatus === "loading"
+                        ? "正在读取…"
+                        : balanceSummary.kind === "ready"
+                          ? `¥${formatCnyFromCents(balanceSummary.balanceCents)}`
+                          : "暂时无法确认"}
+                    </span>
+                  </div>
+                  {balanceSummary.kind === "ready" && balanceStatus === "ready" ? (
+                    <div className={cn(
+                      "flex items-center justify-between gap-4 border-t pt-2 font-medium",
+                      balanceSummary.sufficient ? "text-emerald-700" : "text-red-700"
+                    )}>
+                      <span>{balanceSummary.sufficient ? "支付后剩余" : "还需充值"}</span>
+                      <span>
+                        ¥{formatCnyFromCents(
+                          balanceSummary.sufficient
+                            ? balanceSummary.remainingCents
+                            : balanceSummary.shortfallCents
+                        )}
+                      </span>
+                    </div>
+                  ) : null}
+                  {balanceStatus === "error" ? (
+                    <div className="flex items-center justify-between gap-3 border-t pt-2 text-xs text-red-700">
+                      <span>{balanceError}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 font-medium underline"
+                        onClick={() => balanceRequiresLogin
+                          ? router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`)
+                          : void loadAccountBalance()}
+                      >
+                        {balanceRequiresLogin ? "去登录" : "重新加载"}
+                      </button>
+                    </div>
+                  ) : null}
+                  {balanceSummary.kind === "ready" && !balanceSummary.sufficient ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
+                      <span className="text-xs text-muted-foreground">充值完成后返回本页，余额会自动刷新。</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push(`/products/account-recharge?returnTo=${encodeURIComponent(`/checkout?product=${productId}`)}`)}
+                      >
+                        去充值
+                      </Button>
+                    </div>
+                  ) : null}
+                  {pendingBalanceOrder ? (
+                    <div className="border-t pt-2 text-xs leading-5 text-amber-800">
+                      原订单 {pendingBalanceOrder.orderNo} 已保留；余额充足后将继续处理该订单，不会创建第二个订单。
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div id="checkout-submit-feedback" aria-live="polite">
                 {error ? (
@@ -607,6 +837,7 @@ export default function CheckoutPage() {
                       type="button"
                       className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground"
                       onClick={() => setQuantity((value) => Math.max(1, value - 1))}
+                      disabled={orderConfigurationLocked}
                     >
                       <Minus className="h-4 w-4" />
                     </button>
@@ -621,7 +852,7 @@ export default function CheckoutPage() {
                           Math.min(Math.max(effectiveStock, 1), value + 1)
                         )
                       }
-                      disabled={effectiveStock <= quantity}
+                      disabled={orderConfigurationLocked || effectiveStock <= quantity}
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -631,14 +862,10 @@ export default function CheckoutPage() {
                     type="button"
                     className="h-11 rounded-full px-7 text-sm"
                     onClick={handleSubmit}
-                    disabled={submitLoading}
+                    disabled={submitLoading || Boolean(balanceSubmissionBlockReason)}
                     aria-describedby="checkout-submit-feedback"
                   >
-                    {submitLoading
-                      ? "正在提交订单..."
-                      : !isPurchasable
-                        ? "不可购买"
-                        : "提交订单"}
+                    {submitButtonLabel}
                     <span className="mx-3 h-4 w-px bg-white/50" />
                     {amountLabel}
                   </Button>
@@ -693,12 +920,14 @@ function PaymentMethodSelect({
   selected,
   onOpenChange,
   onSelect,
+  disabled,
 }: {
   open: boolean;
   rootRef: RefObject<HTMLDivElement>;
   selected: PaymentMethodCode;
   onOpenChange: (open: boolean) => void;
   onSelect: (method: PaymentMethodCode) => void;
+  disabled?: boolean;
 }) {
   const selectedOption = getPaymentMethodOption(selected) ?? PAYMENT_METHOD_OPTIONS[0];
   const selectedIndex = Math.max(0, PAYMENT_METHOD_OPTIONS.findIndex((option) => option.code === selected));
@@ -721,6 +950,7 @@ function PaymentMethodSelect({
   }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (disabled) return;
     if (event.key === "Escape") {
       if (open) {
         event.preventDefault();
@@ -759,6 +989,7 @@ function PaymentMethodSelect({
         aria-controls="checkout-payment-method-options"
         aria-activedescendant={open ? `checkout-payment-method-${PAYMENT_METHOD_OPTIONS[activeIndex]?.code ?? selected}` : undefined}
         onClick={() => onOpenChange(!open)}
+        disabled={disabled}
       >
         <span className="flex min-w-0 items-center gap-2">
           <PaymentMethodIcon method={selectedOption.code} />
@@ -2193,10 +2424,12 @@ function SkuSelector({
   options,
   selectedSkuId,
   onSelectSku,
+  disabled,
 }: {
   options: SkuOption[];
   selectedSkuId: string;
   onSelectSku: (skuId: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -2209,6 +2442,7 @@ function SkuSelector({
               type="button"
               key={sku.id}
               onClick={() => onSelectSku(sku.id)}
+              disabled={disabled}
               className={cn(
                 "min-w-0 rounded-lg border bg-white px-3 py-3 text-center transition-all duration-150 hover:scale-[1.015] hover:shadow-sm",
                 selected

@@ -2151,11 +2151,35 @@ test("order API keeps an RPC-created order successful when agreement evidence is
   assert.match(checkout, /client_request_id: clientRequestIdRef\.current/);
   assert.doesNotMatch(checkout, /clientRequestIdRef\.current\s*=\s*["']{2}\s*;/);
   assert.match(checkout, /if \(orderNo\) \{\s*router\.push\(`\/payment\?order=/);
-  assert.match(checkout, /if \(!productRow \|\| submitLoading\) return/);
-  assert.match(checkout, /disabled=\{submitLoading\}/);
+  assert.match(checkout, /if \(!productRow \|\| submitLoading \|\| submissionGuardRef\.current\.isActive\(\)\) return/);
+  assert.match(checkout, /disabled=\{submitLoading \|\| Boolean\(balanceSubmissionBlockReason\)\}/);
   assert.match(checkout, /type="button"[\s\S]*?onClick=\{handleSubmit\}/);
   assert.match(checkout, /id="checkout-submit-feedback"[\s\S]*?aria-live="polite"/);
   assert.match(checkout, /aria-describedby="checkout-submit-feedback"/);
+});
+
+test("checkout reads CNY balance and keeps insufficient-balance retries on the original order", () => {
+  const checkout = file("app/checkout/page.tsx");
+  const flow = file("lib/checkout/balance-flow.mjs");
+
+  assert.match(checkout, /fetch\("\/api\/account\/assets", \{ cache: "no-store" \}\)/);
+  assert.match(checkout, /window\.addEventListener\("focus", refreshBalance\)/);
+  assert.match(checkout, /ACCOUNT_BALANCE_UPDATED_EVENT/);
+  assert.match(checkout, /balanceSubmissionBlockReason/);
+  assert.match(checkout, /disabled=\{submitLoading \|\| Boolean\(balanceSubmissionBlockReason\)\}/);
+  assert.match(checkout, /余额不足，还需充值/);
+  assert.match(checkout, /\/products\/account-recharge\?returnTo=/);
+  assert.match(checkout, /balance_insufficient_existing_order/);
+  assert.match(checkout, /window\.sessionStorage\.setItem\(checkoutSessionKey/);
+  assert.match(checkout, /clientRequestIdRef\.current = requestId/);
+  assert.match(checkout, /继续支付原订单/);
+  assert.match(checkout, /submissionGuardRef\.current\.tryStart\(\)/);
+  assert.match(checkout, /submissionGuardRef\.current\.finish\(\)/);
+
+  assert.match(flow, /Math\.round\(\(value \+ Number\.EPSILON\) \* CNY_SCALE\)/);
+  assert.match(flow, /balanceCents >= orderCents/);
+  assert.match(flow, /status === 402 && orderNo/);
+  assert.doesNotMatch(flow, /USDT|BEP20|wallet_accounts|profiles\.balance/);
 });
 
 test("checkout and user order views keep payment and fulfillment presentation scoped", () => {
