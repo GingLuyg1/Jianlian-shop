@@ -57,6 +57,17 @@ export type RechargeRecord = {
   feeAmount: number;
   payableAmount: number;
   creditedAmount: number;
+  requestedCnyAmount: string | null;
+  expectedUsdtAmount: string | null;
+  actualReceivedUsdt: string | null;
+  creditedCnyAmount: string | null;
+  lockedMarketRate: string | null;
+  lockedSettlementRate: string | null;
+  rateSource: string | null;
+  rateEffectiveDate: string | null;
+  rateLockedAt: string | null;
+  paymentAddress: string | null;
+  paymentTokenContract: string | null;
   status: RechargeStatus;
   createdAt: string;
   paidAt: string | null;
@@ -238,12 +249,28 @@ export function normalizeRechargeRow(row: AnyRow): RechargeRecord {
     feeAmount: finiteNumber(row.fee_amount),
     payableAmount: finiteNumber(row.payable_amount),
     creditedAmount: finiteNumber(row.credited_amount ?? row.received_amount),
+    requestedCnyAmount: decimalTextOrNull(row.requested_cny_amount),
+    expectedUsdtAmount: decimalTextOrNull(row.expected_usdt_amount),
+    actualReceivedUsdt: decimalTextOrNull(row.actual_received_usdt),
+    creditedCnyAmount: decimalTextOrNull(row.credited_cny_amount),
+    lockedMarketRate: decimalTextOrNull(row.locked_market_rate),
+    lockedSettlementRate: decimalTextOrNull(row.locked_settlement_rate),
+    rateSource: textOrNull(row.rate_source),
+    rateEffectiveDate: textOrNull(row.rate_effective_date),
+    rateLockedAt: textOrNull(row.rate_locked_at),
+    paymentAddress: textOrNull(row.payment_address),
+    paymentTokenContract: textOrNull(row.payment_token_contract),
     status,
     createdAt: String(row.created_at ?? ""),
     paidAt: textOrNull(row.paid_at),
     completedAt: textOrNull(row.completed_at ?? row.paid_at),
     reviewReason: textOrNull(row.review_reason ?? row.error_summary),
   };
+}
+
+function decimalTextOrNull(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return textOrNull(value);
 }
 
 export function channelLabel(code: string) {

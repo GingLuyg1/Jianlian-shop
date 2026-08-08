@@ -9,6 +9,12 @@ import {
 import type { PaymentChannel, RechargeStatus } from "@/lib/payments/channel-types";
 import { getPaymentProvider } from "@/lib/payments/providers";
 import {
+  calculateExpectedUsdtAmount,
+  compareRechargeDecimals,
+  parseRequestedCnyAmount,
+} from "@/lib/payments/recharge-rate.mjs";
+import { loadCurrentRechargeDailyRate } from "@/lib/payments/recharge-rate-service";
+import {
   classifyPublicRechargeAmountRange,
   isKnownPaymentChannelCode,
   parsePublicRechargeAmount,
@@ -33,7 +39,7 @@ import { parseRechargeStatusStrict } from "@/lib/recharges/status-machine";
 export const dynamic = "force-dynamic";
 
 const rechargeSelect =
-  "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,status,created_at,paid_at,completed_at,review_reason,error_summary";
+  "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,status,created_at,paid_at,completed_at,review_reason,error_summary";
 const allowedCreateKeys = new Set(["channel", "payment_method", "amount", "currency", "customer_note", "client_request_id", "clientRequestId"]);
 const reusableRechargeStatuses = [
   "pending",
@@ -116,6 +122,7 @@ export async function POST(request: Request) {
   const currency = typeof body.currency === "string" ? body.currency.trim().toUpperCase() : "";
   const customerNote = typeof body.customer_note === "string" ? body.customer_note.trim() : "";
   const rawAmount = parsePublicRechargeAmount(body.amount, 6);
+  const requestedCnyAmount = parseRequestedCnyAmount(body.amount);
   const clientRequestId = normalizeRequestId(body.client_request_id ?? body.clientRequestId);
   if (!isKnownPaymentChannelCode(channelCode)) {
     return NextResponse.json(
@@ -169,14 +176,56 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (currency && currency !== channel.currency) return NextResponse.json({ error: "Recharge currency does not match payment channel." }, { status: 400 });
+    const isUsdtCnyRecharge = channel.code === "usdt_bep20";
+    if (isUsdtCnyRecharge && channel.reviewMode !== "manual") {
+      return NextResponse.json(
+        { error: "USDT-BEP20 账号充值仅支持人工审核模式", code: "RECHARGE_REVIEW_MODE_INVALID" },
+        { status: 400 },
+      );
+    }
+    if (!isUsdtCnyRecharge && currency && currency !== channel.currency) {
+      return NextResponse.json({ error: "Recharge currency does not match payment channel." }, { status: 400 });
+    }
+    if (channel.currency === "USDT" && !isUsdtCnyRecharge) {
+      return NextResponse.json(
+        { error: "该 USDT 充值渠道尚未支持人民币余额换算", code: "RECHARGE_SETTLEMENT_UNSUPPORTED" },
+        { status: 400 },
+      );
+    }
+    if (isUsdtCnyRecharge && (currency && currency !== "CNY")) {
+      return NextResponse.json(
+        { error: "账号充值金额必须使用人民币", code: "RECHARGE_CURRENCY_INVALID" },
+        { status: 400 },
+      );
+    }
 
-    const summary = calculateRechargeAmounts(channel, rawAmount);
-    const amountRange = classifyPublicRechargeAmountRange(
-      summary.amount,
-      channel.minimumAmount,
-      channel.maximumAmount,
-    );
+    const serviceClient = getSupabaseServiceRoleClient();
+    if (!serviceClient) {
+      return paymentFailure(null, "service");
+    }
+    const rate = isUsdtCnyRecharge ? await loadCurrentRechargeDailyRate(serviceClient) : null;
+    if (isUsdtCnyRecharge && (!requestedCnyAmount || !rate)) {
+      return NextResponse.json(
+        { error: rate ? "充值人民币金额格式无效" : "今日充值汇率尚未设置", code: rate ? "RECHARGE_AMOUNT_INVALID" : "RECHARGE_RATE_NOT_CONFIGURED" },
+        { status: rate ? 400 : 503 },
+      );
+    }
+    const expectedUsdtAmount = rate && requestedCnyAmount
+      ? calculateExpectedUsdtAmount(requestedCnyAmount, String(rate.settlement_rate))
+      : null;
+    if (isUsdtCnyRecharge && !expectedUsdtAmount) {
+      return NextResponse.json({ error: "充值换算失败", code: "RECHARGE_RATE_INVALID" }, { status: 503 });
+    }
+
+    const summary = isUsdtCnyRecharge ? null : calculateRechargeAmounts(channel, rawAmount);
+    const amountRange = isUsdtCnyRecharge && expectedUsdtAmount
+      ? classifyExactRange(expectedUsdtAmount, channel.minimumAmount, channel.maximumAmount ?? 0)
+      : summary
+        ? classifyPublicRechargeAmountRange(summary.amount, channel.minimumAmount, channel.maximumAmount)
+        : "invalid";
+    if (amountRange === "invalid") {
+      return NextResponse.json({ error: "充值金额格式无效", code: "RECHARGE_AMOUNT_INVALID" }, { status: 400 });
+    }
     if (amountRange === "below_minimum") {
       return NextResponse.json(
         { error: `Minimum recharge amount for this channel is ${channel.minimumAmount} ${channel.currency}.` },
@@ -194,12 +243,12 @@ export async function POST(request: Request) {
       userId: context.user.id,
       businessId: clientRequestId,
       requestId: clientRequestId,
-      orderAmount: summary.amount,
-      currency: channel.currency,
+      orderAmount: rawAmount,
+      currency: isUsdtCnyRecharge ? "CNY" : channel.currency,
       paymentChannel: channel.code,
       riskContext: {
         provider: channel.provider,
-        payable_amount: summary.payableAmount,
+        payable_amount: isUsdtCnyRecharge ? expectedUsdtAmount : summary?.payableAmount,
       },
     });
 
@@ -220,27 +269,47 @@ export async function POST(request: Request) {
     }
 
     failureOperation = "create";
-    const serviceClient = getSupabaseServiceRoleClient();
-    if (!serviceClient) {
-      return paymentFailure(null, "service");
-    }
-
     const rechargeNo = await insertRecharge(serviceClient, {
       userId: context.user.id,
       userEmail: context.user.email ?? null,
       channel,
-      amount: summary.amount,
-      fee: summary.fee,
-      payableAmount: summary.payableAmount,
+      amount: summary?.amount ?? rawAmount,
+      fee: summary?.fee ?? 0,
+      payableAmount: summary?.payableAmount ?? rawAmount,
       clientRequestId,
       customerNote,
+      rateSnapshot: rate && requestedCnyAmount && expectedUsdtAmount ? {
+        requestedCnyAmount,
+        expectedUsdtAmount,
+        marketRate: String(rate.market_rate),
+        settlementRate: String(rate.settlement_rate),
+        source: rate.source,
+        effectiveDate: rate.effective_date,
+        effectiveAt: rate.effective_at,
+      } : null,
     });
 
     if (channel.reviewMode === "manual") {
-      return NextResponse.json({ rechargeNo, status: "waiting_payment", amount: summary.amount, fee: summary.fee, payableAmount: summary.payableAmount, reviewMode: "manual" }, { status: 201 });
+      return NextResponse.json({
+        rechargeNo,
+        status: "waiting_payment",
+        amount: isUsdtCnyRecharge ? requestedCnyAmount : summary?.amount,
+        requestedCnyAmount: isUsdtCnyRecharge ? requestedCnyAmount : null,
+        expectedUsdtAmount,
+        lockedMarketRate: rate ? String(rate.market_rate) : null,
+        lockedSettlementRate: rate ? String(rate.settlement_rate) : null,
+        rateSource: rate?.source ?? null,
+        rateEffectiveDate: rate?.effective_date ?? null,
+        fee: isUsdtCnyRecharge ? "0.00" : summary?.fee,
+        payableAmount: isUsdtCnyRecharge ? expectedUsdtAmount : summary?.payableAmount,
+        reviewMode: "manual",
+      }, { status: 201 });
     }
 
     try {
+      if (!summary) {
+        return NextResponse.json({ error: "充值渠道结算模式无效", code: "RECHARGE_SETTLEMENT_INVALID" }, { status: 400 });
+      }
       const result = await getPaymentProvider(channel.provider).createPayment({
         rechargeNo,
         channel,
@@ -274,7 +343,7 @@ async function findExistingRecharge(
 ) {
   const { data, error } = await supabase
     .from("account_recharges")
-    .select("recharge_no,status,amount,requested_amount,fee_amount,payable_amount")
+    .select("recharge_no,status,amount,requested_amount,fee_amount,payable_amount,requested_cny_amount,expected_usdt_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date")
     .eq("user_id", userId)
     .eq("client_request_id", clientRequestId)
     .in("status", reusableRechargeStatuses)
@@ -295,6 +364,12 @@ async function findExistingRecharge(
     amount: finiteNumber(data.requested_amount ?? data.amount),
     fee: finiteNumber(data.fee_amount),
     payableAmount: finiteNumber(data.payable_amount),
+    requestedCnyAmount: data.requested_cny_amount ? String(data.requested_cny_amount) : null,
+    expectedUsdtAmount: data.expected_usdt_amount ? String(data.expected_usdt_amount) : null,
+    lockedMarketRate: data.locked_market_rate ? String(data.locked_market_rate) : null,
+    lockedSettlementRate: data.locked_settlement_rate ? String(data.locked_settlement_rate) : null,
+    rateSource: data.rate_source ? String(data.rate_source) : null,
+    rateEffectiveDate: data.rate_effective_date ? String(data.rate_effective_date) : null,
     reused: true,
   };
 }
@@ -310,6 +385,15 @@ async function insertRecharge(
     payableAmount: number;
     clientRequestId: string;
     customerNote: string;
+    rateSnapshot: {
+      requestedCnyAmount: string;
+      expectedUsdtAmount: string;
+      marketRate: string;
+      settlementRate: string;
+      source: string;
+      effectiveDate: string;
+      effectiveAt: string;
+    } | null;
   }
 ) {
   let lastError: unknown = null;
@@ -323,12 +407,12 @@ async function insertRecharge(
       channel_code: input.channel.code,
       channel_name: input.channel.name,
       provider: input.channel.provider,
-      currency: input.channel.currency,
+      currency: input.rateSnapshot ? "CNY" : input.channel.currency,
       network: input.channel.networkLabel ?? null,
-      amount: input.amount,
-      requested_amount: input.amount,
-      fee_amount: input.fee,
-      payable_amount: input.payableAmount,
+      amount: input.rateSnapshot?.requestedCnyAmount ?? input.amount,
+      requested_amount: input.rateSnapshot?.requestedCnyAmount ?? input.amount,
+      fee_amount: input.rateSnapshot ? "0.00" : input.fee,
+      payable_amount: input.rateSnapshot?.requestedCnyAmount ?? input.payableAmount,
       received_amount: 0,
       credited_amount: 0,
       status: input.channel.reviewMode === "manual" ? "waiting_payment" : "pending",
@@ -337,12 +421,27 @@ async function insertRecharge(
       review_mode: input.channel.reviewMode ?? "provider",
       customer_note: input.customerNote || null,
       user_note: input.customerNote || null,
+      ...(input.rateSnapshot ? {
+        settlement_currency: "USDT",
+        requested_cny_amount: input.rateSnapshot.requestedCnyAmount,
+        expected_usdt_amount: input.rateSnapshot.expectedUsdtAmount,
+        actual_received_usdt: null,
+        credited_cny_amount: null,
+        locked_market_rate: input.rateSnapshot.marketRate,
+        locked_settlement_rate: input.rateSnapshot.settlementRate,
+        rate_source: input.rateSnapshot.source,
+        rate_effective_date: input.rateSnapshot.effectiveDate,
+        rate_effective_at: input.rateSnapshot.effectiveAt,
+        rate_locked_at: new Date().toISOString(),
+        payment_address: input.channel.manualPayment?.payment_address ?? null,
+        payment_token_contract: input.channel.manualPayment?.token_contract ?? null,
+      } : {}),
     };
 
     const insertResult = await serviceClient.from("account_recharges").insert(row);
     if (!insertResult.error) return rechargeNo;
 
-    if (isMissingClientRequestColumn(insertResult.error)) {
+    if (!input.rateSnapshot && isMissingClientRequestColumn(insertResult.error)) {
       const retryRow = { ...row };
       delete (retryRow as Partial<typeof row>).client_request_id;
       const retry = await serviceClient.from("account_recharges").insert(retryRow);
@@ -420,6 +519,15 @@ function normalizeRequestId(value: unknown) {
 function finiteNumber(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function classifyExactRange(amount: string, minimum: number, maximum: number) {
+  const minimumComparison = compareRechargeDecimals(amount, String(minimum));
+  const maximumComparison = compareRechargeDecimals(amount, String(maximum));
+  if (minimumComparison === null || maximumComparison === null) return "invalid";
+  if (minimumComparison < 0) return "below_minimum";
+  if (maximum > 0 && maximumComparison > 0) return "above_maximum";
+  return "valid";
 }
 
 function isMissingClientRequestColumn(error: unknown) {

@@ -3926,7 +3926,7 @@ test("client privilege hardening phase 1 removes the redundant authenticated rec
   );
   assert.match(
     route,
-    /if\s*\(channel\.reviewMode\s*===\s*"manual"\)[\s\S]{0,300}status:\s*"waiting_payment"[\s\S]{0,300}reviewMode:\s*"manual"/,
+    /if\s*\(channel\.reviewMode\s*===\s*"manual"\)[\s\S]{0,900}status:\s*"waiting_payment"[\s\S]{0,900}reviewMode:\s*"manual"/,
   );
   assert.doesNotMatch(
     route,

@@ -41,9 +41,15 @@ export async function POST(request: Request, { params }: { params: { rechargeNo:
   if (!context) return NextResponse.json({ error: "请先登录后再提交充值凭证。" }, { status: 401 });
   const rateLimit = checkRateLimit("media_upload", getUserRateLimitKey(context.user.id, `recharge_proof:${params.rechargeNo}`));
   if (!rateLimit.allowed) return rateLimit.response!;
-  const { data: recharge, error: readError } = await context.supabase.from("account_recharges").select("id,recharge_no,user_id,status,proof_paths,review_mode,payable_amount").eq("recharge_no", params.rechargeNo).eq("user_id", context.user.id).maybeSingle();
+  const { data: recharge, error: readError } = await context.supabase.from("account_recharges").select("id,recharge_no,user_id,status,proof_paths,review_mode,payable_amount,settlement_currency").eq("recharge_no", params.rechargeNo).eq("user_id", context.user.id).maybeSingle();
   if (readError) return NextResponse.json({ error: "充值申请读取失败，请稍后重试。" }, { status: 500 });
   if (!recharge) return NextResponse.json({ error: "充值申请不存在。" }, { status: 404 });
+  if (recharge.settlement_currency === "USDT") {
+    return NextResponse.json(
+      { error: "USDT-BEP20 充值必须通过 TxHash 链上核验", code: "RECHARGE_BEP20_VERIFICATION_REQUIRED" },
+      { status: 400 },
+    );
+  }
   if (!["pending", "waiting_payment", "submitted", "rejected"].includes(String(recharge.status))) return NextResponse.json({ error: "当前充值状态不允许提交凭证。" }, { status: 409 });
   if (recharge.review_mode !== "manual") return NextResponse.json({ error: "当前渠道不使用人工凭证审核。" }, { status: 400 });
 
