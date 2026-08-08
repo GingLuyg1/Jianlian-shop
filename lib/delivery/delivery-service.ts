@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { fulfillDajuOrderWithSupabase } from "@/lib/providers/daju/fulfillment";
+
 export type DeliveryServiceResult = {
   ok: boolean;
   order_id?: string;
@@ -52,6 +54,14 @@ export async function deliverDigitalOrder(
   orderId: string,
   triggerSource = "server"
 ): Promise<DeliveryServiceResult> {
+  const supplier = await fulfillDajuOrderWithSupabase(supabase, orderId, triggerSource);
+  if (supplier.uncertain > 0) {
+    throw new Error("供应商采购结果不明确，禁止自动重试，请人工核对");
+  }
+  if (supplier.failed > 0 || supplier.needsInput > 0) {
+    throw new Error("供应商自动发货未完成，请在后台人工处理");
+  }
+
   const { data, error } = await supabase.rpc("deliver_digital_order", {
     p_order_id: orderId,
     p_trigger_source: triggerSource,
@@ -80,5 +90,8 @@ export async function deliverDigitalOrder(
     throw new Error(result.message || "自动发货处理失败，等待人工处理");
   }
 
-  return result;
+  return {
+    ...result,
+    delivered_count: Number(result.delivered_count ?? 0) + supplier.fulfilled,
+  };
 }
