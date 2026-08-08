@@ -42,6 +42,19 @@ test("strictly parses product list, SKU detail, required inputs and balance", ()
   assert.equal(parseDajuProductsResponse({ products: [{ ...product, stock: "9" }] }), null);
 });
 
+test("accepts the real product-detail max_qty zero sentinel without weakening other quantity validation", () => {
+  const realDetailShape = {
+    ...product,
+    max_qty: 0,
+    specs: [{ name: "duration", values: ["monthly"] }],
+    sku_variants: [{ id: 1, title: "monthly" }],
+    required_inputs: [],
+  };
+  assert.equal(parseDajuProductDetailResponse({ success: true, product: realDetailShape })?.maxQty, 0);
+  assert.equal(parseDajuProductDetailResponse({ product: { ...realDetailShape, max_qty: -1 } }), null);
+  assert.equal(parseDajuProductDetailResponse({ product: { ...realDetailShape, max_qty: 0.5 } }), null);
+});
+
 test("strictly parses fulfilled purchases with multiple delivery secrets", () => {
   const parsed = parseDajuOrderResponse(order);
   assert.deepEqual(parsed?.delivered, ["CARD-A", "CARD-B"]);
