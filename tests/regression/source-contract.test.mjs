@@ -2158,6 +2158,20 @@ test("order API keeps an RPC-created order successful when agreement evidence is
   assert.match(checkout, /aria-describedby="checkout-submit-feedback"/);
 });
 
+test("account assets keeps balance available when display_name is missing", () => {
+  const accountAssets = file("app/api/account/assets/route.ts");
+  const profileCompatibility = file("lib/account/assets-profile-compat.mjs");
+
+  assert.match(accountAssets, /ACCOUNT_ASSETS_PROFILE_SELECT/);
+  assert.match(accountAssets, /ACCOUNT_ASSETS_CORE_PROFILE_SELECT/);
+  assert.match(accountAssets, /normalizeAccountAssetsProfile/);
+  assert.match(accountAssets, /getAccountAssetsAvailableBalance\(profileResult\.profile\)/);
+  assert.match(accountAssets, /if \(isMissingColumn\(error\)\)[\s\S]*?error: null/);
+  assert.match(accountAssets, /loadBalanceTransactions\(supabase, user\.id\)/);
+  assert.match(profileCompatibility, /ACCOUNT_ASSETS_PROFILE_SELECT = "email,display_name,role,created_at,balance"/);
+  assert.match(profileCompatibility, /ACCOUNT_ASSETS_CORE_PROFILE_SELECT = "email,balance"/);
+});
+
 test("checkout reads CNY balance and keeps insufficient-balance retries on the original order", () => {
   const checkout = file("app/checkout/page.tsx");
   const flow = file("lib/checkout/balance-flow.mjs");
