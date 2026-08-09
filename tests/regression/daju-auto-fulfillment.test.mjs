@@ -88,10 +88,14 @@ test("snapshot fields, not later catalog metadata, preserve supplier and local h
 
 test("runtime trusts the immutable order-item supplier snapshot instead of later product metadata", () => {
   const fulfillment = file("lib/providers/daju/fulfillment.ts");
+  const candidate = file("lib/providers/daju/fulfillment-candidate.mjs");
   assert.match(fulfillment, /product_snapshot/);
-  assert.match(fulfillment, /snapshot\.supplier_binding/);
-  assert.match(fulfillment, /parseDajuProductBinding\(snapshotBinding\)/);
-  assert.doesNotMatch(fulfillment, /parseDajuProductBinding\(product\.metadata/);
+  assert.match(fulfillment, /classifyDajuFulfillmentCandidate\(item\)/);
+  assert.doesNotMatch(fulfillment, /from\("products"\)|from\("product_skus"\)/);
+  assert.match(candidate, /snapshot\.supplier_binding/);
+  assert.match(candidate, /parseDajuProductBinding\(snapshotBinding\)/);
+  assert.doesNotMatch(`${fulfillment}\n${candidate}`, /parseDajuProductBinding\(product\.metadata/);
+  assert.doesNotMatch(candidate, /current_product_metadata|current_sku_metadata/);
 });
 
 test("candidate migration never exposes supplier delivery content in logs", () => {
@@ -118,6 +122,35 @@ test("Daju product binding is metadata-only and never synchronizes supplier cost
   assert.match(binding, /supplier_max_unit_cost/);
   const update = binding.match(/\.update\(\{[\s\S]*?\}\)/)?.[0] ?? "";
   assert.doesNotMatch(update, /\bprice\b/);
+});
+
+test("joint test rollout artifacts are read-only, ordered and fail closed", () => {
+  const precheck = file("docs/audits/20260810-account-recharge-daju-test-precheck.sql");
+  const rechargePostcheck = file("docs/audits/20260809-account-recharge-usdt-cny-v1-postcheck.sql");
+  const dajuPostcheck = file("docs/audits/20260810-daju-supplier-fulfillment-v1-postcheck.sql");
+  const checklist = file("docs/account-recharge-daju-test-execution-checklist.md");
+  const writeStatement = /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy|vacuum|analyze|refresh)\b/im;
+
+  for (const sql of [precheck, rechargePostcheck, dajuPostcheck]) {
+    const uncommented = sql.replace(/--[^\r\n]*/g, "");
+    assert.match(uncommented, /begin;[\s\S]*set transaction read only;/i);
+    assert.match(uncommented, /rollback;/i);
+    assert.doesNotMatch(uncommented, writeStatement);
+  }
+  assert.match(precheck, /READY_FOR_TEST_MIGRATIONS/);
+  assert.match(dajuPostcheck, /order_items\.product_snapshot/);
+  assert.match(dajuPostcheck, /supplier_product\.metadata[\s\S]*= 0/);
+  const ordered = [
+    "20260810-account-recharge-daju-test-precheck.sql",
+    "20260809120000_account_recharge_usdt_cny_v1.sql",
+    "20260809-account-recharge-usdt-cny-v1-postcheck.sql",
+    "20260810120000_daju_supplier_fulfillment_v1.sql",
+    "20260810-daju-supplier-fulfillment-v1-postcheck.sql",
+  ].map((name) => checklist.indexOf(name));
+  assert.ok(ordered.every((index) => index >= 0));
+  assert.ok(ordered.every((index, position) => position === 0 || index > ordered[position - 1]));
+  assert.match(checklist, /STOP/g);
+  assert.match(checklist, /不调用真实 `\/purchase`/);
 });
 
 test("Daju rollout artifacts are candidate-only and SQL remains unexecuted", () => {

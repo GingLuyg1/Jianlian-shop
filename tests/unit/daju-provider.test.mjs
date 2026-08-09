@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createDajuHttpClient, DajuClientCoreError } from "../../lib/providers/daju/client-core.mjs";
+import { classifyDajuFulfillmentCandidate } from "../../lib/providers/daju/fulfillment-candidate.mjs";
 import { fulfillDajuCandidates } from "../../lib/providers/daju/fulfillment-core.mjs";
 import {
   compareDajuDecimal,
@@ -29,6 +30,80 @@ const order = {
   unit_price: "8.50", total_price: "17.00", balance_after: "30.00",
   status: "completed", delivered: ["CARD-A", "CARD-B"], duplicate: false,
 };
+
+function orderItem(supplierBinding, overrides = {}) {
+  return {
+    id: "item-1",
+    order_id: "order-1",
+    product_id: "product-1",
+    sku_id: null,
+    quantity: 1,
+    delivery_type: "automatic",
+    product_snapshot: supplierBinding === undefined ? { id: "product-1" } : { supplier_binding: supplierBinding },
+    ...overrides,
+  };
+}
+
+test("order snapshot is the sole supplier routing authority after checkout", () => {
+  const frozen = {
+    fulfillment_source: "supplier",
+    supplier: "daju",
+    supplier_product_id: 11,
+    supplier_sku: "SNAPSHOT-SKU",
+    supplier_inputs_mapping: { email: "customer_email" },
+    supplier_max_unit_cost: "8.50",
+  };
+
+  const supplier = classifyDajuFulfillmentCandidate(orderItem(frozen, {
+    current_product_metadata: { fulfillment_source: "local" },
+  }));
+  assert.equal(supplier.kind, "daju");
+  assert.equal(supplier.binding.productId, 11);
+  assert.equal(supplier.binding.sku, "SNAPSHOT-SKU");
+  assert.deepEqual(supplier.binding.inputsMapping, { email: "customer_email" });
+  assert.equal(supplier.binding.maxUnitCost, "8.50");
+
+  assert.deepEqual(classifyDajuFulfillmentCandidate(orderItem(undefined, {
+    current_product_metadata: frozen,
+  })), { kind: "skip", reason: "LEGACY_LOCAL" });
+  assert.deepEqual(classifyDajuFulfillmentCandidate(orderItem({ ...frozen, supplier: "other" }, {
+    current_product_metadata: frozen,
+  })), { kind: "skip", reason: "OTHER_SUPPLIER" });
+});
+
+test("malformed Daju snapshots require validation without catalog fallback", () => {
+  assert.deepEqual(
+    classifyDajuFulfillmentCandidate(orderItem({ fulfillment_source: "supplier", supplier: "daju" })),
+    { kind: "validation", reason: "SUPPLIER_BINDING_INVALID", binding: null }
+  );
+  assert.deepEqual(
+    classifyDajuFulfillmentCandidate(orderItem("malformed-binding")),
+    { kind: "validation", reason: "SUPPLIER_BINDING_INVALID", binding: null }
+  );
+});
+
+test("SKU and no-SKU supplier items both use their frozen snapshot binding", () => {
+  const noSku = classifyDajuFulfillmentCandidate(orderItem({
+    fulfillment_source: "supplier", supplier: "daju", supplier_product_id: 11,
+  }));
+  const withSku = classifyDajuFulfillmentCandidate(orderItem({
+    fulfillment_source: "supplier", supplier: "daju", supplier_product_id: 12, supplier_sku: "SKU-PRO",
+  }, { sku_id: "sku-1" }));
+  assert.equal(noSku.kind, "daju");
+  assert.equal(noSku.binding.productId, 11);
+  assert.equal(noSku.binding.sku, null);
+  assert.equal(withSku.kind, "daju");
+  assert.equal(withSku.binding.productId, 12);
+  assert.equal(withSku.binding.sku, "SKU-PRO");
+});
+
+test("local digital items remain outside Daju routing", () => {
+  assert.deepEqual(classifyDajuFulfillmentCandidate(orderItem(null)), { kind: "skip", reason: "LEGACY_LOCAL" });
+  assert.deepEqual(
+    classifyDajuFulfillmentCandidate(orderItem(undefined, { delivery_type: "manual_delivery" })),
+    { kind: "skip", reason: "NOT_AUTOMATIC" }
+  );
+});
 
 test("strictly parses product list, SKU detail, required inputs and balance", () => {
   assert.equal(parseDajuProductsResponse({ products: [product] })?.[0].id, 11);
@@ -188,6 +263,16 @@ test("fulfilled workflow stores all secrets once and reuses the stable request i
   assert.deepEqual(result, { handled: 1, fulfilled: 1, failed: 0, uncertain: 0, needsInput: 0 });
   assert.equal(ctx.purchases[0].requestId, "jianlian:order-1:item-1");
   assert.equal(ctx.outcomes[0].deliveredContent, "CARD-A\nCARD-B");
+});
+
+test("invalid frozen binding never reaches supplier purchase", async () => {
+  const ctx = runtime();
+  const candidate = { ...baseCandidate(), binding: null, bindingInvalid: true };
+  const result = await fulfillDajuCandidates({ ...coreInput(ctx), candidates: [candidate] });
+  assert.equal(result.failed, 1);
+  assert.equal(ctx.purchases.length, 0);
+  assert.equal(ctx.outcomes[0].state, "FAILED_VALIDATION");
+  assert.equal(ctx.outcomes[0].code, "SUPPLIER_BINDING_INVALID");
 });
 
 test("purchase without delivered queries order once", async () => {

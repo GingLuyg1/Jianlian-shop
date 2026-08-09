@@ -3,9 +3,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createDajuClient } from "./client";
+import { classifyDajuFulfillmentCandidate } from "./fulfillment-candidate.mjs";
 import { fulfillDajuCandidates } from "./fulfillment-core.mjs";
 import {
-  isDajuSupplierMetadata,
   parseDajuProductBinding,
   validateDajuPurchaseReadiness,
 } from "./mapper.mjs";
@@ -94,27 +94,15 @@ export function createSupabaseDajuFulfillmentStore(service: SupabaseClient): Daj
       if (itemError) throw new Error("SUPPLIER_ITEMS_READ_FAILED");
       const candidates: DajuFulfillmentCandidate[] = [];
       for (const item of items ?? []) {
-        if (!["automatic", "auto", "card", "account"].includes(String(item.delivery_type))) continue;
-        const { data: product, error: productError } = await service.from("products").select("id,metadata").eq("id", item.product_id).maybeSingle();
-        if (productError || !product) throw new Error("SUPPLIER_PRODUCT_READ_FAILED");
-        let skuMetadata: unknown = null;
-        if (item.sku_id) {
-          const { data: sku, error: skuError } = await service.from("product_skus").select("id,metadata").eq("id", item.sku_id).maybeSingle();
-          if (skuError || !sku) throw new Error("SUPPLIER_SKU_READ_FAILED");
-          skuMetadata = sku.metadata;
-        }
-        if (!isDajuSupplierMetadata(product.metadata, skuMetadata)) continue;
-        const snapshot = item.product_snapshot && typeof item.product_snapshot === "object" && !Array.isArray(item.product_snapshot)
-          ? item.product_snapshot as Record<string, unknown>
-          : {};
-        const snapshotBinding = snapshot.supplier_binding;
-        const binding = parseDajuProductBinding(snapshotBinding);
+        const classification = classifyDajuFulfillmentCandidate(item);
+        if (classification.kind === "skip") continue;
+        const binding = classification.kind === "daju" ? classification.binding : null;
         candidates.push({
           orderId,
           orderItemId: String(item.id),
           quantity: Number(item.quantity),
           binding,
-          bindingInvalid: !isDajuSupplierMetadata(snapshotBinding) || !binding || !Number.isSafeInteger(Number(item.quantity)) || Number(item.quantity) < 1,
+          bindingInvalid: classification.kind === "validation" || !Number.isSafeInteger(Number(item.quantity)) || Number(item.quantity) < 1,
           orderFields: {
             customer_email: order.customer_email,
             customer_name: order.customer_name,
@@ -126,12 +114,15 @@ export function createSupabaseDajuFulfillmentStore(service: SupabaseClient): Daj
       return candidates;
     },
     async claim(candidate, requestId, triggerSource) {
+      if (!candidate.binding || candidate.bindingInvalid) {
+        throw new Error("SUPPLIER_BINDING_REQUIRES_MANUAL_REVIEW");
+      }
       const { data, error } = await service.rpc("claim_daju_supplier_fulfillment", {
         p_order_id: candidate.orderId,
         p_order_item_id: candidate.orderItemId,
         p_request_id: requestId,
-        p_supplier_product_id: candidate.binding?.productId ?? null,
-        p_supplier_sku: candidate.binding?.sku ?? null,
+        p_supplier_product_id: candidate.binding.productId,
+        p_supplier_sku: candidate.binding.sku,
         p_trigger_source: triggerSource,
       });
       if (error) throw new Error("SUPPLIER_CLAIM_FAILED");
