@@ -236,6 +236,26 @@ test("runtime trusts the immutable order-item supplier snapshot instead of later
   assert.doesNotMatch(candidate, /current_product_metadata|current_sku_metadata/);
 });
 
+test("admin existing-order reconciliation is GET-only and reuses the private delivery outcome boundary", () => {
+  const route = file("app/api/admin/orders/[orderId]/route.ts");
+  const fulfillment = file("lib/providers/daju/fulfillment.ts");
+  const core = file("lib/providers/daju/fulfillment-core.mjs");
+  const client = file("lib/providers/daju/client-core.mjs");
+  assert.match(route, /action === "reconcile_daju_order"/);
+  assert.match(route, /reconcileDajuExistingOrderWithSupabase/);
+  assert.match(fulfillment, /reconcileDajuExistingCandidate/);
+  assert.match(core, /input\.client\.getOrder\(input\.orderCode\)/);
+  assert.match(core, /input\.store\.recordOutcome/);
+  assert.doesNotMatch(core.match(/export async function reconcileDajuExistingCandidate[\s\S]*$/)?.[0] ?? "", /\.purchase\(/);
+  assert.match(client, /parseDajuPurchaseReference/);
+  assert.match(client, /await readOrder\(reference\.orderCode\)/);
+  const reconciliationBlock = route.slice(
+    route.indexOf('if (body?.action === "reconcile_daju_order")'),
+    route.indexOf('if (body?.action === "retry_auto_delivery")'),
+  );
+  assert.doesNotMatch(reconciliationBlock, /delivery_content|deliveredContent/);
+});
+
 test("candidate migration never exposes supplier delivery content in logs", () => {
   const migration = file("supabase/migrations/20260810120000_daju_supplier_fulfillment_v1.sql");
   for (const block of migration.match(/perform public\.write_delivery_log\([\s\S]*?\);/gi) ?? []) {

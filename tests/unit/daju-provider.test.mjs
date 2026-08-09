@@ -3,17 +3,19 @@ import test from "node:test";
 
 import { createDajuHttpClient, DajuClientCoreError } from "../../lib/providers/daju/client-core.mjs";
 import { classifyDajuFulfillmentCandidate } from "../../lib/providers/daju/fulfillment-candidate.mjs";
-import { fulfillDajuCandidates } from "../../lib/providers/daju/fulfillment-core.mjs";
+import { fulfillDajuCandidates, reconcileDajuExistingCandidate } from "../../lib/providers/daju/fulfillment-core.mjs";
 import {
   compareDajuDecimal,
   mapDajuRequiredInputs,
   parseDajuProductBinding,
   validateDajuPurchaseReadiness,
+  validateDajuExistingOrderReconciliation,
 } from "../../lib/providers/daju/mapper.mjs";
 import {
   createDajuRequestId,
   parseDajuBalanceResponse,
   parseDajuOrderResponse,
+  parseDajuPurchaseReference,
   parseDajuProductDetailResponse,
   parseDajuProductsResponse,
   redactDajuLogValue,
@@ -195,6 +197,19 @@ test("strictly parses fulfilled purchases with multiple delivery secrets", () =>
   assert.doesNotMatch(JSON.stringify(redactDajuLogValue(parsed)), /CARD-A|CARD-B/);
 });
 
+test("parses a minimal purchase order reference without weakening full order parsing", () => {
+  assert.deepEqual(parseDajuPurchaseReference({ success: true, order_code: "DJ-1" }), {
+    orderCode: "DJ-1",
+    requestId: null,
+  });
+  assert.deepEqual(parseDajuPurchaseReference({ order: { order_code: "DJ-1", request_id: order.request_id } }), {
+    orderCode: "DJ-1",
+    requestId: order.request_id,
+  });
+  assert.equal(parseDajuPurchaseReference({ success: true }), null);
+  assert.equal(parseDajuOrderResponse({ success: true, order_code: "DJ-1" }), null);
+});
+
 test("validates metadata binding, required inputs and exact cost ceiling", () => {
   const binding = parseDajuProductBinding({
     fulfillment_source: "supplier", supplier: "daju", supplier_product_id: 11,
@@ -255,6 +270,38 @@ test("purchase preserves the caller request id and can query the returned order"
   assert.deepEqual((await client.purchase({ productId: 11, requestId: order.request_id, quantity: 2, sku: "PRO", inputs: { email: "u@example.test" } })).delivered, ["CARD-A", "CARD-B"]);
   assert.equal((await client.getOrder("DJ-1")).orderCode, "DJ-1");
   assert.equal(bodies[0].request_id, order.request_id);
+});
+
+test("minimal purchase success reference is completed by one read-only order query", async () => {
+  const calls = [];
+  const client = createDajuHttpClient({
+    baseUrl: "https://supplier.example/api.php", apiKey: "placeholder",
+    fetchImpl: async (url, init) => {
+      calls.push({ url: String(url), method: init.method ?? "GET" });
+      if (init.method === "POST") {
+        return new Response(JSON.stringify({ success: true, order_code: "DJ-1", request_id: order.request_id }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true, ...order }), { status: 200 });
+    },
+  });
+  const result = await client.purchase({ productId: 11, requestId: order.request_id, quantity: 2 });
+  assert.equal(result.orderCode, "DJ-1");
+  assert.deepEqual(result.delivered, ["CARD-A", "CARD-B"]);
+  assert.equal(calls.filter((entry) => entry.method === "POST").length, 1);
+  assert.equal(calls.filter((entry) => entry.method === "GET").length, 1);
+});
+
+test("purchase reference keeps the known order code when its follow-up GET is uncertain", async () => {
+  const client = createDajuHttpClient({
+    baseUrl: "https://supplier.example/api.php", apiKey: "placeholder",
+    fetchImpl: async (_url, init) => init.method === "POST"
+      ? new Response(JSON.stringify({ success: true, order_code: "DJ-1" }), { status: 200 })
+      : new Response(JSON.stringify({ success: false }), { status: 503 }),
+  });
+  await assert.rejects(
+    () => client.purchase({ productId: 11, requestId: order.request_id, quantity: 2 }),
+    (error) => error instanceof DajuClientCoreError && error.orderCode === "DJ-1"
+  );
 });
 
 test("HTTP 429 and timeout are explicit safe failures without response bodies", async () => {
@@ -364,6 +411,22 @@ test("REQUEST_PROCESSING, idempotency unavailable and transport timeout become u
   }
 });
 
+test("an uncertain purchase response persists a known supplier order code for GET-only reconciliation", async () => {
+  const error = Object.assign(new Error("response unavailable"), {
+    code: "DAJU_RESPONSE_INVALID",
+    kind: "response",
+    orderCode: "DJ-1",
+  });
+  const ctx = runtime({
+    client: { purchase: async (value) => { ctx.purchases.push(value); throw error; } },
+  });
+  const result = await fulfillDajuCandidates(coreInput(ctx));
+  assert.equal(result.uncertain, 1);
+  assert.equal(ctx.purchases.length, 1);
+  assert.equal(ctx.outcomes[0].state, "UNCERTAIN");
+  assert.equal(ctx.outcomes[0].orderCode, "DJ-1");
+});
+
 test("rate limit is retryable with the same request while balance and stock failures are terminal", async () => {
   for (const [code, state, retryable] of [
     ["RATE_LIMITED", "PENDING", true],
@@ -389,4 +452,70 @@ test("an already fulfilled claim never calls purchase again", async () => {
   assert.equal(result.fulfilled, 1);
   assert.equal(purchases, 0);
   assert.equal(ctx.outcomes.length, 0);
+});
+
+test("existing supplier order reconciliation performs GET only and persists through the existing secret outcome", async () => {
+  let queries = 0;
+  let purchases = 0;
+  const outcomes = [];
+  const candidate = baseCandidate();
+  const result = await reconcileDajuExistingCandidate({
+    candidate,
+    orderCode: "DJ-1",
+    triggerSource: "admin_reconcile_existing_daju_order",
+    createRequestId: createDajuRequestId,
+    validateReconciliation: validateDajuExistingOrderReconciliation,
+    client: {
+      getOrder: async () => { queries += 1; return parseDajuOrderResponse(order); },
+      purchase: async () => { purchases += 1; throw new Error("must not purchase"); },
+    },
+    store: {
+      claim: async (_candidate, requestId) => ({
+        action: "NONE", requestId, attemptToken: "attempt-2", status: "PURCHASING", orderCode: null,
+      }),
+      recordOutcome: async (value) => outcomes.push(value),
+    },
+    outcome: (_candidate, claim, requestId, state, retryable, code, extra = {}) => ({
+      claim, requestId, state, retryable, code, ...extra,
+    }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.deliveredCount, 2);
+  assert.equal(queries, 1);
+  assert.equal(purchases, 0);
+  assert.equal(outcomes[0].state, "FULFILLED");
+  assert.equal(outcomes[0].orderCode, "DJ-1");
+  assert.equal(outcomes[0].deliveredContent, "CARD-A\nCARD-B");
+});
+
+test("reconciliation fails closed on amount, identity, or state mismatch without purchase", async () => {
+  const candidate = baseCandidate();
+  assert.equal(validateDajuExistingOrderReconciliation({
+    order: parseDajuOrderResponse({ ...order, total_price: "18.00" }),
+    orderCode: "DJ-1",
+    requestId: order.request_id,
+    candidate,
+  }).code, "DAJU_RECONCILIATION_AMOUNT_MISMATCH");
+  assert.equal(validateDajuExistingOrderReconciliation({
+    order: parseDajuOrderResponse({ ...order, request_id: "jianlian:other:item" }),
+    orderCode: "DJ-1",
+    requestId: order.request_id,
+    candidate,
+  }).code, "DAJU_RECONCILIATION_IDENTITY_MISMATCH");
+
+  let queries = 0;
+  await assert.rejects(() => reconcileDajuExistingCandidate({
+    candidate,
+    orderCode: "DJ-1",
+    triggerSource: "test",
+    createRequestId: createDajuRequestId,
+    validateReconciliation: validateDajuExistingOrderReconciliation,
+    client: { getOrder: async () => { queries += 1; return parseDajuOrderResponse(order); } },
+    store: {
+      claim: async (_candidate, requestId) => ({ action: "NONE", requestId, attemptToken: "attempt-2", status: "UNCERTAIN", orderCode: null }),
+      recordOutcome: async () => { throw new Error("must not write"); },
+    },
+    outcome: () => ({}),
+  }), /DAJU_RECONCILIATION_STATE_CHANGED/);
+  assert.equal(queries, 0);
 });

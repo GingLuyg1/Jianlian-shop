@@ -4,9 +4,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createDajuClient } from "./client";
 import { classifyDajuFulfillmentCandidate } from "./fulfillment-candidate.mjs";
-import { fulfillDajuCandidates } from "./fulfillment-core.mjs";
+import { fulfillDajuCandidates, reconcileDajuExistingCandidate } from "./fulfillment-core.mjs";
 import {
   parseDajuProductBinding,
+  validateDajuExistingOrderReconciliation,
   validateDajuPurchaseReadiness,
 } from "./mapper.mjs";
 import { createDajuRequestId } from "./protocol.mjs";
@@ -208,4 +209,31 @@ export async function fulfillDajuOrderWithSupabase(service: SupabaseClient, orde
     orderId,
     triggerSource,
   });
+}
+
+export async function reconcileDajuExistingOrderWithSupabase(input: {
+  service: SupabaseClient;
+  orderId: string;
+  orderItemId: string;
+  orderCode: string;
+  triggerSource: string;
+}) {
+  if (!/^[a-zA-Z0-9_-]{1,160}$/.test(input.orderCode)) {
+    throw new Error("DAJU_RECONCILIATION_ORDER_CODE_INVALID");
+  }
+  const store = createSupabaseDajuFulfillmentStore(input.service);
+  const candidates = await store.loadCandidates(input.orderId);
+  const candidate = candidates.find((entry) => entry.orderItemId === input.orderItemId);
+  if (!candidate) throw new Error("DAJU_RECONCILIATION_ITEM_NOT_FOUND");
+  return reconcileDajuExistingCandidate({
+    candidate,
+    store,
+    client: createDajuClient(),
+    orderCode: input.orderCode,
+    triggerSource: input.triggerSource,
+    createRequestId: createDajuRequestId,
+    validateReconciliation: validateDajuExistingOrderReconciliation,
+    outcome: (target: DajuFulfillmentCandidate, claim: DajuClaim, requestId: string, state: DajuOutcomeInput["state"], retryable: boolean, code: string | null, extra?: Partial<DajuOutcomeInput>) =>
+      outcome(target, claim, requestId, state, retryable, code, extra, input.triggerSource),
+  }) as Promise<{ ok: true; orderCode: string; requestId: string; deliveredCount: number }>;
 }

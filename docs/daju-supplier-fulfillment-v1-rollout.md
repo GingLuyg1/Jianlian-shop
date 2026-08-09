@@ -29,6 +29,8 @@
 - `RATE_LIMITED`：PENDING，可延后使用相同 request_id 重试。
 - `REQUEST_PROCESSING`、`IDEMPOTENCY_UNAVAILABLE`、`UPSTREAM_UNAVAILABLE`、timeout、connection reset：UNCERTAIN/RECONCILIATION。
 - UNCERTAIN 不得自动重试采购，不得生成新 request_id；只有已有 order_code 时允许只读查询原供应商订单。
+- 若供应商已扣费且本站仍停留在 `PURCHASING`、并且 `provider_order_code` 未能持久化，必须先人工以时间、金额、数量和商品证据唯一关联已有供应商订单。管理员随后只能调用 `reconcile_daju_order`，由服务端 GET 该已有订单并复用原 request_id、原 attempt token 与 `record_daju_supplier_fulfillment_outcome` 私密交付路径；该操作不得调用 `/purchase`。
+- `/purchase` 返回最小订单引用时，客户端使用返回的 `order_code` 执行一次 GET 获取完整详情。若 GET 失败，必须把已知 `order_code` 记录为不确定结果，禁止再次采购。
 - 数据库 outcome 写入响应丢失也按不确定处理，不再次 purchase。
 
 ## 候选数据库文件

@@ -1,7 +1,7 @@
 export type DajuProduct = { id: number; title: string; price: string; stock: number; sales: number; isAuto: boolean; cover: string | null; sortId: number | null };
 export type DajuProductDetail = DajuProduct & { isSku: boolean; description: string | null; minQty: number; maxQty: number; specs: unknown[]; skuVariants: unknown[]; requiredInputs: string[] };
 export type DajuBalance = { balance: string; name: string; totalSpent: string; totalOrders: number };
-export type DajuOrder = { orderCode: string; requestId: string | null; quantity: number; unitPrice: string; totalPrice: string; balanceAfter: string | null; status: string; delivered: string[]; duplicate: boolean };
+export type DajuOrder = { orderCode: string; requestId: string | null; quantity: number; unitPrice: string; totalPrice: string; balanceAfter: string | null; status: string; delivered: string[]; duplicate: boolean; createdAt: string | null; productId: number | null; sku: string | null };
 export function isPlainRecord(value: unknown): value is Record<string, unknown>;
 export function parseDajuDecimal(value: unknown): string | null;
 export function parseDajuProduct(value: unknown): DajuProduct | null;
@@ -10,6 +10,7 @@ export function parseDajuProductDetailResponse(value: unknown): DajuProductDetai
 export function parseDajuBalanceResponse(value: unknown): DajuBalance | null;
 export function parseDajuDelivered(value: unknown): string[] | null;
 export function parseDajuOrderResponse(value: unknown): DajuOrder | null;
+export function parseDajuPurchaseReference(value: unknown): { orderCode: string; requestId: string | null } | null;
 export function parseDajuErrorResponse(value: unknown, httpStatus: number): { code: string };
 export function classifyDajuPurchaseFailure(code: string): { state: "FAILED" | "PENDING" | "UNCERTAIN"; retryable: boolean };
 export function createDajuRequestId(orderId: string, orderItemId: string): string | null;
