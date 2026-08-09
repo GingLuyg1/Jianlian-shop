@@ -130,6 +130,63 @@ test("accepts the real product-detail max_qty zero sentinel without weakening ot
   assert.equal(parseDajuProductDetailResponse({ product: { ...realDetailShape, max_qty: 0.5 } }), null);
 });
 
+test("treats max_qty zero as no positive purchase ceiling while preserving all other readiness gates", () => {
+  const binding = parseDajuProductBinding({
+    fulfillment_source: "supplier",
+    supplier: "daju",
+    supplier_product_id: 45,
+    supplier_sku: null,
+    supplier_inputs_mapping: {},
+    supplier_max_unit_cost: "7",
+  });
+  const unlimited = parseDajuProductDetailResponse({
+    product: {
+      ...product,
+      id: 45,
+      price: "6.5",
+      stock: 96,
+      is_sku: false,
+      min_qty: 1,
+      max_qty: 0,
+      required_inputs: [],
+    },
+  });
+  assert.ok(binding);
+  assert.ok(unlimited);
+  assert.deepEqual(validateDajuPurchaseReadiness({
+    product: unlimited,
+    binding,
+    quantity: 1,
+    orderFields: {},
+  }), { ok: true, inputs: {} });
+  assert.deepEqual(validateDajuPurchaseReadiness({
+    product: unlimited,
+    binding,
+    quantity: 2,
+    orderFields: {},
+  }), { ok: true, inputs: {} });
+
+  const capped = parseDajuProductDetailResponse({
+    product: { ...product, id: 45, price: "6.5", stock: 96, min_qty: 1, max_qty: 5, required_inputs: [] },
+  });
+  assert.equal(validateDajuPurchaseReadiness({
+    product: capped,
+    binding,
+    quantity: 6,
+    orderFields: {},
+  }).code, "FAILED_VALIDATION");
+
+  const minimumTwo = parseDajuProductDetailResponse({
+    product: { ...product, id: 45, price: "6.5", stock: 96, min_qty: 2, max_qty: 0, required_inputs: [] },
+  });
+  assert.equal(validateDajuPurchaseReadiness({
+    product: minimumTwo,
+    binding,
+    quantity: 1,
+    orderFields: {},
+  }).code, "FAILED_VALIDATION");
+});
+
 test("strictly parses fulfilled purchases with multiple delivery secrets", () => {
   const parsed = parseDajuOrderResponse(order);
   assert.deepEqual(parsed?.delivered, ["CARD-A", "CARD-B"]);
