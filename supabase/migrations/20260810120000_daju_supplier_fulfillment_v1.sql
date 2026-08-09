@@ -363,18 +363,86 @@ do $snapshot_supplier_binding$
 declare
   v_definition text;
   v_patched text;
+  v_gap_pattern text := '(?:[[:space:]]|--[^\n]*(?:\n|$)|/\*(?:[^*]|\*+[^*/])*\*+/)+';
+  v_count_anchor_pattern text;
+  v_count_patched_pattern text;
+  v_pick_anchor_pattern text;
+  v_pick_patched_pattern text;
+  v_count_anchor_matches integer;
+  v_pick_anchor_matches integer;
 begin
   select pg_catalog.pg_get_functiondef(
     'public.create_order_with_item(uuid,integer,text,text,text,text,jsonb,uuid,text,text)'::regprocedure
   ) into v_definition;
 
+  -- Match the two local-inventory blocks by their unique control-flow and table
+  -- aliases. Whitespace, CRLF/LF and harmless SQL comments may vary, but the
+  -- business statements themselves must remain intact and occur exactly once.
+  v_count_anchor_pattern :=
+    '(if' || v_gap_pattern || ')v_auto_delivery(' ||
+    v_gap_pattern || 'then' ||
+    v_gap_pattern || 'select' ||
+    v_gap_pattern || 'count\(\*\)::integer' ||
+    v_gap_pattern || 'into' ||
+    v_gap_pattern || 'v_stock' ||
+    v_gap_pattern || 'from' ||
+    v_gap_pattern || 'public\.digital_inventory' ||
+    v_gap_pattern || 'as' ||
+    v_gap_pattern || 'di_count)';
+  v_count_patched_pattern :=
+    'if' || v_gap_pattern || 'v_auto_delivery' ||
+    v_gap_pattern || 'and' ||
+    v_gap_pattern || 'not' ||
+    v_gap_pattern || 'v_supplier_delivery' ||
+    v_gap_pattern || 'then' ||
+    v_gap_pattern || 'select' ||
+    v_gap_pattern || 'count\(\*\)::integer' ||
+    v_gap_pattern || 'into' ||
+    v_gap_pattern || 'v_stock' ||
+    v_gap_pattern || 'from' ||
+    v_gap_pattern || 'public\.digital_inventory' ||
+    v_gap_pattern || 'as' ||
+    v_gap_pattern || 'di_count';
+  v_pick_anchor_pattern :=
+    '(if' || v_gap_pattern || ')v_auto_delivery(' ||
+    v_gap_pattern || 'then' ||
+    v_gap_pattern || 'with' ||
+    v_gap_pattern || 'picked' ||
+    v_gap_pattern || 'as' ||
+    v_gap_pattern || '\(' ||
+    v_gap_pattern || 'select' ||
+    v_gap_pattern || 'di_pick\.id' ||
+    v_gap_pattern || 'from' ||
+    v_gap_pattern || 'public\.digital_inventory' ||
+    v_gap_pattern || 'as' ||
+    v_gap_pattern || 'di_pick)';
+  v_pick_patched_pattern :=
+    'if' || v_gap_pattern || 'v_auto_delivery' ||
+    v_gap_pattern || 'and' ||
+    v_gap_pattern || 'not' ||
+    v_gap_pattern || 'v_supplier_delivery' ||
+    v_gap_pattern || 'then' ||
+    v_gap_pattern || 'with' ||
+    v_gap_pattern || 'picked' ||
+    v_gap_pattern || 'as' ||
+    v_gap_pattern || '\(' ||
+    v_gap_pattern || 'select' ||
+    v_gap_pattern || 'di_pick\.id' ||
+    v_gap_pattern || 'from' ||
+    v_gap_pattern || 'public\.digital_inventory' ||
+    v_gap_pattern || 'as' ||
+    v_gap_pattern || 'di_pick';
+
   if position('v_supplier_delivery boolean' in v_definition) > 0
      and position('''supplier_binding''' in v_definition) > 0 then
     return;
   end if;
+
+  v_count_anchor_matches := pg_catalog.regexp_count(v_definition, v_count_anchor_pattern);
+  v_pick_anchor_matches := pg_catalog.regexp_count(v_definition, v_pick_anchor_pattern);
   if position('v_auto_delivery boolean := false;' in v_definition) = 0
-     or position('if v_auto_delivery then' || chr(10) || '    select count(*)::integer' in v_definition) = 0
-     or position('if v_auto_delivery then' || chr(10) || '    with picked as' in v_definition) = 0
+     or v_count_anchor_matches <> 1
+     or v_pick_anchor_matches <> 1
      or position('''option_snapshot'', v_option_snapshot' in v_definition) = 0 then
     raise exception 'DAJU_FULFILLMENT_CREATE_ORDER_CONTRACT_DRIFT';
   end if;
@@ -417,15 +485,15 @@ begin
       '    end if;' || chr(10) ||
       '  end if;'
   );
-  v_patched := replace(
+  v_patched := pg_catalog.regexp_replace(
     v_patched,
-    'if v_auto_delivery then' || chr(10) || '    select count(*)::integer',
-    'if v_auto_delivery and not v_supplier_delivery then' || chr(10) || '    select count(*)::integer'
+    v_count_anchor_pattern,
+    E'\\1v_auto_delivery and not v_supplier_delivery\\2'
   );
-  v_patched := replace(
+  v_patched := pg_catalog.regexp_replace(
     v_patched,
-    'if v_auto_delivery then' || chr(10) || '    with picked as',
-    'if v_auto_delivery and not v_supplier_delivery then' || chr(10) || '    with picked as'
+    v_pick_anchor_pattern,
+    E'\\1v_auto_delivery and not v_supplier_delivery\\2'
   );
   v_patched := replace(
     v_patched,
@@ -445,7 +513,10 @@ begin
      or position('''supplier_binding''' in v_patched) = 0
      or position('if p_sku_id is not null then' in v_patched) = 0
      or position('v_supplier_product_id := v_product.metadata->''supplier_product_id'';' in v_patched) = 0
-     or position('if v_auto_delivery and not v_supplier_delivery then' in v_patched) = 0 then
+     or pg_catalog.regexp_count(v_patched, v_count_anchor_pattern) <> 0
+     or pg_catalog.regexp_count(v_patched, v_pick_anchor_pattern) <> 0
+     or pg_catalog.regexp_count(v_patched, v_count_patched_pattern) <> 1
+     or pg_catalog.regexp_count(v_patched, v_pick_patched_pattern) <> 1 then
     raise exception 'DAJU_FULFILLMENT_CREATE_ORDER_PATCH_FAILED';
   end if;
   execute v_patched;

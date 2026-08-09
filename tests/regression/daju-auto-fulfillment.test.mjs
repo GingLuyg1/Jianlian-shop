@@ -6,6 +6,30 @@ import test from "node:test";
 const root = path.resolve(import.meta.dirname, "..", "..");
 const file = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
+const createOrderFunction = () => {
+  const migration = file("supabase/migrations/20260710_create_order_with_item_compatibility.sql");
+  const start = migration.indexOf("create or replace function public.create_order_with_item(");
+  assert.ok(start >= 0, "authoritative create_order_with_item definition must exist");
+  const end = migration.indexOf("\n$$;", start);
+  assert.ok(end > start, "authoritative create_order_with_item definition must terminate");
+  return migration.slice(start, end + "\n$$;".length);
+};
+
+const sqlGap = String.raw`(?:\s|--[^\n]*(?:\n|$)|\/\*(?:[^*]|\*+[^*/])*\*\/)+`;
+const countAnchorSource = String.raw`(if${sqlGap})v_auto_delivery(${sqlGap}then${sqlGap}select${sqlGap}count\(\*\)::integer${sqlGap}into${sqlGap}v_stock${sqlGap}from${sqlGap}public\.digital_inventory${sqlGap}as${sqlGap}di_count)`;
+const pickAnchorSource = String.raw`(if${sqlGap})v_auto_delivery(${sqlGap}then${sqlGap}with${sqlGap}picked${sqlGap}as${sqlGap}\(${sqlGap}select${sqlGap}di_pick\.id${sqlGap}from${sqlGap}public\.digital_inventory${sqlGap}as${sqlGap}di_pick)`;
+
+const patchAuthoritativeCreateOrder = (definition) => {
+  const countMatches = [...definition.matchAll(new RegExp(countAnchorSource, "g"))];
+  const pickMatches = [...definition.matchAll(new RegExp(pickAnchorSource, "g"))];
+  if (countMatches.length !== 1 || pickMatches.length !== 1) {
+    throw new Error("DAJU_FULFILLMENT_CREATE_ORDER_CONTRACT_DRIFT");
+  }
+  return definition
+    .replace(new RegExp(countAnchorSource), "$1v_auto_delivery and not v_supplier_delivery$2")
+    .replace(new RegExp(pickAnchorSource), "$1v_auto_delivery and not v_supplier_delivery$2");
+};
+
 test("Daju server client uses only server environment names and never logs credentials or delivery secrets", () => {
   const client = file("lib/providers/daju/client.ts");
   const core = file("lib/providers/daju/client-core.mjs");
@@ -40,9 +64,70 @@ test("candidate migration persists one request per item and uses existing privat
   assert.match(migration, /coalesce\(auth\.role\(\), ''\) <> 'service_role'/i);
   assert.match(migration, /fulfillment_source[\s\S]*supplier[\s\S]*daju/i);
   assert.match(migration, /v_supplier_delivery boolean/i);
-  assert.match(migration, /if v_auto_delivery and not v_supplier_delivery then/i);
+  assert.match(migration, /v_auto_delivery and not v_supplier_delivery/i);
+  assert.match(migration, /v_count_patched_pattern/i);
+  assert.match(migration, /v_pick_patched_pattern/i);
   assert.match(migration, /'supplier_binding'/i);
   assert.doesNotMatch(migration, /create table public\.(?:digital_delivery|delivery_secret|wallet_accounts)/i);
+});
+
+test("Daju order snapshot patch recognizes the authoritative inventory blocks without fragile formatting anchors", () => {
+  const migration = file("supabase/migrations/20260810120000_daju_supplier_fulfillment_v1.sql");
+  const authoritative = createOrderFunction();
+
+  assert.match(authoritative, /v_auto_delivery boolean := false;/);
+  assert.match(authoritative, /'option_snapshot', v_option_snapshot/);
+  assert.doesNotThrow(() => patchAuthoritativeCreateOrder(authoritative));
+  assert.doesNotThrow(() => patchAuthoritativeCreateOrder(authoritative.replace(/\n/g, "\r\n")));
+
+  const reindented = authoritative
+    .replace(
+      "  if v_auto_delivery then\n    select count(*)::integer",
+      "\tif   v_auto_delivery\tthen\n\t\tselect   count(*)::integer",
+    )
+    .replace(
+      "  if v_auto_delivery then\n    with picked as (\n      select di_pick.id",
+      "    if\tv_auto_delivery  then\n      with   picked as (\n        select   di_pick.id",
+    );
+  assert.doesNotThrow(() => patchAuthoritativeCreateOrder(reindented));
+
+  const commented = authoritative
+    .replace(
+      "if v_auto_delivery then\n    select count(*)::integer",
+      "if v_auto_delivery then\n    -- Count only the local inventory reserved by this block.\n    select count(*)::integer",
+    )
+    .replace(
+      "if v_auto_delivery then\n    with picked as (",
+      "if v_auto_delivery then /* keep local FIFO selection */\n    with picked as (",
+    );
+  assert.doesNotThrow(() => patchAuthoritativeCreateOrder(commented));
+
+  assert.throws(
+    () => patchAuthoritativeCreateOrder(authoritative.replace("select count(*)::integer", "select sum(1)::integer")),
+    /CREATE_ORDER_CONTRACT_DRIFT/,
+  );
+  assert.throws(
+    () => patchAuthoritativeCreateOrder(authoritative.replace("with picked as (", "with removed_pick_block as (")),
+    /CREATE_ORDER_CONTRACT_DRIFT/,
+  );
+
+  const patched = patchAuthoritativeCreateOrder(authoritative);
+  assert.equal((patched.match(/if v_auto_delivery and not v_supplier_delivery then/g) ?? []).length, 2);
+  assert.match(patched, /select count\(\*\)::integer[\s\S]*from public\.digital_inventory as di_count/);
+  assert.match(patched, /with picked as \([\s\S]*from public\.digital_inventory as di_pick/);
+  assert.match(patched, /di_count\.status = 'available'/);
+  assert.match(patched, /di_pick\.status = 'available'/);
+
+  const snapshotPatch = migration.match(/do \$snapshot_supplier_binding\$[\s\S]*?\$snapshot_supplier_binding\$;/i)?.[0] ?? "";
+  const noSkuBranch = snapshotPatch.split("'  else'")[1]?.split("'  end if;'")[0] ?? "";
+  assert.match(snapshotPatch, /v_supplier_delivery boolean/);
+  assert.match(snapshotPatch, /''supplier_binding''/);
+  assert.match(noSkuBranch, /v_product\.metadata->''supplier_product_id''/);
+  assert.doesNotMatch(noSkuBranch, /v_sku\.metadata/);
+  assert.match(snapshotPatch, /pg_catalog\.regexp_count\(v_definition, v_count_anchor_pattern\)/);
+  assert.match(snapshotPatch, /pg_catalog\.regexp_replace\([\s\S]*v_count_anchor_pattern/);
+  assert.doesNotMatch(snapshotPatch, /chr\(10\) \|\| '    select count\(\*\)::integer'/);
+  assert.doesNotMatch(snapshotPatch, /chr\(10\) \|\| '    with picked as'/);
 });
 
 test("local delivery selection is frozen by the order-item supplier snapshot", () => {
