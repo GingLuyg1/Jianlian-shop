@@ -2187,6 +2187,10 @@ test("checkout reads CNY balance and keeps insufficient-balance retries on the o
   assert.match(checkout, /window\.sessionStorage\.setItem\(checkoutSessionKey/);
   assert.match(checkout, /clientRequestIdRef\.current = requestId/);
   assert.match(checkout, /继续支付原订单/);
+  assert.match(checkout, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(stored\.orderNo\)\}`/);
+  assert.match(checkout, /getRetainedOrderCustomerEmail\(payload, stored\.orderNo\)/);
+  assert.match(checkout, /setEmail\(retainedEmail\)/);
+  assert.match(checkout, /customerEmail: \(pendingBalanceOrder\?\.customerEmail \?\? email\.trim\(\)\) \|\| null/);
   assert.match(checkout, /submissionGuardRef\.current\.tryStart\(\)/);
   assert.match(checkout, /submissionGuardRef\.current\.finish\(\)/);
 

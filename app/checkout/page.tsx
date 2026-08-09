@@ -62,7 +62,9 @@ import {
   evaluateCheckoutBalance,
   formatCnyFromCents,
   getBalanceSubmissionBlockReason,
+  getRetainedOrderCustomerEmail,
   parseAccountAssetsBalance,
+  parseRetainedCheckoutOrder,
 } from "@/lib/checkout/balance-flow.mjs";
 
 const PRICE_LABELS: Record<string, string> = {
@@ -93,6 +95,7 @@ type BalanceLoadStatus = "loading" | "ready" | "error";
 type PendingBalanceOrder = {
   orderNo: string;
   requestId: string;
+  customerEmail: string | null;
 };
 
 const REQUIRED_AGREEMENT_TYPES = ["terms_of_service", "refund_policy", "digital_delivery_policy", "purchase_notice"];
@@ -272,6 +275,7 @@ export default function CheckoutPage() {
   }, [paymentDropdownOpen]);
 
   useEffect(() => {
+    let active = true;
     clientRequestIdRef.current =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -279,20 +283,36 @@ export default function CheckoutPage() {
     setPendingBalanceOrder(null);
     try {
       const raw = window.sessionStorage.getItem(checkoutSessionKey);
-      if (!raw) return;
-      const stored = JSON.parse(raw) as { requestId?: unknown; orderNo?: unknown };
-      if (typeof stored.requestId !== "string" || !stored.requestId.trim()) return;
-      clientRequestIdRef.current = stored.requestId.trim();
-      if (typeof stored.orderNo === "string" && stored.orderNo.trim()) {
-        setPendingBalanceOrder({
-          requestId: stored.requestId.trim(),
-          orderNo: stored.orderNo.trim(),
-        });
-        setPaymentMethod("balance");
-      }
+      const stored = raw ? parseRetainedCheckoutOrder(JSON.parse(raw)) : null;
+      if (!stored) return;
+      clientRequestIdRef.current = stored.requestId;
+      setPendingBalanceOrder(stored);
+      if (stored.customerEmail) setEmail(stored.customerEmail);
+      setPaymentMethod("balance");
+
+      void (async () => {
+        try {
+          const response = await fetch(`/api/orders/${encodeURIComponent(stored.orderNo)}`, { cache: "no-store" });
+          const payload = await response.json().catch(() => null) as unknown;
+          if (!active || !response.ok) return;
+          const retainedEmail = getRetainedOrderCustomerEmail(payload, stored.orderNo);
+          if (!retainedEmail) return;
+          const restoredOrder = { ...stored, customerEmail: retainedEmail };
+          setEmail(retainedEmail);
+          setPendingBalanceOrder(restoredOrder);
+          window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(restoredOrder));
+        } catch {
+          // Keep the retained order locked to its original request identity. A failed
+          // read must not create a replacement order or overwrite its contact data.
+        }
+      })();
     } catch {
       window.sessionStorage.removeItem(checkoutSessionKey);
     }
+
+    return () => {
+      active = false;
+    };
   }, [checkoutSessionKey]);
 
   useEffect(() => {
@@ -527,6 +547,7 @@ export default function CheckoutPage() {
         JSON.stringify({
           requestId: clientRequestIdRef.current,
           orderNo: pendingBalanceOrder?.orderNo ?? null,
+          customerEmail: (pendingBalanceOrder?.customerEmail ?? email.trim()) || null,
         })
       );
 
@@ -589,6 +610,7 @@ export default function CheckoutPage() {
           const existingOrder = {
             orderNo: responseClassification.orderNo,
             requestId,
+            customerEmail: email.trim() || null,
           };
           clientRequestIdRef.current = requestId;
           setPendingBalanceOrder(existingOrder);

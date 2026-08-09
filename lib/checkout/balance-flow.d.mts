@@ -31,6 +31,12 @@ export function getBalanceSubmissionBlockReason(input: {
   balanceSummary: CheckoutBalanceSummary;
 }): "BALANCE_LOADING" | "BALANCE_UNAVAILABLE" | "BALANCE_INSUFFICIENT" | null;
 export function classifyCheckoutOrderResponse(status: number, payload: unknown): CheckoutOrderResponseClassification;
+export function parseRetainedCheckoutOrder(value: unknown): {
+  requestId: string;
+  orderNo: string;
+  customerEmail: string | null;
+} | null;
+export function getRetainedOrderCustomerEmail(payload: unknown, expectedOrderNo: string): string | null;
 export function createCheckoutSubmissionGuard(): {
   tryStart(): boolean;
   finish(): void;

@@ -7,7 +7,9 @@ import {
   evaluateCheckoutBalance,
   formatCnyFromCents,
   getBalanceSubmissionBlockReason,
+  getRetainedOrderCustomerEmail,
   parseAccountAssetsBalance,
+  parseRetainedCheckoutOrder,
 } from "../../lib/checkout/balance-flow.mjs";
 
 test("checkout balance allows a balance greater than the order amount", () => {
@@ -108,6 +110,35 @@ test("repeating the same 402 classification never invents a second order", () =>
   const second = classifyCheckoutOrderResponse(402, payload);
   assert.equal(first.orderNo, second.orderNo);
   assert.equal(first.requestId, second.requestId);
+});
+
+test("a retained order restores its contact email without changing request identity", () => {
+  const retained = parseRetainedCheckoutOrder({
+    requestId: "request-1",
+    orderNo: "ORDER-RETAINED-1",
+  });
+  assert.deepEqual(retained, {
+    requestId: "request-1",
+    orderNo: "ORDER-RETAINED-1",
+    customerEmail: null,
+  });
+
+  const customerEmail = getRetainedOrderCustomerEmail({
+    order: {
+      order_no: "ORDER-RETAINED-1",
+      customer_email: "retained@example.test",
+    },
+  }, retained.orderNo);
+  assert.equal(customerEmail, "retained@example.test");
+  assert.equal(retained.requestId, "request-1");
+  assert.equal(retained.orderNo, "ORDER-RETAINED-1");
+});
+
+test("retained order email recovery rejects another order and leaves new checkout input alone", () => {
+  assert.equal(parseRetainedCheckoutOrder({ requestId: "request-new", orderNo: null }), null);
+  assert.equal(getRetainedOrderCustomerEmail({
+    order: { order_no: "ORDER-OTHER", customer_email: "other@example.test" },
+  }, "ORDER-EXPECTED"), null);
 });
 
 test("the single-flight guard rejects duplicate checkout clicks", () => {
