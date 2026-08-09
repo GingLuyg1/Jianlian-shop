@@ -364,20 +364,49 @@ declare
   v_definition text;
   v_patched text;
   v_gap_pattern text := '(?:[[:space:]]|--[^\n]*(?:\n|$)|/\*(?:[^*]|\*+[^*/])*\*+/)+';
+  v_optional_gap_pattern text := '(?:[[:space:]]|--[^\n]*(?:\n|$)|/\*(?:[^*]|\*+[^*/])*\*+/)*';
+  v_assignment_anchor_pattern text;
+  v_assignment_patched_pattern text;
   v_count_anchor_pattern text;
   v_count_patched_pattern text;
   v_pick_anchor_pattern text;
   v_pick_patched_pattern text;
+  v_assignment_anchor_matches integer;
+  v_assignment_patched_matches integer;
   v_count_anchor_matches integer;
+  v_count_patched_matches integer;
   v_pick_anchor_matches integer;
+  v_pick_patched_matches integer;
 begin
   select pg_catalog.pg_get_functiondef(
     'public.create_order_with_item(uuid,integer,text,text,text,text,jsonb,uuid,text,text)'::regprocedure
   ) into v_definition;
 
-  -- Match the two local-inventory blocks by their unique control-flow and table
-  -- aliases. Whitespace, CRLF/LF and harmless SQL comments may vary, but the
-  -- business statements themselves must remain intact and occur exactly once.
+  -- Match the automatic-delivery assignment and the two local-inventory blocks
+  -- by their complete business expressions and unique table aliases. Whitespace,
+  -- CRLF/LF and harmless SQL comments may vary, but every contract must remain
+  -- intact and occur exactly once.
+  v_assignment_anchor_pattern :=
+    '(v_auto_delivery' || v_gap_pattern || ':=' ||
+    v_gap_pattern || 'lower' || v_optional_gap_pattern || '\(' ||
+    v_optional_gap_pattern || 'coalesce' || v_optional_gap_pattern || '\(' ||
+    v_optional_gap_pattern || 'v_delivery_type' ||
+    v_optional_gap_pattern || ',' || v_optional_gap_pattern || '''''' ||
+    v_optional_gap_pattern || '\)' || v_optional_gap_pattern || '\)' ||
+    v_gap_pattern || 'in' || v_optional_gap_pattern || '\(' ||
+    v_optional_gap_pattern || '''automatic''' ||
+    v_optional_gap_pattern || ',' || v_optional_gap_pattern || '''auto''' ||
+    v_optional_gap_pattern || ',' || v_optional_gap_pattern || '''card''' ||
+    v_optional_gap_pattern || ',' || v_optional_gap_pattern || '''account''' ||
+    v_optional_gap_pattern || ',' || v_optional_gap_pattern || '''auto_delivery''' ||
+    v_optional_gap_pattern || '\)' || v_optional_gap_pattern || ';)';
+  v_assignment_patched_pattern :=
+    v_assignment_anchor_pattern ||
+    v_gap_pattern || 'if' || v_gap_pattern || 'p_sku_id' ||
+    v_gap_pattern || 'is' || v_gap_pattern || 'not' ||
+    v_gap_pattern || 'null' || v_gap_pattern || 'then' ||
+    v_gap_pattern || 'v_supplier_delivery' || v_gap_pattern || ':=' ||
+    v_gap_pattern || 'v_auto_delivery';
   v_count_anchor_pattern :=
     '(if' || v_gap_pattern || ')v_auto_delivery(' ||
     v_gap_pattern || 'then' ||
@@ -433,16 +462,37 @@ begin
     v_gap_pattern || 'as' ||
     v_gap_pattern || 'di_pick';
 
+  v_assignment_anchor_matches := pg_catalog.regexp_count(v_definition, v_assignment_anchor_pattern);
+  v_assignment_patched_matches := pg_catalog.regexp_count(v_definition, v_assignment_patched_pattern);
+  v_count_anchor_matches := pg_catalog.regexp_count(v_definition, v_count_anchor_pattern);
+  v_count_patched_matches := pg_catalog.regexp_count(v_definition, v_count_patched_pattern);
+  v_pick_anchor_matches := pg_catalog.regexp_count(v_definition, v_pick_anchor_pattern);
+  v_pick_patched_matches := pg_catalog.regexp_count(v_definition, v_pick_patched_pattern);
+
   if position('v_supplier_delivery boolean' in v_definition) > 0
-     and position('''supplier_binding''' in v_definition) > 0 then
-    return;
+     or position('''supplier_binding''' in v_definition) > 0 then
+    if position('v_supplier_delivery boolean' in v_definition) > 0
+       and position('''supplier_binding''' in v_definition) > 0
+       and position('if p_sku_id is not null then' in v_definition) > 0
+       and position('v_supplier_product_id := v_product.metadata->''supplier_product_id'';' in v_definition) > 0
+       and v_assignment_anchor_matches = 1
+       and v_assignment_patched_matches = 1
+       and v_count_anchor_matches = 0
+       and v_count_patched_matches = 1
+       and v_pick_anchor_matches = 0
+       and v_pick_patched_matches = 1 then
+      return;
+    end if;
+    raise exception 'DAJU_FULFILLMENT_CREATE_ORDER_CONTRACT_DRIFT';
   end if;
 
-  v_count_anchor_matches := pg_catalog.regexp_count(v_definition, v_count_anchor_pattern);
-  v_pick_anchor_matches := pg_catalog.regexp_count(v_definition, v_pick_anchor_pattern);
   if position('v_auto_delivery boolean := false;' in v_definition) = 0
+     or v_assignment_anchor_matches <> 1
+     or v_assignment_patched_matches <> 0
      or v_count_anchor_matches <> 1
+     or v_count_patched_matches <> 0
      or v_pick_anchor_matches <> 1
+     or v_pick_patched_matches <> 0
      or position('''option_snapshot'', v_option_snapshot' in v_definition) = 0 then
     raise exception 'DAJU_FULFILLMENT_CREATE_ORDER_CONTRACT_DRIFT';
   end if;
@@ -457,12 +507,10 @@ begin
     '  v_supplier_inputs_mapping jsonb := ''{}''::jsonb;' || chr(10) ||
     '  v_supplier_max_unit_cost jsonb := null;'
   );
-  v_patched := replace(
+  v_patched := pg_catalog.regexp_replace(
     v_patched,
-    'v_auto_delivery := lower(coalesce(v_delivery_type, '''')) in' || chr(10) ||
-      '    (''automatic'',''auto'',''card'',''account'',''auto_delivery'');',
-    'v_auto_delivery := lower(coalesce(v_delivery_type, '''')) in' || chr(10) ||
-      '    (''automatic'',''auto'',''card'',''account'',''auto_delivery'');' || chr(10) ||
+    v_assignment_anchor_pattern,
+    E'\\1' || chr(10) ||
       '  if p_sku_id is not null then' || chr(10) ||
       '    v_supplier_delivery := v_auto_delivery' || chr(10) ||
       '      and coalesce(v_sku.metadata->>''fulfillment_source'', v_product.metadata->>''fulfillment_source'') = ''supplier''' || chr(10) ||
@@ -513,6 +561,8 @@ begin
      or position('''supplier_binding''' in v_patched) = 0
      or position('if p_sku_id is not null then' in v_patched) = 0
      or position('v_supplier_product_id := v_product.metadata->''supplier_product_id'';' in v_patched) = 0
+     or pg_catalog.regexp_count(v_patched, v_assignment_anchor_pattern) <> 1
+     or pg_catalog.regexp_count(v_patched, v_assignment_patched_pattern) <> 1
      or pg_catalog.regexp_count(v_patched, v_count_anchor_pattern) <> 0
      or pg_catalog.regexp_count(v_patched, v_pick_anchor_pattern) <> 0
      or pg_catalog.regexp_count(v_patched, v_count_patched_pattern) <> 1

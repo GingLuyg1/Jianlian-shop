@@ -16,16 +16,46 @@ const createOrderFunction = () => {
 };
 
 const sqlGap = String.raw`(?:\s|--[^\n]*(?:\n|$)|\/\*(?:[^*]|\*+[^*/])*\*\/)+`;
+const sqlOptionalGap = String.raw`(?:\s|--[^\n]*(?:\n|$)|\/\*(?:[^*]|\*+[^*/])*\*\/)*`;
+const assignmentAnchorSource = String.raw`(v_auto_delivery${sqlGap}:=${sqlGap}lower${sqlOptionalGap}\(${sqlOptionalGap}coalesce${sqlOptionalGap}\(${sqlOptionalGap}v_delivery_type${sqlOptionalGap},${sqlOptionalGap}''${sqlOptionalGap}\)${sqlOptionalGap}\)${sqlGap}in${sqlOptionalGap}\(${sqlOptionalGap}'automatic'${sqlOptionalGap},${sqlOptionalGap}'auto'${sqlOptionalGap},${sqlOptionalGap}'card'${sqlOptionalGap},${sqlOptionalGap}'account'${sqlOptionalGap},${sqlOptionalGap}'auto_delivery'${sqlOptionalGap}\)${sqlOptionalGap};)`;
+const assignmentPatchedSource = String.raw`${assignmentAnchorSource}${sqlGap}if${sqlGap}p_sku_id${sqlGap}is${sqlGap}not${sqlGap}null${sqlGap}then${sqlGap}v_supplier_delivery${sqlGap}:=${sqlGap}v_auto_delivery`;
 const countAnchorSource = String.raw`(if${sqlGap})v_auto_delivery(${sqlGap}then${sqlGap}select${sqlGap}count\(\*\)::integer${sqlGap}into${sqlGap}v_stock${sqlGap}from${sqlGap}public\.digital_inventory${sqlGap}as${sqlGap}di_count)`;
+const countPatchedSource = String.raw`if${sqlGap}v_auto_delivery${sqlGap}and${sqlGap}not${sqlGap}v_supplier_delivery${sqlGap}then${sqlGap}select${sqlGap}count\(\*\)::integer${sqlGap}into${sqlGap}v_stock${sqlGap}from${sqlGap}public\.digital_inventory${sqlGap}as${sqlGap}di_count`;
 const pickAnchorSource = String.raw`(if${sqlGap})v_auto_delivery(${sqlGap}then${sqlGap}with${sqlGap}picked${sqlGap}as${sqlGap}\(${sqlGap}select${sqlGap}di_pick\.id${sqlGap}from${sqlGap}public\.digital_inventory${sqlGap}as${sqlGap}di_pick)`;
+const pickPatchedSource = String.raw`if${sqlGap}v_auto_delivery${sqlGap}and${sqlGap}not${sqlGap}v_supplier_delivery${sqlGap}then${sqlGap}with${sqlGap}picked${sqlGap}as${sqlGap}\(${sqlGap}select${sqlGap}di_pick\.id${sqlGap}from${sqlGap}public\.digital_inventory${sqlGap}as${sqlGap}di_pick`;
 
 const patchAuthoritativeCreateOrder = (definition) => {
+  const assignmentMatches = [...definition.matchAll(new RegExp(assignmentAnchorSource, "g"))];
+  const assignmentPatchedMatches = [...definition.matchAll(new RegExp(assignmentPatchedSource, "g"))];
   const countMatches = [...definition.matchAll(new RegExp(countAnchorSource, "g"))];
+  const countPatchedMatches = [...definition.matchAll(new RegExp(countPatchedSource, "g"))];
   const pickMatches = [...definition.matchAll(new RegExp(pickAnchorSource, "g"))];
-  if (countMatches.length !== 1 || pickMatches.length !== 1) {
+  const pickPatchedMatches = [...definition.matchAll(new RegExp(pickPatchedSource, "g"))];
+  if (
+    assignmentMatches.length === 1 &&
+    assignmentPatchedMatches.length === 1 &&
+    countMatches.length === 0 &&
+    countPatchedMatches.length === 1 &&
+    pickMatches.length === 0 &&
+    pickPatchedMatches.length === 1
+  ) {
+    return definition;
+  }
+  if (
+    assignmentMatches.length !== 1 ||
+    assignmentPatchedMatches.length !== 0 ||
+    countMatches.length !== 1 ||
+    countPatchedMatches.length !== 0 ||
+    pickMatches.length !== 1 ||
+    pickPatchedMatches.length !== 0
+  ) {
     throw new Error("DAJU_FULFILLMENT_CREATE_ORDER_CONTRACT_DRIFT");
   }
   return definition
+    .replace(
+      new RegExp(assignmentAnchorSource),
+      "$1\n  if p_sku_id is not null then\n    v_supplier_delivery := v_auto_delivery",
+    )
     .replace(new RegExp(countAnchorSource), "$1v_auto_delivery and not v_supplier_delivery$2")
     .replace(new RegExp(pickAnchorSource), "$1v_auto_delivery and not v_supplier_delivery$2");
 };
@@ -67,6 +97,8 @@ test("candidate migration persists one request per item and uses existing privat
   assert.match(migration, /v_auto_delivery and not v_supplier_delivery/i);
   assert.match(migration, /v_count_patched_pattern/i);
   assert.match(migration, /v_pick_patched_pattern/i);
+  assert.match(migration, /v_assignment_anchor_pattern/i);
+  assert.match(migration, /v_assignment_patched_pattern/i);
   assert.match(migration, /'supplier_binding'/i);
   assert.doesNotMatch(migration, /create table public\.(?:digital_delivery|delivery_secret|wallet_accounts)/i);
 });
@@ -79,6 +111,10 @@ test("Daju order snapshot patch recognizes the authoritative inventory blocks wi
   assert.match(authoritative, /'option_snapshot', v_option_snapshot/);
   assert.doesNotThrow(() => patchAuthoritativeCreateOrder(authoritative));
   assert.doesNotThrow(() => patchAuthoritativeCreateOrder(authoritative.replace(/\n/g, "\r\n")));
+
+  const assignment = "v_auto_delivery := lower(coalesce(v_delivery_type, '')) in\n    ('automatic','auto','card','account','auto_delivery');";
+  const reindentedAssignment = "v_auto_delivery  :=\n    lower ( coalesce ( v_delivery_type , '' ) )\n      in ( 'automatic' , 'auto' , 'card' , 'account' , 'auto_delivery' );";
+  assert.doesNotThrow(() => patchAuthoritativeCreateOrder(authoritative.replace(assignment, reindentedAssignment)));
 
   const reindented = authoritative
     .replace(
@@ -110,13 +146,27 @@ test("Daju order snapshot patch recognizes the authoritative inventory blocks wi
     () => patchAuthoritativeCreateOrder(authoritative.replace("with picked as (", "with removed_pick_block as (")),
     /CREATE_ORDER_CONTRACT_DRIFT/,
   );
+  assert.throws(
+    () => patchAuthoritativeCreateOrder(authoritative.replace(assignment, "")),
+    /CREATE_ORDER_CONTRACT_DRIFT/,
+  );
+  assert.throws(
+    () => patchAuthoritativeCreateOrder(authoritative.replace(assignment, `${assignment}\n  ${assignment}`)),
+    /CREATE_ORDER_CONTRACT_DRIFT/,
+  );
+  assert.throws(
+    () => patchAuthoritativeCreateOrder(authoritative.replace("'automatic','auto','card','account','auto_delivery'", "'automatic','auto','voucher','account','auto_delivery'")),
+    /CREATE_ORDER_CONTRACT_DRIFT/,
+  );
 
   const patched = patchAuthoritativeCreateOrder(authoritative);
+  assert.match(patched, /if p_sku_id is not null then\s+v_supplier_delivery := v_auto_delivery/);
   assert.equal((patched.match(/if v_auto_delivery and not v_supplier_delivery then/g) ?? []).length, 2);
   assert.match(patched, /select count\(\*\)::integer[\s\S]*from public\.digital_inventory as di_count/);
   assert.match(patched, /with picked as \([\s\S]*from public\.digital_inventory as di_pick/);
   assert.match(patched, /di_count\.status = 'available'/);
   assert.match(patched, /di_pick\.status = 'available'/);
+  assert.equal(patchAuthoritativeCreateOrder(patched), patched);
 
   const snapshotPatch = migration.match(/do \$snapshot_supplier_binding\$[\s\S]*?\$snapshot_supplier_binding\$;/i)?.[0] ?? "";
   const noSkuBranch = snapshotPatch.split("'  else'")[1]?.split("'  end if;'")[0] ?? "";
@@ -126,6 +176,9 @@ test("Daju order snapshot patch recognizes the authoritative inventory blocks wi
   assert.doesNotMatch(noSkuBranch, /v_sku\.metadata/);
   assert.match(snapshotPatch, /pg_catalog\.regexp_count\(v_definition, v_count_anchor_pattern\)/);
   assert.match(snapshotPatch, /pg_catalog\.regexp_replace\([\s\S]*v_count_anchor_pattern/);
+  assert.match(snapshotPatch, /pg_catalog\.regexp_count\(v_definition, v_assignment_anchor_pattern\)/);
+  assert.match(snapshotPatch, /pg_catalog\.regexp_replace\([\s\S]*v_assignment_anchor_pattern/);
+  assert.doesNotMatch(snapshotPatch, /v_auto_delivery := lower\(coalesce\(v_delivery_type,[\s\S]{0,120}chr\(10\)/);
   assert.doesNotMatch(snapshotPatch, /chr\(10\) \|\| '    select count\(\*\)::integer'/);
   assert.doesNotMatch(snapshotPatch, /chr\(10\) \|\| '    with picked as'/);
 });
@@ -211,18 +264,22 @@ test("Daju product binding is metadata-only and never synchronizes supplier cost
 
 test("joint test rollout artifacts are read-only, ordered and fail closed", () => {
   const precheck = file("docs/audits/20260810-account-recharge-daju-test-precheck.sql");
+  const retryPrecheck = file("docs/audits/20260810-daju-supplier-fulfillment-v1-retry-precheck.sql");
   const rechargePostcheck = file("docs/audits/20260809-account-recharge-usdt-cny-v1-postcheck.sql");
   const dajuPostcheck = file("docs/audits/20260810-daju-supplier-fulfillment-v1-postcheck.sql");
   const checklist = file("docs/account-recharge-daju-test-execution-checklist.md");
   const writeStatement = /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy|vacuum|analyze|refresh)\b/im;
 
-  for (const sql of [precheck, rechargePostcheck, dajuPostcheck]) {
+  for (const sql of [precheck, retryPrecheck, rechargePostcheck, dajuPostcheck]) {
     const uncommented = sql.replace(/--[^\r\n]*/g, "");
     assert.match(uncommented, /begin;[\s\S]*set transaction read only;/i);
     assert.match(uncommented, /rollback;/i);
     assert.doesNotMatch(uncommented, writeStatement);
   }
   assert.match(precheck, /READY_FOR_TEST_MIGRATIONS/);
+  assert.match(retryPrecheck, /assignment_match_count/);
+  assert.match(retryPrecheck, /patched_assignment_match_count/);
+  assert.match(retryPrecheck, /READY_FOR_DAJU_MIGRATION_RETRY/);
   assert.match(dajuPostcheck, /order_items\.product_snapshot/);
   assert.match(dajuPostcheck, /supplier_product\.metadata[\s\S]*= 0/);
   const ordered = [
