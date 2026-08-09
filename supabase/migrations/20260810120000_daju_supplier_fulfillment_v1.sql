@@ -325,21 +325,20 @@ begin
 end
 $function$;
 
--- The deployed local-inventory RPC must skip supplier-bound items. Patch only
--- the audited selection predicate and fail if its exact contract has drifted.
+-- The deployed local-inventory RPC must skip supplier-bound items. The immutable
+-- order_items.product_snapshot.supplier_binding is authoritative after order
+-- creation: later product/SKU metadata changes must never change fulfillment.
+-- Legacy rows without supplier_binding remain local-inventory rows; current
+-- catalog metadata is deliberately not consulted for those historical orders.
 do $exclude_supplier_items$
 declare
   v_definition text;
   v_patched text;
   v_old text := 'and public.normalize_order_item_delivery_type(delivery_type) = ''auto_delivery''';
   v_new text := $replacement$and public.normalize_order_item_delivery_type(delivery_type) = 'auto_delivery'
-      and not exists (
-        select 1
-        from public.products supplier_product
-        left join public.product_skus supplier_sku on supplier_sku.id = order_items.sku_id
-        where supplier_product.id = order_items.product_id
-          and coalesce(supplier_sku.metadata->>'fulfillment_source', supplier_product.metadata->>'fulfillment_source') = 'supplier'
-          and coalesce(supplier_sku.metadata->>'supplier', supplier_product.metadata->>'supplier') = 'daju'
+      and not (
+        coalesce(order_items.product_snapshot->'supplier_binding'->>'fulfillment_source', '') = 'supplier'
+        and coalesce(order_items.product_snapshot->'supplier_binding'->>'supplier', '') = 'daju'
       )$replacement$;
 begin
   select pg_catalog.pg_get_functiondef('public.deliver_digital_order(uuid,text)'::regprocedure) into v_definition;
@@ -356,6 +355,10 @@ $exclude_supplier_items$;
 -- The order-creation RPC currently treats every automatic product as local
 -- digital inventory. Add a supplier flag, skip only the local inventory count
 -- and reservation for Daju, and persist the immutable binding in product_snapshot.
+-- The existing RPC validates a requested SKU before this injected branch. When
+-- p_sku_id is null, only product metadata is read; v_sku is never dereferenced.
+-- When a validated SKU exists, each SKU binding field continues to override the
+-- corresponding product binding field, preserving the existing binding contract.
 do $snapshot_supplier_binding$
 declare
   v_definition text;
@@ -379,7 +382,12 @@ begin
   v_patched := replace(
     v_definition,
     'v_auto_delivery boolean := false;',
-    'v_auto_delivery boolean := false;' || chr(10) || '  v_supplier_delivery boolean := false;'
+    'v_auto_delivery boolean := false;' || chr(10) ||
+    '  v_supplier_delivery boolean := false;' || chr(10) ||
+    '  v_supplier_product_id jsonb := null;' || chr(10) ||
+    '  v_supplier_sku_binding jsonb := null;' || chr(10) ||
+    '  v_supplier_inputs_mapping jsonb := ''{}''::jsonb;' || chr(10) ||
+    '  v_supplier_max_unit_cost jsonb := null;'
   );
   v_patched := replace(
     v_patched,
@@ -387,9 +395,27 @@ begin
       '    (''automatic'',''auto'',''card'',''account'',''auto_delivery'');',
     'v_auto_delivery := lower(coalesce(v_delivery_type, '''')) in' || chr(10) ||
       '    (''automatic'',''auto'',''card'',''account'',''auto_delivery'');' || chr(10) ||
-      '  v_supplier_delivery := v_auto_delivery' || chr(10) ||
-      '    and coalesce(v_sku.metadata->>''fulfillment_source'', v_product.metadata->>''fulfillment_source'') = ''supplier''' || chr(10) ||
-      '    and coalesce(v_sku.metadata->>''supplier'', v_product.metadata->>''supplier'') = ''daju'';'
+      '  if p_sku_id is not null then' || chr(10) ||
+      '    v_supplier_delivery := v_auto_delivery' || chr(10) ||
+      '      and coalesce(v_sku.metadata->>''fulfillment_source'', v_product.metadata->>''fulfillment_source'') = ''supplier''' || chr(10) ||
+      '      and coalesce(v_sku.metadata->>''supplier'', v_product.metadata->>''supplier'') = ''daju'';' || chr(10) ||
+      '    if v_supplier_delivery then' || chr(10) ||
+      '      v_supplier_product_id := coalesce(v_sku.metadata->''supplier_product_id'', v_product.metadata->''supplier_product_id'');' || chr(10) ||
+      '      v_supplier_sku_binding := coalesce(v_sku.metadata->''supplier_sku'', v_product.metadata->''supplier_sku'');' || chr(10) ||
+      '      v_supplier_inputs_mapping := coalesce(v_sku.metadata->''supplier_inputs_mapping'', v_product.metadata->''supplier_inputs_mapping'', ''{}''::jsonb);' || chr(10) ||
+      '      v_supplier_max_unit_cost := coalesce(v_sku.metadata->''supplier_max_unit_cost'', v_product.metadata->''supplier_max_unit_cost'');' || chr(10) ||
+      '    end if;' || chr(10) ||
+      '  else' || chr(10) ||
+      '    v_supplier_delivery := v_auto_delivery' || chr(10) ||
+      '      and coalesce(v_product.metadata->>''fulfillment_source'', '''') = ''supplier''' || chr(10) ||
+      '      and coalesce(v_product.metadata->>''supplier'', '''') = ''daju'';' || chr(10) ||
+      '    if v_supplier_delivery then' || chr(10) ||
+      '      v_supplier_product_id := v_product.metadata->''supplier_product_id'';' || chr(10) ||
+      '      v_supplier_sku_binding := v_product.metadata->''supplier_sku'';' || chr(10) ||
+      '      v_supplier_inputs_mapping := coalesce(v_product.metadata->''supplier_inputs_mapping'', ''{}''::jsonb);' || chr(10) ||
+      '      v_supplier_max_unit_cost := v_product.metadata->''supplier_max_unit_cost'';' || chr(10) ||
+      '    end if;' || chr(10) ||
+      '  end if;'
   );
   v_patched := replace(
     v_patched,
@@ -408,15 +434,17 @@ begin
     '      ''supplier_binding'', case when v_supplier_delivery then jsonb_build_object(' || chr(10) ||
     '        ''fulfillment_source'', ''supplier'',' || chr(10) ||
     '        ''supplier'', ''daju'',' || chr(10) ||
-    '        ''supplier_product_id'', coalesce(v_sku.metadata->''supplier_product_id'', v_product.metadata->''supplier_product_id''),' || chr(10) ||
-    '        ''supplier_sku'', coalesce(v_sku.metadata->''supplier_sku'', v_product.metadata->''supplier_sku''),' || chr(10) ||
-    '        ''supplier_inputs_mapping'', coalesce(v_sku.metadata->''supplier_inputs_mapping'', v_product.metadata->''supplier_inputs_mapping'', ''{}''::jsonb),' || chr(10) ||
-    '        ''supplier_max_unit_cost'', coalesce(v_sku.metadata->''supplier_max_unit_cost'', v_product.metadata->''supplier_max_unit_cost'')' || chr(10) ||
+    '        ''supplier_product_id'', v_supplier_product_id,' || chr(10) ||
+    '        ''supplier_sku'', v_supplier_sku_binding,' || chr(10) ||
+    '        ''supplier_inputs_mapping'', v_supplier_inputs_mapping,' || chr(10) ||
+    '        ''supplier_max_unit_cost'', v_supplier_max_unit_cost' || chr(10) ||
     '      ) else null end'
   );
 
   if position('v_supplier_delivery boolean' in v_patched) = 0
      or position('''supplier_binding''' in v_patched) = 0
+     or position('if p_sku_id is not null then' in v_patched) = 0
+     or position('v_supplier_product_id := v_product.metadata->''supplier_product_id'';' in v_patched) = 0
      or position('if v_auto_delivery and not v_supplier_delivery then' in v_patched) = 0 then
     raise exception 'DAJU_FULFILLMENT_CREATE_ORDER_PATCH_FAILED';
   end if;

@@ -45,6 +45,47 @@ test("candidate migration persists one request per item and uses existing privat
   assert.doesNotMatch(migration, /create table public\.(?:digital_delivery|delivery_secret|wallet_accounts)/i);
 });
 
+test("local delivery selection is frozen by the order-item supplier snapshot", () => {
+  const migration = file("supabase/migrations/20260810120000_daju_supplier_fulfillment_v1.sql");
+  const exclusion = migration.match(/do \$exclude_supplier_items\$[\s\S]*?\$exclude_supplier_items\$;/i)?.[0] ?? "";
+
+  assert.match(exclusion, /order_items\.product_snapshot->'supplier_binding'->>'fulfillment_source'/i);
+  assert.match(exclusion, /order_items\.product_snapshot->'supplier_binding'->>'supplier'/i);
+  assert.doesNotMatch(exclusion, /supplier_product|supplier_sku|products\s|product_skus\s/i);
+  assert.match(migration, /Legacy rows without supplier_binding remain local-inventory rows/i);
+});
+
+test("supplier binding creation separates validated SKU and no-SKU metadata paths", () => {
+  const migration = file("supabase/migrations/20260810120000_daju_supplier_fulfillment_v1.sql");
+  const snapshotPatch = migration.match(/do \$snapshot_supplier_binding\$[\s\S]*?\$snapshot_supplier_binding\$;/i)?.[0] ?? "";
+  const branch = snapshotPatch.match(/'  if p_sku_id is not null then'[\s\S]*?'  end if;'/i)?.[0] ?? "";
+  const noSkuBranch = branch.split("'  else'")[1] ?? "";
+
+  assert.match(branch, /v_sku\.metadata->>''fulfillment_source''/i);
+  assert.match(branch, /coalesce\(v_sku\.metadata->''supplier_product_id'', v_product\.metadata->''supplier_product_id''\)/i);
+  assert.match(noSkuBranch, /v_product\.metadata->>''fulfillment_source''/i);
+  assert.match(noSkuBranch, /v_supplier_product_id := v_product\.metadata->''supplier_product_id''/i);
+  assert.doesNotMatch(noSkuBranch, /v_sku\.metadata/i);
+  assert.match(migration, /existing RPC validates a requested SKU/i);
+});
+
+test("snapshot fields, not later catalog metadata, preserve supplier and local history", () => {
+  const migration = file("supabase/migrations/20260810120000_daju_supplier_fulfillment_v1.sql");
+  const exclusion = migration.match(/do \$exclude_supplier_items\$[\s\S]*?\$exclude_supplier_items\$;/i)?.[0] ?? "";
+
+  const supplierSnapshot = {
+    supplier_binding: { fulfillment_source: "supplier", supplier: "daju" },
+  };
+  const legacyLocalSnapshot = { id: "historical-local-item" };
+  const isDajuSnapshot = (snapshot) =>
+    snapshot?.supplier_binding?.fulfillment_source === "supplier"
+    && snapshot?.supplier_binding?.supplier === "daju";
+
+  assert.equal(isDajuSnapshot(supplierSnapshot), true);
+  assert.equal(isDajuSnapshot(legacyLocalSnapshot), false);
+  assert.doesNotMatch(exclusion, /metadata/);
+});
+
 test("runtime trusts the immutable order-item supplier snapshot instead of later product metadata", () => {
   const fulfillment = file("lib/providers/daju/fulfillment.ts");
   assert.match(fulfillment, /product_snapshot/);
