@@ -142,6 +142,22 @@ type ParsedTransfer = {
   blockTimestamp: string;
 };
 
+export type AccountRechargeBep20Evidence = {
+  chainId: 56;
+  txHash: string;
+  logIndex: number;
+  blockNumber: string;
+  blockHash: string | null;
+  blockTimestamp: string;
+  tokenContract: string;
+  fromAddress: string;
+  toAddress: string;
+  rawAmount: string;
+  actualReceivedUsdt: string;
+  confirmationCount: number;
+  requiredConfirmations: number;
+};
+
 type PricingSnapshot = {
   orderCurrency: string;
   orderAmount: string;
@@ -373,6 +389,44 @@ export async function verifyBep20TxHash(input: { orderNo: string; txHash: string
   const txHash = normalizeTxHash(input.txHash);
   ensureOrderAllowsBep20(order);
   return verifyBep20TxHashForOrder({ service, config, order, txHash, allowRecovery: false });
+}
+
+export async function inspectAccountRechargeBep20Transfer(txHashValue: unknown): Promise<AccountRechargeBep20Evidence> {
+  const config = readBep20Config();
+  await assertConfiguredTokenDecimals(config);
+  const txHash = normalizeTxHash(txHashValue);
+  const receipt = await loadReceipt(config, txHash);
+  if (!receipt) {
+    throw new Bep20PaymentError("BEP20_TRANSACTION_NOT_FOUND", "链上暂未找到该交易，请稍后重试。", 409);
+  }
+  if (receipt.status && receipt.status !== "0x1") {
+    throw new Bep20PaymentError("BEP20_TRANSACTION_FAILED", "该链上交易执行失败，不能用于充值。", 409);
+  }
+  const transfer = await findUsdtTransfer(config, receipt, txHash);
+  if (!transfer) {
+    throw new Bep20PaymentError("BEP20_TRANSFER_NOT_FOUND", "未找到转入本站地址的 USDT-BEP20 记录。", 409);
+  }
+  if (transfer.confirmations < config.requiredConfirmations) {
+    throw new Bep20PaymentError("BEP20_CONFIRMATIONS_PENDING", "交易确认数尚未达到要求，请稍后重试。", 409);
+  }
+  if (transfer.rawAmount <= BigInt(0)) {
+    throw new Bep20PaymentError("BEP20_AMOUNT_INVALID", "链上实际到账金额无效。", 409);
+  }
+  return {
+    chainId: 56,
+    txHash,
+    logIndex: transfer.logIndex,
+    blockNumber: transfer.blockNumber.toString(),
+    blockHash: transfer.blockHash,
+    blockTimestamp: transfer.blockTimestamp,
+    tokenContract: transfer.tokenContract,
+    fromAddress: transfer.fromAddress,
+    toAddress: transfer.toAddress,
+    rawAmount: transfer.rawAmount.toString(),
+    actualReceivedUsdt: transfer.normalizedAmount,
+    confirmationCount: transfer.confirmations,
+    requiredConfirmations: config.requiredConfirmations,
+  };
 }
 
 export async function recheckAdminBep20ChainPaymentSession(sessionId: string, adminId?: string | null, reason?: string | null): Promise<Bep20VerifyResponse> {

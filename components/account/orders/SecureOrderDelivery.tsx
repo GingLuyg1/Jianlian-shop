@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Clipboard, Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { pollForPaymentDelivery } from "@/lib/orders/delivery-polling.mjs";
 import { normalizeOrderStatus, normalizePaymentStatus } from "@/lib/orders/order-status";
 import { cn } from "@/lib/utils";
 
@@ -55,10 +57,10 @@ export function SecureOrderDelivery({
   const [loading, setLoading] = useState(false);
   const [requested, setRequested] = useState(false);
   const [error, setError] = useState(false);
+  const [pollOutcome, setPollOutcome] = useState<"idle" | "polling" | "timeout" | "error" | "delivered">("idle");
   const [visibleIds, setVisibleIds] = useState<Record<string, boolean>>({});
   const loadingRef = useRef(false);
   const deliveredNotifiedRef = useRef(false);
-  const pollStartedAtRef = useRef(0);
 
   const normalizedPaymentStatus = normalizePaymentStatus(paymentStatus);
   const normalizedOrderStatus = normalizeOrderStatus(orderStatus);
@@ -71,7 +73,7 @@ export function SecureOrderDelivery({
   const delivered = deliveredRows.length > 0;
 
   const loadDelivery = useCallback(async () => {
-    if (!orderNo || normalizedPaymentStatus !== "paid" || loadingRef.current) return false;
+    if (!orderNo || normalizedPaymentStatus !== "paid" || loadingRef.current) return "pending" as const;
     loadingRef.current = true;
     setLoading(true);
     try {
@@ -80,10 +82,12 @@ export function SecureOrderDelivery({
       if (!response.ok) throw new Error("DELIVERY_LOAD_FAILED");
       setDeliveries(result?.deliveries ?? []);
       setError(false);
-      return (result?.deliveries ?? []).some((delivery) => delivery.delivery_status === "delivered");
+      return (result?.deliveries ?? []).some((delivery) => delivery.delivery_status === "delivered")
+        ? "delivered" as const
+        : "pending" as const;
     } catch {
       setError(true);
-      return false;
+      return "error" as const;
     } finally {
       setRequested(true);
       loadingRef.current = false;
@@ -96,10 +100,10 @@ export function SecureOrderDelivery({
     setError(false);
     setRequested(false);
     setVisibleIds({});
+    setPollOutcome("idle");
     deliveredNotifiedRef.current = false;
-    pollStartedAtRef.current = Date.now();
-    if (normalizedPaymentStatus === "paid") void loadDelivery();
-  }, [loadDelivery, normalizedPaymentStatus, orderNo]);
+    if (normalizedPaymentStatus === "paid" && !pollUntilDelivered) void loadDelivery();
+  }, [loadDelivery, normalizedPaymentStatus, orderNo, pollUntilDelivered]);
 
   useEffect(() => {
     if (!delivered || deliveredNotifiedRef.current) return;
@@ -109,37 +113,16 @@ export function SecureOrderDelivery({
 
   useEffect(() => {
     if (!pollUntilDelivered || normalizedPaymentStatus !== "paid" || delivered || cancelled || failed) return;
-    let stopped = false;
-    let timer: number | null = null;
-
-    const schedule = () => {
-      if (stopped) return;
-      if (timer !== null) window.clearTimeout(timer);
-      const elapsed = Date.now() - pollStartedAtRef.current;
-      const delay = document.hidden ? 15000 : elapsed < 120000 ? 4000 : 10000;
-      timer = window.setTimeout(tick, delay);
-    };
-    const tick = async () => {
-      if (stopped) return;
-      if (!document.hidden) {
-        const found = await loadDelivery();
-        if (found) return;
+    const controller = new AbortController();
+    setPollOutcome("polling");
+    void pollForPaymentDelivery({ load: loadDelivery, signal: controller.signal }).then((result) => {
+      if (controller.signal.aborted || result.kind === "cancelled") return;
+      if (result.kind === "delivered" || result.kind === "timeout" || result.kind === "error") {
+        setPollOutcome(result.kind);
       }
-      schedule();
-    };
-
-    const handleVisibilityChange = () => {
-      if (stopped || document.hidden) return;
-      if (timer !== null) window.clearTimeout(timer);
-      void tick();
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    schedule();
+    });
     return () => {
-      stopped = true;
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (timer !== null) window.clearTimeout(timer);
+      controller.abort();
     };
   }, [cancelled, delivered, failed, loadDelivery, normalizedPaymentStatus, pollUntilDelivered]);
 
@@ -209,12 +192,21 @@ export function SecureOrderDelivery({
           })}
         </div>
       ) : (
-        <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">
-          {deliveredHint
-            ? "正在同步交付内容……"
-            : ["manual", "manual_delivery"].includes(String(deliveryType ?? ""))
-              ? "支付已完成，等待人工交付。"
-              : "支付已完成，正在准备交付内容……"}
+        <div className="space-y-3 rounded-lg bg-slate-50 p-3 text-muted-foreground">
+          <div>
+            {pollOutcome === "timeout"
+              ? "支付成功，交付内容仍在准备中。"
+              : deliveredHint
+                ? "正在同步交付内容……"
+                : ["manual", "manual_delivery"].includes(String(deliveryType ?? ""))
+                  ? "支付已完成，等待人工交付。"
+                  : "支付成功，正在准备交付内容……"}
+          </div>
+          {pollOutcome === "timeout" ? (
+            <Button type="button" size="sm" variant="outline" asChild>
+              <Link href="/account/orders">查看我的订单</Link>
+            </Button>
+          ) : null}
         </div>
       )}
     </section>

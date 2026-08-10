@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 
+import {
+  ACCOUNT_ASSETS_CORE_PROFILE_SELECT,
+  ACCOUNT_ASSETS_PROFILE_SELECT,
+  getAccountAssetsAvailableBalance,
+  normalizeAccountAssetsProfile,
+} from "@/lib/account/assets-profile-compat.mjs";
 import { normalizeOrderStatus } from "@/lib/orders/order-status";
 import { getUserBep20UnderpaymentBalanceDispositions } from "@/lib/payments/bep20-underpayment-user";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
@@ -90,7 +96,7 @@ export async function GET() {
     recentRecharges: recharges.slice(0, 5),
     recentBalanceTransactions: balanceTransactions.slice(0, 5),
     summary: {
-      availableBalance: Math.max(0, profileResult.profile.balance),
+      availableBalance: getAccountAssetsAvailableBalance(profileResult.profile),
       frozenBalance: null,
       totalRecharge,
       totalSpend: balanceResult.ready ? transactionSpend : orderSpend,
@@ -119,7 +125,7 @@ async function loadProfile(
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("email,display_name,role,created_at,balance")
+    .select(ACCOUNT_ASSETS_PROFILE_SELECT)
     .eq("id", userId)
     .maybeSingle();
 
@@ -127,20 +133,21 @@ async function loadProfile(
     if (isMissingColumn(error)) {
       const retry = await supabase
         .from("profiles")
-        .select("email,display_name,role,created_at")
+        .select(ACCOUNT_ASSETS_CORE_PROFILE_SELECT)
         .eq("id", userId)
         .maybeSingle();
       if (!retry.error) {
         return {
-          profile: normalizeProfile(retry.data as Record<string, unknown> | null, fallback),
-          error: "余额字段尚未初始化，请执行余额兼容 migration。",
+          profile: normalizeAccountAssetsProfile(retry.data as Record<string, unknown> | null, fallback),
+          error: null,
         };
       }
+      return { profile: fallback, error: getErrorMessage(retry.error, "账户核心资料加载失败") };
     }
     return { profile: fallback, error: getErrorMessage(error, "账户资料加载失败") };
   }
 
-  return { profile: normalizeProfile(data as Record<string, unknown> | null, fallback), error: null };
+  return { profile: normalizeAccountAssetsProfile(data as Record<string, unknown> | null, fallback), error: null };
 }
 
 async function loadOrders(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string) {
@@ -213,16 +220,6 @@ async function loadBalanceTransactions(supabase: ReturnType<typeof getSupabaseSe
     ready: true,
     transactions: ((data ?? []) as Record<string, unknown>[]).map(normalizeBalanceTransaction),
     error: null,
-  };
-}
-
-function normalizeProfile(row: Record<string, unknown> | null, fallback: { email: string | null; displayName: null; role: string; createdAt: string | null; balance: number }) {
-  return {
-    email: textOrNull(row?.email) ?? fallback.email,
-    displayName: textOrNull(row?.display_name),
-    role: textOrNull(row?.role) ?? fallback.role,
-    createdAt: textOrNull(row?.created_at) ?? fallback.createdAt,
-    balance: Math.max(0, finiteNumber(row?.balance)),
   };
 }
 

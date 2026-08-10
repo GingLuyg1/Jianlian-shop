@@ -15,6 +15,11 @@ import {
   rechargeStatusLabel,
   type RechargeRecord,
 } from "@/lib/payments/recharge-utils";
+import {
+  calculateExpectedUsdtAmount,
+  compareRechargeDecimals,
+  parseRequestedCnyAmount,
+} from "@/lib/payments/recharge-rate.mjs";
 import { cn } from "@/lib/utils";
 
 type RecordTab = "recharge" | "funds";
@@ -31,6 +36,14 @@ type RechargeListResponse = {
   error?: string;
   code?: string;
   requestId?: string;
+};
+
+type RechargeRate = {
+  effectiveDate: string;
+  marketRate: string;
+  settlementRate: string;
+  source: string;
+  effectiveAt: string;
 };
 
 type BalanceTransactionRecord = {
@@ -78,17 +91,31 @@ export default function AccountRechargeContent() {
   const [fundsError, setFundsError] = useState<string | null>(null);
   const [fundPage, setFundPage] = useState(1);
   const [fundCount, setFundCount] = useState(0);
+  const [dailyRate, setDailyRate] = useState<RechargeRate | null>(null);
+  const [rateError, setRateError] = useState<string | null>(null);
 
   const selectedChannel =
     paymentChannels.find((channel) => channel.code === selectedChannelCode) ?? paymentChannels[0] ?? null;
-  const amount = Number(amountText) || 0;
+  const isUsdtCnyRecharge = selectedChannel?.code === "usdt_bep20";
+  const legacyChannelAmount = isUsdtCnyRecharge ? 0 : Number(amountText) || 0;
   const summary = useMemo(
-    () => (selectedChannel ? calculateRechargeAmounts(selectedChannel, amount) : null),
-    [amount, selectedChannel]
+    () => (selectedChannel && !isUsdtCnyRecharge ? calculateRechargeAmounts(selectedChannel, legacyChannelAmount) : null),
+    [legacyChannelAmount, isUsdtCnyRecharge, selectedChannel]
   );
-  const amountSymbol = selectedChannel?.currency === "USDT" ? "USDT" : "¥";
-  const reachesMin = Boolean(selectedChannel && summary && summary.amount >= selectedChannel.minimumAmount);
-  const hasValidAmount = Boolean(summary && summary.amount > 0 && reachesMin);
+  const requestedCnyAmount = isUsdtCnyRecharge ? parseRequestedCnyAmount(amountText) : null;
+  const expectedUsdtAmount = requestedCnyAmount && dailyRate
+    ? calculateExpectedUsdtAmount(requestedCnyAmount, dailyRate.settlementRate)
+    : null;
+  const amountSymbol = isUsdtCnyRecharge || selectedChannel?.currency === "CNY" ? "¥" : "USDT";
+  const minimumComparison = expectedUsdtAmount && selectedChannel
+    ? compareRechargeDecimals(expectedUsdtAmount, String(selectedChannel.minimumAmount))
+    : null;
+  const reachesMin = isUsdtCnyRecharge
+    ? minimumComparison !== null && minimumComparison >= 0
+    : Boolean(selectedChannel && summary && summary.amount >= selectedChannel.minimumAmount);
+  const hasValidAmount = isUsdtCnyRecharge
+    ? Boolean(requestedCnyAmount && expectedUsdtAmount && dailyRate && reachesMin)
+    : Boolean(summary && summary.amount > 0 && reachesMin);
   const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting);
 
   const loadRecords = useCallback(async (page: number) => {
@@ -172,10 +199,22 @@ export default function AccountRechargeContent() {
     if (activeRecordTab === "funds") void loadFundRecords(fundPage);
   }, [activeRecordTab, fundPage, loadFundRecords]);
 
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/recharges/rate", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as { rate?: RechargeRate; error?: string } | null;
+        if (!response.ok || !payload?.rate) throw new Error(payload?.error ?? "今日充值汇率读取失败");
+        if (active) { setDailyRate(payload.rate); setRateError(null); }
+      })
+      .catch((error) => { if (active) setRateError(getClientErrorMessage(error, "今日充值汇率读取失败")); });
+    return () => { active = false; };
+  }, []);
+
   const updateAmount = (value: string) => {
     setSubmitError(null);
     setSubmitMessage(null);
-    if (selectedChannel) setAmountText(normalizeAmountInput(value, selectedChannel.currency));
+    if (selectedChannel) setAmountText(normalizeAmountInput(value, isUsdtCnyRecharge ? "CNY" : selectedChannel.currency));
     clientRequestIdRef.current = null;
   };
 
@@ -190,7 +229,7 @@ export default function AccountRechargeContent() {
   };
 
   const createRecharge = async () => {
-    if (!canSubmit || !selectedChannel || !summary) return;
+    if (!canSubmit || !selectedChannel || (!summary && !isUsdtCnyRecharge)) return;
     setIsSubmitting(true);
     setSubmitError(null);
     setSubmitMessage(null);
@@ -203,8 +242,8 @@ export default function AccountRechargeContent() {
         body: JSON.stringify({
           channel: selectedChannel.code,
           payment_method: selectedChannel.code,
-          amount: summary.amount,
-          currency: selectedChannel.currency,
+          amount: isUsdtCnyRecharge ? requestedCnyAmount : summary?.amount,
+          currency: isUsdtCnyRecharge ? "CNY" : selectedChannel.currency,
           customer_note: customerNote,
           client_request_id: clientRequestIdRef.current,
         }),
@@ -379,13 +418,25 @@ export default function AccountRechargeContent() {
                     ) : null}
 
                     <p className="text-xs leading-5 text-amber-700">
-                      请严格核对币种和网络，按实际支付金额足额转账。不要向其他网络或其他合约地址转账。
+                      {isUsdtCnyRecharge
+                        ? "请严格核对 USDT、BSC 网络、收款地址和 Token 合约。最终按链上实际到账 USDT 与本单锁定汇率折算人民币；少付或多付均按实收结算。"
+                        : "请严格核对币种和网络，按实际支付金额足额转账。不要向其他网络或其他合约地址转账。"}
                     </p>
                   </div>
                 </div>
               ) : null}
 
               <div className="mt-auto border-t border-border/70 pt-5">
+                {isUsdtCnyRecharge ? (
+                  <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm">
+                    {dailyRate ? (
+                      <>
+                        <p className="font-semibold text-sky-900">今日充值汇率：1 USDT = ¥{dailyRate.settlementRate}</p>
+                        <p className="mt-1 text-xs text-sky-700">汇率日期：{dailyRate.effectiveDate}。创建充值单后汇率即锁定。</p>
+                      </>
+                    ) : <p className="text-red-600">{rateError ?? "今日充值汇率尚未设置"}</p>}
+                  </div>
+                ) : null}
                 <label className="mb-1.5 block text-sm font-medium">
                   <span className="text-red-500">*</span>金额
                 </label>
@@ -398,11 +449,11 @@ export default function AccountRechargeContent() {
                     inputMode="decimal"
                     onChange={(event) => updateAmount(event.target.value)}
                     disabled={!selectedChannel}
-                    placeholder={selectedChannel ? `请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}` : "请先选择支付渠道"}
-                    className={cn("h-11", selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16")}
+                    placeholder={isUsdtCnyRecharge ? "请输入希望充值的人民币金额" : selectedChannel ? `请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}` : "请先选择支付渠道"}
+                    className={cn("h-11", !isUsdtCnyRecharge && selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16")}
                   />
                 </div>
-                {amount > 0 && !reachesMin ? (
+                {(isUsdtCnyRecharge ? requestedCnyAmount !== null : legacyChannelAmount > 0) && !reachesMin ? (
                   <p className="mt-2 text-xs text-red-500">
                     当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。
                   </p>
@@ -424,13 +475,13 @@ export default function AccountRechargeContent() {
 
                 <div className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 sm:gap-x-8">
-                    <div>充值金额：{selectedChannel && summary ? formatPaymentAmount(summary.amount, selectedChannel.currency) : "—"}</div>
-                    <div>手续费：{selectedChannel && summary ? (summary.fee === 0 ? "免手续费" : formatPaymentAmount(summary.fee, selectedChannel.currency)) : "—"}</div>
+                    <div>充值人民币金额：{isUsdtCnyRecharge && requestedCnyAmount ? `¥${requestedCnyAmount}` : selectedChannel && summary ? formatPaymentAmount(summary.amount, selectedChannel.currency) : "—"}</div>
+                    <div>手续费：{isUsdtCnyRecharge ? "免手续费" : selectedChannel && summary ? (summary.fee === 0 ? "免手续费" : formatPaymentAmount(summary.fee, selectedChannel.currency)) : "—"}</div>
                     <div className="font-medium text-slate-700">
-                      实际支付金额：{selectedChannel && summary ? formatPaymentAmount(summary.payableAmount, selectedChannel.currency) : "—"}
+                      预计需要支付：{isUsdtCnyRecharge ? (expectedUsdtAmount ? `${expectedUsdtAmount} USDT` : "—") : selectedChannel && summary ? formatPaymentAmount(summary.payableAmount, selectedChannel.currency) : "—"}
                     </div>
                     <div className="font-medium text-slate-700">
-                      预计到账金额：{selectedChannel && summary ? formatPaymentAmount(summary.arrivalAmount, selectedChannel.currency) : "—"}
+                      {isUsdtCnyRecharge ? "实际到账 USDT 将按本充值单锁定汇率折算为人民币余额。" : `预计到账金额：${selectedChannel && summary ? formatPaymentAmount(summary.arrivalAmount, selectedChannel.currency) : "—"}`}
                     </div>
                   </div>
                   <Button
@@ -640,15 +691,20 @@ function RechargeRecords({ records, loading, error, page, count, onRetry, onPage
             <dl className="grid gap-2 text-muted-foreground">
               <RecordLine label="支付渠道" value={record.channelName} />
               {record.network ? <RecordLine label="网络" value={record.network} /> : null}
-              <RecordLine label="充值金额" value={formatPaymentAmount(record.requestedAmount, record.currency)} />
+              <RecordLine label="充值金额" value={record.requestedCnyAmount ? `¥${record.requestedCnyAmount}` : formatPaymentAmount(record.requestedAmount, record.currency)} />
+              {record.lockedSettlementRate ? <RecordLine label="锁定汇率" value={`1 USDT = ¥${record.lockedSettlementRate}`} /> : null}
+              {record.expectedUsdtAmount ? <RecordLine label="预计支付" value={`${record.expectedUsdtAmount} USDT`} /> : null}
+              {record.paymentAddress ? <RecordLine label="收款地址" value={record.paymentAddress} /> : null}
+              {record.paymentTokenContract ? <RecordLine label="Token 合约" value={record.paymentTokenContract} /> : null}
+              {record.actualReceivedUsdt ? <RecordLine label="实际到账" value={`${record.actualReceivedUsdt} USDT`} /> : null}
               <RecordLine label="手续费" value={record.feeAmount === 0 ? "免手续费" : formatPaymentAmount(record.feeAmount, record.currency)} />
-              <RecordLine label="应付金额" value={formatPaymentAmount(record.payableAmount, record.currency)} />
-              <RecordLine label="到账金额" value={formatPaymentAmount(record.creditedAmount, record.currency)} />
+              {!record.expectedUsdtAmount ? <RecordLine label="应付金额" value={formatPaymentAmount(record.payableAmount, record.currency)} /> : null}
+              <RecordLine label="到账金额" value={record.creditedCnyAmount ? `¥${record.creditedCnyAmount}` : formatPaymentAmount(record.creditedAmount, record.currency)} />
               <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />
               {record.completedAt ? <RecordLine label="完成时间" value={formatDateTime(record.completedAt)} /> : null}
               {record.reviewReason && ["failed", "rejected", "cancelled"].includes(String(record.status)) ? <RecordLine label="处理说明" value={record.reviewReason} /> : null}
             </dl>
-            {["waiting_payment", "submitted", "rejected"].includes(String(record.status)) ? <RechargeProofForm record={record} onSubmitted={onProofSubmitted} /> : null}
+            {["waiting_payment", "submitted", "rejected"].includes(String(record.status)) ? (record.expectedUsdtAmount ? <RechargeBep20VerifyForm record={record} onSubmitted={onProofSubmitted} /> : <RechargeProofForm record={record} onSubmitted={onProofSubmitted} />) : null}
           </div>
         ))}
       </div>
@@ -662,6 +718,42 @@ function RechargeRecords({ records, loading, error, page, count, onRetry, onPage
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function RechargeBep20VerifyForm({ record, onSubmitted }: { record: RechargeRecord; onSubmitted: () => void }) {
+  const [txHash, setTxHash] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  async function verify() {
+    if (submitting || !/^0x[0-9a-fA-F]{64}$/.test(txHash.trim())) {
+      setError("请输入合法的 0x 开头 32 字节交易哈希。");
+      return;
+    }
+    setSubmitting(true); setError(""); setMessage("");
+    try {
+      const response = await fetch(`/api/recharges/${encodeURIComponent(record.rechargeNo)}/bep20/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txHash: txHash.trim() }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string; actualReceivedUsdt?: string; creditedCnyAmount?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? "链上交易核验失败");
+      setMessage(`已核验实际到账 ${payload?.actualReceivedUsdt ?? "—"} USDT，预计入账 ¥${payload?.creditedCnyAmount ?? "—"}。等待管理员审核。`);
+      onSubmitted();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "链上交易核验失败");
+    } finally { setSubmitting(false); }
+  }
+  return (
+    <div className="mt-3 space-y-2 border-t pt-3">
+      <p className="text-xs text-slate-500">应付参考：{record.expectedUsdtAmount} USDT。少付或多付均按链上实际到账与锁定汇率结算。</p>
+      <Input value={txHash} onChange={(event) => setTxHash(event.target.value)} placeholder="输入 BEP20 TxHash" maxLength={66} />
+      {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      <Button size="sm" disabled={submitting} onClick={() => void verify()}>{submitting ? "核验中..." : "提交 TxHash 并核验"}</Button>
     </div>
   );
 }

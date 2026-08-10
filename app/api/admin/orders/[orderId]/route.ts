@@ -14,6 +14,7 @@ import {
 import { PROMOTION_COMMISSION_RATE } from "@/lib/promotion";
 import { getPromotionSettings } from "@/lib/settings/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { reconcileDajuExistingOrderWithSupabase } from "@/lib/providers/daju/fulfillment";
 
 export const dynamic = "force-dynamic";
 
@@ -217,7 +218,8 @@ export async function POST(request: Request, context: RouteContext) {
 
     const body = (await request.json().catch(() => null)) as
       | {
-          action?: "retry_auto_delivery" | "manual_inventory" | "manual_content" | "mark_failed" | "expire_unpaid_order";
+          action?: "retry_auto_delivery" | "reconcile_daju_order" | "manual_inventory" | "manual_content" | "mark_failed" | "expire_unpaid_order";
+          provider_order_code?: string;
           delivery_type?: string;
           delivery_content?: string;
           delivery_status?: string;
@@ -264,6 +266,59 @@ export async function POST(request: Request, context: RouteContext) {
         },
       });
       return NextResponse.json({ result });
+    }
+    if (body?.action === "reconcile_daju_order") {
+      const orderItemId = typeof body.order_item_id === "string" ? body.order_item_id.trim() : "";
+      const providerOrderCode = typeof body.provider_order_code === "string" ? body.provider_order_code.trim() : "";
+      if (!/^[a-f0-9-]{36}$/i.test(orderItemId) || !/^[a-zA-Z0-9_-]{1,160}$/.test(providerOrderCode)) {
+        return NextResponse.json({ error: "供应商订单协调参数无效", code: "DAJU_RECONCILIATION_INPUT_INVALID" }, { status: 400 });
+      }
+      const serviceClient = getSupabaseServiceRoleClient();
+      if (!serviceClient) {
+        return NextResponse.json({ error: "服务端交付权限未配置", code: "SERVICE_ROLE_UNAVAILABLE" }, { status: 503 });
+      }
+      try {
+        const result = await reconcileDajuExistingOrderWithSupabase({
+          service: serviceClient,
+          orderId: context.params.orderId,
+          orderItemId,
+          orderCode: providerOrderCode,
+          triggerSource: "admin_reconcile_existing_daju_order",
+        });
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "reconcile_daju_order",
+          module: "delivery",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "success",
+          afterSummary: { provider_order_code: result.orderCode, delivered_count: result.deliveredCount, request_id: result.requestId },
+        });
+        return NextResponse.json({
+          ok: true,
+          code: "DAJU_RECONCILIATION_COMPLETED",
+          orderCode: result.orderCode,
+          requestId: result.requestId,
+          deliveredCount: result.deliveredCount,
+        });
+      } catch (error) {
+        const code = error instanceof Error && /^DAJU_[A-Z0-9_]+$/.test(error.message)
+          ? error.message
+          : "DAJU_RECONCILIATION_FAILED";
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "reconcile_daju_order",
+          module: "delivery",
+          targetType: "order",
+          targetId: context.params.orderId,
+          result: "failed",
+          errorCode: code,
+          errorMessage: "供应商已有订单协调失败，未执行新采购",
+        });
+        return NextResponse.json({ error: "供应商已有订单协调失败，未执行新采购", code }, { status: 409 });
+      }
     }
     if (body?.action === "retry_auto_delivery") {
       const serviceClient = getSupabaseServiceRoleClient();

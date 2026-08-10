@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import PaymentSettingsPanel from "@/components/admin/payments/PaymentSettingsPanel";
+import RechargeRateSettings from "@/components/admin/payments/RechargeRateSettings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,7 +165,7 @@ export default function AdminSettingsPage() {
             {!loading && activeGroup === "maintenance" ? <MaintenanceSettings settings={draft} saving={saving} onChange={updateDraft} onSave={saveSettings} /> : null}
             {!loading && activeGroup === "announcement" ? <AnnouncementSettings settings={draft} saving={saving} onChange={updateDraft} onSave={saveSettings} /> : null}
             {!loading && activeGroup === "legal" ? <LegalSettings /> : null}
-            {!loading && activeGroup === "payments" ? <PaymentSettingsPanel /> : null}
+            {!loading && activeGroup === "payments" ? <><RechargeRateSettings /><PaymentSettingsPanel /></> : null}
             {!loading && activeGroup === "security" ? <SecuritySettings settings={draft} logs={logs} saving={saving} onChange={updateDraft} onSave={saveSettings} /> : null}
           </div>
         </section>

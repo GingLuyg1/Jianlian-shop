@@ -136,6 +136,20 @@ type OrderPostProcessStage =
   | "BALANCE_PAYMENT_STARTED"
   | "BALANCE_PAYMENT_COMPLETED"
   | "BALANCE_PAYMENT_FAILED"
+  | "AUTO_DELIVERY_STARTED"
+  | "AUTO_DELIVERY_COMPLETED"
+  | "AUTO_DELIVERY_FAILED"
+  | "LOCAL_RESERVATION_STARTED"
+  | "LOCAL_RESERVATION_COMPLETED"
+  | "LOCAL_RESERVATION_RPC_FAILED"
+  | "LOCAL_RESERVATION_RESULT_INVALID"
+  | "LOCAL_PRIORITY_BLOCKED"
+  | "LOCAL_DELIVERY_STARTED"
+  | "LOCAL_DELIVERY_COMPLETED"
+  | "LOCAL_DELIVERY_RPC_FAILED"
+  | "DAJU_FALLBACK_STARTED"
+  | "DAJU_FALLBACK_COMPLETED"
+  | "DAJU_FALLBACK_FAILED"
   | "BEP20_SESSION_STARTED"
   | "BEP20_SESSION_COMPLETED"
   | "BEP20_SESSION_FAILED"
@@ -553,15 +567,27 @@ export async function POST(request: Request) {
     }
 
     if (paymentMethod === "balance") {
-      logOrderPostProcess({ requestId: clientRequestId, stage: "BALANCE_PAYMENT_STARTED", orderId, orderNo: completedOrder.orderNo });
+      const completedOrderNo = completedOrder.orderNo;
+      logOrderPostProcess({ requestId: clientRequestId, stage: "BALANCE_PAYMENT_STARTED", orderId, orderNo: completedOrderNo });
       try {
         const paymentResult = await payOrderWithBalance({
           orderId,
           userId: user.id,
           clientRequestId,
+          onLifecycleStage: ({ stage, error }) => {
+            logOrderPostProcess({
+              level: stage.endsWith("_FAILED") || stage === "LOCAL_RESERVATION_RESULT_INVALID" || stage === "LOCAL_PRIORITY_BLOCKED"
+                ? "warn"
+                : "info",
+              requestId: clientRequestId,
+              stage,
+              orderId,
+              orderNo: completedOrderNo,
+              error,
+            });
+          },
         });
 
-        logOrderPostProcess({ requestId: clientRequestId, stage: "BALANCE_PAYMENT_COMPLETED", orderId, orderNo: completedOrder.orderNo });
         logOrderPostProcess({ requestId: clientRequestId, stage: "RESPONSE_BUILD_COMPLETED", orderId, orderNo: completedOrder.orderNo });
         return NextResponse.json({
           request_id: clientRequestId,

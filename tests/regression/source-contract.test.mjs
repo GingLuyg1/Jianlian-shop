@@ -623,7 +623,7 @@ test("BEP20 automatic overpayment remains idempotent across verify, delivery ret
   assert.doesNotMatch(service, /credit_bep20_overpayment_to_wallet/);
 });
 
-test("BEP20 terminal UI removes self-service submission and polling uses one visibility-aware timer", () => {
+test("BEP20 terminal UI removes self-service submission and delivery polling is cancellable", () => {
   const paymentPage = file("app/payment/page.tsx");
   const delivery = file("components/account/orders/SecureOrderDelivery.tsx");
 
@@ -632,8 +632,8 @@ test("BEP20 terminal UI removes self-service submission and polling uses one vis
   assert.match(paymentPage, /document\.addEventListener\("visibilitychange", handleVisibilityChange\)/);
   assert.match(paymentPage, /document\.removeEventListener\("visibilitychange", handleVisibilityChange\)/);
   assert.match(paymentPage, /if \(bep20PollTimer\.current !== null\) window\.clearTimeout/);
-  assert.match(delivery, /document\.addEventListener\("visibilitychange", handleVisibilityChange\)/);
-  assert.match(delivery, /if \(timer !== null\) window\.clearTimeout\(timer\)/);
+  assert.match(delivery, /const controller = new AbortController\(\)/);
+  assert.match(delivery, /controller\.abort\(\)/);
 });
 
 test("BEP20 verification uses block timestamp and contract decimals check", () => {
@@ -1571,6 +1571,7 @@ test("digital delivery private tables use least-privilege grants without changin
 
 test("digital delivery writes elevate only after cookie administrator authorization", () => {
   const balance = file("lib/orders/balance-payment-service.ts");
+  const orderRoute = file("app/api/orders/route.ts");
   const completion = file("lib/payments/complete-payment-service.ts");
   const bep20 = file("lib/payments/bep20-chain-service.ts");
   const adminOrder = file("app/api/admin/orders/[orderId]/route.ts");
@@ -1579,7 +1580,10 @@ test("digital delivery writes elevate only after cookie administrator authorizat
   const delivery = file("app/api/orders/[orderNo]/delivery/route.ts");
 
   assert.match(balance, /getSupabaseServiceRoleClient\(\)/);
-  assert.match(balance, /deliverDigitalOrder\(service, result\.orderId, "balance_payment"\)/);
+  assert.match(balance, /deliverDigitalOrder\(service, result\.orderId, "balance_payment", input\.onLifecycleStage\)/);
+  assert.match(balance, /if \(error\) throw error;[\s\S]*runPostPaymentDelivery\(/);
+  assert.match(orderRoute, /BALANCE_PAYMENT_COMPLETED[\s\S]*AUTO_DELIVERY_STARTED[\s\S]*AUTO_DELIVERY_COMPLETED[\s\S]*AUTO_DELIVERY_FAILED/);
+  assert.match(orderRoute, /LOCAL_RESERVATION_RPC_FAILED[\s\S]*LOCAL_RESERVATION_RESULT_INVALID[\s\S]*LOCAL_DELIVERY_RPC_FAILED[\s\S]*DAJU_FALLBACK_STARTED/);
   assert.match(completion, /getSupabaseServiceRoleClient\(\)/);
   assert.match(completion, /deliverDigitalOrder\(service, result\.businessId, input\.source\)/);
   assert.match(bep20, /completePayment\([\s\S]{0,500}service/);
@@ -1727,7 +1731,7 @@ test("paid orders never render as waiting for payment and manual delivery has ex
   assert.match(secureDelivery, /normalizedPaymentStatus !== "paid"/);
   assert.match(secureDelivery, /\["manual", "manual_delivery"\]/);
   assert.match(secureDelivery, /支付已完成，等待人工交付。/);
-  assert.match(secureDelivery, /支付已完成，正在准备交付内容……/);
+  assert.match(secureDelivery, /支付成功，正在准备交付内容……/);
 });
 
 test("account order tables use one centered user-facing status column", () => {
@@ -1883,6 +1887,7 @@ test("BEP20 terminal timing and secure delivery refresh share one guarded presen
   const summary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
   const visibility = file("lib/payments/bep20-presentation.mjs");
   const secureDelivery = file("components/account/orders/SecureOrderDelivery.tsx");
+  const deliveryPolling = file("lib/orders/delivery-polling.mjs");
   const orderList = file("app/account/orders/page.tsx");
   const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
 
@@ -1907,17 +1912,24 @@ test("BEP20 terminal timing and secure delivery refresh share one guarded presen
   assert.match(paymentPage, /document\.hidden \? 15000 : elapsed < 120000 \? 4000 : 10000/);
   assert.match(paymentPage, /window\.clearTimeout\(bep20PollTimer\.current\)/);
   assert.match(secureDelivery, /cache: "no-store"/);
-  assert.match(secureDelivery, /if \(normalizedPaymentStatus === "paid"\) void loadDelivery\(\)/);
-  assert.match(secureDelivery, /document\.hidden \? 15000 : elapsed < 120000 \? 4000 : 10000/);
+  assert.match(secureDelivery, /if \(normalizedPaymentStatus === "paid" && !pollUntilDelivered\) void loadDelivery\(\)/);
+  assert.match(secureDelivery, /pollForPaymentDelivery\(\{ load: loadDelivery, signal: controller\.signal \}\)/);
   assert.match(secureDelivery, /if \(!pollUntilDelivered \|\| normalizedPaymentStatus !== "paid" \|\| delivered \|\| cancelled \|\| failed\) return/);
-  assert.match(secureDelivery, /window\.clearTimeout\(timer\)/);
+  assert.match(secureDelivery, /controller\.abort\(\)/);
+  assert.match(deliveryPolling, /PAYMENT_DELIVERY_POLL_INTERVAL_MS = 1500/);
+  assert.match(deliveryPolling, /PAYMENT_DELIVERY_POLL_TIMEOUT_MS = 24000/);
+  assert.match(deliveryPolling, /if \(remainingMs <= 0\) return \{ kind: "timeout" \}/);
   assert.match(secureDelivery, /重新加载交付信息/);
+  assert.match(secureDelivery, /支付成功，交付内容仍在准备中/);
+  assert.match(secureDelivery, /查看我的订单/);
   assert.match(secureDelivery, /显示完整内容/);
   assert.match(secureDelivery, /navigator\.clipboard\.writeText\(content\)/);
   assert.doesNotMatch(secureDelivery, /from\("(?:order_deliveries|digital_delivery_secrets)"\)/);
   assert.doesNotMatch(secureDelivery, /service[_-]?role/i);
   assert.doesNotMatch(secureDelivery, /console\.(?:log|error).*content/);
   for (const source of [paymentPage, orderList, orderDetail]) assert.match(source, /SecureOrderDelivery/);
+  assert.match(paymentPage, /normalizedPaymentStatus === "paid" \? \([\s\S]*?<SecureOrderDelivery/);
+  assert.doesNotMatch(paymentPage, /router\.push\(`\/order-success\?order=/);
 });
 
 test("owned-user delivery RPCs qualify order identifiers and hide database failures", () => {
@@ -2151,11 +2163,158 @@ test("order API keeps an RPC-created order successful when agreement evidence is
   assert.match(checkout, /client_request_id: clientRequestIdRef\.current/);
   assert.doesNotMatch(checkout, /clientRequestIdRef\.current\s*=\s*["']{2}\s*;/);
   assert.match(checkout, /if \(orderNo\) \{\s*router\.push\(`\/payment\?order=/);
-  assert.match(checkout, /if \(!productRow \|\| submitLoading\) return/);
-  assert.match(checkout, /disabled=\{submitLoading\}/);
+  assert.match(checkout, /if \(!productRow \|\| submitLoading \|\| submissionGuardRef\.current\.isActive\(\)\) return/);
+  assert.match(checkout, /disabled=\{submitLoading \|\| Boolean\(balanceSubmissionBlockReason\)\}/);
   assert.match(checkout, /type="button"[\s\S]*?onClick=\{handleSubmit\}/);
   assert.match(checkout, /id="checkout-submit-feedback"[\s\S]*?aria-live="polite"/);
   assert.match(checkout, /aria-describedby="checkout-submit-feedback"/);
+});
+
+test("Daju local reservation schema includes its reserved user dependency", () => {
+  const priorityMigration = file("supabase/migrations/20260810200000_daju_local_inventory_priority_v1.sql");
+  const compatibilityMigration = file("supabase/migrations/20260810210000_digital_inventory_reserved_user_compatibility.sql");
+  const postcheck = file("docs/audits/20260810-daju-local-inventory-priority-v1-postcheck.sql");
+
+  assert.match(priorityMigration, /reserved_user_id = v_order\.user_id/);
+  assert.match(
+    compatibilityMigration,
+    /alter table public\.digital_inventory\s+add column if not exists reserved_user_id uuid;/i,
+  );
+  assert.doesNotMatch(compatibilityMigration, /\b(?:references|default|not null)\b/i);
+  assert.match(postcheck, /inventory_schema_blocker_count/);
+  assert.match(postcheck, /a\.attname = 'reserved_user_id'/);
+  assert.match(postcheck, /a\.atttypid = 'pg_catalog\.uuid'::pg_catalog\.regtype/);
+  assert.match(
+    postcheck,
+    /inventory_schema_blocker_count = 0[\s\S]*reservation_contract_blocker_count = 0[\s\S]*then 'PASS'/,
+  );
+});
+
+test("automatic delivery service-role auth compatibility preserves delivery and ACL contracts", () => {
+  const migration = file("supabase/migrations/20260811090000_deliver_digital_order_service_role_auth_compatibility.sql");
+  const postcheck = file("docs/audits/20260811-deliver-digital-order-service-role-auth-compatibility-postcheck.sql");
+
+  assert.match(migration, /pg_get_functiondef\(p\.oid\)/);
+  assert.match(migration, /coalesce\(current_setting\(''request\.jwt\.claim\.role'', true\), ''''\)/);
+  assert.match(migration, /coalesce\(auth\.role\(\), ''''\)/);
+  assert.match(migration, /v_legacy_match_count <> 1/);
+  assert.match(migration, /and not public\.is_admin\(\)/);
+  assert.match(migration, /payment_status <> ''paid''/);
+  assert.match(migration, /digital_delivery_secrets/);
+  assert.match(migration, /supplier_fulfillment_requests as local_sfr/);
+  assert.match(migration, /execute v_patched_definition/);
+  assert.doesNotMatch(migration, /create\s+table|alter\s+table|insert\s+into|update\s+public\.|delete\s+from/i);
+
+  assert.match(postcheck, /definition like '%coalesce\(auth\.role\(\), ''''\)%'/);
+  assert.match(postcheck, /definition not like '%request\.jwt\.claim\.role%'/);
+  assert.match(postcheck, /definition like '%and not public\.is_admin\(\)%'/);
+  assert.match(postcheck, /p\.prosecdef/);
+  assert.match(postcheck, /search_path=public/);
+  assert.match(postcheck, /not public_can_execute[\s\S]*not anon_can_execute[\s\S]*not authenticated_can_execute[\s\S]*service_role_can_execute/);
+  assert.match(postcheck, /end as assessment/);
+});
+
+test("automatic delivery ACL compatibility exposes no client execution path", () => {
+  const migration = file("supabase/migrations/20260811093000_deliver_digital_order_service_role_acl_compatibility.sql");
+  const deliveryService = file("lib/delivery/delivery-service.ts");
+  const balanceService = file("lib/orders/balance-payment-service.ts");
+  const paymentService = file("lib/payments/complete-payment-service.ts");
+  const bep20Service = file("lib/payments/bep20-chain-service.ts");
+  const adminRoute = file("app/api/admin/orders/[orderId]/route.ts");
+
+  for (const role of ["public", "anon", "authenticated"]) {
+    assert.match(
+      migration,
+      new RegExp(`revoke execute on function public\\.deliver_digital_order\\(uuid,text\\) from ${role};`, "i"),
+    );
+  }
+  assert.match(migration, /grant execute on function public\.deliver_digital_order\(uuid,text\) to service_role;/i);
+  assert.doesNotMatch(migration, /create\s+or\s+replace|alter\s+function|insert\s+into|update\s+public\.|delete\s+from/i);
+
+  assert.match(deliveryService, /supabase\.rpc\("deliver_digital_order"/);
+  assert.match(balanceService, /getSupabaseServiceRoleClient\(\)[\s\S]*deliverDigitalOrder\(service/);
+  assert.match(paymentService, /getSupabaseServiceRoleClient\(\)[\s\S]*deliverDigitalOrder\(service/);
+  assert.match(bep20Service, /deliverDigitalOrder\(service,/);
+  assert.match(adminRoute, /getServerAdminContext\(\)[\s\S]*getSupabaseServiceRoleClient\(\)[\s\S]*deliverDigitalOrder\(serviceClient/);
+});
+
+test("user delivery compatibility consolidates delivery_no and fully qualifies PL/pgSQL output names", () => {
+  const migration = file("supabase/migrations/20260810190000_user_delivery_compatibility.sql");
+  const postcheck = file("docs/audits/20260810-user-delivery-compatibility-postcheck.sql");
+  assert.match(migration, /alter table public\.order_deliveries[\s\S]*add column if not exists delivery_no text/i);
+  assert.equal((migration.match(/create or replace function public\.get_order_delivery_for_user\(p_order_no text\)/gi) ?? []).length, 1);
+  assert.equal((migration.match(/create or replace function public\.get_order_fulfillment_for_user\(p_order_no text\)/gi) ?? []).length, 1);
+
+  for (const functionName of ["get_order_delivery_for_user", "get_order_fulfillment_for_user"]) {
+    const start = migration.indexOf(`create or replace function public.${functionName}(p_order_no text)`);
+    const end = migration.indexOf("\n$$;", start);
+    assert.ok(start >= 0 && end > start);
+    const definition = migration.slice(start, end);
+    assert.match(definition, /from public\.orders as o[\s\S]*where o\.order_no = p_order_no/);
+    assert.doesNotMatch(definition, /\bwhere\s+order_no\s*=/i);
+    assert.match(definition, /security definer[\s\S]*set search_path = public/i);
+  }
+
+  const fulfillmentStart = migration.indexOf("create or replace function public.get_order_fulfillment_for_user(p_order_no text)");
+  const fulfillmentEnd = migration.indexOf("\n$$;", fulfillmentStart);
+  const fulfillment = migration.slice(fulfillmentStart, fulfillmentEnd);
+  assert.match(fulfillment, /from public\.order_items as oi/);
+  assert.match(fulfillment, /left join public\.order_deliveries as od/);
+  assert.match(fulfillment, /oi\.delivery_status/);
+  assert.match(fulfillment, /od\.delivery_status/);
+  assert.doesNotMatch(fulfillment, /\bwhere\s+delivery_status\s*=/i);
+
+  assert.match(migration, /revoke execute on function public\.get_order_delivery_for_user\(text\) from public, anon/);
+  assert.match(migration, /grant execute on function public\.get_order_delivery_for_user\(text\) to authenticated, service_role/);
+  const executablePostcheck = postcheck.replace(/--[^\r\n]*/g, "");
+  assert.match(executablePostcheck, /begin;[\s\S]*set transaction read only;/i);
+  assert.match(executablePostcheck, /delivery_no_blocker_count/);
+  assert.match(executablePostcheck, /order_alias_blocker_count/);
+  assert.match(executablePostcheck, /fulfillment_alias_blocker_count/);
+  assert.match(executablePostcheck, /end as assessment/);
+  assert.doesNotMatch(executablePostcheck, /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy|vacuum|analyze|refresh)\b/im);
+});
+
+test("account assets keeps balance available when display_name is missing", () => {
+  const accountAssets = file("app/api/account/assets/route.ts");
+  const profileCompatibility = file("lib/account/assets-profile-compat.mjs");
+
+  assert.match(accountAssets, /ACCOUNT_ASSETS_PROFILE_SELECT/);
+  assert.match(accountAssets, /ACCOUNT_ASSETS_CORE_PROFILE_SELECT/);
+  assert.match(accountAssets, /normalizeAccountAssetsProfile/);
+  assert.match(accountAssets, /getAccountAssetsAvailableBalance\(profileResult\.profile\)/);
+  assert.match(accountAssets, /if \(isMissingColumn\(error\)\)[\s\S]*?error: null/);
+  assert.match(accountAssets, /loadBalanceTransactions\(supabase, user\.id\)/);
+  assert.match(profileCompatibility, /ACCOUNT_ASSETS_PROFILE_SELECT = "email,display_name,role,created_at,balance"/);
+  assert.match(profileCompatibility, /ACCOUNT_ASSETS_CORE_PROFILE_SELECT = "email,balance"/);
+});
+
+test("checkout reads CNY balance and keeps insufficient-balance retries on the original order", () => {
+  const checkout = file("app/checkout/page.tsx");
+  const flow = file("lib/checkout/balance-flow.mjs");
+
+  assert.match(checkout, /fetch\("\/api\/account\/assets", \{ cache: "no-store" \}\)/);
+  assert.match(checkout, /window\.addEventListener\("focus", refreshBalance\)/);
+  assert.match(checkout, /ACCOUNT_BALANCE_UPDATED_EVENT/);
+  assert.match(checkout, /balanceSubmissionBlockReason/);
+  assert.match(checkout, /disabled=\{submitLoading \|\| Boolean\(balanceSubmissionBlockReason\)\}/);
+  assert.match(checkout, /余额不足，还需充值/);
+  assert.match(checkout, /\/products\/account-recharge\?returnTo=/);
+  assert.match(checkout, /balance_insufficient_existing_order/);
+  assert.match(checkout, /window\.sessionStorage\.setItem\(checkoutSessionKey/);
+  assert.match(checkout, /clientRequestIdRef\.current = requestId/);
+  assert.match(checkout, /继续支付原订单/);
+  assert.match(checkout, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(stored\.orderNo\)\}`/);
+  assert.match(checkout, /getRetainedOrderCustomerEmail\(payload, stored\.orderNo\)/);
+  assert.match(checkout, /setEmail\(retainedEmail\)/);
+  assert.match(checkout, /customerEmail: \(pendingBalanceOrder\?\.customerEmail \?\? email\.trim\(\)\) \|\| null/);
+  assert.match(checkout, /submissionGuardRef\.current\.tryStart\(\)/);
+  assert.match(checkout, /submissionGuardRef\.current\.finish\(\)/);
+
+  assert.match(flow, /Math\.round\(\(value \+ Number\.EPSILON\) \* CNY_SCALE\)/);
+  assert.match(flow, /balanceCents >= orderCents/);
+  assert.match(flow, /status === 402 && orderNo/);
+  assert.doesNotMatch(flow, /USDT|BEP20|wallet_accounts|profiles\.balance/);
 });
 
 test("checkout and user order views keep payment and fulfillment presentation scoped", () => {
@@ -3902,7 +4061,7 @@ test("client privilege hardening phase 1 removes the redundant authenticated rec
   );
   assert.match(
     route,
-    /if\s*\(channel\.reviewMode\s*===\s*"manual"\)[\s\S]{0,300}status:\s*"waiting_payment"[\s\S]{0,300}reviewMode:\s*"manual"/,
+    /if\s*\(channel\.reviewMode\s*===\s*"manual"\)[\s\S]{0,900}status:\s*"waiting_payment"[\s\S]{0,900}reviewMode:\s*"manual"/,
   );
   assert.doesNotMatch(
     route,

@@ -37,10 +37,15 @@ type ReviewInput = {
 type RechargeReviewRow = {
   id: string;
   recharge_no: string;
+  channel: string | null;
+  channel_code: string | null;
   status: string;
   amount: number | string;
   payable_amount: number | string | null;
   currency: string | null;
+  settlement_currency: string | null;
+  actual_received_usdt: number | string | null;
+  locked_settlement_rate: number | string | null;
   transaction_reference: string | null;
   provider_trade_no: string | null;
   approved_at: string | null;
@@ -206,10 +211,15 @@ class RechargeCreditFailedError extends RechargeReviewError {
 const rechargeSelect = [
   "id",
   "recharge_no",
+  "channel",
+  "channel_code",
   "status",
   "amount",
   "payable_amount",
   "currency",
+  "settlement_currency",
+  "actual_received_usdt",
+  "locked_settlement_rate",
   "transaction_reference",
   "provider_trade_no",
   "approved_at",
@@ -264,6 +274,8 @@ function parseRechargeReviewRow(
     ...row,
     id: row.id,
     recharge_no: row.recharge_no,
+    channel: typeof row.channel === "string" ? row.channel : null,
+    channel_code: typeof row.channel_code === "string" ? row.channel_code : null,
     status: row.status,
     amount: row.amount,
     payable_amount:
@@ -272,6 +284,16 @@ function parseRechargeReviewRow(
         ? row.payable_amount
         : null,
     currency: typeof row.currency === "string" ? row.currency : null,
+    settlement_currency:
+      typeof row.settlement_currency === "string" ? row.settlement_currency : null,
+    actual_received_usdt:
+      typeof row.actual_received_usdt === "number" || typeof row.actual_received_usdt === "string"
+        ? row.actual_received_usdt
+        : null,
+    locked_settlement_rate:
+      typeof row.locked_settlement_rate === "number" || typeof row.locked_settlement_rate === "string"
+        ? row.locked_settlement_rate
+        : null,
     transaction_reference:
       typeof row.transaction_reference === "string"
         ? row.transaction_reference
@@ -712,14 +734,32 @@ async function processCredit(
   requestId: string,
 ) {
   const transactionReference = requireTransactionReference(recharge);
+  const isUsdtSettlement = recharge.settlement_currency === "USDT"
+    || recharge.channel === "usdt_bep20"
+    || recharge.channel_code === "usdt_bep20";
+  if (isUsdtSettlement && (
+    recharge.currency !== "CNY"
+    || recharge.settlement_currency !== "USDT"
+    || recharge.actual_received_usdt === null
+    || recharge.locked_settlement_rate === null
+  )) {
+    throw new RechargeReviewValidationError(
+      "USDT-BEP20 充值缺少已核验的实际到账金额或锁定汇率，禁止入账。",
+    );
+  }
 
   return executeRechargeCreditAttempt({
-    invokeRpc: () => service.rpc("complete_account_recharge", {
-      p_recharge_id: recharge.id,
-      p_provider_transaction_id: transactionReference,
-      p_paid_amount: Number(recharge.payable_amount ?? recharge.amount),
-      p_currency: recharge.currency ?? "CNY",
-    }),
+    invokeRpc: () => isUsdtSettlement
+      ? service.rpc("complete_account_recharge_usdt_cny_v1", {
+          p_recharge_id: recharge.id,
+          p_provider_transaction_id: transactionReference,
+        })
+      : service.rpc("complete_account_recharge", {
+          p_recharge_id: recharge.id,
+          p_provider_transaction_id: transactionReference,
+          p_paid_amount: Number(recharge.payable_amount ?? recharge.amount),
+          p_currency: recharge.currency ?? "CNY",
+        }),
     isExplicitFailure: isExplicitRpcFailure,
     handleExplicitFailure: (error: unknown) => handleExplicitCreditFailure(
       service,
