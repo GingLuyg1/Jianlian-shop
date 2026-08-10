@@ -2158,6 +2158,43 @@ test("order API keeps an RPC-created order successful when agreement evidence is
   assert.match(checkout, /aria-describedby="checkout-submit-feedback"/);
 });
 
+test("user delivery compatibility consolidates delivery_no and fully qualifies PL/pgSQL output names", () => {
+  const migration = file("supabase/migrations/20260810190000_user_delivery_compatibility.sql");
+  const postcheck = file("docs/audits/20260810-user-delivery-compatibility-postcheck.sql");
+  assert.match(migration, /alter table public\.order_deliveries[\s\S]*add column if not exists delivery_no text/i);
+  assert.equal((migration.match(/create or replace function public\.get_order_delivery_for_user\(p_order_no text\)/gi) ?? []).length, 1);
+  assert.equal((migration.match(/create or replace function public\.get_order_fulfillment_for_user\(p_order_no text\)/gi) ?? []).length, 1);
+
+  for (const functionName of ["get_order_delivery_for_user", "get_order_fulfillment_for_user"]) {
+    const start = migration.indexOf(`create or replace function public.${functionName}(p_order_no text)`);
+    const end = migration.indexOf("\n$$;", start);
+    assert.ok(start >= 0 && end > start);
+    const definition = migration.slice(start, end);
+    assert.match(definition, /from public\.orders as o[\s\S]*where o\.order_no = p_order_no/);
+    assert.doesNotMatch(definition, /\bwhere\s+order_no\s*=/i);
+    assert.match(definition, /security definer[\s\S]*set search_path = public/i);
+  }
+
+  const fulfillmentStart = migration.indexOf("create or replace function public.get_order_fulfillment_for_user(p_order_no text)");
+  const fulfillmentEnd = migration.indexOf("\n$$;", fulfillmentStart);
+  const fulfillment = migration.slice(fulfillmentStart, fulfillmentEnd);
+  assert.match(fulfillment, /from public\.order_items as oi/);
+  assert.match(fulfillment, /left join public\.order_deliveries as od/);
+  assert.match(fulfillment, /oi\.delivery_status/);
+  assert.match(fulfillment, /od\.delivery_status/);
+  assert.doesNotMatch(fulfillment, /\bwhere\s+delivery_status\s*=/i);
+
+  assert.match(migration, /revoke execute on function public\.get_order_delivery_for_user\(text\) from public, anon/);
+  assert.match(migration, /grant execute on function public\.get_order_delivery_for_user\(text\) to authenticated, service_role/);
+  const executablePostcheck = postcheck.replace(/--[^\r\n]*/g, "");
+  assert.match(executablePostcheck, /begin;[\s\S]*set transaction read only;/i);
+  assert.match(executablePostcheck, /delivery_no_blocker_count/);
+  assert.match(executablePostcheck, /order_alias_blocker_count/);
+  assert.match(executablePostcheck, /fulfillment_alias_blocker_count/);
+  assert.match(executablePostcheck, /end as assessment/);
+  assert.doesNotMatch(executablePostcheck, /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy|vacuum|analyze|refresh)\b/im);
+});
+
 test("account assets keeps balance available when display_name is missing", () => {
   const accountAssets = file("app/api/account/assets/route.ts");
   const profileCompatibility = file("lib/account/assets-profile-compat.mjs");
