@@ -45,6 +45,8 @@ with function_state as (
     case when prosecdef
                and proconfig @> array['search_path=public']
       then 0 else 1 end as security_contract_blocker_count,
+    -- Function-owner/postgres execution is not a blocker: PostgreSQL owners
+    -- retain implicit control. The externally callable contract is service role only.
     case when not public_can_execute
                and not anon_can_execute
                and not authenticated_can_execute

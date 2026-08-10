@@ -105,6 +105,20 @@ test("automatic delivery uses the same service-role auth contract as local reser
   assert.doesNotMatch(uncommented, /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\b/im);
 });
 
+test("automatic delivery execute ACL is service-role only", () => {
+  const aclCompatibility = file("supabase/migrations/20260811093000_deliver_digital_order_service_role_acl_compatibility.sql");
+  const postcheck = file("docs/audits/20260811-deliver-digital-order-service-role-auth-compatibility-postcheck.sql");
+
+  assert.match(aclCompatibility, /revoke execute on function public\.deliver_digital_order\(uuid,text\) from public;/i);
+  assert.match(aclCompatibility, /revoke execute on function public\.deliver_digital_order\(uuid,text\) from anon;/i);
+  assert.match(aclCompatibility, /revoke execute on function public\.deliver_digital_order\(uuid,text\) from authenticated;/i);
+  assert.match(aclCompatibility, /grant execute on function public\.deliver_digital_order\(uuid,text\) to service_role;/i);
+  assert.doesNotMatch(aclCompatibility, /create\s+or\s+replace|alter\s+function|insert|update|delete/i);
+
+  assert.match(postcheck, /not public_can_execute[\s\S]*not anon_can_execute[\s\S]*not authenticated_can_execute[\s\S]*service_role_can_execute/);
+  assert.doesNotMatch(postcheck, /postgres_can_execute/);
+});
+
 test("local-stock priority reserves all units or falls back without creating a supplier request", () => {
   const migration = file("supabase/migrations/20260810200000_daju_local_inventory_priority_v1.sql");
   const compatibility = file("supabase/migrations/20260810210000_digital_inventory_reserved_user_compatibility.sql");

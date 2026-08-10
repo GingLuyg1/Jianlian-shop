@@ -2206,6 +2206,30 @@ test("automatic delivery service-role auth compatibility preserves delivery and 
   assert.match(postcheck, /end as assessment/);
 });
 
+test("automatic delivery ACL compatibility exposes no client execution path", () => {
+  const migration = file("supabase/migrations/20260811093000_deliver_digital_order_service_role_acl_compatibility.sql");
+  const deliveryService = file("lib/delivery/delivery-service.ts");
+  const balanceService = file("lib/orders/balance-payment-service.ts");
+  const paymentService = file("lib/payments/complete-payment-service.ts");
+  const bep20Service = file("lib/payments/bep20-chain-service.ts");
+  const adminRoute = file("app/api/admin/orders/[orderId]/route.ts");
+
+  for (const role of ["public", "anon", "authenticated"]) {
+    assert.match(
+      migration,
+      new RegExp(`revoke execute on function public\\.deliver_digital_order\\(uuid,text\\) from ${role};`, "i"),
+    );
+  }
+  assert.match(migration, /grant execute on function public\.deliver_digital_order\(uuid,text\) to service_role;/i);
+  assert.doesNotMatch(migration, /create\s+or\s+replace|alter\s+function|insert\s+into|update\s+public\.|delete\s+from/i);
+
+  assert.match(deliveryService, /supabase\.rpc\("deliver_digital_order"/);
+  assert.match(balanceService, /getSupabaseServiceRoleClient\(\)[\s\S]*deliverDigitalOrder\(service/);
+  assert.match(paymentService, /getSupabaseServiceRoleClient\(\)[\s\S]*deliverDigitalOrder\(service/);
+  assert.match(bep20Service, /deliverDigitalOrder\(service,/);
+  assert.match(adminRoute, /getServerAdminContext\(\)[\s\S]*getSupabaseServiceRoleClient\(\)[\s\S]*deliverDigitalOrder\(serviceClient/);
+});
+
 test("user delivery compatibility consolidates delivery_no and fully qualifies PL/pgSQL output names", () => {
   const migration = file("supabase/migrations/20260810190000_user_delivery_compatibility.sql");
   const postcheck = file("docs/audits/20260810-user-delivery-compatibility-postcheck.sql");
