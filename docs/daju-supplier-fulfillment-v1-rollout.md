@@ -31,6 +31,14 @@
 - UNCERTAIN 不得自动重试采购，不得生成新 request_id；只有已有 order_code 时允许只读查询原供应商订单。
 - 若供应商已扣费且本站仍停留在 `PURCHASING`、并且 `provider_order_code` 未能持久化，必须先人工以时间、金额、数量和商品证据唯一关联已有供应商订单。管理员随后只能调用 `reconcile_daju_order`，由服务端 GET 该已有订单并复用原 request_id、原 attempt token 与 `record_daju_supplier_fulfillment_outcome` 私密交付路径；该操作不得调用 `/purchase`。
 - `/purchase` 返回最小订单引用时，客户端使用返回的 `order_code` 执行一次 GET 获取完整详情。若 GET 失败，必须把已知 `order_code` 记录为不确定结果，禁止再次采购。
+
+## 本地库存优先 V1
+
+- 对订单快照中已冻结为 `supplier=daju` 的自动交付订单项，支付完成后先由 `reserve_local_inventory_for_daju_order` 尝试一次性锁定全部剩余本地数字库存，再调用现有 `deliver_digital_order`。
+- 数量为 1 或大于 1 时都必须满足全部数量可用；库存不足时不预留、不部分交付，整个订单项进入既有大橘 fallback。
+- 本地交付完成的订单项在 Daju candidate 分类阶段直接跳过，不创建 `supplier_fulfillment_requests`，也不调用 `/purchase`。
+- 已存在 supplier request、未知的部分预留或部分交付状态必须 fail closed；供应商失败后不得回头再次消费本地库存。
+- 路由只依据 `order_items.product_snapshot.supplier_binding`，不得读取后续变化的商品或 SKU metadata。
 - 数据库 outcome 写入响应丢失也按不确定处理，不再次 purchase。
 
 ## 候选数据库文件
@@ -38,6 +46,10 @@
 1. `docs/audits/20260810-daju-supplier-fulfillment-v1-precheck.sql`
 2. `supabase/migrations/20260810120000_daju_supplier_fulfillment_v1.sql`
 3. `docs/audits/20260810-daju-supplier-fulfillment-v1-postcheck.sql`
+4. `supabase/migrations/20260810200000_daju_local_inventory_priority_v1.sql`
+5. `docs/audits/20260810-daju-local-inventory-priority-v1-postcheck.sql`
+
+本地库存优先应用代码只能在第 4 项成功、且第 5 项返回 `PASS` 后部署；任一步失败均立即停止，不得进入应用部署或供应商采购测试。
 
 必须逐文件、单独授权，禁止 `supabase db push`、`migration up`、`migration repair`、`db reset` 或批量执行。应用代码不得先于数据库合同部署。
 

@@ -71,13 +71,40 @@ test("Daju server client uses only server environment names and never logs crede
   assert.doesNotMatch(`${client}\n${core}`, /NEXT_PUBLIC_DAJU/);
 });
 
-test("paid-order delivery invokes supplier orchestration before local inventory delivery", () => {
+test("paid-order delivery reserves and delivers local stock before supplier fallback", () => {
   const service = file("lib/delivery/delivery-service.ts");
-  const supplierIndex = service.indexOf("fulfillDajuOrderWithSupabase");
+  const reserveIndex = service.indexOf('supabase.rpc("reserve_local_inventory_for_daju_order"');
   const localIndex = service.indexOf('supabase.rpc("deliver_digital_order"');
-  assert.ok(supplierIndex >= 0 && localIndex > supplierIndex);
+  const supplierIndex = service.indexOf("deliverSupplier: () => fulfillDajuOrderWithSupabase");
+  assert.ok(reserveIndex >= 0 && localIndex > reserveIndex && supplierIndex > localIndex);
   assert.match(service, /supplier\.uncertain > 0/);
   assert.match(service, /supplier\.failed > 0 \|\| supplier\.needsInput > 0/);
+});
+
+test("local-stock priority reserves all units or falls back without creating a supplier request", () => {
+  const migration = file("supabase/migrations/20260810200000_daju_local_inventory_priority_v1.sql");
+  const postcheck = file("docs/audits/20260810-daju-local-inventory-priority-v1-postcheck.sql");
+  assert.match(migration, /create or replace function public\.reserve_local_inventory_for_daju_order/);
+  assert.match(migration, /product_snapshot->'supplier_binding'->>'supplier'/);
+  assert.doesNotMatch(migration, /products\.metadata|product_skus\.metadata/);
+  assert.match(migration, /limit v_required[\s\S]*for update skip locked/);
+  assert.match(migration, /cardinality\(v_inventory_ids\)[\s\S]*<> v_required[\s\S]*supplier_fallback_count/);
+  assert.match(migration, /if v_reserved > 0[\s\S]*v_blocked_count := v_blocked_count \+ 1/);
+  assert.match(migration, /v_delivered > 0 and v_delivered < coalesce\(v_item\.quantity, 1\)[\s\S]*v_blocked_count/);
+  assert.match(migration, /v_updated_count <> v_required/);
+  assert.doesNotMatch(migration, /insert into public\.supplier_fulfillment_requests/i);
+  assert.match(migration, /not exists \([\s\S]*supplier_fulfillment_requests as local_sfr/);
+  assert.match(migration, /local_di\.status = 'reserved'/);
+  assert.match(migration, /local_di\.reserved_order_item_id = order_items\.id/);
+  assert.match(migration, /revoke all on function public\.reserve_local_inventory_for_daju_order\(uuid,text\) from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function public\.reserve_local_inventory_for_daju_order\(uuid,text\) to service_role/);
+
+  const uncommented = postcheck.replace(/--[^\r\n]*/g, "");
+  assert.match(uncommented, /begin;[\s\S]*set transaction read only;/i);
+  assert.match(uncommented, /reservation_contract_blocker_count/);
+  assert.match(uncommented, /local_delivery_contract_blocker_count/);
+  assert.match(uncommented, /end as assessment/);
+  assert.doesNotMatch(uncommented, /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\b/im);
 });
 
 test("candidate migration persists one request per item and uses existing private delivery boundary", () => {
