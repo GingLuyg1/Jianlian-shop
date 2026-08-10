@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { runPostPaymentDelivery, type PostPaymentDeliveryStage } from "@/lib/orders/post-payment-delivery.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type BalancePaymentRow = {
@@ -20,6 +21,10 @@ export type PayOrderWithBalanceInput = {
   orderId: string;
   userId: string;
   clientRequestId?: string | null;
+  onLifecycleStage?: (event: {
+    stage: "BALANCE_PAYMENT_COMPLETED" | PostPaymentDeliveryStage;
+    error: unknown | null;
+  }) => void;
 };
 
 export type PayOrderWithBalanceResult = {
@@ -49,13 +54,21 @@ export async function payOrderWithBalance(
   if (error) throw error;
 
   const result = normalizeBalancePaymentResult(data, input.orderId);
-
   try {
-    await deliverDigitalOrder(service, result.orderId, "balance_payment");
-  } catch (deliveryError) {
+    input.onLifecycleStage?.({ stage: "BALANCE_PAYMENT_COMPLETED", error: null });
+  } catch {
+    // Logging callbacks are best-effort and must not change the paid result.
+  }
+  const delivery = await runPostPaymentDelivery({
+    payment: result,
+    deliver: () => deliverDigitalOrder(service, result.orderId, "balance_payment"),
+    onStage: input.onLifecycleStage,
+  });
+
+  if (delivery.deliveryError) {
     return {
       ...result,
-      deliveryError: getDeliveryErrorMessage(deliveryError, "自动发货失败，等待人工处理"),
+      deliveryError: getDeliveryErrorMessage(delivery.deliveryError, "自动发货失败，等待人工处理"),
     };
   }
 
