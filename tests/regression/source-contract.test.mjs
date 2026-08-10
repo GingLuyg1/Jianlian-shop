@@ -2162,6 +2162,26 @@ test("order API keeps an RPC-created order successful when agreement evidence is
   assert.match(checkout, /aria-describedby="checkout-submit-feedback"/);
 });
 
+test("Daju local reservation schema includes its reserved user dependency", () => {
+  const priorityMigration = file("supabase/migrations/20260810200000_daju_local_inventory_priority_v1.sql");
+  const compatibilityMigration = file("supabase/migrations/20260810210000_digital_inventory_reserved_user_compatibility.sql");
+  const postcheck = file("docs/audits/20260810-daju-local-inventory-priority-v1-postcheck.sql");
+
+  assert.match(priorityMigration, /reserved_user_id = v_order\.user_id/);
+  assert.match(
+    compatibilityMigration,
+    /alter table public\.digital_inventory\s+add column if not exists reserved_user_id uuid;/i,
+  );
+  assert.doesNotMatch(compatibilityMigration, /\b(?:references|default|not null)\b/i);
+  assert.match(postcheck, /inventory_schema_blocker_count/);
+  assert.match(postcheck, /a\.attname = 'reserved_user_id'/);
+  assert.match(postcheck, /a\.atttypid = 'pg_catalog\.uuid'::pg_catalog\.regtype/);
+  assert.match(
+    postcheck,
+    /inventory_schema_blocker_count = 0[\s\S]*reservation_contract_blocker_count = 0[\s\S]*then 'PASS'/,
+  );
+});
+
 test("user delivery compatibility consolidates delivery_no and fully qualifies PL/pgSQL output names", () => {
   const migration = file("supabase/migrations/20260810190000_user_delivery_compatibility.sql");
   const postcheck = file("docs/audits/20260810-user-delivery-compatibility-postcheck.sql");

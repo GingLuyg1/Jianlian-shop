@@ -24,6 +24,14 @@ with functions as (
 ), summary as (
   select
     case when exists (
+      select 1
+      from pg_catalog.pg_attribute as a
+      where a.attrelid = pg_catalog.to_regclass('public.digital_inventory')
+        and a.attname = 'reserved_user_id'
+        and not a.attisdropped
+        and a.atttypid = 'pg_catalog.uuid'::pg_catalog.regtype
+    ) then 0 else 1 end as inventory_schema_blocker_count,
+    case when exists (
       select 1 from functions
       where proname = 'reserve_local_inventory_for_daju_order'
         and prosecdef
@@ -51,7 +59,8 @@ with functions as (
 )
 select
   summary.*,
-  case when reservation_contract_blocker_count = 0
+  case when inventory_schema_blocker_count = 0
+          and reservation_contract_blocker_count = 0
           and local_delivery_contract_blocker_count = 0
           and acl_blocker_count = 0
     then 'PASS'

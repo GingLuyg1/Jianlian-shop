@@ -83,6 +83,7 @@ test("paid-order delivery reserves and delivers local stock before supplier fall
 
 test("local-stock priority reserves all units or falls back without creating a supplier request", () => {
   const migration = file("supabase/migrations/20260810200000_daju_local_inventory_priority_v1.sql");
+  const compatibility = file("supabase/migrations/20260810210000_digital_inventory_reserved_user_compatibility.sql");
   const postcheck = file("docs/audits/20260810-daju-local-inventory-priority-v1-postcheck.sql");
   const parser = file("lib/delivery/local-stock-priority.mjs");
   assert.match(migration, /create or replace function public\.reserve_local_inventory_for_daju_order/);
@@ -98,6 +99,7 @@ test("local-stock priority reserves all units or falls back without creating a s
   assert.match(migration, /if v_reserved > 0[\s\S]*v_blocked_count := v_blocked_count \+ 1/);
   assert.match(migration, /v_delivered > 0 and v_delivered < coalesce\(v_item\.quantity, 1\)[\s\S]*v_blocked_count/);
   assert.match(migration, /v_updated_count <> v_required/);
+  assert.match(migration, /reserved_user_id = v_order\.user_id/);
   assert.doesNotMatch(migration, /insert into public\.supplier_fulfillment_requests/i);
   assert.match(migration, /not exists \([\s\S]*supplier_fulfillment_requests as local_sfr/);
   assert.match(migration, /local_di\.status = 'reserved'/);
@@ -105,9 +107,18 @@ test("local-stock priority reserves all units or falls back without creating a s
   assert.match(migration, /revoke all on function public\.reserve_local_inventory_for_daju_order\(uuid,text\) from public, anon, authenticated/);
   assert.match(migration, /grant execute on function public\.reserve_local_inventory_for_daju_order\(uuid,text\) to service_role/);
 
+  assert.match(
+    compatibility,
+    /alter table public\.digital_inventory\s+add column if not exists reserved_user_id uuid;/i,
+  );
+  assert.doesNotMatch(compatibility, /\b(?:references|default|not null|update|insert|delete)\b/i);
+
   const uncommented = postcheck.replace(/--[^\r\n]*/g, "");
   assert.match(uncommented, /begin;[\s\S]*set transaction read only;/i);
   assert.match(uncommented, /reservation_contract_blocker_count/);
+  assert.match(uncommented, /inventory_schema_blocker_count/);
+  assert.match(uncommented, /a\.attname = 'reserved_user_id'/);
+  assert.match(uncommented, /a\.atttypid = 'pg_catalog\.uuid'::pg_catalog\.regtype/);
   assert.match(uncommented, /local_delivery_contract_blocker_count/);
   assert.match(uncommented, /end as assessment/);
   assert.doesNotMatch(uncommented, /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\b/im);
