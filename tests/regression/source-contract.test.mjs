@@ -623,7 +623,7 @@ test("BEP20 automatic overpayment remains idempotent across verify, delivery ret
   assert.doesNotMatch(service, /credit_bep20_overpayment_to_wallet/);
 });
 
-test("BEP20 terminal UI removes self-service submission and polling uses one visibility-aware timer", () => {
+test("BEP20 terminal UI removes self-service submission and delivery polling is cancellable", () => {
   const paymentPage = file("app/payment/page.tsx");
   const delivery = file("components/account/orders/SecureOrderDelivery.tsx");
 
@@ -632,8 +632,8 @@ test("BEP20 terminal UI removes self-service submission and polling uses one vis
   assert.match(paymentPage, /document\.addEventListener\("visibilitychange", handleVisibilityChange\)/);
   assert.match(paymentPage, /document\.removeEventListener\("visibilitychange", handleVisibilityChange\)/);
   assert.match(paymentPage, /if \(bep20PollTimer\.current !== null\) window\.clearTimeout/);
-  assert.match(delivery, /document\.addEventListener\("visibilitychange", handleVisibilityChange\)/);
-  assert.match(delivery, /if \(timer !== null\) window\.clearTimeout\(timer\)/);
+  assert.match(delivery, /const controller = new AbortController\(\)/);
+  assert.match(delivery, /controller\.abort\(\)/);
 });
 
 test("BEP20 verification uses block timestamp and contract decimals check", () => {
@@ -1731,7 +1731,7 @@ test("paid orders never render as waiting for payment and manual delivery has ex
   assert.match(secureDelivery, /normalizedPaymentStatus !== "paid"/);
   assert.match(secureDelivery, /\["manual", "manual_delivery"\]/);
   assert.match(secureDelivery, /支付已完成，等待人工交付。/);
-  assert.match(secureDelivery, /支付已完成，正在准备交付内容……/);
+  assert.match(secureDelivery, /支付成功，正在准备交付内容……/);
 });
 
 test("account order tables use one centered user-facing status column", () => {
@@ -1887,6 +1887,7 @@ test("BEP20 terminal timing and secure delivery refresh share one guarded presen
   const summary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
   const visibility = file("lib/payments/bep20-presentation.mjs");
   const secureDelivery = file("components/account/orders/SecureOrderDelivery.tsx");
+  const deliveryPolling = file("lib/orders/delivery-polling.mjs");
   const orderList = file("app/account/orders/page.tsx");
   const orderDetail = file("app/account/orders/[orderNo]/page.tsx");
 
@@ -1911,17 +1912,24 @@ test("BEP20 terminal timing and secure delivery refresh share one guarded presen
   assert.match(paymentPage, /document\.hidden \? 15000 : elapsed < 120000 \? 4000 : 10000/);
   assert.match(paymentPage, /window\.clearTimeout\(bep20PollTimer\.current\)/);
   assert.match(secureDelivery, /cache: "no-store"/);
-  assert.match(secureDelivery, /if \(normalizedPaymentStatus === "paid"\) void loadDelivery\(\)/);
-  assert.match(secureDelivery, /document\.hidden \? 15000 : elapsed < 120000 \? 4000 : 10000/);
+  assert.match(secureDelivery, /if \(normalizedPaymentStatus === "paid" && !pollUntilDelivered\) void loadDelivery\(\)/);
+  assert.match(secureDelivery, /pollForPaymentDelivery\(\{ load: loadDelivery, signal: controller\.signal \}\)/);
   assert.match(secureDelivery, /if \(!pollUntilDelivered \|\| normalizedPaymentStatus !== "paid" \|\| delivered \|\| cancelled \|\| failed\) return/);
-  assert.match(secureDelivery, /window\.clearTimeout\(timer\)/);
+  assert.match(secureDelivery, /controller\.abort\(\)/);
+  assert.match(deliveryPolling, /PAYMENT_DELIVERY_POLL_INTERVAL_MS = 1500/);
+  assert.match(deliveryPolling, /PAYMENT_DELIVERY_POLL_TIMEOUT_MS = 24000/);
+  assert.match(deliveryPolling, /if \(remainingMs <= 0\) return \{ kind: "timeout" \}/);
   assert.match(secureDelivery, /重新加载交付信息/);
+  assert.match(secureDelivery, /支付成功，交付内容仍在准备中/);
+  assert.match(secureDelivery, /查看我的订单/);
   assert.match(secureDelivery, /显示完整内容/);
   assert.match(secureDelivery, /navigator\.clipboard\.writeText\(content\)/);
   assert.doesNotMatch(secureDelivery, /from\("(?:order_deliveries|digital_delivery_secrets)"\)/);
   assert.doesNotMatch(secureDelivery, /service[_-]?role/i);
   assert.doesNotMatch(secureDelivery, /console\.(?:log|error).*content/);
   for (const source of [paymentPage, orderList, orderDetail]) assert.match(source, /SecureOrderDelivery/);
+  assert.match(paymentPage, /normalizedPaymentStatus === "paid" \? \([\s\S]*?<SecureOrderDelivery/);
+  assert.doesNotMatch(paymentPage, /router\.push\(`\/order-success\?order=/);
 });
 
 test("owned-user delivery RPCs qualify order identifiers and hide database failures", () => {

@@ -623,7 +623,6 @@ export default function PaymentPage() {
     setPaymentStatus(result);
     if (result?.status === "paid") {
       await loadOrder();
-      router.push(`/order-success?order=${encodeURIComponent(orderNo)}`);
     }
     return result;
   }
@@ -799,6 +798,10 @@ export default function PaymentPage() {
                     onVerify={() => void verifyBep20TxHash()}
                     onCopy={copyText}
                   />
+                ) : normalizedPaymentStatus === "paid" ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                    支付成功，正在准备交付内容
+                  </div>
                 ) : !canPay ? (
                   <div className="rounded-xl border bg-slate-50 p-4 text-sm text-muted-foreground">
                     当前订单状态不允许继续付款。
@@ -936,7 +939,7 @@ export default function PaymentPage() {
               <Bep20PaymentNoticeCard />
             ) : null}
 
-            {isBep20Order ? (
+            {normalizedPaymentStatus === "paid" ? (
               <SecureOrderDelivery
                 className="lg:col-span-2"
                 orderNo={order.order_no}
