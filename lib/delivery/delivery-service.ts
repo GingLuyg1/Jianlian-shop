@@ -12,6 +12,42 @@ export type DeliveryServiceResult = {
   message?: string;
 };
 
+export type DeliveryInternalStage =
+  | "LOCAL_RESERVATION_STARTED"
+  | "LOCAL_RESERVATION_COMPLETED"
+  | "LOCAL_RESERVATION_RPC_FAILED"
+  | "LOCAL_RESERVATION_RESULT_INVALID"
+  | "LOCAL_PRIORITY_BLOCKED"
+  | "LOCAL_DELIVERY_STARTED"
+  | "LOCAL_DELIVERY_COMPLETED"
+  | "LOCAL_DELIVERY_RPC_FAILED"
+  | "DAJU_FALLBACK_STARTED"
+  | "DAJU_FALLBACK_COMPLETED"
+  | "DAJU_FALLBACK_FAILED";
+
+export type DeliveryInternalEvent = {
+  stage: DeliveryInternalStage;
+  error: unknown | null;
+};
+
+function stageError(code: DeliveryInternalStage) {
+  const error = new Error(code) as Error & { code: string };
+  error.code = code;
+  return error;
+}
+
+function notifyStage(
+  onStage: ((event: DeliveryInternalEvent) => void) | undefined,
+  stage: DeliveryInternalStage,
+  error: unknown = null
+) {
+  try {
+    onStage?.({ stage, error });
+  } catch {
+    // Diagnostics must never change fulfillment behavior.
+  }
+}
+
 function rawMessage(error: unknown) {
   return (
     (error as { message?: string } | null | undefined)?.message ??
@@ -21,6 +57,8 @@ function rawMessage(error: unknown) {
 
 export function getDeliveryErrorMessage(error: unknown, fallback = "自动发货处理失败") {
   const message = rawMessage(error);
+
+  if (/^(?:LOCAL_|DAJU_FALLBACK_)/.test(message)) return fallback;
 
   if (
     message.includes("Could not find the function") ||
@@ -53,18 +91,26 @@ export function getDeliveryErrorMessage(error: unknown, fallback = "自动发货
 export async function deliverDigitalOrder(
   supabase: SupabaseClient,
   orderId: string,
-  triggerSource = "server"
+  triggerSource = "server",
+  onStage?: (event: DeliveryInternalEvent) => void
 ): Promise<DeliveryServiceResult> {
   const priority = await runLocalStockPriorityDelivery({
     reserveLocal: async () => {
+      notifyStage(onStage, "LOCAL_RESERVATION_STARTED");
       const { data, error } = await supabase.rpc("reserve_local_inventory_for_daju_order", {
         p_order_id: orderId,
         p_trigger_source: triggerSource,
       });
-      if (error) throw new Error("LOCAL_STOCK_PRIORITY_RESERVATION_FAILED");
+      if (error) {
+        const safeError = stageError("LOCAL_RESERVATION_RPC_FAILED");
+        notifyStage(onStage, "LOCAL_RESERVATION_RPC_FAILED", safeError);
+        throw safeError;
+      }
+      notifyStage(onStage, "LOCAL_RESERVATION_COMPLETED");
       return data;
     },
     deliverLocal: async () => {
+      notifyStage(onStage, "LOCAL_DELIVERY_STARTED");
       const { data, error } = await supabase.rpc("deliver_digital_order", {
         p_order_id: orderId,
         p_trigger_source: triggerSource,
@@ -83,11 +129,26 @@ export async function deliverDigitalOrder(
         } catch {
           // Delivery logging is best-effort; the original delivery error is reported below.
         }
-        throw new Error(getDeliveryErrorMessage(error));
+        const safeError = stageError("LOCAL_DELIVERY_RPC_FAILED");
+        notifyStage(onStage, "LOCAL_DELIVERY_RPC_FAILED", safeError);
+        throw safeError;
       }
+      notifyStage(onStage, "LOCAL_DELIVERY_COMPLETED");
       return data;
     },
-    deliverSupplier: () => fulfillDajuOrderWithSupabase(supabase, orderId, triggerSource),
+    deliverSupplier: async () => {
+      notifyStage(onStage, "DAJU_FALLBACK_STARTED");
+      try {
+        const result = await fulfillDajuOrderWithSupabase(supabase, orderId, triggerSource);
+        notifyStage(onStage, "DAJU_FALLBACK_COMPLETED");
+        return result;
+      } catch {
+        const safeError = stageError("DAJU_FALLBACK_FAILED");
+        notifyStage(onStage, "DAJU_FALLBACK_FAILED", safeError);
+        throw safeError;
+      }
+    },
+    onStage: ({ stage, error }) => notifyStage(onStage, stage, error),
   });
   const supplier = priority.supplier;
   if (supplier.uncertain > 0) {

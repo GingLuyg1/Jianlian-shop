@@ -76,12 +76,15 @@ test("supplier failure never loops back to consume local inventory", async () =>
 
 test("partial pre-existing local reservation blocks supplier fallback", async () => {
   let supplierCalls = 0;
+  const stages = [];
   await assert.rejects(() => runLocalStockPriorityDelivery({
     reserveLocal: async () => ({ ok: true, local_ready_count: 0, supplier_fallback_count: 0, blocked_count: 1 }),
     deliverLocal: async () => ({ ok: true }),
     deliverSupplier: async () => { supplierCalls += 1; return {}; },
-  }), /LOCAL_STOCK_PRIORITY_STATE_BLOCKED/);
+    onStage: ({ stage }) => stages.push(stage),
+  }), /LOCAL_PRIORITY_BLOCKED/);
   assert.equal(supplierCalls, 0);
+  assert.deepEqual(stages, ["LOCAL_PRIORITY_BLOCKED"]);
 });
 
 test("priority result parsing is strict and delivered supplier items stay idempotent", () => {
@@ -92,4 +95,15 @@ test("priority result parsing is strict and delivered supplier items stay idempo
   assert.deepEqual(classifyDajuFulfillmentCandidate(supplierItem({ delivery_status: "delivered" })), {
     kind: "skip", reason: "ALREADY_DELIVERED",
   });
+});
+
+test("malformed reservation result reports a fixed safe reason code", async () => {
+  const stages = [];
+  await assert.rejects(() => runLocalStockPriorityDelivery({
+    reserveLocal: async () => ({ ok: true, local_ready_count: "1", supplier_fallback_count: 0, blocked_count: 0 }),
+    deliverLocal: async () => ({ ok: true }),
+    deliverSupplier: async () => ({}),
+    onStage: ({ stage, error }) => stages.push([stage, error.code]),
+  }), /LOCAL_RESERVATION_RESULT_INVALID/);
+  assert.deepEqual(stages, [["LOCAL_RESERVATION_RESULT_INVALID", "LOCAL_RESERVATION_RESULT_INVALID"]]);
 });

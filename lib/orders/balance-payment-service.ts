@@ -2,7 +2,11 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
+import {
+  deliverDigitalOrder,
+  getDeliveryErrorMessage,
+  type DeliveryInternalStage,
+} from "@/lib/delivery/delivery-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { runPostPaymentDelivery, type PostPaymentDeliveryStage } from "@/lib/orders/post-payment-delivery.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -22,7 +26,7 @@ export type PayOrderWithBalanceInput = {
   userId: string;
   clientRequestId?: string | null;
   onLifecycleStage?: (event: {
-    stage: "BALANCE_PAYMENT_COMPLETED" | PostPaymentDeliveryStage;
+    stage: "BALANCE_PAYMENT_COMPLETED" | PostPaymentDeliveryStage | DeliveryInternalStage;
     error: unknown | null;
   }) => void;
 };
@@ -61,7 +65,7 @@ export async function payOrderWithBalance(
   }
   const delivery = await runPostPaymentDelivery({
     payment: result,
-    deliver: () => deliverDigitalOrder(service, result.orderId, "balance_payment"),
+    deliver: () => deliverDigitalOrder(service, result.orderId, "balance_payment", input.onLifecycleStage),
     onStage: input.onLifecycleStage,
   });
 

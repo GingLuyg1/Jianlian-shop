@@ -75,7 +75,7 @@ test("paid-order delivery reserves and delivers local stock before supplier fall
   const service = file("lib/delivery/delivery-service.ts");
   const reserveIndex = service.indexOf('supabase.rpc("reserve_local_inventory_for_daju_order"');
   const localIndex = service.indexOf('supabase.rpc("deliver_digital_order"');
-  const supplierIndex = service.indexOf("deliverSupplier: () => fulfillDajuOrderWithSupabase");
+  const supplierIndex = service.indexOf('notifyStage(onStage, "DAJU_FALLBACK_STARTED")');
   assert.ok(reserveIndex >= 0 && localIndex > reserveIndex && supplierIndex > localIndex);
   assert.match(service, /supplier\.uncertain > 0/);
   assert.match(service, /supplier\.failed > 0 \|\| supplier\.needsInput > 0/);
@@ -84,7 +84,13 @@ test("paid-order delivery reserves and delivers local stock before supplier fall
 test("local-stock priority reserves all units or falls back without creating a supplier request", () => {
   const migration = file("supabase/migrations/20260810200000_daju_local_inventory_priority_v1.sql");
   const postcheck = file("docs/audits/20260810-daju-local-inventory-priority-v1-postcheck.sql");
+  const parser = file("lib/delivery/local-stock-priority.mjs");
   assert.match(migration, /create or replace function public\.reserve_local_inventory_for_daju_order/);
+  assert.match(migration, /p_order_id uuid,[\s\S]*p_trigger_source text default 'system'[\s\S]*returns jsonb/i);
+  for (const field of ["ok", "local_ready_count", "supplier_fallback_count", "blocked_count"]) {
+    assert.match(migration, new RegExp(`'${field}'`));
+    assert.match(parser, new RegExp(field));
+  }
   assert.match(migration, /product_snapshot->'supplier_binding'->>'supplier'/);
   assert.doesNotMatch(migration, /products\.metadata|product_skus\.metadata/);
   assert.match(migration, /limit v_required[\s\S]*for update skip locked/);

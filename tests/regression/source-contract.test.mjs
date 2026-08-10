@@ -1580,9 +1580,10 @@ test("digital delivery writes elevate only after cookie administrator authorizat
   const delivery = file("app/api/orders/[orderNo]/delivery/route.ts");
 
   assert.match(balance, /getSupabaseServiceRoleClient\(\)/);
-  assert.match(balance, /deliverDigitalOrder\(service, result\.orderId, "balance_payment"\)/);
+  assert.match(balance, /deliverDigitalOrder\(service, result\.orderId, "balance_payment", input\.onLifecycleStage\)/);
   assert.match(balance, /if \(error\) throw error;[\s\S]*runPostPaymentDelivery\(/);
   assert.match(orderRoute, /BALANCE_PAYMENT_COMPLETED[\s\S]*AUTO_DELIVERY_STARTED[\s\S]*AUTO_DELIVERY_COMPLETED[\s\S]*AUTO_DELIVERY_FAILED/);
+  assert.match(orderRoute, /LOCAL_RESERVATION_RPC_FAILED[\s\S]*LOCAL_RESERVATION_RESULT_INVALID[\s\S]*LOCAL_DELIVERY_RPC_FAILED[\s\S]*DAJU_FALLBACK_STARTED/);
   assert.match(completion, /getSupabaseServiceRoleClient\(\)/);
   assert.match(completion, /deliverDigitalOrder\(service, result\.businessId, input\.source\)/);
   assert.match(bep20, /completePayment\([\s\S]{0,500}service/);
