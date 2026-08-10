@@ -30,7 +30,7 @@ with functions as (
         and proconfig @> array['search_path=pg_catalog, public']
         and definition ~ 'coalesce\(auth[.]role\(\), ''''\) <> ''service_role'''
         and definition ~ 'for update skip locked'
-        and definition ~ 'cardinality\(v_inventory_ids\).*= v_required'
+        and definition ~ 'coalesce\([[:space:]]*cardinality\(v_inventory_ids\)[[:space:]]*,[[:space:]]*0[[:space:]]*\)[[:space:]]*<>[[:space:]]*v_required'
         and definition ~ 'v_reserved > 0'
         and definition ~ 'v_blocked_count := v_blocked_count \+ 1'
         and definition !~ 'insert[[:space:]]+into[[:space:]]+public[.]supplier_fulfillment_requests'
