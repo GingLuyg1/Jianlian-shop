@@ -2182,6 +2182,30 @@ test("Daju local reservation schema includes its reserved user dependency", () =
   );
 });
 
+test("automatic delivery service-role auth compatibility preserves delivery and ACL contracts", () => {
+  const migration = file("supabase/migrations/20260811090000_deliver_digital_order_service_role_auth_compatibility.sql");
+  const postcheck = file("docs/audits/20260811-deliver-digital-order-service-role-auth-compatibility-postcheck.sql");
+
+  assert.match(migration, /pg_get_functiondef\(p\.oid\)/);
+  assert.match(migration, /coalesce\(current_setting\(''request\.jwt\.claim\.role'', true\), ''''\)/);
+  assert.match(migration, /coalesce\(auth\.role\(\), ''''\)/);
+  assert.match(migration, /v_legacy_match_count <> 1/);
+  assert.match(migration, /and not public\.is_admin\(\)/);
+  assert.match(migration, /payment_status <> ''paid''/);
+  assert.match(migration, /digital_delivery_secrets/);
+  assert.match(migration, /supplier_fulfillment_requests as local_sfr/);
+  assert.match(migration, /execute v_patched_definition/);
+  assert.doesNotMatch(migration, /create\s+table|alter\s+table|insert\s+into|update\s+public\.|delete\s+from/i);
+
+  assert.match(postcheck, /definition like '%coalesce\(auth\.role\(\), ''''\)%'/);
+  assert.match(postcheck, /definition not like '%request\.jwt\.claim\.role%'/);
+  assert.match(postcheck, /definition like '%and not public\.is_admin\(\)%'/);
+  assert.match(postcheck, /p\.prosecdef/);
+  assert.match(postcheck, /search_path=public/);
+  assert.match(postcheck, /not public_can_execute[\s\S]*not anon_can_execute[\s\S]*not authenticated_can_execute[\s\S]*service_role_can_execute/);
+  assert.match(postcheck, /end as assessment/);
+});
+
 test("user delivery compatibility consolidates delivery_no and fully qualifies PL/pgSQL output names", () => {
   const migration = file("supabase/migrations/20260810190000_user_delivery_compatibility.sql");
   const postcheck = file("docs/audits/20260810-user-delivery-compatibility-postcheck.sql");

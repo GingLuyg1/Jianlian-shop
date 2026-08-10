@@ -81,6 +81,30 @@ test("paid-order delivery reserves and delivers local stock before supplier fall
   assert.match(service, /supplier\.failed > 0 \|\| supplier\.needsInput > 0/);
 });
 
+test("automatic delivery uses the same service-role auth contract as local reservation", () => {
+  const authCompatibility = file("supabase/migrations/20260811090000_deliver_digital_order_service_role_auth_compatibility.sql");
+  const postcheck = file("docs/audits/20260811-deliver-digital-order-service-role-auth-compatibility-postcheck.sql");
+
+  assert.match(authCompatibility, /public\.deliver_digital_order\(uuid,text\)/);
+  assert.match(authCompatibility, /pg_catalog\.pg_get_functiondef/);
+  assert.match(authCompatibility, /coalesce\(auth\.role\(\), ''''\)/);
+  assert.match(authCompatibility, /request\.jwt\.claim\.role/);
+  assert.match(authCompatibility, /and not public\.is_admin\(\)/);
+  assert.match(authCompatibility, /execute v_patched_definition/);
+  assert.match(authCompatibility, /supplier_fulfillment_requests as local_sfr/);
+  assert.doesNotMatch(authCompatibility, /(?:grant|revoke) execute/i);
+
+  const uncommented = postcheck.replace(/--[^\r\n]*/g, "");
+  assert.match(uncommented, /set transaction read only/i);
+  assert.match(uncommented, /auth_guard_blocker_count/);
+  assert.match(uncommented, /admin_fallback_blocker_count/);
+  assert.match(uncommented, /security_contract_blocker_count/);
+  assert.match(uncommented, /acl_blocker_count/);
+  assert.match(uncommented, /delivery_contract_blocker_count/);
+  assert.match(uncommented, /then 'PASS'[\s\S]*else 'BLOCKED'/);
+  assert.doesNotMatch(uncommented, /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do)\b/im);
+});
+
 test("local-stock priority reserves all units or falls back without creating a supplier request", () => {
   const migration = file("supabase/migrations/20260810200000_daju_local_inventory_priority_v1.sql");
   const compatibility = file("supabase/migrations/20260810210000_digital_inventory_reserved_user_compatibility.sql");
