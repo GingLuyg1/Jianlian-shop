@@ -227,7 +227,7 @@ export default function AdminUsersPage() {
 
       {!schemaReady ? (
         <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          用户状态字段尚未初始化，请管理员执行 admin_user_controls migration；页面会以兼容模式显示已有资料。
+          用户管理关键字段或 RPC 兼容合同尚未就绪；页面会以只读兼容模式显示可读取资料，请管理员执行对应兼容 Migration 后复核。
         </div>
       ) : null}
       {Object.keys(partialErrors).length ? (

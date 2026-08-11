@@ -159,7 +159,10 @@ export async function POST(request: Request, context: RouteContext) {
       errorMessage: error,
       metadata: { action },
     });
-    return json({ error: toChineseError(error) }, { status: 400 });
+    return json(
+      { error: toChineseError(error) },
+      { status: isUserManagementCompatibilityError(error) ? 503 : 400 }
+    );
   }
 }
 
@@ -175,12 +178,17 @@ async function loadProfile(supabase: any, userId: string) {
 function toChineseError(error: unknown) {
   const message = getAuditErrorMessage(error, "操作失败，请稍后重试。");
   if (/permission|policy|unauthorized|forbidden|无后台|无权/i.test(message)) return "无权限执行该操作。";
+  if (isUserManagementCompatibilityError(error)) {
+    return "用户管理 RPC 兼容合同尚未就绪，请执行对应兼容 Migration 后重试。";
+  }
   if (/not found|不存在/i.test(message)) return "用户不存在或数据未初始化。";
   if (/余额|balance|小于 0|amount/i.test(message)) return message;
-  if (/account_status|risk_status|admin_update_user|admin_adjust_user_balance|schema cache|PGRST|42883|42P01/i.test(message)) {
-    return "用户管理数据库结构尚未初始化，请先执行 admin_user_controls migration。";
-  }
   return message;
+}
+
+function isUserManagementCompatibilityError(error: unknown) {
+  const message = getAuditErrorMessage(error, "");
+  return /account_status|risk_status|super_admin_(?:update_user|adjust_user_balance)|admin_update_user|admin_adjust_user_balance|schema cache|PGRST|42883|42P01/i.test(message);
 }
 
 
