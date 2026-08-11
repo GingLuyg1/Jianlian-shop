@@ -58,11 +58,11 @@ import { cn } from "@/lib/utils";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
 import {
   classifyCheckoutOrderResponse,
+  classifyRetainedCheckoutOrder,
   createCheckoutSubmissionGuard,
   evaluateCheckoutBalance,
   formatCnyFromCents,
   getBalanceSubmissionBlockReason,
-  getRetainedOrderCustomerEmail,
   parseAccountAssetsBalance,
   parseRetainedCheckoutOrder,
 } from "@/lib/checkout/balance-flow.mjs";
@@ -97,6 +97,12 @@ type PendingBalanceOrder = {
   requestId: string;
   customerEmail: string | null;
 };
+
+function createCheckoutClientRequestId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 const REQUIRED_AGREEMENT_TYPES = ["terms_of_service", "refund_policy", "digital_delivery_policy", "purchase_notice"];
 const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20"]);
@@ -276,10 +282,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     let active = true;
-    clientRequestIdRef.current =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    clientRequestIdRef.current = createCheckoutClientRequestId();
     setPendingBalanceOrder(null);
     try {
       const raw = window.sessionStorage.getItem(checkoutSessionKey);
@@ -295,10 +298,16 @@ export default function CheckoutPage() {
           const response = await fetch(`/api/orders/${encodeURIComponent(stored.orderNo)}`, { cache: "no-store" });
           const payload = await response.json().catch(() => null) as unknown;
           if (!active || !response.ok) return;
-          const retainedEmail = getRetainedOrderCustomerEmail(payload, stored.orderNo);
-          if (!retainedEmail) return;
-          const restoredOrder = { ...stored, customerEmail: retainedEmail };
-          setEmail(retainedEmail);
+          const retained = classifyRetainedCheckoutOrder(payload, stored.orderNo);
+          if (retained.kind === "terminal") {
+            window.sessionStorage.removeItem(checkoutSessionKey);
+            setPendingBalanceOrder(null);
+            clientRequestIdRef.current = createCheckoutClientRequestId();
+            return;
+          }
+          if (retained.kind !== "payable") return;
+          const restoredOrder = { ...stored, customerEmail: retained.customerEmail ?? stored.customerEmail };
+          if (restoredOrder.customerEmail) setEmail(restoredOrder.customerEmail);
           setPendingBalanceOrder(restoredOrder);
           window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(restoredOrder));
         } catch {
@@ -619,6 +628,21 @@ export default function CheckoutPage() {
           window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(existingOrder));
           setError(`余额不足，订单 ${existingOrder.orderNo} 已保留。充值后请返回本页继续支付原订单，请勿重复下单。`);
           void loadAccountBalance();
+          return;
+        }
+        if (responseClassification.kind === "existing_order_payment_error" && paymentMethod === "balance") {
+          const requestId = responseClassification.requestId ?? clientRequestIdRef.current;
+          const existingOrder = {
+            orderNo: responseClassification.orderNo,
+            requestId,
+            customerEmail: email.trim() || null,
+          };
+          clientRequestIdRef.current = requestId;
+          setPendingBalanceOrder(existingOrder);
+          setPaymentDropdownOpen(false);
+          setPaymentMethod("balance");
+          window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(existingOrder));
+          setError(message);
           return;
         }
         // Once the API confirms an order number, the idempotent order exists.

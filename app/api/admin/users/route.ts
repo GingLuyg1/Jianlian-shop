@@ -1,7 +1,13 @@
 ﻿import { NextResponse } from "next/server";
 
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
-import { getAuditErrorMessage } from "@/lib/admin/audit-log-service";
+import {
+  ADMIN_USER_PROFILE_CORE_SELECT,
+  ADMIN_USER_PROFILE_EXTENDED_SELECT,
+  ADMIN_USER_PROFILE_LEGACY_SELECT,
+  classifyAdminUserProfileSchemaError,
+  parseAdminUserManagementCompatibility,
+} from "@/lib/admin/user-management-compatibility.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +67,7 @@ export async function GET(request: Request) {
       return json({ users: [], count: 0, page, pageSize, schemaReady: false, error: profileResult.error }, { status: 503 });
     }
 
+    const compatibility = await loadUserManagementCompatibility(admin.supabase);
     let users = profileResult.rows.map(normalizeProfile);
     if (search) {
       users = users.filter((user) =>
@@ -87,8 +94,13 @@ export async function GET(request: Request) {
       count: users.length,
       page,
       pageSize,
-      schemaReady: profileResult.schemaReady,
-      errors: compactErrors({ orders: orders.error, recharges: recharges.error, balanceTransactions: transactions.error }),
+      schemaReady: profileResult.schemaReady && compatibility.schemaReady,
+      errors: compactErrors({
+        userManagement: compatibility.error,
+        orders: orders.error,
+        recharges: recharges.error,
+        balanceTransactions: transactions.error,
+      }),
     });
   } catch (error) {
     console.error("[Admin Users] list failed", error);
@@ -97,18 +109,27 @@ export async function GET(request: Request) {
 }
 
 async function loadProfiles(supabase: any) {
-  const select = "id,email,display_name,full_name,nickname,name,role,balance,created_at,updated_at,last_login_at,account_status,risk_status,status_reason,risk_reason";
-  const { data, error } = await supabase.from("profiles").select(select).order("created_at", { ascending: false }).limit(5000);
+  const { data, error } = await supabase.from("profiles").select(ADMIN_USER_PROFILE_EXTENDED_SELECT).order("created_at", { ascending: false }).limit(5000);
   if (!error) return { ok: true as const, rows: (data ?? []) as ProfileRow[], schemaReady: true };
-  if (/account_status|risk_status|last_login_at|schema cache|42703/i.test(getAuditErrorMessage(error, ""))) {
-    const retry = await supabase
-      .from("profiles")
-      .select("id,email,display_name,full_name,nickname,name,role,balance,created_at,updated_at")
-      .order("created_at", { ascending: false })
-      .limit(5000);
-    if (!retry.error) return { ok: true as const, rows: (retry.data ?? []) as ProfileRow[], schemaReady: false };
+
+  if (classifyAdminUserProfileSchemaError(error) === "optional_identity_missing") {
+    const core = await supabase.from("profiles").select(ADMIN_USER_PROFILE_CORE_SELECT).order("created_at", { ascending: false }).limit(5000);
+    if (!core.error) return { ok: true as const, rows: (core.data ?? []) as ProfileRow[], schemaReady: true };
+    if (classifyAdminUserProfileSchemaError(core.error) !== "required_management_missing") {
+      return { ok: false as const, rows: [], schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
+    }
+  } else if (classifyAdminUserProfileSchemaError(error) !== "required_management_missing") {
+    return { ok: false as const, rows: [], schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
   }
-  return { ok: false as const, rows: [], schemaReady: false, error: "用户管理字段尚未初始化，请先执行 admin_user_controls migration。" };
+
+  const legacy = await supabase.from("profiles").select(ADMIN_USER_PROFILE_LEGACY_SELECT).order("created_at", { ascending: false }).limit(5000);
+  if (!legacy.error) return { ok: true as const, rows: (legacy.data ?? []) as ProfileRow[], schemaReady: false };
+  return { ok: false as const, rows: [], schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
+}
+
+async function loadUserManagementCompatibility(supabase: any) {
+  const { data, error } = await supabase.rpc("get_admin_user_management_compatibility");
+  return parseAdminUserManagementCompatibility(data, error);
 }
 
 function normalizeProfile(row: ProfileRow): NormalizedUser {

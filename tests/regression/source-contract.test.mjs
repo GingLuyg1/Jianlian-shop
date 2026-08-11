@@ -1131,6 +1131,64 @@ test("durable admin_users model separates ordinary admins from super admins", ()
   assert.match(matrix, /profiles\.role = 'admin'.*temporary ordinary-admin compatibility fallback/is);
 });
 
+test("admin user management compatibility restores named RPCs and accurate readiness", () => {
+  const migration = file("supabase/migrations/20260811100000_admin_user_management_rpc_compatibility.sql");
+  const precheck = file("docs/audits/20260811-admin-user-management-compatibility-precheck.sql");
+  const postcheck = file("docs/audits/20260811-admin-user-management-compatibility-postcheck.sql");
+  const listRoute = file("app/api/admin/users/route.ts");
+  const detailRoute = file("app/api/admin/users/[userId]/route.ts");
+  const actionsRoute = file("app/api/admin/users/[userId]/actions/route.ts");
+  const adminUsersRoute = file("app/api/admin/admin-users/route.ts");
+  const adminUserRoute = file("app/api/admin/admin-users/[userId]/route.ts");
+  const page = file("app/admin/users/page.tsx");
+
+  assert.match(migration, /super_admin_adjust_user_balance\(\s*p_user_id uuid,\s*p_adjustment_type text,\s*p_direction text,\s*p_amount numeric,\s*p_reason text,\s*p_request_id text\s*\)/i);
+  assert.match(migration, /super_admin_update_user_account_status\(\s*p_user_id uuid,\s*p_next_status text,\s*p_reason text,\s*p_request_id text\s*\)/i);
+  assert.match(migration, /super_admin_update_user_risk_status\(\s*p_user_id uuid,\s*p_next_status text,\s*p_reason text,\s*p_request_id text\s*\)/i);
+  assert.equal((migration.match(/if not public\.is_super_admin\(auth\.uid\(\)\)/gi) ?? []).length, 4);
+  assert.match(migration, /return public\.admin_adjust_user_balance\(\s*p_user_id,\s*p_adjustment_type,\s*p_direction,\s*p_amount,\s*p_reason,\s*p_request_id\s*\)/i);
+  assert.match(migration, /revoke all on function public\.super_admin_adjust_user_balance[\s\S]*?from public, anon, authenticated, service_role/i);
+  assert.match(migration, /grant execute on function public\.super_admin_adjust_user_balance[\s\S]*?to authenticated, service_role/i);
+  assert.match(migration, /create or replace function public\.get_admin_user_management_compatibility\(\)/i);
+  assert.doesNotMatch(migration, /create or replace function public\.manage_admin_user\(/i);
+  assert.doesNotMatch(migration, /\b(?:insert into|update public|delete from|truncate)\b/i);
+
+  assert.match(actionsRoute, /p_user_id: userId[\s\S]*?p_adjustment_type: adjustmentType[\s\S]*?p_direction: direction[\s\S]*?p_amount: amount[\s\S]*?p_reason: reason[\s\S]*?p_request_id: requestId/);
+  for (const adminRoute of [adminUsersRoute, adminUserRoute]) {
+    assert.match(adminRoute, /rpc\("manage_admin_user",\s*\{[\s\S]*?p_target_user_id:[\s\S]*?p_admin_level:[\s\S]*?p_status:[\s\S]*?p_permissions:[\s\S]*?p_reason:/);
+    assert.doesNotMatch(adminRoute, /\bp_action\s*:/);
+  }
+  assert.match(actionsRoute, /isUserManagementCompatibilityError\(error\) \? 503 : 400/);
+  assert.match(listRoute, /ADMIN_USER_PROFILE_CORE_SELECT/);
+  assert.match(listRoute, /loadUserManagementCompatibility\(admin\.supabase\)/);
+  assert.match(detailRoute, /ADMIN_USER_PROFILE_CORE_SELECT/);
+  assert.match(detailRoute, /profileResult\.schemaReady && compatibility\.schemaReady/);
+  assert.match(page, /用户管理关键字段或 RPC 兼容合同尚未就绪/);
+
+  for (const audit of [precheck, postcheck]) {
+    assert.match(audit, /begin;/i);
+    assert.match(audit, /set transaction read only;/i);
+    assert.match(audit, /rollback;/i);
+    assert.doesNotMatch(audit, /(?:^|;)\s*(?:insert|update|delete|merge|create|alter|drop|grant|revoke|truncate|call|do|copy|vacuum|analyze|refresh)\b/im);
+  }
+  assert.match(precheck, /READY_FOR_ADMIN_USER_MANAGEMENT_COMPATIBILITY/);
+  assert.equal((precheck.match(/array\['p_user_id','p_next_status','p_reason','p_request_id'\]::text\[\]/g) ?? []).length, 2);
+  assert.match(precheck, /'public\.manage_admin_user\(uuid,text,text,jsonb,text\)'[\s\S]*?array\['p_target_user_id','p_admin_level','p_status','p_permissions','p_reason'\]::text\[\][\s\S]*?'search_path=public'[\s\S]*?false/i);
+  assert.doesNotMatch(precheck, /array\['p_target_user_id','p_action','p_admin_level','p_permissions','p_reason'\]/i);
+  assert.match(precheck, /when not r\.repair_target and p\.proargnames is distinct from r\.expected_argument_names then 1/i);
+  assert.match(precheck, /when not r\.repair_target and not \(r\.expected_search_path = any\(coalesce\(p\.proconfig, array\[\]::text\[\]\)\)\) then 1/i);
+  assert.doesNotMatch(precheck, /search_path=pg_catalog, public/);
+  assert.match(precheck, /'public\.super_admin_adjust_user_balance\(uuid,text,text,numeric,text,text\)'[\s\S]*?true/i);
+  assert.match(postcheck, /blocker_count/);
+  assert.match(postcheck, /'public\.manage_admin_user\(uuid,text,text,jsonb,text\)'[\s\S]*?array\['p_target_user_id','p_admin_level','p_status','p_permissions','p_reason'\]/i);
+  assert.match(postcheck, /then 'PASS'[\s\S]*?else 'FAIL'/i);
+  assert.match(postcheck, /actual_argument_names/);
+  assert.match(postcheck, /security_definer/);
+  assert.match(postcheck, /owner_name/);
+  assert.match(postcheck, /authenticated_execute/);
+  assert.match(postcheck, /service_role_execute/);
+});
+
 test("data consistency migration stores fingerprints and keeps user access read-only", () => {
   const migration = file("supabase/migrations/20260630_data_consistency_scan.sql");
   assert.match(migration, /data_consistency_runs/);
@@ -2301,20 +2359,41 @@ test("checkout reads CNY balance and keeps insufficient-balance retries on the o
   assert.match(checkout, /余额不足，还需充值/);
   assert.match(checkout, /\/products\/account-recharge\?returnTo=/);
   assert.match(checkout, /balance_insufficient_existing_order/);
+  assert.match(checkout, /existing_order_payment_error/);
   assert.match(checkout, /window\.sessionStorage\.setItem\(checkoutSessionKey/);
   assert.match(checkout, /clientRequestIdRef\.current = requestId/);
   assert.match(checkout, /继续支付原订单/);
   assert.match(checkout, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(stored\.orderNo\)\}`/);
-  assert.match(checkout, /getRetainedOrderCustomerEmail\(payload, stored\.orderNo\)/);
-  assert.match(checkout, /setEmail\(retainedEmail\)/);
+  assert.match(checkout, /classifyRetainedCheckoutOrder\(payload, stored\.orderNo\)/);
+  assert.match(checkout, /retained\.kind === "terminal"/);
+  assert.match(checkout, /window\.sessionStorage\.removeItem\(checkoutSessionKey\)/);
+  assert.match(checkout, /setPendingBalanceOrder\(null\)/);
+  assert.match(checkout, /clientRequestIdRef\.current = createCheckoutClientRequestId\(\)/);
+  assert.match(checkout, /setEmail\(restoredOrder\.customerEmail\)/);
   assert.match(checkout, /customerEmail: \(pendingBalanceOrder\?\.customerEmail \?\? email\.trim\(\)\) \|\| null/);
   assert.match(checkout, /submissionGuardRef\.current\.tryStart\(\)/);
   assert.match(checkout, /submissionGuardRef\.current\.finish\(\)/);
 
   assert.match(flow, /Math\.round\(\(value \+ Number\.EPSILON\) \* CNY_SCALE\)/);
   assert.match(flow, /balanceCents >= orderCents/);
-  assert.match(flow, /status === 402 && orderNo/);
+  assert.match(flow, /status === 402 && code === "BALANCE_INSUFFICIENT" && orderNo/);
+  assert.match(flow, /status === "pending_payment" && paymentStatus === "unpaid"/);
+  assert.match(flow, /RETAINED_TERMINAL_ORDER_STATUSES/);
   assert.doesNotMatch(flow, /USDT|BEP20|wallet_accounts|profiles\.balance/);
+});
+
+test("balance payment failures use an explicit safe server classification", () => {
+  const route = file("app/api/orders/route.ts");
+  const failure = file("lib/orders/balance-payment-failure.mjs");
+
+  assert.match(route, /classifyBalancePaymentFailure\(paymentError\)/);
+  assert.match(route, /code: paymentFailure\.code/);
+  assert.match(route, /status: paymentFailure\.status/);
+  assert.doesNotMatch(route, /code: "BALANCE_PAYMENT_FAILED"[\s\S]{0,200}status: 402/);
+  assert.match(failure, /code === "P0001" && message === "账户余额不足"/);
+  assert.match(failure, /code: "BALANCE_INSUFFICIENT"/);
+  assert.match(failure, /code: "BALANCE_PAYMENT_UNAVAILABLE"/);
+  assert.doesNotMatch(failure, /details|hint/);
 });
 
 test("checkout and user order views keep payment and fulfillment presentation scoped", () => {

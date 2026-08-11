@@ -1,7 +1,14 @@
 ﻿import { NextResponse } from "next/server";
 
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
-import { getAuditErrorMessage, writeAdminAuditLog } from "@/lib/admin/audit-log-service";
+import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
+import {
+  ADMIN_USER_PROFILE_CORE_SELECT,
+  ADMIN_USER_PROFILE_EXTENDED_SELECT,
+  ADMIN_USER_PROFILE_LEGACY_SELECT,
+  classifyAdminUserProfileSchemaError,
+  parseAdminUserManagementCompatibility,
+} from "@/lib/admin/user-management-compatibility.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +49,8 @@ export async function GET(request: Request, context: RouteContext) {
       return json({ error: profileResult.error ?? "用户不存在" }, { status: profileResult.schemaReady ? 404 : 503 });
     }
 
-    const [orders, recharges, transactions, deliveries, statusHistory, riskRecords, auditLogs] = await Promise.all([
+    const [compatibility, orders, recharges, transactions, deliveries, statusHistory, riskRecords, auditLogs] = await Promise.all([
+      loadUserManagementCompatibility(admin.supabase),
       loadRows(supabase, "orders", "id,order_no,status,payment_status,total_amount,currency,delivery_type,created_at,updated_at", userId, "created_at"),
       loadRows(supabase, "account_recharges", "id,recharge_no,channel_name,channel_code,currency,amount,requested_amount,credited_amount,status,created_at,paid_at", userId, "created_at"),
       loadRows(supabase, "balance_transactions", "id,transaction_no,business_type,business_id,direction,amount,balance_before,balance_after,currency,status,remark,created_at", userId, "created_at"),
@@ -76,6 +84,7 @@ export async function GET(request: Request, context: RouteContext) {
       riskRecords: riskRecords.rows,
       auditLogs: auditLogs.rows,
       errors: compactErrors({
+        userManagement: compatibility.error,
         profile: profileResult.error,
         orders: orders.error,
         recharges: recharges.error,
@@ -85,7 +94,7 @@ export async function GET(request: Request, context: RouteContext) {
         riskRecords: riskRecords.error,
         auditLogs: auditLogs.error,
       }),
-      schemaReady: profileResult.schemaReady,
+      schemaReady: profileResult.schemaReady && compatibility.schemaReady,
     });
   } catch (error) {
     await writeAdminAuditLog({
@@ -103,18 +112,27 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 async function loadProfile(supabase: any, userId: string) {
-  const select = "id,email,display_name,full_name,nickname,name,role,balance,created_at,updated_at,last_login_at,account_status,risk_status,status_reason,risk_reason";
-  const { data, error } = await supabase.from("profiles").select(select).eq("id", userId).maybeSingle();
+  const { data, error } = await supabase.from("profiles").select(ADMIN_USER_PROFILE_EXTENDED_SELECT).eq("id", userId).maybeSingle();
   if (!error) return { profile: normalizeProfile(data as Row | null), error: null as string | null, schemaReady: true };
-  if (/account_status|risk_status|last_login_at|schema cache|42703/i.test(getAuditErrorMessage(error, ""))) {
-    const retry = await supabase
-      .from("profiles")
-      .select("id,email,display_name,full_name,nickname,name,role,balance,created_at,updated_at")
-      .eq("id", userId)
-      .maybeSingle();
-    if (!retry.error) return { profile: normalizeProfile(retry.data as Row | null), error: "用户状态字段尚未初始化，请执行 admin_user_controls migration。", schemaReady: false };
+
+  if (classifyAdminUserProfileSchemaError(error) === "optional_identity_missing") {
+    const core = await supabase.from("profiles").select(ADMIN_USER_PROFILE_CORE_SELECT).eq("id", userId).maybeSingle();
+    if (!core.error) return { profile: normalizeProfile(core.data as Row | null), error: null as string | null, schemaReady: true };
+    if (classifyAdminUserProfileSchemaError(core.error) !== "required_management_missing") {
+      return { profile: null, error: "用户资料加载失败，请稍后重试。", schemaReady: false };
+    }
+  } else if (classifyAdminUserProfileSchemaError(error) !== "required_management_missing") {
+    return { profile: null, error: "用户资料加载失败，请稍后重试。", schemaReady: false };
   }
+
+  const legacy = await supabase.from("profiles").select(ADMIN_USER_PROFILE_LEGACY_SELECT).eq("id", userId).maybeSingle();
+  if (!legacy.error) return { profile: normalizeProfile(legacy.data as Row | null), error: null as string | null, schemaReady: false };
   return { profile: null, error: "用户资料加载失败，请稍后重试。", schemaReady: false };
+}
+
+async function loadUserManagementCompatibility(supabase: any) {
+  const { data, error } = await supabase.rpc("get_admin_user_management_compatibility");
+  return parseAdminUserManagementCompatibility(data, error);
 }
 
 async function loadRows(supabase: any, table: string, select: string, userId: string, orderColumn: string) {

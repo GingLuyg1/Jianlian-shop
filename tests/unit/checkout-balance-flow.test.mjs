@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   classifyCheckoutOrderResponse,
+  classifyRetainedCheckoutOrder,
   createCheckoutSubmissionGuard,
   evaluateCheckoutBalance,
   formatCnyFromCents,
@@ -91,9 +92,9 @@ test("balance availability does not gate the existing BEP20 payment choice", () 
   assert.equal(reason, null);
 });
 
-test("a server 402 preserves the existing order and request identity", () => {
+test("a confirmed insufficient balance response preserves the existing order and request identity", () => {
   const result = classifyCheckoutOrderResponse(402, {
-    code: "BALANCE_PAYMENT_FAILED",
+    code: "BALANCE_INSUFFICIENT",
     request_id: "request-1",
     order: { order_no: "ORD-1001" },
   });
@@ -105,11 +106,67 @@ test("a server 402 preserves the existing order and request identity", () => {
 });
 
 test("repeating the same 402 classification never invents a second order", () => {
-  const payload = { request_id: "request-1", order: { order_no: "ORD-1001" } };
+  const payload = { code: "BALANCE_INSUFFICIENT", request_id: "request-1", order: { order_no: "ORD-1001" } };
   const first = classifyCheckoutOrderResponse(402, payload);
   const second = classifyCheckoutOrderResponse(402, payload);
   assert.equal(first.orderNo, second.orderNo);
   assert.equal(first.requestId, second.requestId);
+});
+
+test("a non-insufficient 402 or service failure never masquerades as insufficient balance", () => {
+  for (const [status, code] of [[402, "BALANCE_PAYMENT_FAILED"], [503, "BALANCE_PAYMENT_UNAVAILABLE"]]) {
+    const result = classifyCheckoutOrderResponse(status, {
+      code,
+      request_id: "request-1",
+      order: { order_no: "ORD-1001" },
+    });
+    assert.deepEqual(result, {
+      kind: "existing_order_payment_error",
+      orderNo: "ORD-1001",
+      requestId: "request-1",
+    });
+  }
+});
+
+test("only a pending unpaid retained order remains payable", () => {
+  assert.deepEqual(classifyRetainedCheckoutOrder({
+    order: {
+      order_no: "ORDER-RETAINED-1",
+      status: "pending_payment",
+      payment_status: "unpaid",
+      customer_email: "retained@example.test",
+    },
+  }, "ORDER-RETAINED-1"), {
+    kind: "payable",
+    customerEmail: "retained@example.test",
+  });
+});
+
+test("expired retained orders are terminal and must be cleared", () => {
+  assert.equal(classifyRetainedCheckoutOrder({
+    order: { order_no: "ORDER-EXPIRED", status: "expired", payment_status: "failed" },
+  }, "ORDER-EXPIRED").kind, "terminal");
+});
+
+test("paid and delivered retained orders are terminal and must be cleared", () => {
+  for (const order of [
+    { order_no: "ORDER-PAID", status: "paid", payment_status: "paid" },
+    { order_no: "ORDER-DELIVERED", status: "delivered", payment_status: "paid" },
+  ]) {
+    assert.equal(classifyRetainedCheckoutOrder({ order }, order.order_no).kind, "terminal");
+  }
+});
+
+test("a known non-payable retained state is cleared instead of blocking a new checkout", () => {
+  assert.equal(classifyRetainedCheckoutOrder({
+    order: { order_no: "ORDER-UNKNOWN", status: "processing", payment_status: "unpaid" },
+  }, "ORDER-UNKNOWN").kind, "terminal");
+});
+
+test("a malformed retained-order read fails safe instead of authorizing a replacement order", () => {
+  assert.equal(classifyRetainedCheckoutOrder({
+    order: { order_no: "ORDER-MALFORMED", status: "processing" },
+  }, "ORDER-MALFORMED").kind, "unknown");
 });
 
 test("a retained order restores its contact email without changing request identity", () => {

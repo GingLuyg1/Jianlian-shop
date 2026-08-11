@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
-import { getBalancePaymentErrorMessage, payOrderWithBalance } from "@/lib/orders/balance-payment-service";
+import { classifyBalancePaymentFailure } from "@/lib/orders/balance-payment-failure.mjs";
+import { payOrderWithBalance } from "@/lib/orders/balance-payment-service";
 import { recordOrderAgreementAcceptances, verifyCheckoutAgreements, type AgreementInput } from "@/lib/legal/legal-service";
 import { normalizePaymentMethod } from "@/lib/payments/payment-methods";
 import { createBep20PaymentSession, getBep20ErrorMessage } from "@/lib/payments/bep20-chain-service";
@@ -604,17 +605,18 @@ export async function POST(request: Request) {
           },
         });
       } catch (paymentError) {
+        const paymentFailure = classifyBalancePaymentFailure(paymentError);
         logOrderPostProcess({ level: "warn", requestId: clientRequestId, stage: "BALANCE_PAYMENT_FAILED", orderId, orderNo: completedOrder.orderNo, error: paymentError });
         logOrderPostProcess({ requestId: clientRequestId, stage: "RESPONSE_BUILD_COMPLETED", orderId, orderNo: completedOrder.orderNo });
         return NextResponse.json(
           {
-            error: getBalancePaymentErrorMessage(paymentError),
-            code: "BALANCE_PAYMENT_FAILED",
+            error: paymentFailure.message,
+            code: paymentFailure.code,
             request_id: clientRequestId,
             warning_code: warningCode,
             order: { id: orderId, ...(savedOrder as Record<string, unknown>) },
           },
-          { status: 402 }
+          { status: paymentFailure.status }
         );
       }
     }

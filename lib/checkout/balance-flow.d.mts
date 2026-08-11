@@ -19,6 +19,7 @@ export type CheckoutBalanceSummary =
 
 export type CheckoutOrderResponseClassification =
   | { kind: "balance_insufficient_existing_order"; orderNo: string; requestId: string | null }
+  | { kind: "existing_order_payment_error"; orderNo: string; requestId: string | null }
   | { kind: "success"; orderNo: string; requestId: string | null }
   | { kind: "failed" | "invalid_response"; orderNo: string | null; requestId: string | null };
 
@@ -31,6 +32,10 @@ export function getBalanceSubmissionBlockReason(input: {
   balanceSummary: CheckoutBalanceSummary;
 }): "BALANCE_LOADING" | "BALANCE_UNAVAILABLE" | "BALANCE_INSUFFICIENT" | null;
 export function classifyCheckoutOrderResponse(status: number, payload: unknown): CheckoutOrderResponseClassification;
+export function classifyRetainedCheckoutOrder(payload: unknown, expectedOrderNo: string): {
+  kind: "payable" | "terminal" | "unknown";
+  customerEmail: string | null;
+};
 export function parseRetainedCheckoutOrder(value: unknown): {
   requestId: string;
   orderNo: string;
