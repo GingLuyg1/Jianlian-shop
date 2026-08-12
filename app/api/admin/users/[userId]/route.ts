@@ -55,8 +55,8 @@ export async function GET(request: Request, context: RouteContext) {
       loadRows(supabase, "account_recharges", "id,recharge_no,channel_name,channel_code,currency,amount,requested_amount,credited_amount,status,created_at,paid_at", userId, "created_at"),
       loadRows(supabase, "balance_transactions", "id,transaction_no,business_type,business_id,direction,amount,balance_before,balance_after,currency,status,remark,created_at", userId, "created_at"),
       loadRows(supabase, "order_deliveries", "id,order_id,order_item_id,product_id,delivery_type,delivery_status,delivered_at,viewed_at,created_at,updated_at", userId, "created_at"),
-      loadRowsByColumn(supabase, "user_account_status_history", "id,old_status,new_status,reason,admin_email,request_id,created_at", "target_user_id", userId, "created_at"),
-      loadRowsByColumn(supabase, "user_risk_records", "id,old_risk_status,new_risk_status,reason,admin_email,request_id,created_at", "target_user_id", userId, "created_at"),
+      loadRowsByColumn(supabase, "user_account_status_history", "id,old_status,new_status,reason,admin_email,request_id,created_at", "user_id", userId, "created_at"),
+      loadRowsByColumn(supabase, "user_risk_records", "id,old_risk_status,new_risk_status,reason,admin_email,request_id,created_at", "user_id", userId, "created_at"),
       loadAuditLogs(supabase, userId),
     ]);
 

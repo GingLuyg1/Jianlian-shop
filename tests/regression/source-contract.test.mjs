@@ -1189,6 +1189,19 @@ test("admin user management compatibility restores named RPCs and accurate readi
   assert.match(postcheck, /service_role_execute/);
 });
 
+test("admin user detail reads status and risk history by the deployed user_id contract", () => {
+  const detailRoute = file("app/api/admin/users/[userId]/route.ts");
+  const historyReads = detailRoute.match(
+    /loadRowsByColumn\(supabase,\s*"(?:user_account_status_history|user_risk_records)"[^\n]+/g
+  ) ?? [];
+
+  assert.equal(historyReads.length, 2);
+  for (const read of historyReads) {
+    assert.match(read, /,\s*"user_id",\s*userId,\s*"created_at"\)/);
+    assert.doesNotMatch(read, /"target_user_id"/);
+  }
+});
+
 test("data consistency migration stores fingerprints and keeps user access read-only", () => {
   const migration = file("supabase/migrations/20260630_data_consistency_scan.sql");
   assert.match(migration, /data_consistency_runs/);
