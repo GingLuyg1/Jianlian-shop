@@ -1,5 +1,9 @@
 # Jianlian Shop 生产代码回滚手册
 
+> 当前权威回滚不重新 build：`bash /www/jianlian-shop/scripts/production-release.sh rollback /www/releases/jianlian-shop-<ROLLBACK_FULL_SHA>`。完整验证和停止条件见 [`docs/manual-production-deployment.md`](manual-production-deployment.md)。本文件后续 checkout/build 旧流程已废止，禁止执行。
+
+<!-- 以下内容仅作历史档案，不在渲染后的运行手册中显示。
+
 本手册只描述人工回滚流程，不自动执行命令。回滚前必须先判断是否涉及数据库 Migration。
 
 ## 适用场景
@@ -91,3 +95,4 @@ curl -fsS https://www.jianlian.shop/api/health
 3. 保存构建日志。
 4. 检查 Node 版本、依赖锁文件和环境变量。
 5. 必要时切换到更早的已知稳定 SHA。
+-->

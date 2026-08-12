@@ -1,5 +1,11 @@
 # Jianlian Shop 生产部署手册
 
+> 本文件中的旧原地部署命令已废止，禁止执行。自建 Production 的唯一权威 full-SHA worktree 流程是 [`docs/manual-production-deployment.md`](manual-production-deployment.md)。它包含环境继承、磁盘/inode gate、3002 smoke、PM2 cwd 切换和无重建 rollback。
+
+<!-- 以下内容仅作历史档案，不在渲染后的运行手册中显示。
+
+<!-- 以下内容仅作历史档案，不在渲染后的运行手册中显示。
+
 ## 本地上线前检查（Windows）
 
 ```powershell
@@ -60,3 +66,5 @@ pm2 logs jianlian-shop --lines 80 --nostream
 - 管理员能访问 `/admin`。
 - 后台商品、订单、充值、库存页面不白屏。
 - 不出现 `Cannot read properties of null`、`MODULE_NOT_FOUND`、`ChunkLoadError`。
+-->
+-->
