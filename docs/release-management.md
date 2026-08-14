@@ -1,5 +1,11 @@
 # Jianlian Shop Release Management
 
+> 自建 Production 服务器发布只遵循 [`docs/manual-production-deployment.md`](manual-production-deployment.md)。本文件后续的原地 `reset/build/restart` 示例已废止，禁止执行。
+
+<!-- Legacy material retained for repository archaeology only.
+
+<!-- Legacy material retained for repository archaeology only.
+
 This document is the release checklist for Jianlian Shop. It does not contain secrets and does not replace manual production approval.
 
 ## Pre-release checks
@@ -46,6 +52,8 @@ APP_ENV=production
 
 ## Manual deployment outline
 
+**DEPRECATED — do not execute the following legacy outline.** Use the authoritative worktree runbook linked above.
+
 Linux server example:
 
 ```bash
@@ -82,3 +90,5 @@ After deployment:
 If application deployment fails before database migrations are applied, roll back the app commit.
 
 If database migrations were applied, do not blindly roll back application code. First confirm whether the previous app version can tolerate the new schema.
+-->
+-->

@@ -1,5 +1,9 @@
 # Jianlian Shop 生产回滚手册
 
+> 当前权威回滚不重新 build：`bash /www/jianlian-shop/scripts/production-release.sh rollback /www/releases/jianlian-shop-<ROLLBACK_FULL_SHA>`。完整流程见 [`docs/manual-production-deployment.md`](manual-production-deployment.md)。本文件后续旧命令仅作历史记录，禁止执行。
+
+<!-- 以下内容仅作历史档案，不在渲染后的运行手册中显示。
+
 ## 回滚前记录
 
 ```bash
@@ -46,3 +50,4 @@ systemctl reload nginx
 - 订单和充值列表可查询。
 - 数字库存未出现重复发货或状态回退。
 - PM2 无持续错误日志。
+-->
