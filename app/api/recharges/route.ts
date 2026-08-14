@@ -39,7 +39,7 @@ import { parseRechargeStatusStrict } from "@/lib/recharges/status-machine";
 export const dynamic = "force-dynamic";
 
 const rechargeSelect =
-  "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,status,created_at,paid_at,completed_at,review_reason,error_summary";
+  "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,expires_at,matched_at,match_method,status,created_at,paid_at,completed_at,review_reason,error_summary";
 const allowedCreateKeys = new Set(["channel", "payment_method", "amount", "currency", "customer_note", "client_request_id", "clientRequestId"]);
 const reusableRechargeStatuses = [
   "pending",
@@ -210,16 +210,16 @@ export async function POST(request: Request) {
         { status: rate ? 400 : 503 },
       );
     }
-    const expectedUsdtAmount = rate && requestedCnyAmount
+    const theoreticalUsdtAmount = rate && requestedCnyAmount
       ? calculateExpectedUsdtAmount(requestedCnyAmount, String(rate.settlement_rate))
       : null;
-    if (isUsdtCnyRecharge && !expectedUsdtAmount) {
+    if (isUsdtCnyRecharge && !theoreticalUsdtAmount) {
       return NextResponse.json({ error: "充值换算失败", code: "RECHARGE_RATE_INVALID" }, { status: 503 });
     }
 
     const summary = isUsdtCnyRecharge ? null : calculateRechargeAmounts(channel, rawAmount);
-    const amountRange = isUsdtCnyRecharge && expectedUsdtAmount
-      ? classifyExactRange(expectedUsdtAmount, channel.minimumAmount, channel.maximumAmount ?? 0)
+    const amountRange = isUsdtCnyRecharge && theoreticalUsdtAmount
+      ? classifyExactRange(theoreticalUsdtAmount, channel.minimumAmount, channel.maximumAmount ?? 0)
       : summary
         ? classifyPublicRechargeAmountRange(summary.amount, channel.minimumAmount, channel.maximumAmount)
         : "invalid";
@@ -248,7 +248,7 @@ export async function POST(request: Request) {
       paymentChannel: channel.code,
       riskContext: {
         provider: channel.provider,
-        payable_amount: isUsdtCnyRecharge ? expectedUsdtAmount : summary?.payableAmount,
+        payable_amount: isUsdtCnyRecharge ? theoreticalUsdtAmount : summary?.payableAmount,
       },
     });
 
@@ -269,7 +269,46 @@ export async function POST(request: Request) {
     }
 
     failureOperation = "create";
+
+    let rechargeId: string | null = null;
+    let expiresAt: string | null = null;
+    let expectedUsdtAmount = theoreticalUsdtAmount;
+
+    if (isUsdtCnyRecharge) {
+      rechargeId = randomUUID();
+      expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+      const paymentAddress = channel.manualPayment?.payment_address ?? "";
+      if (!paymentAddress || !theoreticalUsdtAmount) {
+        return NextResponse.json(
+          { error: "USDT-BEP20 收款配置不完整", code: "RECHARGE_CHANNEL_CONFIG_INVALID" },
+          { status: 503 },
+        );
+      }
+
+      const { data: reservation, error: reservationError } = await serviceClient.rpc(
+        "reserve_account_recharge_usdt_fingerprint_v3",
+        {
+          p_recharge_id: rechargeId,
+          p_payment_address: paymentAddress,
+          p_theoretical_usdt: theoreticalUsdtAmount,
+          p_minimum_usdt: channel.minimumAmount,
+          p_maximum_usdt: channel.maximumAmount ?? 0,
+          p_expires_at: expiresAt,
+        },
+      );
+      if (reservationError) throw reservationError;
+      expectedUsdtAmount = getReservedFingerprintAmount(reservation);
+      if (!expectedUsdtAmount) {
+        return NextResponse.json(
+          { error: "当前充值支付指纹暂时不可用，请稍后重试", code: "RECHARGE_FINGERPRINT_UNAVAILABLE" },
+          { status: 503 },
+        );
+      }
+    }
+
     const rechargeNo = await insertRecharge(serviceClient, {
+      rechargeId,
+      expiresAt,
       userId: context.user.id,
       userEmail: context.user.email ?? null,
       channel,
@@ -289,19 +328,26 @@ export async function POST(request: Request) {
       } : null,
     });
 
+    const persistedRecharge = isUsdtCnyRecharge
+      ? await findExistingRecharge(serviceClient, context.user.id, clientRequestId)
+      : null;
+    const finalExpectedUsdtAmount = persistedRecharge?.expectedUsdtAmount ?? expectedUsdtAmount;
+    const finalExpiresAt = persistedRecharge?.expiresAt ?? expiresAt;
+
     if (channel.reviewMode === "manual") {
       return NextResponse.json({
         rechargeNo,
         status: "waiting_payment",
         amount: isUsdtCnyRecharge ? requestedCnyAmount : summary?.amount,
         requestedCnyAmount: isUsdtCnyRecharge ? requestedCnyAmount : null,
-        expectedUsdtAmount,
+        expectedUsdtAmount: finalExpectedUsdtAmount,
+        expiresAt: finalExpiresAt,
         lockedMarketRate: rate ? String(rate.market_rate) : null,
         lockedSettlementRate: rate ? String(rate.settlement_rate) : null,
         rateSource: rate?.source ?? null,
         rateEffectiveDate: rate?.effective_date ?? null,
         fee: isUsdtCnyRecharge ? "0.00" : summary?.fee,
-        payableAmount: isUsdtCnyRecharge ? expectedUsdtAmount : summary?.payableAmount,
+        payableAmount: isUsdtCnyRecharge ? finalExpectedUsdtAmount : summary?.payableAmount,
         reviewMode: "manual",
       }, { status: 201 });
     }
@@ -343,7 +389,7 @@ async function findExistingRecharge(
 ) {
   const { data, error } = await supabase
     .from("account_recharges")
-    .select("recharge_no,status,amount,requested_amount,fee_amount,payable_amount,requested_cny_amount,expected_usdt_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date")
+    .select("recharge_no,status,amount,requested_amount,fee_amount,payable_amount,requested_cny_amount,expected_usdt_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,expires_at")
     .eq("user_id", userId)
     .eq("client_request_id", clientRequestId)
     .in("status", reusableRechargeStatuses)
@@ -370,6 +416,7 @@ async function findExistingRecharge(
     lockedSettlementRate: data.locked_settlement_rate ? String(data.locked_settlement_rate) : null,
     rateSource: data.rate_source ? String(data.rate_source) : null,
     rateEffectiveDate: data.rate_effective_date ? String(data.rate_effective_date) : null,
+    expiresAt: data.expires_at ? String(data.expires_at) : null,
     reused: true,
   };
 }
@@ -377,6 +424,8 @@ async function findExistingRecharge(
 async function insertRecharge(
   serviceClient: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>,
   input: {
+    rechargeId: string | null;
+    expiresAt: string | null;
     userId: string;
     userEmail: string | null;
     channel: PaymentChannel;
@@ -400,6 +449,7 @@ async function insertRecharge(
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const rechargeNo = generateRechargeNo();
     const row = {
+      ...(input.rechargeId ? { id: input.rechargeId } : {}),
       recharge_no: rechargeNo,
       user_id: input.userId,
       user_email: input.userEmail,
@@ -433,6 +483,7 @@ async function insertRecharge(
         rate_effective_date: input.rateSnapshot.effectiveDate,
         rate_effective_at: input.rateSnapshot.effectiveAt,
         rate_locked_at: new Date().toISOString(),
+        expires_at: input.expiresAt,
         payment_address: input.channel.manualPayment?.payment_address ?? null,
         payment_token_contract: input.channel.manualPayment?.token_contract ?? null,
       } : {}),
@@ -519,6 +570,13 @@ function normalizeRequestId(value: unknown) {
 function finiteNumber(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getReservedFingerprintAmount(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = (value as Record<string, unknown>).expectedUsdtAmount;
+  if (typeof raw === "string" && /^\d+\.\d{4}$/.test(raw)) return raw;
+  return null;
 }
 
 function classifyExactRange(amount: string, minimum: number, maximum: number) {

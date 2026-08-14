@@ -66,6 +66,9 @@ export type RechargeRecord = {
   rateSource: string | null;
   rateEffectiveDate: string | null;
   rateLockedAt: string | null;
+  expiresAt: string | null;
+  matchedAt: string | null;
+  matchMethod: string | null;
   paymentAddress: string | null;
   paymentTokenContract: string | null;
   status: RechargeStatus;
@@ -258,6 +261,9 @@ export function normalizeRechargeRow(row: AnyRow): RechargeRecord {
     rateSource: textOrNull(row.rate_source),
     rateEffectiveDate: textOrNull(row.rate_effective_date),
     rateLockedAt: textOrNull(row.rate_locked_at),
+    expiresAt: textOrNull(row.expires_at),
+    matchedAt: textOrNull(row.matched_at),
+    matchMethod: textOrNull(row.match_method),
     paymentAddress: textOrNull(row.payment_address),
     paymentTokenContract: textOrNull(row.payment_token_contract),
     status,

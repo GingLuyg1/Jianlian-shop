@@ -5,7 +5,7 @@ import {
   Bep20PaymentError,
   inspectAccountRechargeBep20Transfer,
 } from "@/lib/payments/bep20-chain-service";
-import { calculateCreditedCnyAmount } from "@/lib/payments/recharge-rate.mjs";
+import { compareRechargeDecimals } from "@/lib/payments/recharge-rate.mjs";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -29,7 +29,7 @@ export async function POST(request: Request, { params }: { params: { rechargeNo:
 
   try {
     const { data: recharge, error } = await service.from("account_recharges")
-      .select("id,recharge_no,user_id,status,channel,channel_code,currency,settlement_currency,payment_address,payment_token_contract,locked_settlement_rate")
+      .select("id,recharge_no,user_id,status,channel,channel_code,currency,settlement_currency,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,locked_settlement_rate,expires_at")
       .eq("recharge_no", params.rechargeNo)
       .eq("user_id", authData.user.id)
       .maybeSingle();
@@ -45,11 +45,32 @@ export async function POST(request: Request, { params }: { params: { rechargeNo:
       || String(recharge.payment_token_contract ?? "").toLowerCase() !== evidence.tokenContract) {
       return safeFailure("链上收款信息与充值单不一致", "RECHARGE_CHAIN_EVIDENCE_MISMATCH", requestId, 409);
     }
-    const creditedCnyAmount = calculateCreditedCnyAmount(
-      evidence.actualReceivedUsdt,
-      String(recharge.locked_settlement_rate ?? ""),
-    );
-    if (!creditedCnyAmount) return safeFailure("充值换算失败", "RECHARGE_RATE_INVALID", requestId, 409);
+    const expectedUsdtAmount = String(recharge.expected_usdt_amount ?? "");
+    const requestedCnyAmount = String(recharge.requested_cny_amount ?? "");
+    if (
+      !expectedUsdtAmount
+      || !requestedCnyAmount
+      || compareRechargeDecimals(evidence.actualReceivedUsdt, expectedUsdtAmount) !== 0
+    ) {
+      return safeFailure(
+        "链上实际到账金额与本充值单精确应付金额不一致，已停止自动处理，请联系客服人工核对",
+        "RECHARGE_AMOUNT_MISMATCH",
+        requestId,
+        409,
+      );
+    }
+
+    const blockTime = Date.parse(evidence.blockTimestamp);
+    const expiresAt = Date.parse(String(recharge.expires_at ?? ""));
+    if (!Number.isFinite(blockTime) || !Number.isFinite(expiresAt) || blockTime > expiresAt) {
+      return safeFailure(
+        "该笔链上付款超出充值单有效期，已停止自动处理，请联系客服人工核对",
+        "RECHARGE_PAYMENT_EXPIRED",
+        requestId,
+        409,
+      );
+    }
+    const creditedCnyAmount = requestedCnyAmount;
 
     const { data, error: claimError } = await service.rpc("claim_account_recharge_bep20_transfer", {
       p_recharge_id: recharge.id,

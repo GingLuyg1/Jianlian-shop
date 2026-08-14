@@ -478,10 +478,10 @@ export default function AccountRechargeContent() {
                     <div>充值人民币金额：{isUsdtCnyRecharge && requestedCnyAmount ? `¥${requestedCnyAmount}` : selectedChannel && summary ? formatPaymentAmount(summary.amount, selectedChannel.currency) : "—"}</div>
                     <div>手续费：{isUsdtCnyRecharge ? "免手续费" : selectedChannel && summary ? (summary.fee === 0 ? "免手续费" : formatPaymentAmount(summary.fee, selectedChannel.currency)) : "—"}</div>
                     <div className="font-medium text-slate-700">
-                      预计需要支付：{isUsdtCnyRecharge ? (expectedUsdtAmount ? `${expectedUsdtAmount} USDT` : "—") : selectedChannel && summary ? formatPaymentAmount(summary.payableAmount, selectedChannel.currency) : "—"}
+                      创建前参考：{isUsdtCnyRecharge ? (expectedUsdtAmount ? `约 ${expectedUsdtAmount} USDT` : "—") : selectedChannel && summary ? formatPaymentAmount(summary.payableAmount, selectedChannel.currency) : "—"}
                     </div>
                     <div className="font-medium text-slate-700">
-                      {isUsdtCnyRecharge ? "实际到账 USDT 将按本充值单锁定汇率折算为人民币余额。" : `预计到账金额：${selectedChannel && summary ? formatPaymentAmount(summary.arrivalAmount, selectedChannel.currency) : "—"}`}
+                      {isUsdtCnyRecharge ? "创建充值单后会生成 4 位小数的精确应付 USDT；匹配成功后按你申请的人民币金额原额到账。" : `预计到账金额：${selectedChannel && summary ? formatPaymentAmount(summary.arrivalAmount, selectedChannel.currency) : "—"}`}
                     </div>
                   </div>
                   <Button
@@ -693,7 +693,8 @@ function RechargeRecords({ records, loading, error, page, count, onRetry, onPage
               {record.network ? <RecordLine label="网络" value={record.network} /> : null}
               <RecordLine label="充值金额" value={record.requestedCnyAmount ? `¥${record.requestedCnyAmount}` : formatPaymentAmount(record.requestedAmount, record.currency)} />
               {record.lockedSettlementRate ? <RecordLine label="锁定汇率" value={`1 USDT = ¥${record.lockedSettlementRate}`} /> : null}
-              {record.expectedUsdtAmount ? <RecordLine label="预计支付" value={`${record.expectedUsdtAmount} USDT`} /> : null}
+              {record.expectedUsdtAmount ? <RecordLine label="精确应付" value={`${record.expectedUsdtAmount} USDT`} /> : null}
+              {record.expiresAt ? <RecordLine label="支付有效期至" value={formatDateTime(record.expiresAt)} /> : null}
               {record.paymentAddress ? <RecordLine label="收款地址" value={record.paymentAddress} /> : null}
               {record.paymentTokenContract ? <RecordLine label="Token 合约" value={record.paymentTokenContract} /> : null}
               {record.actualReceivedUsdt ? <RecordLine label="实际到账" value={`${record.actualReceivedUsdt} USDT`} /> : null}
@@ -749,7 +750,7 @@ function RechargeBep20VerifyForm({ record, onSubmitted }: { record: RechargeReco
   }
   return (
     <div className="mt-3 space-y-2 border-t pt-3">
-      <p className="text-xs text-slate-500">应付参考：{record.expectedUsdtAmount} USDT。少付或多付均按链上实际到账与锁定汇率结算。</p>
+      <p className="text-xs font-medium text-amber-700">请精确支付 {record.expectedUsdtAmount} USDT，此 4 位小数金额用于识别你的充值单，请勿自行修改。金额不一致或超时付款将转人工处理。</p>
       <Input value={txHash} onChange={(event) => setTxHash(event.target.value)} placeholder="输入 BEP20 TxHash" maxLength={66} />
       {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
