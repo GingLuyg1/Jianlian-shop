@@ -182,12 +182,31 @@ try {
   }
   Assert-DatabaseTarget -DatabaseUrl $databaseUrl
 
+  # Parse the already-validated URI into explicit libpq environment variables.
+  # Do not rely on PGDATABASE to expand a full connection URI.
+  $databaseUri = [Uri]$databaseUrl
+  $userInfo = $databaseUri.UserInfo
+  $credentialSeparator = $userInfo.IndexOf(":")
+  if ($credentialSeparator -lt 1 -or $credentialSeparator -ge ($userInfo.Length - 1)) {
+    throw "DATABASE_CREDENTIALS_MISSING"
+  }
+  $databaseUser = [Uri]::UnescapeDataString($userInfo.Substring(0, $credentialSeparator))
+  $databasePassword = [Uri]::UnescapeDataString($userInfo.Substring($credentialSeparator + 1))
+  $databaseName = $databaseUri.AbsolutePath.TrimStart("/")
+  if (-not $databaseName) {
+    throw "DATABASE_NAME_NOT_ALLOWED"
+  }
+
   # Remove every inherited libpq override before setting the validated target.
   foreach ($name in $libpqEnvironmentVariables) {
     [Environment]::SetEnvironmentVariable($name, $null, "Process")
   }
   # Credentials remain in the child process environment, never in arguments or logs.
-  $env:PGDATABASE = $databaseUrl
+  $env:PGHOST = $databaseUri.DnsSafeHost
+  $env:PGPORT = [string]$databaseUri.Port
+  $env:PGUSER = $databaseUser
+  $env:PGPASSWORD = $databasePassword
+  $env:PGDATABASE = $databaseName
   $env:PGSSLMODE = "require"
   $env:PGCONNECT_TIMEOUT = "15"
   $env:PGAPPNAME = "jianlian-migration-runner"
