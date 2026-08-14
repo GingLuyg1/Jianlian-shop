@@ -169,6 +169,46 @@ revoke all on function public.reserve_account_recharge_usdt_fingerprint_v3(uuid,
 grant execute on function public.reserve_account_recharge_usdt_fingerprint_v3(uuid,text,numeric,numeric,numeric,timestamptz)
   to service_role;
 
+create or replace function public.release_orphan_account_recharge_usdt_fingerprint_v3(
+  p_recharge_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $
+declare
+  deleted_count integer := 0;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'release_orphan_account_recharge_usdt_fingerprint_v3 requires service_role';
+  end if;
+
+  if p_recharge_id is null then
+    return false;
+  end if;
+
+  if exists (
+    select 1
+    from public.account_recharges
+    where id = p_recharge_id
+  ) then
+    return false;
+  end if;
+
+  delete from public.account_recharge_amount_reservations
+  where recharge_id = p_recharge_id;
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count > 0;
+end;
+$;
+
+revoke all on function public.release_orphan_account_recharge_usdt_fingerprint_v3(uuid)
+  from public, anon, authenticated;
+grant execute on function public.release_orphan_account_recharge_usdt_fingerprint_v3(uuid)
+  to service_role;
+
 create or replace function public.protect_account_recharge_rate_snapshot()
 returns trigger
 language plpgsql

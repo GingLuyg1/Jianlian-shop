@@ -306,27 +306,44 @@ export async function POST(request: Request) {
       }
     }
 
-    const rechargeNo = await insertRecharge(serviceClient, {
-      rechargeId,
-      expiresAt,
-      userId: context.user.id,
-      userEmail: context.user.email ?? null,
-      channel,
-      amount: summary?.amount ?? rawAmount,
-      fee: summary?.fee ?? 0,
-      payableAmount: summary?.payableAmount ?? rawAmount,
-      clientRequestId,
-      customerNote,
-      rateSnapshot: rate && requestedCnyAmount && expectedUsdtAmount ? {
-        requestedCnyAmount,
-        expectedUsdtAmount,
-        marketRate: String(rate.market_rate),
-        settlementRate: String(rate.settlement_rate),
-        source: rate.source,
-        effectiveDate: rate.effective_date,
-        effectiveAt: rate.effective_at,
-      } : null,
-    });
+    let rechargeNo: string;
+    try {
+      rechargeNo = await insertRecharge(serviceClient, {
+        rechargeId,
+        expiresAt,
+        userId: context.user.id,
+        userEmail: context.user.email ?? null,
+        channel,
+        amount: summary?.amount ?? rawAmount,
+        fee: summary?.fee ?? 0,
+        payableAmount: summary?.payableAmount ?? rawAmount,
+        clientRequestId,
+        customerNote,
+        rateSnapshot: rate && requestedCnyAmount && expectedUsdtAmount ? {
+          requestedCnyAmount,
+          expectedUsdtAmount,
+          marketRate: String(rate.market_rate),
+          settlementRate: String(rate.settlement_rate),
+          source: rate.source,
+          effectiveDate: rate.effective_date,
+          effectiveAt: rate.effective_at,
+        } : null,
+      });
+    } catch (insertError) {
+      if (rechargeId) {
+        try {
+          await serviceClient.rpc(
+            "release_orphan_account_recharge_usdt_fingerprint_v3",
+            {
+              p_recharge_id: rechargeId,
+            },
+          );
+        } catch {
+          // Best-effort cleanup only; preserve the original recharge creation error.
+        }
+      }
+      throw insertError;
+    }
 
     const persistedRecharge = isUsdtCnyRecharge
       ? await findExistingRecharge(serviceClient, context.user.id, clientRequestId)
