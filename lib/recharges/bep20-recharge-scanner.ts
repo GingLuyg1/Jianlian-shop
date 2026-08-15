@@ -56,6 +56,8 @@ export type RechargeBep20ScanResult = {
   ambiguous: number;
   conflicts: number;
   terminal: number;
+  credited: number;
+  alreadyCredited: number;
 };
 
 export class RechargeBep20ScannerError extends Error {
@@ -140,6 +142,8 @@ export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } =
       ambiguous: 0,
       conflicts: 0,
       terminal: 0,
+      credited: 0,
+      alreadyCredited: 0,
     };
   }
 
@@ -156,6 +160,8 @@ export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } =
     ambiguous: 0,
     conflicts: 0,
     terminal: 0,
+    credited: 0,
+    alreadyCredited: 0,
   };
 
   let chunkFrom = initialFrom;
@@ -172,7 +178,7 @@ export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } =
 
       if (options.dryRun) continue;
 
-      const { data, error } = await service.rpc("match_account_recharge_bep20_fingerprint_v2", {
+      const { data, error } = await service.rpc("match_and_credit_account_recharge_bep20_v3", {
         p_chain_id: config.chainId,
         p_tx_hash: evidence.txHash,
         p_log_index: evidence.logIndex,
@@ -196,13 +202,15 @@ export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } =
         );
       }
 
-      const result = parseMatchResult(data);
-      if (result === "matched") counters.matched += 1;
-      else if (result === "already_matched") counters.alreadyMatched += 1;
-      else if (result === "unmatched" || result === "invalid_window") counters.unmatched += 1;
-      else if (result === "ambiguous_order_payment") counters.ambiguous += 1;
-      else if (result === "tx_conflict") counters.conflicts += 1;
-      else if (result === "terminal_recharge") counters.terminal += 1;
+      const match = parseMatchResult(data);
+      if (match.result === "matched") counters.matched += 1;
+      else if (match.result === "already_matched") counters.alreadyMatched += 1;
+      else if (match.result === "unmatched" || match.result === "invalid_window") counters.unmatched += 1;
+      else if (match.result === "ambiguous_order_payment") counters.ambiguous += 1;
+      else if (match.result === "tx_conflict") counters.conflicts += 1;
+      else if (match.result === "terminal_recharge") counters.terminal += 1;
+      if (match.credited) counters.credited += 1;
+      if (match.alreadyCredited) counters.alreadyCredited += 1;
     }
 
     if (!options.dryRun) {
@@ -398,11 +406,26 @@ function parseMatchResult(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new RechargeBep20ScannerError("RECHARGE_SCANNER_MATCH_RESULT_INVALID", "充值链上匹配返回格式无效");
   }
-  const result = String((value as Record<string, unknown>).result ?? "");
+  const record = value as Record<string, unknown>;
+  const result = String(record.result ?? "");
   if (!RESULT_KINDS.has(result)) {
     throw new RechargeBep20ScannerError("RECHARGE_SCANNER_MATCH_RESULT_UNKNOWN", "充值链上匹配返回未知状态");
   }
-  return result;
+  if (typeof record.credited !== "boolean" || typeof record.alreadyCredited !== "boolean") {
+    throw new RechargeBep20ScannerError("RECHARGE_SCANNER_CREDIT_RESULT_INVALID", "充值自动入账返回格式无效");
+  }
+  const creditEligible = result === "matched" || result === "already_matched";
+  if (
+    (creditEligible && record.credited === record.alreadyCredited)
+    || (!creditEligible && (record.credited || record.alreadyCredited))
+  ) {
+    throw new RechargeBep20ScannerError("RECHARGE_SCANNER_CREDIT_RESULT_INVALID", "充值自动入账结果与匹配状态不一致");
+  }
+  return {
+    result,
+    credited: record.credited,
+    alreadyCredited: record.alreadyCredited,
+  };
 }
 
 async function rpc<T>(config: ScannerConfig, method: string, params: unknown[]): Promise<T> {
@@ -520,5 +543,7 @@ function emptyResult(dryRun: boolean, headBlock: bigint, finalizedBlock: bigint)
     ambiguous: 0,
     conflicts: 0,
     terminal: 0,
+    credited: 0,
+    alreadyCredited: 0,
   };
 }
