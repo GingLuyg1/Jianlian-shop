@@ -29,10 +29,42 @@ V4 dedicated addresses, address pools, sweeping/collection and cold-wallet archi
 
 ## Phase status
 
-- Phase 1 fingerprint reservation foundation has passed TEST migration and schema checks.
-- Phase 2 BEP20 discovery and pure matching has passed TEST write-path acceptance, including exact fingerprint matching, idempotent replay, shared order/recharge ambiguity, global TxHash conflict handling, cursor progression and fixture cleanup.
-- Phase 2 intentionally does not credit CNY (`PHASE2_AUTO_CREDIT=false`).
-- Phase 3 atomic auto-credit is implemented as a migration candidate and scanner source change only. The Phase 3 migration has not been executed in TEST, and Phase 3 TEST end-to-end acceptance has not been performed.
+### Phase 1
+
+The fingerprint reservation foundation has passed the TEST migration and schema checks.
+
+### Phase 2
+
+The BEP20 discovery and pure-match write path has passed TEST acceptance. The acceptance covered:
+
+- exact fingerprint matching;
+- replay idempotency;
+- shared order/recharge ambiguity failing closed;
+- global TxHash conflicts failing closed;
+- successful cursor progression and no cursor progression after an uncertain match;
+- precise fixture cleanup and baseline restoration.
+
+Phase 2 intentionally does not credit CNY (`PHASE2_AUTO_CREDIT=false`).
+
+### Phase 3
+
+Migration `20260815120000_account_recharge_bep20_auto_credit_v3.sql` has been installed successfully in TEST. The Phase 3 function, privilege and fixed-search-path postcheck passed.
+
+The synthetic TEST end-to-end result is `PHASE3_E2E_PASS`. It verified:
+
+- a unique fingerprint transfer returned `matched=1` and `credited=1`;
+- the credited balance and completed ledger amount exactly equalled `requested_cny_amount`;
+- exactly one completed `account_recharge` ledger entry was created;
+- paid replay returned `alreadyMatched=1` and `alreadyCredited=1` without another balance credit (`DOUBLE_CREDIT=false`);
+- an intentional credit-stage failure rolled back the Phase 2 match, chain claim, global TxHash registry ownership, scan/review events and balance effects in the same transaction;
+- the scanner cursor did not advance after that atomic failure;
+- shared-address order ambiguity never credited the recharge;
+- an existing global TxHash assignment never credited the recharge and retained its original ownership;
+- cleanup restored the profile balance, scanner cursor, ledger and all fixture tables to their pre-test baseline.
+
+The TEST E2E used a deterministic synthetic BSC RPC bound only to localhost. It did not broadcast or observe a real USDT transfer and did not use real funds.
+
+**Production status: NOT DEPLOYED / NOT MIGRATED / NOT VERIFIED IN PRODUCTION.** Nothing in the TEST acceptance means that Recharge V3 is live in Production.
 
 ## Phase 3 atomic architecture
 
@@ -48,3 +80,9 @@ The atomic function:
 6. changes the recharge to `paid` and records a system review event in the same transaction.
 
 If any credit validation or ledger operation fails, the RPC fails as a whole. The match claim, transaction ownership, recharge state, audit events and balance change roll back together, and the scanner does not advance that chunk's cursor. Ambiguous, unmatched, conflicting, terminal and invalid-window results remain non-crediting outcomes.
+
+## RPC operational note
+
+Earlier TEST diagnostics found that the originally configured RPC endpoint did not provide an `eth_getLogs` behavior suitable for this scanner. A PublicNode candidate subsequently passed `eth_chainId`, `eth_blockNumber`, token `decimals`, `eth_getLogs` and a temporary scanner GET dry-run. No persistent RPC configuration was changed.
+
+Before any Production rollout, the selected Production RPC endpoint must be revalidated for reliable `eth_getLogs` support as well as the required chain-id, block and token-decimals calls. That validation does not authorize a Production environment change or deployment.
