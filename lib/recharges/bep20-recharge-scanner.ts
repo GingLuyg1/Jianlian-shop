@@ -337,10 +337,17 @@ async function parseTransferEvidence(
   blockCache: Map<string, RpcBlock>,
 ) {
   const txHash = normalizeTxHash(log.transactionHash);
-  const logIndex = Number(parseHexQuantity(log.logIndex, "BSC_LOG_INDEX_INVALID"));
+  const logIndexValue = parseHexQuantity(log.logIndex, "BSC_LOG_INDEX_INVALID");
+  if (logIndexValue > BigInt(2_147_483_647)) {
+    throw new RechargeBep20ScannerError("BSC_LOG_INDEX_INVALID", "BSC 日志索引超出安全范围");
+  }
+  const logIndex = Number(logIndexValue);
   const blockNumber = parseHexQuantity(log.blockNumber, "BSC_BLOCK_NUMBER_INVALID");
-  const blockHash = typeof log.blockHash === "string" ? log.blockHash.toLowerCase() : null;
+  const blockHash = normalizeBytes32(log.blockHash, "BSC_BLOCK_HASH_INVALID");
   const topics = Array.isArray(log.topics) ? log.topics : [];
+  if (topics.length !== 3 || String(topics[0] ?? "").toLowerCase() !== TRANSFER_TOPIC) {
+    throw new RechargeBep20ScannerError("BSC_TRANSFER_TOPIC_INVALID", "BSC Transfer 事件主题格式无效");
+  }
   const fromAddress = topicToAddress(topics[1]);
   const toAddress = topicToAddress(topics[2]);
   const tokenAddress = normalizeAddress(log.address);
@@ -358,6 +365,11 @@ async function parseTransferEvidence(
       throw new RechargeBep20ScannerError("BSC_BLOCK_INVALID", "BSC 区块数据读取失败");
     }
     blockCache.set(blockKey, block);
+  }
+  const returnedBlockNumber = parseHexQuantity(block.number, "BSC_BLOCK_NUMBER_INVALID");
+  const returnedBlockHash = normalizeBytes32(block.hash, "BSC_BLOCK_HASH_INVALID");
+  if (returnedBlockNumber !== blockNumber || returnedBlockHash !== blockHash) {
+    throw new RechargeBep20ScannerError("BSC_BLOCK_EVIDENCE_MISMATCH", "BSC 日志与区块证据不一致");
   }
 
   const timestampSeconds = parseHexQuantity(block.timestamp, "BSC_BLOCK_TIMESTAMP_INVALID");
@@ -441,6 +453,14 @@ function normalizeTxHash(value: unknown) {
   const text = String(value ?? "").trim().toLowerCase();
   if (!/^0x[0-9a-f]{64}$/.test(text)) {
     throw new RechargeBep20ScannerError("BSC_TX_HASH_INVALID", "BSC 交易哈希格式无效");
+  }
+  return text;
+}
+
+function normalizeBytes32(value: unknown, code: string) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!/^0x[0-9a-f]{64}$/.test(text)) {
+    throw new RechargeBep20ScannerError(code, "BSC 32-byte 证据格式无效");
   }
   return text;
 }

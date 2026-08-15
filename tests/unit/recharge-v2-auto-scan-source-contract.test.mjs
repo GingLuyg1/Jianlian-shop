@@ -17,6 +17,17 @@ test("V2 scanner discovers only confirmed USDT Transfers to the configured recha
   assert.match(scanner, /requiredConfirmations/);
 });
 
+test("malformed or inconsistent RPC log evidence fails closed before database matching", () => {
+  assert.match(scanner, /topics\.length !== 3/);
+  assert.match(scanner, /topics\[0\][\s\S]*TRANSFER_TOPIC/);
+  assert.match(scanner, /logIndexValue > BigInt\(2_147_483_647\)/);
+  assert.match(scanner, /returnedBlockNumber !== blockNumber \|\| returnedBlockHash !== blockHash/);
+  assert.match(scanner, /BSC_BLOCK_EVIDENCE_MISMATCH/);
+  assert.match(migration, /normalized_block_hash !~ '\^0x\[0-9a-f\]\{64\}\$'/);
+  assert.match(migration, /p_chain_id is distinct from 56/);
+  assert.match(migration, /p_log_index is null/);
+});
+
 test("V2 database match claims evidence but never credits CNY automatically", () => {
   assert.match(migration, /match_account_recharge_bep20_fingerprint_v2/);
   assert.match(migration, /bep20_transaction_usage_registry/);

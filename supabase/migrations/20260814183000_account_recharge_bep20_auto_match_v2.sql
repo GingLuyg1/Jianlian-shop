@@ -107,6 +107,7 @@ set search_path = pg_catalog, public
 as $$
 declare
   normalized_hash text := lower(btrim(p_tx_hash));
+  normalized_block_hash text := lower(btrim(p_block_hash));
   normalized_token text := lower(btrim(p_token_contract));
   normalized_to text := lower(btrim(p_to_address));
   normalized_from text := nullif(lower(btrim(coalesce(p_from_address, ''))), '');
@@ -121,15 +122,25 @@ begin
     raise exception 'match_account_recharge_bep20_fingerprint_v2 requires service_role';
   end if;
 
-  if p_chain_id <> 56
+  if p_chain_id is distinct from 56
+     or normalized_hash is null
      or normalized_hash !~ '^0x[0-9a-f]{64}$'
+     or normalized_block_hash is null
+     or normalized_block_hash !~ '^0x[0-9a-f]{64}$'
+     or normalized_token is null
      or normalized_token !~ '^0x[0-9a-f]{40}$'
+     or normalized_to is null
      or normalized_to !~ '^0x[0-9a-f]{40}$'
      or (normalized_from is not null and normalized_from !~ '^0x[0-9a-f]{40}$')
+     or p_log_index is null
      or p_log_index < 0
+     or p_block_number is null
      or p_block_number < 0
+     or p_raw_amount is null
      or p_raw_amount <= 0
+     or p_actual_received_usdt is null
      or p_actual_received_usdt <= 0
+     or p_confirmation_count is null
      or p_confirmation_count <= 0
      or p_block_timestamp is null then
     raise exception 'invalid account recharge BEP20 scan evidence';
@@ -368,7 +379,7 @@ begin
     block_timestamp, token_contract, from_address, to_address, raw_amount,
     actual_received_usdt, confirmation_count
   ) values (
-    target_recharge.id, p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_hash,
+    target_recharge.id, p_chain_id, normalized_hash, p_log_index, p_block_number, normalized_block_hash,
     p_block_timestamp, normalized_token, normalized_from, normalized_to, p_raw_amount,
     p_actual_received_usdt, p_confirmation_count
   );
