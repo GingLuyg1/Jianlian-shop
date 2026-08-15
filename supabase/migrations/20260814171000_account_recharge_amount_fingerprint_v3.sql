@@ -176,7 +176,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = pg_catalog, public
-as $
+as $$
 declare
   deleted_count integer := 0;
 begin
@@ -202,7 +202,7 @@ begin
   get diagnostics deleted_count = row_count;
   return deleted_count > 0;
 end;
-$;
+$$;
 
 revoke all on function public.release_orphan_account_recharge_usdt_fingerprint_v3(uuid)
   from public, anon, authenticated;

@@ -16,6 +16,13 @@ test("recharge creation compensates a fingerprint reservation when insert fails"
   assert.match(route, /throw insertError/);
 });
 
+test("orphan cleanup function keeps valid PL/pgSQL dollar quoting", () => {
+  assert.match(
+    migration,
+    /create or replace function public\.release_orphan_account_recharge_usdt_fingerprint_v3\([\s\S]*?as \$\$[\s\S]*?end;\s*\$\$;/,
+  );
+});
+
 test("orphan release is service-role only and refuses to delete a reservation for a persisted recharge", () => {
   assert.match(migration, /create or replace function public\.release_orphan_account_recharge_usdt_fingerprint_v3/);
   assert.match(migration, /auth\.role\(\) <> 'service_role'/);
