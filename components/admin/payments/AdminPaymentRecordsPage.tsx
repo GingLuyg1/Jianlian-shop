@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Copy, Eye, RefreshCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -95,7 +95,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [sort, setSort] = useState("created_desc");
-  const [view, setView] = useState<"all" | "exceptions" | "reconciliations" | "underpayments">("all");
+  const [view, setView] = useState<"all" | "exceptions" | "reconciliations" | "underpayments" | "review">("all");
   const [exceptionType, setExceptionType] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -119,7 +119,9 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     setStartDate(params.get("startDate") ?? "");
     setEndDate(params.get("endDate") ?? "");
     setSort(params.get("sort") ?? "created_desc");
-    if (!isRechargePage) {
+    if (isRechargePage) {
+      setView(params.get("view") === "review" ? "review" : "all");
+    } else {
       setBusinessType(params.get("businessType") ?? "all");
       setView(
         params.get("view") === "exceptions"
@@ -144,7 +146,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     startDate,
     endDate,
     sort,
-    view: isRechargePage ? "all" : view,
+    view,
     exceptionType: isRechargePage ? "all" : exceptionType,
   }), [businessType, channel, debouncedSearch, endDate, exceptionType, isRechargePage, page, sort, startDate, status, view]);
 
@@ -212,12 +214,12 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   };
 
   return (
-    <AdminPageShell title={isRechargePage ? "充值管理" : "支付管理"} description={isRechargePage ? "查看账户充值支付记录。管理员不能在此直接给用户余额入账。" : "统一查看商品订单和账户充值支付记录，异常支付仅做只读追踪。"} actions={<Button variant="outline" size="sm" onClick={loadPayments} disabled={loading}><RefreshCcw className="mr-2 h-4 w-4" />刷新</Button>}>
+    <AdminPageShell title={isRechargePage ? "充值管理" : "支付管理"} description={isRechargePage ? "统一查看账户充值记录，并通过受控审核流程处理需要人工介入的充值。" : "统一查看商品订单和账户充值支付记录，异常支付仅做只读追踪。"} actions={<Button variant="outline" size="sm" onClick={loadPayments} disabled={loading}><RefreshCcw className="mr-2 h-4 w-4" />刷新</Button>}>
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-        {!isRechargePage ? <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => { setView("exceptions"); setPage(1); }}>异常支付</Button><Button size="sm" variant={view === "underpayments" ? "default" : "outline"} onClick={() => { setView("underpayments"); setPage(1); }}>欠额转余额</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "outline"} onClick={() => { setView("reconciliations"); setPage(1); }}>对账记录</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div> : null}
-        {view === "reconciliations" ? <AdminReconciliationPanel /> : view === "underpayments" ? <AdminBep20UnderpaymentPanel /> : <>
+        {isRechargePage ? <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部充值</Button><Button size="sm" variant={view === "review" ? "default" : "outline"} onClick={() => { setView("review"); setPage(1); }}>人工审核</Button></div> : <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => { setView("exceptions"); setPage(1); }}>异常支付</Button><Button size="sm" variant={view === "underpayments" ? "default" : "outline"} onClick={() => { setView("underpayments"); setPage(1); }}>欠额转余额</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "outline"} onClick={() => { setView("reconciliations"); setPage(1); }}>对账记录</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div>}
+        {!isRechargePage && view === "reconciliations" ? <AdminReconciliationPanel /> : !isRechargePage && view === "underpayments" ? <AdminBep20UnderpaymentPanel /> : <>
         <div className="grid shrink-0 gap-2 border-b px-4 py-3 min-[1200px]:grid-cols-[minmax(180px,1.2fr)_150px_150px_145px_145px_140px_86px] min-[1600px]:grid-cols-[minmax(220px,1.35fr)_140px_145px_145px_145px_140px_86px_86px]">
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="支付单号 / 业务单号 / 用户邮箱" className="h-9 pl-9" /></div>
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={isRechargePage ? "支付单号 / 充值单号 / 用户邮箱" : "支付单号 / 业务单号 / 用户邮箱"} className="h-9 pl-9" /></div>
           {!isRechargePage ? <select value={businessType} onChange={(event) => { setBusinessType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部业务</option><option value="order">商品订单</option><option value="recharge">账户充值</option></select> : null}
           <select value={channel} onChange={(event) => { setChannel(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部渠道</option>{PAYMENT_CHANNELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
           <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部状态</option>{PAYMENT_STATUS_VALUES.map((item) => <option key={item} value={item}>{item}</option>)}</select>
@@ -229,7 +231,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
         {error ? <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadPayments} /></div> : <div className="min-h-0 flex-1 overflow-auto"><PaymentTable isRechargePage={isRechargePage} loading={loading} payments={payments} copyText={copyText} loadDetail={loadDetail} /></div>}
         <div className="flex h-12 shrink-0 items-center justify-between border-t px-4 text-sm text-slate-500"><span>共 {count} 条记录，每页 {PAGE_SIZE} 条</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button><span>第 {page} / {totalPages} 页</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button></div></div></>}
       </Card>
-      {selected ? <><PaymentDrawer selected={selected} detail={detail} callbacks={callbacks} callbackError={callbackError} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} detailLoading={detailLoading} detailError={detailError} onClose={() => setSelected(null)} onRetry={() => loadDetail(selected)} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} copyText={copyText} />{selected.source === "account_recharges" ? <RechargeReviewOverlay rechargeId={selected.id} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} /> : null}</> : null}
+      {selected ? <><PaymentDrawer isRechargePage={isRechargePage} selected={selected} detail={detail} callbacks={callbacks} callbackError={callbackError} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} detailLoading={detailLoading} detailError={detailError} onClose={() => setSelected(null)} onRetry={() => loadDetail(selected)} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} copyText={copyText} />{!isRechargePage && selected.source === "account_recharges" ? <RechargeReviewPanel rechargeId={selected.id} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} /> : null}</> : null}
     </AdminPageShell>
   );
 }
@@ -239,13 +241,13 @@ function PaymentTable({ isRechargePage, loading, payments, copyText, loadDetail 
   return <table className="w-full min-w-[1760px] table-fixed text-sm"><colgroup><col className="w-[170px]" />{!isRechargePage ? <col className="w-[110px]" /> : null}<col className="w-[170px]" /><col className="w-[210px]" /><col className="w-[130px]" /><col className="w-[110px]" /><col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[120px]" /><col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[190px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[90px]" /></colgroup><thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-500"><tr className="border-b"><Th>支付单号</Th>{!isRechargePage ? <Th>业务类型</Th> : null}<Th>{isRechargePage ? "充值单号" : "订单号/充值单号"}</Th><Th>用户邮箱</Th><Th>支付渠道</Th><Th>网络</Th><Th>{isRechargePage ? "充值金额" : "业务金额"}</Th><Th>手续费</Th><Th>应付金额</Th><Th>到账金额</Th><Th>支付状态</Th><Th>渠道交易号</Th><Th>创建时间</Th><Th>支付时间</Th><Th className="text-right">操作</Th></tr></thead><tbody>{loading ? Array.from({ length: 8 }).map((_, index) => <tr key={index} className="border-b"><td colSpan={colSpan} className="px-4 py-3 text-slate-400">正在加载支付记录...</td></tr>) : payments.length ? payments.map((payment) => <tr key={`${payment.source}-${payment.id}`} className="border-b hover:bg-slate-50"><Td mono>{payment.payment_no}</Td>{!isRechargePage ? <Td>{getBusinessTypeLabel(payment.business_type)}</Td> : null}<Td mono>{payment.business_no ?? "—"}</Td><Td title={payment.user_email ?? ""}>{payment.user_email ?? "—"}</Td><Td>{getPaymentChannelLabel(payment.channel)}</Td><Td>{payment.channel === "alipay" || payment.channel === "wechat" ? "—" : payment.network ?? "—"}</Td><Td>{formatPaymentMoney(payment.business_amount, payment.business_currency)}</Td><Td>{formatPaymentMoney(payment.fee_amount, payment.payable_currency ?? payment.business_currency)}</Td><Td>{formatPaymentMoney(payment.payable_amount, payment.payable_currency)}</Td><Td>{formatPaymentMoney(payment.received_amount, payment.received_currency)}</Td><Td><Badge variant="outline" className={cn("whitespace-nowrap", getUnifiedPaymentStatusClass(payment.status))}>{getUnifiedPaymentStatusLabel(payment.status)}</Badge></Td><Td><button type="button" onClick={() => copyText(payment.provider_trade_no)} className="flex max-w-full items-center gap-1 text-left text-slate-700 hover:text-primary" title={payment.provider_trade_no ?? ""}><span className="truncate font-mono text-xs">{payment.provider_trade_no ?? "—"}</span>{payment.provider_trade_no ? <Copy className="h-3.5 w-3.5 shrink-0" /> : null}</button></Td><Td>{formatDate(payment.created_at)}</Td><Td>{formatDate(payment.paid_at)}</Td><Td className="text-right"><Button variant="outline" size="sm" onClick={() => loadDetail(payment)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button></Td></tr>) : <tr><td colSpan={colSpan} className="h-[360px] px-4"><AdminEmptyState title={isRechargePage ? "暂无充值记录" : "暂无支付记录"} description="当前筛选条件下没有记录。" className="min-h-full" /></td></tr>}</tbody></table>;
 }
 
-function PaymentDrawer({ selected, detail, callbacks, callbackError, chainPayment, chainPaymentError, overpaymentWallet, detailLoading, detailError, onClose, onRetry, onChanged, copyText }: { selected: AdminPaymentRecord; detail: AdminPaymentRecord | null; callbacks: AdminPaymentCallback[]; callbackError: string; chainPayment: AdminBep20ChainPayment | null; chainPaymentError: string; overpaymentWallet: AdminBep20OverpaymentWallet; detailLoading: boolean; detailError: string; onClose: () => void; onRetry: () => void; onChanged: () => Promise<void>; copyText: (value: string | null | undefined) => void }) {
+function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackError, chainPayment, chainPaymentError, overpaymentWallet, detailLoading, detailError, onClose, onRetry, onChanged, copyText }: { isRechargePage: boolean; selected: AdminPaymentRecord; detail: AdminPaymentRecord | null; callbacks: AdminPaymentCallback[]; callbackError: string; chainPayment: AdminBep20ChainPayment | null; chainPaymentError: string; overpaymentWallet: AdminBep20OverpaymentWallet; detailLoading: boolean; detailError: string; onClose: () => void; onRetry: () => void; onChanged: () => Promise<void>; copyText: (value: string | null | undefined) => void }) {
   const underpaymentCredited = detail?.exception_type === "underpayment_credited_to_wallet";
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" onClick={onClose}>
       <aside className="flex h-full w-full max-w-[760px] flex-col bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
         <div className="flex shrink-0 items-start justify-between border-b px-5 py-4">
-          <div><h2 className="text-lg font-semibold text-slate-950">支付详情</h2><p className="mt-1 text-xs text-slate-500">{selected.payment_no}</p></div>
+          <div><h2 className="text-lg font-semibold text-slate-950">{isRechargePage ? "充值详情" : "支付详情"}</h2><p className="mt-1 text-xs text-slate-500">{selected.payment_no}</p></div>
           <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -253,6 +255,7 @@ function PaymentDrawer({ selected, detail, callbacks, callbackError, chainPaymen
           {detailError ? <AdminErrorState description={detailError} onRetry={onRetry} /> : null}
           {!detailLoading && !detailError && detail ? (
             <div className="space-y-4">
+              {isRechargePage && selected.source === "account_recharges" ? <RechargeReviewPanel rechargeId={selected.id} onChanged={onChanged} embedded /> : null}
               {underpaymentCredited ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">欠额款已转入用户余额，原订单已取消</div> : null}
               <DetailGroup title="基础信息" rows={[["支付单号", detail.payment_no], ["业务类型", getBusinessTypeLabel(detail.business_type)], ["支付状态", underpaymentCredited ? "欠额已转余额" : getUnifiedPaymentStatusLabel(detail.status)], ["创建时间", formatDate(detail.created_at)], ["支付时间", formatDate(detail.paid_at)]]} />
               <DetailGroup title="关联业务" rows={[["业务单号", detail.business_no ?? "—"], ["用户邮箱", detail.user_email ?? "—"], ["用户备注", detail.user_note ?? "—"], ["管理员备注", detail.admin_note ?? "—"]]} />
@@ -331,7 +334,7 @@ function Bep20ChainPaymentPanel({ detail, chainPayment, chainPaymentError, overp
   return <section className="rounded-xl border"><div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><div className="text-sm font-semibold text-slate-950">USDT-BEP20 链上明细</div><div className="flex flex-wrap gap-2">{canManageChainPayment ? <><Button size="sm" variant="outline" onClick={() => runChainAction("recheck_bep20", "请输入重新核验原因：")} disabled={checking || chainPayment.status === "paid" || !chainPayment.submittedTxHash || chainPayment.manualReviewDecision === "rejected"}>{checking ? "处理中..." : "重新核验"}</Button>{chainPayment.status === "manual_review" && !manualReviewDecided ? <><Button size="sm" onClick={() => runChainAction("approve_late_payment", "请输入批准晚到账的原因：")} disabled={checking}>批准晚到账</Button><Button size="sm" variant="destructive" onClick={() => runChainAction("reject_late_payment", "请输入拒绝晚到账的原因：")} disabled={checking}>拒绝晚到账</Button></> : null}</> : null}{canCreditOverpayment ? <Button size="sm" onClick={creditOverpayment} disabled={checking}>{checking ? "处理中..." : "超额转入余额"}</Button> : null}</div></div><div className="divide-y">{rows.map(([label, value, onCopy]) => <div key={label} className="flex items-start justify-between gap-4 px-4 py-3 text-sm"><span className="shrink-0 text-slate-500">{label}</span><button type="button" disabled={!onCopy} onClick={onCopy} className={cn("min-w-0 text-right text-slate-900", onCopy && "hover:text-primary")}><span className="break-all">{value || "—"}</span></button></div>)}</div>{overpaymentWallet.disposition ? <div className="border-t bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><div className="font-medium">超额金额已转入站内余额</div><div className="mt-1">{overpaymentWallet.disposition.overpaidUsdt} USDT × {overpaymentWallet.disposition.exchangeRate} = {overpaymentWallet.disposition.creditedCny} CNY</div><div className="mt-1 text-xs">处理方式：{overpaymentWallet.disposition.settlementSource === "automatic_service" ? "自动原子结算" : "管理员人工入账"}</div><div className="mt-1 text-xs">处理时间：{formatDate(overpaymentWallet.disposition.processedAt)}</div></div> : null}{overpaymentWallet.authorized && overpaymentWallet.error ? <div className="border-t px-4 py-3 text-sm text-amber-700">{overpaymentWallet.error}</div> : null}{chainPayment.explorerUrl && chainPayment.submittedTxHash ? <div className="border-t px-4 py-3 text-sm"><a href={chainPayment.explorerUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">在 BscScan 查看交易</a></div> : null}{chainPaymentError ? <div className="border-t px-4 py-3 text-sm text-amber-700">{chainPaymentError}</div> : null}</section>;
 }
 
-function RechargeReviewOverlay({ rechargeId, onChanged }: { rechargeId: string; onChanged: () => Promise<void> }) {
+function RechargeReviewPanel({ rechargeId, onChanged, embedded = false }: { rechargeId: string; onChanged: () => Promise<void>; embedded?: boolean }) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -339,6 +342,7 @@ function RechargeReviewOverlay({ rechargeId, onChanged }: { rechargeId: string; 
   const [reconciliationRequired, setReconciliationRequired] = useState(false);
   const [lastDiagnosticRequestId, setLastDiagnosticRequestId] = useState("");
   const [actionOutcome, setActionOutcome] = useState("");
+  const actionInFlightRef = useRef(false);
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
@@ -354,9 +358,17 @@ function RechargeReviewOverlay({ rechargeId, onChanged }: { rechargeId: string; 
   }, [rechargeId]);
   useEffect(() => { void load(); }, [load]);
   async function action(name: string, needsReason = true) {
+    if (actionInFlightRef.current) return;
     const reason = needsReason ? window.prompt("请输入本次操作原因：")?.trim() ?? "" : "";
     if (needsReason && !reason) return;
-    if (name === "approve" && !window.confirm("确认真实款项已经到账，并执行原子余额入账？")) return;
+    const confirmations: Record<string, string> = {
+      approve: "确认真实款项已经到账，并执行原子余额入账？",
+      reject: "确认驳回该笔充值？请确保审核证据和原因已经核对。",
+      cancel: "确认取消该笔充值？取消后不能继续当前审核流程。",
+      retry_credit: "确认重新处理该笔充值入账？请先核对当前余额、流水和最近一次处理结果。",
+    };
+    if (confirmations[name] && !window.confirm(confirmations[name])) return;
+    actionInFlightRef.current = true;
     setActing(true);
     try {
       const response = await fetch(`/api/admin/recharges/${rechargeId}/actions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: name, reason }) });
@@ -368,7 +380,7 @@ function RechargeReviewOverlay({ rechargeId, onChanged }: { rechargeId: string; 
       });
       setActionOutcome(decision.outcome);
       if (decision.requestId) setLastDiagnosticRequestId(decision.requestId);
-      if (decision.reconciliationRequired) {
+      if (decision.reconciliationRequired || decision.kind === "manual_reconciliation") {
         setReconciliationRequired(true);
         toast.warning(`${decision.message} 禁止重复操作。`);
       } else if (decision.kind === "conflict") {
@@ -395,14 +407,14 @@ function RechargeReviewOverlay({ rechargeId, onChanged }: { rechargeId: string; 
       await load();
       await onChanged();
     }
-    finally { setActing(false); }
+    finally { actionInFlightRef.current = false; setActing(false); }
   }
   const recharge = data?.recharge;
   const status = String(recharge?.status ?? "");
   const parsedStatus = parseRechargeStatusStrict(status);
   const statusIsUnknown = Boolean(status) && parsedStatus === null;
   const writesDisabled = acting || reconciliationRequired || statusIsUnknown;
-  return <div className="fixed bottom-4 right-5 z-[60] max-h-[48vh] w-[min(640px,calc(100vw-2rem))] overflow-auto rounded-xl border bg-white p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between"><div><div className="font-semibold text-slate-950">充值审核</div><div className="text-xs text-slate-500">{recharge?.recharge_no ?? rechargeId}</div></div><Button size="sm" variant="ghost" onClick={() => void load()} disabled={loading}>刷新</Button></div>{reconciliationRequired ? <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><div className="font-semibold">处理结果需要人工核对，禁止重复操作。</div><div className="mt-1">已刷新最新记录；请核对充值状态、余额流水和账户余额。</div>{lastDiagnosticRequestId ? <div className="mt-1 font-mono text-xs">诊断编号：{lastDiagnosticRequestId}</div> : null}{actionOutcome ? <div className="mt-1 text-xs">结果：{actionOutcome}</div> : null}</div> : null}{statusIsUnknown ? <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">充值状态异常，写操作已禁用，请人工核对。</div> : null}{error ? <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div> : loading ? <div className="py-6 text-center text-sm text-slate-500">正在读取审核信息...</div> : <div className="space-y-3"><div className="grid grid-cols-2 gap-2 text-xs text-slate-600"><div>状态：{status || "—"}</div><div>历史充值：{data?.historyCount ?? 0} 笔</div><div>交易流水号：{recharge?.transaction_reference ?? "—"}</div><div>付款时间：{formatDate(recharge?.payment_time)}</div><div className="col-span-2">付款账号摘要：{recharge?.payer_account_summary ?? "—"}</div></div><div className="flex flex-wrap gap-2">{(data?.proofs ?? []).map((proof: any) => <Button key={proof.url} asChild size="sm" variant="outline"><a href={proof.url} target="_blank" rel="noreferrer">{proof.name}</a></Button>)}</div><div className="flex flex-wrap gap-2">{status === "submitted" ? <Button size="sm" disabled={writesDisabled} onClick={() => void action("start_review", false)}>开始审核</Button> : null}{status === "reviewing" ? <><Button size="sm" disabled={writesDisabled} onClick={() => void action("approve")}>审核通过并入账</Button><Button size="sm" variant="outline" disabled={writesDisabled} onClick={() => void action("request_more_proof")}>要求补充凭证</Button><Button size="sm" variant="destructive" disabled={writesDisabled} onClick={() => void action("reject")}>驳回</Button></> : null}{["approved", "failed"].includes(status) ? <Button size="sm" disabled={writesDisabled} onClick={() => void action("retry_credit")}>重新处理入账</Button> : null}{["pending", "waiting_payment", "submitted", "reviewing", "rejected", "failed"].includes(status) ? <Button size="sm" variant="outline" disabled={writesDisabled} onClick={() => void action("cancel")}>取消充值</Button> : null}</div></div>}</div>;
+  return <div className={cn(embedded ? "rounded-xl border bg-white p-4" : "fixed bottom-4 right-5 z-[60] max-h-[48vh] w-[min(640px,calc(100vw-2rem))] overflow-auto rounded-xl border bg-white p-4 shadow-2xl")}> <div className="mb-3 flex items-center justify-between"><div><div className="font-semibold text-slate-950">充值审核</div><div className="text-xs text-slate-500">{recharge?.recharge_no ?? rechargeId}</div></div><Button size="sm" variant="ghost" onClick={() => void load()} disabled={loading}>刷新</Button></div>{reconciliationRequired ? <div role="alert" className="mb-3 rounded-lg border-2 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950"><div className="font-semibold">处理结果需要人工核对，禁止重复操作。</div><div className="mt-1">已刷新最新记录；请核对充值状态、余额流水和账户余额。</div><div className="mt-1 font-mono text-xs">诊断编号：{lastDiagnosticRequestId || "未返回"}</div>{actionOutcome ? <div className="mt-1 text-xs">结果：{actionOutcome}</div> : null}</div> : null}{statusIsUnknown ? <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">充值状态异常，写操作已禁用，请人工核对。</div> : null}{error ? <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div> : loading ? <div className="py-6 text-center text-sm text-slate-500">正在读取审核信息...</div> : <div className="space-y-3"><div className="grid grid-cols-2 gap-2 text-xs text-slate-600"><div>状态：{status || "—"}</div><div>历史充值：{data?.historyCount ?? 0} 笔</div><div>交易流水号：{recharge?.transaction_reference ?? "—"}</div><div>付款时间：{formatDate(recharge?.payment_time)}</div><div className="col-span-2">付款账号摘要：{recharge?.payer_account_summary ?? "—"}</div></div><div className="flex flex-wrap gap-2">{(data?.proofs ?? []).map((proof: any) => <Button key={proof.url} asChild size="sm" variant="outline"><a href={proof.url} target="_blank" rel="noreferrer">{proof.name}</a></Button>)}</div><div className="flex flex-wrap gap-2">{status === "submitted" ? <Button size="sm" disabled={writesDisabled} onClick={() => void action("start_review", false)}>开始审核</Button> : null}{status === "reviewing" ? <><Button size="sm" disabled={writesDisabled} onClick={() => void action("approve")}>审核通过并入账</Button><Button size="sm" variant="outline" disabled={writesDisabled} onClick={() => void action("request_more_proof")}>要求补充凭证</Button><Button size="sm" variant="destructive" disabled={writesDisabled} onClick={() => void action("reject")}>驳回</Button></> : null}{["approved", "failed"].includes(status) ? <Button size="sm" disabled={writesDisabled} onClick={() => void action("retry_credit")}>重新处理入账</Button> : null}{["pending", "waiting_payment", "submitted", "reviewing", "rejected", "failed"].includes(status) ? <Button size="sm" variant="outline" disabled={writesDisabled} onClick={() => void action("cancel")}>取消充值</Button> : null}</div></div>}</div>;
 }
 
 function CallbackRecords({ callbacks, callbackError }: { callbacks: AdminPaymentCallback[]; callbackError: string }) {

@@ -12,6 +12,26 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const ACTIVE_REVIEW_STATUSES = new Set(["submitted", "reviewing", "approved", "failed"]);
+const COMPLETED_RECHARGE_STATUSES = new Set(["paid", "succeeded"]);
+
+function hasText(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function requiresRechargeAdminAttention(row: Record<string, unknown>) {
+  const status = String(row.status ?? "").trim().toLowerCase();
+  if (COMPLETED_RECHARGE_STATUSES.has(status)) return false;
+  if (ACTIVE_REVIEW_STATUSES.has(status)) return true;
+
+  const hasExceptionEvidence = hasText(row.exception_type) || hasText(row.error_summary);
+  if (["pending", "waiting_payment"].includes(status)) return hasExceptionEvidence;
+
+  const isManualFlow = String(row.review_mode ?? "").trim().toLowerCase() === "manual";
+  const isClosedWithoutAdminAction = ["rejected", "cancelled", "expired"].includes(status);
+  return hasExceptionEvidence || (isManualFlow && !isClosedWithoutAdminAction);
+}
+
 export async function GET(request: Request) {
   const admin = await getServerAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
@@ -29,11 +49,16 @@ export async function GET(request: Request) {
     sort: searchParams.get("sort") ?? "created_desc",
     rechargeOnly: true,
   };
+  const reviewOnly = searchParams.get("view") === "review";
 
   try {
-    const { data, error } = await admin.supabase.from("account_recharges").select(adminRechargeSelect).limit(1000);
+    const { data, error } = await admin.supabase.from("account_recharges").select(`${adminRechargeSelect},review_mode`).limit(1000);
     if (error) throw error;
-    const rows = ((data ?? []) as Record<string, unknown>[]).map(normalizeRechargeRow);
+    const sourceRows = (data ?? []) as Record<string, unknown>[];
+    const rows = (reviewOnly
+      ? sourceRows.filter(requiresRechargeAdminAttention)
+      : sourceRows
+    ).map(normalizeRechargeRow);
     const filtered = sortPaymentRecords(filterPaymentRecords(rows, filters), filters.sort);
     const from = (page - 1) * pageSize;
     return NextResponse.json({ payments: filtered.slice(from, from + pageSize), count: filtered.length });

@@ -175,6 +175,7 @@ test("recharge review uses exact CAS, durable intent and safe post-credit reconc
   const adapter = file("lib/recharges/review-adapter.mjs");
   const uiDecision = file("lib/recharges/review-ui-state.mjs");
   const adminPage = file("components/admin/payments/AdminPaymentRecordsPage.tsx");
+  const adminRechargeListRoute = file("app/api/admin/recharges/route.ts");
   const statusMachine = file("lib/recharges/status-machine.ts");
   const rechargeRoute = file("app/api/recharges/route.ts");
 
@@ -245,8 +246,32 @@ test("recharge review uses exact CAS, durable intent and safe post-credit reconc
   assert.match(actionRoute, /safeMessage/);
   assert.match(uiDecision, /manual_reconciliation/);
   assert.match(adminPage, /reconciliationRequired/);
-  assert.match(adminPage, /诊断编号：\{lastDiagnosticRequestId\}/);
+  assert.match(adminPage, /诊断编号：\{lastDiagnosticRequestId \|\| "未返回"\}/);
   assert.match(adminPage, /禁止重复操作/);
+  assert.match(adminPage, /全部充值/);
+  assert.match(adminPage, /人工审核/);
+  assert.match(adminPage, /isRechargePage && selected\.source === "account_recharges" \? <RechargeReviewPanel[\s\S]*?embedded/);
+  assert.match(adminPage, /!isRechargePage && selected\.source === "account_recharges" \? <RechargeReviewPanel/);
+  assert.match(adminPage, /embedded \? "rounded-xl border bg-white p-4"/);
+  assert.doesNotMatch(adminPage, /function RechargeReviewOverlay/);
+  assert.match(adminRechargeListRoute, /searchParams\.get\("view"\) === "review"/);
+  assert.match(adminRechargeListRoute, /ACTIVE_REVIEW_STATUSES = new Set\(\["submitted", "reviewing", "approved", "failed"\]\)/);
+  assert.match(adminRechargeListRoute, /COMPLETED_RECHARGE_STATUSES = new Set\(\["paid", "succeeded"\]\)/);
+  assert.match(adminRechargeListRoute, /hasText\(row\.exception_type\) \|\| hasText\(row\.error_summary\)/);
+  assert.match(adminRechargeListRoute, /\["pending", "waiting_payment"\]\.includes\(status\)\) return hasExceptionEvidence/);
+  assert.match(adminRechargeListRoute, /row\.review_mode[\s\S]*?=== "manual"/);
+  assert.match(adminRechargeListRoute, /isClosedWithoutAdminAction/);
+  assert.match(adminRechargeListRoute, /select\(`\$\{adminRechargeSelect\},review_mode`\)/);
+  assert.match(adminRechargeListRoute, /sourceRows\.filter\(requiresRechargeAdminAttention\)/);
+  assert.match(adminPage, /actionInFlightRef\.current/);
+  for (const action of ["approve", "reject", "cancel", "retry_credit"]) {
+    assert.match(adminPage, new RegExp(`${action}: ".+"`));
+  }
+  assert.match(adminPage, /if \(confirmations\[name\] && !window\.confirm\(confirmations\[name\]\)\) return/);
+  assert.match(adminPage, /needsReason \? window\.prompt/);
+  assert.match(adminPage, /decision\.reconciliationRequired \|\| decision\.kind === "manual_reconciliation"/);
+  assert.match(adminPage, /role="alert"/);
+  assert.match(adminPage, /诊断编号：\{lastDiagnosticRequestId \|\| "未返回"\}/);
   assert.doesNotMatch(
     actionRoute,
     /error instanceof Error \? error\.message/,
