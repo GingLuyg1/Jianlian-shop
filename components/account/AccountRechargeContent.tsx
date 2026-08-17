@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -70,6 +71,7 @@ type BalanceTransactionRecord = {
 };
 
 export default function AccountRechargeContent() {
+  const router = useRouter();
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
   const [selectedChannelCode, setSelectedChannelCode] = useState<PaymentChannelCode | null>(null);
   const [channelsLoading, setChannelsLoading] = useState(true);
@@ -252,14 +254,14 @@ export default function AccountRechargeContent() {
         | { error?: string; rechargeNo?: string }
         | null;
 
-      if (result?.rechargeNo) await loadRecords(1);
       if (!response.ok) throw new Error(result?.error ?? "充值下单失败，请稍后重试");
 
-      setSubmitMessage(
-        result?.rechargeNo
-          ? `充值单 ${result.rechargeNo} 已创建，等待支付渠道返回。`
-          : "充值单已创建，等待支付渠道返回。"
-      );
+      if (result?.rechargeNo) {
+        router.push(`/payment?recharge=${encodeURIComponent(result.rechargeNo)}`);
+        return;
+      }
+
+      setSubmitMessage("充值单已创建，等待支付渠道返回。");
     } catch (error) {
       setSubmitError(getClientErrorMessage(error));
     } finally {
@@ -279,7 +281,7 @@ export default function AccountRechargeContent() {
                 </p>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className={cn("mt-5 grid gap-3", paymentChannels.length >= 2 && "sm:grid-cols-2")}>
                 {channelsLoading ? (
                   Array.from({ length: 5 }).map((_, index) => (
                     <div key={index} className="h-[118px] animate-pulse rounded-xl border bg-slate-100" />

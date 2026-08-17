@@ -22,6 +22,7 @@ import {
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { getBep20TimingVisibility } from "@/lib/payments/bep20-presentation.mjs";
+import { rechargeStatusLabel, type RechargeRecord } from "@/lib/payments/recharge-utils";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/i18n/money";
 
@@ -425,9 +426,288 @@ function LocalAddressQr({ value }: { value: string }) {
 }
 
 export default function PaymentPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const rechargeNo = searchParams.get("recharge")?.trim() ?? "";
   const orderNo = searchParams.get("order") || searchParams.get("order_no") || "";
+  const paymentMode = rechargeNo ? "recharge" : "order";
+
+  return paymentMode === "recharge"
+    ? <RechargePaymentPage rechargeNo={rechargeNo} />
+    : <OrderPaymentPage orderNo={orderNo} />;
+}
+
+const RECHARGE_TERMINAL_STATUSES = new Set([
+  "succeeded",
+  "rejected",
+  "cancelled",
+  "expired",
+]);
+
+function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
+  const router = useRouter();
+  const [recharge, setRecharge] = useState<RechargeRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [txHash, setTxHash] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyMessage, setVerifyMessage] = useState("");
+  const [nowTick, setNowTick] = useState(0);
+  const pollTimer = useRef<number | null>(null);
+  const pollStartedAt = useRef(0);
+  const pollInFlight = useRef(false);
+  const statusRef = useRef("");
+  const balanceNotificationRechargeRef = useRef("");
+
+  const loadRecharge = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) {
+      setLoading(true);
+      setError("");
+    }
+    try {
+      const response = await fetch(`/api/recharges/${encodeURIComponent(rechargeNo)}`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as
+        | { data?: RechargeRecord; error?: string; requestId?: string }
+        | null;
+
+      if (response.status === 401) {
+        router.push(`/login?redirect=${encodeURIComponent(`/payment?recharge=${rechargeNo}`)}`);
+        return null;
+      }
+      if (!response.ok || !payload?.data) {
+        throw new Error(payload?.error ?? "充值单读取失败");
+      }
+
+      statusRef.current = String(payload.data.status);
+      setRecharge(payload.data);
+      return payload.data;
+    } catch (loadError) {
+      if (!options.silent) setError(getOrderErrorMessage(loadError, "充值单读取失败"));
+      return null;
+    } finally {
+      if (!options.silent) setLoading(false);
+    }
+  }, [rechargeNo, router]);
+
+  useEffect(() => {
+    let stopped = false;
+    pollStartedAt.current = Date.now();
+
+    const schedule = () => {
+      if (stopped || RECHARGE_TERMINAL_STATUSES.has(statusRef.current)) return;
+      if (pollTimer.current !== null) window.clearTimeout(pollTimer.current);
+      const elapsed = Date.now() - pollStartedAt.current;
+      const delay = document.hidden ? 30000 : elapsed < 120000 ? 4000 : 10000;
+      pollTimer.current = window.setTimeout(() => void tick(true), delay);
+    };
+    const tick = async (silent: boolean) => {
+      if (stopped || pollInFlight.current) return;
+      pollInFlight.current = true;
+      try {
+        const latest = await loadRecharge({ silent });
+        if (latest && RECHARGE_TERMINAL_STATUSES.has(String(latest.status))) return;
+      } finally {
+        pollInFlight.current = false;
+      }
+      schedule();
+    };
+    const handleVisibilityChange = () => {
+      if (stopped || RECHARGE_TERMINAL_STATUSES.has(statusRef.current)) return;
+      if (pollTimer.current !== null) window.clearTimeout(pollTimer.current);
+      if (document.hidden) schedule();
+      else void tick(true);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    void tick(false);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (pollTimer.current !== null) window.clearTimeout(pollTimer.current);
+    };
+  }, [loadRecharge]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const rechargeStatus = String(recharge?.status ?? "");
+  const terminal = RECHARGE_TERMINAL_STATUSES.has(rechargeStatus);
+  const succeeded = rechargeStatus === "succeeded";
+  const remainingSeconds = secondsLeft(recharge?.expiresAt) + nowTick * 0;
+  const canTransfer = ["pending", "waiting_payment"].includes(rechargeStatus) && remainingSeconds > 0;
+  const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
+
+  useEffect(() => {
+    if (!succeeded || balanceNotificationRechargeRef.current === rechargeNo) return;
+    balanceNotificationRechargeRef.current = rechargeNo;
+    notifyAccountBalanceUpdated();
+  }, [rechargeNo, succeeded]);
+
+  async function copyRechargeText(value: string) {
+    await navigator.clipboard.writeText(value);
+  }
+
+  async function verifyRechargeTxHash() {
+    if (!txHashValid || verifying || !canTransfer) return;
+    setVerifying(true);
+    setError("");
+    setVerifyMessage("");
+    try {
+      const response = await fetch(`/api/recharges/${encodeURIComponent(rechargeNo)}/bep20/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txHash: txHash.trim() }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; actualReceivedUsdt?: string; creditedCnyAmount?: string }
+        | null;
+      if (!response.ok) throw new Error(payload?.error ?? "链上交易核验失败");
+      setVerifyMessage("TxHash 已提交核验，请勿重复付款。页面会继续自动刷新充值状态。");
+      await loadRecharge({ silent: true });
+    } catch (verifyError) {
+      setError(getOrderErrorMessage(verifyError, "链上交易核验失败"));
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  return (
+    <PublicLayout>
+      <div className="mx-auto max-w-5xl space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">账户充值付款</h1>
+            <p className="mt-1 text-sm text-muted-foreground">请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。</p>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href="/products/account-recharge">返回账户充值</Link>
+          </Button>
+        </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        ) : null}
+
+        {loading ? (
+          <Card><CardContent className="p-6 text-sm text-muted-foreground">正在读取充值单...</CardContent></Card>
+        ) : !recharge ? (
+          <Card>
+            <CardContent className="space-y-4 p-6 text-center">
+              <div className="text-sm text-muted-foreground">充值单不存在或无权访问。</div>
+              <Button variant="outline" onClick={() => void loadRecharge()}>
+                <RefreshCw className="mr-2 h-4 w-4" />重新加载
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <ShieldCheck className="h-5 w-5 text-primary" />USDT-BEP20 付款信息
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {succeeded ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                    <div className="font-semibold">充值成功</div>
+                    <div className="mt-1">已入账 {recharge.creditedCnyAmount ?? recharge.requestedCnyAmount ?? "—"} CNY。</div>
+                  </div>
+                ) : terminal ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                    当前充值单已结束：{rechargeStatusLabel(recharge.status)}。请勿继续转账，如已付款请联系客服。
+                  </div>
+                ) : canTransfer ? (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                    普通充值由 Scanner 自动识别，无需填写 TxHash。请勿重复付款。
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    当前充值正在处理或等待人工复核，请勿重复付款。页面会继续自动刷新状态。
+                  </div>
+                )}
+
+                {canTransfer && recharge.paymentAddress ? (
+                  <div className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
+                    <div className="rounded-xl bg-slate-50 p-3 text-center">
+                      <LocalAddressQr value={recharge.paymentAddress} />
+                      <div className="mt-2 text-xs text-muted-foreground">本地生成，仅包含公开收款地址</div>
+                    </div>
+                    <div className="space-y-3 rounded-xl bg-slate-50 p-4 text-sm">
+                      <Info label="精确应付 USDT" value={recharge.expectedUsdtAmount ?? "—"} strong copyable onCopy={() => void copyRechargeText(recharge.expectedUsdtAmount ?? "")} />
+                      <Info label="收款地址" value={recharge.paymentAddress} copyable onCopy={() => void copyRechargeText(recharge.paymentAddress ?? "")} />
+                      <Info label="Token 合约" value={recharge.paymentTokenContract ?? "—"} copyable={Boolean(recharge.paymentTokenContract)} onCopy={() => void copyRechargeText(recharge.paymentTokenContract ?? "")} />
+                      <Info label="网络" value="BNB Smart Chain (BEP20)" />
+                      <Info label="支付截止时间" value={formatDate(recharge.expiresAt)} />
+                      <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-muted-foreground">
+                        <Clock3 className="h-4 w-4" />
+                        剩余 {Math.floor(remainingSeconds / 60)} 分 {remainingSeconds % 60} 秒
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {canTransfer ? (
+                  <div className="space-y-3 border-t pt-4">
+                    <div>
+                      <div className="text-sm font-medium">TxHash fallback（可选）</div>
+                      <p className="mt-1 text-xs text-muted-foreground">仅在自动识别延迟或客服要求时提交，正常充值无需填写。</p>
+                    </div>
+                    <input
+                      value={txHash}
+                      onChange={(event) => setTxHash(event.target.value)}
+                      placeholder="0x 开头的 32 字节交易哈希"
+                      className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-sm outline-none focus:border-primary"
+                    />
+                    {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
+                    {verifyMessage ? <div className="text-sm text-emerald-700">{verifyMessage}</div> : null}
+                    <Button type="button" onClick={() => void verifyRechargeTxHash()} disabled={!txHashValid || verifying}>
+                      {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      提交 TxHash 核验
+                    </Button>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card className="h-fit">
+              <CardHeader><CardTitle className="text-base">充值单摘要</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <Info label="充值单号" value={recharge.rechargeNo} copyable onCopy={() => void copyRechargeText(recharge.rechargeNo)} />
+                <Info label="申请充值" value={`${recharge.requestedCnyAmount ?? recharge.requestedAmount} CNY`} />
+                <Info label="精确应付" value={`${recharge.expectedUsdtAmount ?? "—"} USDT`} strong />
+                <Info label="结算汇率" value={recharge.lockedSettlementRate ? `1 USDT = ${recharge.lockedSettlementRate} CNY` : "—"} />
+                <Info label="实际到账" value={recharge.actualReceivedUsdt ? `${recharge.actualReceivedUsdt} USDT` : "—"} />
+                <Info label="最终入账" value={recharge.creditedCnyAmount ? `${recharge.creditedCnyAmount} CNY` : "—"} />
+                <Info label="创建时间" value={formatDate(recharge.createdAt)} />
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <span className="text-muted-foreground">充值状态</span>
+                  <Badge variant="outline">{rechargeStatusLabel(recharge.status)}</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3"><CardTitle className="text-base">链上充值须知</CardTitle></CardHeader>
+              <CardContent>
+                <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
+                  <li>仅支持 USDT 通过 BNB Smart Chain（BEP20）转账。</li>
+                  <li>请严格支付页面显示的精确 USDT 金额，不要自行四舍五入。</li>
+                  <li>请在截止时间前付款；金额不一致、晚到账或其他异常交易将进入人工复核。</li>
+                  <li>匹配成功后按申请的人民币金额入账。</li>
+                </ol>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </PublicLayout>
+  );
+}
+
+function OrderPaymentPage({ orderNo }: { orderNo: string }) {
+  const router = useRouter();
   const [order, setOrder] = useState<OrderRecord | null>(null);
   const [channels, setChannels] = useState<PaymentChannel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState("");
