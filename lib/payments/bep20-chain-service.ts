@@ -384,7 +384,7 @@ export async function verifyBep20TxHash(input: { orderNo: string; txHash: string
   const service = requiredServiceClient();
   const order = await loadOwnedOrder(service, input.orderNo, input.userId);
   assertUserOrderAcceptsTxHash(order);
-  const config = readBep20Config();
+  const config = readBep20ManualVerificationConfig();
   await assertConfiguredTokenDecimals(config);
   const txHash = normalizeTxHash(input.txHash);
   ensureOrderAllowsBep20(order);
@@ -392,7 +392,7 @@ export async function verifyBep20TxHash(input: { orderNo: string; txHash: string
 }
 
 export async function inspectAccountRechargeBep20Transfer(txHashValue: unknown): Promise<AccountRechargeBep20Evidence> {
-  const config = readBep20Config();
+  const config = readBep20ManualVerificationConfig();
   await assertConfiguredTokenDecimals(config);
   const txHash = normalizeTxHash(txHashValue);
   const receipt = await loadReceipt(config, txHash);
@@ -431,7 +431,7 @@ export async function inspectAccountRechargeBep20Transfer(txHashValue: unknown):
 
 export async function recheckAdminBep20ChainPaymentSession(sessionId: string, adminId?: string | null, reason?: string | null): Promise<Bep20VerifyResponse> {
   const service = requiredServiceClient();
-  const config = readBep20Config();
+  const config = readBep20ManualVerificationConfig();
   await assertConfiguredTokenDecimals(config);
   const { data, error } = await service
     .from("chain_payment_sessions")
@@ -458,7 +458,7 @@ export async function recheckAdminBep20ChainPaymentSession(sessionId: string, ad
 
 export async function approveLateBep20PaymentSession(sessionId: string, adminId: string, reason: string): Promise<Bep20VerifyResponse> {
   const service = requiredServiceClient();
-  const config = readBep20Config();
+  const config = readBep20ManualVerificationConfig();
   await assertConfiguredTokenDecimals(config);
   const session = await loadAdminChainSession(service, sessionId);
   if (!session.orders || !session.submitted_tx_hash) throw new Bep20PaymentError("CHAIN_SESSION_NOT_FOUND", "链上支付单或 TxHash 不存在。", 404);
@@ -1015,6 +1015,15 @@ function readBep20Config(): Bep20Config {
   }
 
   return { rpcUrl, chainId, tokenContract, tokenDecimals, receiveAddress, requiredConfirmations, expireMinutes, pricingMode, fixedRate, rateTtlSeconds, amountScale };
+}
+
+function readBep20ManualVerificationConfig(): Bep20Config {
+  const config = readBep20Config();
+  const rpcUrl = String(process.env.BSC_RECEIPT_RPC_URL || process.env.BSC_RPC_URL || "").trim();
+  if (!isHttpUrl(rpcUrl)) {
+    throw new Bep20PaymentError("BSC_RPC_NOT_CONFIGURED", "BSC RPC 尚未配置。", 503);
+  }
+  return { ...config, rpcUrl };
 }
 
 async function assertConfiguredTokenDecimals(config: Bep20Config) {
