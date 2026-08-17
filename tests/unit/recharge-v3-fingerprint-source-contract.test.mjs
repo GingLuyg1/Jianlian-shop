@@ -7,6 +7,8 @@ const createRoute = fs.readFileSync("app/api/recharges/route.ts", "utf8");
 const verifyRoute = fs.readFileSync("app/api/recharges/[rechargeNo]/bep20/verify/route.ts", "utf8");
 const ui = fs.readFileSync("components/account/AccountRechargeContent.tsx", "utf8");
 const paymentPage = fs.readFileSync("app/payment/page.tsx", "utf8");
+const bep20ChainService = fs.readFileSync("lib/payments/bep20-chain-service.ts", "utf8");
+const bep20RechargeScanner = fs.readFileSync("lib/recharges/bep20-recharge-scanner.ts", "utf8");
 
 test("V3 reserves a four-decimal fingerprint with a reuse quarantine", () => {
   assert.match(migration, /reserve_account_recharge_usdt_fingerprint_v3/);
@@ -30,6 +32,27 @@ test("manual TxHash fallback requires the exact fingerprint and respects expiry"
   assert.match(verifyRoute, /RECHARGE_PAYMENT_EXPIRED/);
   assert.match(verifyRoute, /compareRechargeDecimals\(evidence\.actualReceivedUsdt, expectedUsdtAmount\) !== 0/);
   assert.match(ui, /精确支付/);
+});
+
+test("manual BEP20 receipt inspection can use a dedicated RPC without changing scanner RPC", () => {
+  const manualConfig = bep20ChainService.slice(
+    bep20ChainService.indexOf("function readBep20ManualVerificationConfig"),
+    bep20ChainService.indexOf("async function assertConfiguredTokenDecimals"),
+  );
+  assert.match(manualConfig, /process\.env\.BSC_RECEIPT_RPC_URL \|\| process\.env\.BSC_RPC_URL/);
+  assert.match(manualConfig, /return \{ \.\.\.config, rpcUrl \}/);
+
+  const rechargeInspection = bep20ChainService.slice(
+    bep20ChainService.indexOf("export async function inspectAccountRechargeBep20Transfer"),
+    bep20ChainService.indexOf("export async function recheckAdminBep20ChainPaymentSession"),
+  );
+  assert.match(rechargeInspection, /const config = readBep20ManualVerificationConfig\(\)/);
+  assert.match(rechargeInspection, /assertConfiguredTokenDecimals\(config\)/);
+  assert.match(rechargeInspection, /loadReceipt\(config, txHash\)/);
+  assert.match(rechargeInspection, /findUsdtTransfer\(config, receipt, txHash\)/);
+
+  assert.match(bep20RechargeScanner, /process\.env\.BSC_RPC_URL/);
+  assert.doesNotMatch(bep20RechargeScanner, /BSC_RECEIPT_RPC_URL/);
 });
 
 test("account recharge stays scrollable and presents the minimal BEP20 flow", () => {
