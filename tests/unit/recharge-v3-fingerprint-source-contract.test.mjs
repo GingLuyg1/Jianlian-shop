@@ -30,3 +30,23 @@ test("manual TxHash fallback requires the exact fingerprint and respects expiry"
   assert.match(verifyRoute, /compareRechargeDecimals\(evidence\.actualReceivedUsdt, expectedUsdtAmount\) !== 0/);
   assert.match(ui, /精确支付/);
 });
+
+test("account recharge stays scrollable and presents the minimal BEP20 flow", () => {
+  assert.doesNotMatch(ui, /h-\[calc\(100dvh-87px\)\]/);
+  assert.doesNotMatch(ui, /contentClassName="[^"]*overflow-hidden/);
+  assert.match(ui, /账户充值/);
+  assert.match(ui, /使用 USDT-BEP20 充值人民币账户余额/);
+  assert.match(ui, /BNB Smart Chain/);
+  assert.match(ui, /今日结算汇率/);
+  assert.match(ui, /预计应付/);
+  assert.match(ui, /创建充值/);
+  assert.match(ui, /USDT-BEP20 付款信息/);
+  assert.match(ui, /链上自动识别，异常交易进入人工复核/);
+  assert.doesNotMatch(ui, /付款后人工审核|人工付款信息/);
+  assert.doesNotMatch(ui, /最终按链上实际到账 USDT 与本单锁定汇率折算人民币|少付或多付均按实收结算/);
+  assert.match(ui, /预计应付：[\s\S]*expectedUsdtAmount/);
+  assert.match(ui, /label="精确应付" value=\{`\$\{record\.expectedUsdtAmount\} USDT`\}/);
+  assert.match(ui, /if \(result\?\.rechargeNo\) await loadRecords\(1\)/);
+  assert.match(ui, /金额不一致、晚到账或其他异常交易将进入人工复核；匹配成功后按申请的人民币金额入账/);
+  assert.match(ui, /calculateExpectedUsdtAmount\(requestedCnyAmount, dailyRate\.settlementRate\)/);
+});
