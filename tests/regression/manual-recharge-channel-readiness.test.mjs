@@ -261,7 +261,7 @@ test("recharge review uses exact CAS, durable intent and safe post-credit reconc
   assert.match(adminRechargeListRoute, /\["pending", "waiting_payment"\]\.includes\(status\)\) return hasExceptionEvidence/);
   assert.match(adminRechargeListRoute, /row\.review_mode[\s\S]*?=== "manual"/);
   assert.match(adminRechargeListRoute, /isClosedWithoutAdminAction/);
-  assert.match(adminRechargeListRoute, /select\(`\$\{adminRechargeSelect\},review_mode`\)/);
+  assert.match(adminRechargeListRoute, /select\(adminRechargeSelect\)/);
   assert.match(adminRechargeListRoute, /sourceRows\.filter\(requiresRechargeAdminAttention\)/);
   assert.match(adminPage, /actionInFlightRef\.current/);
   for (const action of ["approve", "reject", "cancel", "retry_credit"]) {
@@ -298,4 +298,67 @@ test("recharge review uses exact CAS, durable intent and safe post-credit reconc
   );
   assert.ok(listChannelValidation >= 0);
   assert.ok(listChannelOr > listChannelValidation);
+});
+
+test("admin recharge V3 presentation keeps CNY and USDT evidence distinct", () => {
+  const types = file("lib/payments/admin-payment-types.ts");
+  const queries = file("lib/payments/admin-payment-queries.ts");
+  const adminPage = file("components/admin/payments/AdminPaymentRecordsPage.tsx");
+  const detailRoute = file("app/api/admin/recharges/[rechargeId]/route.ts");
+
+  for (const field of [
+    "requested_cny_amount",
+    "expected_usdt_amount",
+    "actual_received_usdt",
+    "credited_cny_amount",
+    "settlement_currency",
+    "review_mode",
+  ]) {
+    assert.match(types, new RegExp(`${field}\\?: string \\| null`));
+    assert.match(queries, new RegExp(`\\b${field}\\b`));
+  }
+
+  assert.match(queries, /requestedCnyAmount = decimalStringOrNull\(row\.requested_cny_amount\)/);
+  assert.match(queries, /expectedUsdtAmount = decimalStringOrNull\(row\.expected_usdt_amount\)/);
+  assert.match(queries, /actualReceivedUsdt = decimalStringOrNull\(row\.actual_received_usdt\)/);
+  assert.match(queries, /creditedCnyAmount = decimalStringOrNull\(row\.credited_cny_amount\)/);
+  assert.match(queries, /businessAmount = numberValue\(requestedCnyAmount \?\? row\.requested_amount \?\? row\.amount\)/);
+  assert.match(queries, /payableAmount = numberValue\(row\.payable_amount \?\? businessAmount \+ feeAmount\)/);
+  assert.match(queries, /receivedAmount = numberValue\(row\.credited_amount \?\? row\.received_amount\)/);
+
+  assert.match(adminPage, /formatStoredDecimal\(payment\.requested_cny_amount, "CNY"\)/);
+  assert.match(adminPage, /formatStoredDecimal\(payment\.expected_usdt_amount, "USDT"\)/);
+  assert.match(adminPage, /formatStoredDecimal\(payment\.actual_received_usdt, "USDT"\)/);
+  assert.match(adminPage, /formatStoredDecimal\(payment\.credited_cny_amount, "CNY"\)/);
+  assert.match(adminPage, /formatPaymentMoney\(payment\.business_amount, payment\.business_currency\)/);
+  assert.match(adminPage, /formatPaymentMoney\(payment\.payable_amount, payment\.payable_currency\)/);
+  assert.match(adminPage, /payment\.received_amount > 0[\s\S]*?formatPaymentMoney\(payment\.received_amount, payment\.received_currency\)/);
+  const v3Formatters = adminPage.slice(adminPage.indexOf("function isV3Recharge"), adminPage.indexOf("function formatDate"));
+  assert.doesNotMatch(v3Formatters, /expected_usdt_amount[\s\S]*?[*/+-]/);
+
+  for (const field of [
+    "requested_cny_amount",
+    "expected_usdt_amount",
+    "actual_received_usdt",
+    "credited_cny_amount",
+    "settlement_currency",
+    "locked_market_rate",
+    "locked_settlement_rate",
+    "rate_effective_date",
+    "expires_at",
+  ]) {
+    assert.match(detailRoute, new RegExp(`\\b${field}\\b`));
+  }
+
+  assert.match(adminPage, /events\.map\(\(event: any, index: number\)/);
+  for (const field of ["created_at", "actor_type", "action", "from_status", "to_status", "reason", "request_id"]) {
+    assert.match(adminPage, new RegExp(`event\\.${field}`));
+  }
+  assert.match(adminPage, /暂无审核记录/);
+  assert.doesNotMatch(adminPage, /event\.metadata/);
+  for (const field of ["review_mode", "review_reason", "exception_type", "error_summary"]) {
+    assert.match(adminPage, new RegExp(`recharge\\?\\.${field}`));
+  }
+  assert.match(adminPage, /decision\.reconciliationRequired \|\| decision\.kind === "manual_reconciliation"/);
+  assert.match(adminPage, /!isRechargePage[\s\S]*?全部支付[\s\S]*?异常支付[\s\S]*?欠额转余额[\s\S]*?对账记录/);
 });

@@ -66,6 +66,12 @@ export const adminRechargeSelect = `
   payable_amount,
   received_amount,
   credited_amount,
+  requested_cny_amount,
+  expected_usdt_amount,
+  actual_received_usdt,
+  credited_cny_amount,
+  settlement_currency,
+  review_mode,
   status,
   provider_trade_no,
   paid_at,
@@ -87,6 +93,12 @@ function numberValue(value: unknown) {
 
 function stringOrNull(value: unknown) {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function decimalStringOrNull(value: unknown) {
+  if (typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value.trim())) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return String(value);
+  return null;
 }
 
 export function normalizeOrderPaymentRow(row: AnyRow): AdminPaymentRecord {
@@ -133,7 +145,12 @@ export function normalizeOrderPaymentRow(row: AnyRow): AdminPaymentRecord {
 }
 
 export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
-  const businessAmount = numberValue(row.requested_amount ?? row.amount);
+  const requestedCnyAmount = decimalStringOrNull(row.requested_cny_amount);
+  const expectedUsdtAmount = decimalStringOrNull(row.expected_usdt_amount);
+  const actualReceivedUsdt = decimalStringOrNull(row.actual_received_usdt);
+  const creditedCnyAmount = decimalStringOrNull(row.credited_cny_amount);
+  const settlementCurrency = stringOrNull(row.settlement_currency);
+  const businessAmount = numberValue(requestedCnyAmount ?? row.requested_amount ?? row.amount);
   const businessCurrency = stringOrNull(row.currency);
   const feeAmount = numberValue(row.fee_amount);
   const payableAmount = numberValue(row.payable_amount ?? businessAmount + feeAmount);
@@ -169,6 +186,12 @@ export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
     created_at: String(row.created_at ?? ""),
     paid_at: stringOrNull(row.paid_at),
     updated_at: String(row.updated_at ?? row.created_at ?? ""),
+    requested_cny_amount: requestedCnyAmount,
+    expected_usdt_amount: expectedUsdtAmount,
+    actual_received_usdt: actualReceivedUsdt,
+    credited_cny_amount: creditedCnyAmount,
+    settlement_currency: settlementCurrency,
+    review_mode: stringOrNull(row.review_mode),
   };
 }
 

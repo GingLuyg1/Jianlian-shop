@@ -8,7 +8,7 @@ export async function GET(request: Request, { params }: { params: { rechargeId: 
   const admin = await getServerAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
   try {
-    const { data: recharge, error } = await admin.supabase.from("account_recharges").select("id,recharge_no,user_id,user_email,channel_code,channel_name,currency,network,amount,payable_amount,credited_amount,status,review_mode,customer_note,user_note,payment_time,payer_account_summary,transaction_reference,proof_paths,submitted_at,reviewing_at,approved_at,rejected_at,cancelled_at,completed_at,reviewed_at,reviewed_by,review_reason,exception_type,error_summary,created_at,updated_at").eq("id", params.rechargeId).maybeSingle();
+    const { data: recharge, error } = await admin.supabase.from("account_recharges").select("id,recharge_no,user_id,user_email,channel_code,channel_name,currency,network,amount,payable_amount,credited_amount,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,settlement_currency,locked_market_rate,locked_settlement_rate,rate_effective_date,expires_at,status,review_mode,customer_note,user_note,payment_time,payer_account_summary,transaction_reference,proof_paths,submitted_at,reviewing_at,approved_at,rejected_at,cancelled_at,completed_at,reviewed_at,reviewed_by,review_reason,exception_type,error_summary,created_at,updated_at").eq("id", params.rechargeId).maybeSingle();
     if (error) throw error;
     if (!recharge) return NextResponse.json({ error: "充值申请不存在。" }, { status: 404 });
     const [{ data: events }, { count: historyCount }] = await Promise.all([

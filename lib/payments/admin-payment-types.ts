@@ -71,6 +71,12 @@ export type AdminPaymentRecord = {
   created_at: string;
   paid_at: string | null;
   updated_at: string;
+  requested_cny_amount?: string | null;
+  expected_usdt_amount?: string | null;
+  actual_received_usdt?: string | null;
+  credited_cny_amount?: string | null;
+  settlement_currency?: string | null;
+  review_mode?: string | null;
 };
 
 export type AdminPaymentCallback = {

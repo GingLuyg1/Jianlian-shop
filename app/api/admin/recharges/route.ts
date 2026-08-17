@@ -52,7 +52,7 @@ export async function GET(request: Request) {
   const reviewOnly = searchParams.get("view") === "review";
 
   try {
-    const { data, error } = await admin.supabase.from("account_recharges").select(`${adminRechargeSelect},review_mode`).limit(1000);
+    const { data, error } = await admin.supabase.from("account_recharges").select(adminRechargeSelect).limit(1000);
     if (error) throw error;
     const sourceRows = (data ?? []) as Record<string, unknown>[];
     const rows = (reviewOnly
