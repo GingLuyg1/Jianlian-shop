@@ -9,7 +9,7 @@ import {
   parseInventoryFile,
   type InventoryContentType,
 } from "@/lib/inventory/import-service";
-import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { sanitizeMessage } from "@/lib/monitoring/logger";
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -33,6 +33,28 @@ function jsonError(message: string, status = 400) {
 
 function getSearchParam(request: Request, key: string) {
   return new URL(request.url).searchParams.get(key)?.trim() ?? "";
+}
+
+function getInventoryAuditError(error: unknown) {
+  const raw = error instanceof Error
+    ? error.message
+    : error && typeof error === "object"
+      ? (["code", "message", "details", "hint"] as const)
+          .flatMap((key) => {
+            const value = (error as Record<string, unknown>)[key];
+            return typeof value === "string" && value.trim() ? [`${key}=${value.trim()}`] : [];
+          })
+          .join("; ")
+      : typeof error === "string"
+        ? error
+        : "Unknown inventory error";
+
+  return sanitizeMessage(raw)
+    .replace(
+      /((?:authorization|cookie|password|api[_-]?key|token|secret|credential)\s*[:=]\s*)[^\s;,]+/gi,
+      "$1[redacted]",
+    )
+    .slice(0, 600);
 }
 
 export async function GET(request: Request) {
@@ -81,7 +103,7 @@ export async function GET(request: Request) {
 
     if (mode === "items") {
       const productId = getSearchParam(request, "productId");
-      const search = getSearchParam(request, "search");
+      const batchNo = getSearchParam(request, "batchNo");
       const rawStatus = getSearchParam(request, "status") || "all";
       const status = INVENTORY_STATUSES.has(rawStatus) ? rawStatus : "all";
       const page = Number(getSearchParam(request, "page") || 1);
@@ -91,8 +113,8 @@ export async function GET(request: Request) {
 
       const { data, error } = await admin.supabase.rpc("admin_list_digital_inventory_items", {
         p_product_id: productId,
+        p_batch_no: batchNo || null,
         p_status: status,
-        p_search: search || null,
         p_page: Number.isFinite(page) ? page : 1,
         p_page_size: Number.isFinite(pageSize) ? pageSize : 20,
       });
@@ -117,13 +139,13 @@ export async function GET(request: Request) {
     if (error) throw error;
     return NextResponse.json({ data: data ?? [] });
   } catch (error) {
-    const message = getOrderErrorMessage(error, "库存数据加载失败");
+    const message = "库存数据加载失败";
     await writeAdminAuditLog({
       action: "view_inventory",
       module: "inventory",
       targetType: "digital_inventory",
       result: "failed",
-      errorMessage: message,
+      errorMessage: getInventoryAuditError(error),
     });
     return jsonError(message, 500);
   }
@@ -348,13 +370,13 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json({ data });
   } catch (error) {
-    const message = getOrderErrorMessage(error, "库存状态更新失败");
+    const message = "库存状态更新失败";
     await writeAdminAuditLog({
       action: "update_inventory",
       module: "inventory",
       targetType: "digital_inventory",
       result: "failed",
-      errorMessage: message,
+      errorMessage: getInventoryAuditError(error),
     });
     return jsonError(message, 500);
   }

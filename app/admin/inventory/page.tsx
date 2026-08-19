@@ -62,14 +62,16 @@ type InventoryBatch = {
 type InventoryItem = {
   id: string;
   product_id: string;
-  batch_id?: string | null;
-  batch_no?: string | null;
-  content_type: string;
+  batch_no: string | null;
   masked_content: string;
   status: string;
-  order_no?: string | null;
+  order_id: string | null;
+  remark: string | null;
+  reserved_at: string | null;
+  delivered_at: string | null;
+  expires_at: string | null;
   created_at: string;
-  delivered_at?: string | null;
+  updated_at: string;
   total_rows: number;
 };
 
@@ -239,10 +241,10 @@ export default function AdminInventoryPage() {
     setItemsLoading(true);
     setItemRows([]);
     try {
-      const params = new URLSearchParams({ mode: "items", productId: row.product_id, status: itemStatus, page: "1", pageSize: "50" });
+      const params = new URLSearchParams({ mode: "items", productId: row.product_id, batchNo: row.batch_no, status: itemStatus, page: "1", pageSize: "50" });
       const response = await fetch(`/api/admin/inventory?${params.toString()}`, { cache: "no-store" });
       const payload = await readJson<{ data: InventoryItem[] }>(response, "库存明细加载失败");
-      setItemRows((payload.data ?? []).filter((item) => item.batch_no === row.batch_no));
+      setItemRows(payload.data ?? []);
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : "库存明细加载失败");
     } finally {
@@ -558,7 +560,14 @@ export default function AdminInventoryPage() {
                   {Object.entries(STATUS_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {selectedProduct ? <Button variant="outline" onClick={() => void openProductItems(selectedProduct)}>重新加载</Button> : null}
+              {selectedProduct ? (
+                <Button
+                  variant="outline"
+                  onClick={() => void (selectedBatch ? openBatchItems(selectedBatch) : openProductItems(selectedProduct))}
+                >
+                  重新加载
+                </Button>
+              ) : null}
             </div>
             <div className="rounded-xl border">
               {itemsLoading ? <div className="p-4"><AdminTableSkeleton rows={8} /></div> : (
@@ -580,7 +589,7 @@ export default function AdminInventoryPage() {
                         <TableCell className="font-mono text-xs">{item.masked_content}</TableCell>
                         <TableCell><InventoryStatusBadge status={item.status} /></TableCell>
                         <TableCell>{item.batch_no ?? "—"}</TableCell>
-                        <TableCell>{item.order_no ?? "—"}</TableCell>
+                        <TableCell>{item.order_id ?? "—"}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             {item.status === "available" ? (
