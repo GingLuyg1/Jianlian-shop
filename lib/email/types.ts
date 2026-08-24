@@ -133,6 +133,9 @@ export type EmailDeliveryJobRecord = {
   provider_message_id: string | null;
   last_error_code: string | null;
   last_error_message: string | null;
+  locked_at: string | null;
+  locked_by: string | null;
+  last_attempt_at: string | null;
   created_at: string;
   updated_at: string | null;
   sent_at: string | null;

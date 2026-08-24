@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { queueRechargeSuccessEmailBestEffort } from "@/lib/email/recharge-success";
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const RESULT_KINDS = new Set([
@@ -211,6 +212,9 @@ export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } =
       else if (match.result === "terminal_recharge") counters.terminal += 1;
       if (match.credited) counters.credited += 1;
       if (match.alreadyCredited) counters.alreadyCredited += 1;
+      if ((match.credited || match.alreadyCredited) && match.rechargeId) {
+        await queueRechargeSuccessEmailBestEffort(match.rechargeId, "bep20_scanner").catch(() => undefined);
+      }
     }
 
     if (!options.dryRun) {
@@ -415,6 +419,10 @@ function parseMatchResult(value: unknown) {
     throw new RechargeBep20ScannerError("RECHARGE_SCANNER_CREDIT_RESULT_INVALID", "充值自动入账返回格式无效");
   }
   const creditEligible = result === "matched" || result === "already_matched";
+  const rechargeId = typeof record.rechargeId === "string" ? record.rechargeId.trim() : "";
+  if (creditEligible && !rechargeId) {
+    throw new RechargeBep20ScannerError("RECHARGE_SCANNER_CREDIT_RESULT_INVALID", "充值自动入账结果缺少充值 ID");
+  }
   if (
     (creditEligible && record.credited === record.alreadyCredited)
     || (!creditEligible && (record.credited || record.alreadyCredited))
@@ -425,6 +433,7 @@ function parseMatchResult(value: unknown) {
     result,
     credited: record.credited,
     alreadyCredited: record.alreadyCredited,
+    rechargeId: rechargeId || null,
   };
 }
 

@@ -17,6 +17,7 @@ import {
 import { executeRechargeWriteCas } from "@/lib/recharges/review-adapter.mjs";
 import { parseRechargeStatusStrict } from "@/lib/recharges/status-machine";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { queueRechargeSuccessEmailBestEffort } from "@/lib/email/recharge-success";
 
 export type RechargeReviewAction =
   | "start_review"
@@ -427,10 +428,11 @@ async function updateRechargeExact(
   };
 }
 
-function completedResult(
+async function completedResult(
   recharge: RechargeReviewRow,
   requestId: string,
-): RechargeReviewResult {
+): Promise<RechargeReviewResult> {
+  await queueRechargeSuccessEmailBestEffort(recharge.id, "recharge_review").catch(() => undefined);
   return {
     recharge,
     code: "RECHARGE_REVIEW_COMPLETED",
