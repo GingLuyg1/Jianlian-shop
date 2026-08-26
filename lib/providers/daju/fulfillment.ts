@@ -85,11 +85,12 @@ export function createSupabaseDajuFulfillmentStore(service: SupabaseClient): Daj
       if (!candidate.binding || candidate.bindingInvalid) {
         throw new Error("SUPPLIER_BINDING_REQUIRES_MANUAL_REVIEW");
       }
-      const { data, error } = await service.rpc("claim_daju_supplier_fulfillment", {
+      const { data, error } = await service.rpc("claim_supplier_fulfillment", {
+        p_supplier: "daju",
         p_order_id: candidate.orderId,
         p_order_item_id: candidate.orderItemId,
         p_request_id: requestId,
-        p_supplier_product_id: candidate.binding.productId,
+        p_supplier_product_id: String(candidate.binding.productId),
         p_supplier_sku: candidate.binding.sku,
         p_trigger_source: triggerSource,
       });
@@ -99,7 +100,8 @@ export function createSupabaseDajuFulfillmentStore(service: SupabaseClient): Daj
       return claim;
     },
     async recordOutcome(outcome) {
-      const { error } = await service.rpc("record_daju_supplier_fulfillment_outcome", {
+      const { error } = await service.rpc("record_supplier_fulfillment_outcome", {
+        p_supplier: "daju",
         p_order_id: outcome.orderId,
         p_order_item_id: outcome.orderItemId,
         p_request_id: outcome.requestId,
