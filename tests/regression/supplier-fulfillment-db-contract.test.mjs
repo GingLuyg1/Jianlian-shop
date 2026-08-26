@@ -27,4 +27,7 @@ test("generic supplier database contract preserves immutable routing and Daju co
   assert.ok(sql.includes("grant execute on function public.reserve_local_inventory_for_supplier_order(uuid,text) to service_role;"));
   assert.ok(sql.includes("DAJU_FULFILLMENT_PRODUCT_ID_COMPAT_GUARD"));
   assert.ok(sql.includes("p_supplier_product_id between 1 and 9223372036854775807"));
+  assert.ok(sql.includes("v_old text := $old$"), "production Daju local-priority baseline must be explicit");
+  assert.ok(sql.includes("v_new text := $new$"), "generic supplier local-priority target must be explicit");
+  assert.ok(sql.includes("SUPPLIER_LOCAL_PRIORITY_DELIVERY_CONTRACT_DRIFT"));
 });

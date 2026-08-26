@@ -510,9 +510,33 @@ declare
   v_definition text;
   v_patched text;
   v_old text := $old$and public.normalize_order_item_delivery_type(delivery_type) = 'auto_delivery'
-      and not (
-        coalesce(order_items.product_snapshot->'supplier_binding'->>'fulfillment_source', '') = 'supplier'
-        and coalesce(order_items.product_snapshot->'supplier_binding'->>'supplier', '') = 'daju'
+      and (
+        not (
+          coalesce(order_items.product_snapshot->'supplier_binding'->>'fulfillment_source', '') = 'supplier'
+          and coalesce(order_items.product_snapshot->'supplier_binding'->>'supplier', '') = 'daju'
+        )
+        or (
+          not exists (
+            select 1 from public.supplier_fulfillment_requests as local_sfr
+            where local_sfr.order_item_id = order_items.id
+          )
+          and (
+            select count(*)::integer
+            from public.digital_inventory as local_di
+            where local_di.product_id = order_items.product_id
+              and ((order_items.sku_id is null and local_di.sku_id is null) or local_di.sku_id = order_items.sku_id)
+              and local_di.status = 'reserved'
+              and coalesce(local_di.reserved_order_id, local_di.order_id) = order_items.order_id
+              and local_di.reserved_order_item_id = order_items.id
+          ) >= greatest(
+            coalesce(order_items.quantity, 1) - (
+              select count(*)::integer from public.order_deliveries as local_od
+              where local_od.order_item_id = order_items.id
+                and local_od.delivery_status = 'delivered'
+            ),
+            0
+          )
+        )
       )$old$;
   v_new text := $new$and public.normalize_order_item_delivery_type(delivery_type) = 'auto_delivery'
       and (
