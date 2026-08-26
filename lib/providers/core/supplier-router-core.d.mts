@@ -13,3 +13,8 @@ export function addSupplierSummary(
   target: SupplierFulfillmentSummary,
   source: SupplierFulfillmentSummary,
 ): SupplierFulfillmentSummary;
+
+export function executeSupplierHandlers<THandler>(
+  handlers: THandler[],
+  invoke: (handler: THandler) => Promise<SupplierFulfillmentSummary> | SupplierFulfillmentSummary,
+): Promise<SupplierFulfillmentSummary>;

@@ -2,10 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fulfillDajuOrderWithSupabase } from "../daju/fulfillment";
 import {
-  addSupplierSummary,
   collectFrozenSupplierCodes,
+  executeSupplierHandlers,
   resolveSupplierHandlers,
-  zeroSupplierSummary,
 } from "./supplier-router-core.mjs";
 import type { SupplierFulfillmentSummary } from "./types";
 
@@ -34,11 +33,7 @@ export async function fulfillSupplierOrderWithSupabase(
 
   const supplierCodes = collectFrozenSupplierCodes(data ?? []);
   const handlers = resolveSupplierHandlers(supplierCodes, SUPPLIER_REGISTRY);
-  const summary = zeroSupplierSummary();
-
-  for (const handler of handlers) {
-    addSupplierSummary(summary, await handler(service, orderId, triggerSource));
-  }
-
-  return summary;
+  return executeSupplierHandlers(handlers, (handler) =>
+    handler(service, orderId, triggerSource),
+  );
 }
