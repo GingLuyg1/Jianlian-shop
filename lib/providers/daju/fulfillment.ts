@@ -12,54 +12,21 @@ import {
 } from "./mapper.mjs";
 import { createDajuRequestId } from "./protocol.mjs";
 import type { DajuClient } from "./types";
+import type {
+  SupplierClaim,
+  SupplierFulfillmentCandidate,
+  SupplierFulfillmentStore,
+  SupplierFulfillmentSummary,
+  SupplierOutcomeInput,
+} from "../core/types";
 
 type DajuBinding = NonNullable<ReturnType<typeof parseDajuProductBinding>>;
 
-export type DajuFulfillmentCandidate = {
-  orderId: string;
-  orderItemId: string;
-  quantity: number;
-  binding: DajuBinding | null;
-  bindingInvalid: boolean;
-  orderFields: Record<string, unknown>;
-};
-
-export type DajuClaim = {
-  action: "PURCHASE" | "QUERY" | "NONE";
-  requestId: string;
-  attemptToken: string | null;
-  status: string;
-  orderCode: string | null;
-};
-
-export type DajuOutcomeInput = {
-  orderId: string;
-  orderItemId: string;
-  requestId: string;
-  attemptToken: string | null;
-  state: "PENDING" | "FULFILLED" | "FAILED" | "UNCERTAIN" | "RECONCILIATION" | "NEEDS_INPUT" | "FAILED_VALIDATION";
-  retryable: boolean;
-  code: string | null;
-  orderCode: string | null;
-  deliveredContent: string | null;
-  supplierUnitPrice: string | null;
-  supplierTotalPrice: string | null;
-  triggerSource: string;
-};
-
-export type DajuFulfillmentStore = {
-  loadCandidates(orderId: string): Promise<DajuFulfillmentCandidate[]>;
-  claim(candidate: DajuFulfillmentCandidate, requestId: string, triggerSource: string): Promise<DajuClaim>;
-  recordOutcome(input: DajuOutcomeInput): Promise<void>;
-};
-
-export type DajuFulfillmentSummary = {
-  handled: number;
-  fulfilled: number;
-  failed: number;
-  uncertain: number;
-  needsInput: number;
-};
+export type DajuFulfillmentCandidate = SupplierFulfillmentCandidate<DajuBinding>;
+export type DajuClaim = SupplierClaim;
+export type DajuOutcomeInput = SupplierOutcomeInput;
+export type DajuFulfillmentStore = SupplierFulfillmentStore<DajuBinding>;
+export type DajuFulfillmentSummary = SupplierFulfillmentSummary;
 
 function parseClaim(value: unknown): DajuClaim {
   const row = Array.isArray(value) ? value[0] : value;
