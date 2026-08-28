@@ -42,15 +42,19 @@ export async function GET(request: Request) {
   const client = service ?? admin.supabase;
 
   try {
-    let listQuery = baseQuery(client)
+    let listQuery = client
+      .from("system_error_events")
       .select("id,level,title,message,route,request_id,error_code,occurrences,last_seen_at,metadata", { count: "exact" })
+      .eq("category", "performance")
       .order("last_seen_at", { ascending: false })
       .range(from, to);
 
     listQuery = applyFilters(listQuery, { route, operation, level, startAt, endAt });
 
-    let summaryQuery = baseQuery(client)
+    let summaryQuery = client
+      .from("system_error_events")
       .select("id,level,title,message,route,request_id,error_code,occurrences,last_seen_at,metadata")
+      .eq("category", "performance")
       .order("last_seen_at", { ascending: false })
       .limit(SUMMARY_LIMIT);
 
@@ -96,10 +100,6 @@ export async function GET(request: Request) {
       { status: isMissingSchema(error) ? 503 : 500, headers: { "Cache-Control": "no-store" } }
     );
   }
-}
-
-function baseQuery(client: any) {
-  return client.from("system_error_events").eq("category", "performance");
 }
 
 function applyFilters(query: any, filters: { route: string; operation: string; level: string; startAt: string; endAt: string }) {
@@ -188,4 +188,3 @@ function isMissingSchema(error: unknown) {
   const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
   return /system_error_events|schema cache|Could not find the table/i.test(message) || ["42P01", "42703", "PGRST205"].includes(code);
 }
-
