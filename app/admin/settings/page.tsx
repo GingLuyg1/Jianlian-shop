@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import PaymentSettingsPanel from "@/components/admin/payments/PaymentSettingsPanel";
 import RechargeRateSettings from "@/components/admin/payments/RechargeRateSettings";
 import { Badge } from "@/components/ui/badge";
@@ -122,7 +124,9 @@ export default function AdminSettingsPage() {
       setSettings(nextSettings);
       setDraft(nextSettings);
       setLogs(payload?.logs ?? []);
-      toast.success(payload?.message ?? "系统设置已保存");
+      const successMessage = payload?.message ?? "系统设置已保存";
+      setMessage(successMessage);
+      toast.success(successMessage);
     } catch {
       setMessage("保存系统设置失败，请稍后重试。");
       toast.error("保存系统设置失败，请稍后重试。");
@@ -132,7 +136,11 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <AdminPageShell title="系统设置" description="统一管理网站公开配置、订单规则、公告、协议和维护模式。">
+    <AdminPageShell
+      title="系统设置"
+      description="统一管理网站公开配置、订单规则、公告、协议和维护模式。"
+      actions={<Badge variant={dirty ? "secondary" : "outline"}>{saving ? "保存中" : dirty ? "有未保存修改" : "已保存"}</Badge>}
+    >
       {message ? <div className="mb-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{message}</div> : null}
       <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
@@ -158,7 +166,7 @@ export default function AdminSettingsPage() {
             <div className="text-base font-semibold text-slate-950">{groups.find((group) => group.id === activeGroup)?.label}</div>
           </div>
           <div ref={contentRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            {loading ? <EmptyPanel>正在读取系统设置...</EmptyPanel> : null}
+            {loading ? <AdminTableSkeleton rows={6} className="p-0" /> : null}
             {!loading && activeGroup === "basic" ? <BasicSettings settings={draft} saving={saving} onChange={updateDraft} onSave={saveSettings} /> : null}
             {!loading && activeGroup === "order" ? <OrderSettings settings={draft} saving={saving} onChange={updateDraft} onSave={saveSettings} /> : null}
             {!loading && activeGroup === "contact" ? <ContactSettings settings={draft} saving={saving} onChange={updateDraft} onSave={saveSettings} /> : null}
@@ -220,6 +228,10 @@ function ContactSettings({ settings, saving, onChange, onSave }: SettingsSection
 function MaintenanceSettings({ settings, saving, onChange, onSave }: SettingsSectionProps) {
   return (
     <Section>
+      <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+        <div><div className="text-sm font-semibold">高影响设置</div><p className="mt-1 text-xs leading-5">启用维护模式会阻止普通用户访问前台页面。保存前请确认运营公告和恢复安排。</p></div>
+      </div>
       <EditableSwitch title="开启维护模式" description="开启后普通前台页面显示维护页，后台、健康检查和支付回调保持可用。" checked={settings.maintenance_enabled} onCheckedChange={(checked) => onChange({ maintenance_enabled: checked, site_status: checked ? "maintenance" : "open" })} />
       <Field label="维护提示"><Textarea rows={4} value={settings.maintenance_message} onChange={(e) => onChange({ maintenance_message: e.target.value })} /></Field>
       <StatusRow name="服务端拦截" status="middleware 控制" />
@@ -277,10 +289,6 @@ function Section({ children }: { children: ReactNode }) {
   return <div className="w-full max-w-none space-y-4">{children}</div>;
 }
 
-function EmptyPanel({ children }: { children: ReactNode }) {
-  return <div className="flex h-full min-h-[360px] flex-col justify-center rounded-xl border border-dashed bg-slate-50/70 p-8 text-center text-sm text-slate-500">{children}</div>;
-}
-
 function Field({ children, label }: { children: ReactNode; label: string }) {
   return <label className="block space-y-2"><span className="text-xs font-medium text-slate-500">{label}</span>{children}</label>;
 }
@@ -298,5 +306,5 @@ function StatusRow({ name, status }: { name: string; status: string }) {
 }
 
 function SaveButton({ onClick, saving }: { saving: boolean; onClick: () => void }) {
-  return <Button variant="outline" disabled={saving} onClick={onClick}>{saving ? "保存中..." : "保存设置"}</Button>;
+  return <Button disabled={saving} onClick={onClick}>{saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />保存中...</> : "保存设置"}</Button>;
 }
