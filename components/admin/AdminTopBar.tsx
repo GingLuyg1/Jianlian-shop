@@ -1,27 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  AlertTriangle,
-  Bell,
-  ClipboardCheck,
-  ClipboardList,
-  FileLock2,
-  ImageIcon,
-  LayoutDashboard,
-  Package,
-  PackageCheck,
-  RotateCcw,
-  ScrollText,
-  Settings,
-  ShieldCheck,
-  User,
-  Users,
-  WalletCards,
-} from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Bell, ChevronDown, LayoutDashboard, User } from "lucide-react";
 
 import AdminGlobalSearch from "./AdminGlobalSearch";
+import {
+  adminNavigationItems,
+  isAdminNavigationGroup,
+  isAdminNavigationGroupActive,
+  isAdminNavigationLinkActive,
+} from "./admin-navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,33 +22,18 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-const adminMenuItems = [
-  { label: "控制台", href: "/admin", icon: LayoutDashboard },
-  { label: "商品列表", href: "/admin/products", icon: Package },
-  { label: "分类管理", href: "/admin/categories", icon: Package },
-  { label: "数字库存", href: "/admin/inventory", icon: PackageCheck },
-  { label: "媒体资源", href: "/admin/media", icon: ImageIcon },
-  { label: "支付管理", href: "/admin/payments", icon: WalletCards },
-  { label: "充值管理", href: "/admin/recharges", icon: WalletCards },
-  { label: "订单管理", href: "/admin/orders", icon: ClipboardList },
-  { label: "售后退款", href: "/admin/refunds", icon: RotateCcw },
-  { label: "用户管理", href: "/admin/users", icon: Users },
-  { label: "隐私请求", href: "/admin/privacy-requests", icon: FileLock2 },
-  { label: "系统设置", href: "/admin/settings", icon: Settings },
-  { label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
-  { label: "项目验收", href: "/admin/system/project-status", icon: ClipboardCheck },
-  { label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
-  { label: "生产封板", href: "/admin/system/production-readiness", icon: ShieldCheck },
-  { label: "操作日志", href: "/admin/audit-logs", icon: ScrollText },
-];
-
 export default function AdminTopBar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const productNavigation = adminNavigationItems.find(isAdminNavigationGroup);
+  const isProductRoute = productNavigation ? isAdminNavigationGroupActive(pathname, productNavigation) : false;
+  const [productsOpen, setProductsOpen] = useState(isProductRoute);
 
-  const isActive = (href: string) => {
-    if (href === "/admin") return pathname === "/admin";
-    return pathname.startsWith(href);
-  };
+  useEffect(() => {
+    if (isProductRoute) {
+      setProductsOpen(true);
+    }
+  }, [isProductRoute]);
 
   return (
     <div className="sticky top-0 z-30 flex h-[var(--admin-header-height)] shrink-0 items-center border-b border-border bg-white px-4 lg:px-5">
@@ -87,9 +62,50 @@ export default function AdminTopBar() {
               </div>
               <nav className="max-h-[calc(100dvh-82px)] overflow-y-auto px-3 py-3">
                 <ul className="space-y-1">
-                  {adminMenuItems.map((item) => {
+                  {adminNavigationItems.map((item) => {
                     const Icon = item.icon;
-                    const active = isActive(item.href);
+                    if (item.type === "group") {
+                      const active = isAdminNavigationGroupActive(pathname, item);
+                      return (
+                        <li key={item.label}>
+                          <button
+                            type="button"
+                            onClick={() => setProductsOpen((value) => !value)}
+                            className={cn(
+                              "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                              active
+                                ? "bg-slate-100 font-medium text-slate-900"
+                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            )}
+                          >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span className="flex-1">{item.label}</span>
+                            <ChevronDown className={cn("h-4 w-4 transition-transform", productsOpen && "rotate-180")} />
+                          </button>
+                          {productsOpen && (
+                            <ul className="mt-1 space-y-1 pl-7">
+                              {item.children.map((child) => (
+                                <li key={child.href}>
+                                  <Link
+                                    href={child.href}
+                                    className={cn(
+                                      "block rounded-md px-3 py-2 text-sm transition-colors",
+                                      isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view"))
+                                        ? "bg-slate-800 font-medium text-white"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    )}
+                                  >
+                                    {child.label}
+                                  </Link>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    }
+
+                    const active = isAdminNavigationLinkActive(pathname, item.href, searchParams.get("view"));
                     return (
                       <li key={item.href}>
                         <Link
