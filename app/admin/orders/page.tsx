@@ -6,6 +6,10 @@ import type { ReactNode } from "react";
 import { AlertCircle, ChevronLeft, ChevronRight, Eye, Loader2, RefreshCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminErrorState from "@/components/admin/AdminErrorState";
+import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +102,12 @@ export default function AdminOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
+  const hasFilters = Boolean(
+    search.trim() ||
+    status !== ALL_VALUE ||
+    paymentStatus !== ALL_VALUE ||
+    deliveryType !== ALL_VALUE
+  );
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -144,17 +154,17 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 lg:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-950">订单管理</h1>
-          <p className="mt-1 text-sm text-slate-500">查看真实订单、关联业务和处理时间线。</p>
-        </div>
+    <AdminPageShell
+      title="订单管理"
+      description="查看真实订单、关联业务和处理时间线。"
+      actions={(
         <Button variant="outline" size="sm" onClick={() => void loadOrders()} disabled={loading}>
           <RefreshCcw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
           重新加载
         </Button>
-      </div>
+      )}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
 
       <Card className="shrink-0">
         <CardContent className="p-4">
@@ -216,9 +226,14 @@ export default function AdminOrdersPage() {
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
           {error ? (
-            <div className="m-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-          ) : null}
-          <div className="min-h-0 flex-1 overflow-auto">
+            <div className="flex min-h-0 flex-1 p-4">
+              <AdminErrorState title="订单列表加载失败" description={error} onRetry={() => void loadOrders()} />
+            </div>
+          ) : loading ? (
+            <AdminTableSkeleton rows={8} />
+          ) : (
+            <>
+              <div className="min-h-0 flex-1 overflow-auto">
             <table className="min-w-[1180px] w-full text-sm">
               <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold text-slate-500">
                 <tr>
@@ -235,14 +250,7 @@ export default function AdminOrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={10} className="px-4 py-16 text-center text-slate-500">
-                      <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
-                      正在读取订单...
-                    </td>
-                  </tr>
-                ) : orders.length ? (
+                {orders.length ? (
                   orders.map((order) => {
                     const orderStatus = normalizeOrderStatus(order.status);
                     const payStatus = normalizePaymentStatus(order.payment_status);
@@ -268,9 +276,11 @@ export default function AdminOrdersPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={10} className="px-4 py-16 text-center text-slate-500">
-                      <div className="font-semibold text-slate-900">暂无订单</div>
-                      <div className="mt-1">调整筛选条件后再试。</div>
+                    <td colSpan={10} className="h-72">
+                      <AdminEmptyState
+                        title={hasFilters ? "没有符合条件的订单" : "暂无订单"}
+                        description={hasFilters ? "请调整筛选条件后再试。" : "新订单创建后会显示在这里。"}
+                      />
                     </td>
                   </tr>
                 )}
@@ -291,6 +301,8 @@ export default function AdminOrdersPage() {
               </Button>
             </div>
           </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -302,7 +314,8 @@ export default function AdminOrdersPage() {
           onRefresh={() => void loadOrders()}
         />
       ) : null}
-    </div>
+      </div>
+    </AdminPageShell>
   );
 }
 

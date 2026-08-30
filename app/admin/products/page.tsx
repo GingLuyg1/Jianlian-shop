@@ -33,6 +33,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminPageShell from "@/components/admin/AdminPageShell";
 import {
   createCategory,
   createProduct,
@@ -275,6 +277,14 @@ export default function AdminProductsPage() {
     return undefined;
   }, [categories, primaryFilter, secondaryFilter]);
   const totalProductPages = Math.max(1, Math.ceil(productCount / productPageSize));
+  const hasProductFilters = Boolean(
+    productSearch.trim() ||
+    primaryFilter !== "all" ||
+    secondaryFilter !== "all" ||
+    productStatusFilter !== "all" ||
+    deliveryFilter !== "all"
+  );
+  const isRefreshing = isProductLoading || isCategoryLoading;
   const productDirty = useMemo(
     () => (productForm ? isProductDirty(productForm, productInitialForm) : false),
     [productForm, productInitialForm]
@@ -793,32 +803,34 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
-      <div className="mb-2 flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-slate-950">商品与分类管理</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            管理 Supabase categories 和 products 数据，商品绑定到二级或最末级分类。
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-2">
+    <AdminPageShell
+      title={activeView === "products" ? "商品管理" : "分类管理"}
+      description={
+        activeView === "products"
+          ? "管理商品信息、分类归属、价格、库存展示和交付方式。"
+          : "管理商品分类层级、启用状态和排序。"
+      }
+      actions={(
+        <>
           <Button
             variant="outline"
             size="sm"
+            disabled={isRefreshing}
             onClick={() => {
-              loadCategories();
-              loadProducts();
+              void loadCategories();
+              void loadProducts();
             }}
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
+            <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
             刷新
           </Button>
-          <Button size="sm" onClick={openNewProduct}>
+          <Button size="sm" onClick={activeView === "products" ? openNewProduct : openNewCategory}>
             <Plus className="mr-2 h-4 w-4" />
-            新增商品
+            {activeView === "products" ? "新增商品" : "新增分类"}
           </Button>
-        </div>
-      </div>
+        </>
+      )}
+    >
 
       {(message || error) && (
         <div
@@ -940,6 +952,7 @@ export default function AdminProductsPage() {
                   onEdit={openEditProduct}
                   onCopyText={copyText}
                   onStatusChange={handleProductStatus}
+                  hasFilters={hasProductFilters}
                 />
               )}
 
@@ -986,19 +999,13 @@ export default function AdminProductsPage() {
       ) : (
           <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <CardHeader className="shrink-0 pb-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <CardTitle className="text-base">分类树</CardTitle>
-                <Button size="sm" onClick={openNewCategory}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  新增分类
-                </Button>
-              </div>
+              <CardTitle className="text-base">分类树</CardTitle>
             </CardHeader>
             <CardContent className="min-h-0 w-full flex-1 overflow-auto">
               {isCategoryLoading ? (
                 <CategoryTreeSkeleton />
               ) : enabledRoots.length === 0 ? (
-                <EmptyState text="暂无分类数据" />
+                <AdminEmptyState title="暂无分类数据" description="新增一级分类后，可继续创建对应的子分类。" />
               ) : (
                 <div className="space-y-3">
                   {categories
@@ -1072,7 +1079,7 @@ export default function AdminProductsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AdminPageShell>
   );
 }
 
@@ -1095,6 +1102,7 @@ function ProductTable({
   onEdit,
   onCopyText,
   onStatusChange,
+  hasFilters,
 }: {
   categoryMap: Map<string, AdminCategory>;
   categories: AdminCategory[];
@@ -1104,6 +1112,7 @@ function ProductTable({
   onEdit: (product: AdminProduct) => void;
   onCopyText: (value: string, successText: string) => void | Promise<void>;
   onStatusChange: (id: string, status: ProductStatus) => void;
+  hasFilters: boolean;
 }) {
   return (
     <div className="min-h-0 w-full flex-1 overflow-auto">
@@ -1139,8 +1148,12 @@ function ProductTable({
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="h-28 text-center text-sm text-slate-500">
-                暂无商品数据
+              <TableCell colSpan={11} className="h-48">
+                <AdminEmptyState
+                  className="min-h-[180px]"
+                  title={hasFilters ? "没有符合条件的商品" : "暂无商品数据"}
+                  description={hasFilters ? "请调整筛选条件后再试。" : "新增商品后会显示在这里。"}
+                />
               </TableCell>
             </TableRow>
           ) : (
@@ -1814,14 +1827,6 @@ function NativeSelect({
     >
       {children}
     </select>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="rounded-xl border border-dashed p-10 text-center text-sm text-slate-500">
-      {text}
-    </div>
   );
 }
 
