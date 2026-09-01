@@ -65,7 +65,7 @@ export async function listCompensationTasks(filters: CompensationFilters) {
   let query = service
     .from("business_compensation_tasks")
     .select(
-      "id,business_type,business_id,business_no,operation,failure_stage,status,retryable,attempts,next_retry_at,error_code,error_summary,request_id,resolved_by,resolution_note,created_at,updated_at",
+      "id,business_type,business_id,business_no,operation,failure_stage,status,retryable,attempts,max_attempts,next_retry_at,error_code,error_summary,request_id,resolved_by,resolution_note,created_at,updated_at",
       { count: "exact" }
     )
     .order("created_at", { ascending: false })

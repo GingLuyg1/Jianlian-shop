@@ -1,6 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
+
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminErrorState from "@/components/admin/AdminErrorState";
+import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { Button } from "@/components/ui/button";
 
 type DatabaseStatusResponse = {
   ok: boolean;
@@ -92,34 +99,34 @@ export default function DatabaseStatusClient() {
   }, [data]);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4 xl:px-6">
-      <header className="mb-4 flex shrink-0 items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-slate-950">数据库结构状态</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            只读检查 migration、关键表字段、RPC 和发布版本信息；不会执行 SQL 或修改数据。
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={loadStatus}
-          disabled={loading}
-          className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {loading ? "检查中..." : "重新检查"}
-        </button>
-      </header>
+    <AdminPageShell
+      title="数据库状态"
+      description="只读检查数据库连通、关键结构、RPC 和 migration 登记；不会执行 SQL 或修改数据。"
+      actions={
+        <Button type="button" variant="outline" onClick={() => void loadStatus()} disabled={loading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          {loading ? "检查中" : "重新检查"}
+        </Button>
+      }
+    >
 
       <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white p-4">
-        {loading && !data ? <Skeleton /> : null}
-        {error ? <ErrorState message={error} onRetry={loadStatus} /> : null}
-        {!loading && !error && data ? (
+        {loading && !data ? <AdminTableSkeleton rows={6} /> : null}
+        {error ? <AdminErrorState title="数据库状态读取失败" description={error} onRetry={() => void loadStatus()} /> : null}
+        {!loading && !error && !data ? (
+          <AdminEmptyState title="暂无数据库检查结果" description="重新检查后可查看当前只读探测结果。" />
+        ) : null}
+        {!error && data ? (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <StatusCard label="检查状态" value={data.ok && issueCount === 0 ? "通过" : "需处理"} tone={data.ok && issueCount === 0 ? "green" : "amber"} />
-              <StatusCard label="检查来源" value={data.source === "rpc" ? "只读 RPC" : "降级探测"} />
-              <StatusCard label="待登记 migration" value={`${data.pendingMigrations?.length ?? 0}`} />
+              <StatusCard label="数据库连通" value="已连接" tone="green" />
+              <StatusCard label="结构检查" value={data.ok && issueCount === 0 ? "通过" : "需关注"} tone={data.ok && issueCount === 0 ? "green" : "amber"} />
+              <StatusCard label="RPC 可用性" value={data.source === "rpc" ? "可用" : "使用降级探测"} tone={data.source === "rpc" ? "green" : "amber"} />
               <StatusCard label="结构问题" value={`${issueCount}`} tone={issueCount > 0 ? "red" : "green"} />
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Migration 区域仅展示应用登记表中的记录；“未登记”不代表 migration 未执行，不能据此直接操作数据库。
             </div>
 
             <Panel title="发布信息">
@@ -148,7 +155,7 @@ export default function DatabaseStatusClient() {
               <IssueList title="缺失约束" items={data.schema?.missing_constraints ?? []} />
             </div>
 
-            <Panel title="Migration 执行登记">
+            <Panel title={`Migration 登记（未登记 ${data.pendingMigrations?.length ?? 0} 项）`}>
               {!data.migrationHistory?.ready ? (
                 <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
                   {data.migrationHistory?.error ?? "迁移登记表尚未初始化。"}
@@ -197,36 +204,7 @@ export default function DatabaseStatusClient() {
           </div>
         ) : null}
       </div>
-    </section>
-  );
-}
-
-function Skeleton() {
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-24 animate-pulse rounded-xl bg-slate-100" />
-        ))}
-      </div>
-      <div className="h-56 animate-pulse rounded-xl bg-slate-100" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="flex min-h-[320px] flex-col items-center justify-center text-center">
-      <h2 className="text-lg font-semibold text-slate-950">数据库状态读取失败</h2>
-      <p className="mt-2 max-w-lg text-sm text-slate-500">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-4 inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-      >
-        重新加载
-      </button>
-    </div>
+    </AdminPageShell>
   );
 }
 

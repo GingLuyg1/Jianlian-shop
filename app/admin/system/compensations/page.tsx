@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +22,7 @@ type CompensationTask = {
   status: string | null;
   retryable: boolean | null;
   attempts: number | null;
+  max_attempts: number | null;
   next_retry_at: string | null;
   error_code: string | null;
   error_summary: string | null;
@@ -64,6 +68,7 @@ export default function AdminCompensationsPage() {
   const [loading, setLoading] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(count / 20)), [count]);
 
@@ -98,6 +103,7 @@ export default function AdminCompensationsPage() {
 
     setActingId(task.id);
     setError("");
+    setNotice("");
     try {
       const response = await fetch("/api/admin/system/compensations", {
         method: "POST",
@@ -106,6 +112,7 @@ export default function AdminCompensationsPage() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "补偿任务处理失败");
+      setNotice(payload.message || "补偿任务状态已更新。");
       await loadTasks();
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "补偿任务处理失败");
@@ -120,8 +127,8 @@ export default function AdminCompensationsPage() {
       description="查看支付、订单、余额、退款和交付等无法自动回滚时产生的人工补偿任务。"
       actions={
         <Button type="button" variant="outline" onClick={() => void loadTasks()} disabled={loading}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          刷新
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          {loading ? "刷新中" : "刷新"}
         </Button>
       }
     >
@@ -145,10 +152,26 @@ export default function AdminCompensationsPage() {
             <Input value={`共 ${count} 条`} readOnly className="bg-slate-50 text-slate-500" />
           </div>
 
-          {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            仅 SuperAdmin 可访问。这里的操作只更新补偿任务处置状态并写入审计日志，不会执行支付、余额、库存或履约重试。
+          </div>
+
+          {notice ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</div> : null}
+          {error && tasks.length > 0 ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
 
           <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
-            <table className="min-w-[1180px] w-full text-sm">
+            {loading && tasks.length === 0 ? (
+              <AdminTableSkeleton rows={7} />
+            ) : error && tasks.length === 0 ? (
+              <AdminErrorState title="补偿任务读取失败" description={error} onRetry={() => void loadTasks()} />
+            ) : tasks.length === 0 ? (
+              <AdminEmptyState
+                title={status === "all" && businessType === "all" ? "暂无补偿任务" : "没有符合筛选条件的补偿任务"}
+                description={status === "all" && businessType === "all"
+                  ? "只有外部事实已发生但站内事务无法自动完成时，任务才会出现在这里。"
+                  : "可调整业务类型或状态筛选后重试。"}
+              />
+            ) : <table className="min-w-[1260px] w-full text-sm">
               <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-3 py-2">业务</th>
@@ -159,16 +182,12 @@ export default function AdminCompensationsPage() {
                   <th className="px-3 py-2">错误</th>
                   <th className="px-3 py-2">Request ID</th>
                   <th className="px-3 py-2">尝试</th>
-                  <th className="px-3 py-2">创建时间</th>
+                  <th className="px-3 py-2">时间</th>
                   <th className="px-3 py-2">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <tr><td colSpan={10} className="px-3 py-12 text-center text-slate-500">读取中...</td></tr>
-                ) : tasks.length === 0 ? (
-                  <tr><td colSpan={10} className="px-3 py-16 text-center text-slate-500">暂无补偿任务。只有外部事实已发生但站内事务无法自动完成时，才会显示在这里。</td></tr>
-                ) : tasks.map((task) => {
+                {tasks.map((task) => {
                   const closed = ["resolved", "cancelled"].includes(String(task.status));
                   return (
                     <tr key={task.id} className="border-t">
@@ -177,10 +196,19 @@ export default function AdminCompensationsPage() {
                       <td className="px-3 py-3">{task.operation ?? "-"}</td>
                       <td className="px-3 py-3">{task.failure_stage ?? "-"}</td>
                       <td className="px-3 py-3">{STATUS_LABEL[String(task.status)] ?? task.status ?? "-"}</td>
-                      <td className="max-w-[260px] truncate px-3 py-3" title={task.error_summary ?? task.error_code ?? ""}>{task.error_code ?? "-"} {task.error_summary ?? ""}</td>
+                      <td className="max-w-[260px] px-3 py-3" title={task.error_summary ?? task.error_code ?? ""}>
+                        <div className="truncate">{task.error_code ?? "-"} {task.error_summary ?? ""}</div>
+                        {task.resolution_note ? <div className="mt-1 truncate text-xs text-slate-500">处置：{task.resolution_note}</div> : null}
+                      </td>
                       <td className="px-3 py-3 font-mono text-xs">{task.request_id ?? "-"}</td>
-                      <td className="px-3 py-3">{task.attempts ?? 0}</td>
-                      <td className="px-3 py-3">{formatDate(task.created_at)}</td>
+                      <td className="px-3 py-3">
+                        <div>{task.attempts ?? 0} / {task.max_attempts ?? "-"}</div>
+                        <div className="mt-1 text-xs text-slate-500">{task.retryable ? `下次：${formatDate(task.next_retry_at)}` : "不可自动重试"}</div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div>创建：{formatDate(task.created_at)}</div>
+                        <div className="mt-1 text-xs text-slate-500">更新：{formatDate(task.updated_at)}</div>
+                      </td>
                       <td className="space-x-2 whitespace-nowrap px-3 py-3">
                         <Button size="sm" variant="outline" disabled={closed || actingId === task.id} onClick={() => void handleAction(task, "mark_manual_review")}>人工审核</Button>
                         <Button size="sm" variant="outline" disabled={closed || actingId === task.id} onClick={() => void handleAction(task, "mark_resolved")}>已解决</Button>
@@ -190,7 +218,7 @@ export default function AdminCompensationsPage() {
                   );
                 })}
               </tbody>
-            </table>
+            </table>}
           </div>
 
           <div className="flex items-center justify-between text-sm text-slate-500">

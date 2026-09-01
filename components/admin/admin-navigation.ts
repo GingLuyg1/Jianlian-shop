@@ -66,11 +66,11 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
       { label: "生产看板", href: "/admin/system/production-readiness" },
       { label: "异常中心", href: "/admin/system-errors" },
       { label: "请求追踪", href: "/admin/system/request-traces" },
+      { label: "事务补偿", href: "/admin/system/compensations" },
+      { label: "数据库状态", href: "/admin/system/database" },
       { label: "操作日志", href: "/admin/audit-logs" },
     ],
   },
-  { type: "link", label: "事务补偿", href: "/admin/system/compensations", icon: AlertTriangle },
-  { type: "link", label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
 ];
 
 export function isAdminNavigationGroup(item: AdminNavigationItem): item is AdminNavigationGroup {
