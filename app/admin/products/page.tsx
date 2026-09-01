@@ -33,6 +33,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminSupplierBindingSheet from "@/components/admin/suppliers/AdminSupplierBindingSheet";
 import {
   createCategory,
   createProduct,
@@ -247,6 +250,7 @@ export default function AdminProductsPage() {
   const [categoryInitialForm, setCategoryInitialForm] = useState<CategoryFormState | null>(null);
   const [productErrors, setProductErrors] = useState<FieldErrors>({});
   const [productSubmitError, setProductSubmitError] = useState("");
+  const [bindingProduct, setBindingProduct] = useState<AdminProduct | null>(null);
   const [categoryErrors, setCategoryErrors] = useState<FieldErrors>({});
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const productReadRequestRef = useRef(0);
@@ -275,6 +279,14 @@ export default function AdminProductsPage() {
     return undefined;
   }, [categories, primaryFilter, secondaryFilter]);
   const totalProductPages = Math.max(1, Math.ceil(productCount / productPageSize));
+  const hasProductFilters = Boolean(
+    productSearch.trim() ||
+    primaryFilter !== "all" ||
+    secondaryFilter !== "all" ||
+    productStatusFilter !== "all" ||
+    deliveryFilter !== "all"
+  );
+  const isRefreshing = isProductLoading || isCategoryLoading;
   const productDirty = useMemo(
     () => (productForm ? isProductDirty(productForm, productInitialForm) : false),
     [productForm, productInitialForm]
@@ -793,32 +805,34 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
-      <div className="mb-2 flex w-full shrink-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-slate-950">商品与分类管理</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            管理 Supabase categories 和 products 数据，商品绑定到二级或最末级分类。
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-2">
+    <AdminPageShell
+      title={activeView === "products" ? "商品管理" : "分类管理"}
+      description={
+        activeView === "products"
+          ? "管理商品信息、分类归属、价格、库存展示和交付方式。"
+          : "管理商品分类层级、启用状态和排序。"
+      }
+      actions={(
+        <>
           <Button
             variant="outline"
             size="sm"
+            disabled={isRefreshing}
             onClick={() => {
-              loadCategories();
-              loadProducts();
+              void loadCategories();
+              void loadProducts();
             }}
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
+            <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
             刷新
           </Button>
-          <Button size="sm" onClick={openNewProduct}>
+          <Button size="sm" onClick={activeView === "products" ? openNewProduct : openNewCategory}>
             <Plus className="mr-2 h-4 w-4" />
-            新增商品
+            {activeView === "products" ? "新增商品" : "新增分类"}
           </Button>
-        </div>
-      </div>
+        </>
+      )}
+    >
 
       {(message || error) && (
         <div
@@ -940,6 +954,8 @@ export default function AdminProductsPage() {
                   onEdit={openEditProduct}
                   onCopyText={copyText}
                   onStatusChange={handleProductStatus}
+                  onSupplierBinding={setBindingProduct}
+                  hasFilters={hasProductFilters}
                 />
               )}
 
@@ -986,19 +1002,13 @@ export default function AdminProductsPage() {
       ) : (
           <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <CardHeader className="shrink-0 pb-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <CardTitle className="text-base">分类树</CardTitle>
-                <Button size="sm" onClick={openNewCategory}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  新增分类
-                </Button>
-              </div>
+              <CardTitle className="text-base">分类树</CardTitle>
             </CardHeader>
             <CardContent className="min-h-0 w-full flex-1 overflow-auto">
               {isCategoryLoading ? (
                 <CategoryTreeSkeleton />
               ) : enabledRoots.length === 0 ? (
-                <EmptyState text="暂无分类数据" />
+                <AdminEmptyState title="暂无分类数据" description="新增一级分类后，可继续创建对应的子分类。" />
               ) : (
                 <div className="space-y-3">
                   {categories
@@ -1039,6 +1049,22 @@ export default function AdminProductsPage() {
         }}
       />
 
+      <AdminSupplierBindingSheet
+        open={Boolean(bindingProduct)}
+        product={bindingProduct}
+        onOpenChange={(open) => {
+          if (!open) setBindingProduct(null);
+        }}
+        onSaved={(saved) => {
+          if (!bindingProduct) return;
+          setProducts((current) => current.map((product) => product.id === bindingProduct.id
+            ? { ...product, metadata: saved.metadata ?? product.metadata, delivery_type: saved.delivery_type ?? "automatic" }
+            : product));
+          setBindingProduct(null);
+          void loadProducts();
+        }}
+      />
+
       <CategoryFormDialog
         categories={categories}
         errors={categoryErrors}
@@ -1072,7 +1098,7 @@ export default function AdminProductsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AdminPageShell>
   );
 }
 
@@ -1086,6 +1112,22 @@ function formatAdminDate(value: string | null | undefined) {
   )}:${pad(date.getMinutes())}`;
 }
 
+function SupplierBindingBadge({ product }: { product: AdminProduct }) {
+  const metadata = product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata)
+    ? product.metadata
+    : {};
+  const isSupplierFulfillment = metadata.fulfillment_source === "supplier";
+  const supplier = isSupplierFulfillment && typeof metadata.supplier === "string" ? metadata.supplier : "";
+  const supplierProductId = typeof metadata.supplier_product_id === "string" || typeof metadata.supplier_product_id === "number"
+    ? String(metadata.supplier_product_id)
+    : "";
+  if (!supplier) return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500">未绑定</Badge>;
+  if (supplier === "daju") {
+    return <div className="flex flex-col items-center gap-0.5"><Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">大橘AI</Badge>{supplierProductId ? <span className="font-mono text-[10px] text-slate-500">#{supplierProductId}</span> : null}</div>;
+  }
+  return <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">{supplier}</Badge>;
+}
+
 function ProductTable({
   categoryMap,
   categories,
@@ -1095,6 +1137,8 @@ function ProductTable({
   onEdit,
   onCopyText,
   onStatusChange,
+  onSupplierBinding,
+  hasFilters,
 }: {
   categoryMap: Map<string, AdminCategory>;
   categories: AdminCategory[];
@@ -1104,10 +1148,12 @@ function ProductTable({
   onEdit: (product: AdminProduct) => void;
   onCopyText: (value: string, successText: string) => void | Promise<void>;
   onStatusChange: (id: string, status: ProductStatus) => void;
+  onSupplierBinding: (product: AdminProduct) => void;
+  hasFilters: boolean;
 }) {
   return (
     <div className="min-h-0 w-full flex-1 overflow-auto">
-      <Table className="w-full min-w-[1520px] table-fixed">
+      <Table className="w-full min-w-[1640px] table-fixed">
         <colgroup>
           <col className="w-[260px]" />
           <col className="w-[140px]" />
@@ -1116,6 +1162,7 @@ function ProductTable({
           <col className="w-[80px]" />
           <col className="w-[75px]" />
           <col className="w-[105px]" />
+          <col className="w-[120px]" />
           <col className="w-[90px]" />
           <col className="w-[65px]" />
           <col className="w-[165px]" />
@@ -1130,6 +1177,7 @@ function ProductTable({
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>原价</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>交付方式</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>供应商</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>排序</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
@@ -1139,8 +1187,12 @@ function ProductTable({
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="h-28 text-center text-sm text-slate-500">
-                暂无商品数据
+              <TableCell colSpan={12} className="h-48">
+                <AdminEmptyState
+                  className="min-h-[180px]"
+                  title={hasFilters ? "没有符合条件的商品" : "暂无商品数据"}
+                  description={hasFilters ? "请调整筛选条件后再试。" : "新增商品后会显示在这里。"}
+                />
               </TableCell>
             </TableRow>
           ) : (
@@ -1218,6 +1270,9 @@ function ProductTable({
                   {deliveryLabel[product.delivery_type]}
                 </TableCell>
                 <TableCell className="px-3 py-2 text-center">
+                  <SupplierBindingBadge product={product} />
+                </TableCell>
+                <TableCell className="px-3 py-2 text-center">
                   <div className="flex w-full justify-center">
                     <Badge
                       variant="outline"
@@ -1262,6 +1317,9 @@ function ProductTable({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-32">
+                        <DropdownMenuItem onClick={() => onSupplierBinding(product)}>
+                          供应商绑定
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-orange-600"
                           onClick={() => onStatusChange(product.id, "sold_out")}
@@ -1814,14 +1872,6 @@ function NativeSelect({
     >
       {children}
     </select>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="rounded-xl border border-dashed p-10 text-center text-sm text-slate-500">
-      {text}
-    </div>
   );
 }
 

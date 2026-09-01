@@ -12,54 +12,21 @@ import {
 } from "./mapper.mjs";
 import { createDajuRequestId } from "./protocol.mjs";
 import type { DajuClient } from "./types";
+import type {
+  SupplierClaim,
+  SupplierFulfillmentCandidate,
+  SupplierFulfillmentStore,
+  SupplierFulfillmentSummary,
+  SupplierOutcomeInput,
+} from "../core/types";
 
 type DajuBinding = NonNullable<ReturnType<typeof parseDajuProductBinding>>;
 
-export type DajuFulfillmentCandidate = {
-  orderId: string;
-  orderItemId: string;
-  quantity: number;
-  binding: DajuBinding | null;
-  bindingInvalid: boolean;
-  orderFields: Record<string, unknown>;
-};
-
-export type DajuClaim = {
-  action: "PURCHASE" | "QUERY" | "NONE";
-  requestId: string;
-  attemptToken: string | null;
-  status: string;
-  orderCode: string | null;
-};
-
-export type DajuOutcomeInput = {
-  orderId: string;
-  orderItemId: string;
-  requestId: string;
-  attemptToken: string | null;
-  state: "PENDING" | "FULFILLED" | "FAILED" | "UNCERTAIN" | "RECONCILIATION" | "NEEDS_INPUT" | "FAILED_VALIDATION";
-  retryable: boolean;
-  code: string | null;
-  orderCode: string | null;
-  deliveredContent: string | null;
-  supplierUnitPrice: string | null;
-  supplierTotalPrice: string | null;
-  triggerSource: string;
-};
-
-export type DajuFulfillmentStore = {
-  loadCandidates(orderId: string): Promise<DajuFulfillmentCandidate[]>;
-  claim(candidate: DajuFulfillmentCandidate, requestId: string, triggerSource: string): Promise<DajuClaim>;
-  recordOutcome(input: DajuOutcomeInput): Promise<void>;
-};
-
-export type DajuFulfillmentSummary = {
-  handled: number;
-  fulfilled: number;
-  failed: number;
-  uncertain: number;
-  needsInput: number;
-};
+export type DajuFulfillmentCandidate = SupplierFulfillmentCandidate<DajuBinding>;
+export type DajuClaim = SupplierClaim;
+export type DajuOutcomeInput = SupplierOutcomeInput;
+export type DajuFulfillmentStore = SupplierFulfillmentStore<DajuBinding>;
+export type DajuFulfillmentSummary = SupplierFulfillmentSummary;
 
 function parseClaim(value: unknown): DajuClaim {
   const row = Array.isArray(value) ? value[0] : value;
@@ -118,11 +85,12 @@ export function createSupabaseDajuFulfillmentStore(service: SupabaseClient): Daj
       if (!candidate.binding || candidate.bindingInvalid) {
         throw new Error("SUPPLIER_BINDING_REQUIRES_MANUAL_REVIEW");
       }
-      const { data, error } = await service.rpc("claim_daju_supplier_fulfillment", {
+      const { data, error } = await service.rpc("claim_supplier_fulfillment", {
+        p_supplier: "daju",
         p_order_id: candidate.orderId,
         p_order_item_id: candidate.orderItemId,
         p_request_id: requestId,
-        p_supplier_product_id: candidate.binding.productId,
+        p_supplier_product_id: String(candidate.binding.productId),
         p_supplier_sku: candidate.binding.sku,
         p_trigger_source: triggerSource,
       });
@@ -132,7 +100,8 @@ export function createSupabaseDajuFulfillmentStore(service: SupabaseClient): Daj
       return claim;
     },
     async recordOutcome(outcome) {
-      const { error } = await service.rpc("record_daju_supplier_fulfillment_outcome", {
+      const { error } = await service.rpc("record_supplier_fulfillment_outcome", {
+        p_supplier: "daju",
         p_order_id: outcome.orderId,
         p_order_item_id: outcome.orderItemId,
         p_request_id: outcome.requestId,

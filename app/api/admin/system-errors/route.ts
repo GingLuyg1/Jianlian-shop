@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const client = getSupabaseServiceRoleClient() ?? admin.supabase;
 
   try {
-    let query = client.from("system_error_events").select("*", { count: "exact" }).order("last_seen_at", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
+    let query = client.from("system_error_events").select("id,fingerprint,level,category,error_code,title,message,route,request_id,order_id,payment_id,product_id,sku_id,occurrences,first_seen_at,last_seen_at,status,resolution_note", { count: "exact" }).order("last_seen_at", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
     const level = params.get("level")?.trim();
     const status = params.get("status")?.trim();
     const category = params.get("category")?.trim();
@@ -65,7 +65,7 @@ export async function PATCH(request: Request) {
     const before = await client.from("system_error_events").select("id,title,status,resolution_note").eq("id", id).maybeSingle();
     if (before.error) throw before.error;
     if (!before.data) return errorResponse("INTERNAL_ERROR", "异常事件不存在。", requestId, 404);
-    const updated = await client.from("system_error_events").update({ status: nextStatus, resolution_note: resolutionNote || null, updated_at: new Date().toISOString() }).eq("id", id).select("*").maybeSingle();
+    const updated = await client.from("system_error_events").update({ status: nextStatus, resolution_note: resolutionNote || null, updated_at: new Date().toISOString() }).eq("id", id).select("id,fingerprint,level,category,error_code,title,message,route,request_id,order_id,payment_id,product_id,sku_id,occurrences,first_seen_at,last_seen_at,status,resolution_note").maybeSingle();
     if (updated.error || !updated.data) throw updated.error ?? new Error("update returned no row");
     await writeAdminAuditLog({ request, admin: { id: admin.user.id, email: admin.user.email }, action: "update_system_error_status", module: "system", targetType: "system_error_event", targetId: id, targetLabel: String(before.data.title ?? id), result: "success", beforeSummary: before.data, afterSummary: { status: nextStatus, resolutionNote: resolutionNote || null } });
     return withRequestIdHeader(NextResponse.json({ success: true, event: updated.data, request_id: requestId }, { headers: { "Cache-Control": "no-store" } }), requestId);

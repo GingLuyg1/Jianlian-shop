@@ -189,6 +189,13 @@ export default function AdminUsersPage() {
   }, [loadUsers]);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const hasFilters = Boolean(
+    search.trim() ||
+    accountStatus !== "all" ||
+    riskStatus !== "all" ||
+    registeredFrom ||
+    registeredTo
+  );
   const stats = useMemo(
     () => ({
       active: users.filter((user) => user.accountStatus === "active").length,
@@ -214,7 +221,7 @@ export default function AdminUsersPage() {
       actions={
         <Button variant="outline" size="sm" onClick={loadUsers} disabled={loading}>
           <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
-          重新加载
+          刷新
         </Button>
       }
     >
@@ -276,7 +283,10 @@ export default function AdminUsersPage() {
           ) : error ? (
             <AdminErrorState title="用户列表加载失败" description={error} onRetry={loadUsers} />
           ) : users.length === 0 ? (
-            <AdminEmptyState title="暂无用户" description="当前筛选条件下没有用户数据。" />
+            <AdminEmptyState
+              title={hasFilters ? "没有符合条件的用户" : "暂无用户"}
+              description={hasFilters ? "请调整搜索、账户状态、风险状态或注册时间后再试。" : "新用户注册后会显示在这里。"}
+            />
           ) : (
             <Table className="min-w-[1320px]">
               <TableHeader className="sticky top-0 z-10 bg-slate-50">
@@ -482,7 +492,7 @@ function UserDrawer({ userId, onClose, onChanged }: { userId: string | null; onC
                       <option value="suspended">暂停</option>
                       <option value="disabled">禁用</option>
                     </NativeSelect>
-                    <Button size="sm" disabled={actionLoading !== null || form.accountStatus === profile.accountStatus} onClick={() => submitAction("update_account_status")}>
+                    <Button variant={["suspended", "disabled"].includes(form.accountStatus) ? "destructive" : "default"} size="sm" disabled={actionLoading !== null || form.accountStatus === profile.accountStatus} onClick={() => submitAction("update_account_status")}>
                       {actionLoading === "update_account_status" ? "处理中..." : "更新账户状态"}
                     </Button>
                   </ControlCard>
@@ -493,7 +503,7 @@ function UserDrawer({ userId, onClose, onChanged }: { userId: string | null; onC
                       <option value="high_risk">高风险</option>
                       <option value="blocked">拦截</option>
                     </NativeSelect>
-                    <Button size="sm" disabled={actionLoading !== null || form.riskStatus === profile.riskStatus} onClick={() => submitAction("update_risk_status")}>
+                    <Button variant={["high_risk", "blocked"].includes(form.riskStatus) ? "destructive" : "default"} size="sm" disabled={actionLoading !== null || form.riskStatus === profile.riskStatus} onClick={() => submitAction("update_risk_status")}>
                       {actionLoading === "update_risk_status" ? "处理中..." : "更新风险标记"}
                     </Button>
                   </ControlCard>
@@ -533,7 +543,7 @@ function UserDrawer({ userId, onClose, onChanged }: { userId: string | null; onC
                   </div>
                   <Textarea className="mt-3 min-h-[82px]" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="必须填写操作原因，原因会写入流水和审计日志。" />
                   <div className="mt-3 text-right">
-                    <Button disabled={actionLoading !== null || !form.amount || Number(form.amount) <= 0} onClick={() => submitAction("adjust_balance")}>
+                    <Button variant={form.direction === "debit" ? "destructive" : "default"} disabled={actionLoading !== null || !form.amount || Number(form.amount) <= 0} onClick={() => submitAction("adjust_balance")}>
                       {actionLoading === "adjust_balance" ? "调整中..." : "提交余额调整"}
                     </Button>
                   </div>

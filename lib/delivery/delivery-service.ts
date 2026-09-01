@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { fulfillDajuOrderWithSupabase } from "@/lib/providers/daju/fulfillment";
+import { fulfillSupplierOrderWithSupabase } from "@/lib/providers/core/supplier-router";
 import { runLocalStockPriorityDelivery } from "./local-stock-priority.mjs";
 
 export type DeliveryServiceResult = {
@@ -139,7 +139,7 @@ export async function deliverDigitalOrder(
     deliverSupplier: async () => {
       notifyStage(onStage, "DAJU_FALLBACK_STARTED");
       try {
-        const result = await fulfillDajuOrderWithSupabase(supabase, orderId, triggerSource);
+        const result = await fulfillSupplierOrderWithSupabase(supabase, orderId, triggerSource);
         notifyStage(onStage, "DAJU_FALLBACK_COMPLETED");
         return result;
       } catch {

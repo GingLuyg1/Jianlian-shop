@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
-import { parseDajuProductBinding } from "@/lib/providers/daju/mapper.mjs";
+import { createDajuClient } from "@/lib/providers/daju/client";
+import { getSafeDajuError } from "@/lib/providers/daju/errors";
+import { compareDajuDecimal, parseDajuProductBinding, validateDajuBindingAgainstProductDetail } from "@/lib/providers/daju/mapper.mjs";
+import type { DajuProductDetail } from "@/lib/providers/daju/types";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +40,32 @@ export async function POST(request: Request, context: Context) {
     supplier_max_unit_cost: input.supplier_max_unit_cost,
   };
   const parsed = parseDajuProductBinding(metadata);
-  if (!parsed || parsed.maxUnitCost === null) {
+  if (!parsed || parsed.maxUnitCost === null || compareDajuDecimal(parsed.maxUnitCost, "0") !== 1) {
     return json({ error: "供应商绑定或成本上限无效", code: "DAJU_BINDING_INVALID", requestId }, 400);
   }
+
+  let supplierProduct: DajuProductDetail;
+  try {
+    const client = createDajuClient();
+    supplierProduct = await client.getProduct(parsed.productId);
+  } catch (error) {
+    const safe = getSafeDajuError(error);
+    console.error("[DajuAdmin] authoritative product read failed", { requestId, code: safe.code, kind: safe.kind });
+    return json({ error: "供应商商品详情读取失败，未保存自动履约绑定", code: safe.code, requestId }, safe.status);
+  }
+
+  const authoritativeValidation = validateDajuBindingAgainstProductDetail(parsed, supplierProduct);
+  if (!authoritativeValidation.ok) {
+    if (authoritativeValidation.code === "DAJU_REQUIRED_INPUTS_UNMAPPED") {
+      return json({ error: `以下供应商必填字段尚未映射：${authoritativeValidation.missing.join("、")}`, code: authoritativeValidation.code, requestId }, 400);
+    }
+    if (authoritativeValidation.code === "DAJU_PRODUCT_NOT_AUTOMATIC") {
+      return json({ error: "该供应商商品不支持自动交付，不能绑定到自动履约商品", code: authoritativeValidation.code, requestId }, 400);
+    }
+    return json({ error: "供应商商品详情与绑定参数不一致", code: authoritativeValidation.code, requestId }, 409);
+  }
+
+  // The current Daju purchase contract defines supplier_sku as optional; do not infer a new SKU requirement here.
 
   const { data: product, error: readError } = await service
     .from("products")

@@ -8,6 +8,7 @@ import {
   compareDajuDecimal,
   mapDajuRequiredInputs,
   parseDajuProductBinding,
+  validateDajuBindingAgainstProductDetail,
   validateDajuPurchaseReadiness,
   validateDajuExistingOrderReconciliation,
 } from "../../lib/providers/daju/mapper.mjs";
@@ -117,6 +118,40 @@ test("strictly parses product list, SKU detail, required inputs and balance", ()
     balance: "47.50", name: "seller", totalSpent: "2.50", totalOrders: 3,
   });
   assert.equal(parseDajuProductsResponse({ products: [{ ...product, stock: "9" }] }), null);
+});
+
+test("admin binding readiness requires every authoritative supplier input mapping", () => {
+  const detail = parseDajuProductDetailResponse({ product: { ...product, required_inputs: ["email", "username"] } });
+  const complete = parseDajuProductBinding({
+    fulfillment_source: "supplier",
+    supplier: "daju",
+    supplier_product_id: 11,
+    supplier_inputs_mapping: { email: "customer_email", username: "customer_name" },
+    supplier_max_unit_cost: "9",
+  });
+  const incomplete = parseDajuProductBinding({
+    fulfillment_source: "supplier",
+    supplier: "daju",
+    supplier_product_id: 11,
+    supplier_inputs_mapping: { email: "customer_email" },
+    supplier_max_unit_cost: "9",
+  });
+
+  assert.ok(detail && complete && incomplete);
+  assert.deepEqual(validateDajuBindingAgainstProductDetail(complete, detail), { ok: true, missing: [] });
+  assert.deepEqual(validateDajuBindingAgainstProductDetail(incomplete, detail), {
+    ok: false,
+    code: "DAJU_REQUIRED_INPUTS_UNMAPPED",
+    missing: ["username"],
+  });
+  assert.equal(validateDajuBindingAgainstProductDetail(complete, { ...detail, isAuto: false }).code, "DAJU_PRODUCT_NOT_AUTOMATIC");
+  assert.equal(parseDajuProductBinding({
+    fulfillment_source: "supplier",
+    supplier: "daju",
+    supplier_product_id: 11,
+    supplier_inputs_mapping: { email: "arbitrary_order_field" },
+    supplier_max_unit_cost: "9",
+  }), null);
 });
 
 test("accepts the real product-detail max_qty zero sentinel without weakening other quantity validation", () => {

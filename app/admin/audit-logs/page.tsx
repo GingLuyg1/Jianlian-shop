@@ -4,6 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Copy, Eye, RotateCcw, Search, X } from "lucide-react";
 
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminErrorState from "@/components/admin/AdminErrorState";
+import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
 type AuditLog = {
   id: string;
   admin_user_id: string | null;
@@ -16,7 +23,7 @@ type AuditLog = {
   request_id: string;
   ip_address: string | null;
   user_agent: string | null;
-  result: "success" | "failed" | "denied";
+  result: "success" | "failed" | "denied" | "partial";
   error_code: string | null;
   error_message: string | null;
   before_summary: unknown;
@@ -36,18 +43,22 @@ const MODULE_LABELS: Record<string, string> = {
   delivery: "发货",
   settings: "设置",
   system: "系统",
+  privacy: "隐私",
+  notifications: "通知",
 };
 
 const RESULT_LABELS: Record<string, string> = {
   success: "成功",
   failed: "失败",
   denied: "拒绝",
+  partial: "部分成功",
 };
 
 const RESULT_CLASS_NAMES: Record<string, string> = {
   success: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   failed: "bg-rose-50 text-rose-700 ring-rose-200",
   denied: "bg-amber-50 text-amber-700 ring-amber-200",
+  partial: "bg-sky-50 text-sky-700 ring-sky-200",
 };
 
 function formatDate(value: string | null | undefined) {
@@ -209,23 +220,11 @@ export default function AdminAuditLogsPage() {
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
-      <div className="mb-3 flex shrink-0 items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-slate-950">操作日志</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            查询后台敏感操作记录。日志只读，不提供前端修改入口。
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={loadLogs}
-          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-        >
-          <RotateCcw className="h-4 w-4" />
-          刷新
-        </button>
-      </div>
+    <AdminPageShell
+      title="操作日志"
+      description="查询后台敏感操作记录。日志只读，安全摘要由服务端脱敏后返回。"
+      actions={<Button variant="outline" onClick={() => void loadLogs()} disabled={loading}><RotateCcw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}
+    >
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="shrink-0 border-b border-slate-100 p-3">
@@ -311,12 +310,6 @@ export default function AdminAuditLogsPage() {
           </div>
         </div>
 
-        {error ? (
-          <div className="mx-3 mt-3 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </div>
-        ) : null}
-
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[1180px] table-fixed text-sm">
             <colgroup>
@@ -342,27 +335,12 @@ export default function AdminAuditLogsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 8 }).map((_, index) => (
-                  <tr key={index}>
-                    {Array.from({ length: 9 }).map((__, cellIndex) => (
-                      <td key={cellIndex} className="h-12 px-3">
-                        <div className="h-3 rounded bg-slate-100" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
+              {error ? (
+                <tr><td colSpan={9}><AdminErrorState description={error} onRetry={() => void loadLogs()} /></td></tr>
+              ) : loading ? (
+                <tr><td colSpan={9}><AdminTableSkeleton rows={8} /></td></tr>
               ) : logs.length === 0 ? (
-                <tr>
-                  <td colSpan={9}>
-                    <div className="flex h-72 flex-col items-center justify-center text-center">
-                      <p className="text-base font-medium text-slate-800">暂无审计记录</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        后台敏感操作发生后会显示在这里。
-                      </p>
-                    </div>
-                  </td>
-                </tr>
+                <tr><td colSpan={9}><AdminEmptyState title="暂无审计记录" description={hasAuditFilters(queryString) ? "没有符合当前筛选条件的操作记录。" : "后台敏感操作发生后会显示在这里。"} /></td></tr>
               ) : (
                 logs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50">
@@ -498,8 +476,13 @@ export default function AdminAuditLogsPage() {
           </aside>
         </div>
       ) : null}
-    </section>
+    </AdminPageShell>
   );
+}
+
+function hasAuditFilters(query: string) {
+  const params = new URLSearchParams(query);
+  return ["adminEmail", "module", "action", "result", "targetId", "requestId", "startAt", "endAt"].some((key) => params.has(key));
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

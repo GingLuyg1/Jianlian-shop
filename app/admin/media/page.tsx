@@ -4,6 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Archive, Copy, ImageIcon, RefreshCcw, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminErrorState from "@/components/admin/AdminErrorState";
+import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
 type MediaAsset = {
   id: string;
   owner_type: string;
@@ -69,6 +76,14 @@ function statusLabel(value: string) {
   return STATUS_OPTIONS.find(([key]) => key === value)?.[1] ?? value;
 }
 
+function statusClassName(value: string) {
+  if (value === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (value === "unused") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (value === "archived") return "border-slate-200 bg-slate-100 text-slate-600";
+  if (value === "deleted" || value === "failed") return "border-red-200 bg-red-50 text-red-700";
+  return "border-slate-200 bg-white text-slate-600";
+}
+
 export default function AdminMediaPage() {
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +93,9 @@ export default function AdminMediaPage() {
   const [query, setQuery] = useState("");
   const [purpose, setPurpose] = useState("product");
   const [files, setFiles] = useState<FileList | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const selectedFiles = files ? Array.from(files) : [];
 
   const filteredAssets = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -128,6 +145,7 @@ export default function AdminMediaPage() {
       if (!response.ok) throw new Error(payload.error || "上传失败");
       toast.success("图片已上传");
       setFiles(null);
+      setFileInputKey((value) => value + 1);
       await loadAssets();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "上传失败");
@@ -164,52 +182,65 @@ export default function AdminMediaPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-950">媒体资源</h1>
-          <p className="mt-1 text-sm text-slate-500">统一管理商品、SKU、分类、站点资源和头像图片。</p>
-        </div>
-        <button onClick={loadAssets} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50">
-          <RefreshCcw className="h-4 w-4" /> 刷新
-        </button>
-      </div>
+    <AdminPageShell
+      title="媒体资源"
+      description="集中上传、筛选和维护商品、SKU、分类及站点使用的图片资源。"
+      actions={(
+        <Button variant="outline" onClick={loadAssets} disabled={loading}>
+          <RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> 刷新
+        </Button>
+      )}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3">
+          <div className="text-sm font-semibold text-slate-950">上传图片</div>
+          <p className="mt-1 text-xs text-slate-500">选择资源用途后上传；新资源将以未绑定状态进入资源库。</p>
+        </div>
         <div className="grid gap-3 lg:grid-cols-[160px_1fr_auto]">
           <select value={purpose} onChange={(event) => setPurpose(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
             {PURPOSE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/x-icon" multiple onChange={(event) => setFiles(event.target.files)} className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm" />
-          <button disabled={uploading} onClick={uploadFiles} className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
-            <Upload className="h-4 w-4" /> {uploading ? "上传中..." : "上传图片"}
-          </button>
+          <input key={fileInputKey} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/x-icon" multiple onChange={(event) => setFiles(event.target.files)} className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm" />
+          <Button disabled={uploading || !selectedFiles.length} onClick={uploadFiles}>
+            <Upload className={`mr-2 h-4 w-4 ${uploading ? "animate-pulse" : ""}`} /> {uploading ? "上传中..." : "上传图片"}
+          </Button>
         </div>
-        <p className="mt-2 text-xs text-slate-500">支持 JPEG、PNG、WebP、GIF、ICO，单文件最大 5MB，单次最多 10 个文件。</p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <span>支持 JPEG、PNG、WebP、GIF、ICO；单文件最大 5MB，单次最多 10 个文件。</span>
+          <span className="max-w-full truncate text-slate-700">
+            {selectedFiles.length
+              ? `已选择 ${selectedFiles.length} 个文件：${selectedFiles.map((file) => file.name).join("、")}`
+              : "尚未选择文件"}
+          </span>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <label className="flex min-w-[260px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-          <Search className="h-4 w-4 text-slate-400" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索文件名、Bucket 或 URL" className="w-full bg-transparent outline-none" />
-        </label>
-        <select value={ownerType} onChange={(event) => setOwnerType(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-          {OWNER_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
-        <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-          {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+      <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap gap-3">
+          <label className="flex min-w-[260px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+            <Search className="h-4 w-4 text-slate-400" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="在当前结果搜索文件名、Bucket 或 URL" className="w-full bg-transparent outline-none" />
+          </label>
+          <select value={ownerType} onChange={(event) => setOwnerType(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            {OWNER_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+          <span>Owner 与状态由后端筛选。</span>
+          <span>关键词只搜索当前已加载的 {assets.length} 条结果。</span>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {error ? (
-          <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-3 p-8 text-center">
-            <ImageIcon className="h-10 w-10 text-orange-500" />
-            <div className="text-base font-semibold text-slate-900">媒体资源暂不可用</div>
-            <p className="max-w-lg text-sm text-slate-500">{error}</p>
-          </div>
+          <AdminErrorState title="媒体资源暂不可用" description={error} onRetry={loadAssets} />
         ) : loading ? (
-          <div className="p-6 text-sm text-slate-500">正在读取媒体资源...</div>
+          <AdminTableSkeleton rows={7} />
         ) : filteredAssets.length ? (
           <div className="h-full overflow-auto">
             <table className="min-w-[1120px] w-full text-left text-sm">
@@ -245,12 +276,12 @@ export default function AdminMediaPage() {
                     <td className="px-4 py-3">{asset.mime_type}</td>
                     <td className="px-4 py-3">{formatBytes(Number(asset.file_size))}</td>
                     <td className="px-4 py-3">{asset.width && asset.height ? `${asset.width}×${asset.height}` : "—"}</td>
-                    <td className="px-4 py-3"><span className="rounded-full bg-orange-50 px-2 py-1 text-xs text-orange-700">{statusLabel(asset.status)}</span></td>
+                    <td className="px-4 py-3"><Badge variant="outline" className={statusClassName(asset.status)}>{statusLabel(asset.status)}</Badge></td>
                     <td className="px-4 py-3">{formatDate(asset.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => copyUrl(asset)} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" title="复制地址"><Copy className="h-4 w-4" /></button>
-                        <button onClick={() => archiveAsset(asset)} disabled={asset.status === "active"} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" title="归档未引用资源"><Archive className="h-4 w-4" /></button>
+                        <Button variant="outline" size="icon" onClick={() => copyUrl(asset)} title="复制地址"><Copy className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon" onClick={() => archiveAsset(asset)} disabled={asset.status === "active"} title={asset.status === "active" ? "使用中资源不可归档" : "归档未引用资源"}><Archive className="h-4 w-4" /></Button>
                       </div>
                     </td>
                   </tr>
@@ -259,13 +290,14 @@ export default function AdminMediaPage() {
             </table>
           </div>
         ) : (
-          <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-3 p-8 text-center">
-            <ImageIcon className="h-10 w-10 text-slate-400" />
-            <div className="text-base font-semibold text-slate-900">暂无媒体资源</div>
-            <p className="max-w-md text-sm text-slate-500">上传商品图、SKU 图、分类图或站点资源后，会显示在这里。</p>
-          </div>
+          <AdminEmptyState
+            icon={<ImageIcon className="h-5 w-5" />}
+            title={query.trim() ? "当前关键词没有匹配资源" : "暂无媒体资源"}
+            description={query.trim() ? "请调整当前结果关键词；Owner 与状态筛选仍由后端应用。" : "上传商品图、SKU 图、分类图或站点资源后，会显示在这里。"}
+          />
         )}
       </div>
-    </div>
+      </div>
+    </AdminPageShell>
   );
 }

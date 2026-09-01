@@ -1,7 +1,8 @@
 ﻿import { NextResponse } from "next/server";
 
-import { getAuditErrorMessage } from "@/lib/admin/audit-log-service";
+import { getAuditErrorMessage, sanitizeAuditValue } from "@/lib/admin/audit-log-service";
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
+import { sanitizeMessage } from "@/lib/monitoring/logger";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ const VALID_MODULES = new Set([
   "settings",
   "system",
   "privacy",
+  "notifications",
 ]);
 
 const VALID_RESULTS = new Set(["success", "failed", "denied", "partial"]);
@@ -60,7 +62,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("admin_audit_logs")
-    .select("*", { count: "exact" })
+    .select("id,admin_user_id,admin_email,module,action,target_type,target_id,target_label,request_id,ip_address,user_agent,result,error_code,error_message,before_summary,after_summary,metadata,created_at", { count: "exact" })
     .order("created_at", { ascending: false });
 
   const adminEmail = searchParams.get("adminEmail")?.trim();
@@ -104,7 +106,13 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    logs: data ?? [],
+    logs: (data ?? []).map((row) => ({
+      ...row,
+      before_summary: sanitizeAuditValue(row.before_summary),
+      after_summary: sanitizeAuditValue(row.after_summary),
+      metadata: sanitizeAuditValue(row.metadata),
+      error_message: typeof row.error_message === "string" ? sanitizeMessage(row.error_message) : row.error_message,
+    })),
     count: count ?? 0,
     page,
     pageSize,
