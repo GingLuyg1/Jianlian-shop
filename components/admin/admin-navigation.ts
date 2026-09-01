@@ -10,8 +10,6 @@ import {
   Package,
   PackageCheck,
   RotateCcw,
-  Route,
-  ScrollText,
   Settings,
   ShieldCheck,
   Users,
@@ -60,12 +58,19 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
   { type: "link", label: "隐私请求", href: "/admin/privacy-requests", icon: FileLock2 },
   { type: "link", label: "邮件通知", href: "/admin/notifications/email-deliveries", icon: MailCheck },
   { type: "link", label: "系统设置", href: "/admin/settings", icon: Settings },
-  { type: "link", label: "异常中心", href: "/admin/system-errors", icon: AlertTriangle },
-  { type: "link", label: "请求追踪", href: "/admin/system/request-traces", icon: Route },
+  {
+    type: "group",
+    label: "系统运营",
+    icon: AlertTriangle,
+    children: [
+      { label: "生产看板", href: "/admin/system/production-readiness" },
+      { label: "异常中心", href: "/admin/system-errors" },
+      { label: "请求追踪", href: "/admin/system/request-traces" },
+      { label: "操作日志", href: "/admin/audit-logs" },
+    ],
+  },
   { type: "link", label: "事务补偿", href: "/admin/system/compensations", icon: AlertTriangle },
   { type: "link", label: "数据库状态", href: "/admin/system/database", icon: ShieldCheck },
-  { type: "link", label: "生产看板", href: "/admin/system/production-readiness", icon: ShieldCheck },
-  { type: "link", label: "操作日志", href: "/admin/audit-logs", icon: ScrollText },
 ];
 
 export function isAdminNavigationGroup(item: AdminNavigationItem): item is AdminNavigationGroup {
