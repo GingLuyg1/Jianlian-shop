@@ -14,6 +14,7 @@ test("supplier operations UI uses existing admin APIs without changing fulfillme
   const bindingSheet = file("components/admin/suppliers/AdminSupplierBindingSheet.tsx");
   const products = file("app/admin/products/page.tsx");
   const uiRegistry = file("components/admin/suppliers/supplier-ui-registry.ts");
+  const bindingRoute = file("app/api/admin/suppliers/daju/bindings/[productId]/route.ts");
   const browserSources = [supplierPage, supplierWorkspace, bindingSheet, uiRegistry].join("\n");
 
   assert.match(navigation, /label: "供应商管理", href: "\/admin\/suppliers"/);
@@ -41,7 +42,9 @@ test("supplier operations UI uses existing admin APIs without changing fulfillme
   assert.match(bindingSheet, /<select value=\{inputsMapping\[field\] \?\? ""\}/);
   assert.doesNotMatch(bindingSheet, /placeholder="输入对应订单字段/);
   assert.match(bindingSheet, /async function saveBinding\(\)[\s\S]*if \(!detail\.isAuto\)[\s\S]*toast\.error\("该供应商商品不支持自动交付/);
-  assert.match(bindingSheet, /disabled=\{saving \|\| !detail \|\| !detail\.isAuto\}/);
+  assert.match(bindingSheet, /async function saveBinding\(\)[\s\S]*missingRequiredInputs\.length > 0[\s\S]*toast\.error\(`以下供应商必填字段尚未映射/);
+  assert.match(bindingSheet, /以下供应商必填字段尚未映射：\{missingRequiredInputs\.join\("、"\)\}/);
+  assert.match(bindingSheet, /disabled=\{saving \|\| !detail \|\| !detail\.isAuto \|\| missingRequiredInputs\.length > 0\}/);
   assert.match(bindingSheet, /window\.confirm/);
   assert.doesNotMatch(bindingSheet, /\/unbind|action:\s*["']unbind["']|delete\s+metadata\.(?:supplier|fulfillment_source)/i);
 
@@ -50,4 +53,14 @@ test("supplier operations UI uses existing admin APIs without changing fulfillme
   for (const operation of ["listProducts", "getProduct", "createProduct", "updateProduct", "deleteProduct"]) {
     assert.match(products, new RegExp(`${operation}\\(`));
   }
+
+  const detailRead = bindingRoute.indexOf("await client.getProduct(parsed.productId)");
+  const productWrite = bindingRoute.indexOf(".update({ metadata: nextMetadata");
+  assert.ok(detailRead > 0 && productWrite > detailRead, "authoritative supplier detail must be read before the website product is modified");
+  assert.match(bindingRoute, /validateDajuBindingAgainstProductDetail\(parsed, supplierProduct\)/);
+  assert.match(bindingRoute, /compareDajuDecimal\(parsed\.maxUnitCost, "0"\) !== 1/);
+  assert.match(bindingRoute, /DAJU_REQUIRED_INPUTS_UNMAPPED[\s\S]*status|DAJU_REQUIRED_INPUTS_UNMAPPED[\s\S]*, 400/);
+  assert.match(bindingRoute, /DAJU_PRODUCT_NOT_AUTOMATIC[\s\S]*, 400/);
+  assert.match(bindingRoute, /详情读取失败，未保存自动履约绑定/);
+  assert.doesNotMatch(bindingRoute, /\.purchase\(|\/purchase/);
 });

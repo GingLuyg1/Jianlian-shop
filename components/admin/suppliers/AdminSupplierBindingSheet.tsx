@@ -145,6 +145,11 @@ export default function AdminSupplierBindingSheet({ open, product, onOpenChange,
       toast.error("该供应商商品不支持自动交付，不能绑定到自动履约商品。");
       return;
     }
+    const missingRequiredInputs = detail.requiredInputs.filter((field) => !ORDER_FIELD_VALUES.has((inputsMapping[field] ?? "").trim()));
+    if (missingRequiredInputs.length > 0) {
+      toast.error(`以下供应商必填字段尚未映射：${missingRequiredInputs.join("、")}`);
+      return;
+    }
     if (!maxUnitCost.trim() || !Number.isFinite(Number(maxUnitCost)) || Number(maxUnitCost) <= 0) {
       toast.error("请填写有效的供应商成本上限");
       return;
@@ -182,6 +187,7 @@ export default function AdminSupplierBindingSheet({ open, product, onOpenChange,
   const metadata = product?.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata) ? product.metadata : {};
   const currentSupplier = metadata.fulfillment_source === "supplier" ? readString(metadata, "supplier") : "";
   const currentSupplierProductId = readString(metadata, "supplier_product_id");
+  const missingRequiredInputs = detail?.requiredInputs.filter((field) => !ORDER_FIELD_VALUES.has((inputsMapping[field] ?? "").trim())) ?? [];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -199,6 +205,7 @@ export default function AdminSupplierBindingSheet({ open, product, onOpenChange,
               <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="supplier-sku">Supplier SKU（可选）</Label><Input id="supplier-sku" value={supplierSku} onChange={(event) => setSupplierSku(event.target.value)} placeholder="请按供应商 SKU 原始数据人工确认" /></div><div className="space-y-2"><Label htmlFor="supplier-cost-limit">供应商成本上限</Label><Input id="supplier-cost-limit" value={maxUnitCost} onChange={(event) => setMaxUnitCost(event.target.value)} inputMode="decimal" /><p className="text-xs text-slate-500">供应商实际单价超过此成本上限时，自动采购会被阻止。当前价格 ¥{detail.price}，成本上限 ¥{maxUnitCost || "—"}。</p></div></div>
               {!detail.isAuto ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">该供应商商品不支持自动交付，不能绑定到自动履约商品。</div> : null}
               <div><div className="text-sm font-medium text-slate-900">订单字段映射</div>{detail.requiredInputs.length ? <div className="mt-2 space-y-3">{detail.requiredInputs.map((field) => <div key={field} className="grid gap-2 sm:grid-cols-[180px_1fr] sm:items-center"><div className="font-mono text-sm text-slate-700">{field}</div><select value={inputsMapping[field] ?? ""} onChange={(event) => setInputsMapping((current) => ({ ...current, [field]: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="">不配置</option>{ORDER_FIELD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}（{option.value}）</option>)}</select></div>)}</div> : <p className="mt-2 text-sm text-slate-500">该商品没有 requiredInputs，将提交空映射。</p>}</div>
+              {missingRequiredInputs.length > 0 ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">以下供应商必填字段尚未映射：{missingRequiredInputs.join("、")}</div> : null}
               <ReadOnlyJson title="Required Inputs 原始数据" value={detail.requiredInputs} /><ReadOnlyJson title="SKU 原始数据" value={detail.skuVariants} /><ReadOnlyJson title="规格原始数据" value={detail.specs} />
             </div> : <AdminEmptyState className="min-h-[160px]" title="尚未选择供应商商品" description="先搜索并选择一个真实供应商商品。" />}</section>
 
@@ -207,7 +214,7 @@ export default function AdminSupplierBindingSheet({ open, product, onOpenChange,
           </div>
         ) : <AdminErrorState title="未选择网站商品" description="请关闭后从商品列表重新打开。" />}
 
-        <SheetFooter className="mt-6 gap-2 sm:space-x-0"><Button asChild variant="outline"><Link href="/admin/suppliers">打开供应商中心<ExternalLink className="ml-2 h-4 w-4" /></Link></Button><Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button><Button onClick={saveBinding} disabled={saving || !detail || !detail.isAuto}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}保存供应商绑定</Button></SheetFooter>
+        <SheetFooter className="mt-6 gap-2 sm:space-x-0"><Button asChild variant="outline"><Link href="/admin/suppliers">打开供应商中心<ExternalLink className="ml-2 h-4 w-4" /></Link></Button><Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button><Button onClick={saveBinding} disabled={saving || !detail || !detail.isAuto || missingRequiredInputs.length > 0}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}保存供应商绑定</Button></SheetFooter>
       </SheetContent>
     </Sheet>
   );
