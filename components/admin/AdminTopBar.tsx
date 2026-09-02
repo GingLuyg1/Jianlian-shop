@@ -8,10 +8,12 @@ import { Bell, ChevronDown, LayoutDashboard, User } from "lucide-react";
 import AdminGlobalSearch from "./AdminGlobalSearch";
 import {
   adminNavigationItems,
-  isAdminNavigationGroup,
+  getAdminNavigationGroup,
   isAdminNavigationGroupActive,
   isAdminNavigationLinkActive,
+  type AdminNavigationGroupKey,
 } from "./admin-navigation";
+import { toggleNavigationGroup } from "./admin-navigation-state.mjs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,15 +27,12 @@ import { cn } from "@/lib/utils";
 export default function AdminTopBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const productNavigation = adminNavigationItems.find(isAdminNavigationGroup);
-  const isProductRoute = productNavigation ? isAdminNavigationGroupActive(pathname, productNavigation) : false;
-  const [productsOpen, setProductsOpen] = useState(isProductRoute);
+  const routeGroup = getAdminNavigationGroup(pathname);
+  const [openSection, setOpenSection] = useState<AdminNavigationGroupKey | null>(routeGroup);
 
   useEffect(() => {
-    if (isProductRoute) {
-      setProductsOpen(true);
-    }
-  }, [isProductRoute]);
+    setOpenSection(routeGroup);
+  }, [pathname, routeGroup]);
 
   return (
     <div className="sticky top-0 z-30 flex h-[var(--admin-header-height)] shrink-0 items-center border-b border-border bg-white px-4 lg:px-5">
@@ -66,11 +65,12 @@ export default function AdminTopBar() {
                     const Icon = item.icon;
                     if (item.type === "group") {
                       const active = isAdminNavigationGroupActive(pathname, item);
+                      const open = openSection === item.key;
                       return (
-                        <li key={item.label}>
+                        <li key={item.key}>
                           <button
                             type="button"
-                            onClick={() => setProductsOpen((value) => !value)}
+                            onClick={() => setOpenSection((current) => toggleNavigationGroup(current, item.key) as AdminNavigationGroupKey | null)}
                             className={cn(
                               "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors",
                               active
@@ -80,9 +80,9 @@ export default function AdminTopBar() {
                           >
                             <Icon className="h-4 w-4 shrink-0" />
                             <span className="flex-1">{item.label}</span>
-                            <ChevronDown className={cn("h-4 w-4 transition-transform", productsOpen && "rotate-180")} />
+                            <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
                           </button>
-                          {productsOpen && (
+                          {open && (
                             <ul className="mt-1 space-y-1 pl-7">
                               {item.children.map((child) => (
                                 <li key={child.href}>

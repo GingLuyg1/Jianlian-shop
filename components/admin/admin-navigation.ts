@@ -15,6 +15,12 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
+import {
+  getNavigationGroupForPath,
+  isAdminPathActive,
+} from "./admin-navigation-state.mjs";
+
+export type AdminNavigationGroupKey = "products" | "system";
 
 type AdminNavigationLink = {
   type: "link";
@@ -25,8 +31,10 @@ type AdminNavigationLink = {
 
 export type AdminNavigationGroup = {
   type: "group";
+  key: AdminNavigationGroupKey;
   label: string;
   icon: LucideIcon;
+  routePrefixes?: readonly string[];
   children: readonly {
     label: string;
     href: string;
@@ -39,6 +47,7 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
   { type: "link", label: "控制台", href: "/admin", icon: LayoutDashboard },
   {
     type: "group",
+    key: "products",
     label: "商品管理",
     icon: Package,
     children: [
@@ -60,8 +69,10 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
   { type: "link", label: "系统设置", href: "/admin/settings", icon: Settings },
   {
     type: "group",
+    key: "system",
     label: "系统运营",
     icon: AlertTriangle,
+    routePrefixes: ["/admin/system"],
     children: [
       { label: "生产看板", href: "/admin/system/production-readiness" },
       { label: "异常中心", href: "/admin/system-errors" },
@@ -88,10 +99,14 @@ export function isAdminNavigationLinkActive(pathname: string, href: string, prod
 }
 
 export function isAdminNavigationGroupActive(pathname: string, item: AdminNavigationGroup) {
-  return item.children.some((child) => isPathActive(pathname, child.href));
+  return getAdminNavigationGroup(pathname) === item.key;
 }
 
-function isPathActive(pathname: string, href: string) {
-  if (href === "/admin") return pathname === href;
-  return pathname === href || pathname.startsWith(`${href}/`);
+export function getAdminNavigationGroup(pathname: string): AdminNavigationGroupKey | null {
+  return getNavigationGroupForPath(
+    pathname,
+    adminNavigationItems.filter(isAdminNavigationGroup)
+  ) as AdminNavigationGroupKey | null;
 }
+
+const isPathActive = isAdminPathActive;

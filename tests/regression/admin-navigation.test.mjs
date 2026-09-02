@@ -9,8 +9,10 @@ function file(path) {
 
 test("desktop and mobile admin navigation use one production menu contract", () => {
   const navigation = file("components/admin/admin-navigation.ts");
+  const navigationState = file("components/admin/admin-navigation-state.mjs");
   const sidebar = file("components/admin/AdminSidebar.tsx");
   const topBar = file("components/admin/AdminTopBar.tsx");
+  const layout = file("components/admin/AdminLayout.tsx");
 
   assert.match(sidebar, /import\s*\{[\s\S]*adminNavigationItems[\s\S]*\}\s*from "\.\/admin-navigation"/);
   assert.match(topBar, /import\s*\{[\s\S]*adminNavigationItems[\s\S]*\}\s*from "\.\/admin-navigation"/);
@@ -21,8 +23,24 @@ test("desktop and mobile admin navigation use one production menu contract", () 
   assert.match(navigation, /label: "生产看板", href: "\/admin\/system\/production-readiness"/);
   assert.match(navigation, /label: "商品列表", href: "\/admin\/products"/);
   assert.match(navigation, /label: "分类管理", href: "\/admin\/categories"/);
-  assert.match(navigation, /if \(href === "\/admin"\) return pathname === href/);
+  assert.match(navigationState, /if \(href === "\/admin"\) return pathname === href/);
   assert.match(navigation, /href === "\/admin\/categories"[\s\S]*productView === "categories"/);
   assert.match(navigation, /href === "\/admin\/products"[\s\S]*productView !== "categories"/);
-  assert.match(navigation, /pathname === href \|\| pathname\.startsWith\(`\$\{href\}\/`\)/);
+  assert.match(navigationState, /pathname === href \|\| pathname\.startsWith\(`\$\{href\}\/`\)/);
+
+  assert.match(navigation, /key: "products"/);
+  assert.match(navigation, /key: "system"/);
+  assert.match(navigation, /routePrefixes: \["\/admin\/system"\]/);
+  assert.match(sidebar, /openSection === item\.key/);
+  assert.match(topBar, /openSection === item\.key/);
+  assert.match(sidebar, /toggleNavigationGroup\(current, item\.key\)/);
+  assert.match(topBar, /toggleNavigationGroup\(current, item\.key\)/);
+  assert.doesNotMatch(sidebar, /productsOpen|setProductsOpen/);
+  assert.doesNotMatch(topBar, /productsOpen|setProductsOpen/);
+  assert.match(navigationState, /currentGroup === requestedGroup \? null : requestedGroup/);
+
+  assert.match(layout, /\[--admin-sidebar-width:184px\]/);
+  assert.match(layout, /lg:gap-4/);
+  assert.match(sidebar, /w-\[var\(--admin-sidebar-width\)\]/);
+  assert.match(topBar, /SheetContent side="left" className="w-64 p-0"/);
 });
