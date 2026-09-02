@@ -12,8 +12,12 @@ interface AdminLayoutProps {
 
 function AdminShell({ children }: AdminLayoutProps) {
   return (
-    <div className="fixed inset-0 flex h-screen max-h-screen min-h-0 w-full overflow-hidden bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:184px] lg:gap-4">
-      <div className="hidden h-full lg:flex">
+    <div className="fixed inset-0 flex h-screen max-h-screen min-h-0 w-full overflow-hidden bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:184px]">
+      <div className="relative hidden h-full pr-4 lg:flex">
+        <div
+          aria-hidden="true"
+          className="absolute right-0 top-0 h-[var(--admin-header-height)] w-4 border-b border-slate-200 bg-white"
+        />
         <AdminSidebar />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

@@ -40,7 +40,10 @@ test("desktop and mobile admin navigation use one production menu contract", () 
   assert.match(navigationState, /currentGroup === requestedGroup \? null : requestedGroup/);
 
   assert.match(layout, /\[--admin-sidebar-width:184px\]/);
-  assert.match(layout, /lg:gap-4/);
+  assert.doesNotMatch(layout, /lg:gap-4/);
+  assert.match(layout, /relative hidden h-full pr-4 lg:flex/);
+  assert.match(layout, /h-\[var\(--admin-header-height\)\] w-4 border-b border-slate-200 bg-white/);
   assert.match(sidebar, /w-\[var\(--admin-sidebar-width\)\]/);
+  assert.match(sidebar, /h-\[var\(--admin-header-height\)\] items-center border-b/);
   assert.match(topBar, /SheetContent side="left" className="w-64 p-0"/);
 });
