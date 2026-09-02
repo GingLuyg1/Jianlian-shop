@@ -11,12 +11,16 @@ export async function GET() {
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
 
   try {
-    const [orderResult, rechargeResult] = await Promise.all([
+    const [orderResult, rechargeResult, orderExceptionResult, rechargeExceptionResult] = await Promise.all([
       admin.supabase.from("order_payments").select(adminOrderPaymentSelect).limit(1000),
       admin.supabase.from("account_recharges").select(adminRechargeSelect).limit(1000),
+      admin.supabase.from("order_payments").select("id", { count: "exact", head: true }).not("exception_type", "is", null),
+      admin.supabase.from("account_recharges").select("id", { count: "exact", head: true }).not("exception_type", "is", null),
     ]);
     if (orderResult.error) throw orderResult.error;
     if (rechargeResult.error && !isPaymentSchemaMissing(rechargeResult.error)) throw rechargeResult.error;
+    if (orderExceptionResult.error) throw orderExceptionResult.error;
+    if (rechargeExceptionResult.error && !isPaymentSchemaMissing(rechargeExceptionResult.error)) throw rechargeExceptionResult.error;
 
     const rows: AdminPaymentRecord[] = [
       ...((orderResult.data ?? []) as Record<string, unknown>[]).map(normalizeOrderPaymentRow),
@@ -34,13 +38,18 @@ export async function GET() {
       acc[key] = (acc[key] ?? 0) + 1;
       return acc;
     }, {});
+    const exceptionRecordCount =
+      (orderExceptionResult.count ?? 0) +
+      (rechargeExceptionResult.error ? 0 : rechargeExceptionResult.count ?? 0);
 
     return NextResponse.json({
       todayPaymentAmount: orderPaidToday.reduce((sum, row) => sum + row.received_amount, 0),
       todayRechargeAmount: rechargePaidToday.reduce((sum, row) => sum + row.received_amount, 0),
       todaySuccessCount: paidToday.length,
       successRate,
-      pendingExceptionCount: rows.filter((row) => Boolean(row.exception_type)).length,
+      exceptionRecordCount,
+      // Temporary response compatibility for existing consumers. This count is not limited to pending records.
+      pendingExceptionCount: exceptionRecordCount,
       channelShare: Object.entries(channels).map(([channel, count]) => ({ channel, count })),
     });
   } catch (error) {

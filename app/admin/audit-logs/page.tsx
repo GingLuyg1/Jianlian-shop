@@ -9,6 +9,7 @@ import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import { Button } from "@/components/ui/button";
+import { formatAdminAuditActor } from "@/lib/admin/admin-operations-presentation.mjs";
 import { cn } from "@/lib/utils";
 
 type AuditLog = {
@@ -347,8 +348,8 @@ export default function AdminAuditLogsPage() {
                     <td className="px-3 py-2 text-xs tabular-nums text-slate-500 whitespace-nowrap">
                       {formatDate(log.created_at)}
                     </td>
-                    <td className="truncate px-3 py-2 text-slate-700" title={safeText(log.admin_email)}>
-                      {safeText(log.admin_email)}
+                    <td className="truncate px-3 py-2 text-slate-700" title={formatAdminAuditActor(log)}>
+                      {formatAdminAuditActor(log)}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {MODULE_LABELS[log.module] ?? log.module}
@@ -442,7 +443,7 @@ export default function AdminAuditLogsPage() {
             </div>
 
             <div className="space-y-4 text-sm">
-              <DetailRow label="管理员" value={safeText(selectedLog.admin_email)} />
+              <DetailRow label="管理员" value={formatAdminAuditActor(selectedLog)} />
               <DetailRow label="模块" value={MODULE_LABELS[selectedLog.module] ?? selectedLog.module} />
               <DetailRow label="操作" value={selectedLog.action} />
               <DetailRow label="目标对象" value={`${safeText(selectedLog.target_label)} / ${safeText(selectedLog.target_id)}`} />
