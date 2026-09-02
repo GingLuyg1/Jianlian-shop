@@ -16,6 +16,7 @@ const groups = [
   },
   {
     key: "system",
+    routePrefixes: ["/admin/system"],
     children: [
       { href: "/admin/system/production-readiness" },
       { href: "/admin/system-errors" },
@@ -33,6 +34,10 @@ test("route matching opens only the owning admin navigation group", () => {
   assert.equal(getNavigationGroupForPath("/admin/system/production-readiness", groups), "system");
   assert.equal(getNavigationGroupForPath("/admin/system/request-traces/request-id", groups), "system");
   assert.equal(getNavigationGroupForPath("/admin/system-errors", groups), "system");
+  assert.equal(getNavigationGroupForPath("/admin/system/data-consistency", groups), "system");
+  assert.equal(getNavigationGroupForPath("/admin/system/performance", groups), "system");
+  assert.equal(getNavigationGroupForPath("/admin/system/project-status", groups), "system");
+  assert.equal(getNavigationGroupForPath("/admin/systematic", groups), null);
   assert.equal(getNavigationGroupForPath("/admin", groups), null);
 });
 

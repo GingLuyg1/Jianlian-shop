@@ -5,7 +5,9 @@ export function isAdminPathActive(pathname, href) {
 
 export function getNavigationGroupForPath(pathname, groups) {
   for (const group of groups ?? []) {
-    if (group.children?.some((child) => isAdminPathActive(pathname, child.href))) {
+    const childMatches = group.children?.some((child) => isAdminPathActive(pathname, child.href));
+    const prefixMatches = group.routePrefixes?.some((prefix) => isAdminPathActive(pathname, prefix));
+    if (childMatches || prefixMatches) {
       return group.key;
     }
   }

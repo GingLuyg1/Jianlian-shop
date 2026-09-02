@@ -1,6 +1,7 @@
 export type NavigationGroupLike = {
   key: string;
   children: readonly { href: string }[];
+  routePrefixes?: readonly string[];
 };
 
 export function isAdminPathActive(pathname: string, href: string): boolean;

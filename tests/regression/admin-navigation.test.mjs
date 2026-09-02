@@ -30,6 +30,7 @@ test("desktop and mobile admin navigation use one production menu contract", () 
 
   assert.match(navigation, /key: "products"/);
   assert.match(navigation, /key: "system"/);
+  assert.match(navigation, /routePrefixes: \["\/admin\/system"\]/);
   assert.match(sidebar, /openSection === item\.key/);
   assert.match(topBar, /openSection === item\.key/);
   assert.match(sidebar, /toggleNavigationGroup\(current, item\.key\)/);
