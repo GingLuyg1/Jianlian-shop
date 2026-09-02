@@ -1,5 +1,11 @@
 import "server-only";
 
+import {
+  getReleaseBuildArtifactTime,
+  inferReleaseCommit,
+  parseReleaseCommit,
+} from "@/lib/system/release-metadata.mjs";
+
 export type ReleaseInfo = {
   release: string;
   commit: string;
@@ -15,13 +21,19 @@ function firstNonEmpty(...values: Array<string | undefined>) {
 }
 
 export function getReleaseInfo(schemaVersion = "unverified"): ReleaseInfo {
+  const releaseDirectories = [process.env.JIANLIAN_RELEASE_DIR, process.cwd()];
   const commit =
     firstNonEmpty(
       process.env.VERCEL_GIT_COMMIT_SHA,
       process.env.GITHUB_SHA,
       process.env.GIT_COMMIT,
       process.env.NEXT_PUBLIC_COMMIT_SHA
-    ) ?? "unknown";
+    ) ?? inferReleaseCommit(releaseDirectories) ?? "unknown";
+  const artifactDirectory = releaseDirectories.find((value) => parseReleaseCommit(value));
+  const buildTime =
+    firstNonEmpty(process.env.BUILD_TIME, process.env.NEXT_PUBLIC_BUILD_TIME) ??
+    getReleaseBuildArtifactTime(artifactDirectory) ??
+    "unknown";
 
   return {
     release: firstNonEmpty(process.env.NEXT_PUBLIC_APP_VERSION, process.env.APP_VERSION) ?? "0.1.0",
@@ -34,7 +46,7 @@ export function getReleaseInfo(schemaVersion = "unverified"): ReleaseInfo {
         process.env.GIT_BRANCH,
         process.env.NEXT_PUBLIC_GIT_BRANCH
       ) ?? "unknown",
-    buildTime: firstNonEmpty(process.env.BUILD_TIME, process.env.NEXT_PUBLIC_BUILD_TIME) ?? "unknown",
+    buildTime,
     environment: firstNonEmpty(process.env.APP_ENV, process.env.NODE_ENV) ?? "unknown",
     schemaVersion,
   };

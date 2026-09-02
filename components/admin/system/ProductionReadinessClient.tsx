@@ -8,7 +8,9 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatAdminAuditActor, formatIncidentStatus } from "@/lib/admin/admin-operations-presentation.mjs";
 import { cn } from "@/lib/utils";
 
 type StatusPayload = {
@@ -21,9 +23,9 @@ type StatusPayload = {
   checked_at: string;
 };
 
-type PaymentStats = { todayPaymentAmount: number; todayRechargeAmount: number; todaySuccessCount: number; successRate: number; pendingExceptionCount: number };
+type PaymentStats = { todayPaymentAmount: number; todayRechargeAmount: number; todaySuccessCount: number; successRate: number; exceptionRecordCount: number };
 type ErrorEvent = { id: string; level: string; title: string; route: string | null; request_id: string | null; last_seen_at: string; status: string };
-type AuditLog = { id: string; admin_email: string | null; action: string; module: string; result: string; request_id: string; created_at: string };
+type AuditLog = { id: string; admin_user_id: string | null; admin_email: string | null; action: string; module: string; result: string; request_id: string; created_at: string };
 type DashboardData = { status: StatusPayload; payments: PaymentStats | null; orders: { count: number } | null; errors: ErrorEvent[]; audits: AuditLog[]; moduleErrors: Record<string, string> };
 
 async function readJson<T>(url: string): Promise<T> {
@@ -98,16 +100,18 @@ function Dashboard({ data }: { data: DashboardData }) {
         <Metric icon={ClipboardList} label="订单总量" value={orders ? String(orders.count) : "不可用"} warning={!orders} detail={moduleErrors.orders || "来自订单只读列表"} />
         <Metric icon={AlertTriangle} label="未解决严重异常" value={status.errors.available ? String(status.errors.unresolved_critical) : "不可用"} warning={!status.errors.available || status.errors.unresolved_critical > 0} detail={`近 24 小时 ${status.errors.last_24_hours} 条`} />
         <Metric icon={WalletCards} label="今日支付成功" value={payments ? String(payments.todaySuccessCount) : "不可用"} warning={!payments} detail={payments ? `成功率 ${payments.successRate}%` : moduleErrors.payments} />
-        <Metric icon={WalletCards} label="支付异常" value={payments ? String(payments.pendingExceptionCount) : "不可用"} warning={!payments || (payments?.pendingExceptionCount ?? 0) > 0} detail={payments ? `支付 ${payments.todayPaymentAmount} / 充值 ${payments.todayRechargeAmount}` : moduleErrors.payments} />
+        <Metric icon={WalletCards} label="异常记录" value={payments ? `${payments.exceptionRecordCount} 条` : "不可用"} warning={!payments || (payments?.exceptionRecordCount ?? 0) > 0} detail={payments ? "全部时间内存在异常标记的支付或充值记录" : moduleErrors.payments} />
+        <Metric icon={WalletCards} label="今日支付金额" value={payments ? formatMoney(payments.todayPaymentAmount) : "不可用"} warning={!payments} detail="今日已支付订单到账金额" />
+        <Metric icon={WalletCards} label="今日充值到账" value={payments ? formatMoney(payments.todayRechargeAmount) : "不可用"} warning={!payments} detail="今日已完成充值到账金额" />
         <Metric icon={MailWarning} label="邮件待处理或失败" value={status.background_jobs.available ? String(status.background_jobs.email_pending_or_failed) : "不可用"} warning={!status.background_jobs.available || status.background_jobs.email_pending_or_failed > 0} detail={`${status.providers.email.provider} · ${status.providers.email.status}`} />
         <Metric icon={WalletCards} label="已配置支付渠道" value={String(status.providers.payment.configured_channels)} warning={status.providers.payment.status !== "configured"} detail={status.providers.payment.status} />
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="最近异常" href="/admin/system-errors" error={moduleErrors.errors}>
-          {errors.length ? errors.map((event) => <Link key={event.id} href={event.request_id ? `/admin/system-errors?requestId=${encodeURIComponent(event.request_id)}` : "/admin/system-errors"} className="block border-b border-slate-100 px-1 py-3 last:border-0 hover:bg-slate-50"><div className="flex items-center justify-between gap-3"><span className="truncate text-sm font-medium text-slate-900">{event.title}</span><span className="text-xs text-slate-500">{formatDate(event.last_seen_at)}</span></div><div className="mt-1 truncate text-xs text-slate-500">{event.level} · {event.route || "无路由"} · {event.status}</div></Link>) : <AdminEmptyState title="暂无异常记录" description="当前查询未返回系统异常。" className="min-h-[180px]" />}
+        <Panel title="异常事件（人工处理状态）" href="/admin/system-errors" error={moduleErrors.errors} description="未关闭表示事件尚未人工关闭，不代表当前探测仍失败。">
+          {errors.length ? errors.map((event) => <Link key={event.id} href={event.request_id ? `/admin/system-errors?requestId=${encodeURIComponent(event.request_id)}` : "/admin/system-errors"} className="block border-b border-slate-100 px-1 py-3 last:border-0 hover:bg-slate-50"><div className="flex items-center justify-between gap-3"><span className="truncate text-sm font-medium text-slate-900">{event.title}</span><Badge variant="outline" className="shrink-0">{formatIncidentStatus(event.status)}</Badge></div><div className="mt-1 truncate text-xs text-slate-500">最后出现：{formatDate(event.last_seen_at)} · {event.level} · {event.route || "无路由"}</div></Link>) : <AdminEmptyState title="暂无异常记录" description="当前查询未返回系统异常。" className="min-h-[180px]" />}
         </Panel>
         <Panel title="最近后台操作" href="/admin/audit-logs" error={moduleErrors.audits}>
-          {audits.length ? audits.map((log) => <Link key={log.id} href={`/admin/audit-logs?requestId=${encodeURIComponent(log.request_id)}`} className="block border-b border-slate-100 px-1 py-3 last:border-0 hover:bg-slate-50"><div className="flex items-center justify-between gap-3"><span className="truncate text-sm font-medium text-slate-900">{log.action}</span><span className="text-xs text-slate-500">{formatDate(log.created_at)}</span></div><div className="mt-1 truncate text-xs text-slate-500">{log.admin_email || "未知管理员"} · {log.module} · {log.result}</div></Link>) : <AdminEmptyState icon={<ScrollText className="h-5 w-5" />} title="暂无操作日志" description="当前账号可见范围内没有后台操作记录。" className="min-h-[180px]" />}
+          {audits.length ? audits.map((log) => <Link key={log.id} href={`/admin/audit-logs?requestId=${encodeURIComponent(log.request_id)}`} className="block border-b border-slate-100 px-1 py-3 last:border-0 hover:bg-slate-50"><div className="flex items-center justify-between gap-3"><span className="truncate text-sm font-medium text-slate-900">{log.action}</span><span className="text-xs text-slate-500">{formatDate(log.created_at)}</span></div><div className="mt-1 truncate text-xs text-slate-500">{formatAdminAuditActor(log)} · {log.module} · {log.result}</div></Link>) : <AdminEmptyState icon={<ScrollText className="h-5 w-5" />} title="暂无操作日志" description="当前账号可见范围内没有后台操作记录。" className="min-h-[180px]" />}
         </Panel>
       </div>
     </div>
@@ -118,9 +122,10 @@ function Metric({ icon: Icon, label, value, detail, warning }: { icon: typeof Ac
   return <div className="rounded-xl border border-slate-200 p-4"><div className="flex items-center gap-2 text-xs font-medium text-slate-500"><Icon className="h-4 w-4" />{label}</div><div className={cn("mt-2 text-2xl font-semibold", warning ? "text-amber-700" : "text-slate-950")}>{value}</div><div className="mt-1 truncate text-xs text-slate-500" title={detail}>{detail || "—"}</div></div>;
 }
 
-function Panel({ title, href, error, children }: { title: string; href: string; error?: string; children: React.ReactNode }) {
-  return <section className="rounded-xl border border-slate-200 p-4"><div className="mb-2 flex items-center justify-between"><h2 className="font-semibold text-slate-950">{title}</h2><Link href={href} className="text-sm text-primary hover:underline">查看全部</Link></div>{error ? <AdminErrorState title={`${title}不可用`} description={error} className="min-h-[180px]" /> : children}</section>;
+function Panel({ title, href, error, description, children }: { title: string; href: string; error?: string; description?: string; children: React.ReactNode }) {
+  return <section className="rounded-xl border border-slate-200 p-4"><div className="mb-2 flex items-center justify-between gap-3"><div><h2 className="font-semibold text-slate-950">{title}</h2>{description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}</div><Link href={href} className="shrink-0 text-sm text-primary hover:underline">查看全部</Link></div>{error ? <AdminErrorState title={`${title}不可用`} description={error} className="min-h-[180px]" /> : children}</section>;
 }
 
 function getReason(value: unknown, fallback: string) { return value instanceof Error ? value.message : fallback; }
 function formatDate(value: string | null | undefined) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }
+function formatMoney(value: number) { return `¥${Number(value || 0).toFixed(2)}`; }

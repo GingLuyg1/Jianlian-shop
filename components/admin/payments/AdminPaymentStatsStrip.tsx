@@ -13,7 +13,8 @@ type PaymentStats = {
   todayRechargeAmount: number;
   todaySuccessCount: number;
   successRate: number;
-  pendingExceptionCount: number;
+  exceptionRecordCount?: number;
+  pendingExceptionCount?: number;
   channelShare: Array<{ channel: string; count: number }>;
 };
 
@@ -50,7 +51,7 @@ export default function AdminPaymentStatsStrip() {
     { title: "今日充值金额", value: failed ? "-" : money(stats?.todayRechargeAmount), icon: WalletCards },
     { title: "今日成功笔数", value: failed ? "-" : stats?.todaySuccessCount ?? 0, icon: ClipboardList },
     { title: "支付成功率", value: failed ? "-" : `${Number(stats?.successRate ?? 0).toFixed(2)}%`, icon: TrendingUp },
-    { title: "待处理异常", value: failed ? "-" : stats?.pendingExceptionCount ?? 0, icon: Loader, href: "/admin/payments?view=exceptions" },
+    { title: "异常记录", value: failed ? "-" : stats?.exceptionRecordCount ?? stats?.pendingExceptionCount ?? 0, icon: Loader, href: "/admin/payments?view=exceptions" },
     { title: "渠道占比", value: failed ? "-" : channelShare, icon: BarChart3 },
   ];
 

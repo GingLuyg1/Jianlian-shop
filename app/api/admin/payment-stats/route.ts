@@ -34,13 +34,16 @@ export async function GET() {
       acc[key] = (acc[key] ?? 0) + 1;
       return acc;
     }, {});
+    const exceptionRecordCount = rows.filter((row) => Boolean(row.exception_type)).length;
 
     return NextResponse.json({
       todayPaymentAmount: orderPaidToday.reduce((sum, row) => sum + row.received_amount, 0),
       todayRechargeAmount: rechargePaidToday.reduce((sum, row) => sum + row.received_amount, 0),
       todaySuccessCount: paidToday.length,
       successRate,
-      pendingExceptionCount: rows.filter((row) => Boolean(row.exception_type)).length,
+      exceptionRecordCount,
+      // Temporary response compatibility for existing consumers. This count is not limited to pending records.
+      pendingExceptionCount: exceptionRecordCount,
       channelShare: Object.entries(channels).map(([channel, count]) => ({ channel, count })),
     });
   } catch (error) {

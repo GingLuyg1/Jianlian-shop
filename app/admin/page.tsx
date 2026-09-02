@@ -37,6 +37,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DASHBOARD_PAYMENT_CALLBACKS_SELECT,
+  DASHBOARD_PAYMENT_CHANNELS_SELECT,
+  DASHBOARD_PAYMENT_RECONCILIATIONS_SELECT,
+  normalizeDashboardPaymentCallback,
+  normalizeDashboardPaymentChannel,
+  normalizeDashboardPaymentReconciliation,
+} from "@/lib/admin/dashboard-payment-schema.mjs";
 import { getOrderStatusLabel, getPaymentStatusLabel } from "@/lib/orders/order-status";
 import {
   getSupabaseBrowserClient,
@@ -370,14 +378,14 @@ async function loadDashboardData(): Promise<DashboardData> {
       .from("payment_sessions")
       .select("id,channel_code,status,payable_amount,currency,provider_order_no,provider_transaction_id,created_at,paid_at,expires_at")
       .gte("created_at", thirtyDaysAgo.toISOString()),
-    supabase.from("payment_channels").select("channel_code,name,is_enabled,status,provider,network,merchant_id,api_base_url"),
+    supabase.from("payment_channels").select(DASHBOARD_PAYMENT_CHANNELS_SELECT),
     supabase
       .from("payment_callback_logs")
-      .select("id,channel,business_no,status,created_at")
-      .gte("created_at", thirtyDaysAgo.toISOString()),
+      .select(DASHBOARD_PAYMENT_CALLBACKS_SELECT)
+      .gte("received_at", thirtyDaysAgo.toISOString()),
     supabase
       .from("payment_reconciliations")
-      .select("id,reconciliation_status,status,created_at")
+      .select(DASHBOARD_PAYMENT_RECONCILIATIONS_SELECT)
       .gte("created_at", thirtyDaysAgo.toISOString()),
     supabase
       .from("order_deliveries")
@@ -409,13 +417,13 @@ async function loadDashboardData(): Promise<DashboardData> {
     ? ((paymentSessionsResult.value.data ?? []) as Array<Record<string, unknown>>)
     : null;
   const channels = channelsResult.status === "fulfilled" && !channelsResult.value.error
-    ? ((channelsResult.value.data ?? []) as Array<Record<string, unknown>>)
+    ? ((channelsResult.value.data ?? []) as unknown as Array<Record<string, unknown>>).map(normalizeDashboardPaymentChannel)
     : null;
   const callbacks = callbackResult.status === "fulfilled" && !callbackResult.value.error
-    ? ((callbackResult.value.data ?? []) as Array<Record<string, unknown>>)
+    ? ((callbackResult.value.data ?? []) as unknown as Array<Record<string, unknown>>).map(normalizeDashboardPaymentCallback)
     : null;
   const reconciliations = reconciliationResult.status === "fulfilled" && !reconciliationResult.value.error
-    ? ((reconciliationResult.value.data ?? []) as Array<Record<string, unknown>>)
+    ? ((reconciliationResult.value.data ?? []) as unknown as Array<Record<string, unknown>>).map(normalizeDashboardPaymentReconciliation)
     : null;
   const deliveries = deliveriesResult.status === "fulfilled" && !deliveriesResult.value.error
     ? ((deliveriesResult.value.data ?? []) as Array<Record<string, unknown>>)
@@ -462,14 +470,14 @@ async function loadDashboardData(): Promise<DashboardData> {
   };
 
   const channelStats = CHANNELS.map((channel) => {
-    const config = channels?.find((row) => row.channel_code === channel.code);
+    const config = channels?.find((row) => row.code === channel.code);
     const rows = sessions?.filter((session) => session.channel_code === channel.code) ?? null;
     const exceptionRows = rows?.filter((session) => ["failed", "expired", "closed"].includes(String(session.status))) ?? null;
     return {
       code: channel.code,
       label: channel.label,
-      enabled: config ? Boolean(config.is_enabled ?? config.status === "active") : null,
-      configured: config ? Boolean(config.provider || config.merchant_id || config.api_base_url) : null,
+      enabled: config ? config.enabled : null,
+      configured: config ? config.configured : null,
       initiated: rows ? rows.length : null,
       successful: rows ? rows.filter((row) => row.status === "paid").length : null,
       amount: rows ? rows.filter((row) => row.status === "paid").reduce((sum, row) => sum + safeNumber(row.payable_amount), 0) : null,
@@ -630,7 +638,7 @@ async function loadDashboardData(): Promise<DashboardData> {
       { label: "自动发货失败", value: deliveries ? deliveries.filter((row) => row.delivery_status === "failed").length : null, href: "/admin/orders" },
       { label: "库存不足订单", value: deliveries ? deliveries.filter((row) => String(row.failure_reason ?? "").includes("库存")).length : null, href: "/admin/orders" },
       { label: "支付回调失败", value: callbacks ? callbacks.filter((row) => String(row.status).includes("failed") || String(row.status).includes("mismatch")).length : null, href: "/admin/payments" },
-      { label: "对账异常", value: reconciliations ? reconciliations.filter((row) => String(row.reconciliation_status ?? row.status).includes("mismatch") || String(row.reconciliation_status ?? row.status).includes("failed")).length : null, href: "/admin/payments" },
+      { label: "对账异常", value: reconciliations ? reconciliations.filter((row) => String(row.status).includes("mismatch") || String(row.status).includes("failed")).length : null, href: "/admin/payments" },
       { label: "待处理充值", value: recharges ? recharges.filter((row) => ["pending", "processing", "submitted", "under_review"].includes(row.status)).length : null, href: "/admin/recharges" },
       { label: "低库存商品", value: products ? products.filter((product) => product.stock > 0 && product.stock <= 5).length : null, href: "/admin/products" },
     ],
