@@ -24,6 +24,8 @@ test("payment exception count and today's amounts have distinct labels and units
   const stats = file("components/admin/payments/AdminPaymentStatsStrip.tsx");
   assert.match(route, /exceptionRecordCount/);
   assert.match(route, /pendingExceptionCount: exceptionRecordCount/);
+  assert.match(route, /select\("id", \{ count: "exact", head: true \}\)\.not\("exception_type", "is", null\)/);
+  assert.doesNotMatch(route, /rows\.filter\(\(row\) => Boolean\(row\.exception_type\)\)/);
   assert.match(board, /label="异常记录"/);
   assert.match(board, /exceptionRecordCount}\s*条/);
   assert.match(board, /label="今日支付金额"/);
@@ -37,9 +39,10 @@ test("release info uses strict release-directory and build artifact fallbacks", 
   const metadata = file("lib/system/release-metadata.mjs");
   assert.match(releaseInfo, /process\.env\.JIANLIAN_RELEASE_DIR/);
   assert.match(releaseInfo, /process\.cwd\(\)/);
+  assert.match(releaseInfo, /\[process\.cwd\(\), process\.env\.JIANLIAN_RELEASE_DIR\]/);
   assert.match(releaseInfo, /inferReleaseCommit/);
   assert.match(releaseInfo, /getReleaseBuildArtifactTime/);
-  assert.match(metadata, /jianlian-shop-\(\[0-9a-f\]\{40\}\)/i);
+  assert.match(metadata, /\^\\\/www\\\/releases\\\/jianlian-shop-\(\[0-9a-f\]\{40\}\)/);
   assert.match(metadata, /\.next", "BUILD_ID"/);
   assert.doesNotMatch(metadata, /child_process|execSync|spawnSync|git\s+(?:rev-parse|log)/);
 });

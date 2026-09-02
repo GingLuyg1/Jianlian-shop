@@ -21,7 +21,9 @@ function firstNonEmpty(...values: Array<string | undefined>) {
 }
 
 export function getReleaseInfo(schemaVersion = "unverified"): ReleaseInfo {
-  const releaseDirectories = [process.env.JIANLIAN_RELEASE_DIR, process.cwd()];
+  // The process cwd is the running artifact selected by PM2. The configured
+  // release directory is only a fallback if cwd is unavailable/non-standard.
+  const releaseDirectories = [process.cwd(), process.env.JIANLIAN_RELEASE_DIR];
   const commit =
     firstNonEmpty(
       process.env.VERCEL_GIT_COMMIT_SHA,

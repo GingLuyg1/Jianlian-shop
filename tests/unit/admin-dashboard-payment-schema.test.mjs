@@ -5,6 +5,8 @@ import {
   DASHBOARD_PAYMENT_CALLBACKS_SELECT,
   DASHBOARD_PAYMENT_CHANNELS_SELECT,
   DASHBOARD_PAYMENT_RECONCILIATIONS_SELECT,
+  isDashboardPaymentCallbackException,
+  isDashboardPaymentReconciliationException,
   normalizeDashboardPaymentCallback,
   normalizeDashboardPaymentChannel,
   normalizeDashboardPaymentReconciliation,
@@ -22,6 +24,22 @@ test("dashboard payment selects use the migrated production column contracts", (
   assert.equal(fields(DASHBOARD_PAYMENT_CALLBACKS_SELECT).has("business_no"), false);
   assert.equal(fields(DASHBOARD_PAYMENT_RECONCILIATIONS_SELECT).has("reconciliation_status"), false);
   assert.equal(fields(DASHBOARD_PAYMENT_CHANNELS_SELECT).has("channel_code"), false);
+});
+
+test("dashboard payment exception classifiers cover actionable production results", () => {
+  for (const status of ["signature_failed", "amount_mismatch", "currency_mismatch", "business_not_found", "order_not_found", "processing_failed"]) {
+    assert.equal(isDashboardPaymentCallbackException({ status }), true, status);
+  }
+  for (const status of ["received", "verified", "parsed", "duplicate", "success", null]) {
+    assert.equal(isDashboardPaymentCallbackException({ status }), false, String(status));
+  }
+
+  for (const status of ["mismatched", "query_failed", "manual_review"]) {
+    assert.equal(isDashboardPaymentReconciliationException({ status }), true, status);
+  }
+  for (const status of ["matched", "pending", "resolved", null]) {
+    assert.equal(isDashboardPaymentReconciliationException({ status }), false, String(status));
+  }
 });
 
 test("dashboard payment mappers preserve UI semantics without legacy database columns", () => {
