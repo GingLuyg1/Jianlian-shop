@@ -27,7 +27,7 @@ export default function AdminSidebar() {
 
   return (
     <aside className="flex h-full w-[var(--admin-sidebar-width)] shrink-0 flex-col border-r border-slate-200 bg-white">
-      <div className="flex h-16 items-center border-b border-slate-200 px-4">
+      <div className="flex h-[var(--admin-header-height)] items-center border-b border-slate-200 px-4">
         <Link href="/admin" className="flex min-w-0 items-center gap-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white">
             JL
