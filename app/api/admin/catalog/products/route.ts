@@ -59,6 +59,7 @@ export async function GET(request: Request) {
     .slice(0, 100);
   const status = (url.searchParams.get("status") ?? "all").trim();
   const deliveryType = (url.searchParams.get("deliveryType") ?? "all").trim();
+  const stockLevel = (url.searchParams.get("stockLevel") ?? "all").trim();
   const sortBy = (url.searchParams.get("sortBy") ?? "sort_order").trim();
   const page = getQueryInteger(url.searchParams.get("page"), 1, 1, 100000);
   const pageSize = getQueryInteger(url.searchParams.get("pageSize"), 20, 1, 100);
@@ -78,6 +79,7 @@ export async function GET(request: Request) {
   }
   if (status && status !== "all") query = query.eq("status", status);
   if (deliveryType && deliveryType !== "all") query = query.eq("delivery_type", deliveryType);
+  if (stockLevel === "low") query = query.gt("stock", 0).lte("stock", 5);
 
   const sortedQuery =
     sortBy === "updated_at"

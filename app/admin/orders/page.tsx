@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, ChevronLeft, ChevronRight, Eye, Loader2, RefreshCcw, Search, X } from "lucide-react";
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const ALL_VALUE = "all";
+const ORDER_ATTENTION_VALUES = ["pending_orders", "manual_delivery", "auto_delivery_failed", "inventory_shortage"] as const;
 
 type RelationGroup = {
   key: string;
@@ -88,15 +90,20 @@ function getOrderNo(order: OrderRecord | null | undefined) {
 }
 
 export default function AdminOrdersPage() {
+  const searchParams = useSearchParams();
+  const initialAttention = ORDER_ATTENTION_VALUES.includes(searchParams.get("attention") as (typeof ORDER_ATTENTION_VALUES)[number])
+    ? searchParams.get("attention") as (typeof ORDER_ATTENTION_VALUES)[number]
+    : ALL_VALUE;
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState(ALL_VALUE);
-  const [paymentStatus, setPaymentStatus] = useState(ALL_VALUE);
-  const [deliveryType, setDeliveryType] = useState(ALL_VALUE);
-  const [sort, setSort] = useState("created_at_desc");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? ALL_VALUE);
+  const [paymentStatus, setPaymentStatus] = useState(searchParams.get("paymentStatus") ?? ALL_VALUE);
+  const [deliveryType, setDeliveryType] = useState(searchParams.get("deliveryType") ?? ALL_VALUE);
+  const [attention, setAttention] = useState(initialAttention);
+  const [sort, setSort] = useState(searchParams.get("sort") ?? "created_at_desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
@@ -106,7 +113,8 @@ export default function AdminOrdersPage() {
     search.trim() ||
     status !== ALL_VALUE ||
     paymentStatus !== ALL_VALUE ||
-    deliveryType !== ALL_VALUE
+    deliveryType !== ALL_VALUE ||
+    attention !== ALL_VALUE
   );
 
   const loadOrders = useCallback(async () => {
@@ -122,6 +130,17 @@ export default function AdminOrdersPage() {
       if (status !== ALL_VALUE) params.set("status", status);
       if (paymentStatus !== ALL_VALUE) params.set("paymentStatus", paymentStatus);
       if (deliveryType !== ALL_VALUE) params.set("deliveryType", deliveryType);
+      if (attention !== ALL_VALUE) params.set("attention", attention);
+
+      const [sortField, sortDirection] = sort === "amount_desc"
+        ? ["total_amount", "desc"]
+        : sort === "amount_asc"
+          ? ["total_amount", "asc"]
+          : sort.split("_").slice(-1)[0] === "asc"
+            ? [sort.replace(/_asc$/, ""), "asc"]
+            : [sort.replace(/_desc$/, ""), "desc"];
+      params.set("sortBy", sortField);
+      params.set("sortDirection", sortDirection);
 
       const response = await fetch(`/api/admin/orders?${params.toString()}`, { cache: "no-store" });
       const payload = await response.json().catch(() => null);
@@ -133,7 +152,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [deliveryType, page, pageSize, paymentStatus, search, sort, status]);
+  }, [attention, deliveryType, page, pageSize, paymentStatus, search, sort, status]);
 
   useEffect(() => {
     void loadOrders();
@@ -149,6 +168,7 @@ export default function AdminOrdersPage() {
     setStatus(ALL_VALUE);
     setPaymentStatus(ALL_VALUE);
     setDeliveryType(ALL_VALUE);
+    setAttention(ALL_VALUE);
     setSort("created_at_desc");
     setPage(1);
   }
@@ -168,7 +188,7 @@ export default function AdminOrdersPage() {
 
       <Card className="shrink-0">
         <CardContent className="p-4">
-          <div className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_180px_180px_180px_180px_auto]">
+          <div className="grid gap-3 xl:grid-cols-4 2xl:grid-cols-[minmax(240px,1fr)_170px_170px_170px_180px_180px_auto]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
@@ -181,6 +201,13 @@ export default function AdminOrdersPage() {
                 className="pl-9"
               />
             </div>
+            <NativeSelect value={attention} onChange={(value) => { setAttention(value as typeof initialAttention); setPage(1); }} label="运营待办">
+              <option value={ALL_VALUE}>全部运营待办</option>
+              <option value="pending_orders">待处理订单</option>
+              <option value="manual_delivery">待人工交付</option>
+              <option value="auto_delivery_failed">自动发货失败</option>
+              <option value="inventory_shortage">库存不足订单</option>
+            </NativeSelect>
             <NativeSelect value={status} onChange={setStatus} label="订单状态">
               <option value={ALL_VALUE}>全部订单状态</option>
               <option value="pending_payment">待支付</option>

@@ -53,6 +53,7 @@ import {
   hasSupabaseConfig,
 } from "@/lib/supabase/client";
 import type { AdminProduct } from "@/lib/supabase/admin-catalog";
+import { requiresRechargeAdminAttention } from "@/lib/recharges/admin-attention";
 import { listProducts } from "@/lib/supabase/admin-catalog";
 
 type MetricValue = number | string | null;
@@ -90,6 +91,9 @@ type DashboardRecharge = {
   channel_name: string | null;
   channel_code: string | null;
   status: string;
+  review_mode?: string | null;
+  exception_type?: string | null;
+  error_summary?: string | null;
   paid_at?: string | null;
   created_at: string;
 };
@@ -371,7 +375,7 @@ async function loadDashboardData(): Promise<DashboardData> {
       .order("created_at", { ascending: false }),
     supabase
       .from("account_recharges")
-      .select("id,recharge_no,user_email,amount,requested_amount,credited_amount,channel_name,channel_code,status,paid_at,created_at")
+      .select("id,recharge_no,user_email,amount,requested_amount,credited_amount,channel_name,channel_code,status,review_mode,exception_type,error_summary,paid_at,created_at")
       .gte("created_at", thirtyDaysAgo.toISOString())
       .order("created_at", { ascending: false }),
     listProducts({ page: 1, pageSize: 500, sortBy: "updated_at" }),
@@ -635,14 +639,14 @@ async function loadDashboardData(): Promise<DashboardData> {
     trend7: makeTrend(7, orders, recharges, visits),
     trend30: makeTrend(30, orders, recharges, visits),
     todos: [
-      { label: "待处理订单", value: orders ? orders.filter((order) => ["paid", "processing"].includes(order.status)).length : null, href: "/admin/orders?status=paid" },
-      { label: "待人工交付", value: deliveries ? deliveries.filter((row) => row.delivery_status === "pending" && row.delivery_type !== "automatic").length : null, href: "/admin/orders" },
-      { label: "自动发货失败", value: deliveries ? deliveries.filter((row) => row.delivery_status === "failed").length : null, href: "/admin/orders" },
-      { label: "库存不足订单", value: deliveries ? deliveries.filter((row) => String(row.failure_reason ?? "").includes("库存")).length : null, href: "/admin/orders" },
-      { label: "支付回调失败", value: callbacks ? callbacks.filter(isDashboardPaymentCallbackException).length : null, href: "/admin/payments" },
-      { label: "对账异常", value: reconciliations ? reconciliations.filter(isDashboardPaymentReconciliationException).length : null, href: "/admin/payments" },
-      { label: "待处理充值", value: recharges ? recharges.filter((row) => ["pending", "processing", "submitted", "under_review"].includes(row.status)).length : null, href: "/admin/recharges" },
-      { label: "低库存商品", value: products ? products.filter((product) => product.stock > 0 && product.stock <= 5).length : null, href: "/admin/products" },
+      { label: "待处理订单", value: orders ? orders.filter((order) => ["paid", "processing"].includes(order.status)).length : null, href: "/admin/orders?attention=pending_orders" },
+      { label: "待人工交付", value: deliveries ? deliveries.filter((row) => row.delivery_status === "pending" && row.delivery_type !== "automatic").length : null, href: "/admin/orders?attention=manual_delivery" },
+      { label: "自动发货失败", value: deliveries ? deliveries.filter((row) => row.delivery_status === "failed" && row.delivery_type === "automatic").length : null, href: "/admin/orders?attention=auto_delivery_failed" },
+      { label: "库存不足订单", value: deliveries ? deliveries.filter((row) => String(row.failure_reason ?? "").includes("库存")).length : null, href: "/admin/orders?attention=inventory_shortage" },
+      { label: "支付回调失败", value: callbacks ? callbacks.filter(isDashboardPaymentCallbackException).length : null, href: "/admin/payments?view=callbacks&attention=failed" },
+      { label: "对账异常", value: reconciliations ? reconciliations.filter(isDashboardPaymentReconciliationException).length : null, href: "/admin/payments?view=reconciliations&attention=failed" },
+      { label: "待处理充值", value: recharges ? recharges.filter((row) => requiresRechargeAdminAttention(row as Record<string, unknown>)).length : null, href: "/admin/recharges?view=review" },
+      { label: "低库存商品", value: products ? products.filter((product) => product.stock > 0 && product.stock <= 5).length : null, href: "/admin/products?stockLevel=low" },
     ],
     salesRank: ranks.sort((a, b) => b.sales - a.sales).slice(0, 8),
     amountRank: [...ranks].sort((a, b) => b.amount - a.amount).slice(0, 8),
@@ -946,7 +950,7 @@ function MiniStat({ label, value, danger }: { label: string; value: MetricValue;
 function TodoLink({ item }: { item: TodoItem }) {
   const urgent = Number(item.value ?? 0) > 0;
   return (
-    <Link href={item.href} className={`rounded-xl border px-3 py-2 transition hover:border-orange-200 ${urgent ? "bg-orange-50 text-orange-700" : "bg-white text-slate-500"}`}>
+    <Link href={item.href} className={`cursor-pointer rounded-xl border px-3 py-2 transition hover:border-orange-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 ${urgent ? "bg-orange-50 text-orange-700" : "bg-white text-slate-500"}`}>
       <div className="truncate text-xs">{item.label}</div>
       <div className={`mt-1 text-xl font-semibold ${urgent ? "text-orange-700" : "text-slate-400"}`}>{item.value ?? NOT_CONNECTED}</div>
     </Link>

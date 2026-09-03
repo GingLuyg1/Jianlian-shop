@@ -48,6 +48,7 @@ export type ProductFilters = {
   categoryIds?: string[];
   status?: ProductStatus | "all";
   deliveryType?: DeliveryType | "all";
+  stockLevel?: "all" | "low";
   sortBy?: "sort_order" | "updated_at";
   page?: number;
   pageSize?: number;
@@ -304,6 +305,7 @@ export async function listProducts({
   categoryIds,
   status = "all",
   deliveryType = "all",
+  stockLevel = "all",
   sortBy = "sort_order",
   page = 1,
   pageSize = 10,
@@ -314,6 +316,7 @@ export async function listProducts({
   if (categoryIds && categoryIds.length > 0) params.set("categoryIds", categoryIds.join(","));
   if (status !== "all") params.set("status", status);
   if (deliveryType !== "all") params.set("deliveryType", deliveryType);
+  if (stockLevel !== "all") params.set("stockLevel", stockLevel);
   params.set("sortBy", sortBy);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));

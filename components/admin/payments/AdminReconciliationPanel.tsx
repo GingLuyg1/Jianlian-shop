@@ -64,6 +64,10 @@ export default function AdminReconciliationPanel() {
   const debouncedSearch = useDebouncedValue(search);
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
+  useEffect(() => {
+    setResult(new URLSearchParams(window.location.search).get("attention") === "failed" ? "attention" : "all");
+  }, []);
+
   const loadRows = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -132,6 +136,7 @@ export default function AdminReconciliationPanel() {
         </div>
         <select value={result} onChange={(event) => { setResult(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm">
           <option value="all">全部结果</option>
+          <option value="attention">仅异常结果</option>
           {RECONCILIATION_RESULTS.map((item) => <option key={item} value={item}>{getReconciliationResultLabel(item)}</option>)}
         </select>
         <select value={differenceType} onChange={(event) => { setDifferenceType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm">

@@ -236,6 +236,7 @@ export default function AdminProductsPage() {
   const [secondaryFilter, setSecondaryFilter] = useState("all");
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatus | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryType | "all">("all");
+  const [stockFilter, setStockFilter] = useState<"all" | "low">(searchParams.get("stockLevel") === "low" ? "low" : "all");
   const [sortBy, setSortBy] = useState<ProductSortBy>("sort_order");
   const [productPageSize, setProductPageSize] = useState(DEFAULT_PRODUCT_PAGE_SIZE);
   const [productPage, setProductPage] = useState(1);
@@ -284,7 +285,8 @@ export default function AdminProductsPage() {
     primaryFilter !== "all" ||
     secondaryFilter !== "all" ||
     productStatusFilter !== "all" ||
-    deliveryFilter !== "all"
+    deliveryFilter !== "all" ||
+    stockFilter !== "all"
   );
   const isRefreshing = isProductLoading || isCategoryLoading;
   const productDirty = useMemo(
@@ -320,6 +322,7 @@ export default function AdminProductsPage() {
         categoryIds: productCategoryIds && productCategoryIds.length > 1 ? productCategoryIds : undefined,
         status: productStatusFilter,
         deliveryType: deliveryFilter,
+        stockLevel: stockFilter,
         sortBy,
         page: productPage,
         pageSize: productPageSize,
@@ -333,7 +336,7 @@ export default function AdminProductsPage() {
     } finally {
       if (productListRequestRef.current === requestSequence) setIsProductLoading(false);
     }
-  }, [debouncedSearch, deliveryFilter, productCategoryIds, productPage, productPageSize, productStatusFilter, sortBy]);
+  }, [debouncedSearch, deliveryFilter, productCategoryIds, productPage, productPageSize, productStatusFilter, sortBy, stockFilter]);
 
   useEffect(() => {
     loadCategories();
@@ -778,6 +781,7 @@ export default function AdminProductsPage() {
     setSecondaryFilter("all");
     setProductStatusFilter("all");
     setDeliveryFilter("all");
+    setStockFilter("all");
     setSortBy("sort_order");
     setProductPageSize(DEFAULT_PRODUCT_PAGE_SIZE);
     setProductPage(1);
@@ -856,7 +860,7 @@ export default function AdminProductsPage() {
               </div>
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pb-0 pt-0">
-              <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_190px_190px_155px_175px_145px_80px]">
+              <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(240px,1fr)_170px_170px_145px_165px_145px_145px_80px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
@@ -936,6 +940,16 @@ export default function AdminProductsPage() {
                 >
                   <option value="sort_order">按排序</option>
                   <option value="updated_at">按更新时间</option>
+                </NativeSelect>
+                <NativeSelect
+                  value={stockFilter}
+                  onChange={(value) => {
+                    setStockFilter(value as "all" | "low");
+                    setProductPage(1);
+                  }}
+                >
+                  <option value="all">全部库存水平</option>
+                  <option value="low">低库存（1–5）</option>
                 </NativeSelect>
                 <Button variant="outline" onClick={resetProductFilters}>
                   重置

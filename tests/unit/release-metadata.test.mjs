@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { getReleaseBuildArtifactTime, inferReleaseCommit, parseReleaseCommit } from "../../lib/system/release-metadata.mjs";
 
 const SHA = "4ea8c291a8bbb77512df705b783158dc9ff58407";
+const CURRENT_RELEASE_SHA = "5e7a337dd684e8410e3d956513bf0c402796b2e4";
 
 test("release commit fallback accepts only the full production release path", () => {
   assert.equal(parseReleaseCommit(`/www/releases/jianlian-shop-${SHA}`), SHA);
@@ -17,6 +18,7 @@ test("release commit fallback accepts only the full production release path", ()
   assert.equal(parseReleaseCommit("/www/releases/jianlian-shop-4ea8c291"), null);
   assert.equal(parseReleaseCommit(`/tmp/prefix-jianlian-shop-${SHA}-suffix`), null);
   assert.equal(inferReleaseCommit(["/nonstandard", `/www/releases/jianlian-shop-${SHA}`]), SHA);
+  assert.equal(parseReleaseCommit(`/www/releases/jianlian-shop-${CURRENT_RELEASE_SHA}`), CURRENT_RELEASE_SHA);
 });
 
 test("build time fallback reads BUILD_ID mtime only inside a validated production release", () => {

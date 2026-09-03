@@ -351,6 +351,7 @@ export async function listAdminOrders(
     sortBy?: "created_at" | "updated_at" | "total_amount";
     sortDirection?: "asc" | "desc";
     search?: string;
+    attention?: "pending_orders" | "manual_delivery" | "auto_delivery_failed" | "inventory_shortage";
   } = {}
 ): Promise<OrderListResult> {
   const page = Math.max(1, options.page ?? 1);
@@ -360,7 +361,11 @@ export async function listAdminOrders(
 
   let query = supabase.from("orders").select(orderSelect, { count: "exact" });
 
-  if (options.status && options.status !== "all") query = query.eq("status", options.status);
+  if (options.attention === "pending_orders") {
+    query = query.in("status", ["paid", "processing"]);
+  } else if (options.status && options.status !== "all") {
+    query = query.eq("status", options.status);
+  }
   if (options.paymentStatus && options.paymentStatus !== "all") {
     query = query.eq("payment_status", options.paymentStatus);
   }
@@ -369,6 +374,26 @@ export async function listAdminOrders(
   }
   if (options.startDate) query = query.gte("created_at", options.startDate);
   if (options.endDate) query = query.lte("created_at", options.endDate);
+
+  if (options.attention && options.attention !== "pending_orders") {
+    let deliveryQuery = supabase
+      .from("order_deliveries")
+      .select("order_id,delivery_status,delivery_type,failure_reason")
+      .limit(5000);
+    if (options.attention === "manual_delivery") deliveryQuery = deliveryQuery.eq("delivery_status", "pending");
+    if (options.attention === "auto_delivery_failed") deliveryQuery = deliveryQuery.eq("delivery_status", "failed");
+    if (options.attention === "inventory_shortage") deliveryQuery = deliveryQuery.ilike("failure_reason", "%库存%");
+
+    const { data: deliveryRows, error: deliveryError } = await deliveryQuery;
+    if (deliveryError) throw new Error(getOrderErrorMessage(deliveryError, "订单交付状态读取失败"));
+    const matchingRows = ((deliveryRows ?? []) as Array<Record<string, unknown>>).filter((row) => {
+      if (options.attention === "manual_delivery") return row.delivery_type !== "automatic";
+      if (options.attention === "auto_delivery_failed") return row.delivery_type === "automatic";
+      return true;
+    });
+    const orderIds = Array.from(new Set(matchingRows.map((row) => String(row.order_id ?? "")).filter(Boolean)));
+    query = orderIds.length ? query.in("id", orderIds) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  }
 
   const search = options.search?.trim();
   if (search) query = query.or(`order_no.ilike.%${search}%,customer_email.ilike.%${search}%`);

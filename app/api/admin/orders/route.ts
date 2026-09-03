@@ -22,6 +22,10 @@ export async function GET(request: Request) {
     const sortBy = url.searchParams.get("sortBy") ?? "created_at";
     const sortDirection = url.searchParams.get("sortDirection") ?? "desc";
     const search = url.searchParams.get("search") ?? "";
+    const rawAttention = url.searchParams.get("attention") ?? "";
+    const attention = ["pending_orders", "manual_delivery", "auto_delivery_failed", "inventory_shortage"].includes(rawAttention)
+      ? rawAttention
+      : undefined;
 
     const result = await listAdminOrders(admin.supabase, {
       page,
@@ -34,6 +38,7 @@ export async function GET(request: Request) {
       sortBy: sortBy as never,
       sortDirection: sortDirection as never,
       search,
+      attention: attention as never,
     });
 
     return NextResponse.json(result);
