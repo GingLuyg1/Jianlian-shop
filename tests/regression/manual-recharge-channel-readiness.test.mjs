@@ -176,6 +176,7 @@ test("recharge review uses exact CAS, durable intent and safe post-credit reconc
   const uiDecision = file("lib/recharges/review-ui-state.mjs");
   const adminPage = file("components/admin/payments/AdminPaymentRecordsPage.tsx");
   const adminRechargeListRoute = file("app/api/admin/recharges/route.ts");
+  const rechargeAttention = file("lib/recharges/admin-attention.ts");
   const statusMachine = file("lib/recharges/status-machine.ts");
   const rechargeRoute = file("app/api/recharges/route.ts");
 
@@ -255,14 +256,15 @@ test("recharge review uses exact CAS, durable intent and safe post-credit reconc
   assert.match(adminPage, /embedded \? "rounded-xl border bg-white p-4"/);
   assert.doesNotMatch(adminPage, /function RechargeReviewOverlay/);
   assert.match(adminRechargeListRoute, /searchParams\.get\("view"\) === "review"/);
-  assert.match(adminRechargeListRoute, /ACTIVE_REVIEW_STATUSES = new Set\(\["submitted", "reviewing", "approved", "failed"\]\)/);
-  assert.match(adminRechargeListRoute, /COMPLETED_RECHARGE_STATUSES = new Set\(\["paid", "succeeded"\]\)/);
-  assert.match(adminRechargeListRoute, /hasText\(row\.exception_type\) \|\| hasText\(row\.error_summary\)/);
-  assert.match(adminRechargeListRoute, /\["pending", "waiting_payment"\]\.includes\(status\)\) return hasExceptionEvidence/);
-  assert.match(adminRechargeListRoute, /row\.review_mode[\s\S]*?=== "manual"/);
-  assert.match(adminRechargeListRoute, /isClosedWithoutAdminAction/);
+  assert.match(adminRechargeListRoute, /import \{ requiresRechargeAdminAttention \} from "@\/lib\/recharges\/admin-attention"/);
   assert.match(adminRechargeListRoute, /select\(adminRechargeSelect\)/);
   assert.match(adminRechargeListRoute, /sourceRows\.filter\(requiresRechargeAdminAttention\)/);
+  assert.match(rechargeAttention, /ACTIVE_REVIEW_STATUSES = new Set\(\["submitted", "reviewing", "approved", "failed"\]\)/);
+  assert.match(rechargeAttention, /COMPLETED_RECHARGE_STATUSES = new Set\(\["paid", "succeeded"\]\)/);
+  assert.match(rechargeAttention, /hasText\(row\.exception_type\) \|\| hasText\(row\.error_summary\)/);
+  assert.match(rechargeAttention, /\["pending", "waiting_payment"\]\.includes\(status\)\) return hasExceptionEvidence/);
+  assert.match(rechargeAttention, /row\.review_mode[\s\S]*?=== "manual"/);
+  assert.match(rechargeAttention, /isClosedWithoutAdminAction/);
   assert.match(adminPage, /actionInFlightRef\.current/);
   for (const action of ["approve", "reject", "cancel", "retry_credit"]) {
     assert.match(adminPage, new RegExp(`${action}: ".+"`));
