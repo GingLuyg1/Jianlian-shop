@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 type ListPayload = { reconciliations?: AdminPaymentReconciliation[]; count?: number; error?: string };
 type DetailPayload = { reconciliation?: AdminPaymentReconciliation; error?: string };
+type Props = { attention: "all" | "failed"; onAttentionChange: (attention: "all" | "failed") => void };
 
 const PAGE_SIZE = 20;
 
@@ -47,7 +48,7 @@ function useDebouncedValue(value: string, delay = 350) {
   return debounced;
 }
 
-export default function AdminReconciliationPanel() {
+export default function AdminReconciliationPanel({ attention, onAttentionChange }: Props) {
   const [rows, setRows] = useState<AdminPaymentReconciliation[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -63,6 +64,10 @@ export default function AdminReconciliationPanel() {
   const [recheckingId, setRecheckingId] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(search);
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+
+  useEffect(() => {
+    setResult(attention === "failed" ? "attention" : "all");
+  }, [attention]);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -130,15 +135,16 @@ export default function AdminReconciliationPanel() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="对账编号 / 业务单号 / 渠道" className="h-9 pl-9" />
         </div>
-        <select value={result} onChange={(event) => { setResult(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm">
+        <select value={result} onChange={(event) => { const next = event.target.value; setResult(next); onAttentionChange(next === "attention" ? "failed" : "all"); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm">
           <option value="all">全部结果</option>
+          <option value="attention">仅异常结果</option>
           {RECONCILIATION_RESULTS.map((item) => <option key={item} value={item}>{getReconciliationResultLabel(item)}</option>)}
         </select>
         <select value={differenceType} onChange={(event) => { setDifferenceType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm">
           <option value="all">全部差异类型</option>
           {RECONCILIATION_DIFFERENCE_TYPES.map((item) => <option key={item} value={item}>{getDifferenceTypeLabel(item)}</option>)}
         </select>
-        <Button variant="outline" size="sm" onClick={() => { setSearch(""); setResult("all"); setDifferenceType("all"); setPage(1); }}>重置</Button>
+        <Button variant="outline" size="sm" onClick={() => { setSearch(""); setResult("all"); onAttentionChange("all"); setDifferenceType("all"); setPage(1); }}>重置</Button>
       </div>
       {error ? (
         <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadRows} /></div>

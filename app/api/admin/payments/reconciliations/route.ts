@@ -27,7 +27,8 @@ export async function GET(request: Request) {
 
   try {
     let query = admin.supabase.from("payment_reconciliations").select(SELECT, { count: "exact" }).order("checked_at", { ascending: false });
-    if (RECONCILIATION_RESULTS.includes(result as any)) query = query.eq("result", result);
+    if (result === "attention") query = query.in("result", ["mismatched", "query_failed", "manual_review"]);
+    else if (RECONCILIATION_RESULTS.includes(result as any)) query = query.eq("result", result);
     if (RECONCILIATION_DIFFERENCE_TYPES.includes(differenceType as any)) query = query.eq("difference_type", differenceType);
     if (search) {
       query = query.or(`reconciliation_no.ilike.%${search}%,business_id.ilike.%${search}%,channel_code.ilike.%${search}%`);

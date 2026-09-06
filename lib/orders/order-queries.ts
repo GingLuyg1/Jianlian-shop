@@ -351,6 +351,7 @@ export async function listAdminOrders(
     sortBy?: "created_at" | "updated_at" | "total_amount";
     sortDirection?: "asc" | "desc";
     search?: string;
+    attention?: "pending_orders" | "manual_delivery" | "auto_delivery_failed" | "inventory_shortage";
   } = {}
 ): Promise<OrderListResult> {
   const page = Math.max(1, options.page ?? 1);
@@ -358,9 +359,18 @@ export async function listAdminOrders(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase.from("orders").select(orderSelect, { count: "exact" });
+  const hasDeliveryAttention = Boolean(options.attention && options.attention !== "pending_orders");
+  const select = hasDeliveryAttention
+    ? `${orderSelect},attention_deliveries:order_deliveries!inner(order_id,delivery_status,delivery_type,failure_reason)`
+    : orderSelect;
+  let query = supabase.from("orders").select(select, { count: "exact" });
 
-  if (options.status && options.status !== "all") query = query.eq("status", options.status);
+  if (options.attention === "pending_orders") {
+    query = query.in("status", ["paid", "processing"]);
+  }
+  if (options.status && options.status !== "all") {
+    query = query.eq("status", options.status);
+  }
   if (options.paymentStatus && options.paymentStatus !== "all") {
     query = query.eq("payment_status", options.paymentStatus);
   }
@@ -369,6 +379,20 @@ export async function listAdminOrders(
   }
   if (options.startDate) query = query.gte("created_at", options.startDate);
   if (options.endDate) query = query.lte("created_at", options.endDate);
+
+  if (options.attention === "manual_delivery") {
+    query = query
+      .eq("attention_deliveries.delivery_status", "pending")
+      .or("delivery_type.neq.automatic,delivery_type.is.null", { foreignTable: "attention_deliveries" });
+  }
+  if (options.attention === "auto_delivery_failed") {
+    query = query
+      .eq("attention_deliveries.delivery_status", "failed")
+      .eq("attention_deliveries.delivery_type", "automatic");
+  }
+  if (options.attention === "inventory_shortage") {
+    query = query.ilike("attention_deliveries.failure_reason", "%库存%");
+  }
 
   const search = options.search?.trim();
   if (search) query = query.or(`order_no.ilike.%${search}%,customer_email.ilike.%${search}%`);
@@ -382,7 +406,7 @@ export async function listAdminOrders(
   if (error) throw new Error(getOrderErrorMessage(error, "订单读取失败"));
 
   return {
-    orders: ((data ?? []) as Array<Record<string, unknown>>).map(normalizeOrder),
+    orders: ((data ?? []) as unknown as Array<Record<string, unknown>>).map(normalizeOrder),
     count: count ?? 0,
   };
 }

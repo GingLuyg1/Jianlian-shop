@@ -59,11 +59,16 @@ export async function GET(request: Request) {
     .slice(0, 100);
   const status = (url.searchParams.get("status") ?? "all").trim();
   const deliveryType = (url.searchParams.get("deliveryType") ?? "all").trim();
+  const stockLevel = (url.searchParams.get("stockLevel") ?? "all").trim();
   const sortBy = (url.searchParams.get("sortBy") ?? "sort_order").trim();
   const page = getQueryInteger(url.searchParams.get("page"), 1, 1, 100000);
   const pageSize = getQueryInteger(url.searchParams.get("pageSize"), 20, 1, 100);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+
+  if (!["all", "low"].includes(stockLevel)) {
+    return productFailureResponse("PRODUCT_INVALID_STOCK_LEVEL", "未知的库存筛选条件", requestId, 400);
+  }
 
   let query = service.from("products").select(PRODUCT_FIELDS, { count: "exact" });
 
@@ -78,6 +83,7 @@ export async function GET(request: Request) {
   }
   if (status && status !== "all") query = query.eq("status", status);
   if (deliveryType && deliveryType !== "all") query = query.eq("delivery_type", deliveryType);
+  if (stockLevel === "low") query = query.gt("stock", 0).lte("stock", 5);
 
   const sortedQuery =
     sortBy === "updated_at"
