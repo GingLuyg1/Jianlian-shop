@@ -13,22 +13,18 @@ import { getPaymentChannelLabel, maskWallet } from "@/lib/payments/admin-payment
 import { formatDateTime } from "@/lib/i18n/datetime";
 
 type Payload = { callbacks?: AdminPaymentCallback[]; count?: number; error?: string };
+type Props = { attention: "all" | "failed"; onAttentionChange: (attention: "all" | "failed") => void };
 const PAGE_SIZE = 20;
 
-export default function AdminPaymentCallbackPanel() {
+export default function AdminPaymentCallbackPanel({ attention, onAttentionChange }: Props) {
   const [rows, setRows] = useState<AdminPaymentCallback[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [attention, setAttention] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
-
-  useEffect(() => {
-    setAttention(new URLSearchParams(window.location.search).get("attention") === "failed" ? "failed" : "all");
-  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 350);
@@ -63,11 +59,11 @@ export default function AdminPaymentCallbackPanel() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="支付单号 / 渠道交易号" className="h-9 pl-9" />
         </div>
-        <select value={attention} onChange={(event) => { setAttention(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm">
+        <select value={attention} onChange={(event) => { onAttentionChange(event.target.value === "failed" ? "failed" : "all"); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm">
           <option value="all">全部回调</option>
           <option value="failed">仅处理失败</option>
         </select>
-        <Button variant="outline" size="sm" onClick={() => { setSearch(""); setAttention("all"); setPage(1); }}>重置</Button>
+        <Button variant="outline" size="sm" onClick={() => { setSearch(""); onAttentionChange("all"); setPage(1); }}>重置</Button>
       </div>
       {error ? <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadRows} /></div>
         : loading ? <AdminTableSkeleton rows={8} />

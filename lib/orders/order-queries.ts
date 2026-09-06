@@ -359,11 +359,16 @@ export async function listAdminOrders(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase.from("orders").select(orderSelect, { count: "exact" });
+  const hasDeliveryAttention = Boolean(options.attention && options.attention !== "pending_orders");
+  const select = hasDeliveryAttention
+    ? `${orderSelect},attention_deliveries:order_deliveries!inner(order_id,delivery_status,delivery_type,failure_reason)`
+    : orderSelect;
+  let query = supabase.from("orders").select(select, { count: "exact" });
 
   if (options.attention === "pending_orders") {
     query = query.in("status", ["paid", "processing"]);
-  } else if (options.status && options.status !== "all") {
+  }
+  if (options.status && options.status !== "all") {
     query = query.eq("status", options.status);
   }
   if (options.paymentStatus && options.paymentStatus !== "all") {
@@ -375,24 +380,18 @@ export async function listAdminOrders(
   if (options.startDate) query = query.gte("created_at", options.startDate);
   if (options.endDate) query = query.lte("created_at", options.endDate);
 
-  if (options.attention && options.attention !== "pending_orders") {
-    let deliveryQuery = supabase
-      .from("order_deliveries")
-      .select("order_id,delivery_status,delivery_type,failure_reason")
-      .limit(5000);
-    if (options.attention === "manual_delivery") deliveryQuery = deliveryQuery.eq("delivery_status", "pending");
-    if (options.attention === "auto_delivery_failed") deliveryQuery = deliveryQuery.eq("delivery_status", "failed");
-    if (options.attention === "inventory_shortage") deliveryQuery = deliveryQuery.ilike("failure_reason", "%库存%");
-
-    const { data: deliveryRows, error: deliveryError } = await deliveryQuery;
-    if (deliveryError) throw new Error(getOrderErrorMessage(deliveryError, "订单交付状态读取失败"));
-    const matchingRows = ((deliveryRows ?? []) as Array<Record<string, unknown>>).filter((row) => {
-      if (options.attention === "manual_delivery") return row.delivery_type !== "automatic";
-      if (options.attention === "auto_delivery_failed") return row.delivery_type === "automatic";
-      return true;
-    });
-    const orderIds = Array.from(new Set(matchingRows.map((row) => String(row.order_id ?? "")).filter(Boolean)));
-    query = orderIds.length ? query.in("id", orderIds) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  if (options.attention === "manual_delivery") {
+    query = query
+      .eq("attention_deliveries.delivery_status", "pending")
+      .or("delivery_type.neq.automatic,delivery_type.is.null", { foreignTable: "attention_deliveries" });
+  }
+  if (options.attention === "auto_delivery_failed") {
+    query = query
+      .eq("attention_deliveries.delivery_status", "failed")
+      .eq("attention_deliveries.delivery_type", "automatic");
+  }
+  if (options.attention === "inventory_shortage") {
+    query = query.ilike("attention_deliveries.failure_reason", "%库存%");
   }
 
   const search = options.search?.trim();
@@ -407,7 +406,7 @@ export async function listAdminOrders(
   if (error) throw new Error(getOrderErrorMessage(error, "订单读取失败"));
 
   return {
-    orders: ((data ?? []) as Array<Record<string, unknown>>).map(normalizeOrder),
+    orders: ((data ?? []) as unknown as Array<Record<string, unknown>>).map(normalizeOrder),
     count: count ?? 0,
   };
 }

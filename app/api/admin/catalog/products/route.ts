@@ -66,6 +66,10 @@ export async function GET(request: Request) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  if (!["all", "low"].includes(stockLevel)) {
+    return productFailureResponse("PRODUCT_INVALID_STOCK_LEVEL", "未知的库存筛选条件", requestId, 400);
+  }
+
   let query = service.from("products").select(PRODUCT_FIELDS, { count: "exact" });
 
   if (search) {

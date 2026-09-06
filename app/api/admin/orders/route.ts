@@ -4,6 +4,8 @@ import { getOrderErrorMessage, listAdminOrders } from "@/lib/orders/order-querie
 
 export const dynamic = "force-dynamic";
 
+const ORDER_ATTENTION_VALUES = new Set(["pending_orders", "manual_delivery", "auto_delivery_failed", "inventory_shortage"]);
+
 export async function GET(request: Request) {
   try {
     const admin = await getServerAdminContext();
@@ -23,9 +25,10 @@ export async function GET(request: Request) {
     const sortDirection = url.searchParams.get("sortDirection") ?? "desc";
     const search = url.searchParams.get("search") ?? "";
     const rawAttention = url.searchParams.get("attention") ?? "";
-    const attention = ["pending_orders", "manual_delivery", "auto_delivery_failed", "inventory_shortage"].includes(rawAttention)
-      ? rawAttention
-      : undefined;
+    if (rawAttention && !ORDER_ATTENTION_VALUES.has(rawAttention)) {
+      return NextResponse.json({ error: "未知的运营待办筛选条件" }, { status: 400 });
+    }
+    const attention = rawAttention || undefined;
 
     const result = await listAdminOrders(admin.supabase, {
       page,

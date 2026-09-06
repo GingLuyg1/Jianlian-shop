@@ -9,15 +9,24 @@ export const dynamic = "force-dynamic";
 const CALLBACK_LIST_SELECT =
   "id,channel,payment_no,provider_trade_no,signature_result,process_result,http_status,is_duplicate,received_at";
 
+function boundedInteger(value: string | null, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.trunc(parsed))) : fallback;
+}
+
 export async function GET(request: Request) {
   const admin = await getServerAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
 
   const { searchParams } = new URL(request.url);
-  const page = Math.max(1, Number(searchParams.get("page") || 1));
-  const pageSize = Math.min(100, Math.max(10, Number(searchParams.get("pageSize") || 20)));
-  const search = (searchParams.get("search") ?? "").trim().replace(/[%,]/g, "");
-  const attention = searchParams.get("attention") ?? "all";
+  const page = boundedInteger(searchParams.get("page"), 1, 1, 100000);
+  const pageSize = boundedInteger(searchParams.get("pageSize"), 20, 10, 100);
+  const search = (searchParams.get("search") ?? "").trim().replace(/[%,]/g, "").slice(0, 120);
+  const rawAttention = searchParams.get("attention") ?? "";
+  if (rawAttention && rawAttention !== "failed") {
+    return NextResponse.json({ error: "未知的回调筛选条件" }, { status: 400 });
+  }
+  const attention = rawAttention || "all";
   const from = (page - 1) * pageSize;
 
   try {

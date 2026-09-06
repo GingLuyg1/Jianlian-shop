@@ -367,6 +367,7 @@ async function loadDashboardData(): Promise<DashboardData> {
     deliveriesResult,
     visitsResult,
     readinessResult,
+    lowStockResult,
   ] = await Promise.allSettled([
     supabase
       .from("orders")
@@ -407,6 +408,7 @@ async function loadDashboardData(): Promise<DashboardData> {
       if (!response.ok) throw new Error("readiness unavailable");
       return response.json();
     }),
+    listProducts({ page: 1, pageSize: 1, stockLevel: "low", sortBy: "updated_at" }),
   ]);
 
   const orders = ordersResult.status === "fulfilled" && !ordersResult.value.error
@@ -416,6 +418,7 @@ async function loadDashboardData(): Promise<DashboardData> {
     ? ((rechargesResult.value.data ?? []) as DashboardRecharge[])
     : null;
   const products = productsResult.status === "fulfilled" ? productsResult.value.products : null;
+  const lowStockCount = lowStockResult.status === "fulfilled" ? lowStockResult.value.count : null;
   const users = usersResult.status === "fulfilled" && !usersResult.value.error
     ? ((usersResult.value.data ?? []) as Array<{ id: string; role?: string | null; created_at?: string | null }>)
     : null;
@@ -646,7 +649,7 @@ async function loadDashboardData(): Promise<DashboardData> {
       { label: "支付回调失败", value: callbacks ? callbacks.filter(isDashboardPaymentCallbackException).length : null, href: "/admin/payments?view=callbacks&attention=failed" },
       { label: "对账异常", value: reconciliations ? reconciliations.filter(isDashboardPaymentReconciliationException).length : null, href: "/admin/payments?view=reconciliations&attention=failed" },
       { label: "待处理充值", value: recharges ? recharges.filter((row) => requiresRechargeAdminAttention(row as Record<string, unknown>)).length : null, href: "/admin/recharges?view=review" },
-      { label: "低库存商品", value: products ? products.filter((product) => product.stock > 0 && product.stock <= 5).length : null, href: "/admin/products?stockLevel=low" },
+      { label: "低库存商品", value: lowStockCount, href: "/admin/products?stockLevel=low" },
     ],
     salesRank: ranks.sort((a, b) => b.sales - a.sales).slice(0, 8),
     amountRank: [...ranks].sort((a, b) => b.amount - a.amount).slice(0, 8),
@@ -773,6 +776,7 @@ export default function AdminDashboardPage() {
           <Card className="shrink-0 overflow-hidden">
             <CardHeader className="px-4 py-3">
               <CardTitle className="text-base">待办中心</CardTitle>
+              <p className="mt-1 text-xs text-slate-500">数字为近 30 天快照；点击查看当前完整队列。</p>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-2 px-4 pb-4 pt-0 md:grid-cols-4 xl:grid-cols-8">
               {(data?.todos ?? []).map((todo) => (

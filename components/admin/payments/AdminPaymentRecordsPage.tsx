@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 
 type Props = { mode: "payments" | "recharges" };
 type ListPayload = { payments?: AdminPaymentRecord[]; count?: number; error?: string };
+type PaymentAttention = "all" | "failed";
 type DetailPayload = {
   payment?: AdminPaymentRecord;
   callbacks?: AdminPaymentCallback[];
@@ -137,6 +138,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   const [endDate, setEndDate] = useState("");
   const [sort, setSort] = useState("created_desc");
   const [view, setView] = useState<"all" | "exceptions" | "callbacks" | "reconciliations" | "underpayments" | "review">("all");
+  const [attention, setAttention] = useState<PaymentAttention>("all");
   const [exceptionType, setExceptionType] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -164,31 +166,57 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   );
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const syncFromLocation = () => {
+      const params = new URLSearchParams(window.location.search);
+      const nextView = isRechargePage
+        ? (params.get("view") === "review" ? "review" : "all")
+        : params.get("view") === "exceptions"
+          ? "exceptions"
+          : params.get("view") === "callbacks"
+            ? "callbacks"
+            : params.get("view") === "reconciliations"
+              ? "reconciliations"
+              : params.get("view") === "underpayments"
+                ? "underpayments"
+                : "all";
+      setView(nextView);
+      setAttention(!isRechargePage && ["callbacks", "reconciliations"].includes(nextView) && params.get("attention") === "failed" ? "failed" : "all");
     setSearch(params.get("search") ?? "");
     setStatus(params.get("status") ?? "all");
     setChannel(params.get("channel") ?? "all");
     setStartDate(params.get("startDate") ?? "");
     setEndDate(params.get("endDate") ?? "");
     setSort(params.get("sort") ?? "created_desc");
-    if (isRechargePage) {
-      setView(params.get("view") === "review" ? "review" : "all");
-    } else {
+      if (!isRechargePage) {
       setBusinessType(params.get("businessType") ?? "all");
-      setView(
-        params.get("view") === "exceptions"
-          ? "exceptions"
-          : params.get("view") === "callbacks"
-            ? "callbacks"
-          : params.get("view") === "reconciliations"
-            ? "reconciliations"
-            : params.get("view") === "underpayments"
-              ? "underpayments"
-              : "all",
-      );
       setExceptionType(params.get("exceptionType") ?? "all");
-    }
+      }
+    };
+    syncFromLocation();
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
   }, [isRechargePage]);
+
+  const updateView = (nextView: typeof view) => {
+    setView(nextView);
+    setPage(1);
+    if (isRechargePage) return;
+    setAttention("all");
+    const url = new URL(window.location.href);
+    if (nextView === "all") url.searchParams.delete("view");
+    else url.searchParams.set("view", nextView);
+    url.searchParams.delete("attention");
+    if (nextView !== "exceptions") url.searchParams.delete("exceptionType");
+    window.history.pushState(null, "", `${url.pathname}${url.search}`);
+  };
+
+  const updateAttention = (nextAttention: PaymentAttention) => {
+    setAttention(nextAttention);
+    const url = new URL(window.location.href);
+    if (["callbacks", "reconciliations"].includes(view) && nextAttention === "failed") url.searchParams.set("attention", "failed");
+    else url.searchParams.delete("attention");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  };
 
   const buildParams = useCallback(() => new URLSearchParams({
     page: String(page),
@@ -259,7 +287,14 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
 
   const resetFilters = () => {
     setSearch(""); setBusinessType(isRechargePage ? "recharge" : "all"); setChannel("all"); setStatus("all");
-    setStartDate(""); setEndDate(""); setSort("created_desc"); setView("all"); setExceptionType("all"); setPage(1);
+    setStartDate(""); setEndDate(""); setSort("created_desc"); setView("all"); setAttention("all"); setExceptionType("all"); setPage(1);
+    if (!isRechargePage) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("view");
+      url.searchParams.delete("attention");
+      url.searchParams.delete("exceptionType");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    }
   };
   const copyText = async (value: string | null | undefined) => {
     if (!value) return;
@@ -270,8 +305,8 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   return (
     <AdminPageShell title={isRechargePage ? "充值管理" : "支付管理"} description={isRechargePage ? "统一查看账户充值记录，并通过受控审核流程处理需要人工介入的充值。" : "统一查看商品订单和账户充值支付记录，异常支付仅做只读追踪。"} actions={<Button variant="outline" size="sm" onClick={loadPayments} disabled={loading}><RefreshCcw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />刷新</Button>}>
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-        {isRechargePage ? <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部充值</Button><Button size="sm" variant={view === "review" ? "default" : "outline"} onClick={() => { setView("review"); setPage(1); }}>人工审核</Button></div> : <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => { setView("all"); setPage(1); }}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => { setView("exceptions"); setPage(1); }}>异常支付</Button><Button size="sm" variant={view === "callbacks" ? "default" : "outline"} onClick={() => { setView("callbacks"); setPage(1); }}>回调记录</Button><Button size="sm" variant={view === "underpayments" ? "default" : "outline"} onClick={() => { setView("underpayments"); setPage(1); }}>欠额转余额</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "outline"} onClick={() => { setView("reconciliations"); setPage(1); }}>对账记录</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div>}
-        {!isRechargePage && view === "callbacks" ? <AdminPaymentCallbackPanel /> : !isRechargePage && view === "reconciliations" ? <AdminReconciliationPanel /> : !isRechargePage && view === "underpayments" ? <AdminBep20UnderpaymentPanel /> : <>
+        {isRechargePage ? <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => updateView("all")}>全部充值</Button><Button size="sm" variant={view === "review" ? "default" : "outline"} onClick={() => updateView("review")}>人工审核</Button></div> : <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => updateView("all")}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => updateView("exceptions")}>异常支付</Button><Button size="sm" variant={view === "callbacks" ? "default" : "outline"} onClick={() => updateView("callbacks")}>回调记录</Button><Button size="sm" variant={view === "underpayments" ? "default" : "outline"} onClick={() => updateView("underpayments")}>欠额转余额</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "outline"} onClick={() => updateView("reconciliations")}>对账记录</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div>}
+        {!isRechargePage && view === "callbacks" ? <AdminPaymentCallbackPanel attention={attention} onAttentionChange={updateAttention} /> : !isRechargePage && view === "reconciliations" ? <AdminReconciliationPanel attention={attention} onAttentionChange={updateAttention} /> : !isRechargePage && view === "underpayments" ? <AdminBep20UnderpaymentPanel /> : <>
         <div className="grid shrink-0 gap-2 border-b px-4 py-3 min-[1200px]:grid-cols-[minmax(180px,1.2fr)_150px_150px_145px_145px_140px_86px] min-[1600px]:grid-cols-[minmax(220px,1.35fr)_140px_145px_145px_145px_140px_86px_86px]">
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={isRechargePage ? "支付单号 / 充值单号 / 用户邮箱" : "支付单号 / 业务单号 / 用户邮箱"} className="h-9 pl-9" /></div>
           {!isRechargePage ? <select value={businessType} onChange={(event) => { setBusinessType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部业务</option><option value="order">商品订单</option><option value="recharge">账户充值</option></select> : null}
