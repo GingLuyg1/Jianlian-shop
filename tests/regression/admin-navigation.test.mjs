@@ -39,7 +39,7 @@ test("desktop and mobile admin navigation use one production menu contract", () 
   assert.doesNotMatch(topBar, /productsOpen|setProductsOpen/);
   assert.match(navigationState, /currentGroup === requestedGroup \? null : requestedGroup/);
 
-  assert.match(layout, /\[--admin-sidebar-width:184px\]/);
+  assert.match(layout, /\[--admin-sidebar-width:204px\]/);
   assert.doesNotMatch(layout, /lg:gap-4/);
   assert.match(layout, /relative hidden h-full pr-4 lg:flex/);
   assert.match(layout, /h-\[var\(--admin-header-height\)\] w-4 border-b border-slate-200 bg-white/);
