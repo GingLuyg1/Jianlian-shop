@@ -28,14 +28,21 @@ test("reconciliation recheck is confirmed, single-flight in the UI, and state-ga
 
   assert.match(panel, /useRef\(new Set<string>\(\)\)/);
   assert.match(panel, /recheckingRef\.current\.has\(row\.id\)/);
-  assert.match(panel, /window\.confirm\("确认重新检查该对账记录/);
+  assert.match(panel, /AlertDialog/);
+  assert.match(panel, /pendingRecheck/);
   assert.match(panel, /recheckingRef\.current\.add\(row\.id\)/);
   assert.match(panel, /await loadRows\(\)/);
   assert.match(panel, /await loadDetail\(row\)/);
   assert.match(route, /RECHECKABLE_RESULTS = new Set\(\["mismatched", "query_failed", "manual_review"\]\)/);
   assert.match(route, /getServerAdminContext\(\)/);
+  assert.match(route, /isUuid\(params\.reconciliationId\)/);
+  assert.match(route, /reconciliation_not_found/);
   assert.match(route, /recheck_status_not_allowed/);
+  assert.match(route, /recheck_record_invalid/);
   assert.match(route, /writeAdminAuditLog/);
+  assert.match(route, /beforeSummary/);
+  assert.match(route, /afterSummary/);
+  assert.match(route, /safeRecheckResult/);
   assert.match(route, /runPaymentReconciliation/);
 });
 
