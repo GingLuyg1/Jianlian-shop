@@ -14,7 +14,11 @@ export function normalizeRiskError(error: unknown, fallback = "风险数据读�
     return "风险事件表尚未初始化，请先手动执行 risk control migration。";
   }
   if (/permission|policy|forbidden|unauthorized/i.test(message)) return "无权限访问风险数据。";
-  return message.trim() || fallback;
+  return fallback;
+}
+
+export function isValidRiskEventId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export function text(value: unknown) {
