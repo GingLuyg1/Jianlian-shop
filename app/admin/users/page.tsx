@@ -244,7 +244,7 @@ export default function AdminUsersPage() {
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-        <div className="grid shrink-0 gap-3 border-b p-3 2xl:grid-cols-[minmax(260px,1fr)_150px_150px_150px_150px_88px_auto] 2xl:items-center">
+        <div className="grid shrink-0 gap-3 border-b p-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(260px,1fr)_150px_150px_150px_150px_88px_auto] 2xl:items-center">
           <div className="relative min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input

@@ -35,8 +35,8 @@ export default function AdminTopBar() {
   }, [pathname, routeGroup]);
 
   return (
-    <div className="sticky top-0 z-30 flex h-[var(--admin-header-height)] shrink-0 items-center border-b border-border bg-white px-4 lg:px-5">
-      <div className="flex w-full items-center justify-between gap-4">
+    <div className="sticky top-0 z-30 flex h-[var(--admin-header-height)] min-w-0 shrink-0 items-center border-b border-border bg-white px-4 lg:px-5">
+      <div className="flex min-w-0 w-full items-center justify-between gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Sheet>
             <SheetTrigger asChild>
