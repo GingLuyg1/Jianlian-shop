@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Eye, RefreshCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,8 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [recheckingId, setRecheckingId] = useState<string | null>(null);
+  const recheckingRef = useRef(new Set<string>());
+  const [pendingRecheck, setPendingRecheck] = useState<AdminPaymentReconciliation | null>(null);
   const debouncedSearch = useDebouncedValue(search);
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
@@ -114,16 +117,20 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
   }, []);
 
   const recheck = async (row: AdminPaymentReconciliation) => {
+    if (recheckingRef.current.has(row.id)) return;
+    recheckingRef.current.add(row.id);
     setRecheckingId(row.id);
     try {
       const response = await fetch(`/api/admin/payments/reconciliations/${row.id}/recheck`, { method: "POST", cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(payload?.error ?? "重新检查失败");
-      toast.success("已提交重新检查");
+      toast.success("重新检查完成，已刷新服务端结果");
       await loadRows();
+      if (selected?.id === row.id) await loadDetail(row);
     } catch (recheckError) {
       toast.error(recheckError instanceof Error ? recheckError.message : "重新检查失败");
     } finally {
+      recheckingRef.current.delete(row.id);
       setRecheckingId(null);
     }
   };
@@ -181,7 +188,7 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
                   <Td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => loadDetail(row)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button>
-                      <Button variant="outline" size="sm" disabled={!row.provider || recheckingId === row.id} onClick={() => recheck(row)} title={row.provider ? "重新检查渠道状态" : "Provider 未配置，无法重新检查"}><RefreshCcw className="mr-1 h-3.5 w-3.5" />重查</Button>
+                      <Button variant="outline" size="sm" disabled={!row.provider || recheckingId === row.id || !["mismatched", "query_failed", "manual_review"].includes(row.result)} onClick={() => setPendingRecheck(row)} title={!row.provider ? "Provider 未配置，无法重新检查" : !["mismatched", "query_failed", "manual_review"].includes(row.result) ? "当前对账状态不允许重新检查" : "重新检查渠道状态"}><RefreshCcw className="mr-1 h-3.5 w-3.5" />重查</Button>
                     </div>
                   </Td>
                 </tr>
@@ -200,6 +207,22 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
         </div>
       </div>
       {selected ? <ReconciliationDrawer selected={selected} detail={detail} detailLoading={detailLoading} detailError={detailError} onClose={() => setSelected(null)} onRetry={() => loadDetail(selected)} /> : null}
+      <AlertDialog open={Boolean(pendingRecheck)} onOpenChange={(open) => !open && !recheckingId && setPendingRecheck(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认重新检查对账记录？</AlertDialogTitle>
+            <AlertDialogDescription>系统会重新查询支付渠道。若渠道已确认支付，统一支付完成流程可能根据既有幂等规则恢复业务。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(recheckingId)}>取消</AlertDialogCancel>
+            <AlertDialogAction disabled={!pendingRecheck || Boolean(recheckingId)} onClick={() => {
+              const row = pendingRecheck;
+              setPendingRecheck(null);
+              if (row) void recheck(row);
+            }}>确认重查</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
