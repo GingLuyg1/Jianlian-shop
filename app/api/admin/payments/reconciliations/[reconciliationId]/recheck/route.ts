@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = { params: { reconciliationId: string } };
 
+const RECHECKABLE_RESULTS = new Set(["mismatched", "query_failed", "manual_review"]);
+
 export async function POST(request: Request, { params }: RouteContext) {
   const admin = await getServerAdminContext();
   if (!admin.ok) {
@@ -16,10 +18,15 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   try {
-    const { data, error } = await admin.supabase.from("payment_reconciliations").select("id,payment_session_id,business_type,reconciliation_no,provider").eq("id", params.reconciliationId).maybeSingle();
+    const { data, error } = await admin.supabase.from("payment_reconciliations").select("id,payment_session_id,business_type,reconciliation_no,provider,result").eq("id", params.reconciliationId).maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "对账记录不存在" }, { status: 404 });
-    const row = data as { payment_session_id?: string | null; business_type?: "order" | "recharge"; reconciliation_no?: string; provider?: string | null };
+    const row = data as { payment_session_id?: string | null; business_type?: "order" | "recharge"; reconciliation_no?: string; provider?: string | null; result?: string | null };
+    if (!RECHECKABLE_RESULTS.has(String(row.result ?? ""))) {
+      const message = "当前对账状态不允许重新检查";
+      await writeAdminAuditLog({ request, admin: { id: admin.user.id, email: admin.user.email }, action: "recheck_payment_reconciliation", module: "payments", targetType: "payment_reconciliation", targetId: params.reconciliationId, targetLabel: row.reconciliation_no, result: "failed", errorCode: "recheck_status_not_allowed", errorMessage: message, metadata: { result: row.result ?? null } });
+      return NextResponse.json({ error: message }, { status: 409 });
+    }
     if (!row.payment_session_id) return NextResponse.json({ error: "对账记录缺少支付会话，无法重新检查" }, { status: 400 });
     if (!row.provider) return NextResponse.json({ error: "Provider 未配置，无法重新检查" }, { status: 400 });
 

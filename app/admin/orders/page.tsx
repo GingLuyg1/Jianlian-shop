@@ -11,6 +11,7 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import OrderFulfillmentPanel from "@/components/admin/orders/OrderFulfillmentPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -295,7 +296,7 @@ export default function AdminOrdersPage() {
                         <td className="px-4 py-3 text-slate-500">{formatDate(order.updated_at)}</td>
                         <td className="sticky right-0 bg-white px-4 py-3 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)]">
                           <Button size="sm" variant="outline" onClick={() => setSelectedOrder(order)}>
-                            <Eye className="mr-2 h-4 w-4" />查看
+                            <Eye className="mr-2 h-4 w-4" />{attention === "manual_delivery" ? "处理交付" : "查看"}
                           </Button>
                         </td>
                       </tr>
@@ -338,7 +339,7 @@ export default function AdminOrdersPage() {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onUpdated={updateOrderInList}
-          onRefresh={() => void loadOrders()}
+          onRefresh={loadOrders}
         />
       ) : null}
       </div>
@@ -380,7 +381,7 @@ type AdminOrderDrawerProps = {
   order: OrderRecord;
   onClose: () => void;
   onUpdated: (order: OrderRecord) => void;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 };
 
 function AdminOrderDrawer(props: AdminOrderDrawerProps) {
@@ -553,6 +554,16 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
               </div>
             </CardContent>
           </Card>
+
+          <div className="mt-4">
+            <OrderFulfillmentPanel
+              order={order}
+              onReload={async () => {
+                onClose();
+                await onRefresh();
+              }}
+            />
+          </div>
 
           <Card className="mt-4">
             <CardHeader className="px-4 py-3"><CardTitle className="text-base">状态操作</CardTitle></CardHeader>
