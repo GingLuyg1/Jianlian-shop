@@ -199,7 +199,7 @@ export default function AdminOrdersPage() {
                   setPage(1);
                 }}
                 placeholder="搜索订单编号或用户邮箱"
-                className="pl-9"
+                className="h-9 pl-9"
               />
             </div>
             <NativeSelect value={attention} onChange={(value) => { setAttention(value as typeof initialAttention); setPage(1); }} label="运营待办">
@@ -243,7 +243,7 @@ export default function AdminOrdersPage() {
               <option value="amount_desc">金额从高到低</option>
               <option value="amount_asc">金额从低到高</option>
             </NativeSelect>
-            <Button variant="ghost" onClick={resetFilters}>重置</Button>
+            <Button variant="ghost" size="sm" onClick={resetFilters}>重置</Button>
           </div>
         </CardContent>
       </Card>
@@ -367,8 +367,7 @@ function NativeSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20",
-          compact && "h-9"
+          "h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
         )}
       >
         {children}

@@ -12,6 +12,7 @@ test("desktop and mobile admin navigation use one production menu contract", () 
   const navigationState = file("components/admin/admin-navigation-state.mjs");
   const sidebar = file("components/admin/AdminSidebar.tsx");
   const topBar = file("components/admin/AdminTopBar.tsx");
+  const globalSearch = file("components/admin/AdminGlobalSearch.tsx");
   const layout = file("components/admin/AdminLayout.tsx");
 
   assert.match(sidebar, /import\s*\{[\s\S]*adminNavigationItems[\s\S]*\}\s*from "\.\/admin-navigation"/);
@@ -39,11 +40,15 @@ test("desktop and mobile admin navigation use one production menu contract", () 
   assert.doesNotMatch(topBar, /productsOpen|setProductsOpen/);
   assert.match(navigationState, /currentGroup === requestedGroup \? null : requestedGroup/);
 
-  assert.match(layout, /\[--admin-sidebar-width:184px\]/);
+  assert.match(layout, /\[--admin-sidebar-width:204px\]/);
   assert.doesNotMatch(layout, /lg:gap-4/);
   assert.match(layout, /relative hidden h-full pr-4 lg:flex/);
   assert.match(layout, /h-\[var\(--admin-header-height\)\] w-4 border-b border-slate-200 bg-white/);
   assert.match(sidebar, /w-\[var\(--admin-sidebar-width\)\]/);
+  assert.match(sidebar, /min-w-0 flex-1 whitespace-nowrap/);
+  assert.match(sidebar, /ml-auto h-4 w-4 shrink-0 transition-transform/);
   assert.match(sidebar, /h-\[var\(--admin-header-height\)\] items-center border-b/);
+  assert.match(topBar, /h-\[var\(--admin-header-height\)\] min-w-0 shrink-0/);
+  assert.match(globalSearch, /relative min-w-0 w-full max-w-xl flex-1/);
   assert.match(topBar, /SheetContent side="left" className="w-64 p-0"/);
 });

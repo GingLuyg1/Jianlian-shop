@@ -122,7 +122,7 @@ export default function AdminGlobalSearch() {
   }
 
   return (
-    <div ref={containerRef} className="relative max-w-xl flex-1">
+    <div ref={containerRef} className="relative min-w-0 w-full max-w-xl flex-1">
       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={keyword}
@@ -147,7 +147,7 @@ export default function AdminGlobalSearch() {
           }
         }}
         placeholder="搜索订单号、支付单号、用户邮箱、商品名称..."
-        className="h-9 pl-9 pr-9 text-sm"
+        className="h-9 w-full pl-9 pr-9 text-sm"
       />
       {loading ? <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" /> : null}
 
