@@ -41,6 +41,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (!body) return json({ error: "请求参数不正确。" }, { status: 400 });
 
   const userId = context.params.userId;
+  if (!isUuid(userId)) return json({ error: "用户编号格式无效。" }, { status: 400 });
   const action = String(body.action ?? "").trim();
   const reason = String(body.reason ?? "").trim();
   const requestId = String(body.requestId ?? randomUUID()).trim();
@@ -182,13 +183,18 @@ function toChineseError(error: unknown) {
     return "用户管理 RPC 兼容合同尚未就绪，请执行对应兼容 Migration 后重试。";
   }
   if (/not found|不存在/i.test(message)) return "用户不存在或数据未初始化。";
-  if (/余额|balance|小于 0|amount/i.test(message)) return message;
-  return message;
+  if (/小于 0/.test(message)) return "扣减后余额不能小于 0。";
+  if (/金额必须大于 0|amount must be greater/i.test(message)) return "调整金额必须大于 0。";
+  return "操作失败，请稍后重试。";
 }
 
 function isUserManagementCompatibilityError(error: unknown) {
   const message = getAuditErrorMessage(error, "");
   return /account_status|risk_status|super_admin_(?:update_user|adjust_user_balance)|admin_update_user|admin_adjust_user_balance|schema cache|PGRST|42883|42P01/i.test(message);
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 
