@@ -22,8 +22,8 @@ const SORT_VALUES = new Set(["newest", "oldest", "recent_activity", "balance_des
 
 type AdminUserRow = {
   id: string; email: string | null; displayName: string | null; role: string;
-  accountStatus: string; riskStatus: string; balance: number; totalRecharge: number;
-  totalSpend: number; orderCount: number; createdAt: string | null; updatedAt: string | null;
+  accountStatus: string; riskStatus: string; balance: number;
+  createdAt: string | null; updatedAt: string | null;
   lastLoginAt: string | null; statusReason: string | null; riskReason: string | null;
 };
 type UserListResponse = { users?: AdminUserRow[]; count?: number; schemaReady?: boolean; errors?: Record<string, string>; error?: string };
@@ -105,7 +105,7 @@ export default function AdminUsersPage() {
         <StatCard label="本页余额合计" value={money(pageSummary.balance)} />
       </div>
       {!schemaReady ? <Notice>用户管理关键字段或 RPC 兼容合同尚未就绪；当前仅显示可以安全读取的资料。</Notice> : null}
-      {Object.keys(partialErrors).length ? <Notice>部分关联统计读取失败：{Object.values(partialErrors).join("、")}</Notice> : null}
+      {Object.keys(partialErrors).length ? <Notice>部分用户管理能力检查失败：{Object.values(partialErrors).join("、")}</Notice> : null}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="shrink-0 border-b border-slate-100 p-3">
@@ -123,13 +123,13 @@ export default function AdminUsersPage() {
 
         <div className="min-h-0 flex-1 overflow-auto">
           {error ? <AdminErrorState title="用户列表加载失败" description={error} onRetry={() => void loadUsers()} /> : loading ? <AdminTableSkeleton rows={10} /> : users.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的用户" : "暂无用户"} description={hasFilters ? "请调整筛选条件后再试。" : "新用户注册后会显示在这里。"} /> : (
-            <table className="w-full min-w-[1280px] table-fixed text-sm">
-              <colgroup><col className="w-[190px]" /><col className="w-[210px]" /><col className="w-[90px]" /><col className="w-[100px]" /><col className="w-[110px]" /><col className="w-[110px]" /><col className="w-[100px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[105px]" /><col className="w-[78px]" /></colgroup>
-              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500"><tr className="border-b">{["用户", "邮箱", "角色", "账户状态", "当前余额", "累计充值", "订单数量", "注册时间", "最近活动", "风险状态", "操作"].map((heading) => <th key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
+            <table className="w-full min-w-[1060px] table-fixed text-sm">
+              <colgroup><col className="w-[190px]" /><col className="w-[210px]" /><col className="w-[90px]" /><col className="w-[100px]" /><col className="w-[110px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[105px]" /><col className="w-[78px]" /></colgroup>
+              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500"><tr className="border-b">{["用户", "邮箱", "角色", "账户状态", "当前余额", "注册时间", "最近活动", "风险状态", "操作"].map((heading) => <th key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
               <tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id} className="hover:bg-slate-50">
                 <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{user.displayName || "未命名用户"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={user.id}>{user.id}</div></td>
                 <td className="truncate px-3 py-2" title={user.email ?? ""}>{user.email || "—"}</td><td className="px-3 py-2">{ROLE_LABELS[user.role] ?? user.role}</td>
-                <td className="px-3 py-2"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-3 py-2 font-semibold">{money(user.balance)}</td><td className="px-3 py-2">{money(user.totalRecharge)}</td><td className="px-3 py-2">{user.orderCount}</td>
+                <td className="px-3 py-2"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-3 py-2 font-semibold">{money(user.balance)}</td>
                 <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(user.createdAt)}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-3 py-2"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></td>
                 <td className="px-3 py-2"><Button asChild variant="ghost" size="sm"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
               </tr>)}</tbody>

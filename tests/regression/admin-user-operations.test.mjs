@@ -19,6 +19,10 @@ test("user list is SuperAdmin-only and uses database filters, exact count, and b
   assert.match(route, /RISK_STATUSES\.has/);
   assert.match(route, /ROLES\.has/);
   assert.match(route, /SORTS\.has/);
+  for (const historySource of ["orders", "account_recharges", "balance_transactions"]) {
+    assert.doesNotMatch(route, new RegExp(`\\.from\\("${historySource}"\\)`));
+  }
+  assert.doesNotMatch(route, /loadOrdersByUsers|loadRechargesByUsers|loadBalanceTransactionsByUsers|applyStats/);
 });
 
 test("user UI keeps shareable URL state and exposes no unsafe write actions", () => {
@@ -41,6 +45,7 @@ test("user detail validates UUID, limits rows, and strictly filters safe audit f
   assert.match(route, /status: 400/);
   assert.match(route, /\.eq\("target_id", userId\)/);
   assert.match(route, /\.eq\("target_type", "user"\)/);
+  assert.match(route, /\.limit\(50\)/);
   assert.match(route, /\.limit\(30\)/);
   assert.doesNotMatch(route, /before_summary,after_summary,metadata/);
   for (const sensitive of ["password_hash", "refresh_token", "access_token", "raw_session", "mfa_secret", "authorization", "cookie"]) assert.doesNotMatch(route, new RegExp(sensitive, "i"));
@@ -63,5 +68,9 @@ test("user detail provides real related navigation, risks, and audit without fak
   assert.match(page, /账户状态/);
   assert.match(page, /风险事件/);
   assert.match(page, /后台审计历史/);
+  assert.match(page, /最近风险事件/);
+  assert.doesNotMatch(page, /summary\.(?:orderCount|rechargeCount)|riskEvents\.length/);
+  assert.doesNotMatch(route, /orderCount:\s*orders\.length|rechargeCount:\s*recharges\.length/);
+  assert.doesNotMatch(page, /累计充值|累计消费|订单数量|关联订单[^\n]*count=|关联充值[^\n]*count=/);
   assert.doesNotMatch(page, /method:\s*"(?:POST|PATCH|DELETE)"|submitAction|window\.confirm/);
 });

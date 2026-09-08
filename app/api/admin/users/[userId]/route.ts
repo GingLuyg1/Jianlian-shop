@@ -76,7 +76,7 @@ export async function GET(request: Request, context: RouteContext) {
 
     return json({
       profile: profileResult.profile,
-      summary: buildSummary(profileResult.profile, orders.rows, recharges.rows, transactions.rows, deliveries.rows),
+      summary: buildSummary(profileResult.profile, orders.rows, recharges.rows, transactions.rows),
       orders: orders.rows.map(normalizeOrder),
       recharges: recharges.rows.map(normalizeRecharge),
       balanceTransactions: transactions.rows.map(normalizeBalanceTransaction),
@@ -182,7 +182,7 @@ function normalizeProfile(row: Row | null) {
   };
 }
 
-function buildSummary(profile: NonNullable<ReturnType<typeof normalizeProfile>>, orders: Row[], recharges: Row[], transactions: Row[], deliveries: Row[]) {
+function buildSummary(profile: NonNullable<ReturnType<typeof normalizeProfile>>, orders: Row[], recharges: Row[], transactions: Row[]) {
   const totalRecharge = recharges
     .filter((row) => ["paid", "succeeded"].includes(String(row.status ?? "")))
     .reduce((sum, row) => sum + finiteNumber(row.credited_amount ?? row.requested_amount ?? row.amount), 0);
@@ -196,10 +196,6 @@ function buildSummary(profile: NonNullable<ReturnType<typeof normalizeProfile>>,
     balance: profile.balance,
     totalRecharge,
     totalSpend: totalSpendFromLedger > 0 ? totalSpendFromLedger : totalSpendFromOrders,
-    orderCount: orders.length,
-    rechargeCount: recharges.length,
-    transactionCount: transactions.length,
-    deliveryCount: deliveries.length,
   };
 }
 

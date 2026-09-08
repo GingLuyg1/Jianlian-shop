@@ -17,10 +17,6 @@ const ACCOUNT_STATUSES = new Set(["active", "restricted", "suspended", "disabled
 const RISK_STATUSES = new Set(["normal", "watch", "high_risk", "blocked"]);
 const ROLES = new Set(["user", "admin"]);
 const SORTS = new Set(["newest", "oldest", "recent_activity", "balance_desc", "balance_asc"]);
-const paidRechargeStatuses = new Set(["paid", "succeeded"]);
-const spendOrderStatuses = new Set(["paid", "processing", "delivered", "completed"]);
-const debitBusinessTypes = new Set(["order_payment"]);
-
 type ProfileRow = Record<string, unknown>;
 
 type NormalizedUser = {
@@ -31,9 +27,6 @@ type NormalizedUser = {
   accountStatus: string;
   riskStatus: string;
   balance: number;
-  totalRecharge: number;
-  totalSpend: number;
-  orderCount: number;
   createdAt: string | null;
   updatedAt: string | null;
   lastLoginAt: string | null;
@@ -89,17 +82,9 @@ export async function GET(request: Request) {
 
     const compatibility = await loadUserManagementCompatibility(admin.supabase);
     const pageUsers = profileResult.rows.map(normalizeProfile);
-    const ids = pageUsers.map((user) => user.id);
-    const [orders, recharges, transactions] = await Promise.all([
-      loadOrdersByUsers(supabase, ids),
-      loadRechargesByUsers(supabase, ids),
-      loadBalanceTransactionsByUsers(supabase, ids),
-    ]);
-
-    const usersWithStats = pageUsers.map((user) => applyStats(user, orders, recharges, transactions));
 
     return json({
-      users: usersWithStats,
+      users: pageUsers,
       count: profileResult.count,
       page,
       pageSize,
@@ -107,9 +92,6 @@ export async function GET(request: Request) {
       schemaReady: profileResult.schemaReady && compatibility.schemaReady,
       errors: compactErrors({
         userManagement: compatibility.error,
-        orders: orders.error,
-        recharges: recharges.error,
-        balanceTransactions: transactions.error,
       }),
     });
   } catch (error) {
@@ -190,59 +172,11 @@ function normalizeProfile(row: ProfileRow): NormalizedUser {
     accountStatus: textOrNull(row.account_status) ?? "active",
     riskStatus: textOrNull(row.risk_status) ?? "normal",
     balance: finiteNumber(row.balance),
-    totalRecharge: 0,
-    totalSpend: 0,
-    orderCount: 0,
     createdAt: textOrNull(row.created_at),
     updatedAt: textOrNull(row.updated_at),
     lastLoginAt: textOrNull(row.last_login_at),
     statusReason: textOrNull(row.status_reason),
     riskReason: textOrNull(row.risk_reason),
-  };
-}
-
-async function loadOrdersByUsers(supabase: any, userIds: string[]) {
-  if (userIds.length === 0) return { rows: [] as ProfileRow[], error: null as string | null };
-  const { data, error } = await supabase.from("orders").select("id,user_id,total_amount,status,created_at").in("user_id", userIds);
-  return { rows: (data ?? []) as ProfileRow[], error: error ? "订单统计读取失败" : null };
-}
-
-async function loadRechargesByUsers(supabase: any, userIds: string[]) {
-  if (userIds.length === 0) return { rows: [] as ProfileRow[], error: null as string | null };
-  const { data, error } = await supabase
-    .from("account_recharges")
-    .select("id,user_id,amount,requested_amount,credited_amount,status,created_at")
-    .in("user_id", userIds);
-  return { rows: (data ?? []) as ProfileRow[], error: error ? "充值统计读取失败" : null };
-}
-
-async function loadBalanceTransactionsByUsers(supabase: any, userIds: string[]) {
-  if (userIds.length === 0) return { rows: [] as ProfileRow[], error: null as string | null };
-  const { data, error } = await supabase
-    .from("balance_transactions")
-    .select("id,user_id,business_type,direction,amount,status,created_at")
-    .in("user_id", userIds);
-  return { rows: (data ?? []) as ProfileRow[], error: error ? "余额流水读取失败" : null };
-}
-
-function applyStats(user: NormalizedUser, orders: { rows: ProfileRow[] }, recharges: { rows: ProfileRow[] }, transactions: { rows: ProfileRow[] }) {
-  const userOrders = orders.rows.filter((row) => row.user_id === user.id);
-  const userRecharges = recharges.rows.filter((row) => row.user_id === user.id);
-  const userTransactions = transactions.rows.filter((row) => row.user_id === user.id);
-  const transactionSpend = userTransactions
-    .filter((row) => row.direction === "debit" && row.status === "completed" && debitBusinessTypes.has(String(row.business_type ?? "")))
-    .reduce((sum, row) => sum + finiteNumber(row.amount), 0);
-  const orderSpend = userOrders
-    .filter((row) => spendOrderStatuses.has(String(row.status ?? "")))
-    .reduce((sum, row) => sum + finiteNumber(row.total_amount), 0);
-
-  return {
-    ...user,
-    orderCount: userOrders.length,
-    totalSpend: transactionSpend > 0 ? transactionSpend : orderSpend,
-    totalRecharge: userRecharges
-      .filter((row) => paidRechargeStatuses.has(String(row.status ?? "")))
-      .reduce((sum, row) => sum + finiteNumber(row.credited_amount ?? row.requested_amount ?? row.amount), 0),
   };
 }
 
