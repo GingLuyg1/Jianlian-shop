@@ -32,6 +32,7 @@ export async function GET(request: Request, context: RouteContext) {
   const serviceClient = getSupabaseServiceRoleClient();
   const supabase = serviceClient ?? admin.supabase;
   const userId = context.params.userId;
+  if (!isUuid(userId)) return json({ error: "用户编号格式无效。" }, { status: 400 });
 
   try {
     const profileResult = await loadProfile(supabase, userId);
@@ -49,7 +50,7 @@ export async function GET(request: Request, context: RouteContext) {
       return json({ error: profileResult.error ?? "用户不存在" }, { status: profileResult.schemaReady ? 404 : 503 });
     }
 
-    const [compatibility, orders, recharges, transactions, deliveries, statusHistory, riskRecords, auditLogs] = await Promise.all([
+    const [compatibility, orders, recharges, transactions, deliveries, statusHistory, riskRecords, riskEvents, auditLogs] = await Promise.all([
       loadUserManagementCompatibility(admin.supabase),
       loadRows(supabase, "orders", "id,order_no,status,payment_status,total_amount,currency,delivery_type,created_at,updated_at", userId, "created_at"),
       loadRows(supabase, "account_recharges", "id,recharge_no,channel_name,channel_code,currency,amount,requested_amount,credited_amount,status,created_at,paid_at", userId, "created_at"),
@@ -57,6 +58,7 @@ export async function GET(request: Request, context: RouteContext) {
       loadRows(supabase, "order_deliveries", "id,order_id,order_item_id,product_id,delivery_type,delivery_status,delivered_at,viewed_at,created_at,updated_at", userId, "created_at"),
       loadRowsByColumn(supabase, "user_account_status_history", "id,old_status,new_status,reason,admin_email,request_id,created_at", "user_id", userId, "created_at"),
       loadRowsByColumn(supabase, "user_risk_records", "id,old_risk_status,new_risk_status,reason,admin_email,request_id,created_at", "user_id", userId, "created_at"),
+      loadRowsByColumn(supabase, "risk_events", "id,rule_code,risk_level,risk_score,recommended_action,business_type,business_id,summary,status,occurrences,last_seen_at,created_at", "user_id", userId, "last_seen_at"),
       loadAuditLogs(supabase, userId),
     ]);
 
@@ -82,6 +84,7 @@ export async function GET(request: Request, context: RouteContext) {
       notifications: [],
       statusHistory: statusHistory.rows,
       riskRecords: riskRecords.rows,
+      riskEvents: riskEvents.rows.map(normalizeRiskEvent),
       auditLogs: auditLogs.rows,
       errors: compactErrors({
         userManagement: compatibility.error,
@@ -92,6 +95,7 @@ export async function GET(request: Request, context: RouteContext) {
         deliveries: deliveries.error,
         statusHistory: statusHistory.error,
         riskRecords: riskRecords.error,
+        riskEvents: riskEvents.error,
         auditLogs: auditLogs.error,
       }),
       schemaReady: profileResult.schemaReady && compatibility.schemaReady,
@@ -152,8 +156,9 @@ async function loadRowsByColumn(supabase: any, table: string, select: string, co
 async function loadAuditLogs(supabase: any, userId: string) {
   const { data, error } = await supabase
     .from("admin_audit_logs")
-    .select("id,admin_email,action,module,target_type,target_id,result,before_summary,after_summary,metadata,created_at,request_id")
+    .select("id,admin_email,action,module,target_type,target_id,target_label,result,created_at,request_id")
     .eq("target_id", userId)
+    .eq("target_type", "user")
     .order("created_at", { ascending: false })
     .limit(30);
   return { rows: (data ?? []) as Row[], error: error ? "审计日志读取失败" : null };
@@ -259,6 +264,23 @@ function normalizeDelivery(row: Row) {
   };
 }
 
+function normalizeRiskEvent(row: Row) {
+  return {
+    id: String(row.id ?? ""),
+    ruleCode: textOrNull(row.rule_code),
+    riskLevel: textOrNull(row.risk_level) ?? "low",
+    riskScore: finiteNumber(row.risk_score),
+    recommendedAction: textOrNull(row.recommended_action),
+    businessType: textOrNull(row.business_type),
+    businessId: textOrNull(row.business_id),
+    summary: textOrNull(row.summary),
+    status: textOrNull(row.status) ?? "open",
+    occurrences: finiteNumber(row.occurrences),
+    lastSeenAt: textOrNull(row.last_seen_at),
+    createdAt: textOrNull(row.created_at),
+  };
+}
+
 function compactErrors(input: Record<string, string | null>) {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => Boolean(value)));
 }
@@ -275,6 +297,10 @@ function finiteNumber(value: unknown) {
 function numberOrNull(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 

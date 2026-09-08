@@ -13,6 +13,10 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE_DEFAULT = 20;
+const ACCOUNT_STATUSES = new Set(["active", "restricted", "suspended", "disabled"]);
+const RISK_STATUSES = new Set(["normal", "watch", "high_risk", "blocked"]);
+const ROLES = new Set(["user", "admin"]);
+const SORTS = new Set(["newest", "oldest", "recent_activity", "balance_desc", "balance_asc"]);
 const paidRechargeStatuses = new Set(["paid", "succeeded"]);
 const spendOrderStatuses = new Set(["paid", "processing", "delivered", "completed"]);
 const debitBusinessTypes = new Set(["order_payment"]);
@@ -55,31 +59,36 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const page = positiveInteger(url.searchParams.get("page"), 1);
   const pageSize = Math.min(100, positiveInteger(url.searchParams.get("pageSize"), PAGE_SIZE_DEFAULT));
-  const search = (url.searchParams.get("search") ?? "").trim().toLowerCase();
-  const accountStatus = url.searchParams.get("accountStatus") ?? "all";
-  const riskStatus = url.searchParams.get("riskStatus") ?? "all";
-  const registeredFrom = url.searchParams.get("registeredFrom") ?? "";
-  const registeredTo = url.searchParams.get("registeredTo") ?? "";
+  const search = sanitizeSearch(url.searchParams.get("search"));
+  const requestedStatus = url.searchParams.get("status") ?? url.searchParams.get("accountStatus") ?? "all";
+  const requestedRisk = url.searchParams.get("risk") ?? url.searchParams.get("riskStatus") ?? "all";
+  const requestedRole = url.searchParams.get("role") ?? "all";
+  const accountStatus = ACCOUNT_STATUSES.has(requestedStatus) ? requestedStatus : "all";
+  const riskStatus = RISK_STATUSES.has(requestedRisk) ? requestedRisk : "all";
+  const role = ROLES.has(requestedRole) ? requestedRole : "all";
+  const registeredFrom = validDate(url.searchParams.get("registeredFrom"), false);
+  const registeredTo = validDate(url.searchParams.get("registeredTo"), true);
+  const requestedSort = url.searchParams.get("sort") ?? "newest";
+  const sort = SORTS.has(requestedSort) ? requestedSort : "newest";
 
   try {
-    const profileResult = await loadProfiles(supabase);
+    const profileResult = await loadProfiles(supabase, {
+      page,
+      pageSize,
+      search,
+      accountStatus,
+      riskStatus,
+      role,
+      registeredFrom,
+      registeredTo,
+      sort,
+    });
     if (!profileResult.ok) {
       return json({ users: [], count: 0, page, pageSize, schemaReady: false, error: profileResult.error }, { status: 503 });
     }
 
     const compatibility = await loadUserManagementCompatibility(admin.supabase);
-    let users = profileResult.rows.map(normalizeProfile);
-    if (search) {
-      users = users.filter((user) =>
-        [user.email, user.displayName, user.id].some((value) => (value ?? "").toLowerCase().includes(search))
-      );
-    }
-    if (accountStatus !== "all") users = users.filter((user) => user.accountStatus === accountStatus);
-    if (riskStatus !== "all") users = users.filter((user) => user.riskStatus === riskStatus);
-    if (registeredFrom) users = users.filter((user) => compareDate(user.createdAt, registeredFrom) >= 0);
-    if (registeredTo) users = users.filter((user) => compareDate(user.createdAt, registeredTo) <= 0);
-
-    const pageUsers = users.slice((page - 1) * pageSize, page * pageSize);
+    const pageUsers = profileResult.rows.map(normalizeProfile);
     const ids = pageUsers.map((user) => user.id);
     const [orders, recharges, transactions] = await Promise.all([
       loadOrdersByUsers(supabase, ids),
@@ -91,9 +100,10 @@ export async function GET(request: Request) {
 
     return json({
       users: usersWithStats,
-      count: users.length,
+      count: profileResult.count,
       page,
       pageSize,
+      filters: { accountStatus, riskStatus, role, sort },
       schemaReady: profileResult.schemaReady && compatibility.schemaReady,
       errors: compactErrors({
         userManagement: compatibility.error,
@@ -108,23 +118,62 @@ export async function GET(request: Request) {
   }
 }
 
-async function loadProfiles(supabase: any) {
-  const { data, error } = await supabase.from("profiles").select(ADMIN_USER_PROFILE_EXTENDED_SELECT).order("created_at", { ascending: false }).limit(5000);
-  if (!error) return { ok: true as const, rows: (data ?? []) as ProfileRow[], schemaReady: true };
+type ProfileQuery = {
+  page: number;
+  pageSize: number;
+  search: string;
+  accountStatus: string;
+  riskStatus: string;
+  role: string;
+  registeredFrom: string | null;
+  registeredTo: string | null;
+  sort: string;
+};
 
-  if (classifyAdminUserProfileSchemaError(error) === "optional_identity_missing") {
-    const core = await supabase.from("profiles").select(ADMIN_USER_PROFILE_CORE_SELECT).order("created_at", { ascending: false }).limit(5000);
-    if (!core.error) return { ok: true as const, rows: (core.data ?? []) as ProfileRow[], schemaReady: true };
+async function loadProfiles(supabase: any, input: ProfileQuery) {
+  const extended = await runProfileQuery(supabase, ADMIN_USER_PROFILE_EXTENDED_SELECT, input, true);
+  if (!extended.error) return { ok: true as const, rows: extended.rows, count: extended.count, schemaReady: true };
+
+  if (classifyAdminUserProfileSchemaError(extended.error) === "optional_identity_missing") {
+    const core = await runProfileQuery(supabase, ADMIN_USER_PROFILE_CORE_SELECT, input, false);
+    if (!core.error) return { ok: true as const, rows: core.rows, count: core.count, schemaReady: true };
     if (classifyAdminUserProfileSchemaError(core.error) !== "required_management_missing") {
-      return { ok: false as const, rows: [], schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
+      return { ok: false as const, rows: [], count: 0, schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
     }
-  } else if (classifyAdminUserProfileSchemaError(error) !== "required_management_missing") {
-    return { ok: false as const, rows: [], schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
+  } else if (classifyAdminUserProfileSchemaError(extended.error) !== "required_management_missing") {
+    return { ok: false as const, rows: [], count: 0, schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
   }
 
-  const legacy = await supabase.from("profiles").select(ADMIN_USER_PROFILE_LEGACY_SELECT).order("created_at", { ascending: false }).limit(5000);
-  if (!legacy.error) return { ok: true as const, rows: (legacy.data ?? []) as ProfileRow[], schemaReady: false };
-  return { ok: false as const, rows: [], schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
+  const legacyInput = { ...input, accountStatus: "all", riskStatus: "all", sort: input.sort === "recent_activity" ? "newest" : input.sort };
+  if (input.accountStatus !== "all" || input.riskStatus !== "all" || input.sort === "recent_activity") {
+    return { ok: false as const, rows: [], count: 0, schemaReady: false, error: "当前数据库缺少所选筛选或排序需要的用户管理字段。" };
+  }
+  const legacy = await runProfileQuery(supabase, ADMIN_USER_PROFILE_LEGACY_SELECT, legacyInput, false);
+  if (!legacy.error) return { ok: true as const, rows: legacy.rows, count: legacy.count, schemaReady: false };
+  return { ok: false as const, rows: [], count: 0, schemaReady: false, error: "用户资料读取失败，请稍后重试。" };
+}
+
+async function runProfileQuery(supabase: any, select: string, input: ProfileQuery, includeNames: boolean) {
+  let query = supabase.from("profiles").select(select, { count: "exact" });
+  if (input.search) {
+    const filters = [`email.ilike.%${input.search}%`];
+    if (isUuid(input.search)) filters.unshift(`id.eq.${input.search}`);
+    if (includeNames) filters.push(`display_name.ilike.%${input.search}%`, `full_name.ilike.%${input.search}%`, `nickname.ilike.%${input.search}%`, `name.ilike.%${input.search}%`);
+    query = query.or(filters.join(","));
+  }
+  if (input.accountStatus !== "all") query = query.eq("account_status", input.accountStatus);
+  if (input.riskStatus !== "all") query = query.eq("risk_status", input.riskStatus);
+  if (input.role !== "all") query = query.eq("role", input.role);
+  if (input.registeredFrom) query = query.gte("created_at", input.registeredFrom);
+  if (input.registeredTo) query = query.lte("created_at", input.registeredTo);
+  if (input.sort === "oldest") query = query.order("created_at", { ascending: true });
+  else if (input.sort === "recent_activity") query = query.order("last_login_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
+  else if (input.sort === "balance_desc") query = query.order("balance", { ascending: false }).order("created_at", { ascending: false });
+  else if (input.sort === "balance_asc") query = query.order("balance", { ascending: true }).order("created_at", { ascending: false });
+  else query = query.order("created_at", { ascending: false });
+  const from = (input.page - 1) * input.pageSize;
+  const { data, error, count } = await query.range(from, from + input.pageSize - 1);
+  return { rows: (data ?? []) as ProfileRow[], count: count ?? 0, error };
 }
 
 async function loadUserManagementCompatibility(supabase: any) {
@@ -206,12 +255,18 @@ function positiveInteger(value: string | null, fallback: number) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function compareDate(value: string | null, boundary: string) {
-  if (!value) return -1;
-  const left = new Date(value).getTime();
-  const right = new Date(boundary).getTime();
-  if (!Number.isFinite(left) || !Number.isFinite(right)) return 0;
-  return left - right;
+function sanitizeSearch(value: string | null) {
+  return (value ?? "").trim().replace(/[^\p{L}\p{N}@._+\-\s]/gu, "").slice(0, 120);
+}
+
+function validDate(value: string | null, endOfDay: boolean) {
+  if (!value) return null;
+  const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function textOrNull(value: unknown) {

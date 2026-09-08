@@ -40,15 +40,12 @@ test("payments, recharges, refunds and users keep operations UI and API contract
   assert.match(refunds, /method: "PATCH"/);
   assert.match(refunds, /window\.confirm\("确认执行该退款操作/);
 
-  assert.match(users, /fetch\(`\/api\/admin\/users\?\$\{params\.toString\(\)\}`/);
-  for (const parameter of ["search", "accountStatus", "riskStatus", "registeredFrom", "registeredTo"]) {
-    assert.match(users, new RegExp(`\\b${parameter},`));
+  assert.match(users, /fetch\(`\/api\/admin\/users\?\$\{queryString\}`/);
+  for (const parameter of ["search", "status", "role", "risk", "registeredFrom", "registeredTo", "sort"]) {
+    assert.match(users, new RegExp(`\\b${parameter}\\b`));
   }
-  assert.match(users, /fetch\(`\/api\/admin\/users\/\$\{userId\}\/actions`/);
-  assert.match(users, /submitAction\("update_account_status"\)/);
-  assert.match(users, /submitAction\("update_risk_status"\)/);
-  assert.match(users, /submitAction\("adjust_balance"\)/);
-  assert.match(users, /window\.confirm\("确认执行该用户管理操作/);
+  assert.match(users, /href=\{`\/admin\/users\/\$\{user\.id\}`\}/);
+  assert.doesNotMatch(users, /\/actions|submitAction|method:\s*"POST"/);
 
   for (const source of [paymentWorkspace, refunds, users]) {
     assert.doesNotMatch(source, /(?:const|let)\s+(?:mock|fake)[A-Za-z0-9_]*/i);

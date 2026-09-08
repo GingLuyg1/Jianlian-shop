@@ -1,7 +1,9 @@
-﻿"use client";
+"use client";
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RefreshCw, Search, X } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Eye, RefreshCw, Search } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
@@ -10,639 +12,140 @@ import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
-
-const ACCOUNT_LABELS: Record<string, string> = {
-  active: "正常",
-  restricted: "受限",
-  suspended: "暂停",
-  disabled: "禁用",
-};
-
-const RISK_LABELS: Record<string, string> = {
-  normal: "正常",
-  watch: "关注",
-  high_risk: "高风险",
-  blocked: "拦截",
-};
-
-const ADJUSTMENT_LABELS: Record<string, string> = {
-  increase: "增加余额",
-  decrease: "扣减余额",
-  compensation: "系统补偿",
-  refund: "订单退款",
-  correction: "错误入账修正",
-  other: "其他",
-};
+const ACCOUNT_LABELS: Record<string, string> = { active: "正常", restricted: "受限", suspended: "暂停", disabled: "禁用" };
+const RISK_LABELS: Record<string, string> = { normal: "正常", watch: "关注", high_risk: "高风险", blocked: "拦截" };
+const ROLE_LABELS: Record<string, string> = { user: "用户", admin: "管理员" };
+const SORT_VALUES = new Set(["newest", "oldest", "recent_activity", "balance_desc", "balance_asc"]);
 
 type AdminUserRow = {
-  id: string;
-  email: string | null;
-  displayName: string | null;
-  role: string;
-  accountStatus: string;
-  riskStatus: string;
-  balance: number;
-  totalRecharge: number;
-  totalSpend: number;
-  orderCount: number;
-  createdAt: string | null;
-  updatedAt: string | null;
-  lastLoginAt: string | null;
-  statusReason: string | null;
-  riskReason: string | null;
+  id: string; email: string | null; displayName: string | null; role: string;
+  accountStatus: string; riskStatus: string; balance: number; totalRecharge: number;
+  totalSpend: number; orderCount: number; createdAt: string | null; updatedAt: string | null;
+  lastLoginAt: string | null; statusReason: string | null; riskReason: string | null;
 };
+type UserListResponse = { users?: AdminUserRow[]; count?: number; schemaReady?: boolean; errors?: Record<string, string>; error?: string };
 
-type UserDetail = {
-  profile: AdminUserRow;
-  summary: {
-    balance: number;
-    totalRecharge: number;
-    totalSpend: number;
-    orderCount: number;
-    rechargeCount: number;
-    transactionCount: number;
-    deliveryCount: number;
-  };
-  orders: Record<string, unknown>[];
-  recharges: Record<string, unknown>[];
-  balanceTransactions: Record<string, unknown>[];
-  deliveries: Record<string, unknown>[];
-  notifications: Record<string, unknown>[];
-  statusHistory: Record<string, unknown>[];
-  riskRecords: Record<string, unknown>[];
-  auditLogs: Record<string, unknown>[];
-  errors?: Record<string, string>;
-  schemaReady?: boolean;
-};
-
-type UserListResponse = {
-  users: AdminUserRow[];
-  count: number;
-  page: number;
-  pageSize: number;
-  schemaReady?: boolean;
-  errors?: Record<string, string>;
-  error?: string;
-};
-
-type ActionForm = {
-  accountStatus: string;
-  riskStatus: string;
-  adjustmentType: string;
-  direction: "credit" | "debit";
-  amount: string;
-  reason: string;
-};
-
-function formatDate(value: unknown) {
-  if (!value || typeof value !== "string") return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("zh-CN", { hour12: false });
-}
-
-function money(value: unknown, currency = "¥") {
-  const parsed = Number(value);
-  return `${currency}${Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00"}`;
-}
-
-function text(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : "—";
-}
-
-function valueOf(row: Record<string, unknown>, key: string) {
-  return row[key];
-}
-
-function statusBadgeClass(value: string, kind: "account" | "risk") {
-  if (kind === "account") {
-    if (value === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    if (value === "restricted") return "border-amber-200 bg-amber-50 text-amber-700";
-    if (value === "suspended") return "border-orange-200 bg-orange-50 text-orange-700";
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-  if (value === "normal") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (value === "watch") return "border-amber-200 bg-amber-50 text-amber-700";
-  if (value === "high_risk") return "border-orange-200 bg-orange-50 text-orange-700";
-  return "border-red-200 bg-red-50 text-red-700";
+function useDebouncedValue(value: string, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => { const timer = window.setTimeout(() => setDebounced(value), delay); return () => window.clearTimeout(timer); }, [delay, value]);
+  return debounced;
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const initial = useSearchParams();
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [schemaReady, setSchemaReady] = useState(true);
   const [partialErrors, setPartialErrors] = useState<Record<string, string>>({});
-  const [search, setSearch] = useState("");
-  const [accountStatus, setAccountStatus] = useState("all");
-  const [riskStatus, setRiskStatus] = useState("all");
-  const [registeredFrom, setRegisteredFrom] = useState("");
-  const [registeredTo, setRegisteredTo] = useState("");
-  const [page, setPage] = useState(1);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [search, setSearch] = useState(initial.get("search") ?? "");
+  const [status, setStatus] = useState(normalizeFilter(initial.get("status"), ACCOUNT_LABELS));
+  const [role, setRole] = useState(normalizeFilter(initial.get("role"), ROLE_LABELS));
+  const [risk, setRisk] = useState(normalizeFilter(initial.get("risk"), RISK_LABELS));
+  const [registeredFrom, setRegisteredFrom] = useState(initial.get("registeredFrom") ?? "");
+  const [registeredTo, setRegisteredTo] = useState(initial.get("registeredTo") ?? "");
+  const [sort, setSort] = useState(SORT_VALUES.has(initial.get("sort") ?? "") ? initial.get("sort")! : "newest");
+  const [page, setPage] = useState(Math.max(Number(initial.get("page") ?? 1) || 1, 1));
+  const debouncedSearch = useDebouncedValue(search);
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE), sort });
+    if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+    if (status !== "all") params.set("status", status);
+    if (role !== "all") params.set("role", role);
+    if (risk !== "all") params.set("risk", risk);
+    if (registeredFrom) params.set("registeredFrom", registeredFrom);
+    if (registeredTo) params.set("registeredTo", registeredTo);
+    return params.toString();
+  }, [debouncedSearch, page, registeredFrom, registeredTo, risk, role, sort, status]);
 
   const loadUsers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(PAGE_SIZE),
-      search,
-      accountStatus,
-      riskStatus,
-      registeredFrom,
-      registeredTo,
-    });
-
+    setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/admin/users?${params.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/admin/users?${queryString}`, { cache: "no-store" });
       const payload = (await response.json().catch(() => ({}))) as UserListResponse;
       if (!response.ok) throw new Error(payload.error || "用户列表加载失败。");
-      setUsers(payload.users ?? []);
-      setCount(payload.count ?? 0);
-      setSchemaReady(payload.schemaReady !== false);
-      setPartialErrors(payload.errors ?? {});
+      setUsers(payload.users ?? []); setCount(payload.count ?? 0);
+      setSchemaReady(payload.schemaReady !== false); setPartialErrors(payload.errors ?? {});
     } catch (loadError) {
-      setUsers([]);
-      setCount(0);
-      setError(loadError instanceof Error ? loadError.message : "用户列表加载失败。");
-    } finally {
-      setLoading(false);
-    }
-  }, [accountStatus, page, registeredFrom, registeredTo, riskStatus, search]);
+      setUsers([]); setCount(0); setError(loadError instanceof Error ? loadError.message : "用户列表加载失败。");
+    } finally { setLoading(false); }
+  }, [queryString]);
 
+  useEffect(() => { router.replace(`${pathname}?${queryString}`, { scroll: false }); void loadUsers(); }, [loadUsers, pathname, queryString, router]);
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    setSearch(initial.get("search") ?? "");
+    setStatus(normalizeFilter(initial.get("status"), ACCOUNT_LABELS));
+    setRole(normalizeFilter(initial.get("role"), ROLE_LABELS));
+    setRisk(normalizeFilter(initial.get("risk"), RISK_LABELS));
+    setRegisteredFrom(initial.get("registeredFrom") ?? "");
+    setRegisteredTo(initial.get("registeredTo") ?? "");
+    setSort(SORT_VALUES.has(initial.get("sort") ?? "") ? initial.get("sort")! : "newest");
+    setPage(Math.max(Number(initial.get("page") ?? 1) || 1, 1));
+  }, [initial]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, registeredFrom, registeredTo, risk, role, sort, status]);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
-  const hasFilters = Boolean(
-    search.trim() ||
-    accountStatus !== "all" ||
-    riskStatus !== "all" ||
-    registeredFrom ||
-    registeredTo
-  );
-  const stats = useMemo(
-    () => ({
-      active: users.filter((user) => user.accountStatus === "active").length,
-      risk: users.filter((user) => user.riskStatus !== "normal").length,
-      balance: users.reduce((sum, user) => sum + Number(user.balance || 0), 0),
-    }),
-    [users]
-  );
-
-  function resetFilters() {
-    setSearch("");
-    setAccountStatus("all");
-    setRiskStatus("all");
-    setRegisteredFrom("");
-    setRegisteredTo("");
-    setPage(1);
-  }
+  const hasFilters = Boolean(debouncedSearch || status !== "all" || role !== "all" || risk !== "all" || registeredFrom || registeredTo || sort !== "newest");
+  const pageSummary = useMemo(() => ({ active: users.filter((user) => user.accountStatus === "active").length, risk: users.filter((user) => user.riskStatus !== "normal").length, balance: users.reduce((sum, user) => sum + Number(user.balance || 0), 0) }), [users]);
+  const resetFilters = () => { setSearch(""); setStatus("all"); setRole("all"); setRisk("all"); setRegisteredFrom(""); setRegisteredTo(""); setSort("newest"); setPage(1); };
 
   return (
-    <AdminPageShell
-      title="用户管理"
-      description="查看用户资产、账户状态、风险标记和管理员操作记录。"
-      actions={
-        <Button variant="outline" size="sm" onClick={loadUsers} disabled={loading}>
-          <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
-          刷新
-        </Button>
-      }
-    >
+    <AdminPageShell title="用户管理" description="只读查询用户资料、账户摘要、关联业务、风险记录和后台审计历史。" actions={<Button variant="outline" onClick={() => void loadUsers()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}>
       <div className="mb-3 grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="当前结果" value={count} />
-        <StatCard label="本页正常账户" value={stats.active} />
-        <StatCard label="本页风险账户" value={stats.risk} tone={stats.risk > 0 ? "warn" : "default"} />
-        <StatCard label="本页余额合计" value={money(stats.balance)} />
+        <StatCard label="本页正常账户" value={pageSummary.active} />
+        <StatCard label="本页风险账户" value={pageSummary.risk} tone={pageSummary.risk ? "warn" : "default"} />
+        <StatCard label="本页余额合计" value={money(pageSummary.balance)} />
       </div>
+      {!schemaReady ? <Notice>用户管理关键字段或 RPC 兼容合同尚未就绪；当前仅显示可以安全读取的资料。</Notice> : null}
+      {Object.keys(partialErrors).length ? <Notice>部分关联统计读取失败：{Object.values(partialErrors).join("、")}</Notice> : null}
 
-      {!schemaReady ? (
-        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          用户管理关键字段或 RPC 兼容合同尚未就绪；页面会以只读兼容模式显示可读取资料，请管理员执行对应兼容 Migration 后复核。
-        </div>
-      ) : null}
-      {Object.keys(partialErrors).length ? (
-        <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
-          部分模块读取失败：{Object.values(partialErrors).join("、")}
-        </div>
-      ) : null}
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-        <div className="grid shrink-0 gap-3 border-b p-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(260px,1fr)_150px_150px_150px_150px_88px_auto] 2xl:items-center">
-          <div className="relative min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder="搜索邮箱、昵称或用户 ID"
-              className="h-9 pl-9"
-            />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="shrink-0 border-b border-slate-100 p-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_138px_120px_138px_150px_150px_180px_76px]">
+            <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="邮箱、昵称或用户 ID" className="h-10 pl-9" /></label>
+            <Select value={status} onChange={setStatus}><option value="all">全部账户状态</option>{Object.entries(ACCOUNT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+            <Select value={role} onChange={setRole}><option value="all">全部角色</option>{Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+            <Select value={risk} onChange={setRisk}><option value="all">全部风险状态</option>{Object.entries(RISK_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+            <Input aria-label="注册开始日期" type="date" value={registeredFrom} onChange={(event) => setRegisteredFrom(event.target.value)} className="h-10" />
+            <Input aria-label="注册结束日期" type="date" value={registeredTo} onChange={(event) => setRegisteredTo(event.target.value)} className="h-10" />
+            <Select value={sort} onChange={setSort}><option value="newest">最新注册</option><option value="oldest">最早注册</option><option value="recent_activity">最近登录</option><option value="balance_desc">余额从高到低</option><option value="balance_asc">余额从低到高</option></Select>
+            <Button variant="outline" onClick={resetFilters}>重置</Button>
           </div>
-          <NativeSelect value={accountStatus} onChange={(value) => { setAccountStatus(value); setPage(1); }}>
-            <option value="all">全部账户状态</option>
-            <option value="active">正常</option>
-            <option value="restricted">受限</option>
-            <option value="suspended">暂停</option>
-            <option value="disabled">禁用</option>
-          </NativeSelect>
-          <NativeSelect value={riskStatus} onChange={(value) => { setRiskStatus(value); setPage(1); }}>
-            <option value="all">全部风险状态</option>
-            <option value="normal">正常</option>
-            <option value="watch">关注</option>
-            <option value="high_risk">高风险</option>
-            <option value="blocked">拦截</option>
-          </NativeSelect>
-          <Input type="date" value={registeredFrom} onChange={(event) => { setRegisteredFrom(event.target.value); setPage(1); }} className="h-9" />
-          <Input type="date" value={registeredTo} onChange={(event) => { setRegisteredTo(event.target.value); setPage(1); }} className="h-9" />
-          <Button variant="outline" size="sm" onClick={resetFilters}>重置</Button>
-          <div className="whitespace-nowrap text-sm text-slate-500">共 {count} 条</div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">
-          {loading ? (
-            <AdminTableSkeleton rows={10} />
-          ) : error ? (
-            <AdminErrorState title="用户列表加载失败" description={error} onRetry={loadUsers} />
-          ) : users.length === 0 ? (
-            <AdminEmptyState
-              title={hasFilters ? "没有符合条件的用户" : "暂无用户"}
-              description={hasFilters ? "请调整搜索、账户状态、风险状态或注册时间后再试。" : "新用户注册后会显示在这里。"}
-            />
-          ) : (
-            <Table className="min-w-[1320px]">
-              <TableHeader className="sticky top-0 z-10 bg-slate-50">
-                <TableRow>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">用户</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">邮箱</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">账户状态</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">当前余额</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">累计充值</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">累计消费</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">订单数量</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">注册时间</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">最后登录</TableHead>
-                  <TableHead className="h-10 whitespace-nowrap px-3 text-xs">风险状态</TableHead>
-                  <TableHead className="sticky right-0 h-10 whitespace-nowrap bg-slate-50 px-3 text-right text-xs">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id} className="h-12">
-                    <TableCell className="px-3 py-2 text-xs">
-                      <div className="font-medium text-slate-900">{user.displayName || "未命名用户"}</div>
-                      <div className="mt-0.5 max-w-[180px] truncate font-mono text-[11px] text-slate-400">{user.id}</div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-2 text-xs">{user.email || "—"}</TableCell>
-                    <TableCell className="px-3 py-2"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-2 text-xs font-semibold">{money(user.balance)}</TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-2 text-xs">{money(user.totalRecharge)}</TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-2 text-xs">{money(user.totalSpend)}</TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-2 text-xs">{user.orderCount}</TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">{formatDate(user.createdAt)}</TableCell>
-                    <TableCell className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">{formatDate(user.lastLoginAt)}</TableCell>
-                    <TableCell className="px-3 py-2"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></TableCell>
-                    <TableCell className="sticky right-0 whitespace-nowrap bg-white px-3 py-2 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedUserId(user.id)}>查看</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          {error ? <AdminErrorState title="用户列表加载失败" description={error} onRetry={() => void loadUsers()} /> : loading ? <AdminTableSkeleton rows={10} /> : users.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的用户" : "暂无用户"} description={hasFilters ? "请调整筛选条件后再试。" : "新用户注册后会显示在这里。"} /> : (
+            <table className="w-full min-w-[1280px] table-fixed text-sm">
+              <colgroup><col className="w-[190px]" /><col className="w-[210px]" /><col className="w-[90px]" /><col className="w-[100px]" /><col className="w-[110px]" /><col className="w-[110px]" /><col className="w-[100px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[105px]" /><col className="w-[78px]" /></colgroup>
+              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500"><tr className="border-b">{["用户", "邮箱", "角色", "账户状态", "当前余额", "累计充值", "订单数量", "注册时间", "最近活动", "风险状态", "操作"].map((heading) => <th key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
+              <tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id} className="hover:bg-slate-50">
+                <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{user.displayName || "未命名用户"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={user.id}>{user.id}</div></td>
+                <td className="truncate px-3 py-2" title={user.email ?? ""}>{user.email || "—"}</td><td className="px-3 py-2">{ROLE_LABELS[user.role] ?? user.role}</td>
+                <td className="px-3 py-2"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-3 py-2 font-semibold">{money(user.balance)}</td><td className="px-3 py-2">{money(user.totalRecharge)}</td><td className="px-3 py-2">{user.orderCount}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(user.createdAt)}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-3 py-2"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></td>
+                <td className="px-3 py-2"><Button asChild variant="ghost" size="sm"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
+              </tr>)}</tbody>
+            </table>
           )}
         </div>
-
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-3 py-3 text-sm text-slate-500">
-          <span>第 {page} / {totalPages} 页</span>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button>
-          </div>
-        </div>
+        <div className="flex h-12 shrink-0 items-center justify-between border-t border-slate-100 px-3 text-sm text-slate-500"><span>共 {count} 条，第 {page} / {totalPages} 页</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button><Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button></div></div>
       </div>
-
-      <UserDrawer
-        userId={selectedUserId}
-        onClose={() => setSelectedUserId(null)}
-        onChanged={() => {
-          loadUsers();
-        }}
-      />
     </AdminPageShell>
   );
 }
 
-function UserDrawer({ userId, onClose, onChanged }: { userId: string | null; onClose: () => void; onChanged: () => void }) {
-  const [detail, setDetail] = useState<UserDetail | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [form, setForm] = useState<ActionForm>({
-    accountStatus: "active",
-    riskStatus: "normal",
-    adjustmentType: "increase",
-    direction: "credit",
-    amount: "",
-    reason: "",
-  });
-
-  const loadDetail = useCallback(async () => {
-    if (!userId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/admin/users/${userId}`, { cache: "no-store" });
-      const payload = (await response.json().catch(() => ({}))) as UserDetail & { error?: string };
-      if (!response.ok) throw new Error(payload.error || "用户详情加载失败。");
-      setDetail(payload);
-      setForm((current) => ({
-        ...current,
-        accountStatus: payload.profile.accountStatus,
-        riskStatus: payload.profile.riskStatus,
-      }));
-    } catch (loadError) {
-      setDetail(null);
-      setError(loadError instanceof Error ? loadError.message : "用户详情加载失败。");
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-    loadDetail();
-  }, [loadDetail, userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, userId]);
-
-  if (!userId) return null;
-
-  async function submitAction(action: string) {
-    if (!detail) return;
-    const reason = form.reason.trim();
-    if (!reason) {
-      window.alert("请填写操作原因。");
-      return;
-    }
-    if (!window.confirm("确认执行该用户管理操作吗？操作会写入审计日志。")) return;
-
-    const requestId = crypto.randomUUID();
-    const body: Record<string, unknown> = { action, reason, requestId };
-    if (action === "update_account_status") body.nextStatus = form.accountStatus;
-    if (action === "update_risk_status") body.nextRiskStatus = form.riskStatus;
-    if (action === "adjust_balance") {
-      body.adjustmentType = form.adjustmentType;
-      body.direction = form.direction;
-      body.amount = Number(form.amount);
-    }
-
-    setActionLoading(action);
-    try {
-      const response = await fetch(`/api/admin/users/${userId}/actions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) throw new Error(payload.error || "操作失败。");
-      setForm((current) => ({ ...current, amount: "", reason: "" }));
-      await loadDetail();
-      onChanged();
-      window.alert("操作成功。" );
-    } catch (actionError) {
-      window.alert(actionError instanceof Error ? actionError.message : "操作失败。");
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  const profile = detail?.profile;
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={onClose}>
-      <aside
-        className="ml-auto flex h-full w-full min-w-0 max-w-[860px] flex-col bg-white shadow-2xl sm:w-[min(860px,94vw)]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b px-6 py-4">
-          <div className="min-w-0">
-            <div className="truncate text-lg font-semibold text-slate-950">用户详情</div>
-            <div className="mt-1 truncate text-xs text-slate-500">{profile?.email || userId}</div>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="关闭用户详情">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          {loading ? (
-            <AdminTableSkeleton rows={8} />
-          ) : error ? (
-            <AdminErrorState title="用户详情加载失败" description={error} onRetry={loadDetail} />
-          ) : detail && profile ? (
-            <div className="space-y-5">
-              {detail.errors && Object.keys(detail.errors).length ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  部分模块读取失败：{Object.values(detail.errors).join("、")}
-                </div>
-              ) : null}
-
-              <Section title="基本资料">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <InfoLine label="用户 ID" value={profile.id} mono />
-                  <InfoLine label="邮箱" value={profile.email} />
-                  <InfoLine label="显示名称" value={profile.displayName} />
-                  <InfoLine label="角色" value={profile.role} />
-                  <InfoLine label="注册时间" value={formatDate(profile.createdAt)} />
-                  <InfoLine label="最后登录" value={formatDate(profile.lastLoginAt)} />
-                </div>
-              </Section>
-
-              <Section title="账户状态">
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <ControlCard title="账户状态" description="禁用、暂停和受限会影响登录后敏感业务操作。">
-                    <NativeSelect value={form.accountStatus} onChange={(value) => setForm((current) => ({ ...current, accountStatus: value }))}>
-                      <option value="active">正常</option>
-                      <option value="restricted">受限</option>
-                      <option value="suspended">暂停</option>
-                      <option value="disabled">禁用</option>
-                    </NativeSelect>
-                    <Button variant={["suspended", "disabled"].includes(form.accountStatus) ? "destructive" : "default"} size="sm" disabled={actionLoading !== null || form.accountStatus === profile.accountStatus} onClick={() => submitAction("update_account_status")}>
-                      {actionLoading === "update_account_status" ? "处理中..." : "更新账户状态"}
-                    </Button>
-                  </ControlCard>
-                  <ControlCard title="风险标记" description="风险状态独立于账户状态，blocked 会限制订单和充值。">
-                    <NativeSelect value={form.riskStatus} onChange={(value) => setForm((current) => ({ ...current, riskStatus: value }))}>
-                      <option value="normal">正常</option>
-                      <option value="watch">关注</option>
-                      <option value="high_risk">高风险</option>
-                      <option value="blocked">拦截</option>
-                    </NativeSelect>
-                    <Button variant={["high_risk", "blocked"].includes(form.riskStatus) ? "destructive" : "default"} size="sm" disabled={actionLoading !== null || form.riskStatus === profile.riskStatus} onClick={() => submitAction("update_risk_status")}>
-                      {actionLoading === "update_risk_status" ? "处理中..." : "更新风险标记"}
-                    </Button>
-                  </ControlCard>
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <InfoLine label="当前账户状态" value={ACCOUNT_LABELS[profile.accountStatus] ?? profile.accountStatus} />
-                  <InfoLine label="当前风险状态" value={RISK_LABELS[profile.riskStatus] ?? profile.riskStatus} />
-                  <InfoLine label="账户状态原因" value={profile.statusReason} />
-                  <InfoLine label="风险原因" value={profile.riskReason} />
-                </div>
-              </Section>
-
-              <Section title="资产概览">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <InfoLine label="当前余额" value={money(detail.summary.balance)} />
-                  <InfoLine label="累计充值" value={money(detail.summary.totalRecharge)} />
-                  <InfoLine label="累计消费" value={money(detail.summary.totalSpend)} />
-                  <InfoLine label="订单数量" value={String(detail.summary.orderCount)} />
-                </div>
-                <div className="mt-4 rounded-xl border bg-slate-50 p-4">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <AlertTriangle className="h-4 w-4 text-orange-500" />
-                    调整余额
-                  </div>
-                  <div className="grid gap-3 lg:grid-cols-[180px_140px_1fr]">
-                    <NativeSelect value={form.adjustmentType} onChange={(value) => setForm((current) => ({ ...current, adjustmentType: value }))}>
-                      {Object.entries(ADJUSTMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </NativeSelect>
-                    <NativeSelect value={form.direction} onChange={(value) => setForm((current) => ({ ...current, direction: value as "credit" | "debit" }))}>
-                      <option value="credit">增加</option>
-                      <option value="debit">扣减</option>
-                    </NativeSelect>
-                    <Input value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} placeholder="金额，必须大于 0" inputMode="decimal" />
-                  </div>
-                  <div className="mt-3 text-sm text-slate-600">
-                    预计余额：{money(Number(profile.balance) + (form.direction === "credit" ? 1 : -1) * Number(form.amount || 0))}
-                  </div>
-                  <Textarea className="mt-3 min-h-[82px]" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="必须填写操作原因，原因会写入流水和审计日志。" />
-                  <div className="mt-3 text-right">
-                    <Button variant={form.direction === "debit" ? "destructive" : "default"} disabled={actionLoading !== null || !form.amount || Number(form.amount) <= 0} onClick={() => submitAction("adjust_balance")}>
-                      {actionLoading === "adjust_balance" ? "调整中..." : "提交余额调整"}
-                    </Button>
-                  </div>
-                </div>
-              </Section>
-
-              <Section title="最近订单"><SimpleRows rows={detail.orders} columns={["orderNo", "status", "paymentStatus", "totalAmount", "createdAt"]} moneyKeys={["totalAmount"]} /></Section>
-              <Section title="充值记录"><SimpleRows rows={detail.recharges} columns={["rechargeNo", "channelName", "amount", "creditedAmount", "status", "createdAt"]} moneyKeys={["amount", "creditedAmount"]} /></Section>
-              <Section title="余额流水"><SimpleRows rows={detail.balanceTransactions} columns={["transactionNo", "businessType", "direction", "amount", "balanceBefore", "balanceAfter", "remark", "createdAt"]} moneyKeys={["amount", "balanceBefore", "balanceAfter"]} /></Section>
-              <Section title="数字交付记录"><SimpleRows rows={detail.deliveries} columns={["deliveryType", "deliveryStatus", "deliveredAt", "viewedAt", "createdAt"]} /></Section>
-              <Section title="站内通知"><SimpleRows rows={detail.notifications} columns={["title", "status", "createdAt"]} /></Section>
-              <Section title="管理员操作记录"><SimpleRows rows={detail.auditLogs} columns={["admin_email", "action", "result", "request_id", "created_at"]} /></Section>
-              <Section title="账户与风险历史">
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <SimpleRows rows={detail.statusHistory} columns={["old_status", "new_status", "reason", "admin_email", "created_at"]} compact />
-                  <SimpleRows rows={detail.riskRecords} columns={["old_risk_status", "new_risk_status", "reason", "admin_email", "created_at"]} compact />
-                </div>
-              </Section>
-            </div>
-          ) : null}
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function StatCard({ label, tone = "default", value }: { label: string; tone?: "default" | "warn"; value: ReactNode }) {
-  return (
-    <div className={cn("rounded-xl border bg-white px-4 py-3 shadow-sm", tone === "warn" && "border-orange-200 bg-orange-50")}>
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums text-slate-950">{value}</div>
-    </div>
-  );
-}
-
-function StatusBadge({ value, labels, kind }: { value: string; labels: Record<string, string>; kind: "account" | "risk" }) {
-  return <Badge variant="outline" className={cn("whitespace-nowrap text-[10px]", statusBadgeClass(value, kind))}>{labels[value] ?? value}</Badge>;
-}
-
-function Section({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <section className="rounded-xl border bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-base font-semibold text-slate-950">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function ControlCard({ children, description, title }: { children: ReactNode; description: string; title: string }) {
-  return (
-    <div className="rounded-xl border bg-slate-50 p-4">
-      <div className="font-medium text-slate-900">{title}</div>
-      <div className="mt-1 text-xs text-slate-500">{description}</div>
-      <div className="mt-3 flex flex-wrap items-center gap-3">{children}</div>
-    </div>
-  );
-}
-
-function InfoLine({ label, mono, value }: { label: string; mono?: boolean; value: ReactNode }) {
-  return (
-    <div className="rounded-xl border bg-slate-50 p-3">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className={cn("mt-2 break-words text-sm font-medium text-slate-900", mono && "font-mono text-xs")}>{value || "—"}</div>
-    </div>
-  );
-}
-
-function SimpleRows({ columns, compact, moneyKeys = [], rows }: { columns: string[]; compact?: boolean; moneyKeys?: string[]; rows: Record<string, unknown>[] }) {
-  if (!rows.length) return <div className="rounded-xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">暂无记录</div>;
-  return (
-    <div className={cn("overflow-auto rounded-xl border", compact ? "max-h-60" : "max-h-80")}>
-      <Table className="min-w-[720px]">
-        <TableHeader className="sticky top-0 bg-slate-50">
-          <TableRow>{columns.map((column) => <TableHead key={column} className="h-9 whitespace-nowrap px-3 text-xs">{column}</TableHead>)}</TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, index) => (
-            <TableRow key={String(row.id ?? index)}>
-              {columns.map((column) => {
-                const raw = valueOf(row, column);
-                const rendered = column.toLowerCase().includes("time") || column.endsWith("At") || column.endsWith("_at")
-                  ? formatDate(raw)
-                  : moneyKeys.includes(column)
-                    ? money(raw)
-                    : text(raw);
-                return <TableCell key={column} className="whitespace-nowrap px-3 py-2 text-xs">{rendered}</TableCell>;
-              })}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function NativeSelect({ children, onChange, value }: { children: ReactNode; onChange: (value: string) => void; value: string }) {
-  return (
-    <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={value} onChange={(event) => onChange(event.target.value)}>
-      {children}
-    </select>
-  );
-}
+function Select({ children, value, onChange }: { children: React.ReactNode; value: string; onChange: (value: string) => void }) { return <select className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary" value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>; }
+function Notice({ children }: { children: React.ReactNode }) { return <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{children}</div>; }
+function StatCard({ label, tone = "default", value }: { label: string; tone?: "default" | "warn"; value: React.ReactNode }) { return <div className={cn("rounded-xl border bg-white px-4 py-3 shadow-sm", tone === "warn" && "border-orange-200 bg-orange-50")}><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-xl font-semibold tabular-nums text-slate-950">{value}</div></div>; }
+function StatusBadge({ value, labels, kind }: { value: string; labels: Record<string, string>; kind: "account" | "risk" }) { const good = kind === "account" ? value === "active" : value === "normal"; const warn = kind === "account" ? value === "restricted" : value === "watch"; return <Badge variant="outline" className={cn("whitespace-nowrap", good ? "border-emerald-200 bg-emerald-50 text-emerald-700" : warn ? "border-amber-200 bg-amber-50 text-amber-700" : "border-red-200 bg-red-50 text-red-700")}>{labels[value] ?? value}</Badge>; }
+function money(value: unknown) { const parsed = Number(value); return `¥${Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00"}`; }
+function formatDate(value: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }
+function normalizeFilter(value: string | null, labels: Record<string, string>) { return value && Object.hasOwn(labels, value) ? value : "all"; }
