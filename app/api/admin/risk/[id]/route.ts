@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { normalizeRiskError, number, requireRiskAdmin, text } from "@/lib/risk/admin-risk";
+import { isValidRiskEventId, normalizeRiskError, number, requireRiskAdmin, text } from "@/lib/risk/admin-risk";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,9 @@ const ACTIONS = new Set(["approve", "reject", "monitor", "release"]);
 export async function GET(_request: Request, context: RouteContext) {
   const admin = await requireRiskAdmin();
   if (!admin.ok) return admin.response;
+  if (!isValidRiskEventId(context.params.id)) {
+    return NextResponse.json({ error: "风险事件编号格式无效。" }, { status: 400 });
+  }
 
   try {
     const { data, error } = await admin.supabase
@@ -30,6 +33,9 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   const admin = await requireRiskAdmin();
   if (!admin.ok) return admin.response;
+  if (!isValidRiskEventId(context.params.id)) {
+    return NextResponse.json({ error: "风险事件编号格式无效。" }, { status: 400 });
+  }
 
   const body = (await request.json().catch(() => null)) as { action?: string; reason?: string; confirmHighRisk?: boolean } | null;
   const action = String(body?.action ?? "").trim();
@@ -136,6 +142,9 @@ function normalizeRiskDetail(row: Record<string, unknown>) {
     firstSeenAt: text(row.first_seen_at),
     lastSeenAt: text(row.last_seen_at),
     expiresAt: text(row.expires_at),
+    createdAt: text(row.created_at),
+    updatedAt: text(row.updated_at),
+    resolvedAt: text(row.resolved_at),
     metadata: safeMetadata(row.metadata),
     reviews: reviews.map((review) => ({
       id: text(review.id) ?? "",
@@ -160,12 +169,22 @@ function summarizeRisk(row: Record<string, unknown>) {
   };
 }
 
-function safeMetadata(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+function safeMetadata(value: unknown, depth = 0): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value) || depth > 3) return {};
   const output: Record<string, unknown> = {};
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
     if (/password|token|secret|key|authorization|cookie|content|callback|payload/i.test(key)) continue;
-    output[key] = typeof raw === "string" ? raw.slice(0, 160) : raw;
+    if (Array.isArray(raw)) {
+      output[key] = raw.slice(0, 20).map((item) => {
+        if (typeof item === "string") return item.slice(0, 160);
+        if (item && typeof item === "object") return safeMetadata(item, depth + 1);
+        return item;
+      });
+    } else if (raw && typeof raw === "object") {
+      output[key] = safeMetadata(raw, depth + 1);
+    } else {
+      output[key] = typeof raw === "string" ? raw.slice(0, 160) : raw;
+    }
   }
   return output;
 }
