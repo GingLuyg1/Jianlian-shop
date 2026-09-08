@@ -1,228 +1,201 @@
-﻿"use client";
+"use client";
 
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileLock2, RefreshCcw, Search, X } from "lucide-react";
-import { toast } from "sonner";
+import { Eye, RefreshCw, Search } from "lucide-react";
 
+import AdminEmptyState from "@/components/admin/AdminEmptyState";
+import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
-const STATUS_OPTIONS = [
-  { value: "all", label: "全部状态" },
-  { value: "requested", label: "已提交" },
-  { value: "verifying", label: "校验中" },
-  { value: "blocked", label: "有阻塞项" },
-  { value: "approved", label: "已批准" },
-  { value: "processing", label: "处理中" },
-  { value: "completed", label: "已完成" },
-  { value: "cancelled", label: "已取消" },
-  { value: "failed", label: "失败" },
-];
-
-const TYPE_OPTIONS = [
-  { value: "all", label: "全部类型" },
-  { value: "data_export", label: "数据导出" },
-  { value: "account_deletion", label: "账号注销" },
-];
-
-const STATUS_LABELS: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map((item) => [item.value, item.label]));
-const TYPE_LABELS: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map((item) => [item.value, item.label]));
+const PAGE_SIZE = 20;
+const STATUS_LABELS: Record<string, string> = {
+  requested: "已提交", verifying: "校验中", blocked: "有阻塞项", approved: "已批准",
+  processing: "处理中", completed: "已完成", cancelled: "已取消", failed: "失败",
+};
+const TYPE_LABELS: Record<string, string> = { data_export: "数据导出", account_deletion: "账号注销" };
+const SORT_VALUES = new Set(["newest", "oldest", "recently_updated"]);
 
 type PrivacyRow = {
   id: string;
   requestNo: string;
-  requestType: string;
-  status: string;
-  reasonDetail: string | null;
-  blockReasons: string[];
-  reviewNote: string | null;
+  userId: string;
   userEmail: string | null;
   userLabel: string;
+  requestType: string;
+  status: string;
+  blockReasons: string[];
   createdAt: string | null;
   updatedAt: string | null;
-  cooldownUntil: string | null;
-  completedAt: string | null;
 };
 
+type PrivacyResponse = {
+  requests?: PrivacyRow[];
+  total?: number;
+  stats?: { pending: number; processing: number; completed: number; closed: number };
+  error?: string;
+};
+
+function useDebouncedValue(value: string, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [delay, value]);
+  return debounced;
+}
+
 export default function AdminPrivacyRequestsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const [rows, setRows] = useState<PrivacyRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState({ pending: 0, processing: 0, completed: 0, closed: 0 });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [type, setType] = useState("all");
-  const [selected, setSelected] = useState<PrivacyRow | null>(null);
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState(params.get("search") ?? "");
+  const [status, setStatus] = useState(normalizeFilter(params.get("status"), STATUS_LABELS));
+  const [type, setType] = useState(normalizeFilter(params.get("type"), TYPE_LABELS));
+  const [startAt, setStartAt] = useState(params.get("startAt") ?? "");
+  const [endAt, setEndAt] = useState(params.get("endAt") ?? "");
+  const [sort, setSort] = useState(SORT_VALUES.has(params.get("sort") ?? "") ? params.get("sort")! : "newest");
+  const [page, setPage] = useState(positivePage(params.get("page")));
+  const debouncedSearch = useDebouncedValue(search);
+
+  const queryString = useMemo(() => {
+    const next = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE), sort });
+    if (debouncedSearch.trim()) next.set("search", debouncedSearch.trim());
+    if (status !== "all") next.set("status", status);
+    if (type !== "all") next.set("type", type);
+    if (startAt) next.set("startAt", startAt);
+    if (endAt) next.set("endAt", endAt);
+    return next.toString();
+  }, [debouncedSearch, endAt, page, sort, startAt, status, type]);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setError("");
     try {
-      const params = new URLSearchParams({ status, type, pageSize: "50" });
-      if (query.trim()) params.set("q", query.trim());
-      const response = await fetch(`/api/admin/privacy-requests?${params.toString()}`, { cache: "no-store" });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "隐私请求读取失败");
-      setRows(Array.isArray(payload.requests) ? payload.requests : []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "隐私请求读取失败";
-      setError(message);
+      const response = await fetch("/api/admin/privacy-requests?" + queryString, { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as PrivacyResponse;
+      if (!response.ok) throw new Error(payload.error || "隐私请求读取失败。");
+      setRows(payload.requests ?? []);
+      setTotal(payload.total ?? 0);
+      setStats(payload.stats ?? { pending: 0, processing: 0, completed: 0, closed: 0 });
+    } catch (loadError) {
       setRows([]);
+      setTotal(0);
+      setStats({ pending: 0, processing: 0, completed: 0, closed: 0 });
+      setError(loadError instanceof Error ? loadError.message : "隐私请求读取失败。");
     } finally {
       setLoading(false);
     }
-  }, [query, status, type]);
+  }, [queryString]);
 
   useEffect(() => {
-    loadRows();
-  }, [loadRows]);
+    router.replace(pathname + "?" + queryString, { scroll: false });
+    void loadRows();
+  }, [loadRows, pathname, queryString, router]);
 
-  const counts = useMemo(() => rows.reduce((acc, row) => {
-    acc.total += 1;
-    if (["requested", "verifying", "blocked"].includes(row.status)) acc.pending += 1;
-    if (row.status === "processing") acc.processing += 1;
-    return acc;
-  }, { total: 0, pending: 0, processing: 0 }), [rows]);
+  useEffect(() => {
+    setSearch(params.get("search") ?? "");
+    setStatus(normalizeFilter(params.get("status"), STATUS_LABELS));
+    setType(normalizeFilter(params.get("type"), TYPE_LABELS));
+    setStartAt(params.get("startAt") ?? "");
+    setEndAt(params.get("endAt") ?? "");
+    setSort(SORT_VALUES.has(params.get("sort") ?? "") ? params.get("sort")! : "newest");
+    setPage(positivePage(params.get("page")));
+  }, [params]);
 
-  async function submitAction(action: string) {
-    if (!selected) return;
-    if (["approve", "reject", "processing", "complete_anonymize"].includes(action) && !note.trim()) {
-      toast.error("请填写处理备注");
-      return;
-    }
-    const dangerous = ["approve", "reject", "cancel", "complete_anonymize"].includes(action);
-    if (dangerous && !window.confirm("确认执行该隐私请求操作？操作会写入审计日志。")) return;
-    setSubmitting(true);
-    try {
-      const response = await fetch("/api/admin/privacy-requests", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, requestId: selected.id, note }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "隐私请求处理失败");
-      toast.success("隐私请求已处理");
-      setSelected(null);
-      setNote("");
-      loadRows();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "隐私请求处理失败");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasFilters = Boolean(debouncedSearch || status !== "all" || type !== "all" || startAt || endAt || sort !== "newest");
+  const reset = () => {
+    setSearch("");
+    setStatus("all");
+    setType("all");
+    setStartAt("");
+    setEndAt("");
+    setSort("newest");
+    setPage(1);
+  };
 
   return (
     <AdminPageShell
       title="隐私请求"
-      description="处理个人数据导出、账号注销、阻塞项复查与匿名化操作。"
-      actions={<Button variant="outline" size="sm" onClick={loadRows} disabled={loading}><RefreshCcw className="mr-2 h-4 w-4" />刷新</Button>}
+      description="只读查询数据导出与账号注销请求、处理时间线和审计记录。"
+      actions={<Button variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}
     >
-      <div className="grid shrink-0 gap-3 md:grid-cols-3">
-        <div className="rounded-xl border bg-white p-4 shadow-sm"><p className="text-sm text-slate-500">当前列表</p><p className="mt-2 text-2xl font-semibold">{counts.total}</p></div>
-        <div className="rounded-xl border bg-white p-4 shadow-sm"><p className="text-sm text-slate-500">待处理</p><p className="mt-2 text-2xl font-semibold text-amber-600">{counts.pending}</p></div>
-        <div className="rounded-xl border bg-white p-4 shadow-sm"><p className="text-sm text-slate-500">处理中</p><p className="mt-2 text-2xl font-semibold text-blue-600">{counts.processing}</p></div>
+      <div className="mb-3 grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="当前待处理" value={stats.pending} warn={stats.pending > 0} />
+        <StatCard label="处理中" value={stats.processing} />
+        <StatCard label="已完成" value={stats.completed} />
+        <StatCard label="已拒绝 / 取消" value={stats.closed} />
       </div>
 
-      <div className="mt-3 flex shrink-0 flex-wrap gap-2 rounded-xl border bg-white p-3 shadow-sm">
-        <div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-lg border px-3 py-2">
-          <Search className="h-4 w-4 text-slate-400" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="搜索申请编号或说明" />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="shrink-0 border-b border-slate-100 p-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_150px_150px_150px_150px_170px_76px]">
+            <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="申请编号、说明或 UUID" className="h-10 pl-9" /></label>
+            <Select value={status} onChange={(value) => { setStatus(value); setPage(1); }}><option value="all">全部状态</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+            <Select value={type} onChange={(value) => { setType(value); setPage(1); }}><option value="all">全部类型</option>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+            <Input aria-label="提交开始日期" type="date" value={startAt} onChange={(event) => { setStartAt(event.target.value); setPage(1); }} className="h-10" />
+            <Input aria-label="提交结束日期" type="date" value={endAt} onChange={(event) => { setEndAt(event.target.value); setPage(1); }} className="h-10" />
+            <Select value={sort} onChange={(value) => { setSort(value); setPage(1); }}><option value="newest">最新提交</option><option value="oldest">最早提交</option><option value="recently_updated">最近更新</option></Select>
+            <Button variant="outline" onClick={reset}>重置</Button>
+          </div>
         </div>
-        <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border px-3 py-2 text-sm">
-          {STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
-        <select value={type} onChange={(event) => setType(event.target.value)} className="rounded-lg border px-3 py-2 text-sm">
-          {TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
-      </div>
 
-      <div className="mt-3 min-h-0 flex-1 overflow-hidden rounded-xl border bg-white shadow-sm">
-        {error ? <div className="m-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-        {loading ? (
-          <div className="h-full animate-pulse bg-slate-50" />
-        ) : rows.length ? (
-          <div className="h-full overflow-auto">
-            <table className="min-w-[1120px] w-full text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">申请编号</th>
-                  <th className="px-4 py-3">用户</th>
-                  <th className="px-4 py-3">类型</th>
-                  <th className="px-4 py-3">状态</th>
-                  <th className="px-4 py-3">阻塞原因</th>
-                  <th className="px-4 py-3">申请时间</th>
-                  <th className="px-4 py-3">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-orange-50/40">
-                    <td className="px-4 py-3 font-medium text-slate-900">{row.requestNo}</td>
-                    <td className="px-4 py-3">{row.userEmail || row.userLabel}</td>
-                    <td className="px-4 py-3">{TYPE_LABELS[row.requestType] ?? row.requestType}</td>
-                    <td className="px-4 py-3">{STATUS_LABELS[row.status] ?? row.status}</td>
-                    <td className="max-w-[300px] truncate px-4 py-3 text-slate-500">{row.blockReasons?.length ? row.blockReasons.join("；") : "—"}</td>
-                    <td className="px-4 py-3 text-slate-500">{row.createdAt ? new Date(row.createdAt).toLocaleString("zh-CN") : "—"}</td>
-                    <td className="px-4 py-3"><Button size="sm" variant="outline" onClick={() => { setSelected(row); setNote(""); }}>查看</Button></td>
-                  </tr>
-                ))}
-              </tbody>
+        <div className="min-h-0 flex-1 overflow-auto">
+          {error ? <AdminErrorState title="隐私请求加载失败" description={error} onRetry={() => void loadRows()} /> : loading ? <AdminTableSkeleton rows={10} /> : rows.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的隐私请求" : "暂无隐私请求"} description={hasFilters ? "请调整筛选条件后再试。" : "用户提交隐私请求后会显示在这里。"} /> : (
+            <table className="w-full min-w-[1180px] table-fixed text-sm">
+              <colgroup><col className="w-[190px]" /><col className="w-[240px]" /><col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[240px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[80px]" /></colgroup>
+              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500"><tr className="border-b">{["请求编号", "用户", "类型", "状态", "阻塞原因", "提交时间", "最近更新", "操作"].map((heading) => <th key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
+              <tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.id} className="hover:bg-slate-50">
+                <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{row.requestNo || "—"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={row.id}>{row.id}</div></td>
+                <td className="px-3 py-2"><div className="truncate" title={row.userEmail ?? ""}>{row.userEmail || row.userLabel || "—"}</div><div className="truncate font-mono text-[11px] text-slate-400">{row.userId || "—"}</div></td>
+                <td className="px-3 py-2">{TYPE_LABELS[row.requestType] ?? row.requestType}</td>
+                <td className="px-3 py-2"><StatusBadge value={row.status} /></td>
+                <td className="truncate px-3 py-2 text-slate-500" title={row.blockReasons.join("；")}>{row.blockReasons.length ? row.blockReasons.join("；") : "—"}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(row.createdAt)}</td>
+                <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(row.updatedAt)}</td>
+                <td className="px-3 py-2"><Button asChild variant="ghost" size="sm"><Link href={"/admin/privacy-requests/" + row.id}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
+              </tr>)}</tbody>
             </table>
-          </div>
-        ) : (
-          <div className="flex h-full min-h-[260px] flex-col items-center justify-center text-center text-sm text-slate-500">
-            <FileLock2 className="mb-3 h-10 w-10 text-slate-300" />
-            暂无隐私请求
-          </div>
-        )}
-      </div>
-
-      {selected ? (
-        <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={() => setSelected(null)}>
-          <aside className="ml-auto flex h-full w-full max-w-3xl flex-col bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
-            <header className="flex items-center justify-between border-b px-5 py-4">
-              <div>
-                <h2 className="text-lg font-semibold">{selected.requestNo}</h2>
-                <p className="text-sm text-slate-500">{TYPE_LABELS[selected.requestType] ?? selected.requestType}</p>
-              </div>
-              <button onClick={() => setSelected(null)} className="rounded-full p-2 hover:bg-slate-100"><X className="h-5 w-5" /></button>
-            </header>
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 text-sm">
-              <div className="grid gap-3 md:grid-cols-2">
-                <Info label="用户" value={selected.userEmail || selected.userLabel} />
-                <Info label="状态" value={STATUS_LABELS[selected.status] ?? selected.status} />
-                <Info label="申请时间" value={selected.createdAt ? new Date(selected.createdAt).toLocaleString("zh-CN") : "—"} />
-                <Info label="预计处理时间" value={selected.cooldownUntil ? new Date(selected.cooldownUntil).toLocaleString("zh-CN") : "—"} />
-              </div>
-              <Info label="申请说明" value={selected.reasonDetail || "—"} />
-              <Info label="阻塞原因" value={selected.blockReasons?.length ? selected.blockReasons.join("；") : "—"} />
-              <label className="block">
-                <span className="font-medium text-slate-700">处理备注</span>
-                <textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-2 h-24 w-full rounded-lg border px-3 py-2 outline-none focus:border-orange-400" placeholder="管理员处理备注，批准/拒绝/匿名化必须填写" />
-              </label>
-            </div>
-            <footer className="flex flex-wrap justify-end gap-2 border-t px-5 py-4">
-              <Button variant="outline" onClick={() => submitAction("recheck")} disabled={submitting}>重新检查</Button>
-              <Button variant="outline" onClick={() => submitAction("processing")} disabled={submitting}>标记处理中</Button>
-              <Button variant="outline" onClick={() => submitAction("cancel")} disabled={submitting}>取消</Button>
-              <Button variant="outline" onClick={() => submitAction("reject")} disabled={submitting}>拒绝</Button>
-              <Button onClick={() => submitAction("approve")} disabled={submitting}>批准</Button>
-              {selected.requestType === "account_deletion" ? <Button variant="destructive" onClick={() => submitAction("complete_anonymize")} disabled={submitting}>完成匿名化</Button> : null}
-            </footer>
-          </aside>
+          )}
         </div>
-      ) : null}
+        <div className="flex h-12 shrink-0 items-center justify-between border-t border-slate-100 px-3 text-sm text-slate-500"><span>共 {total} 条，第 {page} / {totalPages} 页</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button><Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button></div></div>
+      </div>
     </AdminPageShell>
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-slate-50 px-3 py-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 break-words font-medium text-slate-900">{value}</p>
-    </div>
-  );
+function Select({ children, value, onChange }: { children: React.ReactNode; value: string; onChange: (value: string) => void }) {
+  return <select className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary" value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>;
+}
+function StatCard({ label, value, warn = false }: { label: string; value: number; warn?: boolean }) {
+  return <div className={cn("rounded-xl border bg-white px-4 py-3 shadow-sm", warn && "border-amber-200 bg-amber-50")}><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-xl font-semibold tabular-nums text-slate-950">{value}</div></div>;
+}
+function StatusBadge({ value }: { value: string }) {
+  const good = value === "completed";
+  const pending = ["requested", "verifying", "blocked", "approved", "processing"].includes(value);
+  return <Badge variant="outline" className={cn("whitespace-nowrap", good ? "border-emerald-200 bg-emerald-50 text-emerald-700" : pending ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600")}>{STATUS_LABELS[value] ?? value}</Badge>;
+}
+function formatDate(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false });
+}
+function normalizeFilter(value: string | null, labels: Record<string, string>) {
+  return value && Object.hasOwn(labels, value) ? value : "all";
+}
+function positivePage(value: string | null) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }

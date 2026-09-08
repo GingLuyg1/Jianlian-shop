@@ -167,11 +167,14 @@ export function normalizePrivacyRequest(row: Row) {
     blockReasons: Array.isArray(row.block_reasons) ? row.block_reasons : [],
     reasonDetail: text(row.reason_detail),
     reviewNote: text(row.review_note),
+    reviewedBy: text(row.reviewed_by),
+    reviewedAt: text(row.reviewed_at),
     createdAt: text(row.created_at),
     updatedAt: text(row.updated_at),
     cooldownUntil: text(row.cooldown_until),
     completedAt: text(row.completed_at),
     cancelledAt: text(row.cancelled_at),
+    failedAt: text(row.failed_at),
   };
 }
 
