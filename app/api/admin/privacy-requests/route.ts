@@ -7,6 +7,11 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
+const PRIVACY_STATUSES = new Set(["requested", "verifying", "blocked", "approved", "processing", "completed", "cancelled", "failed"]);
+const PRIVACY_TYPES = new Set(["data_export", "account_deletion"]);
+const PRIVACY_SORTS = new Set(["newest", "oldest", "recently_updated"]);
+const PAGE_SIZE_DEFAULT = 20;
+
 type PatchBody = {
   action?: string;
   requestId?: string;
@@ -37,26 +42,42 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") || "all";
-    const type = searchParams.get("type") || "all";
-    const q = (searchParams.get("q") || "").trim();
-    const page = Math.max(Number(searchParams.get("page") || 1), 1);
-    const pageSize = Math.min(Math.max(Number(searchParams.get("pageSize") || 30), 1), 100);
+    const requestedStatus = searchParams.get("status") || "all";
+    const requestedType = searchParams.get("type") || "all";
+    const requestedSort = searchParams.get("sort") || "newest";
+    const status = PRIVACY_STATUSES.has(requestedStatus) ? requestedStatus : "all";
+    const type = PRIVACY_TYPES.has(requestedType) ? requestedType : "all";
+    const sort = PRIVACY_SORTS.has(requestedSort) ? requestedSort : "newest";
+    const search = sanitizeSearch(searchParams.get("search") ?? searchParams.get("q"));
+    const startAt = validDate(searchParams.get("startAt"), false);
+    const endAt = validDate(searchParams.get("endAt"), true);
+    const page = positiveInteger(searchParams.get("page"), 1);
+    const pageSize = Math.min(100, positiveInteger(searchParams.get("pageSize"), PAGE_SIZE_DEFAULT));
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
     const service = requireService();
     let query = service
       .from("privacy_requests")
-      .select("*, profiles:user_id(email, display_name, account_status)", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(from, to);
+      .select("id,request_no,user_id,request_type,status,reason_detail,block_reasons,review_note,reviewed_by,reviewed_at,cooldown_until,completed_at,cancelled_at,failed_at,created_at,updated_at,profiles:user_id(id,email,display_name,account_status)", { count: "exact" });
 
     if (status !== "all") query = query.eq("status", status);
     if (type !== "all") query = query.eq("request_type", type);
-    if (q) query = query.or(`request_no.ilike.%${q}%,reason_detail.ilike.%${q}%`);
+    if (startAt) query = query.gte("created_at", startAt);
+    if (endAt) query = query.lte("created_at", endAt);
+    if (search) {
+      const filters = [`request_no.ilike.%${search}%`, `reason_detail.ilike.%${search}%`];
+      if (isUuid(search)) filters.push(`id.eq.${search}`, `user_id.eq.${search}`);
+      query = query.or(filters.join(","));
+    }
+    if (sort === "oldest") query = query.order("created_at", { ascending: true });
+    else if (sort === "recently_updated") query = query.order("updated_at", { ascending: false }).order("created_at", { ascending: false });
+    else query = query.order("created_at", { ascending: false });
 
-    const { data, error, count } = await query;
+    const [{ data, error, count }, stats] = await Promise.all([
+      query.range(from, to),
+      loadPrivacyStats(service),
+    ]);
     if (error) throw error;
 
     return json({
@@ -64,10 +85,29 @@ export async function GET(request: Request) {
       total: count ?? 0,
       page,
       pageSize,
+      stats,
+      filters: { status, type, sort },
     });
   } catch (error) {
-    return json({ error: privacyInitError(error) }, { status: 500 });
+    return json({ error: safePrivacyError(error) }, { status: 500 });
   }
+}
+
+async function loadPrivacyStats(service: ReturnType<typeof requireService>) {
+  const count = async (statuses: string[]) => {
+    let query = service.from("privacy_requests").select("id", { count: "exact", head: true });
+    query = statuses.length === 1 ? query.eq("status", statuses[0]) : query.in("status", statuses);
+    const { count: value, error } = await query;
+    if (error) throw error;
+    return value ?? 0;
+  };
+  const [pending, processing, completed, closed] = await Promise.all([
+    count(["requested", "verifying", "blocked", "approved"]),
+    count(["processing"]),
+    count(["completed"]),
+    count(["cancelled", "failed"]),
+  ]);
+  return { pending, processing, completed, closed };
 }
 
 export async function PATCH(request: Request) {
@@ -80,7 +120,7 @@ export async function PATCH(request: Request) {
   const note = String(body?.note || "").trim();
   const auditRequestId = crypto.randomUUID();
 
-  if (!requestId) return json({ error: "缺少隐私请求 ID。" }, { status: 400 });
+  if (!isUuid(requestId)) return json({ error: "隐私请求 ID 格式无效。" }, { status: 400 });
   if (["approve", "reject", "processing", "complete_anonymize"].includes(action) && !note) {
     return json({ error: "请填写处理备注。" }, { status: 400 });
   }
@@ -197,7 +237,32 @@ export async function PATCH(request: Request) {
       result: "failed",
       errorMessage: error,
     });
-    return json({ error: privacyInitError(error) }, { status: 500 });
+    return json({ error: safePrivacyError(error) }, { status: 500 });
   }
+}
+
+function positiveInteger(value: string | null, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function sanitizeSearch(value: string | null) {
+  return (value ?? "").trim().replace(/[^\p{L}\p{N}@._+\-\s]/gu, "").slice(0, 120);
+}
+
+function validDate(value: string | null, endOfDay: boolean) {
+  if (!value) return null;
+  const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function safePrivacyError(error: unknown) {
+  const message = privacyInitError(error);
+  if (message.includes("数据库结构尚未初始化") || message.includes("无权限")) return message;
+  return "隐私请求处理失败，请稍后重试。";
 }
 
