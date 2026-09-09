@@ -4,6 +4,8 @@ import { ReactNode } from "react";
 import AdminGuard from "@/components/auth/AdminGuard";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopBar from "./AdminTopBar";
+import v2Styles from "./v2/AdminV2.module.css";
+import { cn } from "@/lib/utils";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -12,7 +14,7 @@ interface AdminLayoutProps {
 
 function AdminShell({ children }: AdminLayoutProps) {
   return (
-    <div className="fixed inset-0 flex h-screen max-h-screen min-h-0 w-full overflow-hidden bg-slate-100 text-slate-950 [--admin-header-height:62px] [--admin-sidebar-width:204px]">
+    <div className={cn(v2Styles.scope, "fixed inset-0 flex h-screen max-h-screen min-h-0 w-full overflow-hidden bg-[var(--admin-v2-background)] text-[var(--admin-v2-text-primary)] [--admin-header-height:62px] [--admin-sidebar-width:204px]")}>
       <div className="relative hidden h-full pr-4 lg:flex">
         <div
           aria-hidden="true"

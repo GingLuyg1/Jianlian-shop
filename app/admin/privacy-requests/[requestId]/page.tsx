@@ -3,14 +3,18 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AdminInfoGrid, AdminInfoItem } from "@/components/admin/v2/AdminInfoGrid";
+import AdminReadOnlyBadge from "@/components/admin/v2/AdminReadOnlyBadge";
+import AdminSection from "@/components/admin/v2/AdminSection";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
+import v2Styles from "@/components/admin/v2/AdminV2.module.css";
 import { cn } from "@/lib/utils";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -63,61 +67,55 @@ export default function AdminPrivacyRequestDetailPage() {
     <AdminPageShell
       title="隐私请求详情"
       description="只读查看请求摘要、用户关联、最近处理时间线和严格匹配的后台审计。"
-      actions={<Button variant="outline" onClick={() => void loadDetail()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}
+      actions={<><AdminReadOnlyBadge /><Button className={v2Styles.control} variant="outline" onClick={() => void loadDetail()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button></>}
     >
-      <div className="mb-3 shrink-0"><Link href="/admin/privacy-requests" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-950"><ArrowLeft className="h-4 w-4" />返回隐私请求</Link></div>
+      <div className="mb-3 shrink-0"><Link href="/admin/privacy-requests" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--admin-v2-text-secondary)] hover:text-[var(--admin-v2-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)]"><ArrowLeft className="h-4 w-4" />返回隐私请求</Link></div>
       <div className="min-h-0 flex-1 overflow-auto pb-4">
         {error ? <AdminErrorState title="隐私请求详情加载失败" description={error} onRetry={() => void loadDetail()} /> : loading && !detail ? <AdminTableSkeleton rows={10} /> : detail && item ? (
           <div className="space-y-4">
             {detail.errors && Object.keys(detail.errors).length ? <Notice>部分关联数据读取失败：{Object.values(detail.errors).join("、")}</Notice> : null}
+            <AdminSection title={TYPE_LABELS[item.requestType] ?? item.requestType} description={item.requestNo || item.id} action={<AdminStatusBadge tone={statusTone(item.status)}>{STATUS_LABELS[item.status] ?? item.status}</AdminStatusBadge>}>
+              <AdminInfoGrid columns={3}>
+                <AdminInfoItem label="申请人" value={item.userEmail || item.userLabel || "—"} secondary={item.userId || undefined} />
+                <AdminInfoItem label="提交时间" value={formatDate(item.createdAt)} />
+                <AdminInfoItem label="最近更新" value={formatDate(item.updatedAt)} />
+                <AdminInfoItem label="预计处理时间" value={formatDate(item.cooldownUntil)} />
+                <AdminInfoItem label="当前阻塞原因" value={item.blockReasons.length ? item.blockReasons.join("；") : "无"} />
+                <AdminInfoItem label="完成 / 关闭时间" value={formatDate(item.completedAt || item.cancelledAt || item.failedAt)} />
+              </AdminInfoGrid>
+            </AdminSection>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <Section title="请求摘要">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <Info label="请求编号" value={item.requestNo || "—"} />
-                  <Info label="请求 ID" value={item.id} mono />
-                  <Info label="请求类型" value={TYPE_LABELS[item.requestType] ?? item.requestType} />
-                  <Info label="当前状态" value={STATUS_LABELS[item.status] ?? item.status} />
-                  <Info label="提交时间" value={formatDate(item.createdAt)} />
-                  <Info label="最近更新" value={formatDate(item.updatedAt)} />
-                  <Info label="预计处理时间" value={formatDate(item.cooldownUntil)} />
-                  <Info label="处理人 ID" value={item.reviewedBy || "—"} mono />
-                  <Info label="审核时间" value={formatDate(item.reviewedAt)} />
-                  <Info label="完成 / 关闭时间" value={formatDate(item.completedAt || item.cancelledAt || item.failedAt)} />
-                </div>
-              </Section>
-              <Section title="用户摘要">
-                <div className="space-y-3">
-                  <Info label="用户" value={item.userEmail || item.userLabel || "—"} />
-                  <Info label="用户 ID" value={item.userId || "—"} mono />
-                  {item.userId ? <Button asChild variant="outline" className="w-full"><Link href={"/admin/users/" + item.userId}>查看用户详情</Link></Button> : null}
-                </div>
-              </Section>
-            </div>
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="min-w-0 space-y-4">
+                <AdminSection title="请求信息" description="业务事实">
+                  <AdminInfoGrid>
+                    <AdminInfoItem label="请求编号" value={item.requestNo || "—"} mono />
+                    <AdminInfoItem label="请求 ID" value={item.id} mono />
+                    <AdminInfoItem label="请求类型" value={TYPE_LABELS[item.requestType] ?? item.requestType} />
+                    <AdminInfoItem label="请求状态" value={STATUS_LABELS[item.status] ?? item.status} />
+                    <AdminInfoItem label="关联用户" value={item.userLabel || item.userEmail || "—"} secondary={item.userId || undefined} />
+                    <AdminInfoItem label="联系邮箱" value={item.userEmail || "—"} />
+                    <AdminInfoItem label="用户申请说明" value={item.reasonDetail || "—"} />
+                    <AdminInfoItem label="审核备注" value={item.reviewNote || "—"} />
+                    <AdminInfoItem label="处理人 ID" value={item.reviewedBy || "—"} mono />
+                    <AdminInfoItem label="审核时间" value={formatDate(item.reviewedAt)} />
+                  </AdminInfoGrid>
+                </AdminSection>
 
-            <Section title="运营信息">
-              <div className="grid gap-3 md:grid-cols-3">
-                <Info label="用户申请说明" value={item.reasonDetail || "—"} />
-                <Info label="阻塞原因" value={item.blockReasons.length ? item.blockReasons.join("；") : "—"} />
-                <Info label="审核备注" value={item.reviewNote || "—"} />
+                {item.userId ? <AdminSection title="关联资源" description="保留当前请求上下文的只读导航"><div className="divide-y divide-[var(--admin-v2-border)] px-4 pb-1 sm:px-5"><RelatedLink icon={<UserRound className="h-4 w-4" />} label="用户详情" href={"/admin/users/" + item.userId} /><RelatedLink label="关联订单" href={"/admin/orders?search=" + relatedSearch} /><RelatedLink label="关联支付" href={"/admin/payments?search=" + relatedSearch} /><RelatedLink label="关联充值" href={"/admin/recharges?search=" + relatedSearch} /><RelatedLink label="关联退款" href={"/admin/refunds?search=" + relatedSearch} /></div></AdminSection> : null}
+
+                <AdminSection title="最近后台审计" description="当前返回记录 · 严格限定当前隐私请求" action={<Link href={"/admin/audit-logs?targetId=" + encodeURIComponent(item.id)} className="text-sm font-medium text-[var(--admin-v2-primary)] hover:underline">查看全部</Link>}>
+                  <RecordList rows={detail.auditLogs} columns={[["admin_email", "管理员"], ["action", "操作"], ["result", "结果"], ["request_id", "请求编号"], ["reason", "原因"], ["created_at", "时间"]]} />
+                </AdminSection>
               </div>
-            </Section>
 
-            {item.userId ? (
-              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <RelatedLink label="关联订单" href={"/admin/orders?search=" + relatedSearch} />
-                <RelatedLink label="关联支付" href={"/admin/payments?search=" + relatedSearch} />
-                <RelatedLink label="关联充值" href={"/admin/recharges?search=" + relatedSearch} />
-                <RelatedLink label="关联退款" href={"/admin/refunds?search=" + relatedSearch} />
-              </section>
-            ) : null}
-
-            <Section title="最近处理时间线">
-              <RecordList rows={detail.events} columns={[["eventType", "事件"], ["actorType", "执行方"], ["message", "说明"], ["createdAt", "时间"]]} />
-            </Section>
-            <Section title="最近后台审计" action={<Link href={"/admin/audit-logs?targetId=" + encodeURIComponent(item.id)} className="text-sm font-medium text-primary hover:underline">查看全部</Link>}>
-              <RecordList rows={detail.auditLogs} columns={[["admin_email", "管理员"], ["action", "操作"], ["result", "结果"], ["request_id", "请求编号"], ["reason", "原因"], ["created_at", "时间"]]} />
-            </Section>
+              <aside className="min-w-0 space-y-4">
+                <AdminSection title="请求时间线" description="最近 50 条以内 · 非历史总数">
+                  <Timeline rows={detail.events} />
+                </AdminSection>
+                <div className="px-1 py-2 text-xs leading-[18px] text-[var(--admin-v2-text-muted)]"><ShieldCheck className="mb-2 h-4 w-4" /><div className="font-medium text-[var(--admin-v2-text-secondary)]">只读隐私工作区</div><p className="mt-1">不执行数据导出、账号删除、匿名化或状态变更。</p></div>
+              </aside>
+            </div>
             <Notice>本页面不执行数据导出、账号删除或匿名化，也不修改隐私请求状态。订单、支付、充值、退款与资金流水按既有保留规则处理。</Notice>
           </div>
         ) : <AdminEmptyState title="隐私请求不存在" />}
@@ -126,18 +124,16 @@ export default function AdminPrivacyRequestDetailPage() {
   );
 }
 
-function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-base font-semibold text-slate-950">{title}</h2>{action}</div>{children}</section>;
-}
-function Info({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return <div className="rounded-lg border border-slate-100 bg-slate-50 p-3"><div className="text-xs text-slate-500">{label}</div><div className={cn("mt-1 break-words text-sm font-medium text-slate-900", mono && "break-all font-mono text-xs")}>{value}</div></div>;
-}
-function RelatedLink({ label, href }: { label: string; href: string }) {
-  return <Link href={href} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 font-medium text-slate-900 shadow-sm transition hover:border-primary/30 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><span>{label}</span><span className="text-sm font-normal text-slate-500">查看</span></Link>;
+function RelatedLink({ label, href, icon }: { label: string; href: string; icon?: React.ReactNode }) {
+  return <Link href={href} className="flex min-h-11 items-center gap-3 py-3 text-sm font-medium text-[var(--admin-v2-text-primary)] transition-colors duration-150 hover:text-[var(--admin-v2-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)]">{icon}<span className="flex-1">{label}</span><span className="inline-flex items-center gap-1 text-xs font-normal text-[var(--admin-v2-text-muted)]">查看<ArrowUpRight className="h-3.5 w-3.5" /></span></Link>;
 }
 function RecordList({ rows, columns }: { rows: Row[]; columns: [string, string][] }) {
   if (!rows.length) return <AdminEmptyState title="暂无记录" className="min-h-[160px]" />;
-  return <div className="overflow-auto rounded-lg border border-slate-200"><table className="min-w-[760px] text-sm"><thead className="bg-slate-50 text-left text-xs text-slate-500"><tr>{columns.map(([, label]) => <th key={label} className="h-9 whitespace-nowrap px-3 font-medium">{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row, index) => <tr key={String(row.id ?? index)}>{columns.map(([key]) => <td key={key} className="max-w-[320px] truncate whitespace-nowrap px-3 py-2 text-xs" title={safeText(row[key])}>{renderValue(key, row[key])}</td>)}</tr>)}</tbody></table></div>;
+  return <div className={cn(v2Styles.tableSurface, "mx-4 mb-4 sm:mx-5 sm:mb-5")}><table className="min-w-[760px] text-sm leading-[22px]"><thead className="bg-[var(--admin-v2-surface-muted)] text-left text-xs text-[var(--admin-v2-text-muted)]"><tr>{columns.map(([, label]) => <th key={label} className="h-9 whitespace-nowrap px-3 font-medium">{label}</th>)}</tr></thead><tbody className="divide-y divide-[var(--admin-v2-border)]">{rows.map((row, index) => <tr key={String(row.id ?? index)} className="hover:bg-[var(--admin-v2-surface-muted)]">{columns.map(([key]) => <td key={key} className={cn("max-w-[320px] truncate whitespace-nowrap px-3 py-2 text-[13px]", /(?:id|request_id)/i.test(key) && "font-mono text-xs")} title={safeText(row[key])}>{renderValue(key, row[key])}</td>)}</tr>)}</tbody></table></div>;
+}
+function Timeline({ rows }: { rows: Row[] }) {
+  if (!rows.length) return <AdminEmptyState title="暂无记录" className="min-h-[160px]" />;
+  return <ol className="mx-5 mb-5 list-none p-0">{rows.map((row, index) => <li key={String(row.id ?? index)} className="relative border-l border-[var(--admin-v2-border)] pb-6 pl-5 last:border-transparent last:pb-0"><span className="absolute -left-1 top-1.5 h-2 w-2 rounded-full bg-[var(--admin-v2-primary)]" aria-hidden="true" /><h3 className="text-sm font-semibold leading-[22px]">{safeText(row.eventType)}</h3><time className="text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{formatDate(typeof row.createdAt === "string" ? row.createdAt : null)}</time><p className="mt-2 text-sm text-[var(--admin-v2-text-secondary)]">{safeText(row.actorType)}</p>{row.message ? <p className="mt-0.5 text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{safeText(row.message)}</p> : null}</li>)}</ol>;
 }
 function Notice({ children }: { children: React.ReactNode }) {
   return <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">{children}</div>;
@@ -153,4 +149,11 @@ function formatDate(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false });
+}
+function statusTone(status: string): AdminStatusTone {
+  if (status === "completed" || status === "approved") return "success";
+  if (status === "failed" || status === "blocked") return "danger";
+  if (status === "verifying" || status === "processing") return "info";
+  if (status === "requested") return "warning";
+  return "neutral";
 }
