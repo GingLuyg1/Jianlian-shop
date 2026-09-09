@@ -9,7 +9,18 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
-import { Badge } from "@/components/ui/badge";
+import {
+  AdminFilterBar,
+  AdminListPagination,
+  AdminListStat,
+  AdminListStats,
+  AdminListSurface,
+  AdminTableViewport,
+  adminListControlClass,
+  adminListRowClass,
+  adminListTableHeadClass,
+} from "@/components/admin/v2/AdminList";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -128,36 +139,40 @@ export default function AdminPrivacyRequestsPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="隐私请求"
       description="只读查询数据导出与账号注销请求、处理时间线和审计记录。"
-      actions={<Button variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}
+      actions={<Button className="h-11 sm:h-9" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}
     >
-      <div className="mb-3 grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="当前待处理" value={stats.pending} warn={stats.pending > 0} />
-        <StatCard label="处理中" value={stats.processing} />
-        <StatCard label="已完成" value={stats.completed} />
-        <StatCard label="已拒绝 / 取消" value={stats.closed} />
-      </div>
+      <AdminListStats>
+        <AdminListStat label="当前待处理" value={stats.pending} tone={stats.pending > 0 ? "warning" : "neutral"} />
+        <AdminListStat label="处理中" value={stats.processing} />
+        <AdminListStat label="已完成" value={stats.completed} />
+        <AdminListStat label="已拒绝 / 取消" value={stats.closed} />
+      </AdminListStats>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="shrink-0 border-b border-slate-100 p-3">
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_150px_150px_150px_150px_170px_76px]">
-            <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="申请编号、说明或 UUID" className="h-10 pl-9" /></label>
-            <Select value={status} onChange={(value) => { setStatus(value); setPage(1); }}><option value="all">全部状态</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-            <Select value={type} onChange={(value) => { setType(value); setPage(1); }}><option value="all">全部类型</option>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-            <Input aria-label="提交开始日期" type="date" value={startAt} onChange={(event) => { setStartAt(event.target.value); setPage(1); }} className="h-10" />
-            <Input aria-label="提交结束日期" type="date" value={endAt} onChange={(event) => { setEndAt(event.target.value); setPage(1); }} className="h-10" />
-            <Select value={sort} onChange={(value) => { setSort(value); setPage(1); }}><option value="newest">最新提交</option><option value="oldest">最早提交</option><option value="recently_updated">最近更新</option></Select>
-            <Button variant="outline" onClick={reset}>重置</Button>
-          </div>
-        </div>
+      <AdminListSurface>
+        <AdminFilterBar
+          className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_150px_150px_150px_150px_170px_76px]"
+          primary={<>
+            <label className="relative sm:col-span-2 lg:col-span-2 2xl:col-span-1"><span className="sr-only">搜索隐私请求</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="申请编号、说明或 UUID" className={cn(adminListControlClass, "pl-9")} /></label>
+            <Select label="状态" value={status} onChange={(value) => { setStatus(value); setPage(1); }}><option value="all">全部状态</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+            <Select label="类型" value={type} onChange={(value) => { setType(value); setPage(1); }}><option value="all">全部类型</option>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+          </>}
+          advanced={<>
+            <Input aria-label="提交开始日期" type="date" value={startAt} onChange={(event) => { setStartAt(event.target.value); setPage(1); }} className={adminListControlClass} />
+            <Input aria-label="提交结束日期" type="date" value={endAt} onChange={(event) => { setEndAt(event.target.value); setPage(1); }} className={adminListControlClass} />
+            <Select label="排序" value={sort} onChange={(value) => { setSort(value); setPage(1); }}><option value="newest">最新提交</option><option value="oldest">最早提交</option><option value="recently_updated">最近更新</option></Select>
+            <Button variant="outline" className="h-11 sm:h-9" onClick={reset}>重置</Button>
+          </>}
+        />
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        <AdminTableViewport>
           {error ? <AdminErrorState title="隐私请求加载失败" description={error} onRetry={() => void loadRows()} /> : loading ? <AdminTableSkeleton rows={10} /> : rows.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的隐私请求" : "暂无隐私请求"} description={hasFilters ? "请调整筛选条件后再试。" : "用户提交隐私请求后会显示在这里。"} /> : (
             <table className="w-full min-w-[1180px] table-fixed text-sm">
               <colgroup><col className="w-[190px]" /><col className="w-[240px]" /><col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[240px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[80px]" /></colgroup>
-              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500"><tr className="border-b">{["请求编号", "用户", "类型", "状态", "阻塞原因", "提交时间", "最近更新", "操作"].map((heading) => <th key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
-              <tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.id} className="hover:bg-slate-50">
+              <thead className={adminListTableHeadClass}><tr className="border-b">{["请求编号", "用户", "类型", "状态", "阻塞原因", "提交时间", "最近更新", "操作"].map((heading) => <th scope="col" key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
+              <tbody>{rows.map((row) => <tr key={row.id} className={adminListRowClass}>
                 <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{row.requestNo || "—"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={row.id}>{row.id}</div></td>
                 <td className="px-3 py-2"><div className="truncate" title={row.userEmail ?? ""}>{row.userEmail || row.userLabel || "—"}</div><div className="truncate font-mono text-[11px] text-slate-400">{row.userId || "—"}</div></td>
                 <td className="px-3 py-2">{TYPE_LABELS[row.requestType] ?? row.requestType}</td>
@@ -165,27 +180,25 @@ export default function AdminPrivacyRequestsPage() {
                 <td className="truncate px-3 py-2 text-slate-500" title={row.blockReasons.join("；")}>{row.blockReasons.length ? row.blockReasons.join("；") : "—"}</td>
                 <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(row.createdAt)}</td>
                 <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(row.updatedAt)}</td>
-                <td className="px-3 py-2"><Button asChild variant="ghost" size="sm"><Link href={"/admin/privacy-requests/" + row.id}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
+                <td className="px-3 py-2"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={"/admin/privacy-requests/" + row.id}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
               </tr>)}</tbody>
             </table>
           )}
-        </div>
-        <div className="flex h-12 shrink-0 items-center justify-between border-t border-slate-100 px-3 text-sm text-slate-500"><span>共 {total} 条，第 {page} / {totalPages} 页</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button><Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button></div></div>
-      </div>
+        </AdminTableViewport>
+        <AdminListPagination summary={`共 ${total} 条`} page={page} totalPages={totalPages} loading={loading} onPrevious={() => setPage((value) => Math.max(1, value - 1))} onNext={() => setPage((value) => Math.min(totalPages, value + 1))} />
+      </AdminListSurface>
     </AdminPageShell>
   );
 }
 
-function Select({ children, value, onChange }: { children: React.ReactNode; value: string; onChange: (value: string) => void }) {
-  return <select className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary" value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>;
-}
-function StatCard({ label, value, warn = false }: { label: string; value: number; warn?: boolean }) {
-  return <div className={cn("rounded-xl border bg-white px-4 py-3 shadow-sm", warn && "border-amber-200 bg-amber-50")}><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-xl font-semibold tabular-nums text-slate-950">{value}</div></div>;
+function Select({ children, label, value, onChange }: { children: React.ReactNode; label: string; value: string; onChange: (value: string) => void }) {
+  return <select aria-label={label} className={cn(adminListControlClass, "px-3 outline-none")} value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>;
 }
 function StatusBadge({ value }: { value: string }) {
   const good = value === "completed";
   const pending = ["requested", "verifying", "blocked", "approved", "processing"].includes(value);
-  return <Badge variant="outline" className={cn("whitespace-nowrap", good ? "border-emerald-200 bg-emerald-50 text-emerald-700" : pending ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600")}>{STATUS_LABELS[value] ?? value}</Badge>;
+  const tone: AdminStatusTone = good ? "success" : pending ? "warning" : "neutral";
+  return <AdminStatusBadge tone={tone}>{STATUS_LABELS[value] ?? value}</AdminStatusBadge>;
 }
 function formatDate(value: string | null) {
   if (!value) return "—";

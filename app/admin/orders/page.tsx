@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Eye, Loader2, RefreshCcw, Search, X } from "lucide-react";
+import { AlertCircle, Eye, Loader2, RefreshCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -12,6 +12,16 @@ import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import OrderFulfillmentPanel from "@/components/admin/orders/OrderFulfillmentPanel";
+import {
+  AdminFilterBar,
+  AdminListPagination,
+  AdminListSurface,
+  AdminTableViewport,
+  adminListControlClass,
+  adminListRowClass,
+  adminListTableHeadClass,
+} from "@/components/admin/v2/AdminList";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,6 +94,20 @@ function getDeliveryLabel(deliveryType: string | null | undefined) {
   if (deliveryType === "card") return "卡密交付";
   if (deliveryType === "account") return "账号交付";
   return "人工处理";
+}
+
+function orderStatusTone(value: string): AdminStatusTone {
+  if (["delivered", "completed"].includes(value)) return "success";
+  if (["failed", "cancelled", "refunded"].includes(value)) return "danger";
+  if (["paid", "processing"].includes(value)) return "info";
+  return "warning";
+}
+
+function paymentStatusTone(value: string): AdminStatusTone {
+  if (value === "paid") return "success";
+  if (["failed", "refunded"].includes(value)) return "danger";
+  if (value === "pending") return "info";
+  return "warning";
 }
 
 function getOrderNo(order: OrderRecord | null | undefined) {
@@ -176,21 +200,23 @@ export default function AdminOrdersPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="订单管理"
       description="查看真实订单、关联业务和处理时间线。"
       actions={(
-        <Button variant="outline" size="sm" onClick={() => void loadOrders()} disabled={loading}>
+        <Button className="h-11 sm:h-9" variant="outline" size="sm" onClick={() => void loadOrders()} disabled={loading}>
           <RefreshCcw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
           重新加载
         </Button>
       )}
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-
-      <Card className="shrink-0">
-        <CardContent className="p-4">
-          <div className="grid gap-3 xl:grid-cols-4 2xl:grid-cols-[minmax(240px,1fr)_170px_170px_170px_180px_180px_auto]">
-            <div className="relative">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <AdminListSurface>
+        <AdminFilterBar
+          className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[minmax(240px,1fr)_170px_170px_170px_180px_180px_auto]"
+          primary={<>
+            <label className="relative sm:col-span-2 lg:col-span-2 2xl:col-span-1">
+              <span className="sr-only">搜索订单</span>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 value={search}
@@ -199,9 +225,9 @@ export default function AdminOrdersPage() {
                   setPage(1);
                 }}
                 placeholder="搜索订单编号或用户邮箱"
-                className="h-9 pl-9"
+                className={cn(adminListControlClass, "pl-9")}
               />
-            </div>
+            </label>
             <NativeSelect value={attention} onChange={(value) => { setAttention(value as typeof initialAttention); setPage(1); }} label="运营待办">
               <option value={ALL_VALUE}>全部运营待办</option>
               <option value="pending_orders">待处理订单</option>
@@ -220,6 +246,8 @@ export default function AdminOrdersPage() {
               <option value="refunded">已退款</option>
               <option value="failed">失败</option>
             </NativeSelect>
+          </>}
+          advanced={<>
             <NativeSelect value={paymentStatus} onChange={setPaymentStatus} label="支付状态">
               <option value={ALL_VALUE}>全部支付状态</option>
               <option value="unpaid">未支付</option>
@@ -244,15 +272,8 @@ export default function AdminOrdersPage() {
               <option value="amount_asc">金额从低到高</option>
             </NativeSelect>
             <Button variant="ghost" size="sm" onClick={resetFilters}>重置</Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <CardHeader className="shrink-0 border-b px-4 py-3">
-          <CardTitle className="text-base">订单列表</CardTitle>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+          </>}
+        />
           {error ? (
             <div className="flex min-h-0 flex-1 p-4">
               <AdminErrorState title="订单列表加载失败" description={error} onRetry={() => void loadOrders()} />
@@ -261,20 +282,12 @@ export default function AdminOrdersPage() {
             <AdminTableSkeleton rows={8} />
           ) : (
             <>
-              <div className="min-h-0 flex-1 overflow-auto">
+              <AdminTableViewport>
             <table className="min-w-[1180px] w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold text-slate-500">
+              <thead className={adminListTableHeadClass}>
                 <tr>
-                  <th className="px-4 py-3">订单编号</th>
-                  <th className="px-4 py-3">用户邮箱</th>
-                  <th className="px-4 py-3">商品摘要</th>
-                  <th className="px-4 py-3">金额</th>
-                  <th className="px-4 py-3">订单状态</th>
-                  <th className="px-4 py-3">支付状态</th>
-                  <th className="px-4 py-3">交付方式</th>
-                  <th className="px-4 py-3">下单时间</th>
-                  <th className="px-4 py-3">更新时间</th>
-                  <th className="sticky right-0 bg-slate-50 px-4 py-3 text-right">操作</th>
+                  {["订单编号", "用户邮箱", "商品摘要", "金额", "订单状态", "支付状态", "交付方式", "下单时间", "更新时间"].map((heading) => <th scope="col" key={heading} className="px-4 py-3">{heading}</th>)}
+                  <th scope="col" className="sticky right-0 bg-[var(--admin-v2-surface-muted)] px-4 py-3 text-right">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -284,18 +297,18 @@ export default function AdminOrdersPage() {
                     const payStatus = normalizePaymentStatus(order.payment_status);
                     const itemSummary = order.order_items?.map((item) => `${item.product_name} x ${item.quantity}`).join("、") || "—";
                     return (
-                      <tr key={order.id} className="bg-white hover:bg-slate-50">
+                      <tr key={order.id} className={adminListRowClass}>
                         <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-900">{getOrderNo(order)}</td>
                         <td className="px-4 py-3 text-slate-600">{order.customer_email || "—"}</td>
                         <td className="max-w-[320px] truncate px-4 py-3 text-slate-700" title={itemSummary}>{itemSummary}</td>
                         <td className="px-4 py-3 font-semibold text-slate-950">{formatMoney(order.total_amount, order.currency)}</td>
-                        <td className="px-4 py-3"><Badge className={ORDER_STATUS_STYLES[orderStatus]}>{getOrderStatusLabel(orderStatus)}</Badge></td>
-                        <td className="px-4 py-3"><Badge className={PAYMENT_STATUS_STYLES[payStatus]}>{getPaymentStatusLabel(payStatus)}</Badge></td>
+                        <td className="px-4 py-3"><AdminStatusBadge tone={orderStatusTone(orderStatus)}>{getOrderStatusLabel(orderStatus)}</AdminStatusBadge></td>
+                        <td className="px-4 py-3"><AdminStatusBadge tone={paymentStatusTone(payStatus)}>{getPaymentStatusLabel(payStatus)}</AdminStatusBadge></td>
                         <td className="px-4 py-3 text-slate-600">{getDeliveryLabel(order.delivery_type)}</td>
                         <td className="px-4 py-3 text-slate-500">{formatDate(order.created_at)}</td>
                         <td className="px-4 py-3 text-slate-500">{formatDate(order.updated_at)}</td>
-                        <td className="sticky right-0 bg-white px-4 py-3 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)]">
-                          <Button size="sm" variant="outline" onClick={() => setSelectedOrder(order)}>
+                        <td className="sticky right-0 border-l border-[var(--admin-v2-border)] bg-white px-4 py-3 text-right">
+                          <Button className="min-h-11 sm:min-h-9" size="sm" variant="ghost" onClick={() => setSelectedOrder(order)}>
                             <Eye className="mr-2 h-4 w-4" />{attention === "manual_delivery" ? "处理交付" : "查看"}
                           </Button>
                         </td>
@@ -314,25 +327,22 @@ export default function AdminOrdersPage() {
                 )}
               </tbody>
             </table>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-slate-500">
-            <div>共 {count} 条记录，第 {page} / {totalPages} 页</div>
-            <div className="flex items-center gap-2">
+          </AdminTableViewport>
+          <AdminListPagination
+            summary={`共 ${count} 条记录`}
+            page={page}
+            totalPages={totalPages}
+            leading={(
               <NativeSelect value={String(pageSize)} onChange={(value) => { setPageSize(Number(value)); setPage(1); }} label="每页数量" compact>
                 {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} 条/页</option>)}
               </NativeSelect>
-              <Button variant="outline" size="icon" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+            )}
+            onPrevious={() => setPage((value) => Math.max(1, value - 1))}
+            onNext={() => setPage((value) => Math.min(totalPages, value + 1))}
+          />
             </>
           )}
-        </CardContent>
-      </Card>
+      </AdminListSurface>
 
       {selectedOrder ? (
         <AdminOrderDrawer
@@ -367,7 +377,8 @@ function NativeSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+          adminListControlClass,
+          "w-full px-3 outline-none transition-colors"
         )}
       >
         {children}
