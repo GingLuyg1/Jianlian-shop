@@ -123,7 +123,7 @@ export default function AdminGlobalSearch() {
 
   return (
     <div ref={containerRef} className="relative min-w-0 w-full max-w-xl flex-1">
-      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--admin-v2-text-muted)]" />
       <Input
         value={keyword}
         onChange={(event) => {
@@ -147,12 +147,12 @@ export default function AdminGlobalSearch() {
           }
         }}
         placeholder="搜索订单号、支付单号、用户邮箱、商品名称..."
-        className="h-9 w-full pl-9 pr-9 text-sm"
+        className="h-9 w-full rounded-[var(--admin-v2-control-radius)] border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] pl-9 pr-9 text-sm text-[var(--admin-v2-text-primary)] transition-colors duration-150 placeholder:text-[var(--admin-v2-text-muted)] focus-visible:border-[var(--admin-v2-primary)] focus-visible:bg-[var(--admin-v2-surface)] focus-visible:ring-[var(--admin-v2-primary)]"
       />
-      {loading ? <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" /> : null}
+      {loading ? <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[var(--admin-v2-text-muted)]" /> : null}
 
       {open && keyword.trim() ? (
-        <div className="absolute left-0 right-0 top-11 z-50 max-h-[560px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+        <div className="absolute left-0 right-0 top-11 z-50 max-h-[560px] overflow-hidden rounded-lg border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-xl">
           {error ? (
             <div className="px-4 py-5 text-sm text-red-600">{error}</div>
           ) : loading && !payload ? (
