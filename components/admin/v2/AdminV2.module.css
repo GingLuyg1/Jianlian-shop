@@ -1,0 +1,48 @@
+.scope {
+  --admin-v2-background: #f8fafc;
+  --admin-v2-surface: #ffffff;
+  --admin-v2-surface-muted: #f1f5f9;
+  --admin-v2-border: #e2e8f0;
+  --admin-v2-text-primary: #0f172a;
+  --admin-v2-text-secondary: #475569;
+  --admin-v2-text-muted: #64748b;
+  --admin-v2-primary: #1d4ed8;
+  --admin-v2-selected: #eff6ff;
+  --admin-v2-success-foreground: #166534;
+  --admin-v2-success-background: #f0fdf4;
+  --admin-v2-warning-foreground: #92400e;
+  --admin-v2-warning-background: #fffbeb;
+  --admin-v2-danger-foreground: #991b1b;
+  --admin-v2-danger-background: #fef2f2;
+  --admin-v2-info-foreground: #1e40af;
+  --admin-v2-info-background: #eff6ff;
+  --admin-v2-neutral-foreground: #475569;
+  --admin-v2-neutral-background: #f1f5f9;
+  --admin-v2-surface-radius: 8px;
+  --admin-v2-control-radius: 6px;
+  --admin-v2-status-radius: 4px;
+
+  background: var(--admin-v2-background);
+  color: var(--admin-v2-text-primary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.control {
+  border-radius: var(--admin-v2-control-radius);
+  transition-duration: 150ms;
+  transform: none !important;
+}
+
+.control:hover,
+.control:active {
+  transform: none !important;
+}
+
+.tableSurface {
+  overflow-x: auto;
+  border: 1px solid var(--admin-v2-border);
+  border-radius: var(--admin-v2-surface-radius);
+  background: var(--admin-v2-surface);
+  box-shadow: none;
+}

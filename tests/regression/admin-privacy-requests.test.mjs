@@ -76,6 +76,46 @@ test("privacy detail minimizes PII and has no delete, export, or state-changing 
   }
 });
 
+test("privacy detail adopts scoped Admin V2 foundations without changing its read contract", () => {
+  const page = file("app/admin/privacy-requests/[requestId]/page.tsx");
+  const layout = file("components/admin/AdminLayout.tsx");
+  const tokens = file("components/admin/v2/AdminV2.module.css");
+  const statusBadge = file("components/admin/v2/AdminStatusBadge.tsx");
+  const readOnlyBadge = file("components/admin/v2/AdminReadOnlyBadge.tsx");
+  const section = file("components/admin/v2/AdminSection.tsx");
+  const infoGrid = file("components/admin/v2/AdminInfoGrid.tsx");
+
+  for (const component of ["AdminStatusBadge", "AdminReadOnlyBadge", "AdminSection", "AdminInfoGrid", "AdminInfoItem"]) {
+    assert.match(page, new RegExp(component));
+  }
+  assert.match(layout, /v2Styles\.scope/);
+  for (const token of ["#f8fafc", "#ffffff", "#e2e8f0", "#0f172a", "#1d4ed8", "#eff6ff"]) {
+    assert.ok(tokens.includes(token));
+  }
+  for (const tone of ["success", "warning", "danger", "info", "neutral"]) {
+    assert.match(statusBadge, new RegExp(tone));
+  }
+  assert.match(statusBadge, /children: ReactNode/);
+  assert.match(readOnlyBadge, /<span/);
+  assert.doesNotMatch(readOnlyBadge, /<button|onClick|hover:/);
+  assert.match(section, /shadow-none/);
+  assert.match(infoGrid, /grid-cols-1/);
+  assert.match(infoGrid, /sm:grid-cols-2/);
+  assert.match(infoGrid, /\[overflow-wrap:anywhere\]/);
+  assert.doesNotMatch(infoGrid, /shadow|break-all/);
+  assert.match(page, /xl:grid-cols-\[minmax\(0,1fr\)_320px\]/);
+  assert.match(page, /最近 50 条以内/);
+  assert.match(page, /fetch\("\/api\/admin\/privacy-requests\/" \+ requestId, \{ cache: "no-store" \}\)/);
+  assert.doesNotMatch(page + layout + statusBadge + readOnlyBadge + section + infoGrid, /design\/admin-ui-v2|DESIGN PREVIEW|Mock Data|Not Production/);
+});
+
+test("privacy detail keeps separate 50-row event and strict audit limits", () => {
+  const route = file("app/api/admin/privacy-requests/[requestId]/route.ts");
+  assert.equal(route.match(/\.limit\(50\)/g)?.length, 2);
+  assert.match(route, /\.from\("privacy_request_events"\)[\s\S]*?\.eq\("request_id", requestId\)[\s\S]*?\.limit\(50\)/);
+  assert.match(route, /\.from\("admin_audit_logs"\)[\s\S]*?\.eq\("target_id", requestId\)[\s\S]*?\.eq\("target_type", "privacy_request"\)[\s\S]*?\.eq\("module", "privacy"\)[\s\S]*?\.limit\(50\)/);
+});
+
 test("retained privacy write API validates UUID and summarizes unknown failures", () => {
   const route = file("app/api/admin/privacy-requests/route.ts");
   assert.match(route, /if \(!isUuid\(requestId\)\)/);
