@@ -3,13 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
-  AlertTriangle,
   ArrowRight,
-  BarChart3,
   Box,
   CheckCircle2,
-  Clock3,
   CreditCard,
   Database,
   Loader2,
@@ -17,7 +13,6 @@ import {
   RefreshCcw,
   ShieldCheck,
   ShoppingCart,
-  TrendingUp,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -25,6 +20,10 @@ import {
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import {
+  AdminMetricTrendCard,
+  AdminMetricValueCard,
+} from "@/components/admin/dashboard/AdminDashboardMetricCards";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +65,10 @@ type MetricCard = {
   tone?: "blue" | "green" | "orange" | "red" | "slate";
   change?: string | null;
   failed?: boolean;
+};
+
+type TrendMetricCard = MetricCard & {
+  trend: Array<number | null>;
 };
 
 type DashboardOrder = {
@@ -118,6 +121,7 @@ type TrendPoint = {
   paidCount: number | null;
   visitors: number | null;
   views: number | null;
+  newUsers: number | null;
 };
 
 type TodoItem = {
@@ -144,7 +148,8 @@ type SystemStatus = {
 };
 
 type DashboardData = {
-  metrics: MetricCard[];
+  trendMetrics: TrendMetricCard[];
+  statusMetrics: MetricCard[];
   channels: ChannelStat[];
   trend7: TrendPoint[];
   trend30: TrendPoint[];
@@ -289,6 +294,7 @@ function createEmptyTrend(days: number) {
       paidCount: null,
       visitors: null,
       views: null,
+      newUsers: null,
     };
   });
 }
@@ -298,6 +304,7 @@ function makeTrend(
   orders: DashboardOrder[] | null,
   recharges: DashboardRecharge[] | null,
   visits: Array<{ visit_date: string; visitor_key?: string | null; page_path?: string | null }> | null,
+  users: Array<{ created_at?: string | null }> | null,
 ) {
   const base = createEmptyTrend(days);
   const paidOrders = orders ? orders.filter((order) => order.payment_status === "paid") : null;
@@ -306,6 +313,7 @@ function makeTrend(
   const orderCount = aggregateByDate(orders, days, (row) => row.created_at, () => 1);
   const paidCount = aggregateByDate(paidOrders, days, (row) => row.paid_at as string | undefined, () => 1);
   const rechargeAmount = aggregateByDate(paidRecharges, days, (row) => row.paid_at ?? row.created_at, (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
+  const newUsers = aggregateByDate(users, days, (row) => row.created_at, () => 1);
 
   let visitorMap: Map<string, Set<string>> | null = null;
   let viewMap: Map<string, number> | null = null;
@@ -332,6 +340,7 @@ function makeTrend(
     paidCount: paidCount ? paidCount.get(point.date) ?? 0 : null,
     visitors: visitorMap ? visitorMap.get(point.date)?.size ?? 0 : null,
     views: viewMap ? viewMap.get(point.date) ?? 0 : null,
+    newUsers: newUsers ? newUsers.get(point.date) ?? 0 : null,
   }));
 }
 
@@ -454,6 +463,7 @@ async function loadDashboardData(): Promise<DashboardData> {
   const todayRecharges = recharges ? recharges.filter((row) => new Date(row.created_at) >= today) : null;
   const yesterdayRecharges = recharges ? recharges.filter((row) => new Date(row.created_at) >= yesterday && new Date(row.created_at) < today) : null;
   const todayUsers = users ? users.filter((row) => row.created_at && new Date(row.created_at) >= today) : null;
+  const yesterdayUsers = users ? users.filter((row) => row.created_at && new Date(row.created_at) >= yesterday && new Date(row.created_at) < today) : null;
   const weekUsers = users ? users.filter((row) => row.created_at && new Date(row.created_at) >= weekAgo) : null;
 
   const todayPayAmount = sumRows(todayOrders, (order) => order.payment_status === "paid", (order) => safeNumber(order.total_amount));
@@ -461,6 +471,7 @@ async function loadDashboardData(): Promise<DashboardData> {
   const todayRechargeAmount = sumRows(todayRecharges, (row) => row.status === "paid", (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
   const yesterdayRechargeAmount = sumRows(yesterdayRecharges, (row) => row.status === "paid", (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
   const todayPaidOrders = countRows(todayOrders, (order) => order.payment_status === "paid");
+  const yesterdayPaidOrders = countRows(yesterdayOrders, (order) => order.payment_status === "paid");
 
   const todayVisitKey = formatBusinessDateKey(today);
   const yesterdayVisitKey = formatBusinessDateKey(yesterday);
@@ -539,8 +550,11 @@ async function loadDashboardData(): Promise<DashboardData> {
     { label: "最近更新时间", value: "正常" },
   ];
 
+  const trend7 = makeTrend(7, orders, recharges, visits, users);
+  const trend30 = makeTrend(30, orders, recharges, visits, users);
+
   return {
-    metrics: [
+    trendMetrics: [
       {
         label: "今日支付金额",
         value: todayPayAmount === null ? FAILED : formatMoney(todayPayAmount),
@@ -548,6 +562,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         href: "/admin/orders?paymentStatus=paid",
         tone: "green",
         change: todayPayAmount !== null && yesterdayPayAmount !== null ? `${formatMoney(yesterdayPayAmount)} 昨日` : "—",
+        trend: trend7.map((point) => point.payAmount),
       },
       {
         label: "今日充值金额",
@@ -556,6 +571,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         href: "/admin/recharges?status=paid",
         tone: "green",
         change: todayRechargeAmount !== null && yesterdayRechargeAmount !== null ? `${formatMoney(yesterdayRechargeAmount)} 昨日` : "—",
+        trend: trend7.map((point) => point.rechargeAmount),
       },
       {
         label: "今日订单数",
@@ -564,6 +580,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         href: "/admin/orders",
         tone: "blue",
         change: yesterdayOrders ? `${yesterdayOrders.length} 昨日` : "—",
+        trend: trend7.map((point) => point.orderCount),
       },
       {
         label: "今日支付成功率",
@@ -571,7 +588,10 @@ async function loadDashboardData(): Promise<DashboardData> {
         description: "已支付 / 今日订单",
         href: "/admin/payments",
         tone: "blue",
-        change: "—",
+        change: yesterdayOrders ? `${formatPercent(yesterdayPaidOrders, yesterdayOrders.length)} 昨日` : "—",
+        trend: trend7.map((point) => point.orderCount === null || point.paidCount === null || point.orderCount === 0
+          ? null
+          : (point.paidCount / point.orderCount) * 100),
       },
       {
         label: "今日访客数",
@@ -580,6 +600,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         tone: "slate",
         change: visits ? `昨日 ${yesterdayVisitorSet?.size ?? 0}` : visitsMissing ? "待执行访问统计 migration" : "读取失败",
         failed: visitsFailed,
+        trend: trend7.map((point) => point.visitors),
       },
       {
         label: "今日访问量",
@@ -588,7 +609,19 @@ async function loadDashboardData(): Promise<DashboardData> {
         tone: "slate",
         change: visits ? `昨日 ${yesterdayVisits?.length ?? 0}` : visitsMissing ? "待执行访问统计 migration" : "读取失败",
         failed: visitsFailed,
+        trend: trend7.map((point) => point.views),
       },
+      {
+        label: "今日新增用户",
+        value: todayUsers ? todayUsers.length : FAILED,
+        description: "profiles 今日新增",
+        href: "/admin/users",
+        tone: "blue",
+        change: yesterdayUsers ? `昨日 ${yesterdayUsers.length}` : "—",
+        trend: trend7.map((point) => point.newUsers),
+      },
+    ],
+    statusMetrics: [
       {
         label: "待处理订单",
         value: orders ? orders.filter((order) => ["paid", "processing"].includes(order.status)).length : FAILED,
@@ -622,14 +655,6 @@ async function loadDashboardData(): Promise<DashboardData> {
         change: "—",
       },
       {
-        label: "今日新增用户",
-        value: todayUsers ? todayUsers.length : FAILED,
-        description: "profiles 今日新增",
-        href: "/admin/users",
-        tone: "blue",
-        change: weekUsers ? `${weekUsers.length} 本周` : "—",
-      },
-      {
         label: "商品总数",
         value: products ? products.length : FAILED,
         description: "products 总量",
@@ -639,8 +664,8 @@ async function loadDashboardData(): Promise<DashboardData> {
       },
     ],
     channels: channelStats,
-    trend7: makeTrend(7, orders, recharges, visits),
-    trend30: makeTrend(30, orders, recharges, visits),
+    trend7,
+    trend30,
     todos: [
       { label: "待处理订单", value: orders ? orders.filter((order) => ["paid", "processing"].includes(order.status)).length : null, href: "/admin/orders?attention=pending_orders" },
       { label: "待人工交付", value: deliveries ? deliveries.filter((row) => row.delivery_status === "pending" && row.delivery_type !== "automatic").length : null, href: "/admin/orders?attention=manual_delivery" },
@@ -730,23 +755,66 @@ export default function AdminDashboardPage() {
       {error ? (
         <AdminErrorState description={error} onRetry={loadDashboard} />
       ) : (
-        <div className="flex min-h-0 w-full flex-1 flex-col gap-3 overflow-auto pb-1">
-          <div className="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-            {(data?.metrics ?? Array.from({ length: 12 }, (_, index) => ({
-              label: `指标 ${index + 1}`,
-              value: loading ? "..." : "—",
-              description: "正在加载",
-            }))).map((metric) => (
-              <MetricCardItem key={metric.label} metric={metric} loading={loading} />
-            ))}
-          </div>
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-1">
+          <section className="shrink-0" aria-labelledby="dashboard-core-metrics">
+            <div className="mb-2 flex items-end justify-between gap-3">
+              <div>
+                <h2 id="dashboard-core-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">核心经营指标</h2>
+                <p className="text-xs text-[var(--admin-v2-text-muted)]">近 7 天真实数据走势；无可用序列时不绘制曲线。</p>
+              </div>
+              <span className="hidden text-xs text-[var(--admin-v2-text-muted)] sm:inline">对比昨日</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 min-[430px]:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
+              {loading && !data
+                ? Array.from({ length: 7 }).map((_, index) => (
+                  <div key={index} className="h-[126px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
+                ))
+                : data?.trendMetrics.map((metric) => (
+                  <AdminMetricTrendCard
+                    key={metric.label}
+                    label={metric.label}
+                    value={formatNumber(metric.value)}
+                    description={metric.description}
+                    comparison={metric.change}
+                    href={metric.href}
+                    loading={loading}
+                    trend={metric.trend}
+                  />
+                ))}
+            </div>
+          </section>
+
+          <section className="shrink-0" aria-labelledby="dashboard-status-metrics">
+            <div className="mb-2">
+              <h2 id="dashboard-status-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">运营状态</h2>
+              <p className="text-xs text-[var(--admin-v2-text-muted)]">待处理、异常与库存状态保持数字展示。</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+              {loading && !data
+                ? Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="h-[92px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
+                ))
+                : data?.statusMetrics.map((metric) => (
+                  <AdminMetricValueCard
+                    key={metric.label}
+                    label={metric.label}
+                    value={formatNumber(metric.value)}
+                    description={metric.description}
+                    comparison={metric.change === "—" ? null : metric.change}
+                    href={metric.href}
+                    loading={loading}
+                    tone={metric.tone === "red" ? "danger" : metric.tone === "orange" ? "warning" : "neutral"}
+                  />
+                ))}
+            </div>
+          </section>
 
           <div className="grid min-h-[320px] grid-cols-1 gap-3 xl:grid-cols-[2fr_1fr]">
-            <Card className="flex min-h-0 flex-col overflow-hidden">
+            <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
               <CardHeader className="flex shrink-0 flex-row items-center justify-between px-4 py-3">
                 <div>
                   <CardTitle className="text-base">经营趋势</CardTitle>
-                  <p className="text-xs text-slate-500">支付、充值、订单和访问趋势</p>
+                  <p className="text-xs text-slate-500">支付、充值、订单和访问的综合走势（各指标独立量程）</p>
                 </div>
                 <Tabs value={trendRange} onValueChange={(value) => setTrendRange(value as "7" | "30")}>
                   <TabsList className="h-8">
@@ -760,7 +828,7 @@ export default function AdminDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card className="flex min-h-0 flex-col overflow-hidden">
+            <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
               <CardHeader className="shrink-0 px-4 py-3">
                 <CardTitle className="text-base">支付渠道表现</CardTitle>
                 <p className="text-xs text-slate-500">按真实支付会话统计，不展示假渠道结果</p>
@@ -773,7 +841,7 @@ export default function AdminDashboardPage() {
             </Card>
           </div>
 
-          <Card className="shrink-0 overflow-hidden">
+          <Card className="shrink-0 overflow-hidden border-[var(--admin-v2-border)] shadow-none">
             <CardHeader className="px-4 py-3">
               <CardTitle className="text-base">待办中心</CardTitle>
               <p className="mt-1 text-xs text-slate-500">数字为近 30 天快照；点击查看当前完整队列。</p>
@@ -821,83 +889,50 @@ function QuickLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function MetricCardItem({ metric, loading }: { metric: MetricCard; loading: boolean }) {
-  const content = (
-    <Card className="h-full transition hover:border-orange-200 hover:shadow-sm">
-      <CardContent className="flex h-full flex-col justify-between p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate text-xs text-slate-500">{metric.label}</div>
-            <div className="mt-1 truncate text-xl font-semibold text-slate-950">
-              {loading ? "..." : formatNumber(metric.value)}
-            </div>
-          </div>
-          <MetricIcon tone={metric.tone} />
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
-          <span className="truncate">{metric.description}</span>
-          <span className="shrink-0">{metric.change ?? "—"}</span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  if (!metric.href) return content;
-  return <Link href={metric.href}>{content}</Link>;
-}
-
-function MetricIcon({ tone = "slate" }: { tone?: MetricCard["tone"] }) {
-  const iconMap = {
-    blue: <BarChart3 className="h-4 w-4 text-blue-600" />,
-    green: <TrendingUp className="h-4 w-4 text-green-600" />,
-    orange: <Clock3 className="h-4 w-4 text-orange-600" />,
-    red: <AlertTriangle className="h-4 w-4 text-red-600" />,
-    slate: <Activity className="h-4 w-4 text-slate-600" />,
-  };
-  const bgMap = {
-    blue: "bg-blue-50",
-    green: "bg-green-50",
-    orange: "bg-orange-50",
-    red: "bg-red-50",
-    slate: "bg-slate-100",
-  };
-  return <div className={`rounded-lg p-2 ${bgMap[tone]}`}>{iconMap[tone]}</div>;
-}
-
 function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolean }) {
-  const maxValue = Math.max(
-    1,
-    ...points.flatMap((point) => [
-      point.payAmount ?? 0,
-      point.rechargeAmount ?? 0,
-      (point.orderCount ?? 0) * 100,
-      (point.views ?? 0) * 20,
-    ]),
-  );
-
-  if (loading) return <div className="h-full min-h-[220px] animate-pulse rounded-xl bg-slate-100" />;
+  if (loading) return <div className="h-full min-h-[220px] animate-pulse rounded-[var(--admin-v2-surface-radius)] bg-[var(--admin-v2-surface-muted)]" />;
   if (points.length === 0) return <AdminEmptyState title="暂无趋势数据" description="有真实订单、充值或访问记录后会显示趋势。" />;
+
+  const series = [
+    { key: "payAmount", label: "支付金额", color: "#2563eb", values: points.map((point) => point.payAmount), format: formatMoney },
+    { key: "rechargeAmount", label: "充值金额", color: "#0ea5e9", values: points.map((point) => point.rechargeAmount), format: formatMoney },
+    { key: "orderCount", label: "订单数量", color: "#6366f1", values: points.map((point) => point.orderCount), format: (value: number | null) => value === null ? NOT_CONNECTED : `${value} 单` },
+    { key: "views", label: "访问量", color: "#64748b", values: points.map((point) => point.views), format: (value: number | null) => value === null ? NOT_CONNECTED : `${value} PV` },
+  ] as const;
+  const chartWidth = 720;
+  const chartHeight = 220;
+  const padding = { top: 16, right: 12, bottom: 28, left: 12 };
+  const chartSeries = series.map((item) => ({
+    ...item,
+    ...buildNormalizedLine(item.values, chartWidth, chartHeight, padding),
+  }));
+  const labelStep = Math.max(1, Math.ceil(points.length / 6));
 
   return (
     <div className="flex h-full min-h-[220px] min-w-0 flex-col">
       <div className="mb-2 flex flex-wrap gap-3 text-xs text-slate-500">
-        <Legend color="bg-green-500" label="支付金额" />
-        <Legend color="bg-orange-500" label="充值金额" />
-        <Legend color="bg-blue-500" label="订单数量" />
-        <Legend color="bg-slate-500" label="访问量" />
+        {series.map((item) => <Legend key={item.key} color={item.color} label={item.label} />)}
       </div>
-      <div className="flex min-h-0 flex-1 items-end gap-1 overflow-x-auto rounded-xl border bg-slate-50 p-3">
-        {points.map((point) => (
-          <div key={point.date} className="flex min-w-[36px] flex-1 flex-col items-center justify-end gap-1" title={`${point.date} 支付 ${formatMoney(point.payAmount)} 充值 ${formatMoney(point.rechargeAmount)} 订单 ${point.orderCount ?? "未接入"} 访问 ${point.views ?? "未接入"}`}>
-            <div className="flex h-40 w-full items-end justify-center gap-0.5">
-              <Bar value={point.payAmount} max={maxValue} color="bg-green-500" />
-              <Bar value={point.rechargeAmount} max={maxValue} color="bg-orange-500" />
-              <Bar value={point.orderCount === null ? null : point.orderCount * 100} max={maxValue} color="bg-blue-500" />
-              <Bar value={point.views === null ? null : point.views * 20} max={maxValue} color="bg-slate-500" />
-            </div>
-            <div className="text-[10px] text-slate-400">{point.date.slice(5)}</div>
-          </div>
-        ))}
+      <div className="min-h-0 flex-1 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1">
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="h-full min-h-[200px] w-full" role="img" aria-label="支付、充值、订单与访问综合趋势折线图">
+          {[0.25, 0.5, 0.75].map((ratio) => {
+            const y = padding.top + ratio * (chartHeight - padding.top - padding.bottom);
+            return <path key={ratio} d={`M${padding.left} ${y} H${chartWidth - padding.right}`} stroke="#e2e8f0" strokeDasharray="3 4" strokeWidth="1" />;
+          })}
+          {chartSeries.flatMap((item) => item.paths.map((path, index) => (
+            <path key={`${item.key}-${index}`} d={path} fill="none" stroke={item.color} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          )))}
+          {chartSeries.flatMap((item) => item.points.map((point, index) => point ? (
+            <circle key={`${item.key}-${index}`} cx={point.x} cy={point.y} r="2.5" fill={item.color} stroke="white" strokeWidth="1.25">
+              <title>{`${points[index].date} · ${item.label} ${item.format(item.values[index])}`}</title>
+            </circle>
+          ) : null))}
+          {points.map((point, index) => {
+            if (index !== 0 && index !== points.length - 1 && index % labelStep !== 0) return null;
+            const x = padding.left + (index / Math.max(points.length - 1, 1)) * (chartWidth - padding.left - padding.right);
+            return <text key={point.date} x={x} y={chartHeight - 7} textAnchor={index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"} fill="#94a3b8" fontSize="10">{point.date.slice(5)}</text>;
+          })}
+        </svg>
       </div>
     </div>
   );
@@ -906,15 +941,45 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
 function Legend({ color, label }: { color: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1">
-      <span className={`h-2 w-2 rounded-full ${color}`} />
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
       {label}
     </span>
   );
 }
 
-function Bar({ value, max, color }: { value: number | null; max: number; color: string }) {
-  if (value === null) return <div className="h-2 w-2 rounded-full bg-slate-300" />;
-  return <div className={`w-2 rounded-t ${color}`} style={{ height: `${Math.max(4, (value / max) * 150)}px` }} />;
+function buildNormalizedLine(
+  values: Array<number | null>,
+  width: number,
+  height: number,
+  padding: { top: number; right: number; bottom: number; left: number },
+) {
+  const finiteValues = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  if (finiteValues.length === 0) return { paths: [] as string[], points: values.map(() => null) as Array<{ x: number; y: number } | null> };
+
+  const min = Math.min(...finiteValues);
+  const max = Math.max(...finiteValues);
+  const range = max - min || 1;
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const points = values.map((value, index) => {
+    if (value === null || !Number.isFinite(value)) return null;
+    return {
+      x: padding.left + (index / Math.max(values.length - 1, 1)) * plotWidth,
+      y: padding.top + (1 - (value - min) / range) * plotHeight,
+    };
+  });
+  const paths: string[] = [];
+  let currentPath = "";
+  points.forEach((point) => {
+    if (!point) {
+      if (currentPath) paths.push(currentPath);
+      currentPath = "";
+      return;
+    }
+    currentPath += `${currentPath ? " L" : "M"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+  });
+  if (currentPath) paths.push(currentPath);
+  return { paths, points };
 }
 
 function ChannelRow({ channel, loading }: { channel: ChannelStat; loading: boolean }) {
@@ -963,7 +1028,7 @@ function TodoLink({ item }: { item: TodoItem }) {
 
 function ProductListCard({ title, rows, type, loading }: { title: string; rows: ProductRank[]; type: "sales" | "amount"; loading: boolean }) {
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden">
+    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
@@ -1010,7 +1075,7 @@ function InventoryFocusCard({
     { label: "长期未售", rows: staleProducts },
   ];
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden">
+    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">商品经营</CardTitle>
       </CardHeader>
@@ -1095,7 +1160,7 @@ function CompactTableCard({
   href: string;
 }) {
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden">
+    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="flex shrink-0 flex-row items-center justify-between px-4 py-3">
         <CardTitle className="text-base">{title}</CardTitle>
         <Link href={href} className="inline-flex items-center text-xs text-orange-600">
@@ -1142,7 +1207,7 @@ function UserOverviewCard({
   loading: boolean;
 }) {
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden">
+    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">用户与访问概览</CardTitle>
       </CardHeader>
@@ -1175,7 +1240,7 @@ function UserOverviewCard({
 
 function SystemStatusCard({ rows, lastRefreshedAt, loading }: { rows: SystemStatus[]; lastRefreshedAt: string | null; loading: boolean }) {
   return (
-    <Card className="shrink-0 overflow-hidden">
+    <Card className="shrink-0 overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
         <div>
           <CardTitle className="text-base">系统运行状态</CardTitle>
