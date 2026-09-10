@@ -9,7 +9,18 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
-import { Badge } from "@/components/ui/badge";
+import {
+  AdminFilterBar,
+  AdminListPagination,
+  AdminListStat,
+  AdminListStats,
+  AdminListSurface,
+  AdminTableViewport,
+  adminListControlClass,
+  adminListRowClass,
+  adminListTableHeadClass,
+} from "@/components/admin/v2/AdminList";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -97,55 +108,57 @@ export default function AdminUsersPage() {
   const resetFilters = () => { setSearch(""); setStatus("all"); setRole("all"); setRisk("all"); setRegisteredFrom(""); setRegisteredTo(""); setSort("newest"); setPage(1); };
 
   return (
-    <AdminPageShell title="用户管理" description="只读查询用户资料、账户摘要、关联业务、风险记录和后台审计历史。" actions={<Button variant="outline" onClick={() => void loadUsers()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}>
-      <div className="mb-3 grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="当前结果" value={count} />
-        <StatCard label="本页正常账户" value={pageSummary.active} />
-        <StatCard label="本页风险账户" value={pageSummary.risk} tone={pageSummary.risk ? "warn" : "default"} />
-        <StatCard label="本页余额合计" value={money(pageSummary.balance)} />
-      </div>
+    <AdminPageShell variant="v2" title="用户管理" description="只读查询用户资料、账户摘要、关联业务、风险记录和后台审计历史。" actions={<Button className="h-11 sm:h-9" variant="outline" onClick={() => void loadUsers()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}>
+      <AdminListStats>
+        <AdminListStat label="当前结果" value={count} />
+        <AdminListStat label="本页正常账户" value={pageSummary.active} />
+        <AdminListStat label="本页风险账户" value={pageSummary.risk} tone={pageSummary.risk ? "warning" : "neutral"} />
+        <AdminListStat label="本页余额合计" value={money(pageSummary.balance)} />
+      </AdminListStats>
       {!schemaReady ? <Notice>用户管理关键字段或 RPC 兼容合同尚未就绪；当前仅显示可以安全读取的资料。</Notice> : null}
       {Object.keys(partialErrors).length ? <Notice>部分用户管理能力检查失败：{Object.values(partialErrors).join("、")}</Notice> : null}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="shrink-0 border-b border-slate-100 p-3">
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_138px_120px_138px_150px_150px_180px_76px]">
-            <label className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="邮箱、昵称或用户 ID" className="h-10 pl-9" /></label>
-            <Select value={status} onChange={setStatus}><option value="all">全部账户状态</option>{Object.entries(ACCOUNT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-            <Select value={role} onChange={setRole}><option value="all">全部角色</option>{Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-            <Select value={risk} onChange={setRisk}><option value="all">全部风险状态</option>{Object.entries(RISK_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-            <Input aria-label="注册开始日期" type="date" value={registeredFrom} onChange={(event) => setRegisteredFrom(event.target.value)} className="h-10" />
-            <Input aria-label="注册结束日期" type="date" value={registeredTo} onChange={(event) => setRegisteredTo(event.target.value)} className="h-10" />
-            <Select value={sort} onChange={setSort}><option value="newest">最新注册</option><option value="oldest">最早注册</option><option value="recent_activity">最近登录</option><option value="balance_desc">余额从高到低</option><option value="balance_asc">余额从低到高</option></Select>
-            <Button variant="outline" onClick={resetFilters}>重置</Button>
-          </div>
-        </div>
+      <AdminListSurface>
+        <AdminFilterBar
+          className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_138px_120px_138px_150px_150px_180px_76px]"
+          primary={<>
+            <label className="relative sm:col-span-2 lg:col-span-2 2xl:col-span-1"><span className="sr-only">搜索用户</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="邮箱、昵称或用户 ID" className={cn(adminListControlClass, "pl-9")} /></label>
+            <Select label="账户状态" value={status} onChange={setStatus}><option value="all">全部账户状态</option>{Object.entries(ACCOUNT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+            <Select label="角色" value={role} onChange={setRole}><option value="all">全部角色</option>{Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+          </>}
+          advanced={<>
+            <Select label="风险状态" value={risk} onChange={setRisk}><option value="all">全部风险状态</option>{Object.entries(RISK_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+            <Input aria-label="注册开始日期" type="date" value={registeredFrom} onChange={(event) => setRegisteredFrom(event.target.value)} className={adminListControlClass} />
+            <Input aria-label="注册结束日期" type="date" value={registeredTo} onChange={(event) => setRegisteredTo(event.target.value)} className={adminListControlClass} />
+            <Select label="排序" value={sort} onChange={setSort}><option value="newest">最新注册</option><option value="oldest">最早注册</option><option value="recent_activity">最近登录</option><option value="balance_desc">余额从高到低</option><option value="balance_asc">余额从低到高</option></Select>
+            <Button variant="outline" className="h-11 sm:h-9" onClick={resetFilters}>重置</Button>
+          </>}
+        />
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        <AdminTableViewport>
           {error ? <AdminErrorState title="用户列表加载失败" description={error} onRetry={() => void loadUsers()} /> : loading ? <AdminTableSkeleton rows={10} /> : users.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的用户" : "暂无用户"} description={hasFilters ? "请调整筛选条件后再试。" : "新用户注册后会显示在这里。"} /> : (
             <table className="w-full min-w-[1060px] table-fixed text-sm">
               <colgroup><col className="w-[190px]" /><col className="w-[210px]" /><col className="w-[90px]" /><col className="w-[100px]" /><col className="w-[110px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[105px]" /><col className="w-[78px]" /></colgroup>
-              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500"><tr className="border-b">{["用户", "邮箱", "角色", "账户状态", "当前余额", "注册时间", "最近活动", "风险状态", "操作"].map((heading) => <th key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
-              <tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id} className="hover:bg-slate-50">
+              <thead className={adminListTableHeadClass}><tr className="border-b">{["用户", "邮箱", "角色", "账户状态", "当前余额", "注册时间", "最近活动", "风险状态", "操作"].map((heading) => <th scope="col" key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
+              <tbody>{users.map((user) => <tr key={user.id} className={adminListRowClass}>
                 <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{user.displayName || "未命名用户"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={user.id}>{user.id}</div></td>
                 <td className="truncate px-3 py-2" title={user.email ?? ""}>{user.email || "—"}</td><td className="px-3 py-2">{ROLE_LABELS[user.role] ?? user.role}</td>
                 <td className="px-3 py-2"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-3 py-2 font-semibold">{money(user.balance)}</td>
                 <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(user.createdAt)}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-3 py-2"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></td>
-                <td className="px-3 py-2"><Button asChild variant="ghost" size="sm"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
+                <td className="px-3 py-2"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
               </tr>)}</tbody>
             </table>
           )}
-        </div>
-        <div className="flex h-12 shrink-0 items-center justify-between border-t border-slate-100 px-3 text-sm text-slate-500"><span>共 {count} 条，第 {page} / {totalPages} 页</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button><Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button></div></div>
-      </div>
+        </AdminTableViewport>
+        <AdminListPagination summary={`共 ${count} 条`} page={page} totalPages={totalPages} loading={loading} onPrevious={() => setPage((value) => Math.max(1, value - 1))} onNext={() => setPage((value) => Math.min(totalPages, value + 1))} />
+      </AdminListSurface>
     </AdminPageShell>
   );
 }
 
-function Select({ children, value, onChange }: { children: React.ReactNode; value: string; onChange: (value: string) => void }) { return <select className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary" value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>; }
+function Select({ children, label, value, onChange }: { children: React.ReactNode; label: string; value: string; onChange: (value: string) => void }) { return <select aria-label={label} className={cn(adminListControlClass, "px-3")} value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>; }
 function Notice({ children }: { children: React.ReactNode }) { return <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{children}</div>; }
-function StatCard({ label, tone = "default", value }: { label: string; tone?: "default" | "warn"; value: React.ReactNode }) { return <div className={cn("rounded-xl border bg-white px-4 py-3 shadow-sm", tone === "warn" && "border-orange-200 bg-orange-50")}><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-xl font-semibold tabular-nums text-slate-950">{value}</div></div>; }
-function StatusBadge({ value, labels, kind }: { value: string; labels: Record<string, string>; kind: "account" | "risk" }) { const good = kind === "account" ? value === "active" : value === "normal"; const warn = kind === "account" ? value === "restricted" : value === "watch"; return <Badge variant="outline" className={cn("whitespace-nowrap", good ? "border-emerald-200 bg-emerald-50 text-emerald-700" : warn ? "border-amber-200 bg-amber-50 text-amber-700" : "border-red-200 bg-red-50 text-red-700")}>{labels[value] ?? value}</Badge>; }
+function StatusBadge({ value, labels, kind }: { value: string; labels: Record<string, string>; kind: "account" | "risk" }) { const good = kind === "account" ? value === "active" : value === "normal"; const warn = kind === "account" ? value === "restricted" : value === "watch"; const tone: AdminStatusTone = good ? "success" : warn ? "warning" : "danger"; return <AdminStatusBadge tone={tone}>{labels[value] ?? value}</AdminStatusBadge>; }
 function money(value: unknown) { const parsed = Number(value); return `¥${Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00"}`; }
 function formatDate(value: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }
 function normalizeFilter(value: string | null, labels: Record<string, string>) { return value && Object.hasOwn(labels, value) ? value : "all"; }

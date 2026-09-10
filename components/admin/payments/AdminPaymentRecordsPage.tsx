@@ -11,9 +11,18 @@ import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import AdminBep20UnderpaymentPanel from "@/components/admin/payments/AdminBep20UnderpaymentPanel";
 import AdminPaymentCallbackPanel from "@/components/admin/payments/AdminPaymentCallbackPanel";
 import AdminReconciliationPanel from "@/components/admin/payments/AdminReconciliationPanel";
+import {
+  AdminFilterBar,
+  AdminListPagination,
+  AdminListSurface,
+  AdminTableViewport,
+  adminListControlClass,
+  adminListRowClass,
+  adminListTableHeadClass,
+} from "@/components/admin/v2/AdminList";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   PAYMENT_CHANNELS,
@@ -26,7 +35,6 @@ import {
   getBusinessTypeLabel,
   getExceptionTypeLabel,
   getPaymentChannelLabel,
-  getUnifiedPaymentStatusClass,
   getUnifiedPaymentStatusLabel,
   maskWallet,
 } from "@/lib/payments/admin-payment-types";
@@ -97,6 +105,12 @@ function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : formatDateTime(value);
+}
+function paymentStatusTone(value: string): AdminStatusTone {
+  if (["paid", "succeeded", "completed", "approved"].includes(value)) return "success";
+  if (["failed", "cancelled", "expired", "rejected", "underpaid"].includes(value)) return "danger";
+  if (["pending", "processing", "reviewing", "submitted", "waiting_payment", "manual_review"].includes(value)) return "warning";
+  return "neutral";
 }
 function compareUnsignedDecimal(left: string | null | undefined, right: string | null | undefined) {
   const normalize = (value: string | null | undefined) => {
@@ -303,23 +317,28 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   };
 
   return (
-    <AdminPageShell title={isRechargePage ? "充值管理" : "支付管理"} description={isRechargePage ? "统一查看账户充值记录，并通过受控审核流程处理需要人工介入的充值。" : "统一查看商品订单和账户充值支付记录，异常支付仅做只读追踪。"} actions={<Button variant="outline" size="sm" onClick={loadPayments} disabled={loading}><RefreshCcw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />刷新</Button>}>
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-        {isRechargePage ? <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => updateView("all")}>全部充值</Button><Button size="sm" variant={view === "review" ? "default" : "outline"} onClick={() => updateView("review")}>人工审核</Button></div> : <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "outline"} onClick={() => updateView("all")}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "outline"} onClick={() => updateView("exceptions")}>异常支付</Button><Button size="sm" variant={view === "callbacks" ? "default" : "outline"} onClick={() => updateView("callbacks")}>回调记录</Button><Button size="sm" variant={view === "underpayments" ? "default" : "outline"} onClick={() => updateView("underpayments")}>欠额转余额</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "outline"} onClick={() => updateView("reconciliations")}>对账记录</Button>{view === "exceptions" ? <select value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div>}
+    <AdminPageShell variant="v2" title={isRechargePage ? "充值管理" : "支付管理"} description={isRechargePage ? "统一查看账户充值记录，并通过受控审核流程处理需要人工介入的充值。" : "统一查看商品订单和账户充值支付记录，异常支付仅做只读追踪。"} actions={<Button className="h-11 sm:h-9" variant="outline" size="sm" onClick={loadPayments} disabled={loading}><RefreshCcw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />刷新</Button>}>
+      <AdminListSurface>
+        {isRechargePage ? <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-[var(--admin-v2-border)] px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "ghost"} onClick={() => updateView("all")}>全部充值</Button><Button size="sm" variant={view === "review" ? "default" : "ghost"} onClick={() => updateView("review")}>人工审核</Button></div> : <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-[var(--admin-v2-border)] px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "ghost"} onClick={() => updateView("all")}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "ghost"} onClick={() => updateView("exceptions")}>异常支付</Button><Button size="sm" variant={view === "callbacks" ? "default" : "ghost"} onClick={() => updateView("callbacks")}>回调记录</Button><Button size="sm" variant={view === "underpayments" ? "default" : "ghost"} onClick={() => updateView("underpayments")}>欠额转余额</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "ghost"} onClick={() => updateView("reconciliations")}>对账记录</Button>{view === "exceptions" ? <select aria-label="异常类型" value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className={cn(adminListControlClass, "px-3")}><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div>}
         {!isRechargePage && view === "callbacks" ? <AdminPaymentCallbackPanel attention={attention} onAttentionChange={updateAttention} /> : !isRechargePage && view === "reconciliations" ? <AdminReconciliationPanel attention={attention} onAttentionChange={updateAttention} /> : !isRechargePage && view === "underpayments" ? <AdminBep20UnderpaymentPanel /> : <>
-        <div className="grid shrink-0 gap-2 border-b px-4 py-3 min-[1200px]:grid-cols-[minmax(180px,1.2fr)_150px_150px_145px_145px_140px_86px] min-[1600px]:grid-cols-[minmax(220px,1.35fr)_140px_145px_145px_145px_140px_86px_86px]">
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={isRechargePage ? "支付单号 / 充值单号 / 用户邮箱" : "支付单号 / 业务单号 / 用户邮箱"} className="h-9 pl-9" /></div>
-          {!isRechargePage ? <select value={businessType} onChange={(event) => { setBusinessType(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部业务</option><option value="order">商品订单</option><option value="recharge">账户充值</option></select> : null}
-          <select value={channel} onChange={(event) => { setChannel(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部渠道</option>{PAYMENT_CHANNELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
-          <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="all">全部状态</option>{PAYMENT_STATUS_VALUES.map((item) => <option key={item} value={item}>{item}</option>)}</select>
-          <Input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setPage(1); }} className="h-9" />
-          <Input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setPage(1); }} className="h-9" />
-          <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm"><option value="created_desc">最新创建</option><option value="created_asc">最早创建</option><option value="amount_desc">金额从高到低</option><option value="amount_asc">金额从低到高</option></select>
-          <Button variant="outline" size="sm" onClick={resetFilters}>重置</Button>
-        </div>
-        {error ? <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadPayments} /></div> : loading ? <AdminTableSkeleton rows={8} /> : <div className="min-h-0 flex-1 overflow-auto"><PaymentTable isRechargePage={isRechargePage} payments={payments} copyText={copyText} loadDetail={loadDetail} hasFilters={hasFilters} /></div>}
-        <div className="flex h-12 shrink-0 items-center justify-between border-t px-4 text-sm text-slate-500"><span>共 {count} 条记录，每页 {PAGE_SIZE} 条</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</Button><span>第 {page} / {totalPages} 页</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button></div></div></>}
-      </Card>
+        <AdminFilterBar
+          className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8"
+          primary={<>
+            <label className="relative sm:col-span-2 lg:col-span-2 2xl:col-span-1"><span className="sr-only">搜索支付记录</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={isRechargePage ? "支付单号 / 充值单号 / 用户邮箱" : "支付单号 / 业务单号 / 用户邮箱"} className={cn(adminListControlClass, "pl-9")} /></label>
+            <select aria-label="支付渠道" value={channel} onChange={(event) => { setChannel(event.target.value); setPage(1); }} className={cn(adminListControlClass, "px-3")}><option value="all">全部渠道</option>{PAYMENT_CHANNELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+            <select aria-label="支付状态" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className={cn(adminListControlClass, "px-3")}><option value="all">全部状态</option>{PAYMENT_STATUS_VALUES.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+          </>}
+          advanced={<>
+            {!isRechargePage ? <select aria-label="业务类型" value={businessType} onChange={(event) => { setBusinessType(event.target.value); setPage(1); }} className={cn(adminListControlClass, "px-3")}><option value="all">全部业务</option><option value="order">商品订单</option><option value="recharge">账户充值</option></select> : null}
+            <Input aria-label="开始日期" type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setPage(1); }} className={adminListControlClass} />
+            <Input aria-label="结束日期" type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setPage(1); }} className={adminListControlClass} />
+            <select aria-label="排序" value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className={cn(adminListControlClass, "px-3")}><option value="created_desc">最新创建</option><option value="created_asc">最早创建</option><option value="amount_desc">金额从高到低</option><option value="amount_asc">金额从低到高</option></select>
+            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={resetFilters}>重置</Button>
+          </>}
+        />
+        {error ? <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadPayments} /></div> : loading ? <AdminTableSkeleton rows={8} /> : <AdminTableViewport><PaymentTable isRechargePage={isRechargePage} payments={payments} copyText={copyText} loadDetail={loadDetail} hasFilters={hasFilters} /></AdminTableViewport>}
+        <AdminListPagination summary={`共 ${count} 条记录，每页 ${PAGE_SIZE} 条`} page={page} totalPages={totalPages} loading={loading} onPrevious={() => setPage((value) => Math.max(1, value - 1))} onNext={() => setPage((value) => Math.min(totalPages, value + 1))} /></>}
+      </AdminListSurface>
       {selected ? <><PaymentDrawer isRechargePage={isRechargePage} selected={selected} detail={detail} callbacks={callbacks} callbackError={callbackError} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} detailLoading={detailLoading} detailError={detailError} onClose={() => setSelected(null)} onRetry={() => loadDetail(selected)} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} copyText={copyText} />{!isRechargePage && selected.source === "account_recharges" ? <RechargeReviewPanel rechargeId={selected.id} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} /> : null}</> : null}
     </AdminPageShell>
   );
@@ -327,9 +346,51 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
 
 function PaymentTable({ isRechargePage, payments, copyText, loadDetail, hasFilters }: { isRechargePage: boolean; payments: AdminPaymentRecord[]; copyText: (value: string | null | undefined) => void; loadDetail: (payment: AdminPaymentRecord) => void; hasFilters: boolean }) {
   const colSpan = isRechargePage ? 14 : 15;
-  return <table className="w-full min-w-[1760px] table-fixed text-sm"><colgroup><col className="w-[170px]" />{!isRechargePage ? <col className="w-[110px]" /> : null}<col className="w-[170px]" /><col className="w-[210px]" /><col className="w-[130px]" /><col className="w-[110px]" /><col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[120px]" /><col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[190px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[90px]" /></colgroup><thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-500"><tr className="border-b"><Th>支付单号</Th>{!isRechargePage ? <Th>业务类型</Th> : null}<Th>{isRechargePage ? "充值单号" : "订单号/充值单号"}</Th><Th>用户邮箱</Th><Th>支付渠道</Th><Th>网络</Th>{isRechargePage ? <><Th>申请充值</Th><Th>应付</Th><Th>实际到账</Th><Th>入账</Th></> : <><Th>业务金额</Th><Th>手续费</Th><Th>应付金额</Th><Th>到账金额</Th></>}<Th>支付状态</Th><Th>渠道交易号</Th><Th>创建时间</Th><Th>支付时间</Th><Th className="text-right">操作</Th></tr></thead><tbody>{payments.length ? payments.map((payment) => <tr key={`${payment.source}-${payment.id}`} className="border-b hover:bg-slate-50"><Td mono>{payment.payment_no}</Td>{!isRechargePage ? <Td>{getBusinessTypeLabel(payment.business_type)}</Td> : null}<Td mono>{payment.business_no ?? "—"}</Td><Td title={payment.user_email ?? ""}>{payment.user_email ?? "—"}</Td><Td>{getPaymentChannelLabel(payment.channel)}</Td><Td>{payment.channel === "alipay" || payment.channel === "wechat" ? "—" : payment.network ?? "—"}</Td><Td>{isRechargePage ? formatRechargeRequested(payment) : formatPaymentMoney(payment.business_amount, payment.business_currency)}</Td><Td>{isRechargePage ? formatRechargeExpected(payment) : formatPaymentMoney(payment.fee_amount, payment.payable_currency ?? payment.business_currency)}</Td><Td>{isRechargePage ? formatRechargeActual(payment) : formatPaymentMoney(payment.payable_amount, payment.payable_currency)}</Td><Td>{isRechargePage ? formatRechargeCredited(payment) : formatPaymentMoney(payment.received_amount, payment.received_currency)}</Td><Td><Badge variant="outline" className={cn("whitespace-nowrap", getUnifiedPaymentStatusClass(payment.status))}>{getUnifiedPaymentStatusLabel(payment.status)}</Badge></Td><Td><button type="button" onClick={() => copyText(payment.provider_trade_no)} className="flex max-w-full items-center gap-1 text-left text-slate-700 hover:text-primary" title={payment.provider_trade_no ?? ""}><span className="truncate font-mono text-xs">{payment.provider_trade_no ?? "—"}</span>{payment.provider_trade_no ? <Copy className="h-3.5 w-3.5 shrink-0" /> : null}</button></Td><Td>{formatDate(payment.created_at)}</Td><Td>{formatDate(payment.paid_at)}</Td><Td className="text-right"><Button variant="outline" size="sm" onClick={() => loadDetail(payment)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button></Td></tr>) : <tr><td colSpan={colSpan} className="h-[360px] px-4"><AdminEmptyState title={hasFilters ? (isRechargePage ? "没有符合条件的充值记录" : "没有符合条件的支付记录") : (isRechargePage ? "暂无充值记录" : "暂无支付记录")} description={hasFilters ? "请调整筛选条件后再试。" : "有新记录后会显示在这里。"} className="min-h-full" /></td></tr>}</tbody></table>;
+  return (
+    <table className="w-full min-w-[1760px] table-fixed text-sm">
+      <colgroup>
+        <col className="w-[170px]" />
+        {!isRechargePage ? <col className="w-[110px]" /> : null}
+        <col className="w-[170px]" /><col className="w-[210px]" /><col className="w-[130px]" /><col className="w-[110px]" />
+        <col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[120px]" /><col className="w-[120px]" />
+        <col className="w-[110px]" /><col className="w-[190px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[90px]" />
+      </colgroup>
+      <thead className={adminListTableHeadClass}>
+        <tr className="border-b">
+          <Th>支付单号</Th>
+          {!isRechargePage ? <Th>业务类型</Th> : null}
+          <Th>{isRechargePage ? "充值单号" : "订单号/充值单号"}</Th>
+          <Th>用户邮箱</Th><Th>支付渠道</Th><Th>网络</Th>
+          {isRechargePage ? <><Th>申请充值</Th><Th>应付</Th><Th>实际到账</Th><Th>入账</Th></> : <><Th>业务金额</Th><Th>手续费</Th><Th>应付金额</Th><Th>到账金额</Th></>}
+          <Th>支付状态</Th><Th>渠道交易号</Th><Th>创建时间</Th><Th>支付时间</Th><Th className="text-right">操作</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {payments.length ? payments.map((payment) => (
+          <tr key={`${payment.source}-${payment.id}`} className={adminListRowClass}>
+            <Td mono>{payment.payment_no}</Td>
+            {!isRechargePage ? <Td>{getBusinessTypeLabel(payment.business_type)}</Td> : null}
+            <Td mono>{payment.business_no ?? "—"}</Td>
+            <Td title={payment.user_email ?? ""}>{payment.user_email ?? "—"}</Td>
+            <Td>{getPaymentChannelLabel(payment.channel)}</Td>
+            <Td>{payment.channel === "alipay" || payment.channel === "wechat" ? "—" : payment.network ?? "—"}</Td>
+            <Td>{isRechargePage ? formatRechargeRequested(payment) : formatPaymentMoney(payment.business_amount, payment.business_currency)}</Td>
+            <Td>{isRechargePage ? formatRechargeExpected(payment) : formatPaymentMoney(payment.fee_amount, payment.payable_currency ?? payment.business_currency)}</Td>
+            <Td>{isRechargePage ? formatRechargeActual(payment) : formatPaymentMoney(payment.payable_amount, payment.payable_currency)}</Td>
+            <Td>{isRechargePage ? formatRechargeCredited(payment) : formatPaymentMoney(payment.received_amount, payment.received_currency)}</Td>
+            <Td><AdminStatusBadge tone={paymentStatusTone(payment.status)}>{getUnifiedPaymentStatusLabel(payment.status)}</AdminStatusBadge></Td>
+            <Td><button type="button" onClick={() => copyText(payment.provider_trade_no)} className="flex min-h-11 max-w-full items-center gap-1 text-left text-slate-700 hover:text-primary sm:min-h-0" title={payment.provider_trade_no ?? ""}><span className="truncate font-mono text-xs">{payment.provider_trade_no ?? "—"}</span>{payment.provider_trade_no ? <Copy className="h-3.5 w-3.5 shrink-0" /> : null}</button></Td>
+            <Td>{formatDate(payment.created_at)}</Td>
+            <Td>{formatDate(payment.paid_at)}</Td>
+            <Td className="text-right"><Button variant="ghost" className="min-h-11 sm:min-h-9" size="sm" onClick={() => loadDetail(payment)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button></Td>
+          </tr>
+        )) : (
+          <tr><td colSpan={colSpan} className="h-[360px] px-4"><AdminEmptyState title={hasFilters ? (isRechargePage ? "没有符合条件的充值记录" : "没有符合条件的支付记录") : (isRechargePage ? "暂无充值记录" : "暂无支付记录")} description={hasFilters ? "请调整筛选条件后再试。" : "有新记录后会显示在这里。"} className="min-h-full" /></td></tr>
+        )}
+      </tbody>
+    </table>
+  );
 }
-
 function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackError, chainPayment, chainPaymentError, overpaymentWallet, detailLoading, detailError, onClose, onRetry, onChanged, copyText }: { isRechargePage: boolean; selected: AdminPaymentRecord; detail: AdminPaymentRecord | null; callbacks: AdminPaymentCallback[]; callbackError: string; chainPayment: AdminBep20ChainPayment | null; chainPaymentError: string; overpaymentWallet: AdminBep20OverpaymentWallet; detailLoading: boolean; detailError: string; onClose: () => void; onRetry: () => void; onChanged: () => Promise<void>; copyText: (value: string | null | undefined) => void }) {
   const underpaymentCredited = detail?.exception_type === "underpayment_credited_to_wallet";
   return (
@@ -511,7 +572,7 @@ function CallbackRecords({ callbacks, callbackError }: { callbacks: AdminPayment
   return <section className="rounded-xl border"><div className="border-b px-4 py-3 text-sm font-semibold text-slate-950">回调记录</div>{callbackError ? <div className="px-4 py-3 text-sm text-amber-700">{callbackError}</div> : null}{callbacks.length ? <div className="max-h-72 overflow-auto"><table className="w-full min-w-[760px] text-xs"><thead className="sticky top-0 bg-slate-50 text-slate-500"><tr><Th>回调 ID</Th><Th>支付渠道</Th><Th>支付单号</Th><Th>渠道交易号</Th><Th>验签结果</Th><Th>处理结果</Th><Th>HTTP</Th><Th>重复</Th><Th>接收时间</Th></tr></thead><tbody>{callbacks.map((item) => <tr key={item.id} className="border-t"><Td mono>{item.id}</Td><Td>{getPaymentChannelLabel(item.channel)}</Td><Td mono>{item.payment_no ?? "—"}</Td><Td mono>{item.provider_trade_no ? maskWallet(item.provider_trade_no) : "—"}</Td><Td>{item.signature_result ?? "—"}</Td><Td>{item.process_result ?? "—"}</Td><Td>{item.http_status ?? "—"}</Td><Td>{item.is_duplicate ? "是" : "否"}</Td><Td>{formatDate(item.received_at)}</Td></tr>)}</tbody></table></div> : !callbackError ? <div className="px-4 py-6 text-sm text-slate-500">暂无回调记录</div> : null}</section>;
 }
 
-function Th({ children, className }: { children: React.ReactNode; className?: string }) { return <th className={cn("h-10 whitespace-nowrap px-3 text-left font-medium", className)}>{children}</th>; }
+function Th({ children, className }: { children: React.ReactNode; className?: string }) { return <th scope="col" className={cn("h-10 whitespace-nowrap px-3 text-left font-medium", className)}>{children}</th>; }
 function Td({ children, className, mono, title }: { children: React.ReactNode; className?: string; mono?: boolean; title?: string }) { return <td title={title} className={cn("truncate whitespace-nowrap px-3 py-3 align-middle text-slate-700", mono && "font-mono text-xs", className)}>{children}</td>; }
 function DetailGroup({ title, rows }: { title: string; rows: Array<[string, string, (() => void)?]> }) { return <section className="rounded-xl border"><div className="border-b px-4 py-3 text-sm font-semibold text-slate-950">{title}</div><div className="divide-y">{rows.map(([label, value, onCopy]) => <div key={label} className="flex items-start justify-between gap-4 px-4 py-3 text-sm"><span className="shrink-0 text-slate-500">{label}</span><button type="button" disabled={!onCopy} onClick={onCopy} className={cn("min-w-0 text-right text-slate-900", onCopy && "hover:text-primary")}><span className="break-all">{value || "—"}</span></button></div>)}</div></section>; }
 function DetailSkeleton() { return <div className="space-y-3">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />)}</div>; }
