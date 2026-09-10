@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Copy, Eye, RefreshCcw, Search, X } from "lucide-react";
+import { AlertTriangle, Copy, Eye, RefreshCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -11,6 +11,9 @@ import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import AdminBep20UnderpaymentPanel from "@/components/admin/payments/AdminBep20UnderpaymentPanel";
 import AdminPaymentCallbackPanel from "@/components/admin/payments/AdminPaymentCallbackPanel";
 import AdminReconciliationPanel from "@/components/admin/payments/AdminReconciliationPanel";
+import { AdminDetailDrawer } from "@/components/admin/v2/AdminDetail";
+import { AdminInfoGrid, AdminInfoItem } from "@/components/admin/v2/AdminInfoGrid";
+import AdminSection from "@/components/admin/v2/AdminSection";
 import {
   AdminFilterBar,
   AdminListPagination,
@@ -394,13 +397,7 @@ function PaymentTable({ isRechargePage, payments, copyText, loadDetail, hasFilte
 function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackError, chainPayment, chainPaymentError, overpaymentWallet, detailLoading, detailError, onClose, onRetry, onChanged, copyText }: { isRechargePage: boolean; selected: AdminPaymentRecord; detail: AdminPaymentRecord | null; callbacks: AdminPaymentCallback[]; callbackError: string; chainPayment: AdminBep20ChainPayment | null; chainPaymentError: string; overpaymentWallet: AdminBep20OverpaymentWallet; detailLoading: boolean; detailError: string; onClose: () => void; onRetry: () => void; onChanged: () => Promise<void>; copyText: (value: string | null | undefined) => void }) {
   const underpaymentCredited = detail?.exception_type === "underpayment_credited_to_wallet";
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" onClick={onClose}>
-      <aside className="flex h-full w-full max-w-[760px] flex-col bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
-        <div className="flex shrink-0 items-start justify-between border-b px-5 py-4">
-          <div><h2 className="text-lg font-semibold text-slate-950">{isRechargePage ? "充值详情" : "支付详情"}</h2><p className="mt-1 text-xs text-slate-500">{selected.payment_no}</p></div>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+    <AdminDetailDrawer title={selected.payment_no} eyebrow={isRechargePage ? "充值详情" : "支付详情"} onClose={onClose} className="max-w-[760px]">
           {detailLoading ? <DetailSkeleton /> : null}
           {detailError ? <AdminErrorState description={detailError} onRetry={onRetry} /> : null}
           {!detailLoading && !detailError && detail ? (
@@ -419,9 +416,7 @@ function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackEr
               {!underpaymentCredited && detail.exception_type ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />重新查询渠道状态</div><p className="mt-1 text-xs">真实支付 Provider 尚未配置，当前操作不可用。</p></div> : null}
             </div>
           ) : null}
-        </div>
-      </aside>
-    </div>
+    </AdminDetailDrawer>
   );
 }
 
@@ -574,5 +569,5 @@ function CallbackRecords({ callbacks, callbackError }: { callbacks: AdminPayment
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) { return <th scope="col" className={cn("h-10 whitespace-nowrap px-3 text-left font-medium", className)}>{children}</th>; }
 function Td({ children, className, mono, title }: { children: React.ReactNode; className?: string; mono?: boolean; title?: string }) { return <td title={title} className={cn("truncate whitespace-nowrap px-3 py-3 align-middle text-slate-700", mono && "font-mono text-xs", className)}>{children}</td>; }
-function DetailGroup({ title, rows }: { title: string; rows: Array<[string, string, (() => void)?]> }) { return <section className="rounded-xl border"><div className="border-b px-4 py-3 text-sm font-semibold text-slate-950">{title}</div><div className="divide-y">{rows.map(([label, value, onCopy]) => <div key={label} className="flex items-start justify-between gap-4 px-4 py-3 text-sm"><span className="shrink-0 text-slate-500">{label}</span><button type="button" disabled={!onCopy} onClick={onCopy} className={cn("min-w-0 text-right text-slate-900", onCopy && "hover:text-primary")}><span className="break-all">{value || "—"}</span></button></div>)}</div></section>; }
+function DetailGroup({ title, rows }: { title: string; rows: Array<[string, string, (() => void)?]> }) { return <AdminSection title={title}><AdminInfoGrid>{rows.map(([label, value, onCopy]) => <AdminInfoItem key={label} label={label} value={onCopy ? <button type="button" onClick={onCopy} className="min-h-11 break-all text-left text-[var(--admin-v2-primary)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] sm:min-h-0">{value || "—"}</button> : <span className="break-all">{value || "—"}</span>} />)}</AdminInfoGrid></AdminSection>; }
 function DetailSkeleton() { return <div className="space-y-3">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />)}</div>; }

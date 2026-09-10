@@ -3,14 +3,19 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, CreditCard, RefreshCw, ScrollText, ShieldAlert, ShoppingBag, WalletCards } from "lucide-react";
+import { CreditCard, RefreshCw, ScrollText, ShieldAlert, ShoppingBag, WalletCards } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AdminDetailBackLink, AdminRelatedLink, AdminTimeline } from "@/components/admin/v2/AdminDetail";
+import { AdminInfoGrid, AdminInfoItem } from "@/components/admin/v2/AdminInfoGrid";
+import AdminReadOnlyBadge from "@/components/admin/v2/AdminReadOnlyBadge";
+import AdminSection from "@/components/admin/v2/AdminSection";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
+import v2Styles from "@/components/admin/v2/AdminV2.module.css";
 import { cn } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -48,36 +53,38 @@ export default function AdminUserDetailPage() {
   const relatedSearch = encodeURIComponent(profile?.email || userId);
 
   return (
-    <AdminPageShell title="用户详情" description="只读查看账户、关联业务、风险事件与严格按用户目标过滤的后台审计记录。" actions={<Button variant="outline" onClick={() => void loadDetail()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}>
-      <div className="mb-3 shrink-0"><Link href="/admin/users" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-950"><ArrowLeft className="h-4 w-4" />返回用户管理</Link></div>
+    <AdminPageShell title="用户详情" description="只读查看账户、关联业务、风险事件与严格按用户目标过滤的后台审计记录。" actions={<><AdminReadOnlyBadge /><Button className={v2Styles.control} variant="outline" onClick={() => void loadDetail()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button></>}>
+      <div className="mb-3 shrink-0"><AdminDetailBackLink href="/admin/users">返回用户管理</AdminDetailBackLink></div>
       <div className="min-h-0 flex-1 overflow-auto pb-4">
         {error ? <AdminErrorState title="用户详情加载失败" description={error} onRetry={() => void loadDetail()} /> : loading && !detail ? <AdminTableSkeleton rows={10} /> : detail && profile ? (
           <div className="space-y-4">
             {detail.schemaReady === false ? <Notice>用户管理兼容合同尚未完全就绪；部分状态只能按安全兼容字段展示。</Notice> : null}
             {detail.errors && Object.keys(detail.errors).length ? <Notice>部分关联数据读取失败：{Object.values(detail.errors).join("、")}</Notice> : null}
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <Section title="基本资料"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Info label="用户 ID" value={profile.id} mono /><Info label="邮箱" value={profile.email ?? "—"} /><Info label="显示名称" value={profile.displayName ?? "—"} /><Info label="角色" value={profile.role} /><Info label="注册时间" value={formatDate(profile.createdAt)} /><Info label="最近活动" value={formatDate(profile.lastLoginAt)} /><Info label="资料更新时间" value={formatDate(profile.updatedAt)} /></div></Section>
-              <Section title="账户摘要"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1"><Info label="充值金额（最近记录）" value={money(detail.summary.totalRecharge)} /><Info label="消费金额（最近记录）" value={money(detail.summary.totalSpend)} /><Info label="当前余额" value={money(detail.summary.balance)} /><Info label="账户 / 风险状态" value={`${ACCOUNT_LABELS[profile.accountStatus] ?? profile.accountStatus} / ${RISK_LABELS[profile.riskStatus] ?? profile.riskStatus}`} /></div></Section>
+            <AdminSection title={profile.email || profile.displayName || "用户账户"} description={profile.id} action={<div className="flex flex-wrap gap-2"><AdminStatusBadge tone={accountTone(profile.accountStatus)}>{ACCOUNT_LABELS[profile.accountStatus] ?? profile.accountStatus}</AdminStatusBadge><AdminStatusBadge tone={riskTone(profile.riskStatus)}>{RISK_LABELS[profile.riskStatus] ?? profile.riskStatus}</AdminStatusBadge></div>}>
+              <AdminInfoGrid columns={3}><AdminInfoItem label="当前余额" value={money(detail.summary.balance)} className="tabular-nums" /><AdminInfoItem label="角色" value={profile.role} /><AdminInfoItem label="最近活动" value={formatDate(profile.lastLoginAt)} /></AdminInfoGrid>
+            </AdminSection>
+
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="min-w-0 space-y-4">
+                <AdminSection title="基本资料" description="用户身份与账户事实"><AdminInfoGrid columns={3}><AdminInfoItem label="用户 ID" value={profile.id} mono /><AdminInfoItem label="邮箱" value={profile.email ?? "—"} /><AdminInfoItem label="显示名称" value={profile.displayName ?? "—"} /><AdminInfoItem label="角色" value={profile.role} /><AdminInfoItem label="注册时间" value={formatDate(profile.createdAt)} /><AdminInfoItem label="资料更新时间" value={formatDate(profile.updatedAt)} /></AdminInfoGrid></AdminSection>
+
+                <AdminSection title="关联资源" description="使用现有列表筛选查看相关业务"><div className="divide-y divide-[var(--admin-v2-border)] px-4 pb-1 sm:px-5"><AdminRelatedLink icon={<ShoppingBag className="h-4 w-4" />} label="关联订单" detail={profile.email || userId} href={`/admin/orders?search=${relatedSearch}`} /><AdminRelatedLink icon={<CreditCard className="h-4 w-4" />} label="关联支付" detail={profile.email || userId} href={`/admin/payments?search=${relatedSearch}`} /><AdminRelatedLink icon={<WalletCards className="h-4 w-4" />} label="关联充值" detail={profile.email || userId} href={`/admin/recharges?search=${relatedSearch}`} /><AdminRelatedLink icon={<ShieldAlert className="h-4 w-4" />} label="关联风险" detail={userId} href={`/admin/risk?search=${encodeURIComponent(userId)}`} /></div></AdminSection>
+
+                <AdminSection title="最近风险事件" description="最近返回记录 · 非历史总数"><RecordList rows={detail.riskEvents} columns={[["ruleCode", "规则"], ["riskLevel", "等级"], ["riskScore", "分数"], ["businessType", "业务"], ["summary", "摘要"], ["status", "状态"], ["lastSeenAt", "最后发现"]]} detailBase="/admin/risk" /></AdminSection>
+                <AdminSection title="最近订单" description="最近 50 条以内 · 非历史总数"><RecordList rows={detail.orders} columns={[["orderNo", "订单号"], ["status", "订单状态"], ["paymentStatus", "支付状态"], ["totalAmount", "金额"], ["createdAt", "创建时间"]]} moneyKeys={["totalAmount"]} /></AdminSection>
+                <AdminSection title="最近充值" description="最近 50 条以内 · 非历史总数"><RecordList rows={detail.recharges} columns={[["rechargeNo", "充值单号"], ["channelName", "渠道"], ["amount", "申请金额"], ["creditedAmount", "入账金额"], ["status", "状态"], ["createdAt", "创建时间"]]} moneyKeys={["amount", "creditedAmount"]} /></AdminSection>
+                <AdminSection title="最近交付" description="最近 50 条以内 · 只读"><RecordList rows={detail.deliveries} columns={[["deliveryNo", "交付编号"], ["deliveryStatus", "状态"], ["deliveryType", "类型"], ["attemptCount", "尝试次数"], ["createdAt", "创建时间"]]} /></AdminSection>
+                <AdminSection title="余额流水" description="最近 50 条以内 · 非历史总数"><RecordList rows={detail.balanceTransactions} columns={[["transactionNo", "流水号"], ["businessType", "业务"], ["direction", "方向"], ["amount", "金额"], ["balanceBefore", "变更前"], ["balanceAfter", "变更后"], ["status", "状态"], ["createdAt", "时间"]]} moneyKeys={["amount", "balanceBefore", "balanceAfter"]} /></AdminSection>
+                <AdminSection title="后台审计历史" description="严格限定当前用户目标 · 最近 30 条" action={<Link href={`/admin/audit-logs?targetId=${encodeURIComponent(userId)}`} className="text-sm font-medium text-[var(--admin-v2-primary)] hover:underline">查看全部</Link>}><RecordList rows={detail.auditLogs} columns={[["admin_email", "管理员"], ["action", "操作"], ["result", "结果"], ["request_id", "请求编号"], ["created_at", "时间"]]} icon={<ScrollText className="h-5 w-5" />} /></AdminSection>
+              </div>
+
+              <aside className="min-w-0 space-y-4">
+                <AdminSection title="账户摘要" description="金额仅汇总当前接口返回的最近记录"><AdminInfoGrid><AdminInfoItem label="充值金额（最近记录）" value={money(detail.summary.totalRecharge)} className="tabular-nums" /><AdminInfoItem label="消费金额（最近记录）" value={money(detail.summary.totalSpend)} className="tabular-nums" /><AdminInfoItem label="当前余额" value={money(detail.summary.balance)} className="tabular-nums" /><AdminInfoItem label="账户 / 风险状态" value={`${ACCOUNT_LABELS[profile.accountStatus] ?? profile.accountStatus} / ${RISK_LABELS[profile.riskStatus] ?? profile.riskStatus}`} /></AdminInfoGrid></AdminSection>
+                <AdminSection title="账户状态时间线" description="最近状态变更"><AdminTimeline items={detail.statusHistory.map((row, index) => ({ id: String(row.id ?? index), title: `${safeText(row.old_status)} → ${safeText(row.new_status)}`, time: formatDate(typeof row.created_at === "string" ? row.created_at : null), actor: safeText(row.admin_email), message: safeText(row.reason) }))} empty={<AdminEmptyState title="暂无状态记录" className="min-h-[140px]" />} /></AdminSection>
+                <AdminSection title="风险状态时间线" description="最近风险标记变更"><AdminTimeline items={detail.riskRecords.map((row, index) => ({ id: String(row.id ?? index), title: `${safeText(row.old_risk_status)} → ${safeText(row.new_risk_status)}`, time: formatDate(typeof row.created_at === "string" ? row.created_at : null), actor: safeText(row.admin_email), message: safeText(row.reason) }))} empty={<AdminEmptyState title="暂无风险状态记录" className="min-h-[140px]" />} /></AdminSection>
+              </aside>
             </div>
-
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <RelatedLink icon={ShoppingBag} label="关联订单" href={`/admin/orders?search=${relatedSearch}`} />
-              <RelatedLink icon={CreditCard} label="关联支付" href={`/admin/payments?search=${relatedSearch}`} />
-              <RelatedLink icon={WalletCards} label="关联充值" href={`/admin/recharges?search=${relatedSearch}`} />
-              <RelatedLink icon={ShieldAlert} label="关联风险" href={`/admin/risk?search=${encodeURIComponent(userId)}`} />
-            </section>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              <Section title="账户状态"><div className="grid gap-3 sm:grid-cols-2"><Info label="当前状态" value={ACCOUNT_LABELS[profile.accountStatus] ?? profile.accountStatus} /><Info label="状态原因" value={profile.statusReason ?? "—"} /></div><RecordList rows={detail.statusHistory} columns={[["old_status", "原状态"], ["new_status", "新状态"], ["reason", "原因"], ["admin_email", "管理员"], ["created_at", "时间"]]} /></Section>
-              <Section title="风险状态"><div className="grid gap-3 sm:grid-cols-2"><Info label="当前标记" value={RISK_LABELS[profile.riskStatus] ?? profile.riskStatus} /><Info label="标记原因" value={profile.riskReason ?? "—"} /></div><RecordList rows={detail.riskRecords} columns={[["old_risk_status", "原状态"], ["new_risk_status", "新状态"], ["reason", "原因"], ["admin_email", "管理员"], ["created_at", "时间"]]} /></Section>
-            </div>
-
-            <Section title="最近风险事件"><RecordList rows={detail.riskEvents} columns={[["ruleCode", "规则"], ["riskLevel", "等级"], ["riskScore", "分数"], ["businessType", "业务"], ["summary", "摘要"], ["status", "状态"], ["lastSeenAt", "最后发现"]]} detailBase="/admin/risk" /></Section>
-            <Section title="最近订单"><RecordList rows={detail.orders} columns={[["orderNo", "订单号"], ["status", "订单状态"], ["paymentStatus", "支付状态"], ["totalAmount", "金额"], ["createdAt", "创建时间"]]} moneyKeys={["totalAmount"]} /></Section>
-            <Section title="最近充值"><RecordList rows={detail.recharges} columns={[["rechargeNo", "充值单号"], ["channelName", "渠道"], ["amount", "申请金额"], ["creditedAmount", "入账金额"], ["status", "状态"], ["createdAt", "创建时间"]]} moneyKeys={["amount", "creditedAmount"]} /></Section>
-            <Section title="余额流水"><RecordList rows={detail.balanceTransactions} columns={[["transactionNo", "流水号"], ["businessType", "业务"], ["direction", "方向"], ["amount", "金额"], ["balanceBefore", "变更前"], ["balanceAfter", "变更后"], ["status", "状态"], ["createdAt", "时间"]]} moneyKeys={["amount", "balanceBefore", "balanceAfter"]} /></Section>
-            <Section title="后台审计历史" action={<Link href={`/admin/audit-logs?targetId=${encodeURIComponent(userId)}`} className="text-sm font-medium text-primary hover:underline">查看全部</Link>}><RecordList rows={detail.auditLogs} columns={[["admin_email", "管理员"], ["action", "操作"], ["result", "结果"], ["request_id", "请求编号"], ["created_at", "时间"]]} icon={<ScrollText className="h-5 w-5" />} /></Section>
 
             <Notice>本页面不提供余额调整、账户禁用、风险标记、角色修改、密码重置或删除用户操作；这些动作尚未全部满足 V1 安全开放标准。</Notice>
           </div>
@@ -87,12 +94,11 @@ export default function AdminUserDetailPage() {
   );
 }
 
-function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-base font-semibold text-slate-950">{title}</h2>{action}</div>{children}</section>; }
-function Info({ label, value, mono }: { label: string; value: string; mono?: boolean }) { return <div className="rounded-lg border border-slate-100 bg-slate-50 p-3"><div className="text-xs text-slate-500">{label}</div><div className={cn("mt-1 break-all text-sm font-medium text-slate-900", mono && "font-mono text-xs")}>{value}</div></div>; }
-function RelatedLink({ icon: Icon, label, href }: { icon: typeof ShoppingBag; label: string; href: string }) { return <Link href={href} className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-primary/30 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex items-center gap-3"><span className="rounded-lg bg-slate-100 p-2 text-slate-500 group-hover:text-primary"><Icon className="h-4 w-4" /></span><span className="font-medium text-slate-900">{label}</span></div><span className="text-sm text-slate-500">查看</span></Link>; }
-function RecordList({ rows, columns, moneyKeys = [], detailBase, icon }: { rows: Row[]; columns: [string, string][]; moneyKeys?: string[]; detailBase?: string; icon?: React.ReactNode }) { if (!rows.length) return <AdminEmptyState icon={icon} title="暂无记录" className="min-h-[160px]" />; return <div className="overflow-auto rounded-lg border border-slate-200"><table className="min-w-[760px] text-sm"><thead className="bg-slate-50 text-left text-xs text-slate-500"><tr>{columns.map(([, label]) => <th key={label} className="h-9 whitespace-nowrap px-3 font-medium">{label}</th>)}{detailBase ? <th className="h-9 px-3 font-medium">操作</th> : null}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row, index) => <tr key={String(row.id ?? index)}>{columns.map(([key]) => <td key={key} className="max-w-[280px] truncate whitespace-nowrap px-3 py-2 text-xs" title={safeText(row[key])}>{renderValue(key, row[key], moneyKeys)}</td>)}{detailBase ? <td className="px-3 py-2"><Link href={`${detailBase}/${String(row.id)}`} className="text-xs font-medium text-primary hover:underline">查看</Link></td> : null}</tr>)}</tbody></table></div>; }
+function RecordList({ rows, columns, moneyKeys = [], detailBase, icon }: { rows: Row[]; columns: [string, string][]; moneyKeys?: string[]; detailBase?: string; icon?: React.ReactNode }) { if (!rows.length) return <AdminEmptyState icon={icon} title="暂无记录" className="min-h-[160px]" />; return <div className={cn(v2Styles.tableSurface, "mx-4 mb-4 sm:mx-5 sm:mb-5")}><table className="min-w-[760px] text-sm"><thead className="bg-[var(--admin-v2-surface-muted)] text-left text-xs text-[var(--admin-v2-text-muted)]"><tr>{columns.map(([, label]) => <th key={label} className="h-9 whitespace-nowrap px-3 font-medium">{label}</th>)}{detailBase ? <th className="h-9 px-3 font-medium">操作</th> : null}</tr></thead><tbody className="divide-y divide-[var(--admin-v2-border)]">{rows.map((row, index) => <tr key={String(row.id ?? index)} className="hover:bg-[var(--admin-v2-surface-muted)]">{columns.map(([key]) => <td key={key} className={cn("max-w-[320px] whitespace-normal px-3 py-2 text-xs [overflow-wrap:anywhere]", /(?:id|no|request)/i.test(key) && "font-mono")} title={safeText(row[key])}>{renderValue(key, row[key], moneyKeys)}</td>)}{detailBase ? <td className="px-3 py-2"><Link href={`${detailBase}/${String(row.id)}`} className="inline-flex min-h-11 items-center text-xs font-medium text-[var(--admin-v2-primary)] hover:underline sm:min-h-0">查看</Link></td> : null}</tr>)}</tbody></table></div>; }
 function Notice({ children }: { children: React.ReactNode }) { return <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">{children}</div>; }
 function renderValue(key: string, value: unknown, moneyKeys: string[]) { if (moneyKeys.includes(key)) return money(value); if (/(?:At|_at)$/.test(key)) return formatDate(typeof value === "string" ? value : null); return safeText(value); }
 function safeText(value: unknown) { if (value === null || value === undefined || value === "") return "—"; return typeof value === "string" ? value : String(value); }
 function money(value: unknown) { const parsed = Number(value); return `¥${Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00"}`; }
 function formatDate(value: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }
+function accountTone(status: string): AdminStatusTone { if (status === "active") return "success"; if (status === "restricted") return "warning"; if (status === "suspended" || status === "disabled") return "danger"; return "neutral"; }
+function riskTone(status: string): AdminStatusTone { if (status === "normal") return "success"; if (status === "watch") return "warning"; if (status === "high_risk" || status === "blocked") return "danger"; return "neutral"; }

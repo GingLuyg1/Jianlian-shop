@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Eye, RefreshCcw, Search, X } from "lucide-react";
+import { AlertTriangle, Eye, RefreshCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
+import { AdminDetailDrawer } from "@/components/admin/v2/AdminDetail";
+import { AdminInfoGrid, AdminInfoItem } from "@/components/admin/v2/AdminInfoGrid";
+import AdminSection from "@/components/admin/v2/AdminSection";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -230,13 +233,7 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
 function ReconciliationDrawer({ selected, detail, detailLoading, detailError, onClose, onRetry }: { selected: AdminPaymentReconciliation; detail: AdminPaymentReconciliation | null; detailLoading: boolean; detailError: string; onClose: () => void; onRetry: () => void }) {
   const item = detail ?? selected;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" onClick={onClose}>
-      <aside className="flex h-full w-full max-w-[680px] flex-col bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
-        <div className="flex shrink-0 items-start justify-between border-b px-5 py-4">
-          <div><h2 className="text-lg font-semibold text-slate-950">对账详情</h2><p className="mt-1 text-xs text-slate-500">{item.reconciliation_no}</p></div>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+    <AdminDetailDrawer title={item.reconciliation_no} eyebrow="对账详情" onClose={onClose} className="max-w-[680px]">
           {detailLoading ? <div className="space-y-3">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />)}</div> : null}
           {detailError ? <AdminErrorState description={detailError} onRetry={onRetry} /> : null}
           {!detailLoading && !detailError ? (
@@ -251,12 +248,10 @@ function ReconciliationDrawer({ selected, detail, detailLoading, detailError, on
               <DetailGroup title="处理时间线" rows={[["检查时间", formatDate(item.checked_at)], ["解决时间", formatDate(item.resolved_at)], ["解决说明", item.resolution ?? "—"]]} />
             </div>
           ) : null}
-        </div>
-      </aside>
-    </div>
+    </AdminDetailDrawer>
   );
 }
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) { return <th className={cn("h-10 whitespace-nowrap px-3 text-left font-medium", className)}>{children}</th>; }
 function Td({ children, className, mono }: { children: React.ReactNode; className?: string; mono?: boolean }) { return <td className={cn("truncate whitespace-nowrap px-3 py-3 align-middle text-slate-700", mono && "font-mono text-xs", className)}>{children}</td>; }
-function DetailGroup({ title, rows }: { title: string; rows: Array<[string, string]> }) { return <section className="rounded-xl border"><div className="border-b px-4 py-3 text-sm font-semibold text-slate-950">{title}</div><div className="divide-y">{rows.map(([label, value]) => <div key={label} className="flex items-start justify-between gap-4 px-4 py-3 text-sm"><span className="shrink-0 text-slate-500">{label}</span><span className="min-w-0 break-all text-right text-slate-900">{value || "—"}</span></div>)}</div></section>; }
+function DetailGroup({ title, rows }: { title: string; rows: Array<[string, string]> }) { return <AdminSection title={title}><AdminInfoGrid>{rows.map(([label, value]) => <AdminInfoItem key={label} label={label} value={value || "—"} />)}</AdminInfoGrid></AdminSection>; }
