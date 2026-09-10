@@ -69,4 +69,7 @@ test("dashboard metric layout is dense on desktop and bounded on mobile", () => 
   assert.match(cards, /shadow-none/);
   assert.match(cards, /var\(--admin-v2-surface-radius\)/);
   assert.match(cards, /var\(--admin-v2-primary\)/);
+  assert.match(cards, /metricSurfaceClassName\(true\)/);
+  assert.match(cards, /metricSurfaceClassName\(false\)/);
+  assert.match(cards, /interactive && "group transition-colors/);
 });

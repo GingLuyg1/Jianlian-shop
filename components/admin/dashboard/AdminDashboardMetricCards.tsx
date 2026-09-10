@@ -22,20 +22,23 @@ type AdminMetricValueCardProps = MetricCardBaseProps & {
   tone?: "neutral" | "warning" | "danger";
 };
 
-function metricSurfaceClassName() {
-  return "group block min-w-0 rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-none transition-colors duration-150 hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-offset-2";
+function metricSurfaceClassName(interactive: boolean) {
+  return cn(
+    "block min-w-0 rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-none",
+    interactive && "group transition-colors duration-150 hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-offset-2",
+  );
 }
 
 function MetricSurface({ href, children }: { href?: string; children: ReactNode }) {
   if (href) {
     return (
-      <Link href={href} className={metricSurfaceClassName()}>
+      <Link href={href} className={metricSurfaceClassName(true)}>
         {children}
       </Link>
     );
   }
 
-  return <div className={metricSurfaceClassName()}>{children}</div>;
+  return <div className={metricSurfaceClassName(false)}>{children}</div>;
 }
 
 export function AdminMetricTrendCard({
