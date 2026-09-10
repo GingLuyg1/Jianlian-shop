@@ -60,7 +60,7 @@ test("risk detail shows safe evidence, timeline, audit, and real related navigat
   assert.match(detail, /log\.target_id === id/);
   assert.match(detail, /状态时间线/);
   assert.match(detail, /安全元数据/);
-  for (const destination of ["/admin/users?search=", "/admin/orders?search=", "/admin/payments?search=", "/admin/recharges?search=", "/admin/system/request-traces?requestId="]) {
+  for (const destination of ["/admin/users/", "/admin/orders?search=", "/admin/payments?search=", "/admin/recharges?search=", "/admin/system/request-traces/"]) {
     assert.match(detail, new RegExp(destination.replace(/[?]/g, "\\?")));
   }
   assert.match(route, /safeMetadata\(raw, depth \+ 1\)/);

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, Eye, Loader2, RefreshCcw, Search, X } from "lucide-react";
+import { AlertCircle, Eye, Loader2, RefreshCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -12,6 +12,7 @@ import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import OrderFulfillmentPanel from "@/components/admin/orders/OrderFulfillmentPanel";
+import { AdminDetailDrawer } from "@/components/admin/v2/AdminDetail";
 import {
   AdminFilterBar,
   AdminListPagination,
@@ -503,27 +504,13 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
   }, [orderStatus]);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35" onMouseDown={onClose}>
-      <aside
-        className="flex h-full w-full max-w-[860px] flex-col bg-white shadow-2xl"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b px-6 py-5">
-          <div>
-            <div className="text-xs text-slate-500">订单编号</div>
-            <div className="mt-1 font-mono text-lg font-semibold text-slate-950">{getOrderNo(order)}</div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Badge className={ORDER_STATUS_STYLES[orderStatus]}>{getOrderStatusLabel(orderStatus)}</Badge>
-              <Badge className={PAYMENT_STATUS_STYLES[paymentStatus]}>{getPaymentStatusLabel(paymentStatus)}</Badge>
-              <Badge variant="outline">{getDeliveryLabel(order.delivery_type)}</Badge>
-            </div>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="关闭订单详情">
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+    <AdminDetailDrawer
+      title={getOrderNo(order)}
+      eyebrow="订单编号"
+      status={<><Badge className={ORDER_STATUS_STYLES[orderStatus]}>{getOrderStatusLabel(orderStatus)}</Badge><Badge className={PAYMENT_STATUS_STYLES[paymentStatus]}>{getPaymentStatusLabel(paymentStatus)}</Badge><Badge variant="outline">{getDeliveryLabel(order.delivery_type)}</Badge></>}
+      onClose={onClose}
+      className="max-w-[860px]"
+    >
           <div className="grid gap-4 lg:grid-cols-2">
             <InfoCard title="用户信息">
               <InfoRow label="用户邮箱" value={order.customer_email || "—"} />
@@ -607,9 +594,7 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
             relations={relations}
             onRetry={() => void loadRelations()}
           />
-        </div>
-      </aside>
-    </div>
+    </AdminDetailDrawer>
   );
 }
 
