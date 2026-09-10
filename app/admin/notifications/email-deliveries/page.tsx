@@ -5,12 +5,13 @@ import { AlertCircle, CheckCircle2, MailCheck } from "lucide-react";
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import { AdminFilterBar, AdminListSurface, AdminTableViewport, adminListRowClass, adminListTableHeadClass } from "@/components/admin/v2/AdminList";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { summarizeEmailError } from "@/lib/email/jobs";
 import { getEmailProviderStatus } from "@/lib/email/provider";
 import { EmailDeliveryActions } from "@/components/admin/EmailDeliveryActions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -60,38 +61,41 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
 
   return (
     <AdminPageShell
+      variant="v2"
       title="邮件发送记录"
       description="查询邮件任务、发送状态、失败原因和 Provider 状态；页面不展示完整邮箱或邮件正文。"
       actions={<Button asChild variant="outline"><Link href="/admin/notifications/email-templates">邮件模板</Link></Button>}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <div className={cn("shrink-0 rounded-xl border p-4 shadow-sm", provider.configured ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50")}>
+        <div className={cn("shrink-0 rounded-[var(--admin-v2-surface-radius)] border p-4 shadow-none", provider.configured ? "border-[var(--admin-v2-success-foreground)]/20 bg-[var(--admin-v2-success-background)]" : "border-[var(--admin-v2-warning-foreground)]/20 bg-[var(--admin-v2-warning-background)]")}>
           <div className="flex items-start gap-3">
             {provider.configured ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600" />}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-slate-950">邮件 Provider</span>
-                <Badge variant="outline" className="bg-white/70">{provider.provider}</Badge>
-                <Badge variant={provider.configured ? "secondary" : "outline"}>{provider.configured ? "已配置" : "未配置"}</Badge>
+                <span className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">邮件 Provider</span>
+                <AdminStatusBadge tone="neutral">{provider.provider}</AdminStatusBadge>
+                <AdminStatusBadge tone={provider.configured ? "success" : "warning"}>{provider.configured ? "已配置" : "未配置"}</AdminStatusBadge>
               </div>
-              <p className="mt-1 text-xs text-slate-600">
+              <p className="mt-1 text-xs text-[var(--admin-v2-text-secondary)]">
                 {provider.configured ? provider.message : `缺少配置：${provider.missing.join("、") || "Provider 配置"}`}
               </p>
             </div>
           </div>
         </div>
 
-        <nav className="flex shrink-0 flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm" aria-label="邮件状态筛选">
+        <nav aria-label="邮件状态筛选">
+        <AdminFilterBar className="flex-row flex-wrap">
           {STATUS_OPTIONS.map(([value, label]) => {
             const active = (searchParams?.status ?? "") === value;
             const href = value ? `/admin/notifications/email-deliveries?status=${value}` : "/admin/notifications/email-deliveries";
-            return <Link key={value || "all"} href={href} className={cn("rounded-lg px-3 py-2 text-sm", active ? "bg-slate-900 font-medium text-white" : "text-slate-600 hover:bg-slate-100")}>{label}</Link>;
+            return <Link key={value || "all"} href={href} aria-current={active ? "page" : undefined} className={cn("inline-flex h-11 items-center rounded-[var(--admin-v2-control-radius)] px-3 text-sm transition-colors sm:h-9", active ? "bg-[var(--admin-v2-primary)] font-medium text-white" : "text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)]")}>{label}</Link>;
           })}
+        </AdminFilterBar>
         </nav>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-medium text-slate-700">
-          <MailCheck className="h-4 w-4 text-orange-500" />
+        <AdminListSurface>
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--admin-v2-border)] px-4 py-3 text-sm font-medium text-[var(--admin-v2-text-primary)]">
+          <MailCheck className="h-4 w-4 text-[var(--admin-v2-primary)]" />
           最近发送任务
         </div>
         {error ? (
@@ -107,9 +111,9 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
             description={searchParams?.status ? "请选择其他状态查看邮件任务。" : "业务事件创建邮件任务后，发送记录会显示在这里。"}
           />
         ) : (
-          <div className="min-h-0 flex-1 overflow-auto">
+          <AdminTableViewport>
             <table className="min-w-full text-left text-sm">
-              <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+              <thead className={adminListTableHeadClass}>
                 <tr>
                   <th className="px-4 py-3">时间</th>
                   <th className="px-4 py-3">模板</th>
@@ -122,25 +126,25 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
                   <th className="px-4 py-3">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-[var(--admin-v2-border)]">
                 {deliveries.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50">
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatTime(row.created_at)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{row.template_code} {row.template_version ? `v${row.template_version}` : ""}</td>
-                    <td className="px-4 py-3">{row.business_type || "—"}<div className="text-xs text-slate-500">{row.business_no || "—"}</div></td>
+                  <tr key={row.id} className={adminListRowClass}>
+                    <td className="whitespace-nowrap px-4 py-3 text-[var(--admin-v2-text-muted)]">{formatTime(row.created_at)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-[var(--admin-v2-text-primary)]">{row.template_code} {row.template_version ? `v${row.template_version}` : ""}</td>
+                    <td className="px-4 py-3">{row.business_type || "—"}<div className="text-xs text-[var(--admin-v2-text-muted)]">{row.business_no || "—"}</div></td>
                     <td className="whitespace-nowrap px-4 py-3">{row.recipient_summary}</td>
                     <td className="px-4 py-3">{renderStatus(row.status)}</td>
                     <td className="px-4 py-3">{row.attempts}/{row.max_attempts}</td>
                     <td className="px-4 py-3">{row.provider || "—"}</td>
-                    <td className="max-w-[280px] truncate px-4 py-3 text-slate-500" title={row.last_error_message || ""}>{row.last_error_code || row.last_error_message || "—"}</td>
+                    <td className="max-w-[280px] truncate px-4 py-3 text-[var(--admin-v2-text-muted)]" title={row.last_error_message || ""}>{row.last_error_code || row.last_error_message || "—"}</td>
                     <td className="px-4 py-3"><EmailDeliveryActions jobId={row.id} status={row.status} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </AdminTableViewport>
         )}
-        </div>
+        </AdminListSurface>
       </div>
     </AdminPageShell>
   );
@@ -156,14 +160,8 @@ function AdminEmailPageState({ title, message }: { title: string; message: strin
 
 function renderStatus(status: string) {
   const map: Record<string, string> = { pending: "待发送", processing: "发送中", sent: "已发送", retrying: "待重试", failed: "失败", cancelled: "已取消" };
-  const className = status === "sent"
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : status === "failed"
-      ? "border-red-200 bg-red-50 text-red-700"
-      : status === "cancelled"
-        ? "border-slate-200 bg-slate-100 text-slate-600"
-        : "border-amber-200 bg-amber-50 text-amber-700";
-  return <Badge variant="outline" className={className}>{map[status] ?? status}</Badge>;
+  const tone: AdminStatusTone = status === "sent" ? "success" : status === "failed" ? "danger" : status === "cancelled" ? "neutral" : "warning";
+  return <AdminStatusBadge tone={tone}>{map[status] ?? status}</AdminStatusBadge>;
 }
 
 function formatTime(value: string | null | undefined) {

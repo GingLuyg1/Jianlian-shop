@@ -2,12 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Copy, Eye, RotateCcw, Search, X } from "lucide-react";
+import { Copy, Eye, RotateCcw, Search } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { AdminDetailDrawer } from "@/components/admin/v2/AdminDetail";
+import {
+  AdminFilterBar,
+  AdminListPagination,
+  AdminListSurface,
+  AdminTableViewport,
+  adminListControlClass,
+  adminListRowClass,
+  adminListTableHeadClass,
+} from "@/components/admin/v2/AdminList";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { Button } from "@/components/ui/button";
 import { formatAdminAuditActor } from "@/lib/admin/admin-operations-presentation.mjs";
 import { cn } from "@/lib/utils";
@@ -55,11 +66,11 @@ const RESULT_LABELS: Record<string, string> = {
   partial: "部分成功",
 };
 
-const RESULT_CLASS_NAMES: Record<string, string> = {
-  success: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  failed: "bg-rose-50 text-rose-700 ring-rose-200",
-  denied: "bg-amber-50 text-amber-700 ring-amber-200",
-  partial: "bg-sky-50 text-sky-700 ring-sky-200",
+const RESULT_TONES: Record<string, AdminStatusTone> = {
+  success: "success",
+  failed: "danger",
+  denied: "warning",
+  partial: "info",
 };
 
 function formatDate(value: string | null | undefined) {
@@ -222,35 +233,38 @@ export default function AdminAuditLogsPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="操作日志"
       description="查询后台敏感操作记录。日志只读，安全摘要由服务端脱敏后返回。"
       actions={<Button variant="outline" onClick={() => void loadLogs()} disabled={loading}><RotateCcw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}
     >
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="shrink-0 border-b border-slate-100 p-3">
+      <AdminListSurface>
+        <div className="shrink-0 px-3 pt-3 sm:px-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-slate-950">审计记录</h2>
-              <p className="text-xs text-slate-500">当前结果 {count} 条</p>
+              <p className="text-xs text-[var(--admin-v2-text-muted)]">当前结果 {count} 条</p>
             </div>
-            {copied ? <span className="text-xs text-primary">{copied}</span> : null}
+            {copied ? <span className="text-xs text-[var(--admin-v2-primary)]" role="status">{copied}</span> : null}
           </div>
-
-          <div className="grid gap-2 xl:grid-cols-[minmax(160px,1fr)_150px_150px_130px_150px_150px_150px_150px_76px]">
+        </div>
+        <AdminFilterBar className="grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(160px,1fr)_150px_150px_130px_150px_150px_150px_150px_76px]">
             <label className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={adminEmail}
                 onChange={(event) => setAdminEmail(event.target.value)}
                 placeholder="管理员邮箱"
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-primary"
+                aria-label="管理员邮箱"
+                className={`${adminListControlClass} w-full pl-9 pr-3`}
               />
             </label>
             <select
               value={moduleFilter}
               onChange={(event) => setModuleFilter(event.target.value)}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"
+              aria-label="模块"
+              className={`${adminListControlClass} px-3`}
             >
               <option value="">全部模块</option>
               {Object.entries(MODULE_LABELS).map(([value, label]) => (
@@ -263,12 +277,14 @@ export default function AdminAuditLogsPage() {
               value={action}
               onChange={(event) => setAction(event.target.value)}
               placeholder="操作类型"
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"
+              aria-label="操作类型"
+              className={`${adminListControlClass} px-3`}
             />
             <select
               value={resultFilter}
               onChange={(event) => setResultFilter(event.target.value)}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"
+              aria-label="执行结果"
+              className={`${adminListControlClass} px-3`}
             >
               <option value="">全部结果</option>
               {Object.entries(RESULT_LABELS).map(([value, label]) => (
@@ -281,37 +297,40 @@ export default function AdminAuditLogsPage() {
               value={targetId}
               onChange={(event) => setTargetId(event.target.value)}
               placeholder="目标 ID"
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"
+              aria-label="目标 ID"
+              className={`${adminListControlClass} px-3`}
             />
             <input
               value={requestId}
               onChange={(event) => setRequestId(event.target.value)}
               placeholder="请求编号"
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"
+              aria-label="请求编号"
+              className={`${adminListControlClass} px-3`}
             />
             <input
               type="datetime-local"
               value={startAt}
               onChange={(event) => setStartAt(event.target.value)}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"
+              aria-label="开始时间"
+              className={`${adminListControlClass} px-3`}
             />
             <input
               type="datetime-local"
               value={endAt}
               onChange={(event) => setEndAt(event.target.value)}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"
+              aria-label="结束时间"
+              className={`${adminListControlClass} px-3`}
             />
             <button
               type="button"
               onClick={resetFilters}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50"
+              className="h-11 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white px-3 text-sm text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] sm:h-9"
             >
               重置
             </button>
-          </div>
-        </div>
+        </AdminFilterBar>
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        <AdminTableViewport>
           <table className="w-full min-w-[1180px] table-fixed text-sm">
             <colgroup>
               <col className="w-[150px]" />
@@ -324,8 +343,8 @@ export default function AdminAuditLogsPage() {
               <col className="w-[210px]" />
               <col className="w-[92px]" />
             </colgroup>
-            <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-500">
-              <tr className="border-b border-slate-100">
+            <thead className={adminListTableHeadClass}>
+              <tr className="border-b border-[var(--admin-v2-border)]">
                 {["时间", "管理员", "模块", "操作", "目标", "结果", "IP", "请求编号", "操作"].map(
                   (heading) => (
                     <th key={heading} className="h-10 px-3 text-left font-medium whitespace-nowrap">
@@ -335,7 +354,7 @@ export default function AdminAuditLogsPage() {
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {error ? (
                 <tr><td colSpan={9}><AdminErrorState description={error} onRetry={() => void loadLogs()} /></td></tr>
               ) : loading ? (
@@ -344,7 +363,7 @@ export default function AdminAuditLogsPage() {
                 <tr><td colSpan={9}><AdminEmptyState title="暂无审计记录" description={hasAuditFilters(queryString) ? "没有符合当前筛选条件的操作记录。" : "后台敏感操作发生后会显示在这里。"} /></td></tr>
               ) : (
                 logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50">
+                  <tr key={log.id} className={adminListRowClass}>
                     <td className="px-3 py-2 text-xs tabular-nums text-slate-500 whitespace-nowrap">
                       {formatDate(log.created_at)}
                     </td>
@@ -366,13 +385,9 @@ export default function AdminAuditLogsPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span
-                        className={`inline-flex h-6 min-w-[56px] items-center justify-center rounded-full px-2 text-xs font-medium ring-1 ${
-                          RESULT_CLASS_NAMES[log.result] ?? RESULT_CLASS_NAMES.failed
-                        }`}
-                      >
+                      <AdminStatusBadge tone={RESULT_TONES[log.result] ?? "danger"}>
                         {RESULT_LABELS[log.result] ?? log.result}
-                      </span>
+                      </AdminStatusBadge>
                     </td>
                     <td className="truncate px-3 py-2 text-xs text-slate-500" title={safeText(log.ip_address)}>
                       {safeText(log.ip_address)}
@@ -395,53 +410,25 @@ export default function AdminAuditLogsPage() {
               )}
             </tbody>
           </table>
-        </div>
+        </AdminTableViewport>
 
-        <div className="flex h-12 shrink-0 items-center justify-between border-t border-slate-100 px-3 text-sm text-slate-500">
-          <span>
-            共 {count} 条，第 {page} / {totalPages} 页
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              className="h-8 rounded-md border border-slate-200 px-3 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              上一页
-            </button>
-            <button
-              type="button"
-              disabled={page >= totalPages}
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-              className="h-8 rounded-md border border-slate-200 px-3 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              下一页
-            </button>
-          </div>
-        </div>
-      </div>
+        <AdminListPagination
+          summary={`共 ${count} 条`}
+          page={page}
+          totalPages={totalPages}
+          loading={loading}
+          onPrevious={() => setPage((current) => Math.max(1, current - 1))}
+          onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+        />
+      </AdminListSurface>
 
       {selectedLog ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" onClick={() => setSelectedLog(null)}>
-          <aside
-            className="h-full w-full max-w-2xl overflow-y-auto bg-white p-5 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-950">审计详情</h2>
-                <p className="mt-1 text-sm text-slate-500">查看本次后台操作的只读记录。</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedLog(null)}
-                className="rounded-md p-2 text-slate-500 hover:bg-slate-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+        <AdminDetailDrawer
+          title="审计详情"
+          description="查看本次后台操作的只读记录。"
+          onClose={() => setSelectedLog(null)}
+          className="max-w-2xl"
+        >
             <div className="space-y-4 text-sm">
               <DetailRow label="管理员" value={formatAdminAuditActor(selectedLog)} />
               <DetailRow label="模块" value={MODULE_LABELS[selectedLog.module] ?? selectedLog.module} />
@@ -474,8 +461,7 @@ export default function AdminAuditLogsPage() {
               <JsonSection title="修改后摘要" value={selectedLog.after_summary} />
               <JsonSection title="扩展信息" value={selectedLog.metadata} />
             </div>
-          </aside>
-        </div>
+        </AdminDetailDrawer>
       ) : null}
     </AdminPageShell>
   );

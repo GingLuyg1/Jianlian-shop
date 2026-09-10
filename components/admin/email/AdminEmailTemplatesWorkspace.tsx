@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Archive, ChevronLeft, ChevronRight, FileEdit, Loader2, MailPlus, RefreshCcw, Send } from "lucide-react";
+import { Archive, FileEdit, Loader2, MailPlus, RefreshCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { AdminFilterBar, AdminListPagination, AdminListSurface, AdminTableViewport, adminListRowClass, adminListTableHeadClass } from "@/components/admin/v2/AdminList";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -263,6 +264,7 @@ export default function AdminEmailTemplatesWorkspace() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="邮件模板"
       description="创建、维护和发布邮件模板版本；已发布内容保持只读，所有发布与归档操作记录原因。"
       actions={(
@@ -273,22 +275,21 @@ export default function AdminEmailTemplatesWorkspace() {
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <div className="flex shrink-0 flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <select value={templateCode} onChange={(event) => { setTemplateCode(event.target.value); setPage(1); }} className="h-10 min-w-[220px] rounded-md border border-input bg-background px-3 text-sm">
+        <AdminListSurface>
+        <AdminFilterBar className="flex flex-wrap">
+          <select aria-label="模板代码" value={templateCode} onChange={(event) => { setTemplateCode(event.target.value); setPage(1); }} className="h-11 min-w-[220px] rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] px-3 text-sm sm:h-9">
             <option value="">全部模板代码</option>
             {EMAIL_TEMPLATE_CODES.map((code) => <option key={code} value={code}>{code}</option>)}
           </select>
-          <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <select aria-label="模板状态" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="h-11 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] px-3 text-sm sm:h-9">
             <option value="">全部状态</option>
             <option value="draft">草稿</option>
             <option value="published">已发布</option>
             <option value="archived">已归档</option>
           </select>
-          <Button variant="outline" onClick={loadTemplates} disabled={loading}><RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />刷新</Button>
-          <span className="ml-auto text-xs text-slate-500">共 {total} 个模板版本</span>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <Button className="h-11 sm:h-9" variant="outline" onClick={loadTemplates} disabled={loading}><RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />刷新</Button>
+          <span className="ml-auto text-xs text-[var(--admin-v2-text-muted)]">共 {total} 个模板版本</span>
+        </AdminFilterBar>
           {error ? (
             <AdminErrorState title="邮件模板读取失败" description={error} onRetry={loadTemplates} />
           ) : loading ? (
@@ -296,14 +297,14 @@ export default function AdminEmailTemplatesWorkspace() {
           ) : templates.length === 0 ? (
             <AdminEmptyState icon={<MailPlus className="h-5 w-5" />} title={templateCode || status ? "当前筛选没有模板版本" : "暂无邮件模板"} description={templateCode || status ? "请调整模板代码或状态筛选。" : "创建第一个草稿版本后，可在此编辑并发布。"} action={<Button onClick={openCreate}>新建模板版本</Button>} />
           ) : (
-            <div className="min-h-0 flex-1 overflow-auto">
+            <AdminTableViewport>
               <table className="min-w-[1040px] w-full text-left text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500">
+                <thead className={adminListTableHeadClass}>
                   <tr><th className="px-4 py-3">模板代码</th><th className="px-4 py-3">版本</th><th className="px-4 py-3">名称</th><th className="px-4 py-3">主题</th><th className="px-4 py-3">状态</th><th className="px-4 py-3">当前版本</th><th className="px-4 py-3">更新时间</th><th className="px-4 py-3 text-right">操作</th></tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-[var(--admin-v2-border)]">
                   {templates.map((template) => (
-                    <tr key={template.id} className="hover:bg-slate-50/70">
+                    <tr key={template.id} className={adminListRowClass}>
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-950">{template.template_code}</td>
                       <td className="px-4 py-3">v{template.version}</td>
                       <td className="max-w-[220px] truncate px-4 py-3">{template.name || "—"}</td>
@@ -316,15 +317,12 @@ export default function AdminEmailTemplatesWorkspace() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </AdminTableViewport>
           )}
           {!loading && !error && total > pageSize ? (
-            <div className="flex shrink-0 items-center justify-between border-t px-4 py-3 text-sm">
-              <span className="text-slate-500">第 {page} / {pageCount} 页</span>
-              <div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}><ChevronLeft className="h-4 w-4" />上一页</Button><Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>下一页<ChevronRight className="h-4 w-4" /></Button></div>
-            </div>
+            <AdminListPagination summary={`第 ${page} / ${pageCount} 页`} page={page} totalPages={pageCount} loading={loading} onPrevious={() => setPage((value) => value - 1)} onNext={() => setPage((value) => value + 1)} />
           ) : null}
-        </div>
+        </AdminListSurface>
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
