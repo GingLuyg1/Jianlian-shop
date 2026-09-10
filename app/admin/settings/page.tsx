@@ -137,14 +137,15 @@ export default function AdminSettingsPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="系统设置"
       description="统一管理网站公开配置、订单规则、公告、协议和维护模式。"
       actions={<Badge variant={dirty ? "secondary" : "outline"}>{saving ? "保存中" : dirty ? "有未保存修改" : "已保存"}</Badge>}
     >
-      {message ? <div className="mb-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{message}</div> : null}
+      {message ? <div className="mb-3 shrink-0 rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-warning-foreground)]/20 bg-[var(--admin-v2-warning-background)] px-4 py-3 text-sm text-[var(--admin-v2-warning-foreground)]" role="status">{message}</div> : null}
       <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-          <div className="shrink-0 border-b px-4 py-3 text-sm font-semibold text-slate-950">设置分组</div>
+        <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-none">
+          <div className="shrink-0 border-b border-[var(--admin-v2-border)] px-4 py-3 text-sm font-semibold text-[var(--admin-v2-text-primary)]">设置分组</div>
           <nav className="min-h-0 flex-1 overflow-y-auto p-2">
             {groups.map((group) => (
               <button
@@ -153,17 +154,18 @@ export default function AdminSettingsPage() {
                 onClick={() => switchGroup(group.id)}
                 className={cn(
                   "mb-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm",
-                  activeGroup === group.id ? "bg-slate-900 font-medium text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                  activeGroup === group.id ? "bg-[var(--admin-v2-selected)] font-medium text-[var(--admin-v2-primary)]" : "text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)] hover:text-[var(--admin-v2-text-primary)]"
                 )}
+                aria-current={activeGroup === group.id ? "page" : undefined}
               >
                 {group.label}
               </button>
             ))}
           </nav>
         </aside>
-        <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-          <div className="shrink-0 border-b px-5 py-3">
-            <div className="text-base font-semibold text-slate-950">{groups.find((group) => group.id === activeGroup)?.label}</div>
+        <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-none">
+          <div className="shrink-0 border-b border-[var(--admin-v2-border)] px-5 py-3">
+            <h2 className="text-base font-semibold text-[var(--admin-v2-text-primary)]">{groups.find((group) => group.id === activeGroup)?.label}</h2>
           </div>
           <div ref={contentRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             {loading ? <AdminTableSkeleton rows={6} className="p-0" /> : null}

@@ -125,6 +125,12 @@ export default function AdminGlobalSearch() {
     <div ref={containerRef} className="relative min-w-0 w-full max-w-xl flex-1">
       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--admin-v2-text-muted)]" />
       <Input
+        id="admin-global-search-input"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open && Boolean(keyword.trim())}
+        aria-controls="admin-global-search-results"
+        aria-activedescendant={open && flatResults[activeIndex] ? `admin-global-search-result-${activeIndex}` : undefined}
         value={keyword}
         onChange={(event) => {
           setKeyword(event.target.value);
@@ -152,7 +158,7 @@ export default function AdminGlobalSearch() {
       {loading ? <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[var(--admin-v2-text-muted)]" /> : null}
 
       {open && keyword.trim() ? (
-        <div className="absolute left-0 right-0 top-11 z-50 max-h-[560px] overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-lg">
+        <div id="admin-global-search-results" role="listbox" aria-label="全局搜索结果" className="absolute left-0 right-0 top-11 z-50 max-h-[560px] overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-lg">
           {error ? (
             <div className="px-4 py-5 text-sm text-[var(--admin-v2-danger-foreground)]">{error}</div>
           ) : loading && !payload ? (
@@ -170,13 +176,16 @@ export default function AdminGlobalSearch() {
                   <div key={group.group} className="py-1">
                     <div className="flex items-center justify-between px-4 py-1 text-xs font-semibold text-[var(--admin-v2-text-muted)]">
                       <span>{group.label}</span>
-                      {group.error ? <span className="text-red-500">{group.error}</span> : <span>{group.results.length}</span>}
+                      {group.error ? <span className="text-[var(--admin-v2-danger-foreground)]">{group.error}</span> : <span>{group.results.length}</span>}
                     </div>
                     <div className="space-y-1 px-2">
                       {group.results.map((result) => {
                         const index = flatResults.findIndex((item) => item.id === result.id && item.group === result.group);
                         return (
                           <Link
+                            id={`admin-global-search-result-${index}`}
+                            role="option"
+                            aria-selected={index === activeIndex}
                             key={`${result.group}-${result.id}`}
                             href={result.href}
                             onClick={() => setOpen(false)}
@@ -191,16 +200,16 @@ export default function AdminGlobalSearch() {
                                   <span className="rounded-[var(--admin-v2-status-radius)] bg-[var(--admin-v2-surface-muted)] px-1.5 py-0.5 text-[11px] text-[var(--admin-v2-text-secondary)]">{result.typeLabel}</span>
                                   <span className="truncate font-semibold text-[var(--admin-v2-text-primary)]">{result.title}</span>
                                 </div>
-                                <div className="mt-1 truncate font-mono text-xs text-slate-500">{result.businessNo}</div>
-                                {result.subtitle ? <div className="mt-1 truncate text-xs text-slate-500">{result.subtitle}</div> : null}
+                                <div className="mt-1 truncate font-mono text-xs text-[var(--admin-v2-text-muted)]">{result.businessNo}</div>
+                                {result.subtitle ? <div className="mt-1 truncate text-xs text-[var(--admin-v2-text-muted)]">{result.subtitle}</div> : null}
                               </div>
-                              <div className="shrink-0 text-right text-xs text-slate-500">
-                                {result.amountLabel ? <div className="font-semibold text-primary">{result.amountLabel}</div> : null}
+                              <div className="shrink-0 text-right text-xs text-[var(--admin-v2-text-muted)]">
+                                {result.amountLabel ? <div className="font-semibold text-[var(--admin-v2-primary)]">{result.amountLabel}</div> : null}
                                 {result.status ? <div>{result.status}</div> : null}
                                 <div>{formatDate(result.createdAt)}</div>
                               </div>
                             </div>
-                            {result.userLabel ? <div className="mt-1 truncate text-xs text-slate-400">用户：{result.userLabel}</div> : null}
+                            {result.userLabel ? <div className="mt-1 truncate text-xs text-[var(--admin-v2-text-muted)]">用户：{result.userLabel}</div> : null}
                           </Link>
                         );
                       })}
