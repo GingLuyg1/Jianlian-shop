@@ -15,12 +15,33 @@ test("Admin V2 detail primitives keep responsive facts, timelines, links, and dr
   assert.match(detail, /export function AdminRelatedLink/);
   assert.match(detail, /export function AdminTimeline/);
   assert.match(detail, /export function AdminDetailDrawer/);
-  assert.match(detail, /role="dialog"/);
-  assert.match(detail, /aria-modal="true"/);
+  assert.match(detail, /@radix-ui\/react-dialog/);
+  assert.match(detail, /<DialogPrimitive\.Root open modal/);
+  assert.match(detail, /<DialogPrimitive\.Portal>/);
+  assert.match(detail, /<DialogPrimitive\.Overlay/);
+  assert.match(detail, /<DialogPrimitive\.Content/);
+  assert.match(detail, /<DialogPrimitive\.Title/);
+  assert.match(detail, /<DialogPrimitive\.Description/);
+  assert.match(detail, /<DialogPrimitive\.Close/);
   assert.match(detail, /min-h-11/);
   assert.match(detail, /overflow-y-auto overflow-x-hidden/);
   assert.match(info, /grid-cols-1/);
   assert.match(info, /\[overflow-wrap:anywhere\]/);
+});
+
+test("Admin detail drawer delegates the complete modal keyboard and focus contract to Radix", () => {
+  const detail = file("components/admin/v2/AdminDetail.tsx");
+
+  assert.match(detail, /<DialogPrimitive\.Root open modal onOpenChange=/);
+  assert.match(detail, /if \(!open\) onClose\(\)/);
+  assert.match(detail, /onOpenAutoFocus=/);
+  assert.match(detail, /closeButtonRef\.current\?\.focus\(\)/);
+  assert.match(detail, /onCloseAutoFocus=/);
+  assert.match(detail, /returnFocusRef\.current\?\.focus\(\)/);
+  assert.match(detail, /<DialogPrimitive\.Overlay/);
+  assert.match(detail, /<DialogPrimitive\.Close[\s\S]*ref=\{closeButtonRef\}/);
+  assert.doesNotMatch(detail, /onEscapeKeyDown=\{[^}]*preventDefault/);
+  assert.doesNotMatch(detail, /onPointerDownOutside=\{[^}]*preventDefault/);
 });
 
 test("user, risk, and request trace detail pages use the V2 detail hierarchy", () => {

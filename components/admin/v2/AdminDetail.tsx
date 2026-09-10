@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useRef, type ReactNode } from "react";
 import { ArrowLeft, ArrowUpRight, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function AdminDetailBackLink({ href, children }: { href: string; children: ReactNode }) {
@@ -89,28 +89,44 @@ export function AdminDetailDrawer({
   children: ReactNode;
   className?: string;
 }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" onMouseDown={onClose}>
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label={typeof title === "string" ? title : "详情"}
-        className={cn("flex h-full w-full max-w-[820px] flex-col border-l border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-xl", className)}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--admin-v2-border)] px-4 py-4 sm:px-5">
-          <div className="min-w-0 flex-1">
-            {eyebrow ? <div className="text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{eyebrow}</div> : null}
-            <h2 className="mt-0.5 text-lg font-semibold leading-7 text-[var(--admin-v2-text-primary)] [overflow-wrap:anywhere]">{title}</h2>
-            {description ? <div className="mt-1 text-xs leading-[18px] text-[var(--admin-v2-text-muted)] [overflow-wrap:anywhere]">{description}</div> : null}
-            {status ? <div className="mt-2 flex flex-wrap gap-2">{status}</div> : null}
-          </div>
-          <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-9 sm:w-9" onClick={onClose} aria-label="关闭详情">
-            <X className="h-4 w-4" />
-          </Button>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5">{children}</div>
-      </aside>
-    </div>
+    <DialogPrimitive.Root open modal onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/30" />
+        <DialogPrimitive.Content
+          className={cn("fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[820px] flex-col border-l border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-xl focus:outline-none", className)}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            closeButtonRef.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            returnFocusRef.current?.focus();
+          }}
+        >
+          <header className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--admin-v2-border)] px-4 py-4 sm:px-5">
+            <div className="min-w-0 flex-1">
+              {eyebrow ? <div className="text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{eyebrow}</div> : null}
+              <DialogPrimitive.Title className="mt-0.5 text-lg font-semibold leading-7 text-[var(--admin-v2-text-primary)] [overflow-wrap:anywhere]">{title}</DialogPrimitive.Title>
+              <DialogPrimitive.Description className={description ? "mt-1 text-xs leading-[18px] text-[var(--admin-v2-text-muted)] [overflow-wrap:anywhere]" : "sr-only"}>{description ?? "后台详情面板"}</DialogPrimitive.Description>
+              {status ? <div className="mt-2 flex flex-wrap gap-2">{status}</div> : null}
+            </div>
+            <DialogPrimitive.Close
+              ref={closeButtonRef}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--admin-v2-control-radius)] transition-colors hover:bg-[var(--admin-v2-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] sm:h-9 sm:w-9"
+              aria-label="关闭详情"
+            >
+              <X className="h-4 w-4" />
+            </DialogPrimitive.Close>
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5">{children}</div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
