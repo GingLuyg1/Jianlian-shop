@@ -53,6 +53,7 @@ import {
 } from "@/lib/supabase/client";
 import type { AdminProduct } from "@/lib/supabase/admin-catalog";
 import { requiresRechargeAdminAttention } from "@/lib/recharges/admin-attention";
+import { cn } from "@/lib/utils";
 import { listProducts } from "@/lib/supabase/admin-catalog";
 
 type MetricValue = number | string | null;
@@ -123,6 +124,8 @@ type TrendPoint = {
   views: number | null;
   newUsers: number | null;
 };
+
+type TrendMetricKey = "payAmount" | "rechargeAmount" | "orderCount" | "views";
 
 type TodoItem = {
   label: string;
@@ -758,12 +761,8 @@ export default function AdminDashboardPage() {
       ) : (
         <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-1">
           <section className="shrink-0" aria-labelledby="dashboard-core-metrics">
-            <div className="mb-2 flex items-end justify-between gap-3">
-              <div>
-                <h2 id="dashboard-core-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">核心经营指标</h2>
-                <p className="text-xs text-[var(--admin-v2-text-muted)]">近 7 天真实数据走势；无可用序列时不绘制曲线。</p>
-              </div>
-              <span className="hidden text-xs text-[var(--admin-v2-text-muted)] sm:inline">对比昨日</span>
+            <div className="mb-2">
+              <h2 id="dashboard-core-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">核心经营指标</h2>
             </div>
             <div className="grid grid-cols-1 gap-2 min-[430px]:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
               {loading && !data
@@ -892,14 +891,17 @@ function QuickLink({ href, label }: { href: string; label: string }) {
 }
 
 function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolean }) {
+  const [selectedMetricKeys, setSelectedMetricKeys] = useState<TrendMetricKey[]>(["payAmount", "rechargeAmount", "orderCount", "views"]);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
   if (loading) return <div className="h-full min-h-[220px] animate-pulse rounded-[var(--admin-v2-surface-radius)] bg-[var(--admin-v2-surface-muted)]" />;
   if (points.length === 0) return <AdminEmptyState title="暂无趋势数据" description="有真实订单、充值或访问记录后会显示趋势。" />;
 
   const series = [
     { key: "payAmount", label: "支付金额", color: "#2563eb", values: points.map((point) => point.payAmount), format: formatMoney },
     { key: "rechargeAmount", label: "充值金额", color: "#0ea5e9", values: points.map((point) => point.rechargeAmount), format: formatMoney },
-    { key: "orderCount", label: "订单数量", color: "#6366f1", values: points.map((point) => point.orderCount), format: (value: number | null) => value === null ? NOT_CONNECTED : `${value} 单` },
-    { key: "views", label: "访问量", color: "#64748b", values: points.map((point) => point.views), format: (value: number | null) => value === null ? NOT_CONNECTED : `${value} PV` },
+    { key: "orderCount", label: "订单数量", color: "#6366f1", values: points.map((point) => point.orderCount), format: (value: number | null) => value === null ? "—" : `${Math.trunc(value).toLocaleString("zh-CN")} 单` },
+    { key: "views", label: "访问量", color: "#64748b", values: points.map((point) => point.views), format: (value: number | null) => value === null ? "—" : `${Math.trunc(value).toLocaleString("zh-CN")} PV` },
   ] as const;
   const chartWidth = 720;
   const chartHeight = 220;
@@ -908,24 +910,69 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
     ...item,
     ...buildNormalizedLine(item.values, chartWidth, chartHeight, padding),
   }));
+  const selectedSeries = chartSeries.filter((item) => selectedMetricKeys.includes(item.key));
   const labelStep = Math.max(1, Math.ceil(points.length / 6));
+  const activePoint = activeIndex !== null && activeIndex < points.length ? points[activeIndex] : null;
+  const activeX = activeIndex !== null
+    ? padding.left + (activeIndex / Math.max(points.length - 1, 1)) * (chartWidth - padding.left - padding.right)
+    : null;
+
+  const toggleMetric = (key: TrendMetricKey) => {
+    setSelectedMetricKeys((current) => {
+      if (!current.includes(key)) return [...current, key];
+      if (current.length === 1) return current;
+      return current.filter((item) => item !== key);
+    });
+  };
 
   return (
     <div className="flex h-full min-h-[220px] min-w-0 flex-col">
-      <div className="mb-2 flex flex-wrap gap-3 text-xs text-slate-500">
-        {series.map((item) => <Legend key={item.key} color={item.color} label={item.label} />)}
+      <div className="mb-2 flex flex-wrap gap-1.5" aria-label="经营趋势指标">
+        {series.map((item) => {
+          const selected = selectedMetricKeys.includes(item.key);
+          return (
+            <button
+              key={item.key}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => toggleMetric(item.key)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)]",
+                selected
+                  ? "border-[var(--admin-v2-border)] bg-white text-[var(--admin-v2-text-secondary)]"
+                  : "border-transparent bg-[var(--admin-v2-surface-muted)] text-[var(--admin-v2-text-muted)] opacity-60",
+              )}
+            >
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: selected ? item.color : "#cbd5e1" }} aria-hidden="true" />
+              {item.label}
+            </button>
+          );
+        })}
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1">
-        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="h-full min-h-[200px] w-full" role="img" aria-label="支付、充值、订单与访问综合趋势折线图">
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1">
+        <svg
+          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          className="h-full min-h-[200px] w-full touch-pan-y"
+          role="img"
+          aria-label="支付、充值、订单与访问综合趋势折线图"
+          onPointerMove={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const viewBoxX = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * chartWidth;
+            const ratio = Math.min(1, Math.max(0, (viewBoxX - padding.left) / (chartWidth - padding.left - padding.right)));
+            setActiveIndex(Math.round(ratio * Math.max(points.length - 1, 0)));
+          }}
+          onPointerLeave={() => setActiveIndex(null)}
+        >
           {[0.25, 0.5, 0.75].map((ratio) => {
             const y = padding.top + ratio * (chartHeight - padding.top - padding.bottom);
             return <path key={ratio} d={`M${padding.left} ${y} H${chartWidth - padding.right}`} stroke="#e2e8f0" strokeDasharray="3 4" strokeWidth="1" />;
           })}
-          {chartSeries.flatMap((item) => item.paths.map((path, index) => (
+          {activeX !== null ? <path d={`M${activeX} ${padding.top} V${chartHeight - padding.bottom}`} stroke="#94a3b8" strokeDasharray="3 3" strokeWidth="1" /> : null}
+          {selectedSeries.flatMap((item) => item.paths.map((path, index) => (
             <path key={`${item.key}-${index}`} d={path} fill="none" stroke={item.color} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
           )))}
-          {chartSeries.flatMap((item) => item.points.map((point, index) => point ? (
-            <circle key={`${item.key}-${index}`} cx={point.x} cy={point.y} r="2.5" fill={item.color} stroke="white" strokeWidth="1.25">
+          {selectedSeries.flatMap((item) => item.points.map((point, index) => point ? (
+            <circle key={`${item.key}-${index}`} cx={point.x} cy={point.y} r={index === activeIndex ? "4" : "2.5"} fill={item.color} stroke="white" strokeWidth="1.25">
               <title>{`${points[index].date} · ${item.label} ${item.format(item.values[index])}`}</title>
             </circle>
           ) : null))}
@@ -935,17 +982,28 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
             return <text key={point.date} x={x} y={chartHeight - 7} textAnchor={index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"} fill="#94a3b8" fontSize="10">{point.date.slice(5)}</text>;
           })}
         </svg>
+        {activePoint && activeX !== null ? (
+          <div
+            className={cn(
+              "pointer-events-none absolute top-3 z-10 min-w-[180px] rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white p-2.5 text-xs shadow-lg",
+              activeIndex !== null && activeIndex >= points.length / 2 ? "-translate-x-[calc(100%+8px)]" : "translate-x-2",
+            )}
+            style={{ left: `${(activeX / chartWidth) * 100}%` }}
+            role="tooltip"
+          >
+            <div className="mb-1.5 font-semibold text-[var(--admin-v2-text-primary)]">{activePoint.date}</div>
+            <div className="space-y-1 text-[var(--admin-v2-text-secondary)]">
+              {selectedSeries.map((item) => (
+                <div key={item.key} className="flex items-center justify-between gap-4">
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</span>
+                  <span className="font-medium tabular-nums text-[var(--admin-v2-text-primary)]">{item.format(item.values[activeIndex ?? 0])}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
-  );
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-      {label}
-    </span>
   );
 }
 

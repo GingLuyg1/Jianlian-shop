@@ -667,25 +667,43 @@ export default function CheckoutPage() {
   };
 
   return (
-    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-hidden px-4 py-3 md:px-6">
-      <div className="grid h-full min-h-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
+    <PublicLayout contentClassName="mt-12 max-w-none py-4 md:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(340px,24vw,372px)]">
+      <div className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
         <ProductDetailCard
           product={product}
           priceLabel={priceLabel}
           closeHref={getProductListHref(product)}
         />
 
-        <Card className="h-full min-h-0 overflow-visible">
+        <Card className="h-auto min-h-0 overflow-hidden lg:h-full">
           <CardContent className="flex h-full min-h-0 flex-col p-0">
-            <div className="shrink-0 border-b border-border bg-white p-4">
-              <div className="flex items-center justify-between gap-4">
-              <h2 className="text-lg font-bold">商品购买</h2>
-              <Button className="h-9 rounded-full px-4 text-sm">商品使用教程</Button>
-              </div>
-            </div>
+            <div className="min-h-0 flex-1 bg-white p-4 lg:overflow-y-auto">
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium">
+                    <span className="text-red-500">*</span>联系邮箱
+                  </label>
+                  <Input
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="请输入接收卡密的邮箱"
+                    className="h-10 bg-slate-50 text-sm"
+                    disabled={orderConfigurationLocked}
+                  />
+                </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              <div className="space-y-5">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium">
+                    提交信息或备注
+                  </label>
+                  <Input
+                    value={customerNote}
+                    onChange={(event) => setCustomerNote(event.target.value)}
+                    placeholder={settings.default_order_note_hint}
+                    className="h-10 bg-slate-50 text-sm"
+                  />
+                </div>
+
               {hasSku ? (
                 <SkuSelector
                   options={skuOptions}
@@ -694,31 +712,6 @@ export default function CheckoutPage() {
                   disabled={orderConfigurationLocked}
                 />
               ) : null}
-                <div className="space-y-3 pt-2">
-                  <h3 className="text-base font-semibold">{"\u8d2d\u4e70\u63d0\u9192"}</h3>
-                  {(settings.checkout_notice || "\u6240\u6709\u8d26\u53f7/\u5361\u5bc6\u7c7b\u5546\u54c1\u8bf7\u4ed4\u7ec6\u6838\u5bf9\u8bf4\u660e\uff0c\u975e\u5546\u54c1\u95ee\u9898\u4e0d\u652f\u6301\u9000\u6362\u3002")
-                    .split(/\r?\n/)
-                    .map((item) => item.trim())
-                    .filter(Boolean)
-                    .slice(0, 6)
-                    .map((item) => <ReminderItem key={item} text={item} />)}
-                </div>
-              </div>
-            </div>
-
-            <div className="shrink-0 space-y-3 border-t border-border bg-white p-4 shadow-[0_-10px_24px_rgba(15,23,42,0.04)]">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium">
-                  <span className="text-red-500">*</span>联系邮箱
-                </label>
-                <Input
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="请输入接收卡密的邮箱"
-                  className="h-10 bg-slate-50 text-sm"
-                  disabled={orderConfigurationLocked}
-                />
-              </div>
 
               {isShippingProduct ? (
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -771,19 +764,7 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
 
-              <div>
-                <label className="mb-1.5 block text-xs font-medium">
-                  提交信息或备注
-                </label>
-                <Input
-                  value={customerNote}
-                  onChange={(event) => setCustomerNote(event.target.value)}
-                  placeholder={settings.default_order_note_hint}
-                  className="h-10 bg-slate-50 text-sm"
-                />
-              </div>
-
-              <div>
+              <div className="border-t border-border pt-4">
                 <div className="mb-1.5 text-xs font-medium text-muted-foreground">
                   支付方式
                 </div>
@@ -876,7 +857,7 @@ export default function CheckoutPage() {
                 ) : null}
               </div>
 
-              <div className="border-t border-border pt-3">
+              <div className="border-t border-border pt-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex h-10 items-center rounded-lg border border-border bg-white">
                     <button
@@ -918,7 +899,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="flex min-w-0 items-center gap-2 border-t border-border pt-2 text-xs leading-5">
+              <div className="flex min-w-0 items-center gap-2 border-t border-border pt-4 text-xs leading-5">
                 <input
                   id="checkout-agreement-confirmation"
                   type="checkbox"
@@ -939,6 +920,7 @@ export default function CheckoutPage() {
                   </button>
                 </div>
               </div>
+            </div>
             </div>
           </CardContent>
         </Card>
@@ -1166,7 +1148,7 @@ function ProductDetailCard({
   closeHref: string;
 }) {
   return (
-    <Card className="relative h-full min-h-0 overflow-hidden">
+    <Card className="relative h-auto min-h-0 overflow-hidden lg:h-full">
       <button
         type="button"
         className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground"
@@ -1177,7 +1159,7 @@ function ProductDetailCard({
       >
         <X className="h-4 w-4" />
       </button>
-      <CardContent className="h-full overflow-y-auto p-6">
+      <CardContent className="h-auto p-6 lg:h-full lg:overflow-y-auto">
         <div className="mb-5 text-sm font-medium text-muted-foreground">
           {product.categoryLabel}
         </div>
@@ -2557,15 +2539,6 @@ function DetailMetric({
       >
         {value}
       </div>
-    </div>
-  );
-}
-
-function ReminderItem({ text }: { text: string }) {
-  return (
-    <div className="flex gap-2 text-sm leading-6">
-      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-      <span>{text}</span>
     </div>
   );
 }

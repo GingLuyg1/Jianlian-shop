@@ -57,9 +57,9 @@ export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
         <Link
           href={item.href}
           className={cn(
-            "flex items-center gap-3 rounded-md px-4 py-2.5 text-[15px] transition-all duration-150 hover:scale-[1.015] active:scale-[1.03]",
+            "flex items-center gap-2.5 whitespace-nowrap rounded-md px-3 py-2.5 text-sm transition-colors duration-150",
             active
-              ? "scale-[1.01] border border-primary/20 bg-primary/10 font-medium text-primary shadow-sm"
+              ? "border border-primary/20 bg-primary/10 font-medium text-primary"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
         >
@@ -71,41 +71,41 @@ export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[270px] flex-col border-r border-border bg-white/90 backdrop-blur md:flex">
-      <div className="flex h-[83px] items-center justify-center px-6">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[var(--storefront-sidebar-width)] flex-col border-r border-border bg-white/95 md:flex">
+      <div className="flex h-[83px] items-center px-3">
         <Link
           href="/"
-          className="flex -translate-x-[5px] items-center justify-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white lg:h-10 lg:w-10">
             <img
               src="/assets/jianlian-brand-logo.png"
               alt="Jianlian"
               width={48}
               height={48}
-              className="h-12 w-12 object-cover"
+              className="h-9 w-9 object-cover lg:h-10 lg:w-10"
             />
           </div>
           <div className="min-w-0">
-            <div className="text-xl font-semibold leading-tight text-foreground">
+            <div className="whitespace-nowrap text-base font-semibold leading-tight text-foreground lg:text-lg">
               Jianlian
             </div>
-            <div className="mt-1 text-sm leading-tight text-muted-foreground">
+            <div className="mt-0.5 whitespace-nowrap text-[11px] leading-tight text-muted-foreground lg:text-xs">
               数字商品服务
             </div>
           </div>
         </Link>
       </div>
 
-      <nav className="sidebar-scroll flex-1 overflow-y-auto px-4 pb-4 pt-0">
+      <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 pb-4 pt-0">
         <ul className="space-y-1.5">{menuItems.map(renderLink)}</ul>
       </nav>
 
-      <div className="px-4 pb-3">
+      <div className="px-3 pb-3">
         <ul className="space-y-1.5">{helpItems.map(renderLink)}</ul>
       </div>
 
-      <div className="border-t border-border px-4 py-4">
+      <div className="border-t border-border px-3 py-4">
         <button
           type="button"
           onClick={() => {
@@ -116,7 +116,7 @@ export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
               window.open(supportHref, "_blank", "noopener,noreferrer");
             }
           }}
-          className="flex w-full select-none items-center justify-start gap-3 rounded-md bg-primary/90 px-4 py-2.5 text-[15px] font-medium text-primary-foreground shadow-sm transition-all duration-150 hover:scale-[1.015] hover:bg-primary active:scale-[1.03]"
+          className="flex w-full select-none items-center justify-start gap-2.5 whitespace-nowrap rounded-md bg-primary/90 px-3 py-2.5 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary"
           {...(!supportHref
             ? ({ popovertarget: "support-popover" } as Record<string, string>)
             : {})}

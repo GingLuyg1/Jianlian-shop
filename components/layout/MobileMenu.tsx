@@ -68,27 +68,30 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-64 p-0">
+      <SheetContent
+        side="left"
+        className="w-[var(--storefront-sidebar-width,160px)] max-w-none p-0"
+      >
         <SheetTitle className="sr-only">导航菜单</SheetTitle>
-        <div className="px-5 py-5 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center border-b border-border px-3 py-4 pr-8">
+          <div className="flex min-w-0 items-center gap-2">
             <img
               src="/assets/jianlian-brand-logo.png"
               alt="Jianlian"
-              className="h-12 w-12 rounded-lg object-cover"
+              className="h-8 w-8 shrink-0 rounded-md object-cover"
             />
-            <div>
-              <div className="font-semibold text-base text-foreground leading-tight">
+            <div className="min-w-0">
+              <div className="whitespace-nowrap text-[13px] font-semibold leading-tight text-foreground">
                 Jianlian
               </div>
-              <div className="text-xs text-muted-foreground leading-tight mt-0.5">
+              <div className="mt-0.5 whitespace-nowrap text-[10px] leading-tight text-muted-foreground">
                 数字商品服务
               </div>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-3 px-3">
+        <nav className="flex-1 overflow-y-auto px-2 py-3">
           <ul className="space-y-1">
             {menuItems.map((item) => {
               const Icon = item.icon;
@@ -99,9 +102,9 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
                     href={item.href}
                     onClick={() => setOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-150 hover:scale-[1.015] active:scale-[1.03]",
+                      "flex items-center gap-2 whitespace-nowrap rounded-md px-2 py-2 text-[13px] transition-colors duration-150",
                       active
-                        ? "scale-[1.01] border border-primary/20 bg-primary/10 text-primary font-medium shadow-sm"
+                        ? "border border-primary/20 bg-primary/10 font-medium text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                   >
@@ -114,7 +117,7 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
           </ul>
         </nav>
 
-        <div className="px-3 pb-3">
+        <div className="px-2 pb-3">
           <ul className="space-y-1">
             {helpItems.map((item) => {
               const Icon = item.icon;
@@ -125,9 +128,9 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
                     href={item.href}
                     onClick={() => setOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-150 hover:scale-[1.015] active:scale-[1.03]",
+                      "flex items-center gap-2 whitespace-nowrap rounded-md px-2 py-2 text-[13px] transition-colors duration-150",
                       active
-                        ? "scale-[1.01] border border-primary/20 bg-primary/10 text-primary font-medium shadow-sm"
+                        ? "border border-primary/20 bg-primary/10 font-medium text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                   >
@@ -140,7 +143,7 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
           </ul>
         </div>
 
-        <div className="px-4 py-4 border-t border-border">
+        <div className="border-t border-border px-2 py-4">
           <button
             type="button"
             onClick={() => {
@@ -152,7 +155,7 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
                 window.open(supportHref, "_blank", "noopener,noreferrer");
               }
             }}
-            className="w-full flex items-center justify-start gap-3 px-3 py-2 rounded-md text-sm bg-primary/90 text-primary-foreground font-medium hover:bg-primary hover:scale-[1.015] active:scale-[1.03] transition-all duration-150 shadow-sm"
+            className="flex w-full items-center justify-start gap-2 whitespace-nowrap rounded-md bg-primary/90 px-2 py-2 text-[13px] font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary"
             {...(!supportHref
               ? ({ popovertarget: "support-popover" } as Record<string, string>)
               : {})}

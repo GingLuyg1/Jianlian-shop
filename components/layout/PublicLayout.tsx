@@ -48,7 +48,9 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
 
   return (
-    <div className={viewportLocked ? "h-dvh overflow-hidden bg-background" : "min-h-screen bg-background"}>
+    <div className={viewportLocked
+      ? "h-dvh overflow-hidden bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px] lg:[--storefront-main-offset:204px] lg:[--storefront-sidebar-width:204px]"
+      : "min-h-screen overflow-x-hidden bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px] lg:[--storefront-main-offset:204px] lg:[--storefront-sidebar-width:204px]"}>
       <RouteLoadingIndicator />
       <PublicSidebar supportHref={supportHref} />
 
@@ -69,9 +71,14 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
       </div>
 
-      <main className={viewportLocked ? "flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[270px]" : "min-h-screen min-w-0 md:ml-[270px]"}>
+      <main className={viewportLocked ? "flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[var(--storefront-main-offset)]" : "min-h-screen min-w-0 md:ml-[var(--storefront-main-offset)]"}>
         <PublicTopInfoBar announcementText={announcement || undefined} />
-        <div className={viewportLocked ? `min-h-0 flex-1 ${contentClassName}` : contentClassName}>{children}</div>
+        <div
+          className={viewportLocked ? `min-h-0 flex-1 ${contentClassName}` : contentClassName}
+          style={{ paddingInline: "var(--storefront-content-padding-x)" }}
+        >
+          {children}
+        </div>
       </main>
 
       <div
