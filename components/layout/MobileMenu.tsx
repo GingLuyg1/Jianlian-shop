@@ -68,7 +68,10 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[var(--storefront-sidebar-width)] max-w-none p-0">
+      <SheetContent
+        side="left"
+        className="w-[var(--storefront-sidebar-width,160px)] max-w-none p-0"
+      >
         <SheetTitle className="sr-only">导航菜单</SheetTitle>
         <div className="flex items-center border-b border-border px-3 py-4 pr-8">
           <div className="flex min-w-0 items-center gap-2">
