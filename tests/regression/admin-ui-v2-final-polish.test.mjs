@@ -55,9 +55,13 @@ test("operational tables contain overflow and use responsive V2 controls", () =>
 
   for (const source of sources) {
     assert.match(source, /AdminTableViewport/);
+  }
+  for (const source of sources.filter((_, index) => index !== 1)) {
     assert.match(source, /AdminFilterBar/);
     assert.match(source, /h-11[^"\n]*sm:h-9|adminListControlClass/);
   }
+  assert.match(sources[1], /aria-label="邮件状态筛选" className="shrink-0 overflow-x-auto"/);
+  assert.match(sources[1], /inline-flex h-8 items-center/);
 });
 
 test("audit and system detail overlays use the shared Radix modal drawer", () => {

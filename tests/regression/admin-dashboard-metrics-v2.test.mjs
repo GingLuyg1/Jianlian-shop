@@ -63,13 +63,14 @@ test("dashboard metric layout is dense on desktop and bounded on mobile", () => 
   const cards = file("components/admin/dashboard/AdminDashboardMetricCards.tsx");
 
   assert.match(dashboard, /grid-cols-1 gap-2 min-\[430px\]:grid-cols-2 md:grid-cols-4 xl:grid-cols-7/);
-  assert.match(dashboard, /grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5/);
+  assert.match(dashboard, /grid-cols-2 gap-px bg-\[var\(--admin-v2-border\)\] md:grid-cols-3 xl:grid-cols-5/);
   assert.match(dashboard, /min-w-0[\s\S]*overflow-x-hidden overflow-y-auto/);
   assert.match(cards, /grid-cols-\[minmax\(0,1fr\)_72px\]/);
   assert.match(cards, /shadow-none/);
   assert.match(cards, /var\(--admin-v2-surface-radius\)/);
   assert.match(cards, /var\(--admin-v2-primary\)/);
-  assert.match(cards, /metricSurfaceClassName\(true\)/);
-  assert.match(cards, /metricSurfaceClassName\(false\)/);
+  assert.match(cards, /metricSurfaceClassName\(true, compact\)/);
+  assert.match(cards, /metricSurfaceClassName\(false, compact\)/);
   assert.match(cards, /interactive && "group transition-colors/);
+  assert.match(cards, /compact \? "hover:bg-\[var\(--admin-v2-selected\)\]" : "hover:border-blue-300"/);
 });

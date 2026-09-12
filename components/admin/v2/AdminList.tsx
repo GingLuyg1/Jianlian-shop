@@ -56,7 +56,7 @@ export function AdminFilterBar({
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="shrink-0 border-b border-[var(--admin-v2-border)] px-3 py-3 sm:px-4">
+    <div className="shrink-0 border-b border-[var(--admin-v2-border)] px-3 py-2.5 sm:px-4">
       <div className={cn("grid items-center gap-2", className)}>
         {children ?? primary}
         {advanced ? (
@@ -116,4 +116,4 @@ export function AdminListPagination({
 export const adminListControlClass = "h-11 min-w-0 rounded-[var(--admin-v2-control-radius)] border-[var(--admin-v2-border)] bg-white text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] sm:h-9";
 export const adminListTableClass = "w-full table-fixed text-sm";
 export const adminListTableHeadClass = "sticky top-0 z-10 bg-[var(--admin-v2-surface-muted)] text-left text-xs font-medium text-[var(--admin-v2-text-muted)]";
-export const adminListRowClass = "border-b border-[var(--admin-v2-border)] bg-white hover:bg-slate-50/70";
+export const adminListRowClass = "h-12 border-b border-[var(--admin-v2-border)] bg-white hover:bg-slate-50/70";

@@ -5,7 +5,7 @@ import { AlertCircle, CheckCircle2, MailCheck } from "lucide-react";
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
-import { AdminFilterBar, AdminListSurface, AdminTableViewport, adminListRowClass, adminListTableHeadClass } from "@/components/admin/v2/AdminList";
+import { AdminListSurface, AdminTableViewport, adminListRowClass, adminListTableHeadClass } from "@/components/admin/v2/AdminList";
 import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -67,30 +67,30 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
       actions={<Button asChild variant="outline"><Link href="/admin/notifications/email-templates">邮件模板</Link></Button>}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <div className={cn("shrink-0 rounded-[var(--admin-v2-surface-radius)] border p-4 shadow-none", provider.configured ? "border-[var(--admin-v2-success-foreground)]/20 bg-[var(--admin-v2-success-background)]" : "border-[var(--admin-v2-warning-foreground)]/20 bg-[var(--admin-v2-warning-background)]")}>
-          <div className="flex items-start gap-3">
-            {provider.configured ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600" />}
+        <div className={cn("shrink-0 rounded-[var(--admin-v2-control-radius)] border px-3 py-2 shadow-none", provider.configured ? "border-[var(--admin-v2-success-foreground)]/20 bg-[var(--admin-v2-success-background)]" : "border-[var(--admin-v2-warning-foreground)]/20 bg-[var(--admin-v2-warning-background)]")}>
+          <div className="flex items-center gap-2.5">
+            {provider.configured ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">邮件 Provider</span>
                 <AdminStatusBadge tone="neutral">{provider.provider}</AdminStatusBadge>
                 <AdminStatusBadge tone={provider.configured ? "success" : "warning"}>{provider.configured ? "已配置" : "未配置"}</AdminStatusBadge>
               </div>
-              <p className="mt-1 text-xs text-[var(--admin-v2-text-secondary)]">
+              <p className="text-xs text-[var(--admin-v2-text-secondary)]">
                 {provider.configured ? provider.message : `缺少配置：${provider.missing.join("、") || "Provider 配置"}`}
               </p>
             </div>
           </div>
         </div>
 
-        <nav aria-label="邮件状态筛选">
-        <AdminFilterBar className="flex-row flex-wrap">
+        <nav aria-label="邮件状态筛选" className="shrink-0 overflow-x-auto">
+        <div className="inline-flex min-w-max items-center gap-1 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] p-1">
           {STATUS_OPTIONS.map(([value, label]) => {
             const active = (searchParams?.status ?? "") === value;
             const href = value ? `/admin/notifications/email-deliveries?status=${value}` : "/admin/notifications/email-deliveries";
-            return <Link key={value || "all"} href={href} aria-current={active ? "page" : undefined} className={cn("inline-flex h-11 items-center rounded-[var(--admin-v2-control-radius)] px-3 text-sm transition-colors sm:h-9", active ? "bg-[var(--admin-v2-primary)] font-medium text-white" : "text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)]")}>{label}</Link>;
+            return <Link key={value || "all"} href={href} aria-current={active ? "page" : undefined} className={cn("inline-flex h-8 items-center rounded-[var(--admin-v2-control-radius)] border border-transparent px-3 text-sm transition-colors", active ? "border-blue-200 bg-[var(--admin-v2-selected)] font-medium text-[var(--admin-v2-primary)]" : "text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)]")}>{label}</Link>;
           })}
-        </AdminFilterBar>
+        </div>
         </nav>
 
         <AdminListSurface>
