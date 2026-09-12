@@ -65,7 +65,7 @@ export default function AdminUserDetailPage() {
               <AdminInfoGrid columns={3}><AdminInfoItem label="当前余额" value={money(detail.summary.balance)} className="tabular-nums" /><AdminInfoItem label="角色" value={profile.role} /><AdminInfoItem label="最近活动" value={formatDate(profile.lastLoginAt)} /></AdminInfoGrid>
             </AdminSection>
 
-            <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="min-w-0 space-y-4">
               <div className="min-w-0 space-y-4">
                 <AdminSection title="基本资料" description="用户身份与账户事实"><AdminInfoGrid columns={3}><AdminInfoItem label="用户 ID" value={profile.id} mono /><AdminInfoItem label="邮箱" value={profile.email ?? "—"} /><AdminInfoItem label="显示名称" value={profile.displayName ?? "—"} /><AdminInfoItem label="角色" value={profile.role} /><AdminInfoItem label="注册时间" value={formatDate(profile.createdAt)} /><AdminInfoItem label="资料更新时间" value={formatDate(profile.updatedAt)} /></AdminInfoGrid></AdminSection>
 
@@ -79,7 +79,7 @@ export default function AdminUserDetailPage() {
                 <AdminSection title="后台审计历史" description="严格限定当前用户目标 · 最近 30 条" action={<Link href={`/admin/audit-logs?targetId=${encodeURIComponent(userId)}`} className="text-sm font-medium text-[var(--admin-v2-primary)] hover:underline">查看全部</Link>}><RecordList rows={detail.auditLogs} columns={[["admin_email", "管理员"], ["action", "操作"], ["result", "结果"], ["request_id", "请求编号"], ["created_at", "时间"]]} icon={<ScrollText className="h-5 w-5" />} /></AdminSection>
               </div>
 
-              <aside className="min-w-0 space-y-4">
+              <aside className="grid min-w-0 gap-4 xl:grid-cols-3">
                 <AdminSection title="账户摘要" description="金额仅汇总当前接口返回的最近记录"><AdminInfoGrid><AdminInfoItem label="充值金额（最近记录）" value={money(detail.summary.totalRecharge)} className="tabular-nums" /><AdminInfoItem label="消费金额（最近记录）" value={money(detail.summary.totalSpend)} className="tabular-nums" /><AdminInfoItem label="当前余额" value={money(detail.summary.balance)} className="tabular-nums" /><AdminInfoItem label="账户 / 风险状态" value={`${ACCOUNT_LABELS[profile.accountStatus] ?? profile.accountStatus} / ${RISK_LABELS[profile.riskStatus] ?? profile.riskStatus}`} /></AdminInfoGrid></AdminSection>
                 <AdminSection title="账户状态时间线" description="最近状态变更"><AdminTimeline items={detail.statusHistory.map((row, index) => ({ id: String(row.id ?? index), title: `${safeText(row.old_status)} → ${safeText(row.new_status)}`, time: formatDate(typeof row.created_at === "string" ? row.created_at : null), actor: safeText(row.admin_email), message: safeText(row.reason) }))} empty={<AdminEmptyState title="暂无状态记录" className="min-h-[140px]" />} /></AdminSection>
                 <AdminSection title="风险状态时间线" description="最近风险标记变更"><AdminTimeline items={detail.riskRecords.map((row, index) => ({ id: String(row.id ?? index), title: `${safeText(row.old_risk_status)} → ${safeText(row.new_risk_status)}`, time: formatDate(typeof row.created_at === "string" ? row.created_at : null), actor: safeText(row.admin_email), message: safeText(row.reason) }))} empty={<AdminEmptyState title="暂无风险状态记录" className="min-h-[140px]" />} /></AdminSection>
@@ -94,7 +94,19 @@ export default function AdminUserDetailPage() {
   );
 }
 
-function RecordList({ rows, columns, moneyKeys = [], detailBase, icon }: { rows: Row[]; columns: [string, string][]; moneyKeys?: string[]; detailBase?: string; icon?: React.ReactNode }) { if (!rows.length) return <AdminEmptyState icon={icon} title="暂无记录" className="min-h-[160px]" />; return <div className={cn(v2Styles.tableSurface, "mx-4 mb-4 sm:mx-5 sm:mb-5")}><table className="min-w-[760px] text-sm"><thead className="bg-[var(--admin-v2-surface-muted)] text-left text-xs text-[var(--admin-v2-text-muted)]"><tr>{columns.map(([, label]) => <th key={label} className="h-9 whitespace-nowrap px-3 font-medium">{label}</th>)}{detailBase ? <th className="h-9 px-3 font-medium">操作</th> : null}</tr></thead><tbody className="divide-y divide-[var(--admin-v2-border)]">{rows.map((row, index) => <tr key={String(row.id ?? index)} className="hover:bg-[var(--admin-v2-surface-muted)]">{columns.map(([key]) => <td key={key} className={cn("max-w-[320px] whitespace-normal px-3 py-2 text-xs [overflow-wrap:anywhere]", /(?:id|no|request)/i.test(key) && "font-mono")} title={safeText(row[key])}>{renderValue(key, row[key], moneyKeys)}</td>)}{detailBase ? <td className="px-3 py-2"><Link href={`${detailBase}/${String(row.id)}`} className="inline-flex min-h-11 items-center text-xs font-medium text-[var(--admin-v2-primary)] hover:underline sm:min-h-0">查看</Link></td> : null}</tr>)}</tbody></table></div>; }
+function RecordList({ rows, columns, moneyKeys = [], detailBase, icon }: { rows: Row[]; columns: [string, string][]; moneyKeys?: string[]; detailBase?: string; icon?: React.ReactNode }) {
+  if (!rows.length) return <AdminEmptyState icon={icon} title="暂无记录" className="min-h-[160px]" />;
+  return (
+    <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+      <div className={cn(v2Styles.tableSurface, "w-full")}>
+        <table className="w-full min-w-[760px] text-sm">
+          <thead className="bg-[var(--admin-v2-surface-muted)] text-left text-xs text-[var(--admin-v2-text-muted)]"><tr>{columns.map(([, label]) => <th key={label} className="h-9 whitespace-nowrap px-3 font-medium">{label}</th>)}{detailBase ? <th className="h-9 px-3 font-medium">操作</th> : null}</tr></thead>
+          <tbody className="divide-y divide-[var(--admin-v2-border)]">{rows.map((row, index) => <tr key={String(row.id ?? index)} className="hover:bg-[var(--admin-v2-surface-muted)]">{columns.map(([key]) => <td key={key} className={cn("max-w-[320px] whitespace-normal px-3 py-2 text-xs [overflow-wrap:anywhere]", /(?:id|no|request)/i.test(key) && "font-mono")} title={safeText(row[key])}>{renderValue(key, row[key], moneyKeys)}</td>)}{detailBase ? <td className="px-3 py-2"><Link href={`${detailBase}/${String(row.id)}`} className="inline-flex min-h-11 items-center text-xs font-medium text-[var(--admin-v2-primary)] hover:underline sm:min-h-0">查看</Link></td> : null}</tr>)}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 function Notice({ children }: { children: React.ReactNode }) { return <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">{children}</div>; }
 function renderValue(key: string, value: unknown, moneyKeys: string[]) { if (moneyKeys.includes(key)) return money(value); if (/(?:At|_at)$/.test(key)) return formatDate(typeof value === "string" ? value : null); return safeText(value); }
 function safeText(value: unknown) { if (value === null || value === undefined || value === "") return "—"; return typeof value === "string" ? value : String(value); }

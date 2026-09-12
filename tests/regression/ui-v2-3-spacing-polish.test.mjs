@@ -9,11 +9,16 @@ function file(path) {
 
 test("checkout keeps a compact purchase column and aligns product detail surfaces", () => {
   const checkout = file("app/checkout/page.tsx");
+  const publicSidebar = file("components/layout/PublicSidebar.tsx");
 
-  assert.match(checkout, /--checkout-purchase-width:clamp\(336px,calc\(24vw-4px\),368px\)/);
+  assert.match(checkout, /--checkout-purchase-width:clamp\(332px,calc\(24vw-8px\),364px\)/);
+  assert.match(publicSidebar, /py-2\.5 text-sm font-medium/);
   assert.match(checkout, /<label className="mb-1\.5 block text-sm font-medium">\s*<span className="text-red-500">\*<\/span>联系邮箱/);
   assert.match(checkout, /<label className="mb-1\.5 block text-sm font-medium">\s*提交信息或备注/);
-  assert.match(checkout, /mx-auto w-full max-w-\[1040px\]/);
+  assert.match(checkout, /data-testid="checkout-product-detail-content" className="mx-auto w-full max-w-\[1040px\]"/);
+  assert.match(checkout, /lg:\[scrollbar-gutter:stable_both-edges\]/);
+  assert.doesNotMatch(checkout, /mt-3 max-w-2xl text-sm leading-relaxed/);
+  assert.doesNotMatch(checkout, /mt-8 grid max-w-2xl/);
   assert.equal((checkout.match(/<div className="mt-8 w-full space-y-5">/g) ?? []).length, 7);
   assert.doesNotMatch(checkout, /mt-8 max-w-(?:3xl|4xl)/);
 
@@ -51,13 +56,20 @@ test("storefront allocates more desktop width to category and product content", 
 
 test("admin sidebar density and user detail width change only layout contracts", () => {
   const sidebar = file("components/admin/AdminSidebar.tsx");
+  const layout = file("components/admin/AdminLayout.tsx");
   const userDetail = file("app/admin/users/[userId]/page.tsx");
 
   assert.match(sidebar, /overflow-y-auto px-2 py-3/);
   assert.equal((sidebar.match(/min-h-10/g) ?? []).length, 3);
   assert.doesNotMatch(sidebar, /min-h-9/);
-  assert.match(userDetail, /2xl:grid-cols-\[minmax\(0,1fr\)_280px\]/);
+  assert.match(layout, /--admin-main-offset:204px/);
+  assert.match(layout, /--admin-sidebar-width:204px/);
+  assert.doesNotMatch(userDetail, /2xl:grid-cols-\[minmax\(0,1fr\)_280px\]/);
   assert.doesNotMatch(userDetail, /xl:grid-cols-\[minmax\(0,1fr\)_320px\]/);
+  assert.match(userDetail, /<aside className="grid min-w-0 gap-4 xl:grid-cols-3">/);
+  assert.match(userDetail, /<div className="px-4 pb-4 sm:px-5 sm:pb-5">/);
+  assert.match(userDetail, /v2Styles\.tableSurface, "w-full"/);
+  assert.match(userDetail, /<table className="w-full min-w-\[760px\] text-sm">/);
   assert.match(userDetail, /title="最近充值"/);
   assert.match(userDetail, /title="最近交付"/);
   assert.match(userDetail, /title="余额流水"/);

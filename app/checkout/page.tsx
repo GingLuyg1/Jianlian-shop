@@ -667,7 +667,7 @@ export default function CheckoutPage() {
   };
 
   return (
-    <PublicLayout contentClassName="mt-12 max-w-none py-4 md:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(336px,calc(24vw-4px),368px)]">
+    <PublicLayout contentClassName="mt-12 max-w-none py-4 md:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(332px,calc(24vw-8px),364px)]">
       <div data-testid="checkout-layout" className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
         <ProductDetailCard
           product={product}
@@ -1159,8 +1159,8 @@ function ProductDetailCard({
       >
         <X className="h-4 w-4" />
       </button>
-      <CardContent className="h-auto p-6 lg:h-full lg:overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1040px]">
+      <CardContent className="h-auto p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]">
+        <div data-testid="checkout-product-detail-content" className="mx-auto w-full max-w-[1040px]">
         <div className="mb-5 text-sm font-medium text-muted-foreground">
           {product.categoryLabel}
         </div>
@@ -1172,11 +1172,11 @@ function ProductDetailCard({
 
           <div className="min-w-0">
             <h1 className="text-2xl font-bold">{product.name}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-3 w-full text-sm leading-relaxed text-muted-foreground">
               {product.description}
             </p>
 
-            <div className="mt-8 grid max-w-2xl grid-cols-1 gap-4 rounded-xl border border-border bg-white p-5 sm:grid-cols-2">
+            <div className="mt-8 grid w-full grid-cols-1 gap-4 rounded-xl border border-border bg-white p-5 sm:grid-cols-2">
               <DetailMetric label="商品分类" value={product.categoryLabel} />
               <DetailMetric label="商品单价" value={priceLabel} highlight />
               <DetailMetric

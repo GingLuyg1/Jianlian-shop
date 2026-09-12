@@ -442,7 +442,7 @@ export default function ProductDetailPage() {
           >
             <main
               data-testid="product-detail-left"
-              className="min-h-0 min-w-0 space-y-5 overflow-visible px-1 sidebar-scroll md:h-full md:overflow-x-hidden md:overflow-y-auto"
+              className="min-h-0 min-w-0 space-y-5 overflow-visible px-1 sidebar-scroll md:h-full md:overflow-x-hidden md:overflow-y-auto md:[scrollbar-gutter:stable_both-edges]"
             >
               <button
                 type="button"
