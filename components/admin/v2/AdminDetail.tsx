@@ -6,6 +6,7 @@ import { useRef, type ReactNode } from "react";
 import { ArrowLeft, ArrowUpRight, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import v2Styles from "@/components/admin/v2/AdminV2.module.css";
 
 export function AdminDetailBackLink({ href, children }: { href: string; children: ReactNode }) {
   return (
@@ -99,7 +100,7 @@ export function AdminDetailDrawer({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/30" />
         <DialogPrimitive.Content
-          className={cn("fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-[820px] flex-col overflow-hidden border-l border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-xl focus:outline-none", className)}
+          className={cn(v2Styles.scope, "fixed inset-y-0 right-0 z-[60] isolate flex h-dvh w-full max-w-[820px] flex-col overflow-hidden border-l border-[var(--admin-v2-border)] bg-white shadow-xl focus:outline-none", className)}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             closeButtonRef.current?.focus();
@@ -109,7 +110,7 @@ export function AdminDetailDrawer({
             returnFocusRef.current?.focus();
           }}
         >
-          <header className="sticky top-0 z-10 flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] px-4 py-3 sm:px-5">
+          <header className="sticky top-0 z-10 flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--admin-v2-border)] bg-white px-4 py-3 sm:px-5">
             <div className="min-w-0 flex-1">
               {eyebrow ? <div className="text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{eyebrow}</div> : null}
               <DialogPrimitive.Title className="mt-0.5 text-lg font-semibold leading-7 text-[var(--admin-v2-text-primary)] [overflow-wrap:anywhere]">{title}</DialogPrimitive.Title>
@@ -124,7 +125,7 @@ export function AdminDetailDrawer({
               <X className="h-4 w-4" />
             </DialogPrimitive.Close>
           </header>
-          <div data-admin-detail-scroll className="min-h-0 flex-1 overscroll-contain overflow-y-auto overflow-x-hidden p-4 sm:p-5">{children}</div>
+          <div data-admin-detail-scroll className="min-h-0 flex-1 overscroll-contain overflow-y-auto overflow-x-hidden bg-slate-50 p-4 sm:p-5">{children}</div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

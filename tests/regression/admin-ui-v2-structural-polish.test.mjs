@@ -49,10 +49,13 @@ test("Detail drawers own their scroll and payment and recharge share one informa
   const payments = file("components/admin/payments/AdminPaymentRecordsPage.tsx");
 
   assert.match(detail, /h-dvh[\s\S]*overflow-hidden/);
+  assert.match(detail, /DialogPrimitive\.Overlay className="fixed inset-0 z-50/);
+  assert.match(detail, /DialogPrimitive\.Content[\s\S]*v2Styles\.scope[\s\S]*z-\[60\][\s\S]*isolate[\s\S]*bg-white/);
   assert.match(detail, /sticky top-0 z-10/);
   assert.match(detail, /data-admin-detail-scroll/);
-  assert.match(detail, /overscroll-contain overflow-y-auto overflow-x-hidden/);
+  assert.match(detail, /overscroll-contain overflow-y-auto overflow-x-hidden bg-slate-50/);
   assert.match(payments, /DrawerSummaryItem/);
+  assert.match(payments, /function DetailGroup[\s\S]*border border-\[var\(--admin-v2-border\)\] bg-white/);
   assert.match(payments, /title="关键字段"/);
   assert.match(payments, /title="关联业务"/);
   assert.match(payments, /isRechargePage \? <DetailGroup title="金额与汇率"/);
