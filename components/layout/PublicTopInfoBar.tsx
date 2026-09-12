@@ -221,7 +221,7 @@ export default function PublicTopInfoBar({
 
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-[#fcf8f3]/90 backdrop-blur-sm">
-      <div className="mx-auto grid h-[62px] max-w-[1540px] -translate-x-0.5 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 px-4 md:px-3 xl:grid-cols-[minmax(0,1fr)_142px_150px]">
+      <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 px-[var(--storefront-content-padding-x)] xl:grid-cols-[minmax(0,1fr)_142px_150px]">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
             <div className="flex h-9 items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60">
