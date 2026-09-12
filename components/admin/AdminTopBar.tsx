@@ -36,7 +36,7 @@ export default function AdminTopBar() {
   }, [pathname, routeGroup]);
 
   return (
-    <div className="sticky top-0 z-30 flex h-[var(--admin-header-height)] min-w-0 shrink-0 items-center border-b border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] px-3 sm:px-4 lg:px-5">
+    <div className="sticky top-0 z-30 flex h-[var(--admin-header-height)] min-w-0 shrink-0 items-center border-b border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] px-3 sm:px-4 lg:[padding-inline:var(--admin-content-padding-x)]">
       <div className="flex min-w-0 w-full items-center justify-between gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>

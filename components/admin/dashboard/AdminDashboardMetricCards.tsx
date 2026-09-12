@@ -20,25 +20,28 @@ type AdminMetricTrendCardProps = MetricCardBaseProps & {
 
 type AdminMetricValueCardProps = MetricCardBaseProps & {
   tone?: "neutral" | "warning" | "danger";
+  compact?: boolean;
 };
 
-function metricSurfaceClassName(interactive: boolean) {
+function metricSurfaceClassName(interactive: boolean, compact = false) {
   return cn(
-    "block min-w-0 rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-none",
-    interactive && "group transition-colors duration-150 hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-offset-2",
+    "block min-w-0 bg-[var(--admin-v2-surface)] shadow-none",
+    compact ? "h-full" : "rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)]",
+    interactive && "group transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-offset-2",
+    interactive && (compact ? "hover:bg-[var(--admin-v2-selected)]" : "hover:border-blue-300"),
   );
 }
 
-function MetricSurface({ href, children }: { href?: string; children: ReactNode }) {
+function MetricSurface({ href, children, compact = false }: { href?: string; children: ReactNode; compact?: boolean }) {
   if (href) {
     return (
-      <Link href={href} className={metricSurfaceClassName(true)}>
+      <Link href={href} className={metricSurfaceClassName(true, compact)}>
         {children}
       </Link>
     );
   }
 
-  return <div className={metricSurfaceClassName(false)}>{children}</div>;
+  return <div className={metricSurfaceClassName(false, compact)}>{children}</div>;
 }
 
 export function AdminMetricTrendCard({
@@ -52,7 +55,7 @@ export function AdminMetricTrendCard({
 }: AdminMetricTrendCardProps) {
   return (
     <MetricSurface href={href}>
-      <div className="flex min-h-[126px] flex-col px-3 py-3 sm:px-3.5">
+      <div className="flex min-h-[112px] flex-col px-3 py-2.5 sm:px-3.5">
         <div className="truncate text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{label}</div>
         <div className="mt-1 truncate text-[22px] font-semibold leading-7 tracking-tight text-[var(--admin-v2-text-primary)]">
           {loading ? "..." : value}
@@ -77,6 +80,7 @@ export function AdminMetricValueCard({
   href,
   loading = false,
   tone = "neutral",
+  compact = false,
 }: AdminMetricValueCardProps) {
   const dotTone = {
     neutral: "bg-slate-300",
@@ -85,13 +89,13 @@ export function AdminMetricValueCard({
   }[tone];
 
   return (
-    <MetricSurface href={href}>
-      <div className="flex min-h-[92px] flex-col justify-between px-3 py-3 sm:px-3.5">
+    <MetricSurface href={href} compact={compact}>
+      <div className={cn("flex flex-col justify-between px-3 py-2.5 sm:px-3.5", compact ? "min-h-[68px]" : "min-h-[92px]")}>
         <div className="flex min-w-0 items-center gap-2">
           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotTone)} aria-hidden="true" />
           <div className="truncate text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{label}</div>
         </div>
-        <div className="mt-1 truncate text-xl font-semibold leading-7 text-[var(--admin-v2-text-primary)]">
+        <div className={cn("mt-0.5 truncate font-semibold text-[var(--admin-v2-text-primary)]", compact ? "text-lg leading-6" : "text-xl leading-7")}>
           {loading ? "..." : value}
         </div>
         <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[11px] leading-4 text-[var(--admin-v2-text-muted)]">

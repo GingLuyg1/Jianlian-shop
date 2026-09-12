@@ -46,9 +46,11 @@ test("desktop and mobile admin navigation use one production menu contract", () 
   assert.match(navigationState, /currentGroup === requestedGroup \? null : requestedGroup/);
 
   assert.match(layout, /\[--admin-sidebar-width:204px\]/);
+  assert.match(layout, /\[--admin-main-offset:204px\]/);
+  assert.match(layout, /\[--admin-content-padding-x:16px\]/);
   assert.doesNotMatch(layout, /lg:gap-4/);
-  assert.match(layout, /relative hidden h-full pr-4 lg:flex/);
-  assert.match(layout, /h-\[var\(--admin-header-height\)\] w-4 border-b border-slate-200 bg-white/);
+  assert.match(layout, /hidden h-full w-\[var\(--admin-main-offset\)\] shrink-0 lg:flex/);
+  assert.doesNotMatch(layout, /pr-4 lg:flex|h-\[var\(--admin-header-height\)\] w-4/);
   assert.match(sidebar, /w-\[var\(--admin-sidebar-width\)\]/);
   assert.match(sidebar, /min-w-0 flex-1 whitespace-nowrap/);
   assert.match(sidebar, /ml-auto h-4 w-4 shrink-0 transition-transform/);
@@ -82,7 +84,8 @@ test("Admin V2 sidebar and topbar use scoped tokens without fake notification UI
 
   assert.match(layout, /\[--admin-header-height:62px\]/);
   assert.match(layout, /\[--admin-sidebar-width:204px\]/);
-  assert.match(layout, /relative hidden h-full pr-4 lg:flex/);
+  assert.match(layout, /\[--admin-main-offset:204px\]/);
+  assert.match(layout, /hidden h-full w-\[var\(--admin-main-offset\)\] shrink-0 lg:flex/);
   assert.match(sidebar, /w-\[var\(--admin-sidebar-width\)\]/);
   assert.match(topBar, /h-\[var\(--admin-header-height\)\]/);
   assert.match(topBar, /SheetContent side="left" className=\{cn\(v2Styles\.scope, "w-64/);

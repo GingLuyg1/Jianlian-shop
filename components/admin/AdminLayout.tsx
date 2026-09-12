@@ -14,12 +14,8 @@ interface AdminLayoutProps {
 
 function AdminShell({ children }: AdminLayoutProps) {
   return (
-    <div className={cn(v2Styles.scope, "fixed inset-0 flex h-screen max-h-screen min-h-0 w-full overflow-hidden bg-[var(--admin-v2-background)] text-[var(--admin-v2-text-primary)] [--admin-header-height:62px] [--admin-sidebar-width:204px]")}>
-      <div className="relative hidden h-full pr-4 lg:flex">
-        <div
-          aria-hidden="true"
-          className="absolute right-0 top-0 h-[var(--admin-header-height)] w-4 border-b border-slate-200 bg-white"
-        />
+    <div className={cn(v2Styles.scope, "fixed inset-0 flex h-screen max-h-screen min-h-0 w-full overflow-hidden bg-[var(--admin-v2-background)] text-[var(--admin-v2-text-primary)] [--admin-content-padding-x:16px] [--admin-header-height:62px] [--admin-main-offset:204px] [--admin-sidebar-width:204px]")}>
+      <div className="hidden h-full w-[var(--admin-main-offset)] shrink-0 lg:flex">
         <AdminSidebar />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -33,7 +29,7 @@ function AdminShell({ children }: AdminLayoutProps) {
 function AdminLayoutSkeleton() {
   return (
     <AdminShell>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 lg:px-5 lg:py-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 lg:[padding-inline:var(--admin-content-padding-x)] lg:py-4">
         <div className="mb-3 shrink-0">
           <div className="h-6 w-40 animate-pulse rounded bg-slate-200" />
           <div className="mt-2 h-3 w-72 animate-pulse rounded bg-slate-200" />

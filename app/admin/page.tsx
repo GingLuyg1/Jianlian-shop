@@ -738,6 +738,7 @@ export default function AdminDashboardPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="经营数据驾驶舱"
       description="集中查看订单、支付、充值、商品、用户和系统状态。未接入的数据会明确标记，不使用模拟数据。"
       actions={
@@ -767,7 +768,7 @@ export default function AdminDashboardPage() {
             <div className="grid grid-cols-1 gap-2 min-[430px]:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
               {loading && !data
                 ? Array.from({ length: 7 }).map((_, index) => (
-                  <div key={index} className="h-[126px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
+                  <div key={index} className="h-[112px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
                 ))
                 : data?.trendMetrics.map((metric) => (
                   <AdminMetricTrendCard
@@ -784,15 +785,15 @@ export default function AdminDashboardPage() {
             </div>
           </section>
 
-          <section className="shrink-0" aria-labelledby="dashboard-status-metrics">
-            <div className="mb-2">
+          <section className="shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]" aria-labelledby="dashboard-status-metrics">
+            <div className="flex items-center justify-between border-b border-[var(--admin-v2-border)] px-3 py-2 sm:px-4">
               <h2 id="dashboard-status-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">运营状态</h2>
-              <p className="text-xs text-[var(--admin-v2-text-muted)]">待处理、异常与库存状态保持数字展示。</p>
+              <p className="hidden text-xs text-[var(--admin-v2-text-muted)] sm:block">待处理、异常与库存状态</p>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5">
               {loading && !data
                 ? Array.from({ length: 5 }).map((_, index) => (
-                  <div key={index} className="h-[92px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
+                  <div key={index} className="h-[68px] animate-pulse bg-[var(--admin-v2-surface-muted)]" />
                 ))
                 : data?.statusMetrics.map((metric) => (
                   <AdminMetricValueCard
@@ -804,6 +805,7 @@ export default function AdminDashboardPage() {
                     href={metric.href}
                     loading={loading}
                     tone={metric.tone === "red" ? "danger" : metric.tone === "orange" ? "warning" : "neutral"}
+                    compact
                   />
                 ))}
             </div>
@@ -841,20 +843,20 @@ export default function AdminDashboardPage() {
             </Card>
           </div>
 
-          <Card className="shrink-0 overflow-hidden border-[var(--admin-v2-border)] shadow-none">
-            <CardHeader className="px-4 py-3">
-              <CardTitle className="text-base">待办中心</CardTitle>
-              <p className="mt-1 text-xs text-slate-500">数字为近 30 天快照；点击查看当前完整队列。</p>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2 px-4 pb-4 pt-0 md:grid-cols-4 xl:grid-cols-8">
+          <section className="shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--admin-v2-border)] px-4 py-2.5">
+              <h2 className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">待办中心</h2>
+              <p className="text-xs text-[var(--admin-v2-text-muted)]">数字为近 30 天快照；点击查看当前完整队列。</p>
+            </div>
+            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-4 xl:grid-cols-8">
               {(data?.todos ?? []).map((todo) => (
                 <TodoLink key={todo.label} item={todo} />
               ))}
               {!data && loading
-                ? Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-16 animate-pulse rounded-xl bg-slate-100" />)
+                ? Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-14 animate-pulse bg-slate-100" />)
                 : null}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           <div className="grid min-h-[300px] grid-cols-1 gap-3 xl:grid-cols-3">
             <ProductListCard title="销量排行" rows={data?.salesRank ?? []} type="sales" loading={loading} />
@@ -986,7 +988,7 @@ function ChannelRow({ channel, loading }: { channel: ChannelStat; loading: boole
   const statusText = channel.configured === null ? NOT_CONNECTED : channel.enabled ? "已启用" : channel.configured ? "已停用" : "未配置";
   const successRate = formatPercent(channel.successful, channel.initiated);
   return (
-    <Link href={`/admin/payments?channel=${channel.code}`} className="block rounded-xl border p-3 transition hover:border-orange-200 hover:bg-orange-50/30">
+    <Link href={`/admin/payments?channel=${channel.code}`} className="block rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3 transition-colors hover:border-blue-200 hover:bg-[var(--admin-v2-selected)]">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-slate-900">{channel.label}</div>
@@ -1019,9 +1021,9 @@ function MiniStat({ label, value, danger }: { label: string; value: MetricValue;
 function TodoLink({ item }: { item: TodoItem }) {
   const urgent = Number(item.value ?? 0) > 0;
   return (
-    <Link href={item.href} className={`cursor-pointer rounded-xl border px-3 py-2 transition hover:border-orange-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 ${urgent ? "bg-orange-50 text-orange-700" : "bg-white text-slate-500"}`}>
+    <Link href={item.href} className={`min-h-14 cursor-pointer bg-white px-3 py-2 transition-colors hover:bg-[var(--admin-v2-selected)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--admin-v2-primary)] ${urgent ? "text-[var(--admin-v2-danger-foreground)]" : "text-[var(--admin-v2-text-muted)]"}`}>
       <div className="truncate text-xs">{item.label}</div>
-      <div className={`mt-1 text-xl font-semibold ${urgent ? "text-orange-700" : "text-slate-400"}`}>{item.value ?? NOT_CONNECTED}</div>
+      <div className={`mt-0.5 text-lg font-semibold leading-6 ${urgent ? "text-[var(--admin-v2-danger-foreground)]" : "text-[var(--admin-v2-text-secondary)]"}`}>{item.value ?? NOT_CONNECTED}</div>
     </Link>
   );
 }
