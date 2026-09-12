@@ -49,8 +49,8 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
 
   return (
     <div className={viewportLocked
-      ? "h-dvh overflow-hidden bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px] lg:[--storefront-main-offset:204px] lg:[--storefront-sidebar-width:204px]"
-      : "min-h-screen overflow-x-hidden bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px] lg:[--storefront-main-offset:204px] lg:[--storefront-sidebar-width:204px]"}>
+      ? "h-dvh overflow-hidden bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px] lg:[--storefront-main-offset:192px] lg:[--storefront-sidebar-width:192px]"
+      : "min-h-screen overflow-x-hidden bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px] lg:[--storefront-main-offset:192px] lg:[--storefront-sidebar-width:192px]"}>
       <RouteLoadingIndicator />
       <PublicSidebar supportHref={supportHref} />
 

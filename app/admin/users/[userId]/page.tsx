@@ -65,7 +65,7 @@ export default function AdminUserDetailPage() {
               <AdminInfoGrid columns={3}><AdminInfoItem label="当前余额" value={money(detail.summary.balance)} className="tabular-nums" /><AdminInfoItem label="角色" value={profile.role} /><AdminInfoItem label="最近活动" value={formatDate(profile.lastLoginAt)} /></AdminInfoGrid>
             </AdminSection>
 
-            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_280px]">
               <div className="min-w-0 space-y-4">
                 <AdminSection title="基本资料" description="用户身份与账户事实"><AdminInfoGrid columns={3}><AdminInfoItem label="用户 ID" value={profile.id} mono /><AdminInfoItem label="邮箱" value={profile.email ?? "—"} /><AdminInfoItem label="显示名称" value={profile.displayName ?? "—"} /><AdminInfoItem label="角色" value={profile.role} /><AdminInfoItem label="注册时间" value={formatDate(profile.createdAt)} /><AdminInfoItem label="资料更新时间" value={formatDate(profile.updatedAt)} /></AdminInfoGrid></AdminSection>
 

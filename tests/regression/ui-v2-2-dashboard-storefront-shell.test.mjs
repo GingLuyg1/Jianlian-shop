@@ -44,8 +44,8 @@ test("Storefront shell shares responsive sidebar and main offset tokens", () => 
   assert.match(layout, /--storefront-sidebar-width:160px/);
   assert.match(layout, /md:\[--storefront-main-offset:176px\]/);
   assert.match(layout, /md:\[--storefront-sidebar-width:176px\]/);
-  assert.match(layout, /lg:\[--storefront-main-offset:204px\]/);
-  assert.match(layout, /lg:\[--storefront-sidebar-width:204px\]/);
+  assert.match(layout, /lg:\[--storefront-main-offset:192px\]/);
+  assert.match(layout, /lg:\[--storefront-sidebar-width:192px\]/);
   assert.match(layout, /md:ml-\[var\(--storefront-main-offset\)\]/);
   assert.match(layout, /paddingInline: "var\(--storefront-content-padding-x\)"/);
   assert.match(sidebar, /w-\[var\(--storefront-sidebar-width\)\]/);
@@ -57,7 +57,7 @@ test("Storefront shell shares responsive sidebar and main offset tokens", () => 
 test("Checkout purchase panel is compact and keeps the order contract intact", () => {
   const checkout = file("app/checkout/page.tsx");
 
-  assert.match(checkout, /--checkout-purchase-width:clamp\(340px,24vw,372px\)/);
+  assert.match(checkout, /--checkout-purchase-width:clamp\(336px,calc\(24vw-4px\),368px\)/);
   assert.match(checkout, /lg:grid-cols-\[minmax\(0,1fr\)_var\(--checkout-purchase-width\)\]/);
   assert.match(checkout, /py-4/);
   assert.match(checkout, /lg:h-\[calc\(100dvh-62px\)\]/);

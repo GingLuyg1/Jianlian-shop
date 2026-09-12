@@ -438,11 +438,11 @@ export default function ProductDetailPage() {
         ) : (
           <div
             data-testid="product-detail-grid"
-            className={`grid gap-5 overflow-visible md:min-h-0 md:overflow-hidden lg:grid-cols-[minmax(0,1fr)_390px] lg:items-stretch ${publicMainPanelHeightClassName}`}
+            className={`grid gap-5 overflow-visible md:min-h-0 md:overflow-hidden lg:grid-cols-[minmax(0,1fr)_386px] lg:items-stretch ${publicMainPanelHeightClassName}`}
           >
             <main
               data-testid="product-detail-left"
-              className="min-h-0 min-w-0 space-y-5 overflow-visible pr-1 sidebar-scroll md:h-full md:overflow-x-hidden md:overflow-y-auto"
+              className="min-h-0 min-w-0 space-y-5 overflow-visible px-1 sidebar-scroll md:h-full md:overflow-x-hidden md:overflow-y-auto"
             >
               <button
                 type="button"

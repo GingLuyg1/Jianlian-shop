@@ -5,13 +5,13 @@ export const mallContentClassName =
   "max-w-none px-4 md:px-6 py-3 overflow-hidden";
 
 export const mallShellClassName =
-  "grid h-[calc(100dvh-87px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[270px_minmax(0,1fr)]";
+  "grid h-[calc(100dvh-87px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[280px_minmax(0,1fr)]";
 
 export const categoryListScrollClassName =
   "scroll-fade-y min-h-0 flex-1 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll";
 
 export const categoryPanelInnerClassName =
-  "flex h-full min-h-0 flex-col rounded-xl bg-gradient-to-b from-orange-50/55 to-white p-3";
+  "flex h-full min-h-0 flex-col rounded-xl bg-gradient-to-b from-orange-50/55 to-white";
 
 export const productPanelContentClassName =
   "flex h-full min-h-0 flex-col overflow-hidden p-4";

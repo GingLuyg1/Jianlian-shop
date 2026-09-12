@@ -343,7 +343,7 @@ function CategoryPanel({
   onSelectCategory: (category: DisplayCategory) => void;
 }) {
   return (
-    <Card className="relative h-full min-h-0 overflow-hidden">
+    <Card data-testid="storefront-secondary-categories" className="relative h-full min-h-0 overflow-hidden">
       <CardContent className="h-full min-h-0 p-4">
         <div className={categoryPanelInnerClassName}>
           <div className={categoryListScrollClassName}>
@@ -464,7 +464,7 @@ function ProductPanel({
   onSearchSubmit: () => void;
 }) {
   return (
-    <Card className="h-full min-h-0 overflow-hidden">
+    <Card data-testid="storefront-product-list" className="h-full min-h-0 overflow-hidden">
       <CardContent className={productPanelContentClassName}>
         <div ref={productListTopRef} className="mb-3 flex flex-col justify-between gap-3 xl:flex-row xl:items-start">
           <div className="min-w-0">

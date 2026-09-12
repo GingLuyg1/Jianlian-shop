@@ -667,20 +667,20 @@ export default function CheckoutPage() {
   };
 
   return (
-    <PublicLayout contentClassName="mt-12 max-w-none py-4 md:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(340px,24vw,372px)]">
-      <div className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
+    <PublicLayout contentClassName="mt-12 max-w-none py-4 md:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(336px,calc(24vw-4px),368px)]">
+      <div data-testid="checkout-layout" className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
         <ProductDetailCard
           product={product}
           priceLabel={priceLabel}
           closeHref={getProductListHref(product)}
         />
 
-        <Card className="h-auto min-h-0 overflow-hidden lg:h-full">
+        <Card data-testid="checkout-purchase-panel" className="h-auto min-h-0 overflow-hidden lg:h-full">
           <CardContent className="flex h-full min-h-0 flex-col p-0">
             <div className="min-h-0 flex-1 bg-white p-4 lg:overflow-y-auto">
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium">
+                  <label className="mb-1.5 block text-sm font-medium">
                     <span className="text-red-500">*</span>联系邮箱
                   </label>
                   <Input
@@ -693,7 +693,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium">
+                  <label className="mb-1.5 block text-sm font-medium">
                     提交信息或备注
                   </label>
                   <Input
@@ -1148,7 +1148,7 @@ function ProductDetailCard({
   closeHref: string;
 }) {
   return (
-    <Card className="relative h-auto min-h-0 overflow-hidden lg:h-full">
+    <Card data-testid="checkout-product-detail" className="relative h-auto min-h-0 overflow-hidden lg:h-full">
       <button
         type="button"
         className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground"
@@ -1160,6 +1160,7 @@ function ProductDetailCard({
         <X className="h-4 w-4" />
       </button>
       <CardContent className="h-auto p-6 lg:h-full lg:overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1040px]">
         <div className="mb-5 text-sm font-medium text-muted-foreground">
           {product.categoryLabel}
         </div>
@@ -1204,7 +1205,7 @@ function ProductDetailCard({
         ) : product.id.startsWith("dig-apple-id-") ? (
           <AppleIdDetails product={product} />
         ) : (
-          <div className="mt-8 max-w-3xl">
+          <div className="mt-8 w-full">
             <h2 className="mb-3 text-base font-semibold">商品详情</h2>
             <p className="text-sm leading-7 text-muted-foreground">
               {product.detail || product.description}
@@ -1216,6 +1217,7 @@ function ProductDetailCard({
             </div>
           </div>
         )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -1283,7 +1285,7 @@ function AppleGiftCardDetails({ product }: { product: Product }) {
   ];
 
   return (
-    <div className="mt-8 max-w-4xl space-y-5">
+    <div className="mt-8 w-full space-y-5">
       <section className="overflow-hidden rounded-2xl border border-orange-200 bg-white">
         <div className="relative bg-gradient-to-br from-orange-500 via-orange-600 to-amber-700 px-6 py-8 text-white">
           <div className="inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold">
@@ -1443,7 +1445,7 @@ function GiffgaffTopupDetails({ product }: { product: Product }) {
   ];
 
   return (
-    <div className="mt-8 max-w-4xl space-y-5">
+    <div className="mt-8 w-full space-y-5">
       <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-5">
         <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-orange-700">
           Giffgaff | 16位卡密充值
@@ -1625,7 +1627,7 @@ function AppleIdDetails({ product }: { product: Product }) {
   ];
 
   return (
-    <div className="mt-8 max-w-4xl space-y-5">
+    <div className="mt-8 w-full space-y-5">
       <section className="overflow-hidden rounded-2xl border border-sky-200 bg-white">
         <div className="relative bg-gradient-to-br from-sky-500 via-blue-600 to-blue-900 px-6 py-8 text-white">
           <div className="inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold">
@@ -1806,7 +1808,7 @@ function GptRechargeDetails({ product }: { product: Product }) {
   ];
 
   return (
-    <div className="mt-8 max-w-4xl space-y-5">
+    <div className="mt-8 w-full space-y-5">
       <section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
         <div className="inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700">
           ChatGPT Plus | CDK 自动充值
@@ -1970,7 +1972,7 @@ function GrokRechargeDetails({ product }: { product: Product }) {
   ];
 
   return (
-    <div className="mt-8 max-w-4xl space-y-5">
+    <div className="mt-8 w-full space-y-5">
       <section className="rounded-2xl border border-sky-200 bg-sky-50/70 p-5">
         <div className="inline-flex rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
           Grok Super | CDK 自动充值
@@ -2144,7 +2146,7 @@ function ClaudeRechargeDetails({ product }: { product: Product }) {
   ];
 
   return (
-    <div className="mt-8 max-w-4xl space-y-5">
+    <div className="mt-8 w-full space-y-5">
       <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-5">
         <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-orange-700">
           Claude | CDK 自动充值
@@ -2334,7 +2336,7 @@ function GeminiRechargeDetails({ product }: { product: Product }) {
   ];
 
   return (
-    <div className="mt-8 max-w-4xl space-y-5">
+    <div className="mt-8 w-full space-y-5">
       <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-5">
         <div className="inline-flex rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-semibold text-indigo-700">
           Gemini | Google One Pro 自助激活
