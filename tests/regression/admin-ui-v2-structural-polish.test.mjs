@@ -56,6 +56,7 @@ test("Detail drawers own their scroll and payment and recharge share one informa
   assert.match(detail, /overscroll-contain overflow-y-auto overflow-x-hidden bg-slate-50/);
   assert.match(payments, /DrawerSummaryItem/);
   assert.match(payments, /function DetailGroup[\s\S]*border border-\[var\(--admin-v2-border\)\] bg-white/);
+  assert.match(payments, /function CallbackRecords[\s\S]*border border-\[var\(--admin-v2-border\)\] bg-white/);
   assert.match(payments, /title="关键字段"/);
   assert.match(payments, /title="关联业务"/);
   assert.match(payments, /isRechargePage \? <DetailGroup title="金额与汇率"/);
