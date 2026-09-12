@@ -36,8 +36,15 @@ test("storefront allocates more desktop width to category and product content", 
   assert.match(layout, /lg:\[--storefront-main-offset:192px\]/);
   assert.match(layout, /--storefront-content-padding-x:16px/);
   assert.match(boundary, /mallShellClassName/);
-  assert.match(productUi, /lg:grid-cols-\[280px_minmax\(0,1fr\)\]/);
+  assert.match(productUi, /gap-4[^"\r\n]*lg:grid-cols-\[240px_minmax\(0,1fr\)\]/);
+  assert.doesNotMatch(productUi, /lg:grid-cols-\[(?:249|2[5-9]\d|[3-9]\d\d)px_/);
+  assert.match(productUi, /categoryListScrollClassName =\s*\r?\n\s*"[^"]*px-1 py-1[^"]*"/);
+  assert.match(productUi, /productListFiveRowsClassName =\s*\r?\n\s*"[^"]*w-full[^"]*px-1\.5 py-1 pr-2[^"]*"/);
+  assert.doesNotMatch(productUi, /w-\[calc\(100%-18px\)\]/);
   assert.match(productUi, /categoryPanelInnerClassName =\s*\r?\n\s*"[^"]*to-white"/);
+  assert.match(file("components/products/SupabaseMallContent.tsx"), /data-testid="storefront-secondary-categories"[\s\S]{0,160}<CardContent className="h-full min-h-0 p-3">/);
+  assert.match(productUi, /productPanelContentClassName =\s*\r?\n\s*"[^"]*p-4"/);
+  assert.match(productUi, /compactProductRowClassName =\s*\r?\n\s*"[^"]*px-5 py-3[^"]*"/);
   assert.match(productDetail, /lg:grid-cols-\[minmax\(0,1fr\)_386px\]/);
   assert.match(productDetail, /data-testid="product-detail-left"[\s\S]{0,180}overflow-visible px-1/);
 });

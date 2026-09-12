@@ -344,7 +344,7 @@ function CategoryPanel({
 }) {
   return (
     <Card data-testid="storefront-secondary-categories" className="relative h-full min-h-0 overflow-hidden">
-      <CardContent className="h-full min-h-0 p-4">
+      <CardContent className="h-full min-h-0 p-3">
         <div className={categoryPanelInnerClassName}>
           <div className={categoryListScrollClassName}>
             {categories.length === 0 && !isLoading ? (
