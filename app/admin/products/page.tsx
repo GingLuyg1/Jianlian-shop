@@ -3,6 +3,7 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +37,7 @@ import {
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminSupplierBindingSheet from "@/components/admin/suppliers/AdminSupplierBindingSheet";
+import { getSupplierUiDefinition } from "@/components/admin/suppliers/supplier-ui-registry";
 import {
   createCategory,
   createProduct,
@@ -237,13 +239,12 @@ export default function AdminProductsPage() {
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatus | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryType | "all">("all");
   const [stockFilter, setStockFilter] = useState<"all" | "low">(searchParams.get("stockLevel") === "low" ? "low" : "all");
-  const [sortBy, setSortBy] = useState<ProductSortBy>("sort_order");
+  const [sortBy, setSortBy] = useState<ProductSortBy>("updated_at");
   const [productPageSize, setProductPageSize] = useState(DEFAULT_PRODUCT_PAGE_SIZE);
   const [productPage, setProductPage] = useState(1);
   const [isProductLoading, setIsProductLoading] = useState(false);
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [productForm, setProductForm] = useState<ProductFormState | null>(null);
   const [productInitialForm, setProductInitialForm] = useState<ProductFormState | null>(null);
@@ -256,6 +257,9 @@ export default function AdminProductsPage() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const productReadRequestRef = useRef(0);
   const productListRequestRef = useRef(0);
+  const setMessage = (message: string) => {
+    if (message) toast.success(message);
+  };
 
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -368,7 +372,6 @@ export default function AdminProductsPage() {
   }, [categoryDirty, isSaving, productDirty]);
 
   function clearNotice() {
-    setMessage("");
     setError("");
   }
 
@@ -414,6 +417,7 @@ export default function AdminProductsPage() {
       name: `${form.name} 副本`,
       slug: `${form.slug}-copy`,
       status: "draft",
+      original_price: "",
     };
     setProductInitialForm(emptyProductForm());
     setProductForm(nextForm);
@@ -530,6 +534,7 @@ export default function AdminProductsPage() {
       nextErrors.price = "售价必填，且不得小于 0";
     }
     if (
+      !form.id &&
       form.original_price.trim() &&
       (!Number.isFinite(originalPrice) || originalPrice === null || originalPrice < price)
     ) {
@@ -601,8 +606,10 @@ export default function AdminProductsPage() {
 
     setIsSaving(true);
     try {
+      const { original_price: preservedOriginalPrice, ...updatePayload } = payload;
+      void preservedOriginalPrice;
       const savedProduct = editingProductId
-        ? await updateProduct(editingProductId, payload)
+        ? await updateProduct(editingProductId, updatePayload)
         : await createProduct(payload);
       const savedForm = toProductForm(savedProduct, categoryMap, categories);
       productListRequestRef.current += 1;
@@ -702,7 +709,7 @@ export default function AdminProductsPage() {
           slug: "该分类标识已存在，请更换 slug",
         }));
       }
-      setError(text);
+      toast.error(text);
     } finally {
       setIsSaving(false);
     }
@@ -717,7 +724,7 @@ export default function AdminProductsPage() {
       mergeSavedProductIntoList(savedProduct);
       setMessage("商品状态已更新");
     } catch (statusError) {
-      setError(getErrorText(statusError, "商品状态更新失败"));
+      toast.error(getErrorText(statusError, "商品状态更新失败"));
     } finally {
       setIsProductLoading(false);
     }
@@ -731,7 +738,7 @@ export default function AdminProductsPage() {
       setMessage("商品已删除");
       await loadProducts();
     } catch (deleteError) {
-      setError(getErrorText(deleteError, "商品删除失败"));
+      toast.error(getErrorText(deleteError, "商品删除失败"));
     } finally {
       setIsProductLoading(false);
     }
@@ -745,7 +752,7 @@ export default function AdminProductsPage() {
       setMessage("分类状态已更新");
       await loadCategories();
     } catch (statusError) {
-      setError(getErrorText(statusError, "分类状态更新失败"));
+      toast.error(getErrorText(statusError, "分类状态更新失败"));
     } finally {
       setIsCategoryLoading(false);
     }
@@ -753,11 +760,11 @@ export default function AdminProductsPage() {
 
   async function performDeleteCategory(category: AdminCategory) {
     if (hasChildren(categories, category.id)) {
-      setError("该分类下还有子分类，请先删除或调整子分类");
+      toast.error("该分类下还有子分类，请先删除或调整子分类");
       return;
     }
     if (products.some((product) => product.category_id === category.id)) {
-      setError("该分类已关联当前列表商品，不能直接删除");
+      toast.error("该分类已关联当前列表商品，不能直接删除");
       return;
     }
 
@@ -768,7 +775,7 @@ export default function AdminProductsPage() {
       setMessage("分类已删除");
       await loadCategories();
     } catch (deleteError) {
-      setError(getErrorText(deleteError, "分类删除失败"));
+      toast.error(getErrorText(deleteError, "分类删除失败"));
     } finally {
       setIsCategoryLoading(false);
     }
@@ -782,7 +789,7 @@ export default function AdminProductsPage() {
     setProductStatusFilter("all");
     setDeliveryFilter("all");
     setStockFilter("all");
-    setSortBy("sort_order");
+    setSortBy("updated_at");
     setProductPageSize(DEFAULT_PRODUCT_PAGE_SIZE);
     setProductPage(1);
   }
@@ -792,9 +799,8 @@ export default function AdminProductsPage() {
     try {
       await navigator.clipboard.writeText(value);
       setMessage(successText);
-      setError("");
     } catch {
-      setError("复制失败，请手动复制");
+      toast.error("复制失败，请手动复制");
     }
   }
 
@@ -838,16 +844,14 @@ export default function AdminProductsPage() {
       )}
     >
 
-      {(message || error) && (
+      {error && (
         <div
           className={cn(
             "mb-2 shrink-0 rounded-xl border px-4 py-2 text-sm",
-            error
-              ? "border-red-200 bg-red-50 text-red-700"
-              : "border-green-200 bg-green-50 text-green-700"
+            "border-red-200 bg-red-50 text-red-700"
           )}
         >
-          {error || message}
+          {error}
         </div>
       )}
 
@@ -938,8 +942,8 @@ export default function AdminProductsPage() {
                     setProductPage(1);
                   }}
                 >
-                  <option value="sort_order">按排序</option>
                   <option value="updated_at">按更新时间</option>
+                  <option value="sort_order">按排序</option>
                 </NativeSelect>
                 <NativeSelect
                   value={stockFilter}
@@ -1136,10 +1140,8 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
     ? String(metadata.supplier_product_id)
     : "";
   if (!supplier) return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500">未绑定</Badge>;
-  if (supplier === "daju") {
-    return <div className="flex flex-col items-center gap-0.5"><Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">大橘AI</Badge>{supplierProductId ? <span className="font-mono text-[10px] text-slate-500">#{supplierProductId}</span> : null}</div>;
-  }
-  return <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">{supplier}</Badge>;
+  const definition = getSupplierUiDefinition(supplier);
+  return <div className="flex flex-col items-center gap-0.5"><Badge variant="outline" className={definition ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}>{definition?.name ?? supplier}</Badge>{supplierProductId ? <span className="font-mono text-[10px] text-slate-500">#{supplierProductId}</span> : null}</div>;
 }
 
 function ProductTable({
@@ -1167,13 +1169,12 @@ function ProductTable({
 }) {
   return (
     <div className="min-h-0 w-full flex-1 overflow-auto">
-      <Table className="w-full min-w-[1640px] table-fixed">
+      <Table className="w-full min-w-[1560px] table-fixed">
         <colgroup>
           <col className="w-[260px]" />
           <col className="w-[140px]" />
           <col className="w-[210px]" />
           <col className="w-[90px]" />
-          <col className="w-[80px]" />
           <col className="w-[75px]" />
           <col className="w-[105px]" />
           <col className="w-[120px]" />
@@ -1182,26 +1183,25 @@ function ProductTable({
           <col className="w-[165px]" />
           <col className="w-[240px]" />
         </colgroup>
-        <TableHeader className="sticky top-0 z-10 bg-slate-50">
+        <TableHeader className="sticky top-0 z-20 bg-slate-50 [&_th]:bg-slate-50">
           <TableRow>
             <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
             <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>Slug</TableHead>
             <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>原价</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>交付方式</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>供应商</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>排序</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
-            <TableHead className={cn("sticky right-0 h-10 bg-slate-50 px-3 text-right text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
+            <TableHead className={cn("sticky right-0 z-30 h-10 bg-slate-50 px-3 text-right text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12} className="h-48">
+              <TableCell colSpan={11} className="h-48">
                 <AdminEmptyState
                   className="min-h-[180px]"
                   title={hasFilters ? "没有符合条件的商品" : "暂无商品数据"}
@@ -1274,9 +1274,6 @@ function ProductTable({
                 <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
                   ¥{product.price.toFixed(2)}
                 </TableCell>
-                <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
-                  {product.original_price ? `¥${product.original_price.toFixed(2)}` : "-"}
-                </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS, product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600")}>
                   {product.stock}
                 </TableCell>
@@ -1308,7 +1305,7 @@ function ProductTable({
                     {formatAdminDate(product.updated_at)}
                   </time>
                 </TableCell>
-                <TableCell className="sticky right-0 bg-white px-3 py-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
+                <TableCell className="sticky right-0 z-10 bg-white px-3 py-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
                   <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                     <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onEdit(product)}>
                       编辑
@@ -1505,12 +1502,9 @@ function ProductFormDialog({
             </FormSection>
 
             <FormSection title="价格与库存" className="md:col-span-2">
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-3">
                 <Field label="售价" required error={errors.price}>
                   <Input type="number" min="0" step="0.01" value={form.price} onChange={(event) => onUpdate({ ...form, price: event.target.value })} />
-                </Field>
-                <Field label="原价" error={errors.original_price}>
-                  <Input type="number" min="0" step="0.01" value={form.original_price} onChange={(event) => onUpdate({ ...form, original_price: event.target.value })} />
                 </Field>
                 <Field label="库存" required error={errors.stock}>
                   <Input type="number" min="0" step="1" value={form.stock} onChange={(event) => onUpdate({ ...form, stock: event.target.value })} />

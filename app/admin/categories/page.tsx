@@ -1,8 +1,9 @@
 ﻿"use client";
 
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { Edit, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Edit, GripVertical, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
@@ -19,6 +20,7 @@ import {
   isCategoryEnabled,
   listCategories,
   listProducts,
+  reorderProducts,
   setCategoryStatus,
   setProductStatus,
   updateCategory,
@@ -235,12 +237,16 @@ export default function AdminCategoriesPage() {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [reordering, setReordering] = useState(false);
+  const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryForm | null>(null);
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
   const [productInitialForm, setProductInitialForm] = useState<ProductForm | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const setNotice = (message: string) => {
+    if (message) toast.success(message);
+  };
 
   const categoryMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
   const rootCategories = useMemo(
@@ -295,7 +301,7 @@ export default function AdminCategoriesPage() {
         search: debouncedSearch,
         categoryId: selectedProductCategoryId,
         status: productStatus,
-        sortBy: "updated_at",
+        sortBy: "sort_order",
         page: 1,
         pageSize: 100,
       });
@@ -413,7 +419,7 @@ export default function AdminCategoriesPage() {
         updateUrl(saved.parent_id ?? "", saved.id);
       }
     } catch (saveError) {
-      setError(getErrorText(saveError, "分类保存失败，请检查输入内容"));
+      toast.error(getErrorText(saveError, "分类保存失败，请检查输入内容"));
     } finally {
       setSaving(false);
     }
@@ -433,7 +439,7 @@ export default function AdminCategoriesPage() {
       if (selectedRootId === category.id) setSelectedRootId("");
       await loadCategories();
     } catch (deleteError) {
-      setError(getErrorText(deleteError, "分类删除失败"));
+      toast.error(getErrorText(deleteError, "分类删除失败"));
     } finally {
       setSaving(false);
     }
@@ -449,7 +455,7 @@ export default function AdminCategoriesPage() {
       setNotice("分类状态已更新");
       await loadCategories();
     } catch (statusError) {
-      setError(getErrorText(statusError, "分类状态更新失败"));
+      toast.error(getErrorText(statusError, "分类状态更新失败"));
     } finally {
       setSaving(false);
     }
@@ -522,7 +528,7 @@ export default function AdminCategoriesPage() {
     if (!categoryId || !category) errors.category_id = "请选择有效分类";
     if (category && !isCategoryEnabled(category)) errors.category_id = "不能绑定已停用分类";
     if (!form.price.trim() || !Number.isFinite(price) || price < 0) errors.price = "售价必须大于或等于 0";
-    if (originalPrice !== null && (!Number.isFinite(originalPrice) || originalPrice < price)) errors.original_price = "原价不能小于售价";
+    if (!form.id && originalPrice !== null && (!Number.isFinite(originalPrice) || originalPrice < price)) errors.original_price = "原价不能小于售价";
     if (!isIntegerText(form.stock) || Number(form.stock) < 0) errors.stock = "库存必须是大于或等于 0 的整数";
     if (!isIntegerText(form.sort_order)) errors.sort_order = "排序必须是整数";
     if (!isValidImagePath(form.image_url)) errors.image_url = "图片地址必须是 /assets/... 或 http(s) URL，不能使用 blob 临时地址";
@@ -560,7 +566,9 @@ export default function AdminCategoriesPage() {
     setNotice("");
     setError("");
     try {
-      const saved = productForm.id ? await updateProduct(productForm.id, payload) : await createProduct(payload);
+      const { original_price: preservedOriginalPrice, ...updatePayload } = payload;
+      void preservedOriginalPrice;
+      const saved = productForm.id ? await updateProduct(productForm.id, updatePayload) : await createProduct(payload);
       mergeSavedProductIntoPanel(saved);
       const savedForm = toProductForm(saved, categoryMap);
       setProductInitialForm(savedForm);
@@ -569,7 +577,7 @@ export default function AdminCategoriesPage() {
       closeProductEditorAfterSave();
       await loadProducts();
     } catch (saveError) {
-      setError(getErrorText(saveError, "商品保存失败，请检查输入内容"));
+      toast.error(getErrorText(saveError, "商品保存失败，请检查输入内容"));
     } finally {
       setSaving(false);
     }
@@ -585,10 +593,47 @@ export default function AdminCategoriesPage() {
       setNotice("商品状态已更新");
       await loadProducts();
     } catch (statusError) {
-      setError(getErrorText(statusError, "商品状态更新失败"));
+      toast.error(getErrorText(statusError, "商品状态更新失败"));
     } finally {
       setSaving(false);
     }
+  }
+
+  const canReorderProducts = Boolean(
+    selectedProductCategoryId && productCount === products.length && !productSearch.trim() && productStatus === "all" && !loadingProducts && !reordering
+  );
+
+  async function moveProduct(sourceId: string, targetId: string) {
+    if (!canReorderProducts || sourceId === targetId) return;
+    const previous = products;
+    const sourceIndex = previous.findIndex((product) => product.id === sourceId);
+    const targetIndex = previous.findIndex((product) => product.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const next = [...previous];
+    const [moved] = next.splice(sourceIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    const optimistic = next.map((product, index) => ({ ...product, sort_order: (index + 1) * 10 }));
+    setProducts(optimistic);
+    setReordering(true);
+    try {
+      const saved = await reorderProducts(selectedProductCategoryId, optimistic);
+      setProducts(saved);
+      toast.success("商品排序已保存");
+    } catch (reorderError) {
+      setProducts(previous);
+      toast.error(getErrorText(reorderError, "商品排序保存失败，已恢复原顺序"));
+    } finally {
+      setDraggedProductId(null);
+      setReordering(false);
+    }
+  }
+
+  function moveProductByKeyboard(productId: string, direction: -1 | 1) {
+    if (!canReorderProducts) return;
+    const index = products.findIndex((product) => product.id === productId);
+    const target = products[index + direction];
+    if (index < 0 || !target) return;
+    void moveProduct(productId, target.id);
   }
 
   return (
@@ -602,18 +647,13 @@ export default function AdminCategoriesPage() {
         </Button>
       }
     >
-      {notice ? (
-        <div className="mb-3 shrink-0 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          {notice}
-        </div>
-      ) : null}
       {error ? (
         <div className="mb-3 shrink-0 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden xl:grid-cols-[minmax(260px,300px)_minmax(300px,360px)_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden xl:grid-cols-[260px_260px_minmax(0,1fr)]">
         <CategoryColumn
           title="一级分类"
           loading={loadingCategories}
@@ -639,7 +679,7 @@ export default function AdminCategoriesPage() {
         </CategoryColumn>
 
         <CategoryColumn
-          title={selectedRoot ? `${selectedRoot.name} / 二级分类` : "二级分类"}
+          title="二级分类"
           loading={loadingCategories}
           emptyTitle={selectedRoot ? "暂无二级分类" : "请选择一级分类"}
           emptyDescription={selectedRoot ? "右侧将显示直接关联该一级分类的商品。" : "选择一级分类后查看二级分类。"}
@@ -708,6 +748,9 @@ export default function AdminCategoriesPage() {
                 ))}
               </select>
             </div>
+            {!canReorderProducts && selectedProductCategoryId && (productSearch.trim() || productStatus !== "all") ? (
+              <p className="mt-2 text-xs text-slate-500">清除搜索和状态筛选后可拖拽排序</p>
+            ) : null}
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto">
@@ -737,16 +780,49 @@ export default function AdminCategoriesPage() {
                 {products.map((product) => (
                   <div
                     key={product.id}
-                    className="grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_150px] items-center px-4 py-3 text-sm"
+                    onDragOver={(event) => {
+                      if (canReorderProducts && draggedProductId) event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (draggedProductId) void moveProduct(draggedProductId, product.id);
+                    }}
+                    className={cn(
+                      "grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_150px] items-center px-4 py-3 text-sm",
+                      draggedProductId === product.id && "bg-blue-50 opacity-70"
+                    )}
                   >
-                    <img
-                      src={product.image_url || PRODUCT_FALLBACK_IMAGE}
-                      alt=""
-                      className="h-10 w-10 rounded-lg border object-cover"
-                      onError={(event) => {
-                        event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
-                      }}
-                    />
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        draggable={canReorderProducts}
+                        disabled={!canReorderProducts}
+                        aria-label={`拖拽排序 ${product.name}；方向键可上移或下移`}
+                        onDragStart={(event) => {
+                          setDraggedProductId(product.id);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", product.id);
+                        }}
+                        onDragEnd={() => setDraggedProductId(null)}
+                        onKeyDown={(event) => {
+                          if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                            event.preventDefault();
+                            moveProductByKeyboard(product.id, event.key === "ArrowUp" ? -1 : 1);
+                          }
+                        }}
+                        className="cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <GripVertical className="h-4 w-4" />
+                      </button>
+                      <img
+                        src={product.image_url || PRODUCT_FALLBACK_IMAGE}
+                        alt=""
+                        className="h-10 w-10 rounded-lg border object-cover"
+                        onError={(event) => {
+                          event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
+                        }}
+                      />
+                    </div>
                     <div className="min-w-0">
                       <div className="truncate font-medium text-slate-950" title={product.name}>
                         {product.name}
@@ -1099,9 +1175,6 @@ function ProductDialog({
           </Field>
           <Field label="售价" error={errors.price} required>
             <Input type="number" min="0" step="0.01" value={form.price} onChange={(event) => onUpdate({ ...form, price: event.target.value })} />
-          </Field>
-          <Field label="原价" error={errors.original_price}>
-            <Input type="number" min="0" step="0.01" value={form.original_price} onChange={(event) => onUpdate({ ...form, original_price: event.target.value })} />
           </Field>
           <Field label="库存" error={errors.stock} required>
             <Input type="number" min="0" step="1" value={form.stock} onChange={(event) => onUpdate({ ...form, stock: event.target.value })} />

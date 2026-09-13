@@ -334,6 +334,18 @@ export async function listProducts({
   };
 }
 
+export async function reorderProducts(categoryId: string, products: AdminProduct[]) {
+  const items = products.map((product, index) => ({ id: product.id, sortOrder: (index + 1) * 10 }));
+  const result = await adminCatalogEnvelopeRequest<{ products: Array<Record<string, unknown>> }>(
+    "/api/admin/products/reorder",
+    {
+      method: "POST",
+      body: JSON.stringify({ categoryId, items }),
+    }
+  );
+  return (result.products ?? []).map(normalizeProduct);
+}
+
 export async function getProduct(id: string) {
   const productId = id.trim();
   if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {
@@ -355,7 +367,7 @@ export async function createProduct(payload: ProductPayload) {
   return normalizeProduct(assertApiRecord(product, "\u5546\u54c1\u4fdd\u5b58\u5931\u8d25\uff0c\u670d\u52a1\u5668\u6ca1\u6709\u8fd4\u56de\u6700\u65b0\u5546\u54c1"));
 }
 
-export async function updateProduct(id: string, payload: ProductPayload) {
+export async function updateProduct(id: string, payload: Partial<ProductPayload>) {
   const productId = id.trim();
   if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {
     throw new Error("商品保存失败，商品 ID 无效，请重新打开商品后再保存");

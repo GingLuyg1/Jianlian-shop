@@ -21,9 +21,11 @@ test("supplier operations UI uses existing admin APIs without changing fulfillme
   assert.match(supplierWorkspace, /import AdminPageShell from "@\/components\/admin\/AdminPageShell"/);
   assert.match(supplierWorkspace, /<AdminPageShell/);
 
-  assert.match(supplierWorkspace, /"\/api\/admin\/suppliers\/daju\?resource=balance"/);
-  assert.match(supplierWorkspace, /"\/api\/admin\/suppliers\/daju\?resource=products"/);
-  assert.match(supplierWorkspace, /`\/api\/admin\/suppliers\/daju\?resource=product&id=\$\{productId\}`/);
+  assert.match(uiRegistry, /adminEndpoint: "\/api\/admin\/suppliers\/daju"/);
+  assert.match(supplierWorkspace, /activeSupplier\.adminEndpoint}\?resource=balance/);
+  assert.match(supplierWorkspace, /activeSupplier\.adminEndpoint}\?resource=products/);
+  assert.match(supplierWorkspace, /activeSupplier\.adminEndpoint}\?resource=product&id=\$\{productId\}/);
+  assert.match(supplierWorkspace, /supplierUiRegistry\.map/);
   assert.doesNotMatch(browserSources, /ai\.hanfolk\.xyz/i);
   assert.doesNotMatch(browserSources, /X-API-Key|DAJU_API_KEY|process\.env/i);
   assert.doesNotMatch(browserSources, /\/purchase(?:[/?"'`]|$)|action:\s*["']purchase["']/i);

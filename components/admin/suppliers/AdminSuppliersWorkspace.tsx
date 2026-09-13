@@ -27,8 +27,6 @@ type DetectionState = {
   error: SupplierError | null;
 };
 
-const dajuDefinition = supplierUiRegistry[0];
-
 function formatTime(value: string | null) {
   if (!value) return "尚未检测";
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
@@ -57,6 +55,8 @@ function SupplierErrorDetails({ error }: { error: SupplierError }) {
 }
 
 export default function AdminSuppliersWorkspace() {
+  const [activeSupplierCode, setActiveSupplierCode] = useState(supplierUiRegistry[0]?.code ?? "");
+  const activeSupplier = supplierUiRegistry.find((supplier) => supplier.code === activeSupplierCode) ?? supplierUiRegistry[0];
   const [balance, setBalance] = useState<DajuBalance | null>(null);
   const [detection, setDetection] = useState<DetectionState>({ status: "idle", checkedAt: null, error: null });
   const [activeArea, setActiveArea] = useState<"overview" | "products">("overview");
@@ -73,7 +73,7 @@ export default function AdminSuppliersWorkspace() {
   const checkConnection = useCallback(async () => {
     setDetection((current) => ({ ...current, status: "checking", error: null }));
     try {
-      const response = await fetch("/api/admin/suppliers/daju?resource=balance", { cache: "no-store" });
+      const response = await fetch(`${activeSupplier.adminEndpoint}?resource=balance`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商连接检测失败");
       setBalance(payload.balance as DajuBalance);
@@ -85,13 +85,13 @@ export default function AdminSuppliersWorkspace() {
       setBalance(null);
       setDetection({ status: "failed", checkedAt: new Date().toISOString(), error: nextError });
     }
-  }, []);
+  }, [activeSupplier.adminEndpoint]);
 
   const loadProducts = useCallback(async () => {
     setProductsLoading(true);
     setProductsError(null);
     try {
-      const url = "/api/admin/suppliers/daju?resource=products" + (query.trim() ? `&q=${encodeURIComponent(query.trim())}` : "");
+      const url = `${activeSupplier.adminEndpoint}?resource=products` + (query.trim() ? `&q=${encodeURIComponent(query.trim())}` : "");
       const response = await fetch(url, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商商品目录读取失败");
@@ -107,7 +107,7 @@ export default function AdminSuppliersWorkspace() {
     } finally {
       setProductsLoading(false);
     }
-  }, [query]);
+  }, [activeSupplier.adminEndpoint, query]);
 
   useEffect(() => {
     void checkConnection();
@@ -123,7 +123,7 @@ export default function AdminSuppliersWorkspace() {
     setDetailError(null);
     setDetailLoading(true);
     try {
-      const response = await fetch(`/api/admin/suppliers/daju?resource=product&id=${productId}`, { cache: "no-store" });
+      const response = await fetch(`${activeSupplier.adminEndpoint}?resource=product&id=${productId}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商商品详情读取失败");
       setDetail(payload.product as DajuProductDetail);
@@ -151,6 +151,26 @@ export default function AdminSuppliersWorkspace() {
       actions={<Button asChild variant="outline"><Link href="/admin/products">前往商品管理<ExternalLink className="ml-2 h-4 w-4" /></Link></Button>}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+        <div className="flex shrink-0 items-center gap-2" aria-label="供应商选择">
+          <span className="text-sm font-medium text-slate-700">供应商：</span>
+          {supplierUiRegistry.map((supplier) => (
+            <Button
+              key={supplier.code}
+              type="button"
+              size="sm"
+              variant={activeSupplier.code === supplier.code ? "default" : "outline"}
+              aria-pressed={activeSupplier.code === supplier.code}
+              onClick={() => {
+                setActiveSupplierCode(supplier.code);
+                setProducts([]);
+                setProductsLoaded(false);
+                setDetailOpen(false);
+              }}
+            >
+              {supplier.name}
+            </Button>
+          ))}
+        </div>
         <nav className="flex shrink-0 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm" aria-label="供应商工作区">
           <Button variant={activeArea === "overview" ? "default" : "ghost"} size="sm" onClick={() => setActiveArea("overview")}>供应商概览</Button>
           <Button variant={activeArea === "products" ? "default" : "ghost"} size="sm" onClick={() => setActiveArea("products")}>商品目录</Button>
@@ -162,7 +182,7 @@ export default function AdminSuppliersWorkspace() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><Factory className="h-5 w-5" /></div>
-                  <div><h2 className="text-lg font-semibold text-slate-950">{dajuDefinition.name}</h2><div className="mt-1 text-xs text-slate-500">供应商代码：<span className="font-mono">{dajuDefinition.code}</span></div></div>
+                  <div><h2 className="text-lg font-semibold text-slate-950">{activeSupplier.name}</h2><div className="mt-1 text-xs text-slate-500">供应商代码：<span className="font-mono">{activeSupplier.code}</span></div></div>
                 </div>
                 <Badge variant="outline" className={`gap-1.5 ${statusPresentation.className}`}>{statusPresentation.icon}{statusPresentation.label}</Badge>
               </div>
@@ -178,7 +198,7 @@ export default function AdminSuppliersWorkspace() {
                 {detection.error ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700"><SupplierErrorDetails error={detection.error} /></div> : null}
               </div>
 
-              <div className="mt-5"><div className="text-sm font-semibold text-slate-950">已接入能力</div><div className="mt-2 flex flex-wrap gap-2">{dajuDefinition.capabilities.map((capability) => <Badge key={capability} variant="secondary">{capability}</Badge>)}</div><p className="mt-3 text-xs text-slate-500">此处仅为运营展示；实际履约路由仍由服务端 Supplier Registry 决定。</p></div>
+              <div className="mt-5"><div className="text-sm font-semibold text-slate-950">已接入能力</div><div className="mt-2 flex flex-wrap gap-2">{activeSupplier.capabilities.map((capability) => <Badge key={capability} variant="secondary">{capability}</Badge>)}</div><p className="mt-3 text-xs text-slate-500">此处仅为运营展示；实际履约路由仍由服务端 Supplier Registry 决定。</p></div>
             </section>
           </div>
         ) : (
