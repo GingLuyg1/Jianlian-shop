@@ -101,12 +101,12 @@ test("promotion and supplier display contracts are truthful and registry-driven"
 
 test("media upload validates before request and safely parses API failures", () => {
   const page = file("app/admin/media/page.tsx");
-  const validationIndex = page.indexOf("selected.length > MAX_MEDIA_FILES");
-  const requestIndex = page.indexOf('fetch("/api/admin/media", { method: "POST"');
-  assert.ok(validationIndex >= 0 && requestIndex > validationIndex);
-  assert.match(page, /单次最多上传 \$\{MAX_MEDIA_FILES\} 个文件，当前选择 \$\{selected\.length\} 个/);
-  assert.match(page, /file\.size > MAX_MEDIA_BYTES/);
-  assert.match(page, /ALLOWED_MEDIA_MIME\.has\(file\.type\)/);
-  assert.match(page, /nested\.message/);
-  assert.match(page, /错误编号：\$\{requestId\}/);
+  const helper = file("lib/media/client-upload.mjs");
+  assert.ok(page.indexOf("validateMediaFiles(selected)") < page.indexOf('fetch("/api/admin/media", { method: "POST"'));
+  assert.match(page, /uploadMediaFilesInBatches/);
+  assert.match(helper, /files.length > MAX_MEDIA_FILES/);
+  assert.match(helper, /file.size > MAX_MEDIA_BYTES/);
+  assert.match(helper, /ALLOWED_MEDIA_MIME.has\(file.type\)/);
+  assert.match(helper, /nested.message/);
+  assert.match(helper, /错误编号/);
 });

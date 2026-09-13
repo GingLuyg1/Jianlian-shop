@@ -12,6 +12,11 @@ import { AdminFilterBar, AdminListSurface, AdminTableViewport, adminListRowClass
 import AdminSection from "@/components/admin/v2/AdminSection";
 import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { Button } from "@/components/ui/button";
+import {
+  parseMediaUploadResponse,
+  uploadMediaFilesInBatches,
+  validateMediaFiles,
+} from "@/lib/media/client-upload.mjs";
 
 type MediaAsset = {
   id: string;
@@ -60,24 +65,6 @@ const PURPOSE_OPTIONS = [
   ["avatar", "头像"],
   ["misc", "其他"],
 ];
-
-const MAX_MEDIA_FILES = 10;
-const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
-const ALLOWED_MEDIA_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/x-icon"]);
-
-function parseSafeMediaError(payload: unknown, fallback: string) {
-  const record = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
-  const nested = record.error && typeof record.error === "object" && !Array.isArray(record.error) ? record.error as Record<string, unknown> : {};
-  const message = typeof record.error === "string" ? record.error : typeof nested.message === "string" ? nested.message : fallback;
-  const requestId = typeof record.request_id === "string"
-    ? record.request_id
-    : typeof record.requestId === "string"
-      ? record.requestId
-      : typeof nested.request_id === "string"
-        ? nested.request_id
-        : null;
-  return requestId ? `${message}（错误编号：${requestId}）` : message;
-}
 
 function formatBytes(value: number) {
   if (!Number.isFinite(value)) return "—";
@@ -142,40 +129,37 @@ export default function AdminMediaPage() {
   }, [loadAssets]);
 
   async function uploadFiles() {
-    if (!files?.length) {
-      toast.error("请选择图片文件");
-      return;
-    }
-    const selected = Array.from(files);
-    if (selected.length > MAX_MEDIA_FILES) {
-      toast.error(`单次最多上传 ${MAX_MEDIA_FILES} 个文件，当前选择 ${selected.length} 个`);
-      return;
-    }
-    const oversized = selected.find((file) => file.size > MAX_MEDIA_BYTES);
-    if (oversized) {
-      toast.error(`${oversized.name} 超过 5MB`);
-      return;
-    }
-    const unsupported = selected.find((file) => !ALLOWED_MEDIA_MIME.has(file.type));
-    if (unsupported) {
-      toast.error(`${unsupported.name} 的文件格式不受支持`);
+    const selected = files ? Array.from(files) : [];
+    const validationError = validateMediaFiles(selected);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
     setUploading(true);
     try {
-      const form = new FormData();
-      form.set("purpose", purpose);
-      form.set("ownerType", "unassigned");
-      selected.forEach((file) => form.append("files", file));
-      const response = await fetch("/api/admin/media", { method: "POST", body: form });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(parseSafeMediaError(payload, "上传失败"));
-      toast.success("图片已上传");
+      const result = await uploadMediaFilesInBatches(selected, async (file: File) => {
+        const form = new FormData();
+        form.set("purpose", purpose);
+        form.set("ownerType", "unassigned");
+        form.append("files", file);
+        const response = await fetch("/api/admin/media", { method: "POST", body: form });
+        return parseMediaUploadResponse(response);
+      });
+
       setFiles(null);
       setFileInputKey((value) => value + 1);
-      await loadAssets();
-    } catch (err) {
-      toast.error(`上传失败：${err instanceof Error ? err.message : "请稍后重试"}`);
+      if (result.successes.length) await loadAssets();
+
+      if (!result.failures.length) {
+        toast.success(`已上传 ${result.successes.length} 个图片`);
+      } else {
+        const failedFiles = result.failures
+          .map((failure) => `${failure.fileName} 上传失败${failure.status ? `（HTTP ${failure.status}）` : ""}：${failure.error}`)
+          .join("；");
+        const summary = `成功 ${result.successes.length} 个，失败 ${result.failures.length} 个。${failedFiles}`;
+        if (result.successes.length) toast.warning(summary);
+        else toast.error(summary);
+      }
     } finally {
       setUploading(false);
     }
@@ -226,7 +210,7 @@ export default function AdminMediaPage() {
           <select aria-label="资源用途" value={purpose} onChange={(event) => setPurpose(event.target.value)} className={mediaControlClass}>
             {PURPOSE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <input aria-label="选择图片文件" key={fileInputKey} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/x-icon" multiple onChange={(event) => setFiles(event.target.files)} className="min-h-11 rounded-[var(--admin-v2-control-radius)] border border-dashed border-[var(--admin-v2-border-strong)] px-3 py-2 text-sm sm:min-h-9" />
+          <input aria-label="选择图片文件" key={fileInputKey} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon" multiple onChange={(event) => setFiles(event.target.files)} className="min-h-11 rounded-[var(--admin-v2-control-radius)] border border-dashed border-[var(--admin-v2-border-strong)] px-3 py-2 text-sm sm:min-h-9" />
           <Button className="h-11 sm:h-9" disabled={uploading || !selectedFiles.length} onClick={uploadFiles}>
             <Upload className={`mr-2 h-4 w-4 ${uploading ? "animate-pulse" : ""}`} /> {uploading ? "上传中..." : "上传图片"}
           </Button>

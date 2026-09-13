@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
@@ -68,7 +69,6 @@ export default function AdminCompensationsPage() {
   const [loading, setLoading] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(count / 20)), [count]);
 
@@ -103,7 +103,6 @@ export default function AdminCompensationsPage() {
 
     setActingId(task.id);
     setError("");
-    setNotice("");
     try {
       const response = await fetch("/api/admin/system/compensations", {
         method: "POST",
@@ -112,10 +111,10 @@ export default function AdminCompensationsPage() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "补偿任务处理失败");
-      setNotice(payload.message || "补偿任务状态已更新。");
+      toast.success(payload.message || "补偿任务状态已更新。");
       await loadTasks();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : "补偿任务处理失败");
+      toast.error(actionError instanceof Error ? actionError.message : "补偿任务处理失败");
     } finally {
       setActingId(null);
     }
@@ -156,7 +155,6 @@ export default function AdminCompensationsPage() {
             仅 SuperAdmin 可访问。这里的操作只更新补偿任务处置状态并写入审计日志，不会执行支付、余额、库存或履约重试。
           </div>
 
-          {notice ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</div> : null}
           {error && tasks.length > 0 ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
 
           <div className="min-h-0 flex-1 overflow-auto rounded-lg border">

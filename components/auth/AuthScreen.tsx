@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -217,7 +218,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
               console.warn("[Promotion] Failed to bind invite code");
             }
           }
-          setMessage("注册成功，正在进入账户中心。");
+          toast.success("注册成功，正在进入账户中心。");
           router.push("/account");
           router.refresh();
           return;
@@ -243,7 +244,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         return;
       }
 
-      setMessage("登录成功，正在进入账户中心。");
+      toast.success("登录成功，正在进入账户中心。");
       if (signInData?.user) {
         await getOrCreateProfile(supabase, signInData.user).catch(() =>
           console.warn("[Supabase Auth] Failed to prepare profile")
