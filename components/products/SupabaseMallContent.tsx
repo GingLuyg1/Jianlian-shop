@@ -2,6 +2,7 @@
 
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { checkoutHref } from "@/lib/products/checkout-navigation";
 import {
   Bot,
   ChevronRight,
@@ -522,6 +523,7 @@ function ProductPanel({
 }
 
 function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: string; product: Product; showStock: boolean }) {
+  const router = useRouter();
   const stock = product.stock ?? 0;
   const imageSrc = product.imageUrl || productImageFallbackSrc;
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
@@ -532,7 +534,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   return (
-    <button type="button" onClick={() => { window.location.href = `/checkout?product=${encodeURIComponent(product.id)}`; }} className={cn(compactProductRowClassName, "group")}>
+    <button type="button" onClick={() => router.push(checkoutHref(product.id, window.location.pathname + window.location.search))} className={cn(compactProductRowClassName, "group")}>
       <div className="flex h-full min-w-0 items-center gap-5">
         <img src={imageSrc} alt={product.name} onError={(event) => setProductImageFallback(event.currentTarget)} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" />
         <div className="min-w-0 flex-1 text-left">
@@ -563,6 +565,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
 }
 
 function ProductRowCompact({ currencySymbol, product, showStock }: { currencySymbol: string; product: Product; showStock: boolean }) {
+  const router = useRouter();
   const stock = Number(product.stock ?? 0);
   const imageSrc = product.imageUrl || productImageFallbackSrc;
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
@@ -576,7 +579,7 @@ function ProductRowCompact({ currencySymbol, product, showStock }: { currencySym
   return (
     <button
       type="button"
-      onClick={() => { window.location.href = `/checkout?product=${encodeURIComponent(product.id)}`; }}
+      onClick={() => router.push(checkoutHref(product.id, window.location.pathname + window.location.search))}
       className={cn(compactProductRowClassName, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-5">

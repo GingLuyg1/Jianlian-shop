@@ -873,12 +873,12 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Chat GPT Plus 一个月充值 CDK【安卓/IOS通用】。支持安卓、iOS、网页端账号使用；未使用卡密永久有效，不会过期。充值地址：https://6661231.xyz/。充值完成后通常自动到账，如 3 分钟内未到账，请打开 GPT 官网进入 Plus 升级页面，点击“我已知晓”后查看。",
+    detail: "Chat GPT Plus 一个月充值 CDK【安卓/IOS通用】。支持安卓、iOS、网页端账号使用；未使用卡密永久有效，不会过期。充值地址：https://aikkcc.com/。充值完成后通常自动到账，如 3 分钟内未到账，请打开 GPT 官网进入 Plus 升级页面，点击“我已知晓”后查看。",
     purchaseNotes: "CDK 属于一次性商品，售出后不支持无理由退换。质保 30 天不掉订阅，掉订阅按天退差价。封号多由 3.5 账号本身、账号共享、频繁更换 IP、敏感问题或翻译敏感话术等原因造成，不属于充值失败。",
     faq: [
       {
         question: "充值地址是什么？",
-        answer: "充值地址为 https://6661231.xyz/，下单获得卡密后进入该页面自助兑换。",
+        answer: "充值地址为 https://aikkcc.com/，下单获得卡密后进入该页面自助兑换。",
       },
       {
         question: "卡密会过期吗？",
@@ -909,7 +909,7 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Claude pro 一个月充值 CDK【安卓/IOS通用】。支持安卓、iOS、网页端账号使用；未使用卡密永久有效，不会过期。充值地址：https://6661231.xyz/#/claude。兑换成功后请登录 Claude 官网或 App 查看会员状态。",
+    detail: "Claude pro 一个月充值 CDK【安卓/IOS通用】。支持安卓、iOS、网页端账号使用；未使用卡密永久有效，不会过期。充值地址：https://aikkcc.com/。兑换成功后请登录 Claude 官网或 App 查看会员状态。",
     purchaseNotes: "CDK 类商品属于一次性商品，售出后不支持无理由退换。质保 30 天不掉订阅，掉订阅按天退差价。账号共享、频繁更换 IP、敏感问题、异常注册或违规使用导致的账号限制，不属于充值本身问题。",
   },
   {
@@ -927,7 +927,7 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Claude Max X5 一个月充值 CDK【安卓/IOS通用】。支持安卓、iOS、网页端账号使用；未使用卡密永久有效，不会过期。充值地址：https://6661231.xyz/#/claude。当前库存为0，仅展示价格和套餐信息。",
+    detail: "Claude Max X5 一个月充值 CDK【安卓/IOS通用】。支持安卓、iOS、网页端账号使用；未使用卡密永久有效，不会过期。充值地址：https://aikkcc.com/。当前库存为0，仅展示价格和套餐信息。",
     purchaseNotes: "CDK 类商品属于一次性商品，售出后不支持无理由退换。库存为0时暂不可购买。如需补货或批量购买，请联系在线客服确认。",
   },
   {
@@ -945,7 +945,7 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Claude Max X20 一个月充值 CDK【安卓/IOS通用】。支持安卓、iOS、网页端账号使用；未使用卡密永久有效，不会过期。充值地址：https://6661231.xyz/#/claude。当前库存为0，仅展示价格和套餐信息。",
+    detail: "Claude Max X20 一个月充值 CDK【安卓/IOS通用】。支持安卓、iOS、网页端账号使用；未使用卡密永久有效，不会过期。充值地址：https://aikkcc.com/。当前库存为0，仅展示价格和套餐信息。",
     purchaseNotes: "CDK 类商品属于一次性商品，售出后不支持无理由退换。库存为0时暂不可购买。如需补货或批量购买，请联系在线客服确认。",
   },
   {
@@ -963,12 +963,12 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Grok Super一个月充值 CDK【安卓/IOS通用】。印度区 iOS 充值，支持安卓、iOS、网页端使用。充值地址：https://6661231.xyz/#/grok。未使用卡密永久有效，不会过期；支持提前续费，无需会员到期，会覆盖剩余时间并继续累计。",
+    detail: "Grok Super一个月充值 CDK【安卓/IOS通用】。印度区 iOS 充值，支持安卓、iOS、网页端使用。充值地址：https://aikkcc.com/。未使用卡密永久有效，不会过期；支持提前续费，无需会员到期，会覆盖剩余时间并继续累计。",
     purchaseNotes: "CDK 类商品属于一次性商品，售出后不支持无理由退换。质保 30 天不掉订阅，掉订阅按天退差价。封号常见原因包括批量注册的 3.5 账号、账号共享、频繁更换 IP、敏感问题、翻译敏感话术等，封号通常不是充值本身导致。",
     faq: [
       {
         question: "充值地址是什么？",
-        answer: "Grok 充值地址为 https://6661231.xyz/#/grok，下单获得卡密后进入该页面自助兑换。",
+        answer: "Grok 充值地址为 https://aikkcc.com/，下单获得卡密后进入该页面自助兑换。",
       },
       {
         question: "卡密会过期吗？",
@@ -999,12 +999,12 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Google One Pro (Pixel开通）。下单后按交付信息进入 https://www.ai1k.xyz/ 自助激活，请核对 Google 账号、地区和商品规格后再提交。库存937。",
+    detail: "Google One Pro (Pixel开通）。下单后按交付信息进入 https://aikkcc.com/ 自助激活，请核对 Google 账号、地区和商品规格后再提交。库存937。",
     purchaseNotes: "数字权益类商品属于一次性商品，售出后不支持无理由退换。激活前请确认账号、地区和商品规格，提交错误信息可能影响到账或使用。",
     faq: [
       {
         question: "在哪里自助激活？",
-        answer: "激活网站为 https://www.ai1k.xyz/，下单获得交付信息后进入该网站自助处理。",
+        answer: "激活网站为 https://aikkcc.com/，下单获得交付信息后进入该网站自助处理。",
       },
       {
         question: "下单前需要注意什么？",
@@ -1031,12 +1031,12 @@ export const products: Product[] = [
     deliveryLabel: "在线交付",
     productType: "digital",
     listingStatus: "active",
-    detail: "Google One Pro (Pixel开通） 一年高权重成品号。下单后按成品号信息交付，也可进入 https://www.ai1k.xyz/ 按说明自助激活或核验权益。库存3。",
+    detail: "Google One Pro (Pixel开通） 一年高权重成品号。下单后按成品号信息交付，也可进入 https://aikkcc.com/ 按说明自助激活或核验权益。库存3。",
     purchaseNotes: "账号/数字权益类商品属于一次性商品，售出后不支持无理由退换。收到账号或交付信息后请第一时间检查权益状态。",
     faq: [
       {
         question: "在哪里自助激活或核验？",
-        answer: "自助网站为 https://www.ai1k.xyz/，按页面提示处理或核验权益。",
+        answer: "自助网站为 https://aikkcc.com/，按页面提示处理或核验权益。",
       },
       {
         question: "收到后需要做什么？",

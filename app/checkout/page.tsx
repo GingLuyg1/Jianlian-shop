@@ -10,6 +10,8 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
+import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
 import {
   CreditCard,
   Gift,
@@ -44,6 +46,7 @@ import { Input } from "@/components/ui/input";
 import {
   getErrorText,
   getPublicProductDetail,
+  listPublicCategories,
   type PublicProductRow,
   type PublicProductSkuRow,
 } from "@/lib/supabase/public-catalog";
@@ -145,7 +148,7 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
   return {
     id: row.slug || row.id,
     name: row.name,
-    category: "digital-accounts",
+    category: resolveCheckoutCategory(row),
     categoryLabel: "商品详情",
     description: row.short_description ?? row.description ?? "",
     price: Number(row.price ?? 0),
@@ -352,6 +355,18 @@ export default function CheckoutPage() {
         }
 
         const detail = await getPublicProductDetail(productId);
+        if (detail?.product.category_id) {
+          const categories = await listPublicCategories().catch(() => []);
+          const path: string[] = [];
+          const visited = new Set<string>();
+          let category = categories.find((item) => item.id === detail.product.category_id);
+          while (category && !visited.has(category.id)) {
+            visited.add(category.id);
+            path.unshift(category.slug);
+            category = categories.find((item) => item.id === category?.parent_id);
+          }
+          if (path.length) detail.product = { ...detail.product, metadata: { ...detail.product.metadata, category_slug: path[0], category_path: path.join("/") } };
+        }
         if (!active) return;
         setProductRow(detail?.product ?? null);
         setProductSkus(detail?.skus ?? []);
@@ -672,7 +687,7 @@ export default function CheckoutPage() {
         <ProductDetailCard
           product={product}
           priceLabel={priceLabel}
-          closeHref={getProductListHref(product)}
+          closeHref={safeProductReturnTo(searchParams.get("returnTo")) ?? getProductListHref(product)}
         />
 
         <Card data-testid="checkout-purchase-panel" className="h-auto min-h-0 overflow-hidden lg:h-full">
@@ -1147,13 +1162,15 @@ function ProductDetailCard({
   priceLabel: string;
   closeHref: string;
 }) {
+  const router = useRouter();
+  const family = resolveRechargeProductFamily(product);
   return (
     <Card data-testid="checkout-product-detail" className="relative h-auto min-h-0 overflow-hidden lg:h-full">
       <button
         type="button"
         className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground"
         onClick={() => {
-          window.location.href = closeHref;
+          router.push(closeHref);
         }}
         aria-label="关闭下单页面"
       >
@@ -1190,13 +1207,13 @@ function ProductDetailCard({
           </div>
         </div>
 
-        {product.id === GPT_RECHARGE_PRODUCT_ID ? (
+        {family === "chatgpt" ? (
           <GptRechargeDetails product={product} />
-        ) : product.id === GROK_RECHARGE_PRODUCT_ID ? (
+        ) : family === "grok" ? (
           <GrokRechargeDetails product={product} />
-        ) : CLAUDE_RECHARGE_PRODUCT_IDS.includes(product.id) ? (
+        ) : family === "claude" ? (
           <ClaudeRechargeDetails product={product} />
-        ) : GEMINI_RECHARGE_PRODUCT_IDS.includes(product.id) ? (
+        ) : family === "gemini" ? (
           <GeminiRechargeDetails product={product} />
         ) : product.id === GIFFGAFF_TOPUP_PRODUCT_ID ? (
           <GiffgaffTopupDetails product={product} />
@@ -1745,164 +1762,33 @@ function AppleIdDetails({ product }: { product: Product }) {
 }
 
 function GptRechargeDetails({ product }: { product: Product }) {
-  const highlights = [
-    {
-      icon: Zap,
-      title: "自动充值，稳定到账",
-      text: "下单后进入充值地址自助兑换，系统自动完成 Plus 订阅充值。",
-    },
-    {
-      icon: Sparkles,
-      title: "新号老号通用",
-      text: "支持已开通过 Plus 的老号，也支持符合条件的新号使用。",
-    },
-    {
-      icon: Smartphone,
-      title: "安卓 / iOS 通用",
-      text: "安卓、iOS、网页端账号均可使用，按页面提示完成兑换。",
-    },
-    {
-      icon: CheckCircle2,
-      title: "卡密永久有效",
-      text: "未使用卡密永久有效，不会过期；已兑换后按订阅周期生效。",
-    },
-    {
-      icon: RefreshCcw,
-      title: "支持提前续费",
-      text: "无需等会员到期，可提前续费，覆盖剩余时间并继续累计。",
-    },
-    {
-      icon: Target,
-      title: "30 天保障",
-      text: "质保 30 天不掉订阅，掉订阅按天退差价。",
-    },
+  const sections = [
+    ["服务亮点 / SERVICE HIGHLIGHTS", "按所选商品提供兑换信息，请核对商品名称和说明后下单。"],
+    ["商品说明与交付规则", product.description || "具体商品内容以所选商品信息和兑换页面提示为准。"],
+    ["适用场景", "用于所选 ChatGPT 商品对应的账户兑换；适用条件以商品说明为准。"],
+    ["售后与注意事项", "兑换前核对卡密和账户信息；如遇异常，请保留订单信息并联系在线客服。"],
+    ["FAQ", "套餐、地区、有效期和售后条件是否相同？不同商品可能不同，请以当前商品信息为准。"],
   ];
-
-  const rules = [
-    ["商品内容", `${product.name}，支持 ChatGPT Plus 月费订阅。`],
-    [
-      "充值地址",
-      <RechargeLink key="gpt-recharge-link" href="https://6661231.xyz/" />,
-    ],
-    ["发货模式", "购买后获得充值卡密，未使用卡密永久有效，不会过期。"],
-    ["到账说明", "充值完成后通常会立即到账；如 3 分钟内未到账，请打开 GPT 官网进入 Plus 升级页面，点击“我已知晓”按钮后查看。"],
-  ];
-
-  const steps = [
-    ["第一步：下单购买", `选择 ${product.name} 商品并完成下单。`],
-    [
-      "第二步：打开充值页面",
-      <>
-        访问充值地址{" "}
-        <RechargeLink href="https://6661231.xyz/" /> 进入兑换页面。
-      </>,
-    ],
-    ["第三步：自助兑换", "在兑换页面填写卡密和充值信息，确认后提交。"],
-    ["第四步：等待到账", "提交后系统自动完成充值，到 GPT 官网或 App 查看 Plus 状态与到期时间。"],
-  ];
-
-  const troubleshooting = [
-    "如未到账，请先核对 accountID 是否填写正确。",
-    "确认是否冲到 team 里，必要时退出账号后重新登录。",
-    "常见封号原因包括：批量注册的 3.5 账号、账号共享、频繁更换 IP、敏感问题、翻译敏感话术等。",
-  ];
-
   return (
     <div className="mt-8 w-full space-y-5">
-      <section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
-        <div className="inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700">
-          ChatGPT Plus | CDK 自动充值
-        </div>
-        <h2 className="mt-3 text-2xl font-bold text-slate-950">
-          {product.name}
-        </h2>
-        <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
-          面向已有账号的 ChatGPT Plus 月费订阅自动充值服务。下单后在充值页面自助兑换即可自动到账，支持安卓、iOS 和网页端使用。
-        </p>
+      <section className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
+        <h2 className="text-2xl font-bold text-slate-950">{product.name}</h2>
+        <p className="mt-2 text-sm leading-7 text-slate-600">{product.description || "请核对所选商品内容，按照兑换页面提示操作。"}</p>
       </section>
-
-      <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-white">
-        <div className="bg-emerald-700 px-5 py-4 text-center text-white">
-          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-100">
-            Service Highlights
-          </div>
-          <div className="mt-1 text-lg font-bold">自动充值，稳定到账</div>
-        </div>
-        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
-          {highlights.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.title}
-                className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 text-center"
-              >
-                <Icon className="mx-auto h-7 w-7 text-emerald-700" />
-                <div className="mt-2 text-sm font-semibold text-slate-950">
-                  {item.title}
-                </div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  {item.text}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-emerald-200 bg-white p-5">
-        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
-          <ShieldCheck className="h-5 w-5 text-emerald-700" />
-          商品说明与交付规则
-        </h3>
-        <div className="mt-4 space-y-3">
-          {rules.map(([label, text]) => (
-            <div
-              key={String(label)}
-              className="rounded-xl border border-emerald-100 bg-emerald-50/30 px-4 py-3 text-sm leading-6"
-            >
-              <span className="font-semibold text-slate-950">{label}：</span>
-              <span className="text-slate-600">{text}</span>
-            </div>
-          ))}
-          <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium leading-6 text-emerald-800">
-            温馨提示：充值成功后请及时登录账号查看 Plus 状态和订阅到期时间。
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-emerald-200 bg-white p-5">
-        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
-          <CheckCircle2 className="h-5 w-5 text-emerald-700" />
-          使用方法
-        </h3>
-        <div className="mt-4 space-y-3">
-          {steps.map(([title, text]) => (
-            <div
-              key={String(title)}
-              className="rounded-xl border border-emerald-100 bg-emerald-50/30 px-4 py-3"
-            >
-              <div className="text-sm font-semibold text-slate-950">
-                {title}
-              </div>
-              <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
-        <h3 className="flex items-center gap-2 text-base font-bold text-rose-700">
-          <Clock3 className="h-5 w-5" />
-          售后与注意事项
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
-          {troubleshooting.map((item) => (
-            <li key={item} className="flex gap-2">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
+      <ChatGptRechargeMethodComparison />
+      {sections.map(([title, description]) => (
+        <section key={title} className="rounded-2xl border border-border bg-white p-5">
+          <h3 className="text-base font-bold text-slate-950">{title}</h3>
+          <p className="mt-3 text-sm leading-7 text-slate-600">{description}</p>
+        </section>
+      ))}
+      <section className="rounded-2xl border border-border bg-white p-5">
+        <h3 className="text-base font-bold">使用方法</h3>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-7 text-slate-600">
+          <li>核对 {product.name} 并完成下单，查看订单中的交付信息。</li>
+          <li>如收到兑换卡密，前往 <RechargeLink href="https://aikkcc.com/" />，按页面提示提交卡密及所需账户信息。</li>
+          <li>完成后核对账户状态；遇到问题请保留订单与兑换结果联系在线客服。</li>
+        </ol>
       </section>
     </div>
   );
@@ -1946,7 +1832,7 @@ function GrokRechargeDetails({ product }: { product: Product }) {
     ["商品内容", `${product.name}，印度区 iOS 充值，安卓 / iOS 通用。`],
     [
       "充值地址",
-      <RechargeLink key="grok-recharge-link" href="https://6661231.xyz/#/grok" />,
+      <RechargeLink key="grok-recharge-link" href="https://aikkcc.com/" />,
     ],
     ["发货模式", "购买后获得充值卡密，未使用卡密永久有效，不会过期。"],
     ["到账说明", "充值完成后通常会自动到账；如长时间未到账，请先核对账号信息，再联系在线客服处理。"],
@@ -1958,7 +1844,7 @@ function GrokRechargeDetails({ product }: { product: Product }) {
       "第二步：打开充值页面",
       <>
         访问充值地址{" "}
-        <RechargeLink href="https://6661231.xyz/#/grok" /> 进入 Grok 兑换页面。
+        <RechargeLink href="https://aikkcc.com/" /> 进入 Grok 兑换页面。
       </>,
     ],
     ["第三步：自助兑换", "在兑换页面填写卡密和 Grok 账号充值信息，确认无误后提交。"],
@@ -2119,7 +2005,7 @@ function ClaudeRechargeDetails({ product }: { product: Product }) {
     ["商品内容", `${product.name}，适用于 Claude 会员充值。`],
     [
       "充值地址",
-      <RechargeLink key="claude-recharge-link" href="https://6661231.xyz/#/claude" />,
+      <RechargeLink key="claude-recharge-link" href="https://aikkcc.com/" />,
     ],
     ["发货模式", "购买后获得充值卡密，未使用卡密永久有效，不会过期。"],
     ["到账说明", "兑换提交后通常会自动处理到账；如长时间未到账，请先核对账号信息，再联系在线客服。"],
@@ -2132,7 +2018,7 @@ function ClaudeRechargeDetails({ product }: { product: Product }) {
       "第二步：打开充值页面",
       <>
         访问充值地址{" "}
-        <RechargeLink href="https://6661231.xyz/#/claude" /> 进入 Claude 兑换页面。
+        <RechargeLink href="https://aikkcc.com/" /> 进入 Claude 兑换页面。
       </>,
     ],
     ["第三步：自助兑换", "在兑换页面填写卡密和 Claude 账号充值信息，确认无误后提交。"],
@@ -2292,7 +2178,7 @@ function GeminiRechargeDetails({ product }: { product: Product }) {
     ["商品内容", `${product.name}，适用于 Gemini / Google One Pro 相关权益。`],
     [
       "激活网站",
-      <RechargeLink key="gemini-recharge-link" href="https://www.ai1k.xyz/" />,
+      <RechargeLink key="gemini-recharge-link" href="https://aikkcc.com/" />,
     ],
     [
       "发货模式",
@@ -2316,7 +2202,7 @@ function GeminiRechargeDetails({ product }: { product: Product }) {
       "第二步：打开激活网站",
       <>
         访问激活网站{" "}
-        <RechargeLink href="https://www.ai1k.xyz/" /> 进入自助激活页面。
+        <RechargeLink href="https://aikkcc.com/" /> 进入自助激活页面。
       </>,
     ],
     [
@@ -2442,10 +2328,10 @@ function RechargeLink({ href }: { href: string }) {
     <a
       href={href}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       className="font-semibold text-primary underline underline-offset-4 transition-colors hover:text-primary/80"
     >
-      点击这里
+      aikkcc.com
     </a>
   );
 }
@@ -2625,7 +2511,8 @@ function getProductListHref(product: Product) {
     return `/products/gift-cards?category=${category}`;
   }
   if (product.category === "ai-membership") {
-    return `/products/ai-membership?category=${getAiCategoryByProductId(product.id)}`;
+    const family = resolveRechargeProductFamily(product);
+    return family === "other" ? "/products/ai-membership" : `/products/ai-membership?category=${family}`;
   }
   if (product.category === "sms-code") {
     return `/products/sms-code?country=${getSmsCountryByProductId(product.id)}`;
