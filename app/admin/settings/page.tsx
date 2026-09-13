@@ -116,7 +116,6 @@ export default function AdminSettingsPage() {
       const payload = (await response.json().catch(() => null)) as SettingsPayload | null;
       if (!response.ok) {
         const error = payload?.error ?? "保存系统设置失败";
-        setMessage(error);
         toast.error(error);
         return;
       }
@@ -125,10 +124,8 @@ export default function AdminSettingsPage() {
       setDraft(nextSettings);
       setLogs(payload?.logs ?? []);
       const successMessage = payload?.message ?? "系统设置已保存";
-      setMessage(successMessage);
       toast.success(successMessage);
     } catch {
-      setMessage("保存系统设置失败，请稍后重试。");
       toast.error("保存系统设置失败，请稍后重试。");
     } finally {
       setSaving(false);

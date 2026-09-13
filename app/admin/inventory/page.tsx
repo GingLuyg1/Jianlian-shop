@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Ban, Eye, FileText, Loader2, PackageCheck, RefreshCw, RotateCcw, Upload, X } from "lucide-react";
+import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
@@ -147,7 +148,7 @@ export default function AdminInventoryPage() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [importValidation, setImportValidation] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
@@ -217,7 +218,7 @@ export default function AdminInventoryPage() {
       const payload = await readJson<{ data: InventoryItem[] }>(response, "库存明细加载失败");
       setItemRows(payload.data ?? []);
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "库存明细加载失败");
+      toast.error(caught instanceof Error ? caught.message : "库存明细加载失败");
     } finally {
       setItemsLoading(false);
     }
@@ -246,7 +247,7 @@ export default function AdminInventoryPage() {
       const payload = await readJson<{ data: InventoryItem[] }>(response, "库存明细加载失败");
       setItemRows(payload.data ?? []);
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "库存明细加载失败");
+      toast.error(caught instanceof Error ? caught.message : "库存明细加载失败");
     } finally {
       setItemsLoading(false);
     }
@@ -254,11 +255,11 @@ export default function AdminInventoryPage() {
 
   const previewImport = useCallback(async () => {
     if (!importProductId || !file) {
-      setNotice("请选择商品和导入文件");
+      setImportValidation("请选择商品和导入文件");
       return;
     }
     setSubmitting(true);
-    setNotice(null);
+    setImportValidation(null);
     setImportResult(null);
     try {
       const formData = new FormData();
@@ -271,7 +272,7 @@ export default function AdminInventoryPage() {
       const payload = await readJson<{ preview: ImportPreview }>(response, "库存文件解析失败");
       setPreview(payload.preview);
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "库存文件解析失败");
+      toast.error(caught instanceof Error ? caught.message : "库存文件解析失败");
     } finally {
       setSubmitting(false);
     }
@@ -279,11 +280,11 @@ export default function AdminInventoryPage() {
 
   const confirmImport = useCallback(async () => {
     if (!importProductId || !file || !preview) {
-      setNotice("请先完成导入预览");
+      setImportValidation("请先完成导入预览");
       return;
     }
     setSubmitting(true);
-    setNotice(null);
+    setImportValidation(null);
     try {
       const formData = new FormData();
       formData.set("intent", "import");
@@ -297,9 +298,12 @@ export default function AdminInventoryPage() {
       setPreview(null);
       setFile(null);
       setBatchName("");
+      const importMessage = `库存导入完成：成功 ${payload.result.importedRows} 条，失败 ${payload.result.failedRows} 条`;
+      if (payload.result.failedRows > 0) toast.warning(importMessage);
+      else toast.success(importMessage);
       await loadData();
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "库存导入失败");
+      toast.error(caught instanceof Error ? caught.message : "库存导入失败");
     } finally {
       setSubmitting(false);
     }
@@ -307,7 +311,6 @@ export default function AdminInventoryPage() {
 
   const updateInventory = useCallback(async (body: Record<string, string>) => {
     setSubmitting(true);
-    setNotice(null);
     try {
       const response = await fetch("/api/admin/inventory", {
         method: "PATCH",
@@ -315,11 +318,11 @@ export default function AdminInventoryPage() {
         body: JSON.stringify(body),
       });
       await readJson(response, "库存状态更新失败");
-      setNotice("操作成功");
+      toast.success("库存状态已更新");
       await loadData();
       if (selectedProduct) await openProductItems(selectedProduct);
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "库存状态更新失败");
+      toast.error(caught instanceof Error ? caught.message : "库存状态更新失败");
     } finally {
       setSubmitting(false);
     }
@@ -368,10 +371,6 @@ export default function AdminInventoryPage() {
               <Button variant="outline" onClick={() => { setSearch(""); setStatus("all"); setPage(1); setBatchPage(1); }}>重置</Button>
             </div>
           </CardHeader>
-
-          {notice ? (
-            <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">{notice}</div>
-          ) : null}
 
           {error ? (
             <div className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -477,7 +476,7 @@ export default function AdminInventoryPage() {
           <CardContent className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
             <div className="space-y-1.5">
               <Label>商品</Label>
-              <Select value={importProductId} onValueChange={(value) => { setImportProductId(value); setPreview(null); setImportResult(null); }}>
+              <Select value={importProductId} onValueChange={(value) => { setImportProductId(value); setPreview(null); setImportResult(null); setImportValidation(null); }}>
                 <SelectTrigger><SelectValue placeholder="选择商品" /></SelectTrigger>
                 <SelectContent>
                   {importableProducts.map((product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}
@@ -499,8 +498,9 @@ export default function AdminInventoryPage() {
             </div>
             <div className="space-y-1.5">
               <Label>导入文件</Label>
-              <Input type="file" accept=".txt,.csv" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); setImportResult(null); }} />
+              <Input type="file" accept=".txt,.csv" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); setImportResult(null); setImportValidation(null); }} />
               <p className="text-xs text-slate-500">最多 5MB / 5000 行。不会在浏览器显示完整库存内容。</p>
+              {importValidation ? <p role="alert" className="text-xs text-red-600">{importValidation}</p> : null}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" disabled={submitting || !file || !importProductId} onClick={() => void previewImport()}>

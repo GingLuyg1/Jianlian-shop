@@ -57,6 +57,17 @@ function getInventoryAuditError(error: unknown) {
     .slice(0, 600);
 }
 
+function getInventoryStatusError(error: unknown) {
+  const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const code = typeof record.code === "string" ? record.code : "";
+  const raw = error instanceof Error ? error.message : typeof record.message === "string" ? record.message : "";
+  if (raw === "库存不存在，或已交付库存不能禁用") return { message: raw, status: 409 };
+  if (/^(?:reserved or delivered inventory cannot be restored|已交付库存不能禁用)$/i.test(raw)) return { message: "已交付或预留库存不能更新", status: 409 };
+  if (code === "PGRST116" || /^(?:inventory (?:batch|item) not found|库存不存在)$/i.test(raw)) return { message: "库存不存在", status: 404 };
+  if (code === "42501" || /^(?:administrator permission required|无后台访问权限)$/i.test(raw)) return { message: "权限不足，无法更新库存", status: 403 };
+  return { message: "库存状态更新失败", status: 500 };
+}
+
 export async function GET(request: Request) {
   const admin = await getServerAdminContext();
   if (!admin.ok) {
@@ -356,7 +367,7 @@ export async function PATCH(request: Request) {
 
     const { data, error } = await admin.supabase.rpc("admin_disable_digital_inventory", {
       p_inventory_id: inventoryId,
-      p_reason: remark || null,
+      p_remark: remark || null,
     });
 
     if (error) throw error;
@@ -370,7 +381,7 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json({ data });
   } catch (error) {
-    const message = "库存状态更新失败";
+    const failure = getInventoryStatusError(error);
     await writeAdminAuditLog({
       action: "update_inventory",
       module: "inventory",
@@ -378,6 +389,6 @@ export async function PATCH(request: Request) {
       result: "failed",
       errorMessage: getInventoryAuditError(error),
     });
-    return jsonError(message, 500);
+    return jsonError(failure.message, failure.status);
   }
 }

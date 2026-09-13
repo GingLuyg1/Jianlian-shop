@@ -408,7 +408,6 @@ export default function PaymentSettingsPanel() {
         "支付设置保存失败",
       );
 
-      setMessage(text);
       toast.error(text);
     } finally {
       setSavingChannel(null);

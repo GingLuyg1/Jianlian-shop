@@ -38,7 +38,9 @@ test("inventory errors stay module-specific and do not expose database details",
 
   assert.doesNotMatch(route, /getOrderErrorMessage/);
   assert.match(route, /catch \(error\) \{[\s\S]*?const message = "库存数据加载失败";[\s\S]*?errorMessage: getInventoryAuditError\(error\),[\s\S]*?return jsonError\(message, 500\);/);
-  assert.match(route, /catch \(error\) \{[\s\S]*?const message = "库存状态更新失败";[\s\S]*?errorMessage: getInventoryAuditError\(error\),[\s\S]*?return jsonError\(message, 500\);/);
+  assert.match(route, /const failure = getInventoryStatusError\(error\)/);
+  assert.match(route, /return jsonError\(failure.message, failure.status\)/);
+  assert.match(route, /message: "库存状态更新失败", status: 500/);
   assert.doesNotMatch(route, /return jsonError\(getInventoryAuditError\(error\)/);
 });
 

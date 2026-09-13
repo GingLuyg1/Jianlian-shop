@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,9 +44,9 @@ export default function RechargeRateSettings() {
       const payload = await response.json().catch(() => null) as { rate?: Rate; error?: string } | null;
       if (!response.ok || !payload?.rate) throw new Error(payload?.error ?? "汇率保存失败");
       setCurrent(payload.rate);
-      setMessage("今日充值汇率已保存；已创建的充值单不会受后续汇率变化影响。");
+      toast.success("今日充值汇率已保存；已创建的充值单不会受后续汇率变化影响。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "汇率保存失败");
+      toast.error(error instanceof Error ? error.message : "汇率保存失败");
     } finally { setSaving(false); }
   }
 
