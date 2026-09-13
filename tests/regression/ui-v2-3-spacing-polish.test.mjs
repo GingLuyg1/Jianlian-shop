@@ -11,8 +11,8 @@ test("checkout keeps a compact purchase column and aligns product detail surface
   const checkout = file("app/checkout/page.tsx");
   const publicSidebar = file("components/layout/PublicSidebar.tsx");
 
-  assert.match(checkout, /--checkout-purchase-width:clamp\(332px,calc\(24vw-8px\),364px\)/);
-  assert.match(publicSidebar, /py-2\.5 text-sm font-medium/);
+  assert.match(checkout, /--checkout-purchase-width:clamp\(327px,calc\(24vw-13px\),359px\)/);
+  assert.match(publicSidebar, /py-2\.5 text-left text-sm font-medium/);
   assert.match(checkout, /<label className="mb-1\.5 block text-sm font-medium">\s*<span className="text-red-500">\*<\/span>联系邮箱/);
   assert.match(checkout, /<label className="mb-1\.5 block text-sm font-medium">\s*提交信息或备注/);
   assert.match(checkout, /data-testid="checkout-product-detail-content" className="mx-auto w-full max-w-\[1040px\]"/);
@@ -33,12 +33,19 @@ test("checkout keeps a compact purchase column and aligns product detail surface
 
 test("storefront allocates more desktop width to category and product content", () => {
   const layout = file("components/layout/PublicLayout.tsx");
+  const publicSidebar = file("components/layout/PublicSidebar.tsx");
   const boundary = file("components/products/CategoryContentBoundary.tsx");
   const productUi = file("components/products/product-ui.ts");
   const productDetail = file("app/products/[id]/page.tsx");
 
-  assert.match(layout, /lg:\[--storefront-sidebar-width:192px\]/);
-  assert.match(layout, /lg:\[--storefront-main-offset:192px\]/);
+  assert.match(layout, /lg:\[--storefront-sidebar-width:195px\]/);
+  assert.match(layout, /lg:\[--storefront-main-offset:195px\]/);
+  assert.match(layout, /md:\[--storefront-sidebar-width:176px\]/);
+  assert.match(layout, /md:\[--storefront-main-offset:176px\]/);
+  assert.match(publicSidebar, /mx-auto flex w-\[calc\(100%-6px\)\] items-center justify-start/);
+  assert.match(publicSidebar, /text-left text-sm/);
+  assert.match(publicSidebar, /sidebar-scroll flex-1 overflow-y-auto px-2/);
+  assert.equal((publicSidebar.match(/w-\[calc\(100%-6px\)\]/g) ?? []).length, 2);
   assert.match(layout, /--storefront-content-padding-x:16px/);
   assert.match(boundary, /mallShellClassName/);
   assert.match(productUi, /gap-4[^"\r\n]*lg:grid-cols-\[240px_minmax\(0,1fr\)\]/);

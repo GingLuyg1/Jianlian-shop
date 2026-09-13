@@ -57,7 +57,7 @@ export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
         <Link
           href={item.href}
           className={cn(
-            "flex items-center gap-2.5 whitespace-nowrap rounded-md px-3 py-2.5 text-sm transition-colors duration-150",
+            "mx-auto flex w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-md px-3 py-2.5 text-left text-sm transition-colors duration-150",
             active
               ? "border border-primary/20 bg-primary/10 font-medium text-primary"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -97,15 +97,15 @@ export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
         </Link>
       </div>
 
-      <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 pb-4 pt-0">
+      <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 pb-4 pt-0">
         <ul className="space-y-1.5">{menuItems.map(renderLink)}</ul>
       </nav>
 
-      <div className="px-3 pb-3">
+      <div className="px-2 pb-3">
         <ul className="space-y-1.5">{helpItems.map(renderLink)}</ul>
       </div>
 
-      <div className="border-t border-border px-3 py-4">
+      <div className="border-t border-border px-2 py-4">
         <button
           type="button"
           onClick={() => {
@@ -116,7 +116,7 @@ export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
               window.open(supportHref, "_blank", "noopener,noreferrer");
             }
           }}
-          className="flex w-full select-none items-center justify-start gap-2.5 whitespace-nowrap rounded-md bg-primary/90 px-3 py-2.5 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary"
+          className="mx-auto flex w-[calc(100%-6px)] select-none items-center justify-start gap-2.5 whitespace-nowrap rounded-md bg-primary/90 px-3 py-2.5 text-left text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary"
           {...(!supportHref
             ? ({ popovertarget: "support-popover" } as Record<string, string>)
             : {})}
