@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const read = (path) => readFileSync(path, "utf8");
 test("category changes select category order without resetting it on secondary filters", () => {
@@ -39,10 +39,25 @@ test("tutorial and FAQ prioritize actual product-specific delivery and aftersale
 });
 test("homepage carousel source is unchanged from V2.4 baseline while copy and links are updated", () => {
   const source = read("app/page.tsx");
-  const baseline = execFileSync("git", ["show", "48a7a3aad0ee7412a772eff79dde10701474fd0c:app/page.tsx"], { encoding: "utf8" });
   const carousel = (value) => value.slice(value.indexOf("const heroSlides ="), value.indexOf("export default function HomePage")).replace(/\r\n/g, "\n");
-  assert.equal(carousel(source), carousel(baseline));
+  // Exact carousel source fingerprint from baseline 48a7a3a; works in Actions'
+  // shallow checkout without requiring historical Git objects or a Git binary.
+  assert.equal(
+    createHash("sha256").update(carousel(source)).digest("hex"),
+    "82b10db70bd7f08f1cbbf702809d7d89073158c37b3d08462291e353d6876a5c",
+  );
   for (const text of ["Apple ID / Steam / Gmail 等账号商品", "海外实体卡、SIM 与通信服务", "多地区 Apple ID 与成品账号", "本站仅提供合法合规的数字商品及相关服务"]) assert.ok(source.includes(text));
   const links = (value) => [...value.matchAll(/href: "([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(links(source), links(baseline));
+  assert.deepEqual(links(source), [
+    "/products/digital-accounts",
+    "/products/ai-membership",
+    "/products/gift-cards",
+    "/products/sim-cards",
+    "/products/sms-code",
+    "/products/account-recharge",
+    "/products/digital-accounts?category=apple-id",
+    "/products/digital-accounts?category=steam",
+    "/products/ai-membership?search=ChatGPT",
+    "/products/ai-membership?search=Grok",
+  ]);
 });
