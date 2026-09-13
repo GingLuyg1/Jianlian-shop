@@ -667,7 +667,7 @@ export default function CheckoutPage() {
   };
 
   return (
-    <PublicLayout contentClassName="mt-12 max-w-none py-4 md:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(332px,calc(24vw-8px),364px)]">
+    <PublicLayout contentClassName="mt-12 max-w-none py-4 md:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
       <div data-testid="checkout-layout" className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
         <ProductDetailCard
           product={product}
