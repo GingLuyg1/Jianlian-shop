@@ -33,6 +33,7 @@ type ProductRow = {
   status: string | null;
   image_url: string | null;
   sort_order: number | null;
+  updated_at: string | null;
 };
 
 type SkuRow = {
@@ -147,7 +148,7 @@ export async function GET(request: Request) {
 function buildProductQuery(supabase: ReturnType<typeof getSupabaseServerClient>, categoryIds: string[]) {
   let query = supabase
     .from("products")
-    .select("id,category_id,name,slug,short_description,price,original_price,stock,status,delivery_type,image_url,sort_order")
+    .select("id,category_id,name,slug,short_description,price,original_price,stock,status,delivery_type,image_url,sort_order,updated_at")
     .in("status", PRODUCT_STATUSES)
     .order("sort_order", { ascending: true })
     .limit(MAX_INTERNAL_PRODUCTS);
@@ -285,7 +286,11 @@ function compareProducts(a: ProductView, b: ProductView) {
     Number(a.status === "sold_out" || a.effective_stock <= 0) -
     Number(b.status === "sold_out" || b.effective_stock <= 0);
   if (stockWeight !== 0) return stockWeight;
-  return Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0);
+  const sortOrder = Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0);
+  if (sortOrder !== 0) return sortOrder;
+  const updatedAt = (Date.parse(b.updated_at ?? "") || 0) - (Date.parse(a.updated_at ?? "") || 0);
+  if (updatedAt !== 0) return updatedAt;
+  return a.id.localeCompare(b.id);
 }
 
 function productSuccess(

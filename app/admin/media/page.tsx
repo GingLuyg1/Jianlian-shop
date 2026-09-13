@@ -61,6 +61,24 @@ const PURPOSE_OPTIONS = [
   ["misc", "其他"],
 ];
 
+const MAX_MEDIA_FILES = 10;
+const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
+const ALLOWED_MEDIA_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/x-icon"]);
+
+function parseSafeMediaError(payload: unknown, fallback: string) {
+  const record = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
+  const nested = record.error && typeof record.error === "object" && !Array.isArray(record.error) ? record.error as Record<string, unknown> : {};
+  const message = typeof record.error === "string" ? record.error : typeof nested.message === "string" ? nested.message : fallback;
+  const requestId = typeof record.request_id === "string"
+    ? record.request_id
+    : typeof record.requestId === "string"
+      ? record.requestId
+      : typeof nested.request_id === "string"
+        ? nested.request_id
+        : null;
+  return requestId ? `${message}（错误编号：${requestId}）` : message;
+}
+
 function formatBytes(value: number) {
   if (!Number.isFinite(value)) return "—";
   if (value < 1024) return `${value} B`;
@@ -128,21 +146,36 @@ export default function AdminMediaPage() {
       toast.error("请选择图片文件");
       return;
     }
+    const selected = Array.from(files);
+    if (selected.length > MAX_MEDIA_FILES) {
+      toast.error(`单次最多上传 ${MAX_MEDIA_FILES} 个文件，当前选择 ${selected.length} 个`);
+      return;
+    }
+    const oversized = selected.find((file) => file.size > MAX_MEDIA_BYTES);
+    if (oversized) {
+      toast.error(`${oversized.name} 超过 5MB`);
+      return;
+    }
+    const unsupported = selected.find((file) => !ALLOWED_MEDIA_MIME.has(file.type));
+    if (unsupported) {
+      toast.error(`${unsupported.name} 的文件格式不受支持`);
+      return;
+    }
     setUploading(true);
     try {
       const form = new FormData();
       form.set("purpose", purpose);
       form.set("ownerType", "unassigned");
-      Array.from(files).forEach((file) => form.append("files", file));
+      selected.forEach((file) => form.append("files", file));
       const response = await fetch("/api/admin/media", { method: "POST", body: form });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "上传失败");
+      if (!response.ok) throw new Error(parseSafeMediaError(payload, "上传失败"));
       toast.success("图片已上传");
       setFiles(null);
       setFileInputKey((value) => value + 1);
       await loadAssets();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "上传失败");
+      toast.error(`上传失败：${err instanceof Error ? err.message : "请稍后重试"}`);
     } finally {
       setUploading(false);
     }

@@ -67,7 +67,8 @@ test("admin sidebar density and user detail width change only layout contracts",
   const userDetail = file("app/admin/users/[userId]/page.tsx");
 
   assert.match(sidebar, /overflow-y-auto px-2 py-3/);
-  assert.equal((sidebar.match(/min-h-10/g) ?? []).length, 3);
+  assert.equal((sidebar.match(/min-h-\[43px\]/g) ?? []).length, 3);
+  assert.equal((sidebar.match(/w-\[calc\(100%-5px\)\]/g) ?? []).length, 3);
   assert.doesNotMatch(sidebar, /min-h-9/);
   assert.match(layout, /--admin-main-offset:204px/);
   assert.match(layout, /--admin-sidebar-width:204px/);

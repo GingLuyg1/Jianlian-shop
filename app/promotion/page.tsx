@@ -326,7 +326,7 @@ export default function PromotionPage() {
             </div>
 
             <div className="mt-2.5 grid gap-2.5 md:grid-cols-[1fr_1fr_1.15fr]">
-              <InfoTile label="充值提佣倍率" value={`${Math.round((data?.commissionRate ?? 0.03) * 100)}%`} />
+              <InfoTile label="充值提佣倍率" value="暂未开放" />
               <InfoTile label="最低提现额" value={formatMoney(data?.minWithdrawAmount ?? 10)} />
               <button
                 type="button"

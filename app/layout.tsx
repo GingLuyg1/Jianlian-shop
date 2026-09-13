@@ -51,7 +51,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <PageViewTracker />
         </Suspense>
-        <Toaster richColors position="top-center" />
+        <Toaster richColors position="top-center" duration={4000} visibleToasts={4} />
       </body>
     </html>
   );

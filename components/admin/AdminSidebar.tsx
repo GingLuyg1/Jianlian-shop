@@ -53,7 +53,7 @@ export default function AdminSidebar() {
                   aria-controls={`admin-sidebar-group-${item.key}`}
                   onClick={() => setOpenSection((current) => toggleNavigationGroup(current, item.key) as AdminNavigationGroupKey | null)}
                   className={cn(
-                    "flex min-h-10 w-full min-w-0 items-center gap-2.5 rounded-[var(--admin-v2-control-radius)] px-2.5 py-2 text-left text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
+                    "mx-auto flex min-h-[43px] w-[calc(100%-5px)] min-w-0 items-center gap-2.5 rounded-[var(--admin-v2-control-radius)] px-2.5 py-2 text-left text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
                     active
                       ? "bg-[var(--admin-v2-selected)] text-[var(--admin-v2-primary)]"
                       : "text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)] hover:text-[var(--admin-v2-text-primary)]"
@@ -71,7 +71,7 @@ export default function AdminSidebar() {
                         href={child.href}
                         aria-current={isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view")) ? "page" : undefined}
                         className={cn(
-                          "block min-h-10 min-w-0 truncate rounded-[var(--admin-v2-control-radius)] px-2.5 py-2 text-[13px] leading-6 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
+                          "mx-auto block min-h-[43px] w-[calc(100%-5px)] min-w-0 truncate rounded-[var(--admin-v2-control-radius)] px-2.5 py-[9.5px] text-[13px] leading-6 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
                           isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view"))
                             ? "bg-[var(--admin-v2-selected)] font-medium text-[var(--admin-v2-primary)]"
                             : "text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)] hover:text-[var(--admin-v2-text-primary)]"
@@ -93,7 +93,7 @@ export default function AdminSidebar() {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-10 w-full min-w-0 items-center gap-2.5 rounded-[var(--admin-v2-control-radius)] px-2.5 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
+                "mx-auto flex min-h-[43px] w-[calc(100%-5px)] min-w-0 items-center gap-2.5 rounded-[var(--admin-v2-control-radius)] px-2.5 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
                 active ? "bg-[var(--admin-v2-selected)] text-[var(--admin-v2-primary)]" : "text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)] hover:text-[var(--admin-v2-text-primary)]"
               )}
             >
