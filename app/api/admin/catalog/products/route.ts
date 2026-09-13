@@ -90,7 +90,7 @@ export async function GET(request: Request) {
       ? query.order("updated_at", { ascending: false }).order("sort_order", { ascending: true })
       : query.order("sort_order", { ascending: true }).order("updated_at", { ascending: false });
 
-  const { data, error, count } = await sortedQuery.range(from, to);
+  const { data, error, count } = await sortedQuery.order("id", { ascending: true }).range(from, to);
   if (error) {
     console.error("[AdminProductList] read failed", { requestId, code: error.code, message: error.message });
     return productFailureResponse("PRODUCT_LIST_READ_FAILED", "商品列表读取失败，请稍后重试", requestId, 500);

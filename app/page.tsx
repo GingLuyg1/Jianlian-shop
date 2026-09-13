@@ -24,54 +24,54 @@ import { cn } from "@/lib/utils";
 const categoryCards = [
   {
     title: "数字账号",
-    desc: "Apple ID / Steam / Gmail",
+    desc: "Apple ID / Steam / Gmail 等账号商品",
     href: "/products/digital-accounts",
     icon: KeyRound,
     active: true,
   },
   {
     title: "AI会员充值",
-    desc: "ChatGPT / Claude / Grok",
+    desc: "ChatGPT / Claude / Grok 等会员服务",
     href: "/products/ai-membership",
     icon: Bot,
   },
   {
     title: "礼品卡 / 充值卡",
-    desc: "Apple Gift Card / App Store",
+    desc: "Apple Gift Card / App Store 等充值卡",
     href: "/products/gift-cards",
     icon: Gift,
   },
   {
     title: "国际电话卡",
-    desc: "海外实体卡与通信服务",
+    desc: "海外实体卡、SIM 与通信服务",
     href: "/products/sim-cards",
     icon: CreditCard,
   },
   {
     title: "接码服务",
-    desc: "注册验证 / 平台接码",
+    desc: "注册验证 / 平台短信接码",
     href: "/products/sms-code",
     icon: MessageCircle,
   },
   {
     title: "账号充值",
-    desc: "余额与账号增值服务",
+    desc: "账户余额与账号增值服务",
     href: "/products/account-recharge",
     icon: Wallet,
   },
 ];
 
 const hotLinks = [
-  { title: "Apple ID", href: "/products/digital-accounts?category=apple-id" },
-  { title: "Steam 账号", href: "/products/digital-accounts?category=steam" },
-  { title: "ChatGPT Plus", href: "/products/ai-membership?search=ChatGPT" },
-  { title: "Grok Super", href: "/products/ai-membership?search=Grok" },
+  { title: "Apple ID", desc: "多地区 Apple ID 与成品账号", href: "/products/digital-accounts?category=apple-id" },
+  { title: "Steam 账号", desc: "Steam 成品号与游戏账号", href: "/products/digital-accounts?category=steam" },
+  { title: "ChatGPT Plus", desc: "Plus / Pro 等会员服务", href: "/products/ai-membership?search=ChatGPT" },
+  { title: "Grok Super", desc: "Grok 高阶会员服务", href: "/products/ai-membership?search=Grok" },
 ];
 
 const highlights = [
-  { title: "安全合规", desc: "下单前请核对说明", icon: ShieldCheck },
-  { title: "快速交付", desc: "按商品说明处理发货", icon: Timer },
-  { title: "售后核验", desc: "拿到账户后及时检查", icon: CheckCircle2 },
+  { title: "购买前核对", desc: "地区、规格、库存与交付说明", icon: ShieldCheck },
+  { title: "按说明交付", desc: "自动或人工处理，以商品详情为准", icon: Timer },
+  { title: "交付后核验", desc: "收到账号、卡密或充值结果后及时检查", icon: CheckCircle2 },
 ];
 
 const heroSlides = [
@@ -311,7 +311,7 @@ export default function HomePage() {
                   href={item.href}
                   className="flex items-center justify-between rounded-xl border border-border bg-slate-50/70 px-4 py-3 font-semibold text-slate-950 transition-colors hover:border-primary/30 hover:bg-white"
                 >
-                  {item.title}
+                  <span>{item.title}<span className="mt-1 block text-xs font-normal text-muted-foreground">{item.desc}</span></span>
                   <ArrowRight className="h-4 w-4 text-primary" />
                 </Link>
               ))}
@@ -343,7 +343,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm leading-6 text-primary shadow-sm">
             <ShieldCheck className="h-5 w-5 shrink-0" />
-            本站拒绝任何违法用途，仅提供合法电商拓客服务。
+            本站仅提供合法合规的数字商品及相关服务，拒绝任何违法用途。
           </div>
         </section>
       </div>

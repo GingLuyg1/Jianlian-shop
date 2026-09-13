@@ -27,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -36,6 +35,7 @@ import {
 } from "@/components/ui/table";
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminSyncedHorizontalScroller from "@/components/admin/AdminSyncedHorizontalScroller";
 import AdminSupplierBindingSheet from "@/components/admin/suppliers/AdminSupplierBindingSheet";
 import { getSupplierUiDefinition } from "@/components/admin/suppliers/supplier-ui-registry";
 import {
@@ -882,6 +882,7 @@ export default function AdminProductsPage() {
                   onChange={(value) => {
                     setPrimaryFilter(value);
                     setSecondaryFilter("all");
+                    setSortBy(value === "all" ? "updated_at" : "sort_order");
                     setProductPage(1);
                   }}
                 >
@@ -897,6 +898,7 @@ export default function AdminProductsPage() {
                   disabled={primaryFilter === "all"}
                   onChange={(value) => {
                     setSecondaryFilter(value);
+                    setSortBy(primaryFilter !== "all" || value !== "all" ? "sort_order" : "updated_at");
                     setProductPage(1);
                   }}
                 >
@@ -1168,8 +1170,8 @@ function ProductTable({
   hasFilters: boolean;
 }) {
   return (
-    <div className="min-h-0 w-full flex-1 overflow-auto">
-      <Table className="w-full min-w-[1560px] table-fixed">
+    <AdminSyncedHorizontalScroller>
+      <table className="w-full min-w-[1560px] table-fixed caption-bottom text-sm">
         <colgroup>
           <col className="w-[260px]" />
           <col className="w-[140px]" />
@@ -1352,8 +1354,8 @@ function ProductTable({
             })
           )}
         </TableBody>
-      </Table>
-    </div>
+      </table>
+    </AdminSyncedHorizontalScroller>
   );
 }
 

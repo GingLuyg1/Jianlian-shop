@@ -14,54 +14,54 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const steps = [
   {
-    title: "选择类目",
-    text: "从左侧菜单进入对应商品类目，先确认商品名称、地区、库存和价格。",
+    title: "选择商品",
+    text: "通过左侧分类进入对应商品列表，确认商品名称、地区、规格、库存和售价。",
     icon: Search,
   },
   {
-    title: "核对说明",
-    text: "下单前阅读商品详情、交付规则和售后期限，账号/卡密类商品请特别核对。",
+    title: "核对详情",
+    text: "重点查看商品说明、交付方式、所需信息和售后时效。商品详情页的具体说明优先于通用教程。",
     icon: ClipboardCheck,
   },
   {
-    title: "提交订单",
-    text: "填写接收邮箱或必要信息，确认无误后提交订单并等待处理。",
+    title: "填写并提交",
+    text: "正确填写接收邮箱及必要的订单信息。提交前再次确认商品与联系方式无误。",
     icon: CreditCard,
   },
   {
-    title: "检查交付",
-    text: "收到账号、卡密或充值结果后第一时间检查，有问题请在售后期内联系客服。",
+    title: "交付后核验",
+    text: "收到账号、卡密或充值结果后尽快检查。如发现商品问题，请保留订单信息并在商品标注的售后时效内联系客服。",
     icon: PackageCheck,
   },
 ];
 
 const notices = [
-  "账号、卡密、充值类商品通常为一次性数字商品，非商品问题售出后不退不换。",
-  "售后期通常以商品发货后 24 小时内为准，具体以商品详情页说明为准。",
-  "库存为 0 或需要批量购买时，请先联系在线客服确认库存和交付时间。",
+  "库存与批量购买：库存为 0 或需要批量购买时，先联系在线客服确认库存、价格和交付时间。",
+  "交付方式：不同商品可能为自动发货、自动处理或人工处理，实际交付方式以商品详情页为准。",
+  "售后时效：数字商品交付后请及时核验。具体售后范围与时效以商品详情和适用规则为准。",
 ];
 
 const serviceRules = [
-  { title: "安全合规", text: "本站仅提供合法电商拓客相关服务。", icon: ShieldCheck },
-  { title: "及时核验", text: "拿到账号或卡密后请第一时间检查。", icon: CheckCircle2 },
-  { title: "先问客服", text: "不确定商品是否适合时，先联系客服确认。", icon: Headphones },
+  { title: "购买前核对", text: "地区、规格、库存和交付说明", icon: ShieldCheck },
+  { title: "按说明交付", text: "自动或人工处理，以商品详情为准", icon: Headphones },
+  { title: "交付后核验", text: "收到账号、卡密或充值结果后及时检查", icon: CheckCircle2 },
 ];
 
 export default function TutorialsPage() {
   return (
-    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-hidden px-4 py-3 md:px-6">
+    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-y-auto px-4 py-3 md:px-6">
       <div className="mx-auto grid h-full max-w-[1500px] gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="space-y-5">
-          <Card className="overflow-hidden border-orange-100 bg-gradient-to-br from-orange-50 via-white to-white">
+          <Card className="overflow-hidden border-orange-100 bg-orange-50">
             <CardContent className="p-6 md:p-8">
               <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-primary">
                 Jianlian 使用教程
               </div>
               <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-950">
-                下单前先看说明，交付后及时检查
+                购买与交付指南
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground">
-                本页用于说明常见购买流程。不同商品的交付方式和售后规则可能不同，请以商品详情页展示内容为准。
+                下单前核对商品信息，交付后及时完成核验。不同商品的地区、规格、交付方式和售后规则可能不同，请始终以商品详情页展示内容为准。
               </p>
             </CardContent>
           </Card>
@@ -150,16 +150,16 @@ export default function TutorialsPage() {
 
           <Card className="bg-primary text-white">
             <CardContent className="p-5">
-              <h2 className="text-lg font-bold">需要补货或批量购买？</h2>
+              <h2 className="text-lg font-bold">需要补货、批量购买或不确定商品是否适用？</h2>
               <p className="mt-3 text-sm leading-7 text-white/90">
-                请先联系在线客服确认库存、价格和交付时间，再提交订单。
+                先联系在线客服确认后再下单。
               </p>
               <button
                 type="button"
                 className="mt-5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-primary"
                 {...({ popovertarget: "support-popover" } as Record<string, string>)}
               >
-                联系客服
+                联系在线客服
               </button>
             </CardContent>
           </Card>

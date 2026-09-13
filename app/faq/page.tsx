@@ -23,78 +23,99 @@ const faqGroups = [
     icon: HelpCircle,
     items: [
       {
-        question: "下单前需要注意什么？",
+        question: "下单前需要确认哪些信息？",
         answer:
-          "请先看清商品名称、地区、库存、价格、交付方式和商品说明。账号、卡密、充值类商品通常不支持无理由退换。",
+          "确认商品名称、地区、规格、库存、售价、交付方式以及商品详情说明。不同地区或规格的商品可能存在使用限制。",
       },
       {
-        question: "库存为 0 还能购买吗？",
+        question: "库存为 0 怎么办？",
         answer:
-          "库存为 0 时请不要直接下单。需要补货或批量购买时，请先联系在线客服确认库存和交付时间。",
+          "库存为 0 时请先联系在线客服确认补货时间。批量购买也建议先确认库存和交付能力。",
       },
       {
-        question: "不确定商品是否适合怎么办？",
+        question: "页面价格和库存以哪里为准？",
+        answer: "商品价格与库存以商品详情页和提交订单时展示的数据为准。",
+      },
+      {
+        question: "不确定商品是否适用怎么办？",
         answer:
-          "请先联系客服说明你的使用场景，让客服帮你确认商品类型。确认后再下单，可以减少买错规格的情况。",
+          "不要直接下单。先将商品名称及使用需求告知在线客服确认。",
       },
     ],
   },
   {
-    title: "交付与查询",
+    title: "订单与交付",
     icon: PackageCheck,
     items: [
       {
-        question: "数字商品如何交付？",
+        question: "接收邮箱为什么要填写正确？",
         answer:
-          "账号、卡密或充值结果会按商品说明交付。请填写正确的接收邮箱，并在订单提交后留意订单状态。",
+          "邮箱可能用于订单通知、交付信息或售后核验，请填写可以正常接收邮件的地址。",
       },
       {
-        question: "如何查询订单？",
+        question: "订单在哪里查看？",
         answer:
-          "进入左侧菜单“我的订单”，可查看订单记录，也可以在页面右侧输入订单号快速查询。",
+          "登录后进入“我的订单”查看订单状态和交付结果。",
       },
       {
-        question: "多久可以处理完成？",
+        question: "商品多久交付？",
         answer:
-          "不同商品处理时间不同，具体以商品详情页说明为准。部分商品需要人工处理，可能会有排队时间。",
+          "自动商品通常在付款确认后自动处理；人工处理商品的时间以商品详情说明为准。",
+      },
+      {
+        question: "订单一直处理中怎么办？",
+        answer: "先刷新订单状态。超过商品说明中的正常处理时间后，携带订单号联系在线客服。",
       },
     ],
   },
   {
-    title: "售后规则",
+    title: "售后与核验",
     icon: ShieldCheck,
     items: [
       {
-        question: "售后期是多久？",
+        question: "售后时效是多久？",
         answer:
-          "如无单独标注，售后期通常为商品发货后 24 小时内。收到账号或卡密后，请第一时间检查。",
+          "不同商品可能不同，以商品详情页标注的售后范围和时效为准。",
       },
       {
-        question: "什么情况不支持退换？",
+        question: "哪些情况可能不属于商品问题？",
         answer:
-          "非商品问题、买错规格、未按说明操作、超出售后期、账号共享或违规使用导致的问题，通常不支持退换。",
+          "错误购买地区或规格、超出商品说明范围的使用，以及用户自行操作导致的问题，需要按照具体商品规则判断。",
       },
       {
-        question: "网站是否提供教程？",
+        question: "收到商品后应该做什么？",
         answer:
-          "本站不提供任何违法用途教程，不为任何非法行业提供支持。仅提供商品登录、核验等必要说明。",
+          "尽快核对账号、卡密、充值结果或其它交付内容，并确认是否与订单一致。",
       },
+      {
+        question: "出现问题需要提供什么？",
+        answer: "提供订单号和能够说明问题的必要截图或信息。不要通过公开渠道发送密码、验证码或其它敏感凭据。",
+      },
+    ],
+  },
+  {
+    title: "合规与安全",
+    icon: ShieldCheck,
+    items: [
+      { question: "网站是否提供违规用途教程？", answer: "不提供。本站仅提供合法合规的数字商品及相关服务，拒绝任何违法用途。" },
+      { question: "账号或卡密收到后需要注意什么？", answer: "及时检查交付内容，并按照商品说明完成必要的安全设置。不要向无关第三方泄露账号、卡密或验证码。" },
     ],
   },
 ];
 
 const keyPoints = [
-  { title: "24 小时内检查", text: "拿到账号或卡密后第一时间核验。", icon: Clock3 },
-  { title: "邮箱填写正确", text: "卡密类商品请填写可接收的邮箱。", icon: MailCheck },
-  { title: "合规使用", text: "仅限合法电商拓客服务场景。", icon: ShieldCheck },
+  { title: "商品详情优先", text: "具体规格、交付和售后以商品详情为准", icon: HelpCircle },
+  { title: "联系方式准确", text: "接收邮箱等订单信息请确认填写正确", icon: MailCheck },
+  { title: "及时核验", text: "收到交付内容后尽快检查", icon: Clock3 },
+  { title: "合规使用", text: "本站拒绝任何违法用途", icon: ShieldCheck },
 ];
 
 export default function FAQPage() {
   return (
-    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-hidden px-4 py-3 md:px-6">
+    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-y-auto px-4 py-3 md:px-6">
       <div className="mx-auto grid h-full max-w-[1500px] gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="space-y-5">
-          <Card className="overflow-hidden border-orange-100 bg-gradient-to-br from-orange-50 via-white to-white">
+          <Card className="overflow-hidden border-orange-100 bg-orange-50">
             <CardContent className="p-6 md:p-8">
               <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-primary">
                 常见问题
@@ -108,7 +129,7 @@ export default function FAQPage() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="grid gap-5 lg:grid-cols-2">
             {faqGroups.map((group) => {
               const Icon = group.icon;
               return (
@@ -184,7 +205,7 @@ export default function FAQPage() {
                 <h2 className="text-lg font-bold">合规声明</h2>
               </div>
               <p className="mt-3 text-sm leading-7 text-slate-700">
-                本站产品拒绝任何违法行为，不提供任何违法用途教程，不为任何非法行业提供任何支持。
+                本站仅提供合法合规的数字商品及相关服务，拒绝任何违法用途。
               </p>
             </CardContent>
           </Card>
