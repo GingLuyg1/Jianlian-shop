@@ -55,8 +55,10 @@ test("user, risk, and request trace detail pages use the V2 detail hierarchy", (
     assert.match(source, /AdminInfoGrid/);
     assert.match(source, /AdminReadOnlyBadge/);
     assert.match(source, /AdminDetailBackLink/);
-    assert.match(source, /xl:grid-cols-\[minmax\(0,1fr\)_320px\]/);
   }
+  assert.doesNotMatch(user, /xl:grid-cols-\[minmax\(0,1fr\)_320px\]/);
+  assert.match(user, /<aside className="grid min-w-0 gap-4 xl:grid-cols-3">/);
+  for (const source of [risk, trace]) assert.match(source, /xl:grid-cols-\[minmax\(0,1fr\)_320px\]/);
   assert.match(user, /AdminRelatedLink/);
   assert.match(user, /AdminTimeline/);
   assert.match(risk, /AdminRelatedLink/);

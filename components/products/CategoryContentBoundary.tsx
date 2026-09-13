@@ -2,9 +2,11 @@
 
 import { type ReactNode } from "react";
 
+import { mallShellClassName } from "./product-ui";
+
 export default function CategoryContentBoundary({ children }: { children: ReactNode }) {
   return (
-    <div className="relative grid h-[calc(100dvh-87px)] min-h-0 grid-cols-1 items-stretch gap-5 overflow-hidden lg:grid-cols-[270px_minmax(0,1fr)]">
+    <div data-testid="storefront-category-layout" className={mallShellClassName}>
       {children}
     </div>
   );
