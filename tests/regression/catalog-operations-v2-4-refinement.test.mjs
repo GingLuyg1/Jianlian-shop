@@ -15,17 +15,32 @@ test("category changes select category order without resetting it on secondary f
   }
   assert.match(read("app/api/admin/catalog/products/route.ts"), /sortedQuery\.order\("id", \{ ascending: true \}\)\.range/);
 });
-test("table viewport has a separate synchronized opaque rail and no nested Table wrapper", () => {
+test("table viewport hides its own horizontal scrollbar and keeps one synchronized rail", () => {
   const rail = read("components/admin/AdminSyncedHorizontalScroller.tsx");
   assert.match(rail, /new ResizeObserver/);
   assert.match(rail, /viewport\.scrollWidth/);
   assert.match(rail, /railRef\.current\.scrollLeft = viewportRef\.current\.scrollLeft/);
   assert.match(rail, /viewportRef\.current\.scrollLeft = railRef\.current\.scrollLeft/);
+  assert.match(rail, /data-admin-table-viewport/);
+  assert.match(rail, /overflow-x-hidden overflow-y-auto/);
+  assert.doesNotMatch(rail, /className="min-h-0 flex-1 overflow-auto"/);
+  assert.match(rail, /data-admin-horizontal-rail/);
   assert.match(rail, /sticky bottom-0.*shrink-0.*bg-white/);
   const source = read("app/admin/products/page.tsx");
   assert.match(source, /<AdminSyncedHorizontalScroller>\s*<table/);
   assert.match(source, /sticky top-0 z-20 bg-slate-50/);
   assert.match(source, /sticky right-0 z-30/);
+});
+test("root and child category cards keep all three actions on one compact row", () => {
+  const source = read("app/admin/categories/page.tsx");
+  const card = source.slice(source.indexOf("function CategoryCard"), source.indexOf("function StatusBadge"));
+  assert.match(card, /data-category-actions[^>]*flex-nowrap/);
+  assert.doesNotMatch(card, /data-category-actions[^>]*flex-wrap/);
+  assert.equal((card.match(/h-8 shrink-0 px-2 text-xs/g) ?? []).length, 3);
+  for (const action of ["编辑", "停用", "启用", "删除"]) assert.ok(card.includes(action));
+  assert.match(card, /onClick=\{onEdit\}/);
+  assert.match(card, /onClick=\{onToggle\}/);
+  assert.match(card, /onClick=\{onDelete\}/);
 });
 test("tutorial and FAQ prioritize actual product-specific delivery and aftersales rules", () => {
   const tutorial = read("app/tutorials/page.tsx");

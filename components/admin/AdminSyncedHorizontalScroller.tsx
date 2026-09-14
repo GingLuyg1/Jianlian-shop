@@ -19,14 +19,17 @@ export default function AdminSyncedHorizontalScroller({ children }: { children: 
   }, [children]);
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
-      <div ref={viewportRef} className="min-h-0 flex-1 overflow-auto"
+      <div
+        ref={viewportRef}
+        data-admin-table-viewport
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
         onScroll={() => {
           if (railRef.current && viewportRef.current && railRef.current.scrollLeft !== viewportRef.current.scrollLeft)
             railRef.current.scrollLeft = viewportRef.current.scrollLeft;
         }}>
         {children}
       </div>
-      <div ref={railRef} tabIndex={0} role="region" aria-label="商品表格横向滚动"
+      <div ref={railRef} tabIndex={0} role="region" aria-label="商品表格横向滚动" data-admin-horizontal-rail
         className="sticky bottom-0 z-30 h-5 shrink-0 overflow-x-auto overflow-y-hidden border-t bg-white"
         onScroll={() => {
           if (viewportRef.current && railRef.current && viewportRef.current.scrollLeft !== railRef.current.scrollLeft)
