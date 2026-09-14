@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildSupplierStockSnapshotUpdate, listDajuSkuStockOptions, resolveDajuEffectiveStock } from "../../lib/providers/daju/stock.mjs";
+import { buildSupplierStockAggregateUpdate, buildSupplierStockSnapshotUpdate, collectDajuBoundProductIds, listDajuSkuStockOptions, parseDajuSkuStockBinding, resolveDajuEffectiveStock, sumActiveSupplierSkuStock } from "../../lib/providers/daju/stock.mjs";
 
 const detail = {
   id: 15, title: "Product", price: "8", stock: 27, sales: 0, isAuto: true,
@@ -35,4 +35,29 @@ test("provider failure retains last successful stock snapshot", () => {
 
 test("non-SKU supplier product uses authoritative detail stock", () => {
   assert.deepEqual(resolveDajuEffectiveStock({ ...detail, isSku: false, stock: 6 }, null), { ok: true, stock: 6, source: "product" });
+});
+
+test("multi-SKU stock binding never inherits the parent supplier SKU", () => {
+  const parent = { fulfillment_source: "supplier", supplier: "daju", supplier_product_id: 15, supplier_sku: "13", supplier_inputs_mapping: {} };
+  const missingSku = parseDajuSkuStockBinding(parent, {});
+  const explicitSku = parseDajuSkuStockBinding(parent, { supplier_sku: "14" });
+  assert.equal(missingSku?.sku, null);
+  assert.equal(explicitSku?.sku, "14");
+});
+
+test("partial sync aggregates successful values with failed SKU last-good stock", () => {
+  const failed = buildSupplierStockSnapshotUpdate(18, { supplier_stock_snapshot: 18, supplier_stock_last_success_at: "2026-09-14T00:00:00.000Z" }, { ok: false, code: "SUPPLIER_READ_FAILED" }, "2026-09-15T00:00:00.000Z");
+  const aggregate = sumActiveSupplierSkuStock([{ status: "active", stock: failed.stock }, { status: "active", stock: 9 }, { status: "inactive", stock: 99 }]);
+  const productUpdate = buildSupplierStockAggregateUpdate({}, aggregate, "2026-09-15T00:00:00.000Z", false);
+  assert.equal(failed.stock, 18);
+  assert.equal(failed.metadata.supplier_stock_last_success_at, "2026-09-14T00:00:00.000Z");
+  assert.equal(productUpdate.stock, 27);
+  assert.equal(productUpdate.metadata.supplier_stock_sync_status, "partial");
+});
+
+test("batch discovery includes products bound only through SKU metadata", () => {
+  assert.deepEqual(
+    collectDajuBoundProductIds([{ id: "product-bound" }], [{ product_id: "sku-only" }, { product_id: "product-bound" }]),
+    ["product-bound", "sku-only"],
+  );
 });

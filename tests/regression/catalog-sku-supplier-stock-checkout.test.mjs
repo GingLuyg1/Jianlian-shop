@@ -36,10 +36,17 @@ test("supplier binding provides friendly SKU choices and saves website SKU mappi
 test("stock sync preserves snapshots and never performs supplier purchase", () => {
   const service = file("lib/providers/daju/stock-sync.ts");
   const route = file("app/api/admin/suppliers/daju/stock/[productId]/route.ts");
+  const batchRoute = file("app/api/admin/suppliers/daju/stock/route.ts");
   assert.match(service, /syncDajuProductStock/);
   assert.match(service, /buildSupplierStockSnapshotUpdate/);
+  assert.match(service, /parseDajuSkuStockBinding/);
+  assert.match(service, /effectiveRows\.push\(\{ status: row\.status, stock: row\.stock \}\)/);
+  assert.match(service, /buildSupplierStockAggregateUpdate/);
+  assert.match(batchRoute, /from\("product_skus"\)/);
+  assert.match(batchRoute, /collectDajuBoundProductIds/);
   assert.doesNotMatch(service, /\.purchase\s*\(/);
   assert.doesNotMatch(route, /\.purchase\s*\(/);
+  assert.doesNotMatch(batchRoute, /\.purchase\s*\(/);
   assert.match(route, /sync_daju_supplier_stock/);
 });
 

@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createDajuClient } from "./client";
 import { parseDajuProductBinding } from "./mapper.mjs";
-import { buildSupplierStockSnapshotUpdate, resolveDajuEffectiveStock } from "./stock.mjs";
+import { buildSupplierStockAggregateUpdate, buildSupplierStockSnapshotUpdate, parseDajuSkuStockBinding, resolveDajuEffectiveStock, sumActiveSupplierSkuStock } from "./stock.mjs";
 import type { DajuClient, DajuProductDetail } from "./types";
 
 type SyncOptions = { service: SupabaseClient; productId: string; client?: DajuClient };
@@ -29,34 +29,45 @@ export async function syncDajuProductStock({ service, productId, client = create
 
   if (rows.length > 0) {
     let updated = 0;
-    let aggregate = 0;
     let aggregateComplete = true;
+    const effectiveRows: Array<{ status: string | null | undefined; stock: number }> = [];
     for (const row of rows) {
       const metadata = metadataOf(row.metadata);
-      const binding = parseDajuProductBinding(metadataOf(productRow.metadata), metadata);
-      if (!binding) { aggregateComplete = false; continue; }
+      const binding = parseDajuSkuStockBinding(metadataOf(productRow.metadata), metadata);
+      if (!binding) {
+        aggregateComplete = false;
+        effectiveRows.push({ status: row.status, stock: row.stock });
+        continue;
+      }
       try {
         const detail = await loadDetail(binding.productId);
         const resolved = resolveDajuEffectiveStock(detail, binding.sku);
         if (!resolved.ok) {
           aggregateComplete = false;
           await service.from("product_skus").update({ metadata: buildSupplierStockSnapshotUpdate(row.stock, metadata, resolved, syncedAt).metadata }).eq("id", row.id);
+          effectiveRows.push({ status: row.status, stock: row.stock });
           continue;
         }
         const update = buildSupplierStockSnapshotUpdate(row.stock, metadata, resolved, syncedAt);
         const { error } = await service.from("product_skus").update(update).eq("id", row.id);
-        if (error) { aggregateComplete = false; continue; }
+        if (error) {
+          aggregateComplete = false;
+          effectiveRows.push({ status: row.status, stock: row.stock });
+          continue;
+        }
         updated += 1;
-        if (row.status === "active") aggregate += resolved.stock;
+        effectiveRows.push({ status: row.status, stock: resolved.stock });
       } catch {
         aggregateComplete = false;
         await service.from("product_skus").update({ metadata: buildSupplierStockSnapshotUpdate(row.stock, metadata, { ok: false, code: "SUPPLIER_READ_FAILED" }, syncedAt).metadata }).eq("id", row.id);
+        effectiveRows.push({ status: row.status, stock: row.stock });
       }
     }
-    if (aggregateComplete && updated > 0) {
-      await service.from("products").update(buildSupplierStockSnapshotUpdate(productRow.stock, metadataOf(productRow.metadata), { ok: true, stock: aggregate }, syncedAt)).eq("id", productId);
-    }
-    return { ok: aggregateComplete && updated > 0, code: aggregateComplete ? "SYNCED" : "PARTIAL_OR_FAILED", updated, stock: aggregateComplete ? aggregate : productRow.stock } as const;
+    const aggregate = sumActiveSupplierSkuStock(effectiveRows);
+    const complete = aggregateComplete && updated === rows.length;
+    const { error: aggregateError } = await service.from("products").update(buildSupplierStockAggregateUpdate(metadataOf(productRow.metadata), aggregate, syncedAt, complete)).eq("id", productId);
+    if (aggregateError) return { ok: false as const, code: "STOCK_WRITE_FAILED", updated, stock: productRow.stock };
+    return { ok: complete, code: complete ? "SYNCED" : "PARTIAL_OR_FAILED", updated, stock: aggregate } as const;
   }
 
   const productMetadata = metadataOf(productRow.metadata);
