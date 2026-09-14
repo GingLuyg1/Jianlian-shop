@@ -42,6 +42,26 @@ export type AdminProduct = {
   created_at?: string | null;
 };
 
+export type AdminProductSku = {
+  id: string;
+  product_id: string;
+  sku_code: string | null;
+  sku_title: string | null;
+  price: number;
+  original_price: number | null;
+  stock: number;
+  status: ProductStatus;
+  delivery_type: DeliveryType | null;
+  image_url: string | null;
+  sort_order: number;
+  metadata: Record<string, unknown> | null;
+};
+
+export type ProductSkuPayload = Omit<AdminProductSku, "id" | "product_id" | "metadata">;
+export class ProductSkuWriteError extends Error {
+  constructor(message: string, public savedSku: AdminProductSku) { super(message); }
+}
+
 export type ProductFilters = {
   search?: string;
   categoryId?: string;
@@ -125,7 +145,11 @@ async function adminCatalogRequest<T>(url: string, init: RequestInit = {}): Prom
         : apiError && typeof apiError === "object" && "message" in apiError
           ? String((apiError as { message?: unknown }).message ?? "")
           : "";
-    throw new Error(apiMessage || fieldError || "操作失败，请稍后重试");
+    const message = apiMessage || fieldError || "操作失败，请稍后重试";
+    if ("sku" in body && body.sku && typeof body.sku === "object" && "id" in body.sku) {
+      throw new ProductSkuWriteError(message, normalizeProductSku(body.sku as Record<string, unknown>));
+    }
+    throw new Error(message);
   }
 
   return body as T;
@@ -334,6 +358,19 @@ export async function listProducts({
   };
 }
 
+function normalizeProductSku(row: Record<string, unknown>): AdminProductSku {
+  return {
+    id: String(row.id), product_id: String(row.product_id),
+    sku_code: row.sku_code ? String(row.sku_code) : null,
+    sku_title: row.sku_title ? String(row.sku_title) : null,
+    price: normalizeNumber(row.price), original_price: row.original_price == null ? null : normalizeNumber(row.original_price),
+    stock: normalizeNumber(row.stock), status: (row.status as ProductStatus) ?? "draft",
+    delivery_type: row.delivery_type ? row.delivery_type as DeliveryType : null,
+    image_url: row.image_url ? String(row.image_url) : null, sort_order: normalizeNumber(row.sort_order),
+    metadata: row.metadata && typeof row.metadata === "object" ? row.metadata as Record<string, unknown> : null,
+  };
+}
+
 export async function reorderProducts(categoryId: string, products: AdminProduct[]) {
   const items = products.map((product, index) => ({ id: product.id, sortOrder: (index + 1) * 10 }));
   const result = await adminCatalogEnvelopeRequest<{ products: Array<Record<string, unknown>> }>(
@@ -344,6 +381,18 @@ export async function reorderProducts(categoryId: string, products: AdminProduct
     }
   );
   return (result.products ?? []).map(normalizeProduct);
+}
+
+export async function reorderCategories(parentId: string | null, categories: AdminCategory[]) {
+  const items = categories.map((category, index) => ({ id: category.id, sortOrder: (index + 1) * 10 }));
+  const result = await adminCatalogEnvelopeRequest<{ categories: Array<Record<string, unknown>> }>(
+    "/api/admin/catalog/categories/reorder",
+    {
+      method: "POST",
+      body: JSON.stringify({ parentId, items }),
+    }
+  );
+  return (result.categories ?? []).map(normalizeCategory);
 }
 
 export async function getProduct(id: string) {
@@ -407,4 +456,23 @@ export async function setProductStatus(id: string, status: ProductStatus) {
   );
   const product = result.product ?? result.data?.product;
   return normalizeProduct(assertApiRecord(product, "商品状态更新失败，服务器没有返回最新商品"));
+}
+
+export async function listProductSkus(productId: string) {
+  const result = await adminCatalogRequest<{ skus: Array<Record<string, unknown>> }>(`/api/admin/products/${encodeURIComponent(productId)}/skus`);
+  return (result.skus ?? []).map(normalizeProductSku);
+}
+
+export async function createProductSku(productId: string, payload: ProductSkuPayload) {
+  const result = await adminCatalogRequest<{ sku: Record<string, unknown> }>(`/api/admin/products/${encodeURIComponent(productId)}/skus`, { method: "POST", body: JSON.stringify(payload) });
+  return normalizeProductSku(result.sku);
+}
+
+export async function updateProductSku(productId: string, skuId: string, payload: Partial<ProductSkuPayload>) {
+  const result = await adminCatalogRequest<{ sku: Record<string, unknown> }>(`/api/admin/products/${encodeURIComponent(productId)}/skus/${encodeURIComponent(skuId)}`, { method: "PATCH", body: JSON.stringify(payload) });
+  return normalizeProductSku(result.sku);
+}
+
+export async function deleteProductSku(productId: string, skuId: string) {
+  await adminCatalogRequest<{ ok: boolean }>(`/api/admin/products/${encodeURIComponent(productId)}/skus/${encodeURIComponent(skuId)}`, { method: "DELETE" });
 }

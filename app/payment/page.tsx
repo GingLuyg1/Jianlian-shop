@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { copyWithFeedback } from "@/lib/ui/copy-feedback";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Clock3, Copy, ExternalLink, Headphones, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 
@@ -545,7 +547,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   }, [rechargeNo, succeeded]);
 
   async function copyRechargeText(value: string) {
-    await navigator.clipboard.writeText(value);
+    await copyWithFeedback(value);
   }
 
   async function verifyRechargeTxHash() {
@@ -566,7 +568,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
       setVerifyMessage("TxHash 已提交核验，请勿重复付款。页面会继续自动刷新充值状态。");
       await loadRecharge({ silent: true });
     } catch (verifyError) {
-      setError(getOrderErrorMessage(verifyError, "链上交易核验失败"));
+      toast.error(getOrderErrorMessage(verifyError, "链上交易核验失败"));
     } finally {
       setVerifying(false);
     }
@@ -824,7 +826,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
       if (!response.ok) throw new Error(result?.error ?? "支付会话创建失败");
       setSession(result);
     } catch (sessionError) {
-      setError(getOrderErrorMessage(sessionError, "支付会话创建失败"));
+      toast.error(getOrderErrorMessage(sessionError, "支付会话创建失败"));
     } finally {
       setCreatingSession(false);
     }
@@ -856,7 +858,11 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
       }
       return true;
     } catch (sessionError) {
-      if (!options.silent) setError(getOrderErrorMessage(sessionError, "USDT-BEP20 支付单创建失败"));
+      if (!options.silent) {
+        const message = getOrderErrorMessage(sessionError, "USDT-BEP20 支付单创建失败");
+        if (options.create) toast.error(message);
+        else setError(message);
+      }
       return false;
     } finally {
       if (!options.silent) setCreatingSession(false);
@@ -888,7 +894,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
       }
       return true;
     } catch (verifyError) {
-      if (!options.silent) setError(getOrderErrorMessage(verifyError, "链上交易校验失败"));
+      if (!options.silent) toast.error(getOrderErrorMessage(verifyError, "链上交易校验失败"));
       return false;
     } finally {
       bep20VerifyInFlight.current = false;
@@ -1014,7 +1020,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
   }, [bep20Session?.overpaymentCredit?.processedAt]);
 
   async function copyText(value: string) {
-    await navigator.clipboard.writeText(value);
+    await copyWithFeedback(value);
   }
 
   return (

@@ -57,7 +57,8 @@ test("product operations default to updated time and remove only original price 
   assert.doesNotMatch(categories, /label="原价"/);
   assert.match(page, /original_price: preservedOriginalPrice, \.\.\.updatePayload/);
   assert.match(categories, /original_price: preservedOriginalPrice, \.\.\.updatePayload/);
-  assert.match(page, /updateProduct\(editingProductId, updatePayload\)/);
+  assert.match(page, /updateProduct\(editingProductId, saveSkus \? basePayload : updatePayload\)/);
+  assert.match(page, /price: previewPrice, stock: previewStock, \.\.\.basePayload/);
   assert.match(categories, /updateProduct\(productForm\.id, updatePayload\)/);
   assert.match(page, /TableHeader className="sticky top-0 z-20 bg-slate-50 \[&_th\]:bg-slate-50"/);
   assert.match(page, />更新时间</);

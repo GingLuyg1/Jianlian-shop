@@ -252,22 +252,22 @@ export default function AdminMediaPage() {
             <table className="min-w-[1120px] w-full text-left text-sm">
               <thead className={adminListTableHeadClass}>
                 <tr>
-                  <th className="px-4 py-3">缩略图</th>
+                  <th className="px-4 py-3 text-center">缩略图</th>
                   <th className="px-4 py-3">文件</th>
                   <th className="px-4 py-3">用途</th>
                   <th className="px-4 py-3">Bucket / 路径</th>
-                  <th className="px-4 py-3">类型</th>
-                  <th className="px-4 py-3">大小</th>
-                  <th className="px-4 py-3">尺寸</th>
-                  <th className="px-4 py-3">状态</th>
-                  <th className="px-4 py-3">上传时间</th>
-                  <th className="px-4 py-3 text-right">操作</th>
+                  <th className="px-4 py-3 text-center">类型</th>
+                  <th className="px-4 py-3 text-center">大小</th>
+                  <th className="px-4 py-3 text-center">尺寸</th>
+                  <th className="px-4 py-3 text-center">状态</th>
+                  <th className="px-4 py-3 text-center">上传时间</th>
+                  <th className="px-4 py-3 text-center">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-v2-border)]">
                 {filteredAssets.map((asset) => (
                   <tr key={asset.id} className={adminListRowClass}>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-center">
                       {asset.public_url ? <img src={asset.public_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" /> : <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100"><ImageIcon className="h-5 w-5 text-slate-400" /></div>}
                     </td>
                     <td className="max-w-[220px] px-4 py-3">
@@ -279,13 +279,13 @@ export default function AdminMediaPage() {
                       <div className="font-medium text-slate-700">{asset.bucket}</div>
                       <div className="truncate text-xs text-slate-500">{asset.storage_path}</div>
                     </td>
-                    <td className="px-4 py-3">{asset.mime_type}</td>
-                    <td className="px-4 py-3">{formatBytes(Number(asset.file_size))}</td>
-                    <td className="px-4 py-3">{asset.width && asset.height ? `${asset.width}×${asset.height}` : "—"}</td>
-                    <td className="px-4 py-3"><AdminStatusBadge tone={mediaStatusTone(asset.status)}>{statusLabel(asset.status)}</AdminStatusBadge></td>
-                    <td className="px-4 py-3">{formatDate(asset.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
+                    <td className="px-4 py-3 text-center">{asset.mime_type}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">{formatBytes(Number(asset.file_size))}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">{asset.width && asset.height ? `${asset.width}×${asset.height}` : "—"}</td>
+                    <td className="px-4 py-3 text-center"><AdminStatusBadge tone={mediaStatusTone(asset.status)}>{statusLabel(asset.status)}</AdminStatusBadge></td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center">{formatDate(asset.created_at)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex justify-center gap-2 whitespace-nowrap">
                         <Button variant="outline" size="icon" onClick={() => copyUrl(asset)} title="复制地址"><Copy className="h-4 w-4" /></Button>
                         <Button variant="outline" size="icon" onClick={() => archiveAsset(asset)} disabled={asset.status === "active"} title={asset.status === "active" ? "使用中资源不可归档" : "归档未引用资源"}><Archive className="h-4 w-4" /></Button>
                       </div>

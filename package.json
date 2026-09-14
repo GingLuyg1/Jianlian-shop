@@ -12,6 +12,7 @@
     "check:bep20-test-readiness": "node scripts/check-bep20-test-readiness.mjs",
     "check:order-expiration-readiness": "node scripts/check-order-expiration-readiness.mjs",
     "catalog:migrate": "node scripts/migrate-static-catalog-to-supabase.cjs",
+    "catalog:sku-backfill": "node scripts/backfill-legacy-product-skus.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "storybook": "storybook dev -p 6006",

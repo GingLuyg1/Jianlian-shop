@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Eye, RefreshCw } from "lucide-react";
@@ -79,14 +80,14 @@ export default function AdminSystemErrorsPage() {
 
   async function updateStatus(next: EventStatus) {
     if (!selected || saving) return;
-    if ((next === "resolved" || next === "ignored") && !note.trim()) { setError("标记已解决或已忽略时必须填写处理说明。"); return; }
+    if ((next === "resolved" || next === "ignored") && !note.trim()) { toast.warning("标记已解决或已忽略时必须填写处理说明。"); return; }
     setSaving(true); setError("");
     try {
       const response = await fetch("/api/admin/system-errors", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: selected.id, status: next, resolutionNote: note }) });
       const body = await response.json().catch(() => null) as { event?: EventRow; error?: ApiError } | null;
       if (!response.ok) throw new Error(errorMessage(body?.error, response));
       if (body?.event) { setSelected(body.event); setRows((current) => current.map((row) => row.id === body.event?.id ? body.event : row)); }
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "状态更新失败，请稍后重试。"); }
+    } catch (caught) { toast.error(caught instanceof Error ? caught.message : "状态更新失败，请稍后重试。"); }
     finally { setSaving(false); }
   }
 

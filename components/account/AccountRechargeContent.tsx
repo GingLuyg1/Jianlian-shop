@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,7 +81,6 @@ export default function AccountRechargeContent() {
   const [customerNote, setCustomerNote] = useState("");
   const clientRequestIdRef = useRef<string | null>(null);
   const [activeRecordTab, setActiveRecordTab] = useState<RecordTab>("recharge");
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [records, setRecords] = useState<RechargeRecord[]>([]);
@@ -214,7 +214,6 @@ export default function AccountRechargeContent() {
   }, []);
 
   const updateAmount = (value: string) => {
-    setSubmitError(null);
     setSubmitMessage(null);
     if (selectedChannel) setAmountText(normalizeAmountInput(value, isUsdtCnyRecharge ? "CNY" : selectedChannel.currency));
     clientRequestIdRef.current = null;
@@ -225,7 +224,6 @@ export default function AccountRechargeContent() {
     if (!channel || !channel.enabled) return;
     setSelectedChannelCode(channelCode);
     setAmountText("");
-    setSubmitError(null);
     setSubmitMessage(null);
     clientRequestIdRef.current = null;
   };
@@ -233,7 +231,6 @@ export default function AccountRechargeContent() {
   const createRecharge = async () => {
     if (!canSubmit || !selectedChannel || (!summary && !isUsdtCnyRecharge)) return;
     setIsSubmitting(true);
-    setSubmitError(null);
     setSubmitMessage(null);
 
     try {
@@ -263,7 +260,7 @@ export default function AccountRechargeContent() {
 
       setSubmitMessage("充值单已创建，等待支付渠道返回。");
     } catch (error) {
-      setSubmitError(getClientErrorMessage(error));
+      toast.error(getClientErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -440,11 +437,6 @@ export default function AccountRechargeContent() {
                   </div>
                 ) : null}
 
-                {submitError ? (
-                  <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-                    {submitError}
-                  </div>
-                ) : null}
                 {submitMessage ? (
                   <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                     {submitMessage}
@@ -725,7 +717,7 @@ function RechargeBep20VerifyForm({ record, onSubmitted }: { record: RechargeReco
       setMessage(`已核验实际到账 ${payload?.actualReceivedUsdt ?? "—"} USDT，预计入账 ¥${payload?.creditedCnyAmount ?? "—"}。等待管理员审核。`);
       onSubmitted();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "链上交易核验失败");
+      toast.error(cause instanceof Error ? cause.message : "链上交易核验失败");
     } finally { setSubmitting(false); }
   }
   return (
@@ -747,10 +739,9 @@ function RechargeProofForm({ record, onSubmitted }: { record: RechargeRecord; on
   const [paymentTime, setPaymentTime] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
   async function submit() {
     if (submitting) return;
-    setSubmitting(true); setError("");
+    setSubmitting(true);
     try {
       const form = new FormData();
       form.set("paymentAmount", String(record.payableAmount));
@@ -763,10 +754,10 @@ function RechargeProofForm({ record, onSubmitted }: { record: RechargeRecord; on
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || "凭证提交失败，请稍后重试。");
       setOpen(false); setFiles([]); setReference(""); setPayer(""); setPaymentTime(""); setNote(""); onSubmitted();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "凭证提交失败，请稍后重试。"); }
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : "凭证提交失败，请稍后重试。"); }
     finally { setSubmitting(false); }
   }
-  return <div className="mt-3 border-t pt-3">{!open ? <Button size="sm" variant="outline" onClick={() => setOpen(true)}>{record.status === "submitted" ? "补充支付凭证" : "提交支付凭证"}</Button> : <div className="space-y-2 rounded-lg border bg-white p-3"><div className="text-xs text-slate-500">付款金额：{formatPaymentAmount(record.payableAmount, record.currency)}</div><Input value={reference} maxLength={160} onChange={(e) => setReference(e.target.value)} placeholder="交易流水号" /><Input value={payer} maxLength={120} onChange={(e) => setPayer(e.target.value)} placeholder="付款账号摘要（请勿填写完整敏感信息）" /><Input type="datetime-local" value={paymentTime} onChange={(e) => setPaymentTime(e.target.value)} /><Input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="用户备注（可选）" /><Input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 3))} /><p className="text-xs text-slate-500">支持 JPG、PNG、WEBP、PDF，单个最大 5MB，最多 3 个。</p>{error ? <p className="text-xs text-red-600">{error}</p> : null}<div className="flex gap-2"><Button size="sm" disabled={submitting} onClick={() => void submit()}>{submitting ? "提交中..." : "提交审核"}</Button><Button size="sm" variant="outline" disabled={submitting} onClick={() => setOpen(false)}>取消</Button></div></div>}</div>;
+  return <div className="mt-3 border-t pt-3">{!open ? <Button size="sm" variant="outline" onClick={() => setOpen(true)}>{record.status === "submitted" ? "补充支付凭证" : "提交支付凭证"}</Button> : <div className="space-y-2 rounded-lg border bg-white p-3"><div className="text-xs text-slate-500">付款金额：{formatPaymentAmount(record.payableAmount, record.currency)}</div><Input value={reference} maxLength={160} onChange={(e) => setReference(e.target.value)} placeholder="交易流水号" /><Input value={payer} maxLength={120} onChange={(e) => setPayer(e.target.value)} placeholder="付款账号摘要（请勿填写完整敏感信息）" /><Input type="datetime-local" value={paymentTime} onChange={(e) => setPaymentTime(e.target.value)} /><Input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="用户备注（可选）" /><Input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 3))} /><p className="text-xs text-slate-500">支持 JPG、PNG、WEBP、PDF，单个最大 5MB，最多 3 个。</p><div className="flex gap-2"><Button size="sm" disabled={submitting} onClick={() => void submit()}>{submitting ? "提交中..." : "提交审核"}</Button><Button size="sm" variant="outline" disabled={submitting} onClick={() => setOpen(false)}>取消</Button></div></div>}</div>;
 }
 
 function normalizeAmountInput(value: string, currency: PaymentCurrency) {

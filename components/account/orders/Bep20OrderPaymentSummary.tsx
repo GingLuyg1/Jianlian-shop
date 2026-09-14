@@ -143,8 +143,8 @@ function DetailRow({
 }) {
   async function copy() {
     if (!copyValue) return;
-    await navigator.clipboard.writeText(copyValue);
-    toast.success("已复制");
+    try { await navigator.clipboard.writeText(copyValue); toast.success("已复制"); }
+    catch { toast.error("复制失败，请手动复制"); }
   }
 
   return (
@@ -237,7 +237,9 @@ export function Bep20OrderPaymentSummary({
         setTxHash(result?.prefillSubmittedTxHash ? result.submittedTxHash ?? "" : "");
         return true;
       } catch (sessionError) {
-        setError(getOrderErrorMessage(sessionError, options.create ? "支付单生成失败，请稍后重试" : "支付信息读取失败，请稍后重试"));
+        const message = getOrderErrorMessage(sessionError, options.create ? "支付单生成失败，请稍后重试" : "支付信息读取失败，请稍后重试");
+        if (options.create) toast.error(message);
+        else setError(message);
         return false;
       } finally {
         setLoading(false);
@@ -286,7 +288,7 @@ export function Bep20OrderPaymentSummary({
       setTxHash(result?.prefillSubmittedTxHash ? result.submittedTxHash ?? txHash : "");
       await onUpdated?.();
     } catch (verifyError) {
-      setError(getOrderErrorMessage(verifyError, "链上交易校验失败，请稍后重试"));
+      toast.error(getOrderErrorMessage(verifyError, "链上交易校验失败，请稍后重试"));
     } finally {
       setVerifying(false);
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { checkOrderProductAvailability } from "@/lib/catalog/order-product-visibility.mjs";
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
 import { classifyBalancePaymentFailure } from "@/lib/orders/balance-payment-failure.mjs";
 import { payOrderWithBalance } from "@/lib/orders/balance-payment-service";
@@ -346,6 +347,20 @@ export async function POST(request: Request) {
 
     if (paymentMethod !== "balance" && paymentMethod !== "usdt_bep20") {
       return NextResponse.json({ error: "This payment method is not available yet." }, { status: 400 });
+    }
+
+    const availability = await checkOrderProductAvailability(supabase, productId);
+    if (!availability.available) {
+      if (availability.reason === "check_failed") {
+        return NextResponse.json(
+          { error: "商品可用性检查失败，请稍后重试", code: "PRODUCT_AVAILABILITY_CHECK_FAILED" },
+          { status: 503 },
+        );
+      }
+      return NextResponse.json(
+        { error: "商品当前不可购买", code: "PRODUCT_UNAVAILABLE" },
+        { status: 404 },
+      );
     }
 
     let verifiedAgreements;

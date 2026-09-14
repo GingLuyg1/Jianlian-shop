@@ -105,8 +105,8 @@ export default function MyOrdersPage() {
   const rows = useMemo(() => orders, [orders]);
 
   async function copyOrderNo(orderNo: string) {
-    await navigator.clipboard.writeText(orderNo);
-    toast.success("订单编号已复制");
+    try { await navigator.clipboard.writeText(orderNo); toast.success("订单编号已复制"); }
+    catch { toast.error("复制失败，请手动复制"); }
   }
 
   return (

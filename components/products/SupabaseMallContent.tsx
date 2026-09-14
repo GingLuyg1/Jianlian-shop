@@ -186,7 +186,9 @@ export default function SupabaseMallContent({
           setActiveCategory(null);
           setProducts([]);
           setTotal(0);
-          setError(`未找到“${fallbackTitle}”一级分类。`);
+          // Disabled or unavailable categories use the normal empty state. Do not
+          // expose an administrative visibility reason to storefront visitors.
+          setError("");
           return;
         }
 

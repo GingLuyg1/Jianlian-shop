@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { copyWithFeedback } from "@/lib/ui/copy-feedback";
 import { Copy, RefreshCw } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -38,7 +39,7 @@ export default function AdminRequestTracePage() {
   }, [requestId]);
 
   useEffect(() => { void load(); }, [load]);
-  const copyId = async () => { await navigator.clipboard.writeText(requestId).catch(() => undefined); };
+  const copyId = async () => { await copyWithFeedback(requestId); };
 
   return (
     <AdminPageShell title="Request ID 追踪" description={requestId} actions={<><AdminReadOnlyBadge /><Button variant="outline" onClick={copyId}><Copy className="mr-2 h-4 w-4" />复制 ID</Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button></>}>

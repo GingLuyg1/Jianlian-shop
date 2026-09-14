@@ -72,8 +72,8 @@ export default function UserFulfillmentPanel({ order }: { order: OrderRecord }) 
 
   async function copyContent(content: string | null) {
     if (!content) return;
-    await navigator.clipboard.writeText(content);
-    toast.success("交付内容已复制");
+    try { await navigator.clipboard.writeText(content); toast.success("交付内容已复制"); }
+    catch { toast.error("复制失败，请手动复制"); }
   }
 
   return (

@@ -35,7 +35,6 @@ export default function AccountSecurityPage() {
     confirmPassword: "",
   });
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [visible, setVisible] = useState<Record<keyof SecurityForm, boolean>>({
     currentPassword: false,
@@ -64,7 +63,6 @@ export default function AccountSecurityPage() {
     if (saving || !validate()) return;
 
     setSaving(true);
-    setFormError("");
 
     try {
       const supabase = getSupabaseBrowserClient();
@@ -73,7 +71,7 @@ export default function AccountSecurityPage() {
       } = await supabase.auth.getUser();
 
       if (!user?.email) {
-        setFormError("登录状态已失效，请重新登录。");
+        toast.error("登录状态已失效，请重新登录。");
         setSaving(false);
         return;
       }
@@ -94,7 +92,7 @@ export default function AccountSecurityPage() {
       });
 
       if (updateError) {
-        setFormError("密码修改失败，请稍后重试。");
+        toast.error("密码修改失败，请稍后重试。");
         setSaving(false);
         return;
       }
@@ -104,7 +102,7 @@ export default function AccountSecurityPage() {
       router.replace("/login?redirect=/account/security");
       router.refresh();
     } catch {
-      setFormError("密码修改失败，请稍后重试。");
+      toast.error("密码修改失败，请稍后重试。");
       setSaving(false);
     }
   }
@@ -117,11 +115,6 @@ export default function AccountSecurityPage() {
       </CardHeader>
       <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <form onSubmit={handleSubmit} className="flex min-h-full max-w-xl flex-col gap-5">
-          {formError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {formError}
-            </div>
-          ) : null}
 
           <PasswordField
             id="currentPassword"

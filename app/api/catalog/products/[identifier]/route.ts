@@ -4,6 +4,10 @@ import { NextResponse } from "next/server";
 import { normalizePublicProduct, normalizePublicSku } from "@/lib/supabase/public-catalog";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  buildEffectiveCategoryVisibility,
+  isProductEffectivelyVisible,
+} from "@/lib/catalog/effective-category-visibility.mjs";
 
 const PRODUCT_SELECT =
   "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,delivery_type,status,sort_order,metadata,created_at,updated_at";
@@ -144,6 +148,24 @@ export async function GET(
     }
 
     if (!productData) {
+      return jsonError(404, "PRODUCT_NOT_FOUND", "商品不存在", requestId);
+    }
+
+    const { data: categoryRows, error: categoryError } = await supabase
+      .from("categories")
+      .select("id,parent_id,level,is_active");
+    if (categoryError) {
+      return jsonError(500, "PRODUCT_CATEGORY_QUERY_FAILED", "Product detail query failed", requestId);
+    }
+    const categoryVisibility = buildEffectiveCategoryVisibility(
+      ((categoryRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
+        id: String(row.id),
+        parent_id: row.parent_id ? String(row.parent_id) : null,
+        level: Number(row.level ?? 1),
+        is_active: typeof row.is_active === "boolean" ? row.is_active : null,
+      }))
+    );
+    if (!isProductEffectivelyVisible(productData as Record<string, unknown>, categoryVisibility)) {
       return jsonError(404, "PRODUCT_NOT_FOUND", "商品不存在", requestId);
     }
 

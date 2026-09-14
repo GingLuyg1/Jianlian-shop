@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -96,9 +97,10 @@ export default function DataConsistencyClient() {
       const response = await fetch("/api/admin/system/data-consistency", { method: "POST" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "数据巡检执行失败");
+      toast.success("数据巡检已完成");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "数据巡检执行失败");
+      toast.error(err instanceof Error ? err.message : "数据巡检执行失败");
     } finally {
       setRunning(false);
     }
@@ -107,7 +109,7 @@ export default function DataConsistencyClient() {
   async function updateStatus(nextStatus: Issue["status"]) {
     if (!selected) return;
     if (!note.trim()) {
-      setError("处理备注不能为空。");
+      toast.warning("处理备注不能为空。");
       return;
     }
     setSavingStatus(true);
@@ -120,11 +122,12 @@ export default function DataConsistencyClient() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "处理状态保存失败");
+      toast.success("处理状态已保存");
       setSelected(null);
       setNote("");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "处理状态保存失败");
+      toast.error(err instanceof Error ? err.message : "处理状态保存失败");
     } finally {
       setSavingStatus(false);
     }
@@ -200,15 +203,15 @@ export default function DataConsistencyClient() {
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="px-3 py-2 text-left">规则编号</th>
-                <th className="px-3 py-2 text-left">严重程度</th>
+                <th className="px-3 py-2 text-center">严重程度</th>
                 <th className="px-3 py-2 text-left">异常标题</th>
-                <th className="px-3 py-2 text-left">业务类型</th>
+                <th className="px-3 py-2 text-center">业务类型</th>
                 <th className="px-3 py-2 text-left">关联业务编号</th>
                 <th className="px-3 py-2 text-center">出现次数</th>
-                <th className="px-3 py-2 text-left">首次发现</th>
-                <th className="px-3 py-2 text-left">最后发现</th>
-                <th className="px-3 py-2 text-left">处理状态</th>
-                <th className="px-3 py-2 text-right">操作</th>
+                <th className="px-3 py-2 text-center">首次发现</th>
+                <th className="px-3 py-2 text-center">最后发现</th>
+                <th className="px-3 py-2 text-center">处理状态</th>
+                <th className="px-3 py-2 text-center">操作</th>
               </tr>
             </thead>
             <tbody>

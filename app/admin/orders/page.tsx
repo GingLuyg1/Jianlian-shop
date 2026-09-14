@@ -287,8 +287,9 @@ export default function AdminOrdersPage() {
             <table className="min-w-[1180px] w-full text-sm">
               <thead className={adminListTableHeadClass}>
                 <tr>
-                  {["订单编号", "用户邮箱", "商品摘要", "金额", "订单状态", "支付状态", "交付方式", "下单时间", "更新时间"].map((heading) => <th scope="col" key={heading} className="px-4 py-3">{heading}</th>)}
-                  <th scope="col" className="sticky right-0 bg-[var(--admin-v2-surface-muted)] px-4 py-3 text-right">操作</th>
+                  {["订单编号", "用户邮箱", "商品摘要"].map((heading) => <th scope="col" key={heading} className="px-4 py-3 text-left">{heading}</th>)}
+                  {["金额", "订单状态", "支付状态", "交付方式", "下单时间", "更新时间"].map((heading) => <th scope="col" key={heading} className="px-4 py-3 text-center">{heading}</th>)}
+                  <th scope="col" className="sticky right-0 bg-[var(--admin-v2-surface-muted)] px-4 py-3 text-center">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -302,13 +303,13 @@ export default function AdminOrdersPage() {
                         <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-900">{getOrderNo(order)}</td>
                         <td className="px-4 py-3 text-slate-600">{order.customer_email || "—"}</td>
                         <td className="max-w-[320px] truncate px-4 py-3 text-slate-700" title={itemSummary}>{itemSummary}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-950">{formatMoney(order.total_amount, order.currency)}</td>
-                        <td className="px-4 py-3"><AdminStatusBadge tone={orderStatusTone(orderStatus)}>{getOrderStatusLabel(orderStatus)}</AdminStatusBadge></td>
-                        <td className="px-4 py-3"><AdminStatusBadge tone={paymentStatusTone(payStatus)}>{getPaymentStatusLabel(payStatus)}</AdminStatusBadge></td>
-                        <td className="px-4 py-3 text-slate-600">{getDeliveryLabel(order.delivery_type)}</td>
-                        <td className="px-4 py-3 text-slate-500">{formatDate(order.created_at)}</td>
-                        <td className="px-4 py-3 text-slate-500">{formatDate(order.updated_at)}</td>
-                        <td className="sticky right-0 border-l border-[var(--admin-v2-border)] bg-white px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-center font-semibold tabular-nums text-slate-950">{formatMoney(order.total_amount, order.currency)}</td>
+                        <td className="px-4 py-3 text-center"><AdminStatusBadge tone={orderStatusTone(orderStatus)}>{getOrderStatusLabel(orderStatus)}</AdminStatusBadge></td>
+                        <td className="px-4 py-3 text-center"><AdminStatusBadge tone={paymentStatusTone(payStatus)}>{getPaymentStatusLabel(payStatus)}</AdminStatusBadge></td>
+                        <td className="px-4 py-3 text-center text-slate-600">{getDeliveryLabel(order.delivery_type)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-center text-slate-500">{formatDate(order.created_at)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-center text-slate-500">{formatDate(order.updated_at)}</td>
+                        <td className="sticky right-0 border-l border-[var(--admin-v2-border)] bg-white px-4 py-3 text-center whitespace-nowrap">
                           <Button className="min-h-11 sm:min-h-9" size="sm" variant="ghost" onClick={() => setSelectedOrder(order)}>
                             <Eye className="mr-2 h-4 w-4" />{attention === "manual_delivery" ? "处理交付" : "查看"}
                           </Button>

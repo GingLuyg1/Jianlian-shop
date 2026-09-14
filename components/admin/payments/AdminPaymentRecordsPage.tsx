@@ -314,8 +314,8 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   };
   const copyText = async (value: string | null | undefined) => {
     if (!value) return;
-    await navigator.clipboard.writeText(value);
-    toast.success("已复制");
+    try { await navigator.clipboard.writeText(value); toast.success("已复制"); }
+    catch { toast.error("复制失败，请手动复制"); }
   };
 
   return (

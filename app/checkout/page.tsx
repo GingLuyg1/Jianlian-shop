@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
 import {
@@ -99,6 +100,7 @@ type PendingBalanceOrder = {
   orderNo: string;
   requestId: string;
   customerEmail: string | null;
+  skuId: string | null;
 };
 
 function createCheckoutClientRequestId() {
@@ -186,6 +188,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { settings } = usePublicSettings();
   const productId = searchParams.get("product") ?? "";
+  const requestedSkuId = searchParams.get("sku") ?? "";
 
   const [email, setEmail] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -212,6 +215,7 @@ export default function CheckoutPage() {
   const [balanceError, setBalanceError] = useState("");
   const [balanceRequiresLogin, setBalanceRequiresLogin] = useState(false);
   const [pendingBalanceOrder, setPendingBalanceOrder] = useState<PendingBalanceOrder | null>(null);
+  const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
   const paymentDropdownRef = useRef<HTMLDivElement | null>(null);
   const clientRequestIdRef = useRef("");
   const balanceRequestVersionRef = useRef(0);
@@ -293,6 +297,7 @@ export default function CheckoutPage() {
       if (!stored) return;
       clientRequestIdRef.current = stored.requestId;
       setPendingBalanceOrder(stored);
+      if (stored.skuId) setSelectedSkuId(stored.skuId);
       if (stored.customerEmail) setEmail(stored.customerEmail);
       setPaymentMethod("balance");
 
@@ -370,7 +375,7 @@ export default function CheckoutPage() {
         if (!active) return;
         setProductRow(detail?.product ?? null);
         setProductSkus(detail?.skus ?? []);
-        setSelectedSkuId("");
+        setSelectedSkuId((current) => requestedSkuId || current);
       } catch (loadError) {
         if (!active) return;
         setError(getErrorText(loadError, "商品读取失败，请返回商品列表重试"));
@@ -386,7 +391,7 @@ export default function CheckoutPage() {
     return () => {
       active = false;
     };
-  }, [productId]);
+  }, [productId, requestedSkuId]);
 
   useEffect(() => {
     let active = true;
@@ -478,6 +483,14 @@ export default function CheckoutPage() {
     if (!product) return "";
     return `¥${orderAmount.toFixed(2)}`;
   }, [orderAmount, product]);
+  const rechargeReturnTo = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("product", productId);
+    const originalReturnTo = searchParams.get("returnTo");
+    if (originalReturnTo) params.set("returnTo", originalReturnTo);
+    if (selectedSku?.id) params.set("sku", selectedSku.id);
+    return `/products/account-recharge?returnTo=${encodeURIComponent(`/checkout?${params.toString()}`)}`;
+  }, [productId, searchParams, selectedSku?.id]);
 
   if (productLoading) {
     return (
@@ -508,51 +521,55 @@ export default function CheckoutPage() {
 
   const handleSubmit = async () => {
     if (!productRow || submitLoading || submissionGuardRef.current.isActive()) return;
-    setError("");
+
+    if (hasSku && !selectedSku) {
+      toast.warning("请选择 SKU");
+      return;
+    }
 
     if (!isPurchasable) {
-      setError(unavailableMessage || "该商品目前不可购买");
+      toast.error(unavailableMessage || "该商品目前不可购买");
       return;
     }
 
     if (legalLoading || legalError || !agreementsReady) {
-      setError(legalError || "协议版本未准备好，请刷新后重试");
+      toast.error(legalError || "协议版本未准备好，请刷新后重试");
       return;
     }
 
     if (!confirmed) {
-      setError("请先阅读并确认订单协议");
+      toast.warning("请先阅读并确认订单协议");
       return;
     }
 
     if (selectedPaymentUnavailable) {
-      setError("该支付方式暂未开放，请选择余额支付。");
+      toast.warning("该支付方式暂未开放，请选择余额支付。");
       return;
     }
 
     if (balanceSubmissionBlockReason) {
       if (balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT" && balanceSummary.kind === "ready") {
-        setError(`余额不足，还需充值 ¥${formatCnyFromCents(balanceSummary.shortfallCents)}`);
+        setBalanceDialogOpen(true);
       } else if (balanceSubmissionBlockReason === "BALANCE_LOADING") {
-        setError("正在读取账户余额，请稍候");
+        toast.info("正在读取账户余额，请稍候");
       } else {
-        setError(balanceError || "账户余额暂时无法确认，请重新加载");
+        toast.error(balanceError || "账户余额暂时无法确认，请重新加载");
       }
       return;
     }
 
     if (!email.trim()) {
-      setError("请填写联系邮箱");
+      toast.warning("请填写联系邮箱");
       return;
     }
 
     if (isShippingProduct && (!customerName.trim() || !customerPhone.trim() || !shippingRegion.trim() || !shippingAddress.trim())) {
-      setError("请完整填写收件人、联系电话、省市区和详细地址");
+      toast.warning("请完整填写收件人、联系电话、省市区和详细地址");
       return;
     }
 
     if (isShippingProduct && !isValidContactPhone(customerPhone)) {
-      setError("请输入有效的联系电话");
+      toast.warning("请输入有效的联系电话");
       return;
     }
 
@@ -572,6 +589,7 @@ export default function CheckoutPage() {
           requestId: clientRequestIdRef.current,
           orderNo: pendingBalanceOrder?.orderNo ?? null,
           customerEmail: (pendingBalanceOrder?.customerEmail ?? email.trim()) || null,
+          skuId: pendingBalanceOrder?.skuId ?? selectedDatabaseSkuId,
         })
       );
 
@@ -635,13 +653,14 @@ export default function CheckoutPage() {
             orderNo: responseClassification.orderNo,
             requestId,
             customerEmail: email.trim() || null,
+            skuId: selectedDatabaseSkuId,
           };
           clientRequestIdRef.current = requestId;
           setPendingBalanceOrder(existingOrder);
           setPaymentDropdownOpen(false);
           setPaymentMethod("balance");
           window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(existingOrder));
-          setError(`余额不足，订单 ${existingOrder.orderNo} 已保留。充值后请返回本页继续支付原订单，请勿重复下单。`);
+          setBalanceDialogOpen(true);
           void loadAccountBalance();
           return;
         }
@@ -651,13 +670,14 @@ export default function CheckoutPage() {
             orderNo: responseClassification.orderNo,
             requestId,
             customerEmail: email.trim() || null,
+            skuId: selectedDatabaseSkuId,
           };
           clientRequestIdRef.current = requestId;
           setPendingBalanceOrder(existingOrder);
           setPaymentDropdownOpen(false);
           setPaymentMethod("balance");
           window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(existingOrder));
-          setError(message);
+          toast.error(message);
           return;
         }
         // Once the API confirms an order number, the idempotent order exists.
@@ -674,7 +694,7 @@ export default function CheckoutPage() {
       window.sessionStorage.removeItem(checkoutSessionKey);
       router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
     } catch (submitError) {
-      setError(getErrorText(submitError, "订单创建失败，请稍后重试"));
+      toast.error(getErrorText(submitError, "订单创建失败，请稍后重试"));
     } finally {
       submissionGuardRef.current.finish();
       setSubmitLoading(false);
@@ -694,6 +714,15 @@ export default function CheckoutPage() {
           <CardContent className="flex h-full min-h-0 flex-col p-0">
             <div className="min-h-0 flex-1 bg-white p-4 lg:overflow-y-auto">
               <div className="space-y-4">
+              {hasSku ? (
+                <SkuSelector
+                  options={skuOptions}
+                  selectedSkuId={selectedSku.id}
+                  onSelectSku={setSelectedSkuId}
+                  disabled={orderConfigurationLocked}
+                />
+              ) : null}
+
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">
                     <span className="text-red-500">*</span>联系邮箱
@@ -718,15 +747,6 @@ export default function CheckoutPage() {
                     className="h-10 bg-slate-50 text-sm"
                   />
                 </div>
-
-              {hasSku ? (
-                <SkuSelector
-                  options={skuOptions}
-                  selectedSkuId={selectedSku.id}
-                  onSelectSku={setSelectedSkuId}
-                  disabled={orderConfigurationLocked}
-                />
-              ) : null}
 
               {isShippingProduct ? (
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -796,78 +816,20 @@ export default function CheckoutPage() {
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
                   </p>
                 ) : null}
+                {paymentMethod === "balance" && balanceStatus === "error" ? (
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs text-red-700">
+                    <span>{balanceError}</span>
+                    <button type="button" className="shrink-0 font-medium underline" onClick={() => balanceRequiresLogin ? router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`) : void loadAccountBalance()}>
+                      {balanceRequiresLogin ? "去登录" : "重新加载"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
-              {paymentMethod === "balance" ? (
-                <div className="space-y-2 rounded-xl border border-[#ead9cc] bg-[#fffaf6] px-3 py-3 text-sm">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-muted-foreground">订单金额</span>
-                    <span className="font-semibold">¥{orderAmount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-muted-foreground">账户余额</span>
-                    <span className="font-semibold">
-                      {balanceStatus === "loading"
-                        ? "正在读取…"
-                        : balanceSummary.kind === "ready"
-                          ? `¥${formatCnyFromCents(balanceSummary.balanceCents)}`
-                          : "暂时无法确认"}
-                    </span>
-                  </div>
-                  {balanceSummary.kind === "ready" && balanceStatus === "ready" ? (
-                    <div className={cn(
-                      "flex items-center justify-between gap-4 border-t pt-2 font-medium",
-                      balanceSummary.sufficient ? "text-emerald-700" : "text-red-700"
-                    )}>
-                      <span>{balanceSummary.sufficient ? "支付后剩余" : "还需充值"}</span>
-                      <span>
-                        ¥{formatCnyFromCents(
-                          balanceSummary.sufficient
-                            ? balanceSummary.remainingCents
-                            : balanceSummary.shortfallCents
-                        )}
-                      </span>
-                    </div>
-                  ) : null}
-                  {balanceStatus === "error" ? (
-                    <div className="flex items-center justify-between gap-3 border-t pt-2 text-xs text-red-700">
-                      <span>{balanceError}</span>
-                      <button
-                        type="button"
-                        className="shrink-0 font-medium underline"
-                        onClick={() => balanceRequiresLogin
-                          ? router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`)
-                          : void loadAccountBalance()}
-                      >
-                        {balanceRequiresLogin ? "去登录" : "重新加载"}
-                      </button>
-                    </div>
-                  ) : null}
-                  {balanceSummary.kind === "ready" && !balanceSummary.sufficient ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
-                      <span className="text-xs text-muted-foreground">充值完成后返回本页，余额会自动刷新。</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => router.push(`/products/account-recharge?returnTo=${encodeURIComponent(`/checkout?product=${productId}`)}`)}
-                      >
-                        去充值
-                      </Button>
-                    </div>
-                  ) : null}
-                  {pendingBalanceOrder ? (
-                    <div className="border-t pt-2 text-xs leading-5 text-amber-800">
-                      原订单 {pendingBalanceOrder.orderNo} 已保留；余额充足后将继续处理该订单，不会创建第二个订单。
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
               <div id="checkout-submit-feedback" aria-live="polite">
-                {error ? (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {error}
+                {pendingBalanceOrder ? (
+                  <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                    原订单 {pendingBalanceOrder.orderNo} 已保留；余额充足后将继续处理该订单，不会创建第二个订单。
                   </div>
                 ) : null}
               </div>
@@ -904,7 +866,7 @@ export default function CheckoutPage() {
                     type="button"
                     className="h-11 rounded-full px-7 text-sm"
                     onClick={handleSubmit}
-                    disabled={submitLoading || Boolean(balanceSubmissionBlockReason)}
+                    disabled={submitLoading || (Boolean(balanceSubmissionBlockReason) && balanceSubmissionBlockReason !== "BALANCE_INSUFFICIENT")}
                     aria-describedby="checkout-submit-feedback"
                   >
                     {submitButtonLabel}
@@ -942,6 +904,25 @@ export default function CheckoutPage() {
       </div>
 
       <TermsDialog open={termsOpen} onOpenChange={setTermsOpen} documents={legalDocuments} error={legalError} loading={legalLoading} />
+      <Dialog open={balanceDialogOpen} onOpenChange={setBalanceDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>账户余额不足</DialogTitle>
+          </DialogHeader>
+          {balanceSummary.kind === "ready" ? (
+            <div className="space-y-2 rounded-xl border border-orange-100 bg-orange-50/60 p-4 text-sm">
+              <div className="flex justify-between gap-4"><span className="text-muted-foreground">当前余额</span><strong>¥{formatCnyFromCents(balanceSummary.balanceCents)}</strong></div>
+              <div className="flex justify-between gap-4"><span className="text-muted-foreground">本次支付</span><strong>¥{orderAmount.toFixed(2)}</strong></div>
+              <div className="flex justify-between gap-4 border-t border-orange-100 pt-2 text-orange-700"><span>还需充值</span><strong>¥{formatCnyFromCents(balanceSummary.shortfallCents)}</strong></div>
+            </div>
+          ) : null}
+          {pendingBalanceOrder ? <p className="text-xs leading-5 text-amber-800">订单 {pendingBalanceOrder.orderNo} 已保留，充值返回后将继续使用原订单。</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setBalanceDialogOpen(false)}>取消</Button>
+            <Button type="button" onClick={() => router.push(rechargeReturnTo)}>去充值</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PublicLayout>
   );
 }
@@ -2358,11 +2339,11 @@ function SkuSelector({
               type="button"
               key={sku.id}
               onClick={() => onSelectSku(sku.id)}
-              disabled={disabled}
+              disabled={disabled || sku.status !== "active" || Number(sku.stock ?? 0) <= 0}
               className={cn(
-                "min-w-0 rounded-lg border bg-white px-3 py-3 text-center transition-all duration-150 hover:scale-[1.015] hover:shadow-sm",
+                "min-w-0 rounded-lg border bg-white px-3 py-3 text-center transition-colors disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-70",
                 selected
-                  ? "scale-[1.015] border-primary bg-primary/5 shadow-sm"
+                  ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/30"
               )}
             >
@@ -2372,6 +2353,7 @@ function SkuSelector({
               <div className="mt-1 break-words text-[13px] font-semibold leading-tight text-primary">
                 ¥{sku.rmb.toFixed(2)}
               </div>
+              {sku.status !== "active" || Number(sku.stock ?? 0) <= 0 ? <div className="mt-1 text-xs text-slate-500">已售罄</div> : null}
             </button>
           );
         })}
