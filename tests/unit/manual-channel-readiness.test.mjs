@@ -159,7 +159,7 @@ test("rejects inconsistent request identity pairs", () => {
     getPaymentChannelPairValidationError({
       channel: "alipay",
       code: "alipay",
-      provider: "generic_api",
+      provider: "liuhaoyi",
       provider_name: "binance",
     }),
     /must match/,
@@ -168,7 +168,7 @@ test("rejects inconsistent request identity pairs", () => {
     getPaymentChannelPairValidationError({
       channel: "alipay",
       code: "alipay",
-      provider: "generic_api",
+      provider: "liuhaoyi",
       provider_name: "",
     }),
     /must match/,
@@ -272,7 +272,7 @@ test("provider readiness requires configured state and compatible provider", () 
   assert.equal(
     isPaymentChannelReady({
       channel: "alipay",
-      provider: "generic_api",
+      provider: "liuhaoyi",
       reviewMode: "provider",
       configured: false,
     }),
@@ -282,7 +282,7 @@ test("provider readiness requires configured state and compatible provider", () 
   assert.equal(
     isPaymentChannelReady({
       channel: "alipay",
-      provider: "generic_api",
+      provider: "liuhaoyi",
       reviewMode: "provider",
       configured: true,
     }),
@@ -307,9 +307,9 @@ test("provider transitions fail closed and incompatible providers are rejected",
     resolvePaymentChannelState({
       channel: "alipay",
       currentReviewMode: "manual",
-      currentProvider: "generic_api",
+      currentProvider: "liuhaoyi",
       nextReviewMode: "provider",
-      nextProvider: "generic_api",
+      nextProvider: "liuhaoyi",
       requestedEnabled: true,
       providerTrustedConfigured: true,
     }),
@@ -324,7 +324,7 @@ test("provider transitions fail closed and incompatible providers are rejected",
     resolvePaymentChannelState({
       channel: "alipay",
       currentReviewMode: "provider",
-      currentProvider: "generic_api",
+      currentProvider: "liuhaoyi",
       nextReviewMode: "provider",
       nextProvider: "binance",
       requestedEnabled: true,
@@ -597,7 +597,7 @@ test("settings state never saves fallback data and only selects dirty rows", () 
 test("settings edits disable channels immediately on mode or provider changes", () => {
   const current = {
     channel: "alipay",
-    provider: "generic_api",
+    provider: "liuhaoyi",
     review_mode: "manual",
     configured: true,
     enabled: true,
@@ -788,14 +788,14 @@ test("legacy provider rows are shown only as disabled read-only compatibility da
   const legacy = {
     channel: "alipay",
     code: "alipay",
-    provider: "generic_api",
+    provider: "liuhaoyi",
     provider_name: null,
     enabled: false,
     configured: false,
   };
   assert.deepEqual(getLegacyPaymentChannelCompatibility(legacy), {
     channel: "alipay",
-    provider: "generic_api",
+    provider: "liuhaoyi",
     compatibility_issue: "legacy_provider_field_missing",
     compatibility_needs_sync: true,
     compatibility_read_only: true,
@@ -803,8 +803,8 @@ test("legacy provider rows are shown only as disabled read-only compatibility da
   assert.deepEqual(buildLegacyPaymentChannelCompatibilitySync(legacy), {
     channel: "alipay",
     code: "alipay",
-    provider: "generic_api",
-    provider_name: "generic_api",
+    provider: "liuhaoyi",
+    provider_name: "liuhaoyi",
     configured: false,
     enabled: false,
   });
@@ -814,7 +814,7 @@ test("legacy compatibility classification rejects enabled, configured and ambigu
   const base = {
     channel: "alipay",
     code: "alipay",
-    provider: "generic_api",
+    provider: "liuhaoyi",
     provider_name: null,
     enabled: false,
     configured: false,
@@ -860,8 +860,8 @@ test("runtime patch validation rejects coercible non-string contracts", () => {
   const valid = {
     channel: "alipay",
     code: "alipay",
-    provider: "generic_api",
-    provider_name: "generic_api",
+    provider: "liuhaoyi",
+    provider_name: "liuhaoyi",
     currency: "CNY",
     review_mode: "provider",
     sort_order: "10",

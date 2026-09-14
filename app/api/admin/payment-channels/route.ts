@@ -28,6 +28,7 @@ import type {
   PaymentChannelCode,
   PaymentProviderCode,
 } from "@/lib/payments/channel-types";
+import { checkPaymentProviderConfig } from "@/lib/payments/providers";
 
 export const dynamic = "force-dynamic";
 
@@ -93,7 +94,7 @@ function publicConfigOf(value: unknown): Record<string, unknown> {
 }
 
 function defaultProvider(channel: PaymentChannelCode): PaymentProviderCode {
-  if (channel === "alipay" || channel === "wechat") return "generic_api";
+  if (channel === "alipay" || channel === "wechat") return "liuhaoyi";
   if (channel === "binance_pay") return "binance";
   return "crypto_address";
 }
@@ -103,7 +104,8 @@ function normalizeProvider(
   channel: PaymentChannelCode,
 ): PaymentProviderCode {
   if (
-    value === "generic_api"
+    value === "liuhaoyi"
+    || value === "generic_api"
     || value === "binance"
     || value === "crypto_address"
   ) {
@@ -365,7 +367,8 @@ function buildChannelRow(
       ?? current.provider_name
       ?? expectedProviderForChannel(channel);
   if (
-    rawProvider !== "generic_api"
+    rawProvider !== "liuhaoyi"
+    && rawProvider !== "generic_api"
     && rawProvider !== "binance"
     && rawProvider !== "crypto_address"
   ) {
@@ -446,9 +449,9 @@ function buildChannelRow(
     paymentAddress,
     tokenContract,
     paymentInstructions,
-    // Provider secrets are intentionally not read by this route. Until a
-    // trusted runtime readiness source exists, provider mode stays disabled.
-    providerTrustedConfigured: false,
+    // Only the boolean server-side readiness result is used; credential
+    // values are never returned through this Admin API.
+    providerTrustedConfigured: checkPaymentProviderConfig(provider).configured,
   });
 
   const modeOrProviderChanged =

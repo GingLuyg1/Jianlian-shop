@@ -1,7 +1,7 @@
 export type PaymentCurrency = "CNY" | "USDT";
 export type PaymentNetwork = "TRC20" | "BEP20";
 export type ProviderNetwork = PaymentNetwork | "TRON" | "BSC";
-export type PaymentProviderCode = "generic_api" | "binance" | "crypto_address";
+export type PaymentProviderCode = "liuhaoyi" | "generic_api" | "binance" | "crypto_address";
 export type PaymentProviderEnvironment = "sandbox" | "production";
 export type PaymentProviderConfigStatus =
   | "not_configured"

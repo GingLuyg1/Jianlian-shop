@@ -97,6 +97,14 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       return providerResponse(callbackProvider, { ok: false, message: "支付会话不存在" }, { error: "支付会话不存在" }, 404);
     }
 
+    const expiredRechargePayment = parsed.status === "paid"
+      && String(session.business_type) === "recharge"
+      && await isExpiredRechargePayment(service, session);
+    const latePaymentMessage = "支付渠道在充值订单过期后确认付款，禁止自动入账，等待人工客服核对";
+    if (expiredRechargePayment) {
+      await preserveLateRechargePaymentEvidence(service, session, parsed, latePaymentMessage);
+    }
+
     if (!amountEqual(session.payable_amount, parsed.amount, session.currency)) {
       await updateCallbackLog(service, logId, "amount_mismatch", "渠道金额与支付会话金额不一致");
       await recordCallbackReconciliationIssue(service, {
@@ -152,6 +160,19 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
     if (session.status === "paid") {
       await updateCallbackLog(service, logId, "duplicate", null, { is_duplicate: true });
       return providerResponse(callbackProvider, { ok: true, duplicate: true }, { ok: true, duplicate: true });
+    }
+
+    if (expiredRechargePayment) {
+      await recordCallbackReconciliationIssue(service, {
+        session: { ...session, status: "expired" },
+        parsed,
+        result: "manual_review",
+        differenceType: "provider_paid_local_unpaid",
+        errorCode: "CALLBACK_RECHARGE_PAID_AFTER_EXPIRY",
+        errorMessage: latePaymentMessage,
+      });
+      await updateCallbackLog(service, logId, "processing_failed", latePaymentMessage);
+      return providerResponse(callbackProvider, { ok: true, message: latePaymentMessage }, { ok: true, manualReview: true });
     }
 
     const transition = assertPaymentStatusTransition(session.status, "paid");
@@ -211,7 +232,7 @@ async function findCallbackSession(
 ) {
   let query = service
     .from("payment_sessions")
-    .select("id,business_type,business_id,business_no,status,payable_amount,currency,channel_code,provider,provider_transaction_id")
+    .select("id,business_type,business_id,business_no,status,payable_amount,currency,channel_code,provider,provider_transaction_id,expires_at")
     .eq("channel_code", channelCode)
     .limit(1);
   if (parsed.sessionNo) query = query.eq("session_no", parsed.sessionNo);
@@ -220,6 +241,61 @@ async function findCallbackSession(
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data;
+}
+
+async function isExpiredRechargePayment(service: SupabaseClient, session: Record<string, unknown>) {
+  if (String(session.status) === "expired" || isPastDue(session.expires_at)) return true;
+  const { data, error } = await service
+    .from("account_recharges")
+    .select("status,expires_at")
+    .eq("id", String(session.business_id ?? ""))
+    .maybeSingle();
+  if (error) throw error;
+  return data?.status === "expired" || isPastDue(data?.expires_at);
+}
+
+async function preserveLateRechargePaymentEvidence(
+  service: SupabaseClient,
+  session: Record<string, unknown>,
+  parsed: ProviderParsedCallback,
+  message: string,
+) {
+  const providerTransactionId = parsed.providerTransactionId || null;
+  const checkedAt = new Date().toISOString();
+  const { error: sessionError } = await service
+    .from("payment_sessions")
+    .update({
+      status: "expired",
+      provider_transaction_id: providerTransactionId,
+      last_synced_at: checkedAt,
+      reconcile_status: "provider_paid_local_unpaid",
+      last_error: message,
+    })
+    .eq("id", String(session.id ?? ""))
+    .in("status", ["pending", "processing", "failed", "expired", "closed"]);
+  if (sessionError) {
+    throw new Error(getSafeErrorMessage(sessionError, "late payment session evidence could not be saved"));
+  }
+
+  const { error: rechargeError } = await service
+    .from("account_recharges")
+    .update({
+      status: "expired",
+      provider_trade_no: providerTransactionId,
+      callback_status: "manual_review",
+      exception_type: "provider_paid_local_unpaid",
+      error_summary: message,
+    })
+    .eq("id", String(session.business_id ?? ""))
+    .in("status", ["pending", "waiting_payment", "processing", "failed", "expired", "closed"]);
+  if (rechargeError) {
+    throw new Error(getSafeErrorMessage(rechargeError, "late recharge evidence could not be saved"));
+  }
+}
+
+function isPastDue(value: unknown) {
+  const expiresAt = Date.parse(String(value ?? ""));
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
 }
 
 async function createCallbackLog(

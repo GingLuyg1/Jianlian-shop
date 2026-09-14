@@ -263,7 +263,12 @@ async function reconcileOne(supabase: SupabaseClient, session: PaymentSession, d
     comparison.differenceType === "provider_paid_local_unpaid" &&
     comparison.recoveryStatus === "ready"
   ) {
-    if (dryRun) {
+    if (session.provider === "liuhaoyi") {
+      comparison.result = "manual_review";
+      comparison.errorMessage = "六号易渠道已支付但本站未完成，按问题支付流程转客服人工处理。";
+      comparison.recoveryAction = null;
+      comparison.recoveryStatus = "manual_review";
+    } else if (dryRun) {
       comparison.result = "manual_review";
       comparison.recoveryStatus = "dry_run";
     } else {

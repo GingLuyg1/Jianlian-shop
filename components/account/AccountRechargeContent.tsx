@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -10,11 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import {
   calculateRechargeAmounts,
-  formatFeeRate,
   formatPaymentAmount,
 } from "@/lib/payments/channels";
 import type { PaymentChannel, PaymentChannelCode, PaymentCurrency } from "@/lib/payments/channel-types";
 import { isLiuhaoyiAmountOverLimit, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
+import {
+  canContinueLiuhaoyiRechargePayment,
+  isRechargePastDue,
+} from "@/lib/payments/recharge-expiry.mjs";
 import {
   rechargeStatusLabel,
   type RechargeRecord,
@@ -26,8 +30,6 @@ import {
 } from "@/lib/payments/recharge-rate.mjs";
 import { cn } from "@/lib/utils";
 import { openPublicSupport } from "@/lib/support/open-public-support";
-
-type RecordTab = "recharge" | "funds";
 
 type RechargeListError = {
   message: string;
@@ -51,29 +53,6 @@ type RechargeRate = {
   effectiveAt: string;
 };
 
-type BalanceTransactionRecord = {
-  transactionNo: string;
-  businessType: string;
-  businessId: string;
-  direction: "credit" | "debit";
-  amount: number;
-  balanceBefore: number | null;
-  balanceAfter: number | null;
-  currency: PaymentCurrency | string;
-  status: string;
-  remark: string | null;
-  subtype: string | null;
-  orderNo: string | null;
-  receivedUsdt: string | null;
-  expectedUsdt: string | null;
-  shortfallUsdt: string | null;
-  exchangeRate: string | null;
-  creditedCny: string | null;
-  txHashSummary: string | null;
-  processedAt: string | null;
-  createdAt: string | null;
-};
-
 export default function AccountRechargeContent() {
   const router = useRouter();
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
@@ -83,7 +62,6 @@ export default function AccountRechargeContent() {
   const [amountText, setAmountText] = useState("");
   const [customerNote, setCustomerNote] = useState("");
   const clientRequestIdRef = useRef<string | null>(null);
-  const [activeRecordTab, setActiveRecordTab] = useState<RecordTab>("recharge");
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [records, setRecords] = useState<RechargeRecord[]>([]);
@@ -91,14 +69,10 @@ export default function AccountRechargeContent() {
   const [recordsError, setRecordsError] = useState<RechargeListError | null>(null);
   const [recordPage, setRecordPage] = useState(1);
   const [recordCount, setRecordCount] = useState(0);
-  const [fundRecords, setFundRecords] = useState<BalanceTransactionRecord[]>([]);
-  const [fundsLoading, setFundsLoading] = useState(false);
-  const [fundsError, setFundsError] = useState<string | null>(null);
-  const [fundPage, setFundPage] = useState(1);
-  const [fundCount, setFundCount] = useState(0);
   const [dailyRate, setDailyRate] = useState<RechargeRate | null>(null);
   const [rateError, setRateError] = useState<string | null>(null);
   const [liuhaoyiLimitDialogOpen, setLiuhaoyiLimitDialogOpen] = useState(false);
+  const [historyNowTick, setHistoryNowTick] = useState(0);
 
   const selectedChannel =
     paymentChannels.find((channel) => channel.code === selectedChannelCode) ?? paymentChannels[0] ?? null;
@@ -155,24 +129,6 @@ export default function AccountRechargeContent() {
     }
   }, []);
 
-  const loadFundRecords = useCallback(async (page: number) => {
-    setFundsLoading(true);
-    setFundsError(null);
-    try {
-      const response = await fetch(`/api/account/balance-transactions?page=${page}&pageSize=10`, { cache: "no-store" });
-      const result = (await response.json().catch(() => null)) as
-        | { data?: BalanceTransactionRecord[]; count?: number; error?: string }
-        | null;
-      if (!response.ok) throw new Error(result?.error ?? "资金变动记录加载失败，请稍后重试");
-      setFundRecords(result?.data ?? []);
-      setFundCount(result?.count ?? 0);
-    } catch (error) {
-      setFundsError(getClientErrorMessage(error, "资金变动记录加载失败，请稍后重试"));
-    } finally {
-      setFundsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -204,8 +160,9 @@ export default function AccountRechargeContent() {
   }, [loadRecords, recordPage]);
 
   useEffect(() => {
-    if (activeRecordTab === "funds") void loadFundRecords(fundPage);
-  }, [activeRecordTab, fundPage, loadFundRecords]);
+    const timer = window.setInterval(() => setHistoryNowTick((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -344,7 +301,13 @@ export default function AccountRechargeContent() {
                       </div>
                       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <span>最低充值：{formatPaymentAmount(channel.minimumAmount, channel.currency)}</span>
-                        <span>{channel.feeRate === 0 ? "0 手续费" : `手续费：${formatFeeRate(channel.feeRate)}`}</span>
+                        <span>
+                          {isLiuhaoyiPaymentMethod(channel.code)
+                            ? "支付平台另收 3% 通道手续费"
+                            : channel.code === "usdt_bep20"
+                              ? "手续费 0"
+                              : channel.feeRate === 0 ? "0 手续费" : "以渠道配置为准"}
+                        </span>
                       </div>
                     </button>
                   );
@@ -457,6 +420,12 @@ export default function AccountRechargeContent() {
                   </div>
                 ) : null}
 
+                {isLiuhaoyiRecharge ? (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+                    支付宝 / 微信支付将额外收取 3% 支付通道手续费，由支付平台收取。充值到账金额不包含手续费，实际付款金额以支付页面为准。本站仍按充值金额原额创建支付单并入账。
+                  </div>
+                ) : null}
+
                 {submitMessage ? (
                   <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                     {submitMessage}
@@ -469,7 +438,7 @@ export default function AccountRechargeContent() {
                 <div className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 sm:gap-x-8">
                     <div>充值人民币金额：{isUsdtCnyRecharge && requestedCnyAmount ? `¥${requestedCnyAmount}` : selectedChannel && summary ? formatPaymentAmount(summary.amount, selectedChannel.currency) : "—"}</div>
-                    <div>手续费：{isUsdtCnyRecharge ? "免手续费" : selectedChannel && summary ? (summary.fee === 0 ? "免手续费" : formatPaymentAmount(summary.fee, selectedChannel.currency)) : "—"}</div>
+                    <div>本站手续费：{isUsdtCnyRecharge || isLiuhaoyiRecharge ? "0" : selectedChannel && summary ? (summary.fee === 0 ? "0" : formatPaymentAmount(summary.fee, selectedChannel.currency)) : "—"}</div>
                     <div className="font-medium text-slate-700">
                       预计应付：{isUsdtCnyRecharge ? (expectedUsdtAmount ? `${expectedUsdtAmount} USDT` : "—") : selectedChannel && summary ? formatPaymentAmount(summary.payableAmount, selectedChannel.currency) : "—"}
                     </div>
@@ -491,45 +460,18 @@ export default function AccountRechargeContent() {
 
         <Card>
           <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
-              <Button
-                className="h-11 flex-1 rounded-full px-5"
-                variant={activeRecordTab === "recharge" ? "default" : "secondary"}
-                onClick={() => setActiveRecordTab("recharge")}
-              >
-                充值记录
-              </Button>
-              <Button
-                variant={activeRecordTab === "funds" ? "default" : "secondary"}
-                className="h-11 flex-1 rounded-full px-5"
-                onClick={() => setActiveRecordTab("funds")}
-              >
-                资金变动记录
-              </Button>
-            </div>
-
-            {activeRecordTab === "recharge" ? (
-              <RechargeRecords
-                records={records}
-                loading={recordsLoading}
-                error={recordsError}
-                page={recordPage}
-                count={recordCount}
-                onRetry={() => void loadRecords(recordPage)}
-                onPageChange={setRecordPage}
-                onProofSubmitted={() => void loadRecords(recordPage)}
-              />
-            ) : (
-              <BalanceRecords
-                records={fundRecords}
-                loading={fundsLoading}
-                error={fundsError}
-                page={fundPage}
-                count={fundCount}
-                onRetry={() => void loadFundRecords(fundPage)}
-                onPageChange={setFundPage}
-              />
-            )}
+            <h2 className="text-lg font-semibold">资金充值记录</h2>
+            <RechargeRecords
+              records={records}
+              loading={recordsLoading}
+              error={recordsError}
+              page={recordPage}
+              count={recordCount}
+              nowTick={historyNowTick}
+              onRetry={() => void loadRecords(recordPage)}
+              onPageChange={setRecordPage}
+              onProofSubmitted={() => void loadRecords(recordPage)}
+            />
           </CardContent>
         </Card>
       </div>
@@ -552,108 +494,6 @@ export default function AccountRechargeContent() {
   );
 }
 
-function BalanceRecords({
-  records,
-  loading,
-  error,
-  page,
-  count,
-  onRetry,
-  onPageChange,
-}: {
-  records: BalanceTransactionRecord[];
-  loading: boolean;
-  error: string | null;
-  page: number;
-  count: number;
-  onRetry: () => void;
-  onPageChange: (page: number) => void;
-}) {
-  const totalPages = Math.max(1, Math.ceil(count / 10));
-  if (loading) return <div className="mt-6 h-44 animate-pulse rounded-xl bg-slate-100" />;
-  if (error) return (
-    <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-      <p>{error}</p><Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>重新加载</Button>
-    </div>
-  );
-  if (records.length === 0) return (
-    <div className="mt-6 flex flex-1 items-center justify-center rounded-xl bg-slate-50 p-6 text-center text-sm text-muted-foreground">
-      暂无资金变动记录
-    </div>
-  );
-  return (
-    <div className="mt-5 flex min-h-0 flex-1 flex-col">
-      <div className="space-y-3">
-        {records.map((record) => {
-          const positive = record.direction === "credit";
-          const underpaymentCredit = record.subtype === "bep20_underpayment_wallet_credit";
-          return (
-            <div key={record.transactionNo} className="rounded-xl bg-slate-50 p-4 text-sm">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="truncate font-semibold text-slate-800" title={record.transactionNo}>
-                  {underpaymentCredit ? "BEP20 欠额转余额" : balanceTypeLabel(record.businessType)}
-                </span>
-                <span className={cn("shrink-0 font-semibold", positive ? "text-emerald-600" : "text-red-600")}>
-                  {positive ? "+" : "-"}{formatPaymentAmount(record.amount, record.currency as PaymentCurrency)}
-                </span>
-              </div>
-              <dl className="grid gap-2 text-muted-foreground">
-                <RecordLine label="流水号" value={record.transactionNo} />
-                <RecordLine label={underpaymentCredit ? "对应订单" : "关联业务"} value={record.businessId || "—"} />
-                {underpaymentCredit ? (
-                  <>
-                    <RecordLine label="实收 USDT" value={record.receivedUsdt ?? "—"} />
-                    <RecordLine label="应付 USDT" value={record.expectedUsdt ?? "—"} />
-                    <RecordLine label="欠额 USDT" value={record.shortfallUsdt ?? "—"} />
-                    <RecordLine label="冻结汇率" value={record.exchangeRate ?? "—"} />
-                    <RecordLine label="链上交易" value={record.txHashSummary ?? "—"} />
-                  </>
-                ) : null}
-                <RecordLine label="变动前余额" value={formatOptionalBalance(record.balanceBefore, record.currency)} />
-                <RecordLine label="变动后余额" value={formatOptionalBalance(record.balanceAfter, record.currency)} />
-                {!underpaymentCredit ? <RecordLine label="备注" value={record.remark || "—"} /> : null}
-                <RecordLine
-                  label={underpaymentCredit ? "处理时间" : "创建时间"}
-                  value={(underpaymentCredit ? record.processedAt : record.createdAt)
-                    ? formatDateTime((underpaymentCredit ? record.processedAt : record.createdAt) as string)
-                    : "—"}
-                />
-              </dl>
-            </div>
-          );
-        })}
-      </div>
-      {count > 10 ? (
-        <div className="mt-3 flex shrink-0 items-center justify-between text-xs text-muted-foreground">
-          <span>共 {count} 条</span>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>上一页</Button>
-            <span>{page} / {totalPages}</span>
-            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>下一页</Button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function balanceTypeLabel(type: string) {
-  return (
-    {
-      account_recharge: "充值入账",
-      order_payment: "订单消费",
-      admin_adjustment: "管理员调整",
-      refund: "订单退款",
-      promotion: "推广收益",
-      system: "系统处理",
-    }[type] ?? type
-  );
-}
-
-function formatOptionalBalance(value: number | null, currency: string) {
-  return value == null ? "—" : formatPaymentAmount(value, currency as PaymentCurrency);
-}
-
 function createClientRequestId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -668,7 +508,7 @@ function RecordLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RechargeRecords({ records, loading, error, page, count, onRetry, onPageChange, onProofSubmitted }: { records: RechargeRecord[]; loading: boolean; error: RechargeListError | null; page: number; count: number; onRetry: () => void; onPageChange: (page: number) => void; onProofSubmitted: () => void }) {
+function RechargeRecords({ records, loading, error, page, count, nowTick, onRetry, onPageChange, onProofSubmitted }: { records: RechargeRecord[]; loading: boolean; error: RechargeListError | null; page: number; count: number; nowTick: number; onRetry: () => void; onPageChange: (page: number) => void; onProofSubmitted: () => void }) {
   const totalPages = Math.max(1, Math.ceil(count / 10));
   if (error) return (
     <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
@@ -689,11 +529,19 @@ function RechargeRecords({ records, loading, error, page, count, onRetry, onPage
   return (
     <div className="mt-5 flex min-h-0 flex-1 flex-col">
       <div className="space-y-3">
-        {records.map((record) => (
-          <div key={record.rechargeNo} className="rounded-xl bg-slate-50 p-4 text-sm">
+        {records.map((record) => {
+          const now = new Date(Date.now() + nowTick * 0);
+          const expired = record.status === "expired" || isRechargePastDue(record.expiresAt, now);
+          const canContinue = isLiuhaoyiPaymentMethod(record.channelCode)
+            ? canContinueLiuhaoyiRechargePayment(record as unknown as Record<string, unknown>, now)
+            : Boolean(record.expectedUsdtAmount && ["pending", "waiting_payment"].includes(String(record.status)) && !expired);
+          const status = expired ? "expired" : record.status;
+          const remainingSeconds = secondsUntil(record.expiresAt, now);
+          const isLiuhaoyi = isLiuhaoyiPaymentMethod(record.channelCode);
+          return <div key={record.rechargeNo} className="rounded-xl bg-slate-50 p-4 text-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <span className="truncate font-semibold text-slate-800" title={record.rechargeNo}>{record.rechargeNo}</span>
-              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{rechargeStatusLabel(record.status)}</span>
+              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{rechargeStatusLabel(status)}</span>
             </div>
             <dl className="grid gap-2 text-muted-foreground">
               <RecordLine label="支付渠道" value={record.channelName} />
@@ -701,20 +549,28 @@ function RechargeRecords({ records, loading, error, page, count, onRetry, onPage
               <RecordLine label="充值金额" value={record.requestedCnyAmount ? `¥${record.requestedCnyAmount}` : formatPaymentAmount(record.requestedAmount, record.currency)} />
               {record.lockedSettlementRate ? <RecordLine label="锁定汇率" value={`1 USDT = ¥${record.lockedSettlementRate}`} /> : null}
               {record.expectedUsdtAmount ? <RecordLine label="精确应付" value={`${record.expectedUsdtAmount} USDT`} /> : null}
+              <CopyableRecordLine label="订单编号" value={record.rechargeNo} />
               {record.expiresAt ? <RecordLine label="支付有效期至" value={formatDateTime(record.expiresAt)} /> : null}
+              {canContinue ? <RecordLine label="待支付剩余时间" value={formatCountdown(remainingSeconds)} /> : null}
               {record.paymentAddress ? <RecordLine label="收款地址" value={record.paymentAddress} /> : null}
               {record.paymentTokenContract ? <RecordLine label="Token 合约" value={record.paymentTokenContract} /> : null}
               {record.actualReceivedUsdt ? <RecordLine label="实际到账" value={`${record.actualReceivedUsdt} USDT`} /> : null}
-              <RecordLine label="手续费" value={record.feeAmount === 0 ? "免手续费" : formatPaymentAmount(record.feeAmount, record.currency)} />
+              <RecordLine label="本站手续费" value={record.feeAmount === 0 ? "0" : formatPaymentAmount(record.feeAmount, record.currency)} />
+              {isLiuhaoyi ? <RecordLine label="支付通道手续费" value="3%（支付平台额外收取）" /> : null}
               {!record.expectedUsdtAmount ? <RecordLine label="应付金额" value={formatPaymentAmount(record.payableAmount, record.currency)} /> : null}
               <RecordLine label="到账金额" value={record.creditedCnyAmount ? `¥${record.creditedCnyAmount}` : formatPaymentAmount(record.creditedAmount, record.currency)} />
               <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />
-              {record.completedAt ? <RecordLine label="完成时间" value={formatDateTime(record.completedAt)} /> : null}
+              {record.completedAt ? <RecordLine label="到账时间" value={formatDateTime(record.completedAt)} /> : null}
               {record.reviewReason && ["failed", "rejected", "cancelled"].includes(String(record.status)) ? <RecordLine label="处理说明" value={record.reviewReason} /> : null}
             </dl>
-            {["waiting_payment", "submitted", "rejected"].includes(String(record.status)) ? (record.expectedUsdtAmount ? <RechargeBep20VerifyForm record={record} onSubmitted={onProofSubmitted} /> : <RechargeProofForm record={record} onSubmitted={onProofSubmitted} />) : null}
-          </div>
-        ))}
+            {canContinue ? <Button asChild size="sm" className="mt-3"><Link href={`/payment?recharge=${encodeURIComponent(record.rechargeNo)}`}>继续支付</Link></Button> : null}
+            {expired ? <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+              <p>充值订单已过期。如您已完成转账，请联系人工客服并提供充值订单编号。</p>
+              <Button type="button" size="sm" variant="outline" className="mt-2" onClick={openPublicSupport}>联系客服</Button>
+            </div> : null}
+            {!expired && ["waiting_payment", "submitted", "rejected"].includes(String(record.status)) ? (record.expectedUsdtAmount ? <RechargeBep20VerifyForm record={record} onSubmitted={onProofSubmitted} /> : <RechargeProofForm record={record} onSubmitted={onProofSubmitted} />) : null}
+          </div>;
+        })}
       </div>
       {count > 10 ? (
         <div className="mt-3 flex shrink-0 items-center justify-between text-xs text-muted-foreground">
@@ -793,6 +649,36 @@ function RechargeProofForm({ record, onSubmitted }: { record: RechargeRecord; on
     finally { setSubmitting(false); }
   }
   return <div className="mt-3 border-t pt-3">{!open ? <Button size="sm" variant="outline" onClick={() => setOpen(true)}>{record.status === "submitted" ? "补充支付凭证" : "提交支付凭证"}</Button> : <div className="space-y-2 rounded-lg border bg-white p-3"><div className="text-xs text-slate-500">付款金额：{formatPaymentAmount(record.payableAmount, record.currency)}</div><Input value={reference} maxLength={160} onChange={(e) => setReference(e.target.value)} placeholder="交易流水号" /><Input value={payer} maxLength={120} onChange={(e) => setPayer(e.target.value)} placeholder="付款账号摘要（请勿填写完整敏感信息）" /><Input type="datetime-local" value={paymentTime} onChange={(e) => setPaymentTime(e.target.value)} /><Input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="用户备注（可选）" /><Input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 3))} /><p className="text-xs text-slate-500">支持 JPG、PNG、WEBP、PDF，单个最大 5MB，最多 3 个。</p><div className="flex gap-2"><Button size="sm" disabled={submitting} onClick={() => void submit()}>{submitting ? "提交中..." : "提交审核"}</Button><Button size="sm" variant="outline" disabled={submitting} onClick={() => setOpen(false)}>取消</Button></div></div>}</div>;
+}
+
+function CopyableRecordLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <dt className="text-slate-500">{label}：</dt>
+      <dd className="flex min-w-0 items-center gap-2 text-right text-slate-400">
+        <span className="truncate" title={value}>{value}</span>
+        <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={() => void copyRechargeNo(value)}>复制</Button>
+      </dd>
+    </div>
+  );
+}
+
+async function copyRechargeNo(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success("充值订单编号已复制");
+  } catch {
+    toast.error("复制失败，请手动复制订单编号");
+  }
+}
+
+function secondsUntil(expiresAt: string | null, now: Date) {
+  if (!expiresAt) return 0;
+  return Math.max(0, Math.floor((Date.parse(expiresAt) - now.getTime()) / 1000));
+}
+
+function formatCountdown(totalSeconds: number) {
+  return `${Math.floor(totalSeconds / 60)} 分 ${totalSeconds % 60} 秒`;
 }
 
 function normalizeAmountInput(value: string, currency: PaymentCurrency) {

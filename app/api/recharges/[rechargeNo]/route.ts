@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { getPaymentErrorMessage, isPaymentSchemaUnavailable, normalizeRechargeRow } from "@/lib/payments/recharge-utils";
+import { expireOverdueLiuhaoyiRecharges } from "@/lib/payments/recharge-expiry-service";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,13 @@ export async function GET(_request: Request, { params }: RouteContext) {
   }
 
   try {
+    const service = getSupabaseServiceRoleClient();
+    if (service) {
+      await expireOverdueLiuhaoyiRecharges(service, {
+        userId: authData.user.id,
+        rechargeNo,
+      });
+    }
     const { data, error } = await supabase
       .from("account_recharges")
       .select(rechargeDetailSelect)

@@ -1,14 +1,19 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { getPaymentChannelValidationError } from "../../lib/payments/manual-channel-readiness.mjs";
 
 import {
   buildLiuhaoyiSignContent,
   createLiuhaoyiMd5Signature,
+  isExpectedLiuhaoyiMerchant,
+  liuhaoyiCallbackResponseBody,
+  liuhaoyiChannelForType,
   liuhaoyiTypeForChannel,
   verifyLiuhaoyiMd5Signature,
 } from "../../lib/payments/providers/liuhaoyi-core.mjs";
 import {
+  assertLiuhaoyiAmountBreakdown,
   assertLiuhaoyiPaymentAmount,
   isLiuhaoyiAmountOverLimit,
   isLiuhaoyiPaymentMethod,
@@ -59,8 +64,18 @@ test("正确回调签名通过，错误或篡改后的签名拒绝", () => {
 test("支付宝和微信映射为六号易协议 type，其他支付方式不受该 Provider 管辖", () => {
   assert.equal(liuhaoyiTypeForChannel("alipay"), "alipay");
   assert.equal(liuhaoyiTypeForChannel("wechat_pay"), "wxpay");
+  assert.equal(liuhaoyiChannelForType("alipay"), "alipay");
+  assert.equal(liuhaoyiChannelForType("wxpay"), "wechat");
+  assert.throws(() => liuhaoyiChannelForType("wechat"), /不支持/);
   assert.equal(isLiuhaoyiPaymentMethod("balance"), false);
   assert.equal(isLiuhaoyiPaymentMethod("usdt_bep20"), false);
+});
+
+test("¥100 的网站本金、零手续费、应付金额和 API money 均精确为 100.00", () => {
+  assert.equal(assertLiuhaoyiAmountBreakdown("100.00", "0.00", "100.00"), "100.00");
+  assert.throws(() => assertLiuhaoyiAmountBreakdown("100.00", "3.00", "103.00"), /不得.*手续费/);
+  assert.match(source("lib/payments/providers/liuhaoyi.ts"), /money = assertLiuhaoyiAmountBreakdown\(input\.requestedAmount, input\.feeAmount, input\.payableAmount\)/);
+  assert.match(getPaymentChannelValidationError({ channel: "alipay", provider: "liuhaoyi", currency: "CNY", feeRate: 0.03, minimumAmount: 1, maximumAmount: 2000, network: null }), /must not add a local Liuhaoyi fee/);
 });
 
 test("¥2000 可以创建，超过 ¥2000 在后端公共校验中拒绝", () => {
@@ -86,7 +101,25 @@ test("六号易回调使用 GET、统一 completePayment，并显式处理重复
   assert.match(callbackRoute, /export async function GET/);
   assert.match(callbackService, /if \(session\.status === "paid"\)[\s\S]*"duplicate"/);
   assert.match(callbackService, /await completePayment\(/);
-  assert.match(provider, /result\.ok \? "success" : "fail"/);
+  assert.equal(liuhaoyiCallbackResponseBody(true), "success");
+  assert.equal(liuhaoyiCallbackResponseBody(false), "fail");
+  assert.match(provider, /liuhaoyiCallbackResponseBody\(result\.ok\)/);
+});
+
+test("合法签名也必须通过独立 pid 校验，错误 pid 被拒绝", () => {
+  const wrongPid = { ...callback, pid: "another-merchant" };
+  const signed = { ...wrongPid, sign: createLiuhaoyiMd5Signature(wrongPid, merchantKey) };
+  assert.equal(verifyLiuhaoyiMd5Signature(signed, merchantKey), true);
+  assert.equal(isExpectedLiuhaoyiMerchant(signed, "merchant-demo"), false);
+  assert.equal(isExpectedLiuhaoyiMerchant(callback, "merchant-demo"), true);
+  assert.match(source("lib/payments/providers/liuhaoyi.ts"), /isExpectedLiuhaoyiMerchant\(parameters, config\.merchantId\)/);
+});
+
+test("已签名但 type 或 trade_status 不合法的回调不能进入完成流程", () => {
+  const provider = source("lib/payments/providers/liuhaoyi.ts");
+  assert.throws(() => liuhaoyiChannelForType("wechat"), /不支持/);
+  assert.match(provider, /callbackChannel !== expectedChannel[\s\S]*LIUHAOYI_CHANNEL_MISMATCH/);
+  assert.match(provider, /parameters\.trade_status !== "TRADE_SUCCESS"[\s\S]*LIUHAOYI_STATUS_INVALID/);
 });
 
 test("订单与充值均有服务端上限校验且复用统一 payment session", () => {
@@ -98,7 +131,44 @@ test("订单与充值均有服务端上限校验且复用统一 payment session"
   assert.match(orders, /assertLiuhaoyiPaymentAmount/);
   assert.match(recharges, /assertLiuhaoyiPaymentAmount/);
   assert.match(recharges, /createPaymentSession\(/);
-  assert.match(sessions, /assertLiuhaoyiPaymentAmount\(business\.payableAmount\)/);
+  assert.match(sessions, /assertLiuhaoyiAmountBreakdown\(business\.requestedAmount, business\.feeAmount, business\.payableAmount\)/);
+});
+
+test("回调金额以发送本金对应的 Session payable_amount 为唯一预期值", () => {
+  const callbackService = source("lib/payments/payment-callback-service.ts");
+  const creditMigration = source("supabase/migrations/20260623_payment_balance_transactions_compatibility.sql");
+  assert.match(callbackService, /amountEqual\(session\.payable_amount, parsed\.amount, session\.currency\)/);
+  assert.match(creditMigration, /v_after := v_before \+ coalesce\(v_recharge\.amount, 0\)/);
+});
+
+test("out_trade_no 使用全局唯一 session_no，并由 callback 与 reconciliation 稳定反查", () => {
+  const provider = source("lib/payments/providers/liuhaoyi.ts");
+  const callbackService = source("lib/payments/payment-callback-service.ts");
+  const reconciliation = source("lib/payments/reconciliation-service.ts");
+  const coreMigration = source("supabase/migrations/20260623_payment_provider_core.sql");
+  assert.match(provider, /out_trade_no: input\.sessionNo/);
+  assert.match(callbackService, /query = query\.eq\("session_no", parsed\.sessionNo\)/);
+  assert.match(reconciliation, /session\.providerOrderNo \?\? session\.sessionNo/);
+  assert.match(coreMigration, /session_no text not null unique/);
+  assert.match(coreMigration, /payment_sessions_active_business_unique/);
+});
+
+test("return_url 只返回订单或充值展示页，不具备完成或入账能力", () => {
+  const provider = source("lib/payments/providers/liuhaoyi.ts");
+  const paymentPage = source("app/payment/page.tsx");
+  assert.match(provider, /`\/payment\?order=/);
+  assert.match(provider, /`\/payment\?recharge=/);
+  assert.doesNotMatch(paymentPage, /completePayment|complete_account_recharge|deliverDigitalOrder/);
+});
+
+test("独立 liuhaoyi Provider 保留 generic_api 占位，并由兼容 Migration 精确迁移", () => {
+  const providers = source("lib/payments/providers.ts");
+  const migration = source("supabase/migrations/20260914120000_liuhaoyi_provider_identity.sql");
+  assert.match(providers, /liuhaoyi: liuhaoyiProvider/);
+  assert.match(providers, /generic_api: unavailableProvider\(\)/);
+  assert.match(migration, /channel in \('alipay', 'wechat'\)/);
+  assert.match(migration, /fee_rate = 0/);
+  assert.match(migration, /'\{maximum_amount\}'[\s\S]*'2000'/);
 });
 
 test("前端只限制六号易，balance 和 usdt_bep20 大额路径不被误拦截", () => {

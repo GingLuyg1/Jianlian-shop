@@ -24,7 +24,9 @@ import {
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { getBep20TimingVisibility } from "@/lib/payments/bep20-presentation.mjs";
+import { isRechargePastDue } from "@/lib/payments/recharge-expiry.mjs";
 import { rechargeStatusLabel, type RechargeRecord } from "@/lib/payments/recharge-utils";
+import { openPublicSupport } from "@/lib/support/open-public-support";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/i18n/money";
 
@@ -538,6 +540,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   const succeeded = rechargeStatus === "succeeded";
   const isLiuhaoyiRecharge = ["alipay", "wechat", "wechat_pay"].includes(recharge?.channelCode ?? "");
   const remainingSeconds = secondsLeft(recharge?.expiresAt) + nowTick * 0;
+  const expiredByTime = Boolean(isLiuhaoyiRecharge && recharge?.expiresAt && isRechargePastDue(recharge.expiresAt));
   const canTransfer = ["pending", "waiting_payment"].includes(rechargeStatus) && remainingSeconds > 0;
   const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
 
@@ -615,8 +618,16 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                {isLiuhaoyiRecharge ? (
-                  <LiuhaoyiRechargePaymentPanel recharge={recharge} onRechargeChanged={() => loadRecharge({ silent: true })} />
+                {isLiuhaoyiRecharge ? (succeeded ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                    <div className="font-semibold">充值成功</div>
+                    <div className="mt-1">人民币余额入账由统一支付完成流程处理。</div>
+                  </div>
+                ) : terminal || expiredByTime ? (
+                  <ExpiredRechargeNotice rechargeNo={recharge.rechargeNo} />
+                ) : (
+                  <LiuhaoyiRechargePaymentPanel recharge={recharge} onRechargeChanged={loadRecharge} />
+                )
                 ) : <>{succeeded ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                     <div className="font-semibold">充值成功</div>
@@ -725,13 +736,21 @@ function LiuhaoyiRechargePaymentPanel({
   const [sessionStatus, setSessionStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [nowTick, setNowTick] = useState(0);
   const createStarted = useRef(false);
   const channel = recharge.channelCode === "wechat_pay" ? "wechat" : recharge.channelCode;
   const completed = String(recharge.status) === "succeeded";
   const providerPaid = sessionStatus === "paid";
+  const expired = sessionStatus === "expired" || isRechargePastDue(session?.expiresAt ?? recharge.expiresAt);
+  const remainingSeconds = secondsLeft(session?.expiresAt ?? recharge.expiresAt) + nowTick * 0;
 
   useEffect(() => {
-    if (createStarted.current || completed) {
+    const timer = window.setInterval(() => setNowTick((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (createStarted.current || completed || expired) {
       setLoading(false);
       return;
     }
@@ -757,10 +776,10 @@ function LiuhaoyiRechargePaymentPanel({
       }
     })();
     return () => { active = false; };
-  }, [channel, completed, recharge.rechargeNo]);
+  }, [channel, completed, expired, recharge.rechargeNo]);
 
   useEffect(() => {
-    if (!session?.sessionNo || completed) return;
+    if (!session?.sessionNo || completed || expired) return;
     let stopped = false;
     const timer = window.setInterval(() => {
       void (async () => {
@@ -772,11 +791,12 @@ function LiuhaoyiRechargePaymentPanel({
       })();
     }, 4000);
     return () => { stopped = true; window.clearInterval(timer); };
-  }, [completed, onRechargeChanged, session?.sessionNo]);
+  }, [completed, expired, onRechargeChanged, session?.sessionNo]);
 
   if (completed) {
     return <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><div className="font-semibold">充值成功</div><div className="mt-1">人民币余额入账由统一支付完成流程处理。</div></div>;
   }
+  if (expired) return <ExpiredRechargeNotice rechargeNo={recharge.rechargeNo} />;
   if (loading) return <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />正在获取付款信息...</div>;
   if (error) return <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}。请返回充值记录确认状态后再重试，勿重复创建或付款。</div>;
   if (!session) return null;
@@ -784,15 +804,31 @@ function LiuhaoyiRechargePaymentPanel({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">请核对金额后完成付款。支付结果以服务端异步回调和统一支付状态为准，请勿重复付款。</div>
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">支付宝 / 微信支付将额外收取 3% 支付通道手续费，由支付平台收取。充值到账金额不包含手续费，实际付款金额以支付页面为准。本地充值金额与六号易 API 金额不增加此费用。</div>
       {providerPaid ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">支付渠道已确认付款，正在完成余额入账，请勿重复付款。</div> : null}
       {session.qrCodeUrl ? <div className="rounded-xl bg-slate-50 p-4 text-center"><img src={session.qrCodeUrl} alt="支付二维码" className="mx-auto h-52 w-52 rounded-lg object-contain" /><p className="mt-2 text-xs text-muted-foreground">请使用对应的支付宝或微信应用扫码</p></div> : null}
       <div className="space-y-3 rounded-xl bg-slate-50 p-4 text-sm">
         <Info label="应付金额" value={`${session.payableAmount.toFixed(2)} CNY`} strong />
         <Info label="支付状态" value={getStatusText(sessionStatus || session.status)} />
         <Info label="支付截止时间" value={formatDate(session.expiresAt)} />
+        <Info label="待支付剩余时间" value={`${Math.floor(remainingSeconds / 60)} 分 ${remainingSeconds % 60} 秒`} />
       </div>
       {session.paymentUrl ? <Button asChild className="w-full"><a href={session.paymentUrl} target="_blank" rel="noreferrer">打开付款页面<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
       {!session.qrCodeUrl && !session.paymentUrl ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">渠道未返回可展示的付款入口，请勿付款并联系客服。</div> : null}
+    </div>
+  );
+}
+
+function ExpiredRechargeNotice({ rechargeNo }: { rechargeNo: string }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+      <div className="font-semibold">已过期</div>
+      <p className="mt-1">充值订单已过期。如您已完成转账，请联系人工客服并提供充值订单编号。</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <code className="rounded bg-white px-2 py-1 text-xs">{rechargeNo}</code>
+        <Button type="button" size="sm" variant="outline" onClick={() => void copyWithFeedback(rechargeNo)}>复制订单编号</Button>
+        <Button type="button" size="sm" onClick={openPublicSupport}>联系客服</Button>
+      </div>
     </div>
   );
 }

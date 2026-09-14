@@ -16,6 +16,8 @@ import {
   parseRequestedCnyAmount,
 } from "@/lib/payments/recharge-rate.mjs";
 import { loadCurrentRechargeDailyRate } from "@/lib/payments/recharge-rate-service";
+import { createLiuhaoyiRechargeWindow } from "@/lib/payments/recharge-expiry.mjs";
+import { expireOverdueLiuhaoyiRecharges } from "@/lib/payments/recharge-expiry-service";
 import {
   classifyPublicRechargeAmountRange,
   isKnownPaymentChannelCode,
@@ -75,6 +77,8 @@ export async function GET(request: Request) {
   }
 
   try {
+    const service = getSupabaseServiceRoleClient();
+    if (service) await expireOverdueLiuhaoyiRecharges(service, { userId: context.user.id });
     let query = context.supabase
       .from("account_recharges")
       .select(rechargeSelect, { count: "exact" })
@@ -290,7 +294,14 @@ export async function POST(request: Request) {
 
     let rechargeId: string | null = null;
     let expiresAt: string | null = null;
+    let createdAt: string | null = null;
     let expectedUsdtAmount = theoreticalUsdtAmount;
+
+    if (isLiuhaoyiPaymentMethod(channel.code)) {
+      const window = createLiuhaoyiRechargeWindow();
+      createdAt = window.createdAt;
+      expiresAt = window.expiresAt;
+    }
 
     if (isUsdtCnyRecharge) {
       rechargeId = randomUUID();
@@ -328,6 +339,7 @@ export async function POST(request: Request) {
     try {
       rechargeNo = await insertRecharge(serviceClient, {
         rechargeId,
+        createdAt,
         expiresAt,
         userId: context.user.id,
         userEmail: context.user.email ?? null,
@@ -459,6 +471,7 @@ async function insertRecharge(
   serviceClient: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>,
   input: {
     rechargeId: string | null;
+    createdAt: string | null;
     expiresAt: string | null;
     userId: string;
     userEmail: string | null;
@@ -484,6 +497,7 @@ async function insertRecharge(
     const rechargeNo = generateRechargeNo();
     const row = {
       ...(input.rechargeId ? { id: input.rechargeId } : {}),
+      ...(input.createdAt ? { created_at: input.createdAt } : {}),
       recharge_no: rechargeNo,
       user_id: input.userId,
       user_email: input.userEmail,
@@ -505,6 +519,7 @@ async function insertRecharge(
       review_mode: input.channel.reviewMode ?? "provider",
       customer_note: input.customerNote || null,
       user_note: input.customerNote || null,
+      expires_at: input.expiresAt,
       ...(input.rateSnapshot ? {
         settlement_currency: "USDT",
         requested_cny_amount: input.rateSnapshot.requestedCnyAmount,
@@ -517,7 +532,6 @@ async function insertRecharge(
         rate_effective_date: input.rateSnapshot.effectiveDate,
         rate_effective_at: input.rateSnapshot.effectiveAt,
         rate_locked_at: new Date().toISOString(),
-        expires_at: input.expiresAt,
         payment_address: input.channel.manualPayment?.payment_address ?? null,
         payment_token_contract: input.channel.manualPayment?.token_contract ?? null,
       } : {}),

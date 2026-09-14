@@ -4,3 +4,4 @@ export function isLiuhaoyiPaymentMethod(value: unknown): boolean;
 export function cnyToMinorUnits(value: unknown): bigint | null;
 export function isLiuhaoyiAmountOverLimit(value: unknown): boolean;
 export function assertLiuhaoyiPaymentAmount(value: unknown): string;
+export function assertLiuhaoyiAmountBreakdown(requestedAmount: unknown, feeAmount: unknown, payableAmount: unknown): string;

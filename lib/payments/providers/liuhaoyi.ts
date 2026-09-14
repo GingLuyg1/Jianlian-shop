@@ -11,9 +11,12 @@ import type {
   ProviderQueryPaymentResult,
   RechargeStatus,
 } from "@/lib/payments/channel-types";
-import { assertLiuhaoyiPaymentAmount } from "@/lib/payments/liuhaoyi-limits.mjs";
+import { assertLiuhaoyiAmountBreakdown, assertLiuhaoyiPaymentAmount } from "@/lib/payments/liuhaoyi-limits.mjs";
 import {
   createLiuhaoyiMd5Signature,
+  isExpectedLiuhaoyiMerchant,
+  liuhaoyiCallbackResponseBody,
+  liuhaoyiChannelForType,
   liuhaoyiTypeForChannel,
   parseLiuhaoyiQuery,
   verifyLiuhaoyiMd5Signature,
@@ -69,12 +72,13 @@ async function createPayment(
   if (input.currency !== "CNY") {
     throw new LiuhaoyiProviderError("LIUHAOYI_CURRENCY_INVALID", "六号易仅支持人民币支付");
   }
-  if (input.feeAmount !== 0 || input.requestedAmount !== input.payableAmount) {
+  const config = configuration();
+  let money: string;
+  try {
+    money = assertLiuhaoyiAmountBreakdown(input.requestedAmount, input.feeAmount, input.payableAmount);
+  } catch {
     throw new LiuhaoyiProviderError("LIUHAOYI_FEE_CONFIGURATION_INVALID", "六号易支付不得由本站附加买家手续费");
   }
-
-  const config = configuration();
-  const money = assertLiuhaoyiPaymentAmount(input.payableAmount);
   const channelType = liuhaoyiTypeForChannel(input.channel.code);
   const clientIp = String(input.clientIp ?? "").trim();
   if (!clientIp) throw new LiuhaoyiProviderError("LIUHAOYI_CLIENT_IP_REQUIRED", "无法确认付款客户端 IP");
@@ -153,7 +157,7 @@ async function verifyCallback(_payload: unknown, context?: string | ProviderCall
   try {
     const config = configuration();
     const parameters = callbackParameters(context);
-    return parameters.pid === config.merchantId
+    return isExpectedLiuhaoyiMerchant(parameters, config.merchantId)
       && String(parameters.sign_type ?? "").toUpperCase() === "MD5"
       && verifyLiuhaoyiMd5Signature(parameters, config.merchantKey);
   } catch {
@@ -164,9 +168,10 @@ async function verifyCallback(_payload: unknown, context?: string | ProviderCall
 async function parseCallback(_payload: unknown, context?: ProviderCallbackContext): Promise<ProviderParsedCallback> {
   const config = configuration();
   const parameters = callbackParameters(context);
-  const expectedType = liuhaoyiTypeForChannel(context?.channelCode);
-  if (parameters.pid !== config.merchantId) throw new LiuhaoyiProviderError("LIUHAOYI_PID_MISMATCH", "六号易回调商户号不匹配");
-  if (parameters.type !== expectedType) throw new LiuhaoyiProviderError("LIUHAOYI_CHANNEL_MISMATCH", "六号易回调支付渠道不匹配");
+  const expectedChannel = context?.channelCode;
+  const callbackChannel = liuhaoyiChannelForType(parameters.type);
+  if (!isExpectedLiuhaoyiMerchant(parameters, config.merchantId)) throw new LiuhaoyiProviderError("LIUHAOYI_PID_MISMATCH", "六号易回调商户号不匹配");
+  if (callbackChannel !== expectedChannel) throw new LiuhaoyiProviderError("LIUHAOYI_CHANNEL_MISMATCH", "六号易回调支付渠道不匹配");
   if (parameters.trade_status !== "TRADE_SUCCESS") throw new LiuhaoyiProviderError("LIUHAOYI_STATUS_INVALID", "六号易回调支付状态无效");
   const sessionNo = boundedOptionalText(parameters.out_trade_no, 160);
   const providerTransactionId = boundedOptionalText(parameters.trade_no, 160);
@@ -180,7 +185,7 @@ async function parseCallback(_payload: unknown, context?: ProviderCallbackContex
     status: "paid",
     amount,
     currency: "CNY",
-    channelCode: context?.channelCode,
+    channelCode: callbackChannel,
     rawSummary: { tradeStatus: "TRADE_SUCCESS", providerTransactionIdPresent: true },
   };
 }
@@ -194,7 +199,7 @@ export const liuhaoyiProvider: PaymentProvider = {
   verifyCallback,
   parseCallback,
   formatCallbackResponse(result) {
-    return new Response(result.ok ? "success" : "fail", {
+    return new Response(liuhaoyiCallbackResponseBody(result.ok), {
       status: result.ok ? 200 : 400,
       headers: { "content-type": "text/plain; charset=utf-8" },
     });

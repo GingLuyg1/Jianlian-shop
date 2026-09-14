@@ -14,7 +14,7 @@ import {
   isPublicPaymentChannelReady,
   paymentReviewMode,
 } from "@/lib/payments/manual-channel-readiness.mjs";
-import { normalizeRechargeStatus, rechargeFlowStatusLabel } from "@/lib/recharges/status-machine";
+import { normalizeRechargeStatus } from "@/lib/recharges/status-machine";
 
 export const RECHARGE_STATUSES: RechargeStatus[] = [
   "pending",
@@ -162,7 +162,8 @@ export function normalizeChannelRow(row: AnyRow): PaymentChannel | null {
   const currency: PaymentCurrency = row.currency;
   const providerValue = row.provider;
   if (
-    providerValue !== "generic_api"
+    providerValue !== "liuhaoyi"
+    && providerValue !== "generic_api"
     && providerValue !== "binance"
     && providerValue !== "crypto_address"
   ) return null;
@@ -293,16 +294,21 @@ export function channelLabel(code: string) {
 }
 
 export function rechargeStatusLabel(status: string) {
-  return rechargeFlowStatusLabel(status);
-  /* Legacy labels retained below for source compatibility. */
   return (
     {
       pending: "待支付",
+      waiting_payment: "待支付",
+      submitted: "处理中",
+      reviewing: "处理中",
+      approved: "处理中",
       processing: "处理中",
+      succeeded: "已到账",
       paid: "已到账",
       failed: "失败",
+      rejected: "失败",
+      cancelled: "失败",
       expired: "已过期",
-      closed: "已关闭",
+      closed: "失败",
     }[status] ?? "待支付"
   );
 }
@@ -312,8 +318,8 @@ function isKnownChannel(value: string): value is PaymentChannelCode {
 }
 
 function normalizeProvider(value: unknown, code: PaymentChannelCode): PaymentProviderCode {
-  if (value === "generic_api" || value === "binance" || value === "crypto_address") return value;
-  if (code === "alipay" || code === "wechat") return "generic_api";
+  if (value === "liuhaoyi" || value === "generic_api" || value === "binance" || value === "crypto_address") return value;
+  if (code === "alipay" || code === "wechat") return "liuhaoyi";
   if (code === "binance_pay") return "binance";
   return "crypto_address";
 }

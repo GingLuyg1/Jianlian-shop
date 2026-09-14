@@ -58,7 +58,8 @@ function unavailableProvider(): PaymentProvider {
 }
 
 const providers: Record<PaymentProviderCode, PaymentProvider> = {
-  generic_api: liuhaoyiProvider,
+  liuhaoyi: liuhaoyiProvider,
+  generic_api: unavailableProvider(),
   binance: unavailableProvider(),
   crypto_address: unavailableProvider(),
 };
@@ -76,6 +77,17 @@ export function getPaymentProvider(provider: PaymentProviderCode) {
 }
 
 export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCapabilities> = {
+  liuhaoyi: {
+    supportsCreate: true,
+    supportsQuery: true,
+    supportsClose: false,
+    supportsCallback: true,
+    supportsRefund: false,
+    supportsQrCode: true,
+    supportsRedirect: true,
+    supportsWalletAddress: false,
+    supportsSandbox: false,
+  },
   generic_api: {
     supportsCreate: true,
     supportsQuery: true,
@@ -112,11 +124,16 @@ export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCa
 };
 
 const providerRequiredEnvNames: Record<PaymentProviderCode, string[]> = {
-  generic_api: [
+  liuhaoyi: [
     "LIUHAOYI_API_BASE_URL",
     "LIUHAOYI_MERCHANT_ID",
     "LIUHAOYI_MERCHANT_KEY",
     "LIUHAOYI_SITE_URL",
+  ],
+  generic_api: [
+    "GENERIC_PAYMENT_API_BASE_URL",
+    "GENERIC_PAYMENT_MERCHANT_ID",
+    "GENERIC_PAYMENT_API_SECRET",
   ],
   binance: [
     "BINANCE_PAY_API_BASE_URL",

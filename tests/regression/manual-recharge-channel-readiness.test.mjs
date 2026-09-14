@@ -49,7 +49,7 @@ test("admin payment channel settings synchronize compatibility and runtime field
     /return\s+NextResponse\.json\([\s\S]{0,500}\bsecret_config\b/,
   );
   assert.match(route, /resolvePaymentChannelState/);
-  assert.match(route, /providerTrustedConfigured:\s*false/);
+  assert.match(route, /providerTrustedConfigured:\s*checkPaymentProviderConfig\(provider\)\.configured/);
   assert.match(route, /PAYMENT_CHANNEL_CONFLICT_STATUS/);
   assert.match(route, /hasMatchingPaymentChannelVersion/);
   assert.match(route, /parseSinglePaymentChannelPatchPayload/);

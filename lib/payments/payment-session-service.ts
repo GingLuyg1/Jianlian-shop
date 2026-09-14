@@ -10,7 +10,7 @@ import type {
   ProviderCreatePaymentResult,
 } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
-import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
+import { assertLiuhaoyiAmountBreakdown, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { getPaymentProvider } from "@/lib/payments/providers";
 import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -76,6 +76,7 @@ type BusinessRecord = {
   payableAmount: number;
   currency: PaymentCurrency;
   channelCode?: string | null;
+  expiresAt?: string | null;
 };
 
 type ReservedSession = {
@@ -98,7 +99,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
       throw new PaymentSessionError("LIUHAOYI_CURRENCY_INVALID", "支付宝/微信支付仅支持人民币订单");
     }
     try {
-      assertLiuhaoyiPaymentAmount(business.payableAmount);
+      assertLiuhaoyiAmountBreakdown(business.requestedAmount, business.feeAmount, business.payableAmount);
     } catch (error) {
       throw new PaymentSessionError("LIUHAOYI_AMOUNT_LIMIT_EXCEEDED", getSafeErrorMessage(error, "支付宝/微信支付金额无效"));
     }
@@ -108,7 +109,9 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
   }
 
   const sessionNo = generateSessionNo();
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const expiresAt = businessType === "recharge" && business.expiresAt
+    ? business.expiresAt
+    : new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const providerNetwork =
     channel.code === "usdt_trc20" ? "TRON" : channel.code === "usdt_bep20" ? "BSC" : channel.network;
 
@@ -195,12 +198,32 @@ export async function getPaymentSessionStatus(
     throw new PaymentSessionError("SESSION_FORBIDDEN", "无权查看该支付会话");
   }
 
+  let status = normalizeSessionStatus(data.status);
+  if (["pending", "processing"].includes(status) && isExpiredAt(data.expires_at)) {
+    const expiredAt = new Date().toISOString();
+    const { error: expireError } = await service
+      .from("payment_sessions")
+      .update({ status: "expired", closed_at: expiredAt, last_error: "支付会话已过期" })
+      .eq("session_no", sessionNo)
+      .in("status", ACTIVE_SESSION_STATUSES);
+    if (expireError) throw expireError;
+    status = "expired";
+    if (String(data.business_type) === "recharge" && isLiuhaoyiPaymentMethod(data.channel_code)) {
+      const { error: rechargeExpireError } = await service
+        .from("account_recharges")
+        .update({ status: "expired", error_summary: "充值订单已过期" })
+        .eq("recharge_no", data.business_no)
+        .in("status", ["pending", "waiting_payment", "processing"]);
+      if (rechargeExpireError) throw rechargeExpireError;
+    }
+  }
+
   return {
     sessionNo: String(data.session_no),
     businessType: String(data.business_type),
     businessNo: textOrNull(data.business_no),
     channel: String(data.channel_code),
-    status: normalizeSessionStatus(data.status),
+    status,
     providerTransactionId: textOrNull(data.provider_transaction_id),
     paidAt: textOrNull(data.paid_at),
     expiresAt: textOrNull(data.expires_at),
@@ -390,7 +413,7 @@ async function loadBusinessRecord(
 
   const { data, error } = await service
     .from("account_recharges")
-    .select("id,recharge_no,user_id,status,amount,requested_amount,fee_amount,payable_amount,currency,channel_code,channel")
+    .select("id,recharge_no,user_id,status,amount,requested_amount,fee_amount,payable_amount,currency,channel_code,channel,expires_at")
     .eq("recharge_no", normalizedNo)
     .maybeSingle();
   if (error) throw error;
@@ -408,6 +431,7 @@ async function loadBusinessRecord(
     payableAmount: finiteNumber(data.payable_amount),
     currency: data.currency === "USDT" ? "USDT" : "CNY",
     channelCode: textOrNull(data.channel_code ?? data.channel),
+    expiresAt: textOrNull(data.expires_at),
   };
 }
 
@@ -418,7 +442,15 @@ function ensureBusinessCanCreatePayment(record: BusinessRecord) {
   if (["cancelled", "closed", "expired", "refunded", "failed"].includes(record.status)) {
     throw new PaymentSessionError("BUSINESS_STATUS_INVALID", "当前业务单状态不允许创建支付会话");
   }
+  if (isLiuhaoyiPaymentMethod(record.channelCode) && isExpiredAt(record.expiresAt)) {
+    throw new PaymentSessionError("BUSINESS_STATUS_INVALID", "充值订单已过期，不能继续使用原支付单");
+  }
   if (record.payableAmount <= 0) throw new PaymentSessionError("AMOUNT_INVALID", "支付金额无效");
+}
+
+function isExpiredAt(value: unknown) {
+  const expiresAt = Date.parse(String(value ?? ""));
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
 }
 
 async function expireStaleSessions(service: SupabaseClient, businessType: string, businessId: string) {
