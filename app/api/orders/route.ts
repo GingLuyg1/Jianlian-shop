@@ -6,6 +6,9 @@ import { classifyBalancePaymentFailure } from "@/lib/orders/balance-payment-fail
 import { payOrderWithBalance } from "@/lib/orders/balance-payment-service";
 import { recordOrderAgreementAcceptances, verifyCheckoutAgreements, type AgreementInput } from "@/lib/legal/legal-service";
 import { normalizePaymentMethod } from "@/lib/payments/payment-methods";
+import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
+import { createPaymentSession, PaymentSessionError } from "@/lib/payments/payment-session-service";
+import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
 import { createBep20PaymentSession, getBep20ErrorMessage } from "@/lib/payments/bep20-chain-service";
 import { getUserBep20UnderpaymentWalletCredits } from "@/lib/payments/bep20-underpayment-user";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
@@ -155,6 +158,9 @@ type OrderPostProcessStage =
   | "BEP20_SESSION_STARTED"
   | "BEP20_SESSION_COMPLETED"
   | "BEP20_SESSION_FAILED"
+  | "LIUHAOYI_SESSION_STARTED"
+  | "LIUHAOYI_SESSION_COMPLETED"
+  | "LIUHAOYI_SESSION_FAILED"
   | "RESPONSE_BUILD_COMPLETED"
   | "UNHANDLED_POSTPROCESSING_FAILED";
 
@@ -319,6 +325,7 @@ export async function POST(request: Request) {
     const customerPhone = body.customer_phone?.trim() || null;
     const customerNote = body.customer_note?.trim() || null;
     const paymentMethod = normalizePaymentMethod(body.payment_method ?? body.paymentMethod ?? "balance");
+    const persistedPaymentMethod = paymentMethod === "wechat_pay" ? "wechat" : paymentMethod;
     const agreementInputs = Array.isArray(body.agreements) ? body.agreements : body.agreement_version_ids;
 
     if (!productId) {
@@ -345,7 +352,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unsupported payment method." }, { status: 400 });
     }
 
-    if (paymentMethod !== "balance" && paymentMethod !== "usdt_bep20") {
+    if (!["balance", "usdt_bep20", "alipay", "wechat_pay"].includes(paymentMethod)) {
       return NextResponse.json({ error: "This payment method is not available yet." }, { status: 400 });
     }
 
@@ -390,6 +397,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Please select a complete product SKU." }, { status: 400 });
     }
 
+    if (isLiuhaoyiPaymentMethod(paymentMethod)) {
+      const priceResult = skuId
+        ? await supabase.from("product_skus").select("price").eq("id", skuId).eq("product_id", productId).eq("status", "active").maybeSingle()
+        : await supabase.from("products").select("price").eq("id", productId).eq("status", "active").maybeSingle();
+      if (priceResult.error || !priceResult.data) {
+        return NextResponse.json({ error: "无法确认支付宝/微信支付金额，请刷新后重试", code: "LIUHAOYI_AMOUNT_UNAVAILABLE" }, { status: 503 });
+      }
+      const payableAmount = (Number(priceResult.data.price) * quantity).toFixed(2);
+      try {
+        assertLiuhaoyiPaymentAmount(payableAmount);
+      } catch (amountError) {
+        return NextResponse.json(
+          { error: getOrderErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥2000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
+          { status: 400 }
+        );
+      }
+    }
+
     const risk = await evaluateOrderRisk({
       supabase,
       request,
@@ -429,7 +454,7 @@ export async function POST(request: Request) {
       p_customer_phone: customerPhone,
       p_customer_note: customerNote,
       p_shipping_address: body.shipping_address ?? null,
-      p_payment_method: paymentMethod,
+      p_payment_method: persistedPaymentMethod,
       p_client_request_id: clientRequestId,
     };
 
@@ -660,6 +685,39 @@ export async function POST(request: Request) {
             order: { id: orderId, ...(savedOrder as Record<string, unknown>) },
           },
           { status: typeof (chainError as { status?: unknown })?.status === "number" ? Number((chainError as { status: number }).status) : 503 }
+        );
+      }
+    }
+
+    if (isLiuhaoyiPaymentMethod(paymentMethod)) {
+      logOrderPostProcess({ requestId: clientRequestId, stage: "LIUHAOYI_SESSION_STARTED", orderId, orderNo: completedOrder.orderNo });
+      try {
+        const paymentSession = await createPaymentSession({
+          businessType: "order",
+          businessNo: String(savedOrder.order_no),
+          channelCode: paymentMethod === "wechat_pay" ? "wechat" : "alipay",
+          userId: user.id,
+          clientIp: getPaymentClientIp(request),
+        });
+        logOrderPostProcess({ requestId: clientRequestId, stage: "LIUHAOYI_SESSION_COMPLETED", orderId, orderNo: completedOrder.orderNo });
+        return NextResponse.json({
+          request_id: clientRequestId,
+          warning_code: warningCode,
+          order: { ...(created as Record<string, unknown>), payment_method: paymentMethod },
+          paymentSession,
+        });
+      } catch (providerError) {
+        const code = providerError instanceof PaymentSessionError ? providerError.code : "LIUHAOYI_SESSION_FAILED";
+        logOrderPostProcess({ level: "warn", requestId: clientRequestId, stage: "LIUHAOYI_SESSION_FAILED", orderId, orderNo: completedOrder.orderNo, error: providerError });
+        return NextResponse.json(
+          {
+            error: getOrderErrorMessage(providerError, "支付宝/微信支付服务暂时不可用"),
+            code,
+            request_id: clientRequestId,
+            warning_code: warningCode,
+            order: { id: orderId, ...(savedOrder as Record<string, unknown>) },
+          },
+          { status: code === "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" ? 400 : 503 }
         );
       }
     }

@@ -98,6 +98,7 @@ export type ProviderCreatePaymentInput = {
   description?: string;
   notifyUrl?: string;
   returnUrl?: string;
+  clientIp?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -109,13 +110,14 @@ export type ProviderCreatePaymentResult = {
   walletAddress?: string;
   providerOrderNo?: string;
   expiresAt?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type ProviderQueryPaymentResult = {
   status: PaymentSessionStatus;
   providerTransactionId?: string;
   paidAt?: string;
-  amount?: number;
+  amount?: number | string;
   currency?: PaymentCurrency;
   rawSummary?: Record<string, unknown>;
 };
@@ -169,6 +171,7 @@ export type ProviderCallbackContext = {
   provider: PaymentProviderCode;
   rawBody: string;
   headers: Headers;
+  requestUrl: string;
 };
 
 export type ProviderParsedCallback = {
@@ -177,7 +180,7 @@ export type ProviderParsedCallback = {
   providerOrderNo?: string;
   providerTransactionId: string;
   status: PaymentSessionStatus;
-  amount: number;
+  amount: number | string;
   currency: PaymentCurrency;
   channelCode?: PaymentChannelCode;
   paidAt?: string;

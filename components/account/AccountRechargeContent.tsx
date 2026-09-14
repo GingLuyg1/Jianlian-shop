@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   calculateRechargeAmounts,
@@ -13,6 +14,7 @@ import {
   formatPaymentAmount,
 } from "@/lib/payments/channels";
 import type { PaymentChannel, PaymentChannelCode, PaymentCurrency } from "@/lib/payments/channel-types";
+import { isLiuhaoyiAmountOverLimit, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import {
   rechargeStatusLabel,
   type RechargeRecord,
@@ -23,6 +25,7 @@ import {
   parseRequestedCnyAmount,
 } from "@/lib/payments/recharge-rate.mjs";
 import { cn } from "@/lib/utils";
+import { openPublicSupport } from "@/lib/support/open-public-support";
 
 type RecordTab = "recharge" | "funds";
 
@@ -95,6 +98,7 @@ export default function AccountRechargeContent() {
   const [fundCount, setFundCount] = useState(0);
   const [dailyRate, setDailyRate] = useState<RechargeRate | null>(null);
   const [rateError, setRateError] = useState<string | null>(null);
+  const [liuhaoyiLimitDialogOpen, setLiuhaoyiLimitDialogOpen] = useState(false);
 
   const selectedChannel =
     paymentChannels.find((channel) => channel.code === selectedChannelCode) ?? paymentChannels[0] ?? null;
@@ -118,7 +122,9 @@ export default function AccountRechargeContent() {
   const hasValidAmount = isUsdtCnyRecharge
     ? Boolean(requestedCnyAmount && expectedUsdtAmount && dailyRate && reachesMin)
     : Boolean(summary && summary.amount > 0 && reachesMin);
-  const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting);
+  const isLiuhaoyiRecharge = isLiuhaoyiPaymentMethod(selectedChannel?.code);
+  const liuhaoyiOverLimit = Boolean(isLiuhaoyiRecharge && summary && isLiuhaoyiAmountOverLimit(summary.payableAmount));
+  const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting && !liuhaoyiOverLimit);
 
   const loadRecords = useCallback(async (page: number) => {
     setRecordsLoading(true);
@@ -229,7 +235,12 @@ export default function AccountRechargeContent() {
   };
 
   const createRecharge = async () => {
-    if (!canSubmit || !selectedChannel || (!summary && !isUsdtCnyRecharge)) return;
+    if (!selectedChannel || (!summary && !isUsdtCnyRecharge)) return;
+    if (isLiuhaoyiRecharge && summary && isLiuhaoyiAmountOverLimit(summary.payableAmount)) {
+      setLiuhaoyiLimitDialogOpen(true);
+      return;
+    }
+    if (!canSubmit) return;
     setIsSubmitting(true);
     setSubmitMessage(null);
 
@@ -274,7 +285,7 @@ export default function AccountRechargeContent() {
               <div>
                 <h1 className="text-2xl font-bold">账户充值</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  使用 USDT-BEP20 充值人民币账户余额。
+                  使用 USDT-BEP20 充值人民币账户余额，也可选择已开放的支付宝或微信支付渠道。
                 </p>
               </div>
 
@@ -424,6 +435,15 @@ export default function AccountRechargeContent() {
                     当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。
                   </p>
                 ) : null}
+                {liuhaoyiOverLimit ? (
+                  <button
+                    type="button"
+                    className="mt-2 text-left text-xs text-red-600 underline-offset-2 hover:underline"
+                    onClick={() => setLiuhaoyiLimitDialogOpen(true)}
+                  >
+                    支付宝/微信单笔支付最高支持 ¥2000，点击查看其他方式。
+                  </button>
+                ) : null}
 
                 {isUsdtCnyRecharge ? (
                   <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm">
@@ -513,6 +533,21 @@ export default function AccountRechargeContent() {
           </CardContent>
         </Card>
       </div>
+      <Dialog open={liuhaoyiLimitDialogOpen} onOpenChange={setLiuhaoyiLimitDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>单笔支付金额超限</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm leading-6 text-muted-foreground">
+            支付宝/微信单笔支付最高支持 ¥2000。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => setLiuhaoyiLimitDialogOpen(false)}>取消</Button>
+            <Button variant="outline" onClick={() => { setLiuhaoyiLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
+            <Button onClick={() => { setAmountText("2000"); clientRequestIdRef.current = null; setLiuhaoyiLimitDialogOpen(false); }}>改为 ¥2000</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PublicLayout>
   );
 }

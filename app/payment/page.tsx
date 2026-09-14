@@ -536,6 +536,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   const rechargeStatus = String(recharge?.status ?? "");
   const terminal = RECHARGE_TERMINAL_STATUSES.has(rechargeStatus);
   const succeeded = rechargeStatus === "succeeded";
+  const isLiuhaoyiRecharge = ["alipay", "wechat", "wechat_pay"].includes(recharge?.channelCode ?? "");
   const remainingSeconds = secondsLeft(recharge?.expiresAt) + nowTick * 0;
   const canTransfer = ["pending", "waiting_payment"].includes(rechargeStatus) && remainingSeconds > 0;
   const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
@@ -580,7 +581,9 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground">账户充值付款</h1>
-            <p className="mt-1 text-sm text-muted-foreground">请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isLiuhaoyiRecharge ? "请使用六号易返回的支付宝/微信付款入口完成支付。" : "请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。"}
+            </p>
           </div>
           <Button variant="outline" asChild>
             <Link href="/products/account-recharge">返回账户充值</Link>
@@ -607,11 +610,14 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <ShieldCheck className="h-5 w-5 text-primary" />USDT-BEP20 付款信息
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                  {isLiuhaoyiRecharge ? `${recharge.channelName || (recharge.channelCode === "alipay" ? "支付宝" : "微信支付")}付款信息` : "USDT-BEP20 付款信息"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                {succeeded ? (
+                {isLiuhaoyiRecharge ? (
+                  <LiuhaoyiRechargePaymentPanel recharge={recharge} onRechargeChanged={() => loadRecharge({ silent: true })} />
+                ) : <>{succeeded ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                     <div className="font-semibold">充值成功</div>
                     <div className="mt-1">已入账 {recharge.creditedCnyAmount ?? recharge.requestedCnyAmount ?? "—"} CNY。</div>
@@ -648,7 +654,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                       </div>
                     </div>
                   </div>
-                ) : null}
+                ) : null}</>}
 
                 {canTransfer ? (
                   <div className="space-y-3 border-t pt-4">
@@ -678,9 +684,9 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
               <CardContent className="space-y-3 text-sm">
                 <Info label="充值单号" value={recharge.rechargeNo} copyable onCopy={() => void copyRechargeText(recharge.rechargeNo)} />
                 <Info label="申请充值" value={`${recharge.requestedCnyAmount ?? recharge.requestedAmount} CNY`} />
-                <Info label="精确应付" value={`${recharge.expectedUsdtAmount ?? "—"} USDT`} strong />
-                <Info label="结算汇率" value={recharge.lockedSettlementRate ? `1 USDT = ${recharge.lockedSettlementRate} CNY` : "—"} />
-                <Info label="实际到账" value={recharge.actualReceivedUsdt ? `${recharge.actualReceivedUsdt} USDT` : "—"} />
+                <Info label="精确应付" value={isLiuhaoyiRecharge ? `${recharge.payableAmount} CNY` : `${recharge.expectedUsdtAmount ?? "—"} USDT`} strong />
+                {!isLiuhaoyiRecharge ? <Info label="结算汇率" value={recharge.lockedSettlementRate ? `1 USDT = ${recharge.lockedSettlementRate} CNY` : "—"} /> : null}
+                {!isLiuhaoyiRecharge ? <Info label="实际到账" value={recharge.actualReceivedUsdt ? `${recharge.actualReceivedUsdt} USDT` : "—"} /> : null}
                 <Info label="最终入账" value={recharge.creditedCnyAmount ? `${recharge.creditedCnyAmount} CNY` : "—"} />
                 <Info label="创建时间" value={formatDate(recharge.createdAt)} />
                 <div className="flex items-center justify-between gap-3 pt-2">
@@ -690,7 +696,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
               </CardContent>
             </Card>
 
-            <Card className="lg:col-span-2">
+            {!isLiuhaoyiRecharge ? <Card className="lg:col-span-2">
               <CardHeader className="pb-3"><CardTitle className="text-base">链上充值须知</CardTitle></CardHeader>
               <CardContent>
                 <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
@@ -700,11 +706,94 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                   <li>匹配成功后按申请的人民币金额入账。</li>
                 </ol>
               </CardContent>
-            </Card>
+            </Card> : null}
           </div>
         )}
       </div>
     </PublicLayout>
+  );
+}
+
+function LiuhaoyiRechargePaymentPanel({
+  recharge,
+  onRechargeChanged,
+}: {
+  recharge: RechargeRecord;
+  onRechargeChanged: () => Promise<RechargeRecord | null>;
+}) {
+  const [session, setSession] = useState<PaymentSession | null>(null);
+  const [sessionStatus, setSessionStatus] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const createStarted = useRef(false);
+  const channel = recharge.channelCode === "wechat_pay" ? "wechat" : recharge.channelCode;
+  const completed = String(recharge.status) === "succeeded";
+  const providerPaid = sessionStatus === "paid";
+
+  useEffect(() => {
+    if (createStarted.current || completed) {
+      setLoading(false);
+      return;
+    }
+    createStarted.current = true;
+    let active = true;
+    void (async () => {
+      try {
+        const response = await fetch("/api/payments/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ businessType: "recharge", businessNo: recharge.rechargeNo, channel }),
+        });
+        const payload = await response.json().catch(() => null) as (PaymentSession & { error?: string }) | null;
+        if (!response.ok || !payload?.sessionNo) throw new Error(payload?.error ?? "付款会话创建失败");
+        if (active) {
+          setSession(payload);
+          setSessionStatus(payload.status);
+        }
+      } catch (sessionError) {
+        if (active) setError(getOrderErrorMessage(sessionError, "付款会话创建失败"));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [channel, completed, recharge.rechargeNo]);
+
+  useEffect(() => {
+    if (!session?.sessionNo || completed) return;
+    let stopped = false;
+    const timer = window.setInterval(() => {
+      void (async () => {
+        const response = await fetch(`/api/payments/status/${encodeURIComponent(session.sessionNo)}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => null) as PaymentStatus | null;
+        if (stopped || !response.ok || !payload) return;
+        setSessionStatus(payload.status);
+        if (payload.status === "paid") await onRechargeChanged();
+      })();
+    }, 4000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [completed, onRechargeChanged, session?.sessionNo]);
+
+  if (completed) {
+    return <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><div className="font-semibold">充值成功</div><div className="mt-1">人民币余额入账由统一支付完成流程处理。</div></div>;
+  }
+  if (loading) return <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />正在获取付款信息...</div>;
+  if (error) return <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}。请返回充值记录确认状态后再重试，勿重复创建或付款。</div>;
+  if (!session) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">请核对金额后完成付款。支付结果以服务端异步回调和统一支付状态为准，请勿重复付款。</div>
+      {providerPaid ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">支付渠道已确认付款，正在完成余额入账，请勿重复付款。</div> : null}
+      {session.qrCodeUrl ? <div className="rounded-xl bg-slate-50 p-4 text-center"><img src={session.qrCodeUrl} alt="支付二维码" className="mx-auto h-52 w-52 rounded-lg object-contain" /><p className="mt-2 text-xs text-muted-foreground">请使用对应的支付宝或微信应用扫码</p></div> : null}
+      <div className="space-y-3 rounded-xl bg-slate-50 p-4 text-sm">
+        <Info label="应付金额" value={`${session.payableAmount.toFixed(2)} CNY`} strong />
+        <Info label="支付状态" value={getStatusText(sessionStatus || session.status)} />
+        <Info label="支付截止时间" value={formatDate(session.expiresAt)} />
+      </div>
+      {session.paymentUrl ? <Button asChild className="w-full"><a href={session.paymentUrl} target="_blank" rel="noreferrer">打开付款页面<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
+      {!session.qrCodeUrl && !session.paymentUrl ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">渠道未返回可展示的付款入口，请勿付款并联系客服。</div> : null}
+    </div>
   );
 }
 
@@ -728,6 +817,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
   const bep20PollInFlight = useRef(false);
   const bep20VerifyInFlight = useRef(false);
   const refreshedOverpaymentCredit = useRef<string | null>(null);
+  const externalSessionStarted = useRef("");
 
   const firstItem = order?.order_items?.[0] ?? null;
   const orderStatus = normalizeOrderStatus(order?.status);
@@ -742,6 +832,11 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
     : paymentStatus?.status ?? order?.payment_status ?? "unpaid";
   const remainingSeconds = secondsLeft(session?.expiresAt) + nowTick * 0;
   const isBep20Order = order?.payment_method === "usdt_bep20";
+  const preferredExternalChannel = order?.payment_method === "wechat_pay" || order?.payment_method === "wechat"
+    ? "wechat"
+    : order?.payment_method === "alipay"
+      ? "alipay"
+      : "";
   const bep20RemainingSeconds = secondsLeft(bep20Session?.expiresAt) + nowTick * 0;
 
   const loadOrder = useCallback(async (options: { silent?: boolean } = {}) => {
@@ -768,7 +863,10 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
 
       if (!response.ok) throw new Error(result?.error ?? "订单读取失败");
       setOrder(result?.order ?? null);
-      if (result?.order?.payment_method === "usdt_bep20") setSelectedChannel("usdt_bep20");
+      const orderPaymentMethod = result?.order?.payment_method;
+      if (orderPaymentMethod === "usdt_bep20") setSelectedChannel("usdt_bep20");
+      else if (orderPaymentMethod === "wechat_pay" || orderPaymentMethod === "wechat") setSelectedChannel("wechat");
+      else if (orderPaymentMethod === "alipay") setSelectedChannel("alipay");
     } catch (loadError) {
       if (!options.silent) setError(getOrderErrorMessage(loadError, "订单读取失败"));
     } finally {
@@ -826,11 +924,19 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
       if (!response.ok) throw new Error(result?.error ?? "支付会话创建失败");
       setSession(result);
     } catch (sessionError) {
+      externalSessionStarted.current = "";
       toast.error(getOrderErrorMessage(sessionError, "支付会话创建失败"));
     } finally {
       setCreatingSession(false);
     }
   }
+
+  useEffect(() => {
+    if (!order?.order_no || !preferredExternalChannel || !canPay || session || creatingSession) return;
+    if (externalSessionStarted.current === order.order_no) return;
+    externalSessionStarted.current = order.order_no;
+    void createSession(preferredExternalChannel);
+  }, [canPay, creatingSession, order?.order_no, preferredExternalChannel, session]);
 
   const loadBep20Session = useCallback(async (options: { create?: boolean; silent?: boolean } = {}) => {
     if (!order?.order_no || creatingSession) return false;
@@ -1099,7 +1205,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                 ) : (
                   <>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      {channels.map((channel) => {
+                      {channels.filter((channel) => !preferredExternalChannel || (channel.code || channel.channel_code) === preferredExternalChannel).map((channel) => {
                         const code = channel.code || channel.channel_code || "";
                         const selected = selectedChannel === code;
                         return (

@@ -8,6 +8,7 @@ import {
   createPaymentSession,
   PaymentSessionError,
 } from "@/lib/payments/payment-session-service";
+import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
 import { evaluatePaymentRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 import { checkRateLimit, checkRequestSize, getBusinessRateLimitKey, getUserRateLimitKey } from "@/lib/security/rate-limit";
 
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
       businessNo,
       channelCode: channel,
       userId: context.user.id,
+      clientIp: getPaymentClientIp(request),
     });
     return NextResponse.json(session, { status: 201 });
   } catch (error) {

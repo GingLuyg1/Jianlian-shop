@@ -7,7 +7,9 @@ import {
   buildRechargeSafeLogFields,
 } from "@/lib/payments/recharge-api-failure.mjs";
 import type { PaymentChannel, RechargeStatus } from "@/lib/payments/channel-types";
-import { getPaymentProvider } from "@/lib/payments/providers";
+import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
+import { createPaymentSession } from "@/lib/payments/payment-session-service";
+import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
 import {
   calculateExpectedUsdtAmount,
   compareRechargeDecimals,
@@ -218,6 +220,22 @@ export async function POST(request: Request) {
     }
 
     const summary = isUsdtCnyRecharge ? null : calculateRechargeAmounts(channel, rawAmount);
+    if (isLiuhaoyiPaymentMethod(channel.code) && summary) {
+      if (summary.fee !== 0 || summary.payableAmount !== summary.amount) {
+        return NextResponse.json(
+          { error: "支付宝/微信渠道不得由本站附加买家手续费", code: "LIUHAOYI_FEE_CONFIGURATION_INVALID" },
+          { status: 503 }
+        );
+      }
+      try {
+        assertLiuhaoyiPaymentAmount(summary.payableAmount);
+      } catch (amountError) {
+        return NextResponse.json(
+          { error: getPaymentErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥2000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
+          { status: 400 }
+        );
+      }
+    }
     const amountRange = isUsdtCnyRecharge && theoreticalUsdtAmount
       ? classifyExactRange(theoreticalUsdtAmount, channel.minimumAmount, channel.maximumAmount ?? 0)
       : summary
@@ -373,15 +391,14 @@ export async function POST(request: Request) {
       if (!summary) {
         return NextResponse.json({ error: "充值渠道结算模式无效", code: "RECHARGE_SETTLEMENT_INVALID" }, { status: 400 });
       }
-      const result = await getPaymentProvider(channel.provider).createPayment({
-        rechargeNo,
-        channel,
+      const result = await createPaymentSession({
+        businessType: "recharge",
+        businessNo: rechargeNo,
+        channelCode: channel.code,
         userId: context.user.id,
-        amount: summary.amount,
-        fee: summary.fee,
-        payableAmount: summary.payableAmount,
+        clientIp: getPaymentClientIp(request),
       });
-      return NextResponse.json(result, { status: 201 });
+      return NextResponse.json({ rechargeNo, ...result }, { status: 201 });
     } catch (providerError) {
       const providerRequestId = randomUUID();
       logRechargeFailure("create", providerRequestId, 503, providerError);

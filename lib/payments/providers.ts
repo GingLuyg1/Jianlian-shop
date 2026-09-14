@@ -15,6 +15,7 @@ import type {
   ProviderQueryPaymentResult,
   RechargeStatus,
 } from "@/lib/payments/channel-types";
+import { liuhaoyiProvider } from "@/lib/payments/providers/liuhaoyi";
 
 export const PROVIDER_INTERFACE_COMPLETE = true;
 
@@ -57,7 +58,7 @@ function unavailableProvider(): PaymentProvider {
 }
 
 const providers: Record<PaymentProviderCode, PaymentProvider> = {
-  generic_api: unavailableProvider(),
+  generic_api: liuhaoyiProvider,
   binance: unavailableProvider(),
   crypto_address: unavailableProvider(),
 };
@@ -78,7 +79,7 @@ export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCa
   generic_api: {
     supportsCreate: true,
     supportsQuery: true,
-    supportsClose: true,
+    supportsClose: false,
     supportsCallback: true,
     supportsRefund: false,
     supportsQrCode: true,
@@ -112,10 +113,10 @@ export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCa
 
 const providerRequiredEnvNames: Record<PaymentProviderCode, string[]> = {
   generic_api: [
-    "GENERIC_PAYMENT_API_BASE_URL",
-    "GENERIC_PAYMENT_MERCHANT_ID",
-    "GENERIC_PAYMENT_API_SECRET",
-    "GENERIC_PAYMENT_WEBHOOK_SECRET",
+    "LIUHAOYI_API_BASE_URL",
+    "LIUHAOYI_MERCHANT_ID",
+    "LIUHAOYI_MERCHANT_KEY",
+    "LIUHAOYI_SITE_URL",
   ],
   binance: [
     "BINANCE_PAY_API_BASE_URL",

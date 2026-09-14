@@ -10,6 +10,7 @@ import type {
   ProviderCreatePaymentResult,
 } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
+import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { getPaymentProvider } from "@/lib/payments/providers";
 import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -35,6 +36,7 @@ export type CreatePaymentSessionInput = {
   businessNo: string;
   channelCode: string;
   userId: string;
+  clientIp?: string | null;
 };
 
 export type PaymentSessionResponse = {
@@ -91,6 +93,19 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
   if (!channel.configured) {
     throw new PaymentSessionError("PROVIDER_NOT_CONFIGURED", "支付渠道尚未配置，无法创建真实支付会话。");
   }
+  if (isLiuhaoyiPaymentMethod(channel.code)) {
+    if (business.currency !== "CNY") {
+      throw new PaymentSessionError("LIUHAOYI_CURRENCY_INVALID", "支付宝/微信支付仅支持人民币订单");
+    }
+    try {
+      assertLiuhaoyiPaymentAmount(business.payableAmount);
+    } catch (error) {
+      throw new PaymentSessionError("LIUHAOYI_AMOUNT_LIMIT_EXCEEDED", getSafeErrorMessage(error, "支付宝/微信支付金额无效"));
+    }
+    if (!input.clientIp) {
+      throw new PaymentSessionError("LIUHAOYI_CLIENT_IP_REQUIRED", "无法确认付款客户端 IP");
+    }
+  }
 
   const sessionNo = generateSessionNo();
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -124,6 +139,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
       feeAmount: business.feeAmount,
       payableAmount: business.payableAmount,
       expiresAt,
+      clientIp: input.clientIp ?? undefined,
     })) as ProviderCreatePaymentResult;
 
     const { data, error } = await service
@@ -136,7 +152,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
         wallet_address: providerResult.walletAddress ?? null,
         provider_order_no: providerResult.providerOrderNo ?? null,
         expires_at: providerResult.expiresAt ?? expiresAt,
-        metadata: { initializing: false },
+        metadata: { initializing: false, ...(providerResult.metadata ?? {}) },
         last_error: null,
       })
       .eq("session_no", sessionNo)
