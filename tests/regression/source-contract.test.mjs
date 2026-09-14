@@ -2235,7 +2235,8 @@ test("order API keeps an RPC-created order successful when agreement evidence is
   assert.doesNotMatch(checkout, /clientRequestIdRef\.current\s*=\s*["']{2}\s*;/);
   assert.match(checkout, /if \(orderNo\) \{\s*router\.push\(`\/payment\?order=/);
   assert.match(checkout, /if \(!productRow \|\| submitLoading \|\| submissionGuardRef\.current\.isActive\(\)\) return/);
-  assert.match(checkout, /disabled=\{submitLoading \|\| Boolean\(balanceSubmissionBlockReason\)\}/);
+  assert.match(checkout, /balanceSubmissionBlockReason !== "BALANCE_INSUFFICIENT"/);
+  assert.match(checkout, /setBalanceDialogOpen\(true\)/);
   assert.match(checkout, /type="button"[\s\S]*?onClick=\{handleSubmit\}/);
   assert.match(checkout, /id="checkout-submit-feedback"[\s\S]*?aria-live="polite"/);
   assert.match(checkout, /aria-describedby="checkout-submit-feedback"/);
@@ -2368,8 +2369,10 @@ test("checkout reads CNY balance and keeps insufficient-balance retries on the o
   assert.match(checkout, /window\.addEventListener\("focus", refreshBalance\)/);
   assert.match(checkout, /ACCOUNT_BALANCE_UPDATED_EVENT/);
   assert.match(checkout, /balanceSubmissionBlockReason/);
-  assert.match(checkout, /disabled=\{submitLoading \|\| Boolean\(balanceSubmissionBlockReason\)\}/);
-  assert.match(checkout, /余额不足，还需充值/);
+  assert.match(checkout, /balanceSubmissionBlockReason !== "BALANCE_INSUFFICIENT"/);
+  assert.match(checkout, /<Dialog open=\{balanceDialogOpen\}/);
+  assert.match(checkout, /<DialogTitle>账户余额不足<\/DialogTitle>/);
+  assert.match(checkout, /<span>还需充值<\/span>/);
   assert.match(checkout, /\/products\/account-recharge\?returnTo=/);
   assert.match(checkout, /balance_insufficient_existing_order/);
   assert.match(checkout, /existing_order_payment_error/);

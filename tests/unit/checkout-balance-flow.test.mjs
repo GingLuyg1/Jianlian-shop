@@ -178,6 +178,7 @@ test("a retained order restores its contact email without changing request ident
     requestId: "request-1",
     orderNo: "ORDER-RETAINED-1",
     customerEmail: null,
+    skuId: null,
   });
 
   const customerEmail = getRetainedOrderCustomerEmail({

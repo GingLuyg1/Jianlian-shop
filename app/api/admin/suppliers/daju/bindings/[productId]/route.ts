@@ -6,6 +6,7 @@ import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { createDajuClient } from "@/lib/providers/daju/client";
 import { getSafeDajuError } from "@/lib/providers/daju/errors";
 import { compareDajuDecimal, parseDajuProductBinding, validateDajuBindingAgainstProductDetail } from "@/lib/providers/daju/mapper.mjs";
+import { resolveDajuEffectiveStock } from "@/lib/providers/daju/stock.mjs";
 import type { DajuProductDetail } from "@/lib/providers/daju/types";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -31,6 +32,7 @@ export async function POST(request: Request, context: Context) {
     return json({ error: "供应商绑定参数无效", code: "DAJU_BINDING_INVALID", requestId }, 400);
   }
   const input = body as Record<string, unknown>;
+  const websiteSkuId = typeof input.website_sku_id === "string" && input.website_sku_id.trim() ? input.website_sku_id.trim() : null;
   const metadata = {
     fulfillment_source: "supplier",
     supplier: "daju",
@@ -77,13 +79,49 @@ export async function POST(request: Request, context: Context) {
   const currentMetadata = product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata)
     ? product.metadata as Record<string, unknown>
     : {};
-  const nextMetadata = { ...currentMetadata, ...metadata };
-  const { data: saved, error: saveError } = await service
-    .from("products")
-    .update({ metadata: nextMetadata, delivery_type: "automatic" })
-    .eq("id", context.params.productId)
-    .select("id,name,metadata,delivery_type")
-    .single();
+  if (supplierProduct.isSku && !parsed.sku) {
+    return json({ error: "SKU 商品必须明确配置 Supplier SKU，不能使用供应商商品总库存", code: "DAJU_SUPPLIER_SKU_REQUIRED", requestId }, 400);
+  }
+  const stockResolution = resolveDajuEffectiveStock(supplierProduct, parsed.sku);
+  if ("code" in stockResolution) {
+    return json({ error: stockResolution.code === "SUPPLIER_SKU_NOT_FOUND" ? "所选 Supplier SKU 已不存在，请重新读取供应商详情" : "供应商库存数据无效，绑定未保存", code: stockResolution.code, requestId }, 409);
+  }
+  const syncedAt = new Date().toISOString();
+  const stockMetadata = { supplier_stock_snapshot: stockResolution.stock, supplier_stock_synced_at: syncedAt, supplier_stock_last_success_at: syncedAt, supplier_stock_sync_status: "synced", supplier_stock_sync_error: null };
+
+  let saved: Record<string, unknown> | null = null;
+  let saveError: { code?: string } | null = null;
+  let savedSku: Record<string, unknown> | null = null;
+  if (websiteSkuId) {
+    const { data: sku, error: skuReadError } = await service.from("product_skus").select("id,product_id,metadata").eq("id", websiteSkuId).eq("product_id", context.params.productId).maybeSingle();
+    if (skuReadError || !sku) return json({ error: "网站 SKU 不存在或不属于当前商品", code: "WEBSITE_SKU_NOT_FOUND", requestId }, 404);
+    const skuMetadata = sku.metadata && typeof sku.metadata === "object" && !Array.isArray(sku.metadata) ? sku.metadata as Record<string, unknown> : {};
+    const skuUpdate = await service.from("product_skus").update({
+      metadata: { ...skuMetadata, ...metadata, ...stockMetadata },
+      delivery_type: "automatic",
+      stock: stockResolution.stock,
+    }).eq("id", websiteSkuId).eq("product_id", context.params.productId).select("id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata").single();
+    savedSku = skuUpdate.data as Record<string, unknown> | null;
+    saveError = skuUpdate.error;
+    if (!saveError && savedSku) {
+      const { data: activeSkus } = await service.from("product_skus").select("stock").eq("product_id", context.params.productId).eq("status", "active");
+      const effectiveStock = (activeSkus ?? []).reduce((sum, row) => sum + Math.max(0, Number(row.stock) || 0), 0);
+      const productUpdate = await service.from("products").update({ stock: effectiveStock }).eq("id", context.params.productId).select("id,name,stock,metadata,delivery_type").single();
+      saved = productUpdate.data as Record<string, unknown> | null;
+      saveError = productUpdate.error;
+    }
+  } else {
+    const nextMetadata = { ...currentMetadata, ...metadata, ...stockMetadata };
+    const productUpdate = await service
+      .from("products")
+      .update({ metadata: nextMetadata, delivery_type: "automatic", stock: stockResolution.stock })
+      .eq("id", context.params.productId)
+      .select("id,name,stock,metadata,delivery_type")
+      .single();
+    saved = productUpdate.data as Record<string, unknown> | null;
+    saveError = productUpdate.error;
+  }
+
   if (saveError || !saved) {
     console.error("[DajuAdmin] binding save failed", { requestId, code: saveError?.code ?? "UNKNOWN" });
     return json({ error: "供应商绑定保存失败", code: "DAJU_BINDING_SAVE_FAILED", requestId }, 500);
@@ -94,12 +132,12 @@ export async function POST(request: Request, context: Context) {
     admin: { id: admin.user.id, email: admin.user.email },
     action: "bind_daju_supplier_product",
     module: "products",
-    targetType: "product",
-    targetId: context.params.productId,
+    targetType: websiteSkuId ? "product_sku" : "product",
+    targetId: websiteSkuId ?? context.params.productId,
     targetLabel: String(product.name ?? ""),
     result: "success",
     beforeSummary: { fulfillment_source: currentMetadata.fulfillment_source ?? null, supplier: currentMetadata.supplier ?? null },
-    afterSummary: { fulfillment_source: "supplier", supplier: "daju", supplier_product_id: parsed.productId, has_sku: Boolean(parsed.sku), has_cost_limit: true },
+    afterSummary: { fulfillment_source: "supplier", supplier: "daju", supplier_product_id: parsed.productId, has_sku: Boolean(parsed.sku), has_cost_limit: true, stock_sync: "synced" },
   });
-  return json({ product: saved, requestId });
+  return json({ product: saved, sku: savedSku, stockSync: stockResolution, requestId });
 }

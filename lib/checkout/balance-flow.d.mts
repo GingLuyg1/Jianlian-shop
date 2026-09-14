@@ -40,6 +40,7 @@ export function parseRetainedCheckoutOrder(value: unknown): {
   requestId: string;
   orderNo: string;
   customerEmail: string | null;
+  skuId: string | null;
 } | null;
 export function getRetainedOrderCustomerEmail(payload: unknown, expectedOrderNo: string): string | null;
 export function createCheckoutSubmissionGuard(): {
