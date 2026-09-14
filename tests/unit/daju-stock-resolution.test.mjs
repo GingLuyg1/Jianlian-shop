@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildSupplierStockAggregateUpdate, buildSupplierStockSnapshotUpdate, collectDajuBoundProductIds, listDajuSkuStockOptions, parseDajuSkuStockBinding, resolveDajuEffectiveStock, sumActiveSupplierSkuStock } from "../../lib/providers/daju/stock.mjs";
+import { buildSupplierStockAggregateUpdate, buildSupplierStockSnapshotUpdate, collectDajuBoundProductIds, listDajuSkuStockOptions, resolveDajuEffectiveStock, resolveDajuSkuStockBinding, sumActiveSupplierSkuStock } from "../../lib/providers/daju/stock.mjs";
 
 const detail = {
   id: 15, title: "Product", price: "8", stock: 27, sales: 0, isAuto: true,
@@ -37,10 +37,38 @@ test("non-SKU supplier product uses authoritative detail stock", () => {
   assert.deepEqual(resolveDajuEffectiveStock({ ...detail, isSku: false, stock: 6 }, null), { ok: true, stock: 6, source: "product" });
 });
 
+test("single-SKU legacy product binding falls back without fabricating SKU metadata", () => {
+  const parent = { fulfillment_source: "supplier", supplier: "daju", supplier_product_id: 15, supplier_sku: "13", supplier_inputs_mapping: {} };
+  const binding = resolveDajuSkuStockBinding(parent, {}, true);
+  const resolved = resolveDajuEffectiveStock(detail, binding?.sku);
+  const update = buildSupplierStockSnapshotUpdate(0, {}, resolved, "2026-09-15T00:00:00.000Z");
+  assert.equal(binding?.sku, "13");
+  assert.equal(resolved.stock, 18);
+  assert.equal(update.stock, 18);
+  assert.equal(sumActiveSupplierSkuStock([{ status: "active", stock: update.stock }]), 18);
+  assert.equal(Object.hasOwn(update.metadata, "supplier_sku"), false);
+});
+
+test("single-SKU explicit binding overrides the legacy parent binding", () => {
+  const parent = { fulfillment_source: "supplier", supplier: "daju", supplier_product_id: 15, supplier_sku: "13", supplier_inputs_mapping: {} };
+  const binding = resolveDajuSkuStockBinding(parent, { supplier_sku: "14" }, true);
+  assert.equal(binding?.sku, "14");
+  assert.equal(resolveDajuEffectiveStock(detail, binding?.sku).stock, 9);
+
+  const directBinding = resolveDajuSkuStockBinding(parent, {
+    fulfillment_source: "supplier",
+    supplier: "daju",
+    supplier_product_id: 16,
+    supplier_inputs_mapping: {},
+  }, true);
+  assert.equal(directBinding?.productId, 16);
+  assert.equal(directBinding?.sku, null);
+});
+
 test("multi-SKU stock binding never inherits the parent supplier SKU", () => {
   const parent = { fulfillment_source: "supplier", supplier: "daju", supplier_product_id: 15, supplier_sku: "13", supplier_inputs_mapping: {} };
-  const missingSku = parseDajuSkuStockBinding(parent, {});
-  const explicitSku = parseDajuSkuStockBinding(parent, { supplier_sku: "14" });
+  const missingSku = resolveDajuSkuStockBinding(parent, {}, false);
+  const explicitSku = resolveDajuSkuStockBinding(parent, { supplier_sku: "14" }, false);
   assert.equal(missingSku?.sku, null);
   assert.equal(explicitSku?.sku, "14");
 });

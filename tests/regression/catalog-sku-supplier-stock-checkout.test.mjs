@@ -39,7 +39,7 @@ test("stock sync preserves snapshots and never performs supplier purchase", () =
   const batchRoute = file("app/api/admin/suppliers/daju/stock/route.ts");
   assert.match(service, /syncDajuProductStock/);
   assert.match(service, /buildSupplierStockSnapshotUpdate/);
-  assert.match(service, /parseDajuSkuStockBinding/);
+  assert.match(service, /resolveDajuSkuStockBinding\(metadataOf\(productRow\.metadata\), metadata, rows\.length === 1\)/);
   assert.match(service, /effectiveRows\.push\(\{ status: row\.status, stock: row\.stock \}\)/);
   assert.match(service, /buildSupplierStockAggregateUpdate/);
   assert.match(batchRoute, /from\("product_skus"\)/);

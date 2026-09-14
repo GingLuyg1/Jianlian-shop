@@ -3,6 +3,7 @@ import type { DajuBinding } from "./mapper.mjs";
 
 export type DajuSkuStockOption = { sku: string; title: string; stock: number; price: string | null; raw: Record<string, unknown> };
 export function parseDajuSkuStockBinding(productMetadata: unknown, skuMetadata: unknown): DajuBinding | null;
+export function resolveDajuSkuStockBinding(productMetadata: unknown, skuMetadata: unknown, allowLegacyProductFallback?: boolean): DajuBinding | null;
 export function collectDajuBoundProductIds(productRows: unknown, skuRows: unknown): string[];
 export function listDajuSkuStockOptions(detail: DajuProductDetail): DajuSkuStockOption[];
 export function resolveDajuEffectiveStock(detail: DajuProductDetail, supplierSku?: string | null):

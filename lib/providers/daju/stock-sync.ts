@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createDajuClient } from "./client";
 import { parseDajuProductBinding } from "./mapper.mjs";
-import { buildSupplierStockAggregateUpdate, buildSupplierStockSnapshotUpdate, parseDajuSkuStockBinding, resolveDajuEffectiveStock, sumActiveSupplierSkuStock } from "./stock.mjs";
+import { buildSupplierStockAggregateUpdate, buildSupplierStockSnapshotUpdate, resolveDajuEffectiveStock, resolveDajuSkuStockBinding, sumActiveSupplierSkuStock } from "./stock.mjs";
 import type { DajuClient, DajuProductDetail } from "./types";
 
 type SyncOptions = { service: SupabaseClient; productId: string; client?: DajuClient };
@@ -33,7 +33,7 @@ export async function syncDajuProductStock({ service, productId, client = create
     const effectiveRows: Array<{ status: string | null | undefined; stock: number }> = [];
     for (const row of rows) {
       const metadata = metadataOf(row.metadata);
-      const binding = parseDajuSkuStockBinding(metadataOf(productRow.metadata), metadata);
+      const binding = resolveDajuSkuStockBinding(metadataOf(productRow.metadata), metadata, rows.length === 1);
       if (!binding) {
         aggregateComplete = false;
         effectiveRows.push({ status: row.status, stock: row.stock });
