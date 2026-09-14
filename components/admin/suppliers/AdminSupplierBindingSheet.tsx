@@ -74,7 +74,6 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
   const [maxUnitCost, setMaxUnitCost] = useState("");
   const [inputsMapping, setInputsMapping] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<SupplierError | null>(null);
 
   useEffect(() => {
     if (!open || !product) return;
@@ -90,7 +89,6 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
     setSupplierSku(readString(metadata, "supplier_sku"));
     setMaxUnitCost(readString(metadata, "supplier_max_unit_cost"));
     setInputsMapping(readMapping(metadata));
-    setSaveError(null);
 
     if (metadata.fulfillment_source === "supplier" && metadata.supplier === "daju" && Number.isSafeInteger(existingProductId) && existingProductId > 0) {
       void loadDetail(existingProductId, true);
@@ -168,7 +166,6 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
     if (!window.confirm(`确认将商品“${product.name}”绑定到 Daju 商品 #${detail.id}？保存后 delivery_type 将设为 automatic，自动履约将按该供应商配置执行，成本上限为 ¥${maxUnitCost.trim()}。`)) return;
 
     setSaving(true);
-    setSaveError(null);
     try {
       const response = await fetch(`/api/admin/suppliers/daju/bindings/${product.id}`, {
         method: "POST",
@@ -190,7 +187,7 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
       } as BindingSavedProduct);
       onOpenChange(false);
     } catch (error) {
-      setSaveError(error && typeof error === "object" && "message" in error ? error as SupplierError : { message: "供应商绑定保存失败", code: null, requestId: null });
+      toast.error(error && typeof error === "object" && "message" in error ? String(error.message) : "供应商绑定保存失败");
     } finally {
       setSaving(false);
     }
@@ -223,7 +220,6 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
               <ReadOnlyJson title="Required Inputs 原始数据" value={detail.requiredInputs} /><ReadOnlyJson title="SKU 原始数据" value={detail.skuVariants} /><ReadOnlyJson title="规格原始数据" value={detail.specs} />
             </div> : <AdminEmptyState className="min-h-[160px]" title="尚未选择供应商商品" description="先搜索并选择一个真实供应商商品。" />}</section>
 
-            {saveError ? <SupplierErrorCard error={saveError} /> : null}
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">当前版本仅支持绑定或更新绑定；解绑需要独立、受审计的后端操作。</div>
           </div>
         ) : <AdminErrorState title="未选择网站商品" description="请关闭后从商品列表重新打开。" />}

@@ -37,10 +37,10 @@ const helpItems = [
 ];
 
 type PublicSidebarProps = {
-  supportHref?: string;
+  onSupportOpen: () => void;
 };
 
-export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
+export default function PublicSidebar({ onSupportOpen }: PublicSidebarProps) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -108,18 +108,8 @@ export default function PublicSidebar({ supportHref }: PublicSidebarProps) {
       <div className="border-t border-border px-2 py-4">
         <button
           type="button"
-          onClick={() => {
-            if (!supportHref) return;
-            if (supportHref.startsWith("mailto:")) {
-              window.location.href = supportHref;
-            } else {
-              window.open(supportHref, "_blank", "noopener,noreferrer");
-            }
-          }}
+          onClick={onSupportOpen}
           className="mx-auto flex w-[calc(100%-6px)] select-none items-center justify-start gap-2.5 whitespace-nowrap rounded-md bg-primary/90 px-3 py-2.5 text-left text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary"
-          {...(!supportHref
-            ? ({ popovertarget: "support-popover" } as Record<string, string>)
-            : {})}
         >
           <Headphones className="h-[18px] w-[18px] shrink-0" />
           <span>在线客服</span>

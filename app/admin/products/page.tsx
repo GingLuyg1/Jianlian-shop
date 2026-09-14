@@ -37,7 +37,7 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminSyncedHorizontalScroller from "@/components/admin/AdminSyncedHorizontalScroller";
 import AdminSupplierBindingSheet from "@/components/admin/suppliers/AdminSupplierBindingSheet";
-import AdminProductSkuManager from "@/components/admin/products/AdminProductSkuManager";
+import AdminProductSkuManager, { type ProductSkuManagerHandle } from "@/components/admin/products/AdminProductSkuManager";
 import { getSupplierUiDefinition } from "@/components/admin/suppliers/supplier-ui-registry";
 import {
   createCategory,
@@ -254,6 +254,7 @@ export default function AdminProductsPage() {
   const [categoryInitialForm, setCategoryInitialForm] = useState<CategoryFormState | null>(null);
   const [productErrors, setProductErrors] = useState<FieldErrors>({});
   const [productSubmitError, setProductSubmitError] = useState("");
+  const [skuEditsDirty, setSkuEditsDirty] = useState(false);
   const [bindingProduct, setBindingProduct] = useState<AdminProduct | null>(null);
   const [bindingSku, setBindingSku] = useState<AdminProductSku | null>(null);
   const [skuRefreshKey, setSkuRefreshKey] = useState(0);
@@ -298,8 +299,8 @@ export default function AdminProductsPage() {
   );
   const isRefreshing = isProductLoading || isCategoryLoading;
   const productDirty = useMemo(
-    () => (productForm ? isProductDirty(productForm, productInitialForm) : false),
-    [productForm, productInitialForm]
+    () => (productForm ? skuEditsDirty || isProductDirty(productForm, productInitialForm) : false),
+    [productForm, productInitialForm, skuEditsDirty]
   );
   const categoryDirty = useMemo(
     () => (categoryForm ? isCategoryDirty(categoryForm, categoryInitialForm) : false),
@@ -380,6 +381,7 @@ export default function AdminProductsPage() {
   }
 
   function openNewProduct() {
+    setSkuEditsDirty(false);
     clearNotice();
     setProductErrors({});
     setProductSubmitError("");
@@ -389,6 +391,7 @@ export default function AdminProductsPage() {
   }
 
   async function openEditProduct(product: AdminProduct) {
+    setSkuEditsDirty(false);
     clearNotice();
     setProductErrors({});
     setProductSubmitError("");
@@ -437,6 +440,7 @@ export default function AdminProductsPage() {
   }
 
   function closeProductDialog() {
+    setSkuEditsDirty(false);
     productReadRequestRef.current += 1;
     setProductForm(null);
     setProductInitialForm(null);
@@ -446,6 +450,7 @@ export default function AdminProductsPage() {
   }
 
   function closeProductDialogAfterSave() {
+    setSkuEditsDirty(false);
     productReadRequestRef.current += 1;
     setProductForm(null);
     setProductInitialForm(null);
@@ -589,12 +594,12 @@ export default function AdminProductsPage() {
     };
   }
 
-  async function handleProductSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleProductSubmit(event: FormEvent<HTMLFormElement>, saveSkus?: (product: AdminProduct) => Promise<void>) {
     event.preventDefault();
     clearNotice();
     setProductSubmitError("");
     if (!productForm || isSaving) return;
-    if (!isProductDirty(productForm, productInitialForm)) {
+    if (!isProductDirty(productForm, productInitialForm) && !saveSkus) {
       setMessage("没有需要保存的修改");
       return;
     }
@@ -604,17 +609,26 @@ export default function AdminProductsPage() {
 
     const editingProductId = productForm.id?.trim();
     if (editingProductId && editingProductId !== productInitialForm?.id) {
-      setProductSubmitError("商品保存失败，当前编辑商品已变化，请重新打开后再保存");
+      toast.error("商品保存失败，当前编辑商品已变化，请重新打开后再保存");
       return;
     }
 
     setIsSaving(true);
+    let writtenProduct: AdminProduct | null = null;
     try {
       const { original_price: preservedOriginalPrice, ...updatePayload } = payload;
       void preservedOriginalPrice;
-      const savedProduct = editingProductId
-        ? await updateProduct(editingProductId, updatePayload)
+      // SKU routes own summary fields; never write unsaved row previews to products.
+      const { price: previewPrice, stock: previewStock, ...basePayload } = updatePayload;
+      void previewPrice; void previewStock;
+      let savedProduct = editingProductId
+        ? await updateProduct(editingProductId, saveSkus ? basePayload : updatePayload)
         : await createProduct(payload);
+      writtenProduct = savedProduct;
+      if (saveSkus) {
+        await saveSkus(savedProduct);
+        savedProduct = await getProduct(savedProduct.id);
+      }
       const savedForm = toProductForm(savedProduct, categoryMap, categories);
       productListRequestRef.current += 1;
       mergeSavedProductIntoList(savedProduct);
@@ -633,7 +647,13 @@ export default function AdminProductsPage() {
           slug: "该商品标识已存在，请更换 slug",
         }));
       }
-      setProductSubmitError(text);
+      if (!editingProductId && writtenProduct) {
+        const savedForm = toProductForm(writtenProduct, categoryMap, categories);
+        mergeSavedProductIntoList(writtenProduct);
+        setProductInitialForm(savedForm);
+        setProductForm(savedForm);
+      }
+      toast.error(text);
     } finally {
       setIsSaving(false);
     }
@@ -1073,6 +1093,7 @@ export default function AdminProductsPage() {
       <ProductFormDialog
         product={productForm?.id ? products.find((item) => item.id === productForm.id) ?? null : null}
         skuRefreshKey={skuRefreshKey}
+        onSkuDirty={() => setSkuEditsDirty(true)}
         categories={categories}
         errors={productErrors}
         form={productForm}
@@ -1389,6 +1410,7 @@ function ProductTable({
 }
 
 function ProductFormDialog({
+  onSkuDirty,
   product,
   skuRefreshKey,
   categories,
@@ -1402,6 +1424,7 @@ function ProductFormDialog({
   onUpdate,
   onSupplierBinding,
 }: {
+  onSkuDirty: () => void;
   product: AdminProduct | null;
   skuRefreshKey: number;
   categories: AdminCategory[];
@@ -1411,7 +1434,7 @@ function ProductFormDialog({
   isSaving: boolean;
   onClose: () => void;
   submitError: string;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>, saveSkus?: (product: AdminProduct) => Promise<void>) => void;
   onUpdate: (form: ProductFormState) => void;
   onSupplierBinding: (product: AdminProduct, sku: AdminProductSku) => void;
 }) {
@@ -1420,16 +1443,22 @@ function ProductFormDialog({
     ? getEnabledChildren(categories, form.primaryCategoryId)
     : [];
   const selectedImage = form?.image_url.trim();
+  const skuManagerRef = useRef<ProductSkuManagerHandle>(null);
 
   return (
     <ModalFrame
       open={Boolean(form)}
       title={form?.id ? "编辑商品" : "新增商品"}
+      size="max-w-6xl"
       isSaving={isSaving}
       onClose={onClose}
     >
       {form && (
-        <form onSubmit={onSubmit} className="flex max-h-[calc(100vh-48px)] flex-col">
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          if (!skuManagerRef.current?.validate()) return;
+          onSubmit(event, (savedProduct) => skuManagerRef.current!.saveAll(savedProduct));
+        }} className="flex max-h-[calc(100vh-48px)] flex-col">
           {submitError && (
             <div className="mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <p className="font-semibold">商品保存失败</p>
@@ -1538,18 +1567,11 @@ function ProductFormDialog({
               </Field>
             </FormSection>
 
-            <FormSection title="价格与库存" className="md:col-span-2">
-              <div className="grid gap-4 md:grid-cols-3">
-                <Field label="售价" required error={errors.price}>
-                  <Input type="number" min="0" step="0.01" value={form.price} onChange={(event) => onUpdate({ ...form, price: event.target.value })} />
-                </Field>
-                <Field label="库存" required error={errors.stock}>
-                  <Input type="number" min="0" step="1" value={form.stock} onChange={(event) => onUpdate({ ...form, stock: event.target.value })} />
-                </Field>
-                <Field label="排序" required error={errors.sort_order}>
-                  <Input type="number" step="1" value={form.sort_order} onChange={(event) => onUpdate({ ...form, sort_order: event.target.value })} />
-                </Field>
-              </div>
+            <FormSection title="价格与库存 / SKU" className="md:col-span-2">
+              <AdminProductSkuManager ref={skuManagerRef} product={product} refreshKey={skuRefreshKey}
+                defaults={{ price: form.price, original_price: form.original_price, stock: form.stock, delivery_type: form.delivery_type, status: form.status }}
+                onSummary={(summary) => { onSkuDirty(); onUpdate({ ...form, price: String(summary.price ?? form.price), stock: String(summary.stock) }); }}
+                onSupplierBinding={onSupplierBinding} />
             </FormSection>
 
             <FormSection title="交付与状态">
@@ -1564,6 +1586,9 @@ function ProductFormDialog({
               </Field>
             </FormSection>
             <FormSection title="商品状态">
+              <Field label="商品排序" required error={errors.sort_order}>
+                <Input type="number" step="1" value={form.sort_order} onChange={(event) => onUpdate({ ...form, sort_order: event.target.value })} />
+              </Field>
               <Field label="状态" required>
                 <NativeSelect value={form.status} onChange={(value) => onUpdate({ ...form, status: value as ProductStatus })}>
                   {Object.entries(productStatusLabel).map(([value, label]) => (
@@ -1584,7 +1609,6 @@ function ProductFormDialog({
                 />
               </Field>
             </FormSection>
-            {product ? <FormSection title="SKU / 规格与供应商绑定" className="md:col-span-2"><AdminProductSkuManager product={product} refreshKey={skuRefreshKey} onSupplierBinding={onSupplierBinding} /></FormSection> : null}
           </div>
           <DialogActions disableSave={!isDirty} isSaving={isSaving} saveLabel="保存商品" onCancel={onClose} />
         </form>

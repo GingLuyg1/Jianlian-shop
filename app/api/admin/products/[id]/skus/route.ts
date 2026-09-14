@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { auditCatalogAction, requireCatalogAdmin } from "../../../catalog/_shared";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { syncSkuProductSummary } from "@/lib/products/sku-summary";
 
 const SKU_FIELDS = "id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,created_at,updated_at";
 const STATUSES = new Set(["active", "inactive", "sold_out", "draft"]);
@@ -41,7 +42,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const payload = { product_id: params.id, sku_title: title, sku_code: code, combination_key: code.toLowerCase(), price, original_price: originalPrice, stock, status, sort_order: sortOrder, delivery_type: deliveryType, image_url: text(body?.image_url, 2000), metadata: {} };
   const { data, error } = await service.from("product_skus").insert(payload).select(SKU_FIELDS).single();
   if (error || !data) return json({ error: error?.code === "23505" ? "SKU Code 已存在" : "SKU 新增失败", requestId }, error?.code === "23505" ? 409 : 500);
-  await service.from("products").update({ has_skus: true }).eq("id", params.id);
   await auditCatalogAction({ request, user: admin.user, action: "create_product_sku", module: "products", targetType: "product_sku", targetId: data.id, targetLabel: title, result: "success", afterSummary: data });
+  try { await syncSkuProductSummary(service, params.id); }
+  catch { return json({ sku: data, error: "SKU 已新增，但商品汇总失败，请刷新后重试保存该 SKU", requestId }, 500); }
   return json({ sku: data, requestId }, 201);
 }

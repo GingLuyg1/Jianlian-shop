@@ -49,10 +49,10 @@ const helpItems = [
 ];
 
 type MobileMenuProps = {
-  supportHref?: string;
+  onSupportOpen: () => void;
 };
 
-export default function MobileMenu({ supportHref }: MobileMenuProps) {
+export default function MobileMenu({ onSupportOpen }: MobileMenuProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -64,7 +64,7 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="md:hidden">
+        <Button data-storefront-menu-trigger variant="ghost" size="icon" className="md:hidden">
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
@@ -148,17 +148,9 @@ export default function MobileMenu({ supportHref }: MobileMenuProps) {
             type="button"
             onClick={() => {
               setOpen(false);
-              if (!supportHref) return;
-              if (supportHref.startsWith("mailto:")) {
-                window.location.href = supportHref;
-              } else {
-                window.open(supportHref, "_blank", "noopener,noreferrer");
-              }
+              onSupportOpen();
             }}
             className="flex w-full items-center justify-start gap-2 whitespace-nowrap rounded-md bg-primary/90 px-2 py-2 text-[13px] font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary"
-            {...(!supportHref
-              ? ({ popovertarget: "support-popover" } as Record<string, string>)
-              : {})}
           >
             <Headphones className="h-4 w-4 shrink-0" />
             <span>在线客服</span>

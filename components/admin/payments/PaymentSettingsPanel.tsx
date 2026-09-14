@@ -293,7 +293,7 @@ export default function PaymentSettingsPanel() {
     }) as PaymentChannelConfig | null;
 
     if (!channel) {
-      setMessage(
+      toast.warning(
         "当前配置不是从服务端完整读取的可编辑数据，请刷新并确认读取成功后再保存。",
       );
       return;

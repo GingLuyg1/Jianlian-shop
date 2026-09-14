@@ -103,8 +103,8 @@ export default function OrderSuccessPage() {
 
   async function copyOrderNo() {
     if (!order?.order_no) return;
-    await navigator.clipboard.writeText(order.order_no);
-    toast.success("订单编号已复制");
+    try { await navigator.clipboard.writeText(order.order_no); toast.success("订单编号已复制"); }
+    catch { toast.error("复制失败，请手动复制"); }
   }
 
   return (

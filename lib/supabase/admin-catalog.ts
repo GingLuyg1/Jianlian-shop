@@ -58,6 +58,9 @@ export type AdminProductSku = {
 };
 
 export type ProductSkuPayload = Omit<AdminProductSku, "id" | "product_id" | "metadata">;
+export class ProductSkuWriteError extends Error {
+  constructor(message: string, public savedSku: AdminProductSku) { super(message); }
+}
 
 export type ProductFilters = {
   search?: string;
@@ -142,7 +145,11 @@ async function adminCatalogRequest<T>(url: string, init: RequestInit = {}): Prom
         : apiError && typeof apiError === "object" && "message" in apiError
           ? String((apiError as { message?: unknown }).message ?? "")
           : "";
-    throw new Error(apiMessage || fieldError || "操作失败，请稍后重试");
+    const message = apiMessage || fieldError || "操作失败，请稍后重试";
+    if ("sku" in body && body.sku && typeof body.sku === "object" && "id" in body.sku) {
+      throw new ProductSkuWriteError(message, normalizeProductSku(body.sku as Record<string, unknown>));
+    }
+    throw new Error(message);
   }
 
   return body as T;

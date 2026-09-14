@@ -10,11 +10,11 @@ test("admin product edit exposes database SKU management and existing supplier b
   const page = file("app/admin/products/page.tsx");
   const manager = file("components/admin/products/AdminProductSkuManager.tsx");
   assert.match(page, /AdminProductSkuManager/);
-  assert.match(manager, /新增 SKU/);
+  assert.match(manager, /ensureTrailingEmptySkuRow/);
   assert.match(manager, /SKU 名称/);
   assert.match(manager, /SKU Code/);
-  assert.match(manager, /供应商绑定/);
-  assert.match(manager, /onSupplierBinding\(product, sku\)/);
+  assert.match(manager, /绑定供货商/);
+  assert.match(manager, /onSupplierBinding\(product, row\.sku!/);
   assert.match(manager, /createProductSku/);
   assert.match(manager, /updateProductSku/);
   assert.match(manager, /deleteProductSku/);

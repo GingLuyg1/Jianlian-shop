@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { auditCatalogAction, requireCatalogAdmin } from "../../../../catalog/_shared";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { syncSkuProductSummary } from "@/lib/products/sku-summary";
 
 const SKU_FIELDS = "id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,created_at,updated_at";
 const ALLOWED = new Set(["sku_code", "sku_title", "price", "original_price", "stock", "status", "delivery_type", "image_url", "sort_order"]);
@@ -38,6 +39,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const { data, error } = await service.from("product_skus").update(payload).eq("id", params.skuId).eq("product_id", params.id).select(SKU_FIELDS).single();
   if (error || !data) return json({ error: error?.code === "23505" ? "SKU Code 已存在" : "SKU 保存失败", requestId }, error?.code === "23505" ? 409 : 500);
   await auditCatalogAction({ request, user: admin.user, action: "update_product_sku", module: "products", targetType: "product_sku", targetId: params.skuId, targetLabel: String(data.sku_title ?? ""), result: "success", beforeSummary: before, afterSummary: data });
+  try { await syncSkuProductSummary(service, params.id); }
+  catch { return json({ sku: data, error: "SKU 已保存，但商品汇总失败，请重试保存该 SKU", requestId }, 500); }
   return json({ sku: data, requestId });
 }
 
@@ -51,8 +54,8 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   if (!before) return json({ error: "SKU 不存在", requestId }, 404);
   const { error } = await service.from("product_skus").delete().eq("id", params.skuId).eq("product_id", params.id);
   if (error) return json({ error: "SKU 删除失败，可能仍被订单引用；可改为停用", requestId }, 409);
-  const { count } = await service.from("product_skus").select("id", { count: "exact", head: true }).eq("product_id", params.id);
-  if (!count) await service.from("products").update({ has_skus: false }).eq("id", params.id);
   await auditCatalogAction({ request, user: admin.user, action: "delete_product_sku", module: "products", targetType: "product_sku", targetId: params.skuId, targetLabel: String(before.sku_title ?? ""), result: "success", beforeSummary: before });
+  try { await syncSkuProductSummary(service, params.id); }
+  catch { return json({ error: "SKU 已删除，但商品汇总失败，请刷新后重试保存剩余 SKU", requestId }, 500); }
   return json({ ok: true, requestId });
 }

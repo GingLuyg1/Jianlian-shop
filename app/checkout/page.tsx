@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
 import {
@@ -520,25 +521,29 @@ export default function CheckoutPage() {
 
   const handleSubmit = async () => {
     if (!productRow || submitLoading || submissionGuardRef.current.isActive()) return;
-    setError("");
+
+    if (hasSku && !selectedSku) {
+      toast.warning("请选择 SKU");
+      return;
+    }
 
     if (!isPurchasable) {
-      setError(unavailableMessage || "该商品目前不可购买");
+      toast.error(unavailableMessage || "该商品目前不可购买");
       return;
     }
 
     if (legalLoading || legalError || !agreementsReady) {
-      setError(legalError || "协议版本未准备好，请刷新后重试");
+      toast.error(legalError || "协议版本未准备好，请刷新后重试");
       return;
     }
 
     if (!confirmed) {
-      setError("请先阅读并确认订单协议");
+      toast.warning("请先阅读并确认订单协议");
       return;
     }
 
     if (selectedPaymentUnavailable) {
-      setError("该支付方式暂未开放，请选择余额支付。");
+      toast.warning("该支付方式暂未开放，请选择余额支付。");
       return;
     }
 
@@ -546,25 +551,25 @@ export default function CheckoutPage() {
       if (balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT" && balanceSummary.kind === "ready") {
         setBalanceDialogOpen(true);
       } else if (balanceSubmissionBlockReason === "BALANCE_LOADING") {
-        setError("正在读取账户余额，请稍候");
+        toast.info("正在读取账户余额，请稍候");
       } else {
-        setError(balanceError || "账户余额暂时无法确认，请重新加载");
+        toast.error(balanceError || "账户余额暂时无法确认，请重新加载");
       }
       return;
     }
 
     if (!email.trim()) {
-      setError("请填写联系邮箱");
+      toast.warning("请填写联系邮箱");
       return;
     }
 
     if (isShippingProduct && (!customerName.trim() || !customerPhone.trim() || !shippingRegion.trim() || !shippingAddress.trim())) {
-      setError("请完整填写收件人、联系电话、省市区和详细地址");
+      toast.warning("请完整填写收件人、联系电话、省市区和详细地址");
       return;
     }
 
     if (isShippingProduct && !isValidContactPhone(customerPhone)) {
-      setError("请输入有效的联系电话");
+      toast.warning("请输入有效的联系电话");
       return;
     }
 
@@ -672,7 +677,7 @@ export default function CheckoutPage() {
           setPaymentDropdownOpen(false);
           setPaymentMethod("balance");
           window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(existingOrder));
-          setError(message);
+          toast.error(message);
           return;
         }
         // Once the API confirms an order number, the idempotent order exists.
@@ -689,7 +694,7 @@ export default function CheckoutPage() {
       window.sessionStorage.removeItem(checkoutSessionKey);
       router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
     } catch (submitError) {
-      setError(getErrorText(submitError, "订单创建失败，请稍后重试"));
+      toast.error(getErrorText(submitError, "订单创建失败，请稍后重试"));
     } finally {
       submissionGuardRef.current.finish();
       setSubmitLoading(false);
@@ -825,11 +830,6 @@ export default function CheckoutPage() {
                 {pendingBalanceOrder ? (
                   <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                     原订单 {pendingBalanceOrder.orderNo} 已保留；余额充足后将继续处理该订单，不会创建第二个订单。
-                  </div>
-                ) : null}
-                {error ? (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {error}
                   </div>
                 ) : null}
               </div>

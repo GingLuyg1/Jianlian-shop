@@ -244,7 +244,7 @@ export default function AccountProfilePage() {
     setSaving(false);
 
     if (!response.ok) {
-      setFormError(body.error || sanitizeError());
+      toast.error(body.error || sanitizeError());
       setErrors((current) => ({ ...current, display_name: current.display_name }));
       return;
     }
