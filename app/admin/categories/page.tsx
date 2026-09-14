@@ -974,15 +974,15 @@ function CategoryCard({
         </div>
         {category.description ? <p className="mt-2 line-clamp-2 text-xs text-slate-500">{category.description}</p> : null}
       </button>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={onEdit} disabled={saving}>
+      <div data-category-actions className="mt-3 flex flex-nowrap items-center gap-1.5">
+        <Button className="h-8 shrink-0 px-2 text-xs" variant="outline" size="sm" onClick={onEdit} disabled={saving}>
           <Edit className="mr-1 h-3.5 w-3.5" />
           编辑
         </Button>
-        <Button variant="outline" size="sm" onClick={onToggle} disabled={saving}>
+        <Button className="h-8 shrink-0 px-2 text-xs" variant="outline" size="sm" onClick={onToggle} disabled={saving}>
           {isCategoryEnabled(category) ? "停用" : "启用"}
         </Button>
-        <Button variant="outline" size="sm" onClick={onDelete} disabled={saving}>
+        <Button className="h-8 shrink-0 px-2 text-xs" variant="outline" size="sm" onClick={onDelete} disabled={saving}>
           <Trash2 className="mr-1 h-3.5 w-3.5" />
           删除
         </Button>

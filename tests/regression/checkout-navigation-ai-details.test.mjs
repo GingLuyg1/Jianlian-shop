@@ -48,6 +48,8 @@ test("ChatGPT method comparison is native, responsive, truthful and family-scope
   for (const text of ["菲区卡充与 iOS 端充值的区别", "菲律宾区银行卡充值", "Apple App Store 充值", "设备使用说明", "具体以官方服务规则为准", "不表示当前商品同时包含两种方式"]) assert.ok(component.includes(text));
   assert.match(component, /grid-cols-1[^"]*md:grid-cols-2/);
   assert.match(component, /min-w-0/);
+  assert.match(component, /overflow-hidden rounded-2xl border border-orange-200 bg-white/);
+  for (const structure of ["InfoRow", "CompactList", "方式 {index + 1}", "border-t border-slate-100"]) assert.ok(component.includes(structure));
   assert.doesNotMatch(component, /成功率更高|最低价|百分之百|一定支持/);
   assert.doesNotMatch(page + component, /机器猫Ai|Doraemon AI|Your AI, Our Support|让 AI 更简单|更专业的 AI 账号服务平台/);
 });
