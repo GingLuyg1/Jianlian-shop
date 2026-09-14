@@ -390,7 +390,7 @@ export default function AdminInventoryPage() {
                       <TableHead className="text-center">预留</TableHead>
                       <TableHead className="text-center">已交付</TableHead>
                       <TableHead className="text-center">禁用</TableHead>
-                      <TableHead className="text-right">操作</TableHead>
+                      <TableHead className="text-center">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -407,7 +407,7 @@ export default function AdminInventoryPage() {
                         <TableCell className="text-center tabular-nums">{row.reserved_count}</TableCell>
                         <TableCell className="text-center tabular-nums">{row.delivered_count}</TableCell>
                         <TableCell className="text-center tabular-nums text-red-500">{row.disabled_count}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-center">
                           <Button size="sm" variant="outline" onClick={() => void openProductItems(row)}><Eye className="mr-1 h-3.5 w-3.5" />明细</Button>
                         </TableCell>
                       </TableRow>
@@ -425,12 +425,12 @@ export default function AdminInventoryPage() {
                     <TableRow>
                       <TableHead>批次</TableHead>
                       <TableHead>商品</TableHead>
-                      <TableHead>内容类型</TableHead>
+                      <TableHead className="text-center">内容类型</TableHead>
                       <TableHead className="text-center">可用/总数</TableHead>
-                      <TableHead>导入状态</TableHead>
+                      <TableHead className="text-center">导入状态</TableHead>
                       <TableHead>文件</TableHead>
-                      <TableHead>创建时间</TableHead>
-                      <TableHead className="text-right">操作</TableHead>
+                      <TableHead className="text-center">创建时间</TableHead>
+                      <TableHead className="text-center">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -443,13 +443,13 @@ export default function AdminInventoryPage() {
                           <div className="mt-1 text-xs text-slate-500">{row.batch_no}</div>
                         </TableCell>
                         <TableCell>{row.product_name}</TableCell>
-                        <TableCell>{CONTENT_TYPE_LABELS[row.content_type] ?? row.content_type}</TableCell>
+                        <TableCell className="text-center">{CONTENT_TYPE_LABELS[row.content_type] ?? row.content_type}</TableCell>
                         <TableCell className="text-center tabular-nums"><span className="text-emerald-600">{row.available_count}</span> / {row.total_count}</TableCell>
-                        <TableCell><BatchStatusBadge status={row.import_status} /></TableCell>
+                        <TableCell className="text-center"><BatchStatusBadge status={row.import_status} /></TableCell>
                         <TableCell className="max-w-[180px] truncate" title={row.source_filename ?? ""}>{row.source_filename ?? "—"}</TableCell>
-                        <TableCell className="whitespace-nowrap text-xs text-slate-500">{formatDate(row.created_at)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                        <TableCell className="whitespace-nowrap text-center text-xs text-slate-500">{formatDate(row.created_at)}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2 whitespace-nowrap">
                             <Button size="sm" variant="outline" onClick={() => void openBatchItems(row)}>详情</Button>
                             {row.import_status !== "disabled" ? (
                               <Button size="sm" variant="outline" className="text-red-600" disabled={submitting} onClick={() => {
@@ -575,10 +575,10 @@ export default function AdminInventoryPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>脱敏内容</TableHead>
-                      <TableHead>状态</TableHead>
+                      <TableHead className="text-center">状态</TableHead>
                       <TableHead>批次</TableHead>
                       <TableHead>关联订单</TableHead>
-                      <TableHead className="text-right">操作</TableHead>
+                      <TableHead className="text-center">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -587,11 +587,11 @@ export default function AdminInventoryPage() {
                     ) : itemRows.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-mono text-xs">{item.masked_content}</TableCell>
-                        <TableCell><InventoryStatusBadge status={item.status} /></TableCell>
+                        <TableCell className="text-center"><InventoryStatusBadge status={item.status} /></TableCell>
                         <TableCell>{item.batch_no ?? "—"}</TableCell>
                         <TableCell>{item.order_id ?? "—"}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2 whitespace-nowrap">
                             {item.status === "available" ? (
                               <Button size="sm" variant="outline" className="text-red-600" disabled={submitting} onClick={() => {
                                 if (window.confirm("确定禁用这条未交付库存吗？")) void updateInventory({ action: "disable_item", inventory_id: item.id });

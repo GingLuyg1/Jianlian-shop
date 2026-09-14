@@ -23,6 +23,7 @@ import {
   Headphones,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -55,6 +56,10 @@ type MobileMenuProps = {
 export default function MobileMenu({ onSupportOpen }: MobileMenuProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const visibleCategoryHrefs = useVisibleStorefrontCategoryHrefs();
+  const visibleMenuItems = menuItems.filter(
+    (item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href)
+  );
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -93,7 +98,7 @@ export default function MobileMenu({ onSupportOpen }: MobileMenuProps) {
 
         <nav className="flex-1 overflow-y-auto px-2 py-3">
           <ul className="space-y-1">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
               return (

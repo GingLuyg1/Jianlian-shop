@@ -1243,7 +1243,7 @@ function ProductTable({
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>排序</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
-            <TableHead className={cn("sticky right-0 z-30 h-10 bg-slate-50 px-3 text-right text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
+            <TableHead className={cn("sticky right-0 z-30 h-10 bg-slate-50 px-3 text-center text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -1355,7 +1355,7 @@ function ProductTable({
                   </time>
                 </TableCell>
                 <TableCell className="sticky right-0 z-10 bg-white px-3 py-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
-                  <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                  <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                     <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onEdit(product)}>
                       编辑
                     </Button>

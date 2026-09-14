@@ -203,15 +203,15 @@ export default function DataConsistencyClient() {
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="px-3 py-2 text-left">规则编号</th>
-                <th className="px-3 py-2 text-left">严重程度</th>
+                <th className="px-3 py-2 text-center">严重程度</th>
                 <th className="px-3 py-2 text-left">异常标题</th>
-                <th className="px-3 py-2 text-left">业务类型</th>
+                <th className="px-3 py-2 text-center">业务类型</th>
                 <th className="px-3 py-2 text-left">关联业务编号</th>
                 <th className="px-3 py-2 text-center">出现次数</th>
-                <th className="px-3 py-2 text-left">首次发现</th>
-                <th className="px-3 py-2 text-left">最后发现</th>
-                <th className="px-3 py-2 text-left">处理状态</th>
-                <th className="px-3 py-2 text-right">操作</th>
+                <th className="px-3 py-2 text-center">首次发现</th>
+                <th className="px-3 py-2 text-center">最后发现</th>
+                <th className="px-3 py-2 text-center">处理状态</th>
+                <th className="px-3 py-2 text-center">操作</th>
               </tr>
             </thead>
             <tbody>

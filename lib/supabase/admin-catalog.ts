@@ -383,6 +383,18 @@ export async function reorderProducts(categoryId: string, products: AdminProduct
   return (result.products ?? []).map(normalizeProduct);
 }
 
+export async function reorderCategories(parentId: string | null, categories: AdminCategory[]) {
+  const items = categories.map((category, index) => ({ id: category.id, sortOrder: (index + 1) * 10 }));
+  const result = await adminCatalogEnvelopeRequest<{ categories: Array<Record<string, unknown>> }>(
+    "/api/admin/catalog/categories/reorder",
+    {
+      method: "POST",
+      body: JSON.stringify({ parentId, items }),
+    }
+  );
+  return (result.categories ?? []).map(normalizeCategory);
+}
+
 export async function getProduct(id: string) {
   const productId = id.trim();
   if (!productId || !SAFE_PRODUCT_ID_PATTERN.test(productId)) {

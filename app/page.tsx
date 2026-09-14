@@ -20,6 +20,7 @@ import {
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { cn } from "@/lib/utils";
+import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
 
 const categoryCards = [
   {
@@ -236,6 +237,14 @@ function HeroVisual({ type }: { type: string }) {
 }
 
 export default function HomePage() {
+  const visibleCategoryHrefs = useVisibleStorefrontCategoryHrefs();
+  const visibleCategoryCards = categoryCards.filter(
+    (item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href)
+  );
+  const visibleHotLinks = hotLinks.filter((item) => {
+    const categoryHref = item.href.split("?")[0];
+    return !isCatalogCategoryHref(categoryHref) || visibleCategoryHrefs.has(categoryHref);
+  });
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -268,7 +277,7 @@ export default function HomePage() {
               </span>
             </div>
             <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              {categoryCards.map((category) => {
+              {visibleCategoryCards.map((category) => {
                 const Icon = category.icon;
                 return (
                   <Link
@@ -305,7 +314,7 @@ export default function HomePage() {
               <Sparkles className="h-5 w-5 text-primary" />
             </div>
             <div className="space-y-3">
-              {hotLinks.map((item) => (
+              {visibleHotLinks.map((item) => (
                 <Link
                   key={item.title}
                   href={item.href}

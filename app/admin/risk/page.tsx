@@ -125,17 +125,17 @@ export default function AdminRiskPage() {
           {error ? <AdminErrorState title="风险事件加载失败" description={error} onRetry={() => void loadRisk()} /> : loading ? <AdminTableSkeleton rows={8} /> : events.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的风险事件" : "暂无风险事件"} description={hasFilters ? "请调整筛选条件后再试。" : "真实风险事件产生后会显示在这里。"} /> : (
             <table className="w-full min-w-[1280px] table-fixed text-sm">
               <colgroup><col className="w-[148px]" /><col className="w-[130px]" /><col className="w-[190px]" /><col className="w-[130px]" /><col className="w-[110px]" /><col className="w-[220px]" /><col className="w-[100px]" /><col className="w-[150px]" /><col className="w-[78px]" /></colgroup>
-              <thead className={adminListTableHeadClass}><tr className="border-b">{["风险记录号", "关联用户", "关联业务", "风险类型", "等级 / 分数", "风险原因", "状态", "最后发现", "操作"].map((heading) => <th scope="col" key={heading} className="h-10 px-3 font-medium whitespace-nowrap">{heading}</th>)}</tr></thead>
+              <thead className={adminListTableHeadClass}><tr className="border-b">{["风险记录号", "关联用户", "关联业务", "风险类型", "等级 / 分数", "风险原因", "状态", "最后发现", "操作"].map((heading) => <th scope="col" key={heading} className={`h-10 whitespace-nowrap px-3 font-medium ${["等级 / 分数", "状态", "最后发现", "操作"].includes(heading) ? "text-center" : "text-left"}`}>{heading}</th>)}</tr></thead>
               <tbody>{events.map((event) => <tr key={event.id} className={adminListRowClass}>
                 <td className="truncate px-3 py-2 font-mono text-xs" title={event.id}>{event.id}</td>
                 <td className="px-3 py-2">{event.userId ? <Link className="font-mono text-xs text-primary hover:underline" href={`/admin/users?search=${encodeURIComponent(event.userId)}`}>{shortId(event.userId)}</Link> : "—"}</td>
                 <td className="px-3 py-2"><div>{businessLabel(event.businessType)}</div>{event.businessId ? (businessHref(event) ? <Link className="block truncate font-mono text-xs text-primary hover:underline" href={businessHref(event)!}>{event.businessId}</Link> : <span className="block truncate font-mono text-xs text-slate-500">{event.businessId}</span>) : <span className="text-xs text-slate-400">—</span>}</td>
                 <td className="truncate px-3 py-2 font-mono text-xs" title={event.ruleCode}>{event.ruleCode}</td>
-                <td className="px-3 py-2"><RiskBadge level={event.riskLevel} score={event.riskScore} /></td>
+                <td className="px-3 py-2 text-center"><RiskBadge level={event.riskLevel} score={event.riskScore} /></td>
                 <td className="px-3 py-2"><div className="line-clamp-2" title={event.summary}>{event.summary}</div><div className="mt-1 text-xs text-slate-400">建议：{event.recommendedAction}</div></td>
-                <td className="px-3 py-2">{statusLabel(event.status)}</td>
-                <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(event.lastSeenAt)}</td>
-                <td className="px-3 py-2"><Link href={`/admin/risk/${event.id}`} className="inline-flex min-h-11 items-center font-medium text-primary hover:underline sm:min-h-9">查看</Link></td>
+                <td className="px-3 py-2 text-center">{statusLabel(event.status)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(event.lastSeenAt)}</td>
+                <td className="px-3 py-2 text-center whitespace-nowrap"><Link href={`/admin/risk/${event.id}`} className="inline-flex min-h-11 items-center font-medium text-primary hover:underline sm:min-h-9">查看</Link></td>
               </tr>)}</tbody>
             </table>
           )}

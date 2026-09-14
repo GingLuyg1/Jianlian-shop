@@ -300,7 +300,7 @@ export default function AdminEmailTemplatesWorkspace() {
             <AdminTableViewport>
               <table className="min-w-[1040px] w-full text-left text-sm">
                 <thead className={adminListTableHeadClass}>
-                  <tr><th className="px-4 py-3">模板代码</th><th className="px-4 py-3">版本</th><th className="px-4 py-3">名称</th><th className="px-4 py-3">主题</th><th className="px-4 py-3">状态</th><th className="px-4 py-3">当前版本</th><th className="px-4 py-3">更新时间</th><th className="px-4 py-3 text-right">操作</th></tr>
+                  <tr><th className="px-4 py-3">模板代码</th><th className="px-4 py-3 text-center">版本</th><th className="px-4 py-3">名称</th><th className="px-4 py-3">主题</th><th className="px-4 py-3 text-center">状态</th><th className="px-4 py-3 text-center">当前版本</th><th className="px-4 py-3 text-center">更新时间</th><th className="px-4 py-3 text-center">操作</th></tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--admin-v2-border)]">
                   {templates.map((template) => (
@@ -312,7 +312,7 @@ export default function AdminEmailTemplatesWorkspace() {
                       <td className="px-4 py-3"><TemplateStatusBadge status={template.status} /></td>
                       <td className="px-4 py-3">{template.is_current ? <Badge variant="secondary">当前</Badge> : "—"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500"><div>更新 {formatTime(template.updated_at)}</div><div className="mt-1">发布 {formatTime(template.published_at)}</div></td>
-                      <td className="px-4 py-3 text-right"><Button variant="outline" size="sm" onClick={() => openDetail(template)}><FileEdit className="mr-2 h-4 w-4" />{template.status === "draft" ? "查看/编辑" : "查看"}</Button></td>
+                      <td className="px-4 py-3 text-center whitespace-nowrap"><Button variant="outline" size="sm" onClick={() => openDetail(template)}><FileEdit className="mr-2 h-4 w-4" />{template.status === "draft" ? "查看/编辑" : "查看"}</Button></td>
                     </tr>
                   ))}
                 </tbody>

@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { CACHE_REVALIDATE_SECONDS } from "@/lib/cache/cache-tags";
 import { checkRateLimit, getRequestSourceKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  buildEffectiveCategoryVisibility,
+  filterEffectivelyVisibleCategories,
+} from "@/lib/catalog/effective-category-visibility.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +22,7 @@ type CategoryRow = {
   name: string | null;
   slug: string | null;
   sort_order: number | null;
+  is_active: boolean | null;
 };
 
 type ProductRow = {
@@ -87,17 +92,19 @@ export async function GET(request: Request) {
     const supabase = getSupabaseServerClient();
     const { data: categoryRows, error: categoryError } = await supabase
       .from("categories")
-      .select("id,parent_id,level,name,slug,sort_order")
+      .select("id,parent_id,level,name,slug,sort_order,is_active")
       .order("level", { ascending: true })
       .order("sort_order", { ascending: true });
 
     if (categoryError) throw categoryError;
 
-    const categories = (categoryRows ?? []) as CategoryRow[];
+    const allCategories = (categoryRows ?? []) as CategoryRow[];
+    const categoryVisibility = buildEffectiveCategoryVisibility(allCategories);
+    const categories = filterEffectivelyVisibleCategories(allCategories);
     const categoryMap = new Map(categories.map((category) => [category.id, category]));
     const categoryErrorMessage = validateCategorySelection(categoryMap, primaryCategoryId, secondaryCategoryId);
     if (categoryErrorMessage) {
-      return productError("CATEGORY_ID_INVALID", categoryErrorMessage, requestId, 400);
+      return productError("CATEGORY_NOT_FOUND", categoryErrorMessage, requestId, 404);
     }
 
     const categoryIds = resolveProductCategoryIds(categories, primaryCategoryId, secondaryCategoryId);
@@ -110,7 +117,7 @@ export async function GET(request: Request) {
 
     const products = ((productRows ?? []) as ProductRow[]).filter((product) => {
       if (!product.category_id) return false;
-      if (!categoryMap.has(product.category_id)) return false;
+      if (categoryVisibility.get(product.category_id) !== true) return false;
       if (excludeId && product.id === excludeId) return false;
       return true;
     });

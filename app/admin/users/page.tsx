@@ -139,13 +139,16 @@ export default function AdminUsersPage() {
           {error ? <AdminErrorState title="用户列表加载失败" description={error} onRetry={() => void loadUsers()} /> : loading ? <AdminTableSkeleton rows={10} /> : users.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的用户" : "暂无用户"} description={hasFilters ? "请调整筛选条件后再试。" : "新用户注册后会显示在这里。"} /> : (
             <table className="w-full min-w-[1060px] table-fixed text-sm">
               <colgroup><col className="w-[190px]" /><col className="w-[210px]" /><col className="w-[90px]" /><col className="w-[100px]" /><col className="w-[110px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[105px]" /><col className="w-[78px]" /></colgroup>
-              <thead className={adminListTableHeadClass}><tr className="border-b">{["用户", "邮箱", "角色", "账户状态", "当前余额", "注册时间", "最近活动", "风险状态", "操作"].map((heading) => <th scope="col" key={heading} className="h-10 whitespace-nowrap px-3 font-medium">{heading}</th>)}</tr></thead>
+              <thead className={adminListTableHeadClass}><tr className="border-b">{[
+                ["用户", "text-left"], ["邮箱", "text-left"], ["角色", "text-center"], ["账户状态", "text-center"],
+                ["当前余额", "text-center"], ["注册时间", "text-center"], ["最近活动", "text-center"], ["风险状态", "text-center"], ["操作", "text-center"],
+              ].map(([heading, align]) => <th scope="col" key={heading} className={`h-10 whitespace-nowrap px-3 font-medium ${align}`}>{heading}</th>)}</tr></thead>
               <tbody>{users.map((user) => <tr key={user.id} className={adminListRowClass}>
                 <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{user.displayName || "未命名用户"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={user.id}>{user.id}</div></td>
-                <td className="truncate px-3 py-2" title={user.email ?? ""}>{user.email || "—"}</td><td className="px-3 py-2">{ROLE_LABELS[user.role] ?? user.role}</td>
-                <td className="px-3 py-2"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-3 py-2 font-semibold">{money(user.balance)}</td>
-                <td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(user.createdAt)}</td><td className="px-3 py-2 text-xs tabular-nums text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-3 py-2"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></td>
-                <td className="px-3 py-2"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
+                <td className="truncate px-3 py-2" title={user.email ?? ""}>{user.email || "—"}</td><td className="px-3 py-2 text-center">{ROLE_LABELS[user.role] ?? user.role}</td>
+                <td className="px-3 py-2 text-center"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-3 py-2 text-center font-semibold tabular-nums">{money(user.balance)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(user.createdAt)}</td><td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-3 py-2 text-center"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></td>
+                <td className="px-3 py-2 text-center whitespace-nowrap"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
               </tr>)}</tbody>
             </table>
           )}

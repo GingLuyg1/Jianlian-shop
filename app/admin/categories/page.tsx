@@ -20,6 +20,7 @@ import {
   isCategoryEnabled,
   listCategories,
   listProducts,
+  reorderCategories,
   reorderProducts,
   setCategoryStatus,
   setProductStatus,
@@ -240,6 +241,8 @@ export default function AdminCategoriesPage() {
   const [error, setError] = useState("");
   const [reordering, setReordering] = useState(false);
   const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
+  const [reorderingCategories, setReorderingCategories] = useState(false);
+  const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryForm | null>(null);
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
   const [productInitialForm, setProductInitialForm] = useState<ProductForm | null>(null);
@@ -636,6 +639,43 @@ export default function AdminCategoriesPage() {
     void moveProduct(productId, target.id);
   }
 
+  async function moveCategory(parentId: string | null, sourceId: string, targetId: string) {
+    if (reorderingCategories || loadingCategories || saving || sourceId === targetId) return;
+    const siblings = (parentId === null ? rootCategories : childCategories);
+    const sourceIndex = siblings.findIndex((category) => category.id === sourceId);
+    const targetIndex = siblings.findIndex((category) => category.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const nextSiblings = [...siblings];
+    const [moved] = nextSiblings.splice(sourceIndex, 1);
+    nextSiblings.splice(targetIndex, 0, moved);
+    const optimistic = nextSiblings.map((category, index) => ({ ...category, sort_order: (index + 1) * 10 }));
+    const optimisticMap = new Map(optimistic.map((category) => [category.id, category]));
+    const previous = categories;
+    setCategories((current) => current.map((category) => optimisticMap.get(category.id) ?? category));
+    setReorderingCategories(true);
+    try {
+      const saved = await reorderCategories(parentId, optimistic);
+      const savedMap = new Map(saved.map((category) => [category.id, category]));
+      setCategories((current) => current.map((category) => savedMap.get(category.id) ?? category));
+      toast.success("分类排序已保存");
+    } catch (reorderError) {
+      setCategories(previous);
+      toast.error(getErrorText(reorderError, "分类排序保存失败，已恢复原顺序"));
+    } finally {
+      setDraggedCategoryId(null);
+      setReorderingCategories(false);
+    }
+  }
+
+  function moveCategoryByKeyboard(parentId: string | null, categoryId: string, direction: -1 | 1) {
+    const siblings = parentId === null ? rootCategories : childCategories;
+    const index = siblings.findIndex((category) => category.id === categoryId);
+    const target = siblings[index + direction];
+    if (index < 0 || !target) return;
+    void moveCategory(parentId, categoryId, target.id);
+  }
+
   return (
     <AdminPageShell
       title="分类管理"
@@ -674,6 +714,12 @@ export default function AdminCategoriesPage() {
               onDelete={() => removeCategory(category)}
               onToggle={() => toggleCategory(category)}
               saving={saving}
+              dragging={draggedCategoryId === category.id}
+              reorderDisabled={reorderingCategories || loadingCategories || saving}
+              onDragStart={() => setDraggedCategoryId(category.id)}
+              onDragEnd={() => setDraggedCategoryId(null)}
+              onDrop={() => draggedCategoryId && void moveCategory(null, draggedCategoryId, category.id)}
+              onMoveByKeyboard={(direction) => moveCategoryByKeyboard(null, category.id, direction)}
             />
           ))}
         </CategoryColumn>
@@ -699,6 +745,12 @@ export default function AdminCategoriesPage() {
               onDelete={() => removeCategory(category)}
               onToggle={() => toggleCategory(category)}
               saving={saving}
+              dragging={draggedCategoryId === category.id}
+              reorderDisabled={reorderingCategories || loadingCategories || saving}
+              onDragStart={() => setDraggedCategoryId(category.id)}
+              onDragEnd={() => setDraggedCategoryId(null)}
+              onDrop={() => draggedCategoryId && void moveCategory(selectedRootId, draggedCategoryId, category.id)}
+              onMoveByKeyboard={(direction) => moveCategoryByKeyboard(selectedRootId, category.id, direction)}
             />
           ))}
         </CategoryColumn>
@@ -768,14 +820,14 @@ export default function AdminCategoriesPage() {
               />
             ) : (
               <div className="min-w-[760px] divide-y">
-                <div className="sticky top-0 z-10 grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_150px] bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-500">
-                  <div>图片</div>
+                <div className="sticky top-0 z-10 grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_168px] bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-500">
+                  <div className="text-center">图片</div>
                   <div>商品名称</div>
-                  <div>价格</div>
-                  <div>库存</div>
-                  <div>状态</div>
-                  <div>更新时间</div>
-                  <div className="text-right">操作</div>
+                  <div className="text-center">价格</div>
+                  <div className="text-center">库存</div>
+                  <div className="text-center">状态</div>
+                  <div className="text-center">更新时间</div>
+                  <div className="text-center">操作</div>
                 </div>
                 {products.map((product) => (
                   <div
@@ -788,11 +840,11 @@ export default function AdminCategoriesPage() {
                       if (draggedProductId) void moveProduct(draggedProductId, product.id);
                     }}
                     className={cn(
-                      "grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_150px] items-center px-4 py-3 text-sm",
+                      "grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_168px] items-center px-4 py-3 text-sm",
                       draggedProductId === product.id && "bg-blue-50 opacity-70"
                     )}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       <button
                         type="button"
                         draggable={canReorderProducts}
@@ -831,13 +883,13 @@ export default function AdminCategoriesPage() {
                         {product.slug}
                       </div>
                     </div>
-                    <div className="tabular-nums">¥{product.price.toFixed(2)}</div>
-                    <div className={cn("tabular-nums", product.stock <= 0 ? "text-red-600" : "text-slate-700")}>
+                    <div className="text-center tabular-nums">¥{product.price.toFixed(2)}</div>
+                    <div className={cn("text-center tabular-nums", product.stock <= 0 ? "text-red-600" : "text-slate-700")}>
                       {product.stock}
                     </div>
-                    <StatusBadge status={product.status} />
-                    <time className="text-xs text-slate-500">{formatDate(product.updated_at)}</time>
-                    <div className="flex justify-end gap-1">
+                    <div className="flex justify-center"><StatusBadge status={product.status} /></div>
+                    <time className="text-center text-xs text-slate-500">{formatDate(product.updated_at)}</time>
+                    <div className="flex justify-center gap-1 whitespace-nowrap">
                       <Button variant="ghost" size="sm" onClick={() => openEditProduct(product)}>
                         编辑
                       </Button>
@@ -947,6 +999,12 @@ function CategoryCard({
   onEdit,
   onToggle,
   saving,
+  dragging,
+  reorderDisabled,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+  onMoveByKeyboard,
 }: {
   active: boolean;
   category: AdminCategory;
@@ -956,12 +1014,49 @@ function CategoryCard({
   onEdit: () => void;
   onToggle: () => void;
   saving: boolean;
+  dragging: boolean;
+  reorderDisabled: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDrop: () => void;
+  onMoveByKeyboard: (direction: -1 | 1) => void;
 }) {
   return (
-    <div className={cn("rounded-lg border p-3", active ? "border-primary bg-orange-50" : "border-slate-200")}>
-      <button type="button" className="block w-full text-left" onClick={onClick}>
+    <div
+      onDragOver={(event) => {
+        if (!reorderDisabled) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        onDrop();
+      }}
+      className={cn("rounded-lg border p-3", active ? "border-primary bg-orange-50" : "border-slate-200", dragging && "opacity-60")}
+    >
+      <div className="flex min-w-0 items-start gap-1.5">
+        <button
+          type="button"
+          draggable={!reorderDisabled}
+          disabled={reorderDisabled}
+          aria-label={`拖拽排序 ${category.name}；方向键可上移或下移`}
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", category.id);
+            onDragStart();
+          }}
+          onDragEnd={onDragEnd}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+              event.preventDefault();
+              onMoveByKeyboard(event.key === "ArrowUp" ? -1 : 1);
+            }
+          }}
+          className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <button type="button" className="min-w-0 flex-1 text-left" onClick={onClick}>
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-slate-950">{category.name}</span>
+          <span className="min-w-0 truncate text-sm font-medium text-slate-950" title={category.name}>{category.name}</span>
           <Badge
             variant="outline"
             className={isCategoryEnabled(category) ? "border-green-200 bg-green-50 text-green-700" : "border-slate-200 bg-slate-50 text-slate-500"}
@@ -969,11 +1064,12 @@ function CategoryCard({
             {isCategoryEnabled(category) ? "启用" : "停用"}
           </Badge>
         </div>
-        <div className="mt-1 truncate text-xs text-slate-500">
+        <div className="mt-1 truncate text-xs text-slate-500" title={`${category.slug} · sort ${category.sort_order} · ${count} 项`}>
           {category.slug} · sort {category.sort_order} · {count} 项
         </div>
-        {category.description ? <p className="mt-2 line-clamp-2 text-xs text-slate-500">{category.description}</p> : null}
+        {category.description ? <p className="mt-2 truncate text-xs text-slate-500" title={category.description}>{category.description}</p> : null}
       </button>
+      </div>
       <div data-category-actions className="mt-3 flex flex-nowrap items-center gap-1.5">
         <Button className="h-8 shrink-0 px-2 text-xs" variant="outline" size="sm" onClick={onEdit} disabled={saving}>
           <Edit className="mr-1 h-3.5 w-3.5" />

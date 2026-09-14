@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
 
 const menuItems = [
   { label: "首页", href: "/", icon: Home },
@@ -42,6 +43,10 @@ type PublicSidebarProps = {
 
 export default function PublicSidebar({ onSupportOpen }: PublicSidebarProps) {
   const pathname = usePathname();
+  const visibleCategoryHrefs = useVisibleStorefrontCategoryHrefs();
+  const visibleMenuItems = menuItems.filter(
+    (item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href)
+  );
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -98,7 +103,7 @@ export default function PublicSidebar({ onSupportOpen }: PublicSidebarProps) {
       </div>
 
       <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 pb-4 pt-0">
-        <ul className="space-y-1.5">{menuItems.map(renderLink)}</ul>
+        <ul className="space-y-1.5">{visibleMenuItems.map(renderLink)}</ul>
       </nav>
 
       <div className="px-2 pb-3">

@@ -52,10 +52,10 @@ export default function AdminOrderTable({ orders }: AdminOrderTableProps) {
             <TableHead className="text-xs">订单号</TableHead>
             <TableHead className="text-xs">用户邮箱</TableHead>
             <TableHead className="text-xs">商品</TableHead>
-            <TableHead className="text-xs">金额</TableHead>
-            <TableHead className="text-xs">状态</TableHead>
-            <TableHead className="text-xs">创建时间</TableHead>
-            <TableHead className="text-xs text-right">操作</TableHead>
+            <TableHead className="text-center text-xs">金额</TableHead>
+            <TableHead className="text-center text-xs">状态</TableHead>
+            <TableHead className="text-center text-xs">创建时间</TableHead>
+            <TableHead className="text-center text-xs">操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -68,10 +68,10 @@ export default function AdminOrderTable({ orders }: AdminOrderTableProps) {
               <TableCell className="text-xs max-w-[180px] truncate">
                 {order.productName}
               </TableCell>
-              <TableCell className="text-xs font-medium">
+              <TableCell className="text-center text-xs font-medium tabular-nums">
                 ¥{order.amount.toFixed(2)}
               </TableCell>
-              <TableCell>
+              <TableCell className="text-center">
                 <Badge
                   variant="outline"
                   className={cn(
@@ -91,11 +91,11 @@ export default function AdminOrderTable({ orders }: AdminOrderTableProps) {
                   {order.processingStatusLabel}
                 </Badge>
               </TableCell>
-              <TableCell className="text-xs text-muted-foreground">
+              <TableCell className="text-center text-xs text-muted-foreground">
                 {order.createdAt}
               </TableCell>
-              <TableCell className="text-right">
-                <div className="flex items-center justify-end gap-1">
+              <TableCell className="text-center">
+                <div className="flex items-center justify-center gap-1 whitespace-nowrap">
                   <Button variant="ghost" size="sm" className="h-6 text-[10px]">
                     详情
                   </Button>

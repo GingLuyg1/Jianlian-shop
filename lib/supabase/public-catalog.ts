@@ -1,4 +1,9 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  buildEffectiveCategoryVisibility,
+  filterEffectivelyVisibleCategories,
+  isCategoryIndividuallyEnabled,
+} from "@/lib/catalog/effective-category-visibility.mjs";
 import type {
   DeliveryMethod,
   Product,
@@ -180,8 +185,7 @@ export function getErrorText(error: unknown, fallback = "操作失败，请稍�
 }
 
 export function isPublicCategoryEnabled(category: PublicCategory) {
-  if (typeof category.is_active === "boolean") return category.is_active;
-  return category.status !== "inactive";
+  return isCategoryIndividuallyEnabled(category);
 }
 
 export async function listPublicCategories() {
@@ -194,9 +198,9 @@ export async function listPublicCategories() {
 
   if (error) throw new Error(getErrorText(error, "分类读取失败，请检查 RLS 读取策略"));
 
-  return ((data ?? []) as Array<Record<string, unknown>>)
-    .map(normalizeCategory)
-    .filter(isPublicCategoryEnabled);
+  return filterEffectivelyVisibleCategories(
+    ((data ?? []) as Array<Record<string, unknown>>).map(normalizeCategory)
+  );
 }
 
 export async function listActiveProductsByCategory(categoryId: string) {
@@ -204,7 +208,9 @@ export async function listActiveProductsByCategory(categoryId: string) {
 }
 
 export async function listActiveProductsByCategoryIds(categoryIds: string[]) {
-  const ids = Array.from(new Set(categoryIds.filter(Boolean)));
+  const categories = await listPublicCategories();
+  const visibleIds = new Set(categories.map((category) => category.id));
+  const ids = Array.from(new Set(categoryIds.filter((id) => Boolean(id) && visibleIds.has(id))));
   if (ids.length === 0) return [];
 
   const { data, error } = await getSupabaseBrowserClient()
@@ -277,7 +283,14 @@ export async function getProductByIdOrSlug(identifier: string, options: { active
 
   if (error) throw new Error(getErrorText(error, "商品详情读取失败"));
 
-  return data ? normalizePublicProduct(data as Record<string, unknown>) : null;
+  if (!data) return null;
+  const product = normalizePublicProduct(data as Record<string, unknown>);
+  if (options.activeOnly) {
+    const categories = await listPublicCategories();
+    const visibility = buildEffectiveCategoryVisibility(categories);
+    if (!product.category_id || visibility.get(product.category_id) !== true) return null;
+  }
+  return product;
 }
 
 async function findPublicCatalogProductById(identifier: string) {
