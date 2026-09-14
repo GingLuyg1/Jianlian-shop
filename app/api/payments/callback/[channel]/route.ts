@@ -7,3 +7,7 @@ type RouteContext = { params: { channel: string } };
 export async function POST(request: Request, context: RouteContext) {
   return handlePaymentCallback(request, context.params.channel);
 }
+
+export async function GET(request: Request, context: RouteContext) {
+  return handlePaymentCallback(request, context.params.channel);
+}

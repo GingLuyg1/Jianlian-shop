@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
   PaymentChannelCode,
+  PaymentProvider,
   PaymentProviderCode,
   ProviderCallbackContext,
   ProviderParsedCallback,
@@ -39,11 +40,13 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
 
   const rawBody = await request.text();
   const url = new URL(request.url);
-  const channelCode = String(
+  const requestedChannel = String(
     routeChannel ?? url.searchParams.get("channel") ?? request.headers.get("x-payment-channel") ?? ""
   ).trim();
-  const payload = safeJson(rawBody);
+  const channelCode = requestedChannel === "wechat_pay" ? "wechat" : requestedChannel;
+  const payload = request.method === "GET" ? Object.fromEntries(url.searchParams.entries()) : safeJson(rawBody);
   let logId: string | null = null;
+  let callbackProvider: PaymentProvider | null = null;
 
   try {
     if (!isPaymentChannelCode(channelCode)) {
@@ -68,18 +71,19 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       provider: channel.provider as PaymentProviderCode,
       rawBody,
       headers: request.headers,
+      requestUrl: request.url,
     };
-    const provider = getPaymentProvider(channel.provider);
-    const verified = await provider.verifyCallback(rawBody, context);
+    callbackProvider = getPaymentProvider(channel.provider);
+    const verified = await callbackProvider.verifyCallback(rawBody, context);
     if (!verified) {
       await updateCallbackLog(service, logId, "signature_failed", "回调验签失败或 Provider 未配置", {
         signature_result: "failed",
       });
-      return response({ error: "回调验签失败" }, 400);
+      return providerResponse(callbackProvider, { ok: false, message: "回调验签失败" }, { error: "回调验签失败" }, 400);
     }
     await updateCallbackLog(service, logId, "verified", null, { signature_result: "success" });
 
-    const parsedRaw = (await provider.parseCallback(payload ?? rawBody, context)) as ProviderParsedCallback;
+    const parsedRaw = (await callbackProvider.parseCallback(payload ?? rawBody, context)) as ProviderParsedCallback;
     const parsed = { ...parsedRaw, status: normalizeProviderPaymentStatus(parsedRaw.status) };
     await updateCallbackLog(service, logId, "parsed", null, {
       payment_no: parsed.businessNo,
@@ -90,7 +94,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
     const session = await findCallbackSession(service, parsed, channelCode);
     if (!session) {
       await updateCallbackLog(service, logId, "business_not_found", "未找到匹配的支付会话");
-      return response({ error: "支付会话不存在" }, 404);
+      return providerResponse(callbackProvider, { ok: false, message: "支付会话不存在" }, { error: "支付会话不存在" }, 404);
     }
 
     if (!amountEqual(session.payable_amount, parsed.amount, session.currency)) {
@@ -103,7 +107,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         errorCode: "CALLBACK_AMOUNT_MISMATCH",
         errorMessage: "支付回调金额与支付会话金额不一致",
       });
-      return response({ error: "支付金额不一致" }, 400);
+      return providerResponse(callbackProvider, { ok: false, message: "支付金额不一致" }, { error: "支付金额不一致" }, 400);
     }
     if (String(session.currency).toUpperCase() !== String(parsed.currency).toUpperCase()) {
       await updateCallbackLog(service, logId, "currency_mismatch", "渠道币种与支付会话币种不一致");
@@ -115,7 +119,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         errorCode: "CALLBACK_CURRENCY_MISMATCH",
         errorMessage: "支付回调币种与支付会话币种不一致",
       });
-      return response({ error: "支付币种不一致" }, 400);
+      return providerResponse(callbackProvider, { ok: false, message: "支付币种不一致" }, { error: "支付币种不一致" }, 400);
     }
 
     if (parsed.status !== "paid") {
@@ -130,7 +134,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
           errorCode: "CALLBACK_STATUS_TRANSITION_DENIED",
           errorMessage: transition.message,
         });
-        return response({ error: transition.message }, 409);
+        return providerResponse(callbackProvider, { ok: false, message: transition.message }, { error: transition.message }, 409);
       }
       await service
         .from("payment_sessions")
@@ -142,12 +146,12 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         .eq("id", session.id)
         .neq("status", "paid");
       await updateCallbackLog(service, logId, "success", null);
-      return response({ ok: true });
+      return providerResponse(callbackProvider, { ok: true }, { ok: true });
     }
 
     if (session.status === "paid") {
       await updateCallbackLog(service, logId, "duplicate", null, { is_duplicate: true });
-      return response({ ok: true, duplicate: true });
+      return providerResponse(callbackProvider, { ok: true, duplicate: true }, { ok: true, duplicate: true });
     }
 
     const transition = assertPaymentStatusTransition(session.status, "paid");
@@ -161,7 +165,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         errorCode: "CALLBACK_PAID_TRANSITION_DENIED",
         errorMessage: transition.message,
       });
-      return response({ error: transition.message }, 409);
+      return providerResponse(callbackProvider, { ok: false, message: transition.message }, { error: transition.message }, 409);
     }
 
     const completion = await completePayment(
@@ -180,11 +184,11 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       business_type: completion.businessType,
       business_id: completion.businessId,
     });
-    return response({ ok: true, duplicate: completion.idempotent });
+    return providerResponse(callbackProvider, { ok: true, duplicate: completion.idempotent }, { ok: true, duplicate: completion.idempotent });
   } catch (error) {
     const message = getSafeErrorMessage(error, "支付回调处理失败");
     if (logId) await updateCallbackLog(service, logId, "processing_failed", message);
-    return response({ error: message }, 400);
+    return providerResponse(callbackProvider, { ok: false, message }, { error: message }, 400);
   }
 }
 
@@ -332,9 +336,39 @@ function response(body: Record<string, unknown>, status = 200) {
   });
 }
 
+function providerResponse(
+  provider: PaymentProvider | null,
+  result: { ok: boolean; duplicate?: boolean; message?: string },
+  fallbackBody: Record<string, unknown>,
+  fallbackStatus = 200
+) {
+  const formatted = provider?.formatCallbackResponse?.(result);
+  if (formatted instanceof Response) return formatted;
+  if (typeof formatted === "string") {
+    return new Response(formatted, {
+      status: fallbackStatus,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+  return response(fallbackBody, fallbackStatus);
+}
+
 function amountEqual(local: unknown, provider: unknown, currency: unknown) {
   const scale = String(currency).toUpperCase() === "USDT" ? 6 : 2;
-  return Number(local).toFixed(scale) === Number(provider).toFixed(scale);
+  const left = decimalToMinorUnits(local, scale);
+  const right = decimalToMinorUnits(provider, scale);
+  return left !== null && right !== null && left === right;
+}
+
+function decimalToMinorUnits(value: unknown, scale: number) {
+  const normalized = typeof value === "number"
+    ? (Number.isFinite(value) ? value.toFixed(scale) : "")
+    : String(value ?? "").trim();
+  const match = new RegExp(`^(0|[1-9]\\d*)(?:\\.(\\d{1,${scale}}))?$`).exec(normalized);
+  if (!match) return null;
+  let multiplier = BigInt(1);
+  for (let index = 0; index < scale; index += 1) multiplier *= BigInt(10);
+  return BigInt(match[1]) * multiplier + BigInt((match[2] ?? "").padEnd(scale, "0"));
 }
 
 function safeJson(rawBody: string) {

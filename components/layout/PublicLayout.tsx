@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Headphones, Mail, MessageCircle, Copy, ExternalLink } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import MobileMenu from "./MobileMenu";
 import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
 import RouteLoadingIndicator from "./RouteLoadingIndicator";
+import { OPEN_PUBLIC_SUPPORT_EVENT } from "@/lib/support/open-public-support";
 
 interface PublicLayoutProps {
   children: ReactNode;
@@ -42,10 +43,14 @@ function getSupportHref(value: string) {
 function PublicLayoutContent({ children, contentClassName, viewportLocked = false }: PublicLayoutProps) {
   const [supportOpen, setSupportOpen] = useState(false);
   const supportTrigger = useRef<HTMLElement | null>(null);
-  const openSupport = () => {
+  const openSupport = useCallback(() => {
     supportTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSupportOpen(true);
-  };
+  }, []);
+  useEffect(() => {
+    window.addEventListener(OPEN_PUBLIC_SUPPORT_EVENT, openSupport);
+    return () => window.removeEventListener(OPEN_PUBLIC_SUPPORT_EVENT, openSupport);
+  }, [openSupport]);
   const pathname = usePathname();
   const { settings } = usePublicSettings();
   const pagePlacement = pathname === "/" ? "home" : pathname.startsWith("/checkout") ? "checkout" : pathname.startsWith("/account") ? "account" : null;

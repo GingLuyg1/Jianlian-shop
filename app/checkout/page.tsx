@@ -57,6 +57,8 @@ import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethodCode,
 } from "@/lib/payments/payment-methods";
+import { isLiuhaoyiAmountOverLimit, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
+import { openPublicSupport } from "@/lib/support/open-public-support";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
@@ -110,7 +112,7 @@ function createCheckoutClientRequestId() {
 }
 
 const REQUIRED_AGREEMENT_TYPES = ["terms_of_service", "refund_policy", "digital_delivery_policy", "purchase_notice"];
-const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20"]);
+const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20", "alipay", "wechat_pay"]);
 const AGREEMENT_LABELS: Record<string, string> = {
   terms_of_service: "用户协议",
   refund_policy: "退款政策",
@@ -216,6 +218,7 @@ export default function CheckoutPage() {
   const [balanceRequiresLogin, setBalanceRequiresLogin] = useState(false);
   const [pendingBalanceOrder, setPendingBalanceOrder] = useState<PendingBalanceOrder | null>(null);
   const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
+  const [liuhaoyiLimitDialogOpen, setLiuhaoyiLimitDialogOpen] = useState(false);
   const paymentDropdownRef = useRef<HTMLDivElement | null>(null);
   const clientRequestIdRef = useRef("");
   const balanceRequestVersionRef = useRef(0);
@@ -544,6 +547,11 @@ export default function CheckoutPage() {
 
     if (selectedPaymentUnavailable) {
       toast.warning("该支付方式暂未开放，请选择余额支付。");
+      return;
+    }
+
+    if (isLiuhaoyiPaymentMethod(paymentMethod) && isLiuhaoyiAmountOverLimit(orderAmount)) {
+      setLiuhaoyiLimitDialogOpen(true);
       return;
     }
 
@@ -920,6 +928,22 @@ export default function CheckoutPage() {
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setBalanceDialogOpen(false)}>取消</Button>
             <Button type="button" onClick={() => router.push(rechargeReturnTo)}>去充值</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={liuhaoyiLimitDialogOpen} onOpenChange={setLiuhaoyiLimitDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>支付宝/微信支付金额超限</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm leading-6 text-muted-foreground">
+            支付宝/微信单笔支付最高支持 ¥2000。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setLiuhaoyiLimitDialogOpen(false)}>取消</Button>
+            <Button type="button" variant="outline" onClick={() => { setLiuhaoyiLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
+            <Button type="button" variant="outline" onClick={() => { setPaymentMethod("balance"); setLiuhaoyiLimitDialogOpen(false); }}>使用余额支付</Button>
+            <Button type="button" onClick={() => router.push("/products/account-recharge")}>去充值</Button>
           </div>
         </DialogContent>
       </Dialog>

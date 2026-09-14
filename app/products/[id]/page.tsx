@@ -20,6 +20,7 @@ import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   FRONTEND_ACTIVE_PRODUCT_STATUS,
@@ -37,6 +38,8 @@ import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethodCode,
 } from "@/lib/payments/payment-methods";
+import { isLiuhaoyiAmountOverLimit, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
+import { openPublicSupport } from "@/lib/support/open-public-support";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +50,7 @@ const REQUIRED_AGREEMENT_TYPES = [
   "digital_delivery_policy",
   "purchase_notice",
 ] as const;
-const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20"]);
+const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20", "alipay", "wechat_pay"]);
 
 type LegalDocument = {
   id: string;
@@ -147,6 +150,7 @@ export default function ProductDetailPage() {
   const [legalError, setLegalError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [liuhaoyiLimitDialogOpen, setLiuhaoyiLimitDialogOpen] = useState(false);
   const clientRequestIdRef = useRef("");
   const loadSeqRef = useRef(0);
 
@@ -355,6 +359,10 @@ export default function ProductDetailPage() {
 
   async function handleSubmit() {
     if (submitting) return;
+    if (isLiuhaoyiPaymentMethod(paymentMethod) && isLiuhaoyiAmountOverLimit(unitPrice * quantity)) {
+      setLiuhaoyiLimitDialogOpen(true);
+      return;
+    }
     const validationError = validateSubmit();
     if (validationError) {
       setSubmitError(validationError);
@@ -737,6 +745,18 @@ export default function ProductDetailPage() {
           </div>
         )}
       </div>
+      <Dialog open={liuhaoyiLimitDialogOpen} onOpenChange={setLiuhaoyiLimitDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>支付宝/微信支付金额超限</DialogTitle></DialogHeader>
+          <p className="text-sm leading-6 text-muted-foreground">支付宝/微信单笔支付最高支持 ¥2000。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setLiuhaoyiLimitDialogOpen(false)}>取消</Button>
+            <Button variant="outline" onClick={() => { setLiuhaoyiLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
+            <Button variant="outline" onClick={() => { setPaymentMethod("balance"); setLiuhaoyiLimitDialogOpen(false); }}>使用余额支付</Button>
+            <Button onClick={() => router.push("/products/account-recharge")}>去充值</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PublicLayout>
   );
 }
