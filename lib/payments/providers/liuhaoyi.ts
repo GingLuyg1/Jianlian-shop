@@ -140,16 +140,22 @@ async function queryPayment(paymentNo: string): Promise<{ status: RechargeStatus
   endpoint.searchParams.set("key", config.merchantKey);
   endpoint.searchParams.set("out_trade_no", paymentNo);
   const payload = await fetchJson(endpoint, { method: "GET", cache: "no-store" }, config.timeoutMs, "六号易订单查询失败");
-  const paid = String(payload.status ?? "") === "1";
+  const found = String(payload.code ?? "") === "1";
+  const paid = found && String(payload.status ?? "") === "1";
+  const providerTradeNo = boundedOptionalText(payload.trade_no, 160);
   return {
     status: paid ? "paid" : "pending",
-    providerTransactionId: boundedOptionalText(payload.trade_no, 160),
+    providerTransactionId: providerTradeNo,
     amount: typeof payload.money === "string" || typeof payload.money === "number" ? payload.money : undefined,
     currency: "CNY",
     rawSummary: {
-      found: String(payload.code ?? "") === "1",
+      found,
       paid,
       type: boundedOptionalText(payload.type, 32),
+      outTradeNo: boundedOptionalText(payload.out_trade_no, 160),
+      providerTradeNoPresent: Boolean(providerTradeNo),
+      addtime: boundedOptionalText(payload.addtime, 64),
+      endtime: boundedOptionalText(payload.endtime, 64),
     },
   };
 }

@@ -6,6 +6,12 @@ import { completePayment } from "@/lib/payments/complete-payment-service";
 import type { PaymentProviderCode, PaymentSessionStatus } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import {
+  evaluateLiuhaoyiAlipayRechargeRecovery,
+  LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE,
+  LIUHAOYI_RECOVERY_EXPIRY_MARGIN_MS,
+  LIUHAOYI_RECOVERY_MINIMUM_AGE_MS,
+} from "@/lib/payments/liuhaoyi-recovery-policy.mjs";
+import {
   getPaymentProvider,
   normalizeProviderPaymentStatus,
   PaymentProviderError,
@@ -78,8 +84,15 @@ type PaymentSession = {
   localAmount: number;
   currency: string;
   localTradeNo: string | null;
+  expiresAt: string | null;
   updatedAt: string | null;
   createdAt: string | null;
+};
+
+type AccountRecharge = {
+  id: string;
+  status: string;
+  expiresAt: string | null;
 };
 
 type ProviderSummary = {
@@ -90,6 +103,11 @@ type ProviderSummary = {
   paidAt: string | null;
   rawStatus: string | null;
   type: string | null;
+  found: boolean;
+  outTradeNo: string | null;
+  providerTradeNoPresent: boolean;
+  addtime: string | null;
+  endtime: string | null;
 };
 
 type ReconciliationComparison = {
@@ -108,6 +126,7 @@ export type ReconciliationRunOptions = {
   batchSize?: number;
   dryRun?: boolean;
   reason?: string;
+  recoveryMode?: typeof LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE;
 };
 
 export type ReconciliationRunResult = {
@@ -124,7 +143,7 @@ export type ReconciliationRunResult = {
 };
 
 const SESSION_SELECT =
-  "id,session_no,business_type,business_id,business_no,channel_code,provider,provider_order_no,status,payable_amount,currency,provider_transaction_id,updated_at,created_at";
+  "id,session_no,business_type,business_id,business_no,channel_code,provider,provider_order_no,status,payable_amount,currency,provider_transaction_id,expires_at,updated_at,created_at";
 
 export function normalizeProviderStatus(value: unknown) {
   const raw = String(value ?? "").trim().toLowerCase();
@@ -212,9 +231,14 @@ export async function runPaymentReconciliation(
     errors: [],
   };
   const batchSize = Math.min(100, Math.max(1, Number(options.batchSize ?? 20)));
+  const recoveryMode = options.recoveryMode === LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE
+    ? LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE
+    : null;
   const sessions = options.paymentSessionId
     ? [await readSession(supabase, options.paymentSessionId, options.businessType)]
-    : await listSessions(supabase, batchSize, options.businessType);
+    : recoveryMode
+      ? await listLiuhaoyiAlipayRechargeRecoverySessions(supabase, batchSize)
+      : await listSessions(supabase, batchSize, options.businessType);
 
   for (const session of sessions) {
     if (!session) {
@@ -222,7 +246,12 @@ export async function runPaymentReconciliation(
       continue;
     }
     try {
-      const record = await reconcileOne(supabase, session, Boolean(options.dryRun));
+      const record = await reconcileOne(
+        supabase,
+        session,
+        Boolean(options.dryRun),
+        recoveryMode,
+      );
       output.processed += 1;
       output[record.result] += 1;
       output.records.push(record);
@@ -236,7 +265,12 @@ export async function runPaymentReconciliation(
   return output;
 }
 
-async function reconcileOne(supabase: SupabaseClient, session: PaymentSession, dryRun: boolean) {
+async function reconcileOne(
+  supabase: SupabaseClient,
+  session: PaymentSession,
+  dryRun: boolean,
+  recoveryMode: typeof LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE | null,
+) {
   let provider: ProviderSummary;
   try {
     provider = await queryProvider(session);
@@ -259,53 +293,89 @@ async function reconcileOne(supabase: SupabaseClient, session: PaymentSession, d
     );
   }
 
-  const comparison = compare(session, provider);
+  let currentSession = session;
+  let recharge: AccountRecharge | null = null;
+  if (recoveryMode === LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE) {
+    currentSession = (await readSession(supabase, session.id, "recharge")) ?? session;
+    recharge = await readAccountRecharge(supabase, currentSession.businessId);
+  }
+
+  const comparison = compare(currentSession, provider);
   if (
     comparison.differenceType === "provider_paid_local_unpaid" &&
     comparison.recoveryStatus === "ready"
   ) {
-    if (session.provider === "liuhaoyi") {
-      comparison.result = "manual_review";
-      comparison.errorMessage = "六号易渠道已支付但本站未完成，按问题支付流程转客服人工处理。";
-      comparison.recoveryAction = null;
-      comparison.recoveryStatus = "manual_review";
+    if (currentSession.provider === "liuhaoyi") {
+      const decision = recoveryMode === LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE
+        ? evaluateLiuhaoyiAlipayRechargeRecovery({
+            session: currentSession,
+            recharge,
+            provider,
+          })
+        : null;
+      if (!decision?.eligible) {
+        comparison.result = decision?.manualReview === false ? "pending" : "manual_review";
+        comparison.differenceType = decision?.differenceType ?? comparison.differenceType;
+        comparison.errorCode = decision
+          ? `liuhaoyi_recovery_${decision.reason}`
+          : "liuhaoyi_recovery_not_enabled";
+        comparison.errorMessage = decision?.manualReview === false
+          ? "六号易付款查询已确认，仍在自然回调宽限期，等待后续安全重试。"
+          : "六号易渠道已支付但未满足查询兜底自动入账条件，已转人工复核。";
+        comparison.recoveryAction = null;
+        comparison.recoveryStatus = decision?.manualReview === false ? "deferred" : "manual_review";
+      } else if (dryRun) {
+        comparison.result = "manual_review";
+        comparison.recoveryStatus = "dry_run";
+      } else {
+        await attemptAutomaticCompletion(supabase, currentSession, provider, comparison);
+      }
     } else if (dryRun) {
       comparison.result = "manual_review";
       comparison.recoveryStatus = "dry_run";
     } else {
-      try {
-        const completed = await completePayment(
-          {
-            paymentSessionId: session.id,
-            providerTransactionId: provider.tradeNo ?? "",
-            amount: provider.amount ?? session.localAmount,
-            currency: provider.currency ?? session.currency,
-            paidAt: provider.paidAt,
-            source: "reconciliation",
-          },
-          supabase
-        );
-        comparison.result = "resolved";
-        comparison.errorCode = null;
-        comparison.errorMessage = completed.deliveryError ?? null;
-        comparison.recoveryAction = "complete_payment";
-        comparison.recoveryStatus = completed.deliveryError ? "paid_delivery_failed" : "success";
-        comparison.recoveryError = completed.deliveryError ?? null;
-      } catch (error) {
-        comparison.result = "manual_review";
-        comparison.errorCode = "auto_recovery_failed";
-        comparison.errorMessage = "渠道已支付，但自动恢复失败，已转入人工复核。";
-        comparison.recoveryStatus = "failed";
-        comparison.recoveryError = getSafeErrorMessage(error, "自动恢复失败");
-      }
+      await attemptAutomaticCompletion(supabase, currentSession, provider, comparison);
     }
   }
 
-  if (session.provider === "liuhaoyi" && provider.status === "paid" && session.localStatus !== "paid") {
-    await persistLiuhaoyiDetectionEvidence(supabase, session, provider, comparison, dryRun);
+  if (currentSession.provider === "liuhaoyi" && provider.status === "paid" && currentSession.localStatus !== "paid") {
+    await persistLiuhaoyiDetectionEvidence(supabase, currentSession, provider, comparison, dryRun);
   }
 
-  return record(supabase, session, provider, comparison, dryRun);
+  return record(supabase, currentSession, provider, comparison, dryRun);
+}
+
+async function attemptAutomaticCompletion(
+  supabase: SupabaseClient,
+  session: PaymentSession,
+  provider: ProviderSummary,
+  comparison: ReconciliationComparison,
+) {
+  try {
+    const completed = await completePayment(
+      {
+        paymentSessionId: session.id,
+        providerTransactionId: provider.tradeNo ?? "",
+        amount: provider.amount ?? session.localAmount,
+        currency: provider.currency ?? session.currency,
+        paidAt: provider.paidAt,
+        source: "reconciliation",
+      },
+      supabase,
+    );
+    comparison.result = "resolved";
+    comparison.errorCode = null;
+    comparison.errorMessage = completed.deliveryError ?? null;
+    comparison.recoveryAction = "complete_payment";
+    comparison.recoveryStatus = completed.deliveryError ? "paid_delivery_failed" : "success";
+    comparison.recoveryError = completed.deliveryError ?? null;
+  } catch (error) {
+    comparison.result = "manual_review";
+    comparison.errorCode = "auto_recovery_failed";
+    comparison.errorMessage = "渠道已支付，但自动恢复失败，已转入人工复核。";
+    comparison.recoveryStatus = "failed";
+    comparison.recoveryError = getSafeErrorMessage(error, "自动恢复失败");
+  }
 }
 
 function compare(session: PaymentSession, provider: ProviderSummary): ReconciliationComparison {
@@ -392,8 +462,11 @@ async function queryProvider(session: PaymentSession): Promise<ProviderSummary> 
       ? (raw.rawSummary as Record<string, unknown>)
       : null;
   const rawStatus = text(raw.status);
+  const found = rawSummary?.found === true;
   return {
-    status: normalizeProviderStatus(raw.status),
+    status: found === false && session.provider === "liuhaoyi"
+      ? "not_found"
+      : normalizeProviderStatus(raw.status),
     amount: raw.amount == null ? null : number(raw.amount),
     currency: text(raw.currency),
     tradeNo:
@@ -401,6 +474,11 @@ async function queryProvider(session: PaymentSession): Promise<ProviderSummary> 
     paidAt: text(raw.paidAt),
     rawStatus,
     type: text(rawSummary?.type),
+    found,
+    outTradeNo: text(rawSummary?.outTradeNo),
+    providerTradeNoPresent: rawSummary?.providerTradeNoPresent === true,
+    addtime: text(rawSummary?.addtime),
+    endtime: text(rawSummary?.endtime),
   };
 }
 
@@ -433,6 +511,43 @@ async function listSessions(
   return ((data ?? []) as Record<string, unknown>[]).map(normalizeSession);
 }
 
+async function listLiuhaoyiAlipayRechargeRecoverySessions(
+  supabase: SupabaseClient,
+  limit: number,
+) {
+  const now = Date.now();
+  const { data, error } = await supabase
+    .from("payment_sessions")
+    .select(SESSION_SELECT)
+    .eq("provider", "liuhaoyi")
+    .eq("business_type", "recharge")
+    .eq("channel_code", "alipay")
+    .in("status", ["pending", "processing"])
+    .not("expires_at", "is", null)
+    .gt("expires_at", new Date(now + LIUHAOYI_RECOVERY_EXPIRY_MARGIN_MS).toISOString())
+    .lte("created_at", new Date(now - LIUHAOYI_RECOVERY_MINIMUM_AGE_MS).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(Math.min(20, limit));
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map(normalizeSession);
+}
+
+async function readAccountRecharge(supabase: SupabaseClient, id: string) {
+  const { data, error } = await supabase
+    .from("account_recharges")
+    .select("id,status,expires_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as Record<string, unknown>;
+  return {
+    id: String(row.id),
+    status: String(row.status ?? ""),
+    expiresAt: text(row.expires_at),
+  } satisfies AccountRecharge;
+}
+
 async function persistLiuhaoyiDetectionEvidence(
   supabase: SupabaseClient,
   session: PaymentSession,
@@ -446,7 +561,11 @@ async function persistLiuhaoyiDetectionEvidence(
     last_synced_at: new Date().toISOString(),
     reconcile_status: reconcileStatus,
   };
-  if (!session.localTradeNo && provider.tradeNo) {
+  if (
+    !session.localTradeNo
+    && provider.tradeNo
+    && session.providerOrderNo === provider.tradeNo
+  ) {
     update.provider_transaction_id = provider.tradeNo;
   }
   const { error } = await supabase
@@ -482,6 +601,7 @@ function normalizeSession(row: Record<string, unknown>): PaymentSession {
     localAmount: number(row.payable_amount),
     currency: String(row.currency ?? "CNY"),
     localTradeNo: text(row.provider_transaction_id),
+    expiresAt: text(row.expires_at),
     updatedAt: text(row.updated_at),
     createdAt: text(row.created_at),
   };
@@ -596,6 +716,11 @@ function emptyProvider(): ProviderSummary {
     paidAt: null,
     rawStatus: null,
     type: null,
+    found: false,
+    outTradeNo: null,
+    providerTradeNoPresent: false,
+    addtime: null,
+    endtime: null,
   };
 }
 
@@ -608,6 +733,11 @@ function safeSummary(provider: ProviderSummary) {
     tradeNoMasked: provider.tradeNo ? mask(provider.tradeNo) : null,
     paidAt: provider.paidAt,
     type: provider.type,
+    found: provider.found,
+    outTradeNoMasked: provider.outTradeNo ? mask(provider.outTradeNo) : null,
+    providerTradeNoPresent: provider.providerTradeNoPresent,
+    addtime: provider.addtime,
+    endtime: provider.endtime,
   };
 }
 

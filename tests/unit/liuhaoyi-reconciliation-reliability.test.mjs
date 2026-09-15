@@ -28,22 +28,20 @@ test("Liuhaoyi reconciliation always queries by session_no as out_trade_no", () 
   assert.match(provider, /endpoint\.searchParams\.set\("out_trade_no", paymentNo\)/);
 });
 
-test("paid provider with pending or expired Liuhaoyi session is manual-review evidence only", () => {
+test("Liuhaoyi auto recovery requires the explicit Alipay recharge V1 mode", () => {
   const reconcileOne = section(reconciliation, "async function reconcileOne", "function compare");
-  const liuhaoyiGuard = reconcileOne.slice(
-    reconcileOne.indexOf('if (session.provider === "liuhaoyi")'),
-    reconcileOne.indexOf("} else if (dryRun)"),
-  );
-  assert.match(liuhaoyiGuard, /comparison\.result = "manual_review"/);
-  assert.match(liuhaoyiGuard, /comparison\.recoveryStatus = "manual_review"/);
-  assert.doesNotMatch(liuhaoyiGuard, /completePayment\(/);
+  assert.match(reconciliation, /recoveryMode\?: typeof LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE/);
+  assert.match(reconcileOne, /recoveryMode === LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE/);
+  assert.match(reconcileOne, /evaluateLiuhaoyiAlipayRechargeRecovery/);
+  assert.match(reconcileOne, /liuhaoyi_recovery_not_enabled/);
+  assert.match(reconcileOne, /attemptAutomaticCompletion/);
   assert.match(
     reconciliation,
     /\.in\("status", \["pending", "processing", "expired", "paid", "failed"\]\)/,
   );
   assert.match(
     reconcileOne,
-    /provider\.status === "paid" && session\.localStatus !== "paid"[\s\S]*persistLiuhaoyiDetectionEvidence/,
+    /provider\.status === "paid" && currentSession\.localStatus !== "paid"[\s\S]*persistLiuhaoyiDetectionEvidence/,
   );
 });
 
@@ -78,16 +76,21 @@ test("amount mismatch remains manual review and cannot enter automatic completio
 
 test("Liuhaoyi query summaries and errors never expose the merchant key", () => {
   const query = section(provider, "async function queryPayment", "function callbackParameters");
-  assert.match(query, /rawSummary:\s*\{[\s\S]*found: String\(payload\.code/);
+  assert.match(query, /rawSummary:\s*\{[\s\S]*found,/);
   assert.match(query, /type: boundedOptionalText\(payload\.type, 32\)/);
+  assert.match(query, /outTradeNo: boundedOptionalText\(payload\.out_trade_no, 160\)/);
+  assert.match(query, /providerTradeNoPresent: Boolean\(providerTradeNo\)/);
+  assert.match(query, /addtime: boundedOptionalText\(payload\.addtime, 64\)/);
+  assert.match(query, /endtime: boundedOptionalText\(payload\.endtime, 64\)/);
   assert.doesNotMatch(query, /rawSummary:[\s\S]*merchantKey/);
   assert.doesNotMatch(provider, /console\.(?:log|info|warn|error)/);
   assert.match(provider, /LIUHAOYI_REQUEST_FAILED/);
 });
 
-test("normal signed callback remains the only Liuhaoyi automatic completion path", () => {
+test("normal callback remains unchanged while recovery also uses unified completion", () => {
   assert.match(callbackService, /if \(!verified\)[\s\S]*signature_failed/);
   assert.match(callbackService, /const completion = await completePayment\(/);
   assert.match(callbackService, /source: "callback"/);
+  assert.match(reconciliation, /source: "reconciliation"/);
   assert.doesNotMatch(reconciliation, /forceCredit|forcePaid/);
 });

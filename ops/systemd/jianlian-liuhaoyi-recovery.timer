@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Jianlian Liuhaoyi Alipay recharge recovery every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+RandomizedDelaySec=5s
+Persistent=true
+Unit=jianlian-liuhaoyi-recovery.service
+
+[Install]
+WantedBy=timers.target

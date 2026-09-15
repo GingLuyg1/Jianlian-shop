@@ -1,0 +1,16 @@
+[Unit]
+Description=Jianlian Liuhaoyi Alipay recharge recovery
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/jianlian/liuhaoyi-recovery.env
+ExecStart=/bin/sh -c 'exec "$JIANLIAN_NODE_BINARY" /opt/jianlian/ops/liuhaoyi-alipay-recharge-recovery.mjs --batch-size=20'
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
