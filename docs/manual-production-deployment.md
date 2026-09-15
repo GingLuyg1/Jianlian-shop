@@ -75,7 +75,9 @@ Prepare、build 和 Smoke PASS 后会生成绑定目标 SHA、env 摘要与 buil
 bash scripts/production-release.sh switch <FULL_SHA>
 ```
 
-脚本重新检查 SHA、`.next`、env 与 marker，再检查 PM2 online、cwd、localhost `3001/api/health`、正式首页和 login。全部为 200 后才 `pm2 save`；任一切换后验证失败会恢复原 release 并验证其 health/site/login，绝不保存失败状态。自动恢复失败时停止并要求人工恢复。
+脚本重新检查 SHA、`.next`、env 与 prepare/build/ready marker，记录并验证当前 release 后，使用受控 fresh activation 切换：只删除名为 `jianlian-shop` 的现有 PM2 process，再以目标 `JIANLIAN_RELEASE_DIR` 和唯一的 `ecosystem.production.config.cjs` 执行全新 `pm2 start`。禁止用 `startOrReload` 跨 release 切换，因为 PM2 reload 不会可靠采用新的 cwd 或 script path。
+
+Fresh activation 最多用 60 秒、每 2 秒检查一次 PM2 process、online 状态、PID、`/proc/<pid>/cwd`、`pm_cwd` 和 `pm_exec_path`，随后最多再用 60 秒等待 localhost `3001/api/health`。短暂 Production downtime 是预期行为。目标 health 和正式首页/login 全部通过后才 `pm2 save`；任一步失败只调用一次相同的 fresh activation 恢复已记录的 previous release，恢复版本完整通过后才保存。自动恢复失败时停止并要求人工恢复，禁止递归回滚、`pm2 delete all` 或 `pm2 kill`。
 
 ## Release 保留策略
 
@@ -93,7 +95,7 @@ bash scripts/production-release.sh switch <FULL_SHA>
 bash /www/jianlian-shop/scripts/production-release.sh rollback /www/releases/jianlian-shop-<ROLLBACK_FULL_SHA>
 ```
 
-Rollback 拒绝当前 cwd，验证目标目录、Git SHA、`.next`、env 后直接切回且不重新安装或构建，检查 health/site/login，最后 `pm2 save`。失败时恢复并验证切换前 release，且不保存失败状态。应用 rollback 不等于数据库 rollback，禁止自动执行 SQL。
+Rollback 拒绝当前 cwd，验证目标目录、Git SHA、`.next`、env 后，通过同一个受控 fresh activation helper 精确替换 `jianlian-shop` process，不重新安装或构建。脚本有界等待目标 PID、cwd、PM2 metadata 和 health，再检查首页/login，全部通过后才 `pm2 save`。失败时只尝试一次恢复并验证切换前 release；中间失败状态不保存。应用 rollback 不等于数据库 rollback，禁止自动执行 SQL。
 
 ## 权威停止条件
 

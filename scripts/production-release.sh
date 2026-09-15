@@ -78,6 +78,95 @@ current_pm2_cwd() {
   readlink -f "/proc/$pid/cwd"
 }
 
+pm2_app_exists() {
+  pm2 describe "$APP_NAME" >/dev/null 2>&1
+}
+
+pm2_process_metadata() {
+  pm2 jlist 2>/dev/null | node -e '
+    let input = "";
+    process.stdin.on("data", (chunk) => { input += chunk; });
+    process.stdin.on("end", () => {
+      const appName = process.argv[1];
+      const app = JSON.parse(input).find((entry) => entry.name === appName);
+      if (!app) process.exit(1);
+      const env = app.pm2_env || {};
+      process.stdout.write([
+        String(app.pid || ""),
+        String(env.status || ""),
+        String(env.pm_cwd || ""),
+        String(env.pm_exec_path || ""),
+      ].join("\t"));
+    });
+  ' "$APP_NAME"
+}
+
+wait_for_pm2_release() {
+  local expected="$1" expected_exec attempt pid listed_pid process_status pm_cwd pm_exec_path proc_cwd resolved_exec metadata
+  expected_exec="$(readlink -f "$expected/node_modules/next/dist/bin/next")"
+  [[ -n "$expected_exec" && -f "$expected_exec" ]] || return 1
+  for attempt in $(seq 0 30); do
+    pid="$(pm2 pid "$APP_NAME" 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $1 != 0 { value = $1 } END { print value }')"
+    metadata="$(pm2_process_metadata 2>/dev/null || true)"
+    listed_pid=''; process_status=''; pm_cwd=''; pm_exec_path=''
+    IFS=$'\t' read -r listed_pid process_status pm_cwd pm_exec_path <<<"$metadata"
+    proc_cwd=''; resolved_exec=''
+    if [[ "$pid" =~ ^[0-9]+$ && "$pid" != 0 && -d "/proc/$pid" ]]; then
+      proc_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+    fi
+    if [[ -n "$pm_exec_path" ]]; then
+      resolved_exec="$(readlink -f "$pm_exec_path" 2>/dev/null || true)"
+    fi
+    if [[ "$pid" == "$listed_pid" && "$process_status" == online && "$proc_cwd" == "$expected" && "$pm_cwd" == "$expected" && "$resolved_exec" == "$expected_exec" ]]; then
+      status PM2_ACTIVATION_SECONDS "$((attempt * 2))"
+      status PM2_PID "$pid"
+      status PM2_STATUS "$process_status"
+      status PM2_PROC_CWD "$proc_cwd"
+      status PM2_PM_CWD "$pm_cwd"
+      status PM2_PM_EXEC_PATH "$pm_exec_path"
+      return 0
+    fi
+    if (( attempt < 30 )); then sleep 2; fi
+  done
+  return 1
+}
+
+wait_for_production_health() {
+  local attempt http
+  for attempt in $(seq 0 30); do
+    http="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PRODUCTION_PORT/api/health" || true)"
+    if [[ "$http" == 200 ]]; then
+      status HEALTH_READY_SECONDS "$((attempt * 2))"
+      return 0
+    fi
+    if (( attempt < 30 )); then sleep 2; fi
+  done
+  return 1
+}
+
+verify_public_endpoints() {
+  local path http
+  for path in / /login; do
+    http="$(curl -sS -o /dev/null -w '%{http_code}' "https://jianlian.shop$path" || true)"
+    status "PUBLIC_${path//\//_}" "$http"
+    [[ "$http" == 200 ]] || return 1
+  done
+}
+
+activate_release_fresh() {
+  local target="$1"
+  assert_release_path "$target"
+  verify_runtime_release "$target"
+  if pm2_app_exists; then
+    pm2 delete "$APP_NAME"
+  fi
+  if ! JIANLIAN_RELEASE_DIR="$target" pm2 start "$REPO/ecosystem.production.config.cjs" --only "$APP_NAME"; then
+    return 1
+  fi
+  wait_for_pm2_release "$target" || return 1
+  wait_for_production_health || return 1
+}
+
 env_present() {
   local file="$1" name="$2"
   awk -v key="$name" '
@@ -318,16 +407,11 @@ run_smoke() {
 }
 
 restore_previous_release() {
-  local previous="$1" cwd path http
-  JIANLIAN_RELEASE_DIR="$previous" pm2 startOrReload "$REPO/ecosystem.production.config.cjs" --only "$APP_NAME" --update-env || return 1
-  cwd="$(current_pm2_cwd)" || return 1
-  [[ "$cwd" == "$previous" ]] || return 1
-  http="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PRODUCTION_PORT/api/health" || true)"
-  [[ "$http" == 200 ]] || return 1
-  for path in / /login; do
-    http="$(curl -sS -o /dev/null -w '%{http_code}' "https://jianlian.shop$path" || true)"
-    [[ "$http" == 200 ]] || return 1
-  done
+  local previous="$1"
+  activate_release_fresh "$previous" || return 1
+  verify_public_endpoints || return 1
+  pm2 save
+  status PREVIOUS_RELEASE_RESTORED PASS
 }
 
 prepare() {
@@ -374,44 +458,31 @@ retry_build() {
 }
 
 switch_release() {
-  local sha="$1" target current cwd path http
+  local sha="$1" target current
   target="$(release_path_for_sha "$sha")"
   assert_release_path "$target"
   verify_runtime_release "$target"
+  verify_prepare_marker "$sha" "$target"
+  verify_build_marker "$sha" "$target"
   verify_ready_marker "$sha" "$target"
   assert_release_env_matches_source "$target/.env.production.local"
   current="$(current_pm2_cwd)"
   verify_runtime_release "$current"
   status PREVIOUS_PRODUCTION_RELEASE "$current"
-  if ! JIANLIAN_RELEASE_DIR="$target" pm2 startOrReload "$REPO/ecosystem.production.config.cjs" --only "$APP_NAME" --update-env; then
+  if ! activate_release_fresh "$target"; then
     restore_previous_release "$current" || die "target switch failed and previous release could not be verified; manual recovery required"
     die "target switch failed; previous release restored and pm2 save was not run"
   fi
-  cwd="$(current_pm2_cwd)"
-  if [[ "$cwd" != "$target" ]]; then
-    restore_previous_release "$current" || die "target cwd mismatch and previous release could not be verified; manual recovery required"
-    die "PM2 cwd did not match target; previous release restored and pm2 save was not run"
+  if ! verify_public_endpoints; then
+    restore_previous_release "$current" || die "public validation failed and previous release could not be verified; manual recovery required"
+    die "public Production endpoint failed; previous release restored and pm2 save was not run"
   fi
-  for path in /api/health; do
-    http="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PRODUCTION_PORT$path" || true)"
-    if [[ "$http" != 200 ]]; then
-      restore_previous_release "$current" || die "target health failed and previous release could not be verified; manual recovery required"
-      die "local Production health failed; previous release restored and pm2 save was not run"
-    fi
-  done
-  for path in / /login; do
-    http="$(curl -sS -o /dev/null -w '%{http_code}' "https://jianlian.shop$path" || true)"
-    if [[ "$http" != 200 ]]; then
-      restore_previous_release "$current" || die "public validation failed and previous release could not be verified; manual recovery required"
-      die "public Production endpoint failed: $path; previous release restored and pm2 save was not run"
-    fi
-  done
   pm2 save
   status PRODUCTION_SWITCH PASS
 }
 
 rollback_release() {
-  local target="$1" sha current cwd path http
+  local target="$1" sha current
   assert_release_path "$target"
   current="$(current_pm2_cwd)"
   assert_release_path "$current"
@@ -419,29 +490,14 @@ rollback_release() {
   verify_runtime_release "$target"
   verify_runtime_release "$current"
   sha="${target##*-}"
-  if ! JIANLIAN_RELEASE_DIR="$target" pm2 startOrReload "$REPO/ecosystem.production.config.cjs" --only "$APP_NAME" --update-env; then
+  if ! activate_release_fresh "$target"; then
     restore_previous_release "$current" || die "rollback switch failed and previous release could not be verified; manual recovery required"
     die "rollback switch failed; previous release restored and pm2 save was not run"
   fi
-  cwd="$(current_pm2_cwd)"
-  if [[ "$cwd" != "$target" ]]; then
-    restore_previous_release "$current" || die "rollback cwd mismatch and previous release could not be verified; manual recovery required"
-    die "rollback PM2 cwd mismatch; previous release restored and pm2 save was not run"
+  if ! verify_public_endpoints; then
+    restore_previous_release "$current" || die "rollback public validation failed and previous release could not be verified; manual recovery required"
+    die "rollback public endpoint failed; previous release restored and pm2 save was not run"
   fi
-  for path in /api/health; do
-    http="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PRODUCTION_PORT$path" || true)"
-    if [[ "$http" != 200 ]]; then
-      restore_previous_release "$current" || die "rollback health failed and previous release could not be verified; manual recovery required"
-      die "rollback local health failed; previous release restored and pm2 save was not run"
-    fi
-  done
-  for path in / /login; do
-    http="$(curl -sS -o /dev/null -w '%{http_code}' "https://jianlian.shop$path" || true)"
-    if [[ "$http" != 200 ]]; then
-      restore_previous_release "$current" || die "rollback public validation failed and previous release could not be verified; manual recovery required"
-      die "rollback public endpoint failed: $path; previous release restored and pm2 save was not run"
-    fi
-  done
   pm2 save
   status ROLLBACK_ASSESSMENT PASS
 }
