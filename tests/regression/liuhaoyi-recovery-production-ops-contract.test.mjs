@@ -21,6 +21,7 @@ const guide = readFileSync(
 
 test("systemd service uses a root-only environment file and stable installed worker", () => {
   assert.match(service, /Type=oneshot/);
+  assert.match(service, /TimeoutStartSec=5min/);
   assert.match(service, /EnvironmentFile=\/etc\/jianlian\/liuhaoyi-recovery\.env/);
   assert.match(service, /\/opt\/jianlian\/ops\/liuhaoyi-alipay-recharge-recovery\.mjs/);
   assert.match(service, /UMask=0077/);
@@ -29,6 +30,8 @@ test("systemd service uses a root-only environment file and stable installed wor
 
 test("timer is one-minute cadence but repository changes do not enable it", () => {
   assert.match(timer, /OnUnitActiveSec=1min/);
+  assert.match(timer, /Persistent=false/);
+  assert.doesNotMatch(timer, /Persistent=true/);
   assert.match(timer, /WantedBy=timers\.target/);
   assert.doesNotMatch(worker + service + timer, /systemctl\s+(?:enable|start)/);
   assert.match(guide, /不会复制 unit、执行 `daemon-reload`、启动 service 或启用 timer/);

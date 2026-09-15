@@ -114,7 +114,12 @@ test("provider and merchant identifiers must match without fuzzy fallback", () =
     decision({ provider: { outTradeNo: "OTHER" } }).reason,
     "out_trade_no_mismatch",
   );
-  assert.equal(decision({ provider: { outTradeNo: null } }).eligible, true);
+  assert.deepEqual(decision({ provider: { outTradeNo: null } }), {
+    eligible: false,
+    reason: "out_trade_no_missing",
+    manualReview: true,
+    differenceType: "transaction_id_conflict",
+  });
 });
 
 test("paid, expired, closed, and failed local sessions never auto recover", () => {

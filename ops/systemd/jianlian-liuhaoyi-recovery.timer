@@ -6,7 +6,7 @@ OnBootSec=2min
 OnUnitActiveSec=1min
 AccuracySec=5s
 RandomizedDelaySec=5s
-Persistent=true
+Persistent=false
 Unit=jianlian-liuhaoyi-recovery.service
 
 [Install]

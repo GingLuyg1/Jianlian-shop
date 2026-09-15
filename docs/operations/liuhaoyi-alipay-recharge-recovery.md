@@ -59,6 +59,8 @@ worker 只输出一行聚合 JSON：处理数、成功恢复数、人工复核�
 
 ## 失败与竞态
 
+定时器明确使用 `Persistent=false`，服务器恢复后不会补跑停机期间错过的资金任务；oneshot 服务设有 5 分钟启动超时，避免任务重叠堆积。
+
 - 单笔查询/处理失败由 reconciliation batch 隔离，不中止其余候选。
 - callback 先完成时，重新读取的 Session 或候选过滤会跳过已支付记录。
 - worker 先完成时，callback 走已有 paid 幂等路径。
