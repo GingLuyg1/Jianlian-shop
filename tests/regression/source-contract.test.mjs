@@ -2888,6 +2888,7 @@ test("order status labels are valid UTF-8 Chinese and include expired", () => {
 test("recharge user APIs enforce ownership", () => {
   const listRoute = file("app/api/recharges/route.ts");
   const detailRoute = file("app/api/recharges/[rechargeNo]/route.ts");
+  const expiryService = file("lib/payments/recharge-expiry-service.ts");
   const proofRoute = file("app/api/recharges/[rechargeNo]/proof/route.ts");
   const adminRoute = file("app/api/admin/recharges/route.ts");
 
@@ -2905,7 +2906,15 @@ test("recharge user APIs enforce ownership", () => {
   const detailQuery = detailRoute.match(/from\("account_recharges"\)[\s\S]*?maybeSingle\(\)/)?.[0] ?? "";
   assert.match(detailQuery, /\.eq\("recharge_no", rechargeNo\)/);
   assert.match(detailQuery, /\.eq\("user_id", authData\.user\.id\)/);
-  assert.doesNotMatch(detailRoute, /getSupabaseServiceRoleClient/);
+  const detailAuth = detailRoute.indexOf("await supabase.auth.getUser()");
+  const serviceRoleExpiry = detailRoute.indexOf("const service = getSupabaseServiceRoleClient()");
+  assert.ok(detailAuth >= 0 && serviceRoleExpiry > detailAuth);
+  assert.match(
+    detailRoute,
+    /expireOverdueLiuhaoyiRecharges\(service,\s*\{\s*userId:\s*authData\.user\.id,\s*rechargeNo,\s*\}\)/,
+  );
+  assert.match(expiryService, /if \(input\.userId\) query = query\.eq\("user_id", input\.userId\)/);
+  assert.match(expiryService, /if \(input\.rechargeNo\) query = query\.eq\("recharge_no", input\.rechargeNo\)/);
 
   assert.match(proofRoute, /\.eq\("recharge_no", params\.rechargeNo\)\.eq\("user_id", context\.user\.id\)/);
   assert.match(adminRoute, /requireApiAdmin|getServerAdminContext|requireSuperAdmin/);
@@ -3902,7 +3911,7 @@ test("BEP20 underpayment wallet-credit disposition has explicit user and admin p
   const accountPage = file("app/account/page.tsx");
   const accountAssets = file("app/api/account/assets/route.ts");
   const balanceRoute = file("app/api/account/balance-transactions/route.ts");
-  const balancePage = file("components/account/AccountRechargeContent.tsx");
+  const rechargePage = file("components/account/AccountRechargeContent.tsx");
   const userDisposition = file("lib/payments/bep20-underpayment-user.ts");
   const orderStatus = file("lib/orders/order-status.ts");
   const adminTypes = file("lib/payments/admin-payment-types.ts");
@@ -3939,12 +3948,8 @@ test("BEP20 underpayment wallet-credit disposition has explicit user and admin p
   assert.match(accountPage, /BEP20 欠额转余额/);
   assert.match(accountPage, /balanceBefore/);
   assert.match(accountPage, /balanceAfter/);
-  assert.match(balancePage, /BEP20 欠额转余额/);
-  assert.match(balancePage, /实收 USDT/);
-  assert.match(balancePage, /应付 USDT/);
-  assert.match(balancePage, /欠额 USDT/);
-  assert.match(balancePage, /冻结汇率/);
-  assert.match(balancePage, /链上交易/);
+  assert.match(rechargePage, /资金充值记录/);
+  assert.doesNotMatch(rechargePage, /资金变动记录|BEP20 欠额转余额/);
 
   assert.match(settlementMigration, /set status = 'cancelled', payment_status = 'failed'/i);
   assert.match(settlementMigration, /update public\.payment_sessions[\s\S]*?set status = 'closed'/i);

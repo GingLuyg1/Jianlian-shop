@@ -75,7 +75,11 @@ test("public recharge amount accepts only positive ordinary decimal strings", ()
   assert.equal(parsePublicRechargeAmount("10", 6), 10);
   assert.equal(parsePublicRechargeAmount("10.00", 6), 10);
   assert.equal(parsePublicRechargeAmount("0.01", 6), 0.01);
+  assert.equal(parsePublicRechargeAmount("1.1", 6), 1.1);
+  assert.equal(parsePublicRechargeAmount("1.10", 6), 1.1);
+  assert.equal(parsePublicRechargeAmount("2000", 6), 2000);
   assert.equal(parsePublicRechargeAmount("1.123456", 6), 1.123456);
+  assert.equal(parsePublicRechargeAmount(1.1, 6), null);
 });
 
 test("public recharge amount range keeps channel minimum and maximum enforcement", () => {

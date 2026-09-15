@@ -16,6 +16,18 @@ test("UI explains the provider 3 percent charge without adding it to local amoun
   assert.doesNotMatch(provider, /\*\s*1\.03|1\.03\s*\*/);
 });
 
+test("Alipay and WeChat recharge requests preserve the normalized decimal string payload", () => {
+  assert.match(
+    rechargeUi,
+    /amount:\s*isUsdtCnyRecharge\s*\?\s*requestedCnyAmount\s*:\s*amountText/,
+  );
+  assert.doesNotMatch(
+    rechargeUi,
+    /amount:\s*isUsdtCnyRecharge\s*\?\s*requestedCnyAmount\s*:\s*summary\?\.amount/,
+  );
+  assert.match(rechargeRoute, /parsePublicRechargeAmount\(body\.amount, 6\)/);
+});
+
 test("recharge history exposes order number, countdown, continue payment and customer service", () => {
   assert.match(rechargeUi, /资金充值记录/);
   assert.doesNotMatch(rechargeUi, /资金变动记录/);

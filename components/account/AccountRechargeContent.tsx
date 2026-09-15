@@ -209,7 +209,7 @@ export default function AccountRechargeContent() {
         body: JSON.stringify({
           channel: selectedChannel.code,
           payment_method: selectedChannel.code,
-          amount: isUsdtCnyRecharge ? requestedCnyAmount : summary?.amount,
+          amount: isUsdtCnyRecharge ? requestedCnyAmount : amountText,
           currency: isUsdtCnyRecharge ? "CNY" : selectedChannel.currency,
           customer_note: customerNote,
           client_request_id: clientRequestIdRef.current,
