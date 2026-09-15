@@ -216,7 +216,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
 async function loadChannel(service: SupabaseClient, channelCode: PaymentChannelCode) {
   const { data, error } = await service
     .from("payment_channels")
-    .select("channel,code,enabled,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,sort_order,configured")
+    .select("channel,code,enabled,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,sort_order,configured,public_config")
     .or(`code.eq.${channelCode},channel.eq.${channelCode}`)
     .maybeSingle();
   if (error) throw error;
