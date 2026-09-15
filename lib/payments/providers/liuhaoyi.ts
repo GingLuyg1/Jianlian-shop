@@ -14,6 +14,7 @@ import type {
 import { assertLiuhaoyiAmountBreakdown, assertLiuhaoyiPaymentAmount } from "@/lib/payments/liuhaoyi-limits.mjs";
 import {
   createLiuhaoyiMd5Signature,
+  extractLiuhaoyiCreateIdentity,
   isExpectedLiuhaoyiMerchant,
   liuhaoyiCallbackResponseBody,
   liuhaoyiChannelForType,
@@ -116,6 +117,7 @@ async function createPayment(
   const paymentUrl = safeHttpUrl(payload.payurl);
   const qrCodeUrl = safeHttpUrl(payload.qrcode);
   const urlScheme = safePaymentDeepLink(payload.urlscheme);
+  const createIdentity = extractLiuhaoyiCreateIdentity(payload);
   if (!paymentUrl && !qrCodeUrl && !urlScheme) {
     throw new LiuhaoyiProviderError("LIUHAOYI_PAYMENT_ARTIFACT_MISSING", "六号易未返回可用的付款信息");
   }
@@ -124,6 +126,7 @@ async function createPayment(
     paymentType: qrCodeUrl ? "qrcode" : "redirect",
     paymentUrl: paymentUrl ?? urlScheme,
     qrCodeUrl,
+    ...createIdentity,
     expiresAt: input.expiresAt,
     metadata: { provider: "liuhaoyi", ...(urlScheme ? { urlScheme } : {}) },
   };
@@ -143,7 +146,11 @@ async function queryPayment(paymentNo: string): Promise<{ status: RechargeStatus
     providerTransactionId: boundedOptionalText(payload.trade_no, 160),
     amount: typeof payload.money === "string" || typeof payload.money === "number" ? payload.money : undefined,
     currency: "CNY",
-    rawSummary: { found: String(payload.code ?? "") === "1", paid },
+    rawSummary: {
+      found: String(payload.code ?? "") === "1",
+      paid,
+      type: boundedOptionalText(payload.type, 32),
+    },
   };
 }
 

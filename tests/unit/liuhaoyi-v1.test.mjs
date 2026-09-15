@@ -6,6 +6,7 @@ import { getPaymentChannelValidationError } from "../../lib/payments/manual-chan
 import {
   buildLiuhaoyiSignContent,
   createLiuhaoyiMd5Signature,
+  extractLiuhaoyiCreateIdentity,
   isExpectedLiuhaoyiMerchant,
   liuhaoyiCallbackResponseBody,
   liuhaoyiChannelForType,
@@ -148,9 +149,33 @@ test("out_trade_no 使用全局唯一 session_no，并由 callback 与 reconcili
   const coreMigration = source("supabase/migrations/20260623_payment_provider_core.sql");
   assert.match(provider, /out_trade_no: input\.sessionNo/);
   assert.match(callbackService, /query = query\.eq\("session_no", parsed\.sessionNo\)/);
-  assert.match(reconciliation, /session\.providerOrderNo \?\? session\.sessionNo/);
+  assert.match(reconciliation, /session\.provider === "liuhaoyi"[\s\S]*session\.sessionNo[\s\S]*session\.providerOrderNo \?\? session\.sessionNo/);
   assert.match(coreMigration, /session_no text not null unique/);
   assert.match(coreMigration, /payment_sessions_active_business_unique/);
+});
+
+test("mapi trade_no becomes the bounded providerOrderNo persisted by payment sessions", () => {
+  const provider = source("lib/payments/providers/liuhaoyi.ts");
+  const sessionService = source("lib/payments/payment-session-service.ts");
+  const createPayment = provider.slice(
+    provider.indexOf("async function createPayment"),
+    provider.indexOf("async function queryPayment"),
+  );
+  assert.deepEqual(
+    extractLiuhaoyiCreateIdentity({
+      code: 1,
+      trade_no: "LHY202609150001",
+      payurl: "https://provider.example.test/pay",
+    }),
+    { providerOrderNo: "LHY202609150001" },
+  );
+  assert.deepEqual(extractLiuhaoyiCreateIdentity({ code: 1, payurl: "https://provider.example.test/pay" }), {});
+  assert.equal(extractLiuhaoyiCreateIdentity({ trade_no: "T".repeat(200) }).providerOrderNo.length, 160);
+  assert.match(createPayment, /extractLiuhaoyiCreateIdentity\(payload\)/);
+  assert.match(createPayment, /\.\.\.createIdentity/);
+  assert.match(sessionService, /provider_order_no: providerResult\.providerOrderNo \?\? null/);
+  assert.match(createPayment, /if \(!paymentUrl && !qrCodeUrl && !urlScheme\)/);
+  assert.doesNotMatch(createPayment, /if \(!createIdentity/);
 });
 
 test("return_url 只返回订单或充值展示页，不具备完成或入账能力", () => {

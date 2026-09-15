@@ -89,6 +89,7 @@ type ProviderSummary = {
   tradeNo: string | null;
   paidAt: string | null;
   rawStatus: string | null;
+  type: string | null;
 };
 
 type ReconciliationComparison = {
@@ -300,6 +301,10 @@ async function reconcileOne(supabase: SupabaseClient, session: PaymentSession, d
     }
   }
 
+  if (session.provider === "liuhaoyi" && provider.status === "paid" && session.localStatus !== "paid") {
+    await persistLiuhaoyiDetectionEvidence(supabase, session, provider, comparison, dryRun);
+  }
+
   return record(supabase, session, provider, comparison, dryRun);
 }
 
@@ -365,8 +370,12 @@ function compare(session: PaymentSession, provider: ProviderSummary): Reconcilia
 
 async function queryProvider(session: PaymentSession): Promise<ProviderSummary> {
   if (!session.provider) throw new PaymentProviderError("支付渠道 Provider 未配置");
+  const paymentNo =
+    session.provider === "liuhaoyi"
+      ? session.sessionNo
+      : session.providerOrderNo ?? session.sessionNo;
   const result = await getPaymentProvider(session.provider).queryPayment(
-    session.providerOrderNo ?? session.sessionNo
+    paymentNo
   );
   const raw = result as {
     status?: unknown;
@@ -376,7 +385,12 @@ async function queryProvider(session: PaymentSession): Promise<ProviderSummary> 
     providerTradeNo?: unknown;
     tradeNo?: unknown;
     paidAt?: unknown;
+    rawSummary?: unknown;
   };
+  const rawSummary =
+    raw.rawSummary && typeof raw.rawSummary === "object"
+      ? (raw.rawSummary as Record<string, unknown>)
+      : null;
   const rawStatus = text(raw.status);
   return {
     status: normalizeProviderStatus(raw.status),
@@ -386,6 +400,7 @@ async function queryProvider(session: PaymentSession): Promise<ProviderSummary> 
       text(raw.providerTransactionId) ?? text(raw.providerTradeNo) ?? text(raw.tradeNo),
     paidAt: text(raw.paidAt),
     rawStatus,
+    type: text(rawSummary?.type),
   };
 }
 
@@ -409,13 +424,48 @@ async function listSessions(
   let query = supabase
     .from("payment_sessions")
     .select(SESSION_SELECT)
-    .in("status", ["pending", "processing", "paid", "failed"])
+    .in("status", ["pending", "processing", "expired", "paid", "failed"])
     .order("updated_at", { ascending: true })
     .limit(limit);
   if (businessType) query = query.eq("business_type", businessType);
   const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as Record<string, unknown>[]).map(normalizeSession);
+}
+
+async function persistLiuhaoyiDetectionEvidence(
+  supabase: SupabaseClient,
+  session: PaymentSession,
+  provider: ProviderSummary,
+  comparison: ReconciliationComparison,
+  dryRun: boolean
+) {
+  if (dryRun) return;
+  const reconcileStatus = sessionReconcileStatus(comparison);
+  const update: Record<string, unknown> = {
+    last_synced_at: new Date().toISOString(),
+    reconcile_status: reconcileStatus,
+  };
+  if (!session.localTradeNo && provider.tradeNo) {
+    update.provider_transaction_id = provider.tradeNo;
+  }
+  const { error } = await supabase
+    .from("payment_sessions")
+    .update(update)
+    .eq("id", session.id)
+    .eq("status", session.localStatus);
+  if (error) throw error;
+}
+
+function sessionReconcileStatus(comparison: ReconciliationComparison) {
+  if (comparison.differenceType === "provider_paid_local_unpaid") {
+    return "provider_paid_local_unpaid";
+  }
+  if (comparison.differenceType === "amount_mismatch") return "amount_mismatch";
+  if (comparison.differenceType === "local_paid_provider_unpaid") {
+    return "local_paid_provider_unpaid";
+  }
+  return "query_failed";
 }
 
 function normalizeSession(row: Record<string, unknown>): PaymentSession {
@@ -445,9 +495,15 @@ async function record(
   dryRun: boolean
 ) {
   const checkedAt = new Date().toISOString();
+  const sessionStateVersion =
+    session.provider === "liuhaoyi" &&
+    provider.status === "paid" &&
+    session.localStatus !== "paid"
+      ? "provider-detection"
+      : session.updatedAt ?? session.createdAt ?? "none";
   const dedupeKey = [
     session.id,
-    session.updatedAt ?? session.createdAt ?? "none",
+    sessionStateVersion,
     session.localStatus,
     provider.status,
     provider.amount ?? "none",
@@ -539,6 +595,7 @@ function emptyProvider(): ProviderSummary {
     tradeNo: null,
     paidAt: null,
     rawStatus: null,
+    type: null,
   };
 }
 
@@ -550,6 +607,7 @@ function safeSummary(provider: ProviderSummary) {
     currency: provider.currency,
     tradeNoMasked: provider.tradeNo ? mask(provider.tradeNo) : null,
     paidAt: provider.paidAt,
+    type: provider.type,
   };
 }
 
