@@ -3,8 +3,18 @@ import test from "node:test";
 
 import {
   evaluateLiuhaoyiAlipayRechargeRecovery,
+  isExplicitLiuhaoyiRecoveryExecution,
   LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE,
 } from "../../lib/payments/liuhaoyi-recovery-policy.mjs";
+
+test("recovery execution requires the literal boolean true", () => {
+  assert.equal(isExplicitLiuhaoyiRecoveryExecution(undefined), false);
+  assert.equal(isExplicitLiuhaoyiRecoveryExecution(false), false);
+  assert.equal(isExplicitLiuhaoyiRecoveryExecution(null), false);
+  assert.equal(isExplicitLiuhaoyiRecoveryExecution("true"), false);
+  assert.equal(isExplicitLiuhaoyiRecoveryExecution(1), false);
+  assert.equal(isExplicitLiuhaoyiRecoveryExecution(true), true);
+});
 
 const nowMs = Date.parse("2026-09-15T10:00:00.000Z");
 

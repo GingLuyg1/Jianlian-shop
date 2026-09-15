@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE } from "@/lib/payments/liuhaoyi-recovery-policy.mjs";
+import {
+  isExplicitLiuhaoyiRecoveryExecution,
+  LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE,
+} from "@/lib/payments/liuhaoyi-recovery-policy.mjs";
 import { runPaymentReconciliation } from "@/lib/payments/reconciliation-service";
 import { checkRateLimit, checkRequestSize, getInternalTaskRateLimitKey } from "@/lib/security/rate-limit";
 
@@ -32,7 +35,11 @@ export async function POST(request: Request) {
 
   running = true;
   try {
-    const body = await request.json().catch(() => null) as { batchSize?: unknown } | null;
+    const body = await request.json().catch(() => null) as {
+      batchSize?: unknown;
+      execute?: unknown;
+    } | null;
+    const execute = isExplicitLiuhaoyiRecoveryExecution(body?.execute);
     const parsedBatchSize = Number(body?.batchSize ?? 20);
     const batchSize = Number.isInteger(parsedBatchSize)
       ? Math.min(20, Math.max(1, parsedBatchSize))
@@ -40,11 +47,12 @@ export async function POST(request: Request) {
     const result = await runPaymentReconciliation({
       businessType: "recharge",
       batchSize,
-      dryRun: false,
+      dryRun: !execute,
       reason: "liuhaoyi_alipay_recharge_worker",
       recoveryMode: LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE,
     });
     return NextResponse.json({
+      mode: execute ? "execute" : "dry_run",
       processed: result.processed,
       resolved: result.resolved,
       manual_review: result.manual_review,

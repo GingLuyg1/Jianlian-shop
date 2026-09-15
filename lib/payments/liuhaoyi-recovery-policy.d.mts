@@ -1,6 +1,7 @@
 export const LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE: "alipay_account_recharge_v1";
 export const LIUHAOYI_RECOVERY_MINIMUM_AGE_MS: number;
 export const LIUHAOYI_RECOVERY_EXPIRY_MARGIN_MS: number;
+export function isExplicitLiuhaoyiRecoveryExecution(value: unknown): boolean;
 
 export type LiuhaoyiRecoveryDecision = {
   eligible: boolean;

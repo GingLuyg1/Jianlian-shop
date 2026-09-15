@@ -22,6 +22,7 @@ const guide = readFileSync(
 test("systemd service uses a root-only environment file and stable installed worker", () => {
   assert.match(service, /Type=oneshot/);
   assert.match(service, /TimeoutStartSec=5min/);
+  assert.match(service, /ExecStart=.*--execute/);
   assert.match(service, /EnvironmentFile=\/etc\/jianlian\/liuhaoyi-recovery\.env/);
   assert.match(service, /\/opt\/jianlian\/ops\/liuhaoyi-alipay-recharge-recovery\.mjs/);
   assert.match(service, /UMask=0077/);
@@ -41,4 +42,6 @@ test("worker calls only the narrow recovery route and emits aggregate output", (
   assert.match(worker, /liuhaoyi-alipay-recharge-recovery/);
   assert.match(worker, /x-payment-reconciliation-secret/);
   assert.doesNotMatch(worker, /LIUHAOYI_MERCHANT_KEY|LIUHAOYI_API_BASE_URL|completePayment|forceCredit|refund/i);
+  assert.match(worker, /execute: argumentsList\.includes\("--execute"\)/);
+  assert.doesNotMatch(worker, /process\.env\.[A-Z0-9_]*EXECUTE/);
 });

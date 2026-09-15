@@ -19,8 +19,9 @@
    `20260915210000_liuhaoyi_recharge_recovery_expiry_guards.sql`。
 2. 部署已通过测试的不可变 release。
 3. 使用已有 `PAYMENT_RECONCILIATION_SECRET`，不要创建第二份支付密钥。
-4. 先手工执行一次 worker canary，并只检查聚合计数。
-5. 单独审批后才能安装和启用 timer。
+4. 先手工执行默认 dry-run worker，并只检查聚合计数。
+5. 单独审批后，使用显式 `--execute` 做一次真实 canary。
+6. 单独审批后才能安装和启用 timer。
 
 ## Root-only worker 配置
 
@@ -33,6 +34,20 @@ PAYMENT_RECONCILIATION_SECRET=<EXISTING_SECRET>
 ```
 
 不得将真实 Secret 写入仓库、unit 文件、命令参数或日志。
+
+人工预检默认是 DRY RUN，不会完成支付或写入对账证据：
+
+```bash
+node scripts/ops/liuhaoyi-alipay-recharge-recovery.mjs --batch-size=20
+```
+
+真实单次 canary 必须经过独立审批并显式增加 `--execute`：
+
+```bash
+node scripts/ops/liuhaoyi-alipay-recharge-recovery.mjs --batch-size=20 --execute
+```
+
+不读取任何环境变量来隐式切换 execute 模式。systemd service 模板因用于正式定时恢复，`ExecStart` 明确包含 `--execute`。
 
 从已经部署的不可变 release 安装稳定脚本副本：
 

@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=oneshot
 TimeoutStartSec=5min
 EnvironmentFile=/etc/jianlian/liuhaoyi-recovery.env
-ExecStart=/bin/sh -c 'exec "$JIANLIAN_NODE_BINARY" /opt/jianlian/ops/liuhaoyi-alipay-recharge-recovery.mjs --batch-size=20'
+ExecStart=/bin/sh -c 'exec "$JIANLIAN_NODE_BINARY" /opt/jianlian/ops/liuhaoyi-alipay-recharge-recovery.mjs --batch-size=20 --execute'
 User=root
 Group=root
 UMask=0077

@@ -140,6 +140,27 @@ test("general reconciliation route cannot opt in to Liuhaoyi recovery", () => {
   assert.match(recoveryRoute, /recoveryMode: LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE/);
   assert.match(recoveryRoute, /businessType: "recharge"/);
   assert.match(recoveryRoute, /Math\.min\(20/);
+  assert.match(recoveryRoute, /isExplicitLiuhaoyiRecoveryExecution\(body\?\.execute\)/);
+  assert.match(recoveryRoute, /dryRun: !execute/);
+  assert.match(recoveryRoute, /mode: execute \? "execute" : "dry_run"/);
+});
+
+test("dry-run exits before every reconciliation or payment state write", () => {
+  const reconcileOne = reconciliation.slice(
+    reconciliation.indexOf("async function reconcileOne"),
+    reconciliation.indexOf("function compare("),
+  );
+  const evidence = reconciliation.slice(
+    reconciliation.indexOf("async function persistLiuhaoyiDetectionEvidence"),
+    reconciliation.indexOf("function sessionReconcileStatus"),
+  );
+  const recordSource = reconciliation.slice(
+    reconciliation.indexOf("async function record("),
+    reconciliation.indexOf("function issue("),
+  );
+  assert.match(reconcileOne, /else if \(dryRun\)[\s\S]*?recoveryStatus = "dry_run";[\s\S]*?else \{[\s\S]*?attemptAutomaticCompletion/);
+  assert.match(evidence, /if \(dryRun\) return;[\s\S]*?\.update\(update\)/);
+  assert.match(recordSource, /if \(dryRun\) \{[\s\S]*?return normalizeReconciliationRow[\s\S]*?\.upsert\(row/);
 });
 
 test("candidate query is narrow, active, age-gated, expiry-gated, and failure-isolated", () => {

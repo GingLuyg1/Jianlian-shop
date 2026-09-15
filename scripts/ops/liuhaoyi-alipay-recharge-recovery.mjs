@@ -25,11 +25,13 @@ export async function runLiuhaoyiRecoveryWorker({
   baseUrl,
   secret,
   batchSize = DEFAULT_BATCH_SIZE,
+  execute = false,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   fetchImpl = fetch,
   write = (line) => process.stdout.write(`${line}\n`),
 } = {}) {
   const startedAt = Date.now();
+  const mode = execute === true ? "execute" : "dry_run";
   let httpStatus = 0;
   try {
     if (typeof secret !== "string" || !secret) {
@@ -41,26 +43,30 @@ export async function runLiuhaoyiRecoveryWorker({
         "content-type": "application/json",
         "x-payment-reconciliation-secret": secret,
       },
-      body: JSON.stringify({ batchSize: parseBatchSize(batchSize) }),
+      body: JSON.stringify({
+        batchSize: parseBatchSize(batchSize),
+        execute: execute === true,
+      }),
       signal: AbortSignal.timeout(timeoutMs),
     });
     httpStatus = response.status;
     const payload = await response.json().catch(() => null);
-    if (!response.ok || !validResponse(payload)) {
+    if (!response.ok || !validResponse(payload, mode)) {
       throw new Error("LIUHAOYI_RECOVERY_RESPONSE_INVALID");
     }
-    const summary = safeSummary(payload, httpStatus, Date.now() - startedAt, true);
+    const summary = safeSummary(payload, httpStatus, Date.now() - startedAt, true, mode);
     write(JSON.stringify(summary));
     return { exitCode: 0, ...summary };
   } catch {
-    const summary = safeSummary(null, httpStatus, Date.now() - startedAt, false);
+    const summary = safeSummary(null, httpStatus, Date.now() - startedAt, false, mode);
     write(JSON.stringify(summary));
     return { exitCode: 1, ...summary };
   }
 }
 
-function validResponse(value) {
+function validResponse(value, mode) {
   if (!value || typeof value !== "object") return false;
+  if (value.mode !== mode) return false;
   return [
     "processed",
     "resolved",
@@ -72,10 +78,11 @@ function validResponse(value) {
   ].every((key) => Number.isInteger(value[key]) && value[key] >= 0);
 }
 
-function safeSummary(payload, httpStatus, durationMs, success) {
+function safeSummary(payload, httpStatus, durationMs, success, mode) {
   return {
     timestamp: new Date().toISOString(),
     success,
+    mode,
     http_status: httpStatus,
     processed: payload?.processed ?? null,
     resolved: payload?.resolved ?? null,
@@ -89,11 +96,13 @@ function safeSummary(payload, httpStatus, durationMs, success) {
 }
 
 async function main() {
-  const argument = process.argv.slice(2).find((value) => value.startsWith("--batch-size="));
+  const argumentsList = process.argv.slice(2);
+  const argument = argumentsList.find((value) => value.startsWith("--batch-size="));
   const result = await runLiuhaoyiRecoveryWorker({
     baseUrl: process.env.JIANLIAN_INTERNAL_BASE_URL,
     secret: process.env.PAYMENT_RECONCILIATION_SECRET ?? process.env.INTERNAL_API_SECRET,
     batchSize: parseBatchSize(argument?.slice("--batch-size=".length)),
+    execute: argumentsList.includes("--execute"),
   });
   process.exitCode = result.exitCode;
 }
