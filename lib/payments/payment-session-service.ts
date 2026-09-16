@@ -14,6 +14,7 @@ import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { assertLiuhaoyiAmountBreakdown, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { getPaymentProvider } from "@/lib/payments/providers";
 import { normalizeLiuhaoyiSessionPresentation } from "@/lib/payments/providers/liuhaoyi-core.mjs";
+import { isReusablePaymentSession } from "@/lib/payments/payment-session-reuse.mjs";
 import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -96,7 +97,19 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
   const business = await loadBusinessRecord(service, businessType, input.businessNo, input.userId);
   ensureBusinessCanCreatePayment(business);
 
-  const channel = await loadEnabledChannel(service, input.channelCode || business.channelCode);
+  const channelCode = normalizeChannelCode(input.channelCode || business.channelCode);
+  const reusable = await getReusableSession(service, {
+    businessType,
+    business,
+    channelCode,
+  });
+  if (reusable) {
+    const existing = await waitForInitializedSession(service, reusable);
+    assertReusableSessionMatches(existing, { businessType, business, channelCode });
+    return toSessionResponse(existing);
+  }
+
+  const channel = await loadEnabledChannel(service, channelCode);
   if (!channel.configured) {
     throw new PaymentSessionError("PROVIDER_NOT_CONFIGURED", "支付渠道尚未配置，无法创建真实支付会话。");
   }
@@ -132,6 +145,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
 
   if (!reserved.created) {
     const existing = await waitForInitializedSession(service, reserved.session);
+    assertReusableSessionMatches(existing, { businessType, business, channelCode: channel.code, provider: channel.provider });
     return toSessionResponse(existing);
   }
 
@@ -272,7 +286,7 @@ export async function closePaymentSession(sessionNo: string, userId: string) {
 }
 
 const sessionResponseSelect =
-  "session_no,status,payment_type,payment_url,qr_code_url,wallet_address,network,currency,requested_amount,fee_amount,payable_amount,expires_at,metadata,provider,channel_code";
+  "session_no,business_type,business_id,business_no,user_id,status,payment_type,payment_url,qr_code_url,wallet_address,network,currency,requested_amount,fee_amount,payable_amount,expires_at,metadata,provider,channel_code";
 
 async function reservePaymentSession(
   service: SupabaseClient,
@@ -346,7 +360,12 @@ async function reservePaymentSessionFallback(
   if (!error && data) return { created: true, session: data };
   if (!isUniqueViolation(error)) throw error;
 
-  const existing = await getReusableSession(service, input.businessType, input.business.id);
+  const existing = await getReusableSession(service, {
+    businessType: input.businessType,
+    business: input.business,
+    channelCode: input.channel.code,
+    provider: input.channel.provider,
+  });
   if (!existing) throw error;
   return { created: false, session: existing };
 }
@@ -470,24 +489,54 @@ async function expireStaleSessions(service: SupabaseClient, businessType: string
     .lt("expires_at", new Date().toISOString());
 }
 
-async function getReusableSession(service: SupabaseClient, businessType: string, businessId: string) {
-  const { data, error } = await service
+type ReusableSessionIdentity = {
+  businessType: "order" | "recharge";
+  business: BusinessRecord;
+  channelCode: string;
+  provider?: string;
+};
+
+async function getReusableSession(service: SupabaseClient, identity: ReusableSessionIdentity) {
+  let query = service
     .from("payment_sessions")
     .select(sessionResponseSelect)
-    .eq("business_type", businessType)
-    .eq("business_id", businessId)
+    .eq("business_type", identity.businessType)
+    .eq("business_id", identity.business.id)
+    .eq("business_no", identity.business.businessNo)
+    .eq("user_id", identity.business.userId)
+    .eq("channel_code", identity.channelCode)
     .in("status", ACTIVE_SESSION_STATUSES)
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  if (identity.provider) query = query.eq("provider", identity.provider);
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data;
 }
 
-async function loadEnabledChannel(service: SupabaseClient, code: string | null | undefined): Promise<PaymentChannel> {
-  const channelCode = String(code ?? "").trim();
+function assertReusableSessionMatches(row: Record<string, unknown>, identity: ReusableSessionIdentity) {
+  const matches = isReusablePaymentSession(row, {
+    businessType: identity.businessType,
+    businessId: identity.business.id,
+    businessNo: identity.business.businessNo,
+    userId: identity.business.userId,
+    channelCode: identity.channelCode,
+    provider: identity.provider,
+  });
+  if (!matches) {
+    throw new PaymentSessionError("SESSION_REUSE_MISMATCH", "现有支付会话与当前业务不匹配，请刷新后重试");
+  }
+}
+
+function normalizeChannelCode(value: string | null | undefined) {
+  const channelCode = String(value ?? "").trim();
   if (!channelCode) throw new PaymentSessionError("CHANNEL_REQUIRED", "缺少支付渠道");
+  return channelCode;
+}
+
+async function loadEnabledChannel(service: SupabaseClient, code: string | null | undefined): Promise<PaymentChannel> {
+  const channelCode = normalizeChannelCode(code);
 
   const { data, error } = await service
     .from("payment_channels")
