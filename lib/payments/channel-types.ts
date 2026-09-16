@@ -19,7 +19,7 @@ export type PaymentChannelCode =
 export type RechargeStatus = "pending" | "waiting_payment" | "submitted" | "reviewing" | "approved" | "processing" | "succeeded" | "failed" | "rejected" | "cancelled" | "expired" | "paid" | "closed";
 export type PaymentSessionStatus = "pending" | "processing" | "paid" | "failed" | "expired" | "closed";
 export type PaymentBusinessType = "order" | "recharge" | "account_recharge";
-export type PaymentResultType = "redirect" | "qrcode" | "address";
+export type PaymentResultType = "redirect" | "qrcode" | "address" | "deeplink";
 
 export type ManualPaymentInstructions = {
   payment_address: string;
@@ -75,6 +75,8 @@ export type CreatePaymentResult = {
   paymentType: PaymentResultType;
   paymentUrl?: string;
   qrCodeUrl?: string;
+  qrCodeValue?: string;
+  deepLinkUrl?: string;
   address?: string;
   network?: string;
   amount: number;
@@ -107,6 +109,8 @@ export type ProviderCreatePaymentResult = {
   paymentType: PaymentResultType;
   paymentUrl?: string;
   qrCodeUrl?: string;
+  qrCodeValue?: string;
+  deepLinkUrl?: string;
   walletAddress?: string;
   providerOrderNo?: string;
   expiresAt?: string;

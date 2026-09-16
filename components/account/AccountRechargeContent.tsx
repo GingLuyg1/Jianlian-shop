@@ -216,13 +216,13 @@ export default function AccountRechargeContent() {
         }),
       });
       const result = (await response.json().catch(() => null)) as
-        | { error?: string; rechargeNo?: string; paymentUrl?: string }
+        | { error?: string; rechargeNo?: string; paymentType?: string; paymentUrl?: string }
         | null;
 
       if (!response.ok) throw new Error(result?.error ?? "充值下单失败，请稍后重试");
 
       if (result?.rechargeNo) {
-        if (isLiuhaoyiRecharge && result.paymentUrl) {
+        if (isLiuhaoyiRecharge && result.paymentType === "redirect" && result.paymentUrl) {
           window.location.assign(result.paymentUrl);
           return;
         }

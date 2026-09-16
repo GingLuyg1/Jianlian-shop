@@ -43,9 +43,11 @@ export type CreatePaymentSessionInput = {
 export type PaymentSessionResponse = {
   sessionNo: string;
   status: "pending" | "processing";
-  paymentType: "redirect" | "qrcode" | "address";
+  paymentType: "redirect" | "qrcode" | "address" | "deeplink";
   paymentUrl?: string;
   qrCodeUrl?: string;
+  qrCodeValue?: string;
+  deepLinkUrl?: string;
   walletAddress?: string;
   network?: string;
   currency: PaymentCurrency;
@@ -151,8 +153,8 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
       .update({
         status: providerResult.status,
         payment_type: providerResult.paymentType,
-        payment_url: providerResult.paymentUrl ?? null,
-        qr_code_url: providerResult.qrCodeUrl ?? null,
+        payment_url: providerResult.paymentUrl ?? providerResult.deepLinkUrl ?? null,
+        qr_code_url: providerResult.qrCodeValue ?? providerResult.qrCodeUrl ?? null,
         wallet_address: providerResult.walletAddress ?? null,
         provider_order_no: providerResult.providerOrderNo ?? null,
         expires_at: providerResult.expiresAt ?? expiresAt,
@@ -511,6 +513,8 @@ function toSessionResponse(row: Record<string, unknown>): PaymentSessionResponse
     paymentType: artifact.paymentType,
     paymentUrl: artifact.paymentUrl,
     qrCodeUrl: artifact.qrCodeUrl,
+    qrCodeValue: artifact.qrCodeValue,
+    deepLinkUrl: artifact.deepLinkUrl,
     walletAddress: textOrUndefined(row.wallet_address),
     network: textOrUndefined(row.network),
     currency: row.currency === "USDT" ? "USDT" : "CNY",
@@ -527,8 +531,8 @@ function normalizeSessionStatus(value: unknown): PaymentSessionStatus {
     : "pending";
 }
 
-function normalizePaymentType(value: unknown): "redirect" | "qrcode" | "address" {
-  return value === "qrcode" || value === "address" ? value : "redirect";
+function normalizePaymentType(value: unknown): "redirect" | "qrcode" | "address" | "deeplink" {
+  return value === "qrcode" || value === "address" || value === "deeplink" ? value : "redirect";
 }
 
 function generateSessionNo() {

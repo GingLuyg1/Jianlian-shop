@@ -643,7 +643,7 @@ export default function CheckoutPage() {
             code?: string;
             request_id?: string;
             warning_code?: string;
-            paymentSession?: { paymentUrl?: string };
+            paymentSession?: { paymentType?: string; paymentUrl?: string };
           }
         | null;
 
@@ -701,7 +701,11 @@ export default function CheckoutPage() {
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
       window.sessionStorage.removeItem(checkoutSessionKey);
-      if (isLiuhaoyiPaymentMethod(paymentMethod) && result?.paymentSession?.paymentUrl) {
+      if (
+        isLiuhaoyiPaymentMethod(paymentMethod)
+        && result?.paymentSession?.paymentType === "redirect"
+        && result.paymentSession.paymentUrl
+      ) {
         window.location.assign(result.paymentSession.paymentUrl);
         return;
       }

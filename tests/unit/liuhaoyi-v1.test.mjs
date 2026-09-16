@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { QRCodeSVG } from "qrcode.react";
 import { getPaymentChannelValidationError } from "../../lib/payments/manual-channel-readiness.mjs";
 
 import {
@@ -176,35 +179,38 @@ test("mapi trade_no becomes the bounded providerOrderNo persisted by payment ses
   assert.match(createPayment, /extractLiuhaoyiCreateIdentity\(payload\)/);
   assert.match(createPayment, /\.\.\.createIdentity/);
   assert.match(sessionService, /provider_order_no: providerResult\.providerOrderNo \?\? null/);
-  assert.match(createPayment, /if \(!paymentArtifact\.paymentUrl\)/);
+  assert.match(createPayment, /if \(!paymentArtifact\.paymentUrl && !paymentArtifact\.qrCodeValue && !paymentArtifact\.deepLinkUrl\)/);
   assert.doesNotMatch(createPayment, /if \(!createIdentity/);
 });
 
-test("六号易 qrcode 是托管付款页 URL，不作为图片二维码输出", () => {
+test("六号易 payurl、qrcode 与 urlscheme 保持各自展示语义", () => {
   assert.deepEqual(
     selectLiuhaoyiPaymentArtifact({ qrcode: "https://provider.example.test/cashier/123" }),
     {
-      paymentType: "redirect",
-      paymentUrl: "https://provider.example.test/cashier/123",
-      qrCodeUrl: undefined,
+      paymentType: "qrcode",
+      qrCodeValue: "https://provider.example.test/cashier/123",
     },
   );
-  assert.equal(
+  assert.deepEqual(
     selectLiuhaoyiPaymentArtifact({
       payurl: "https://provider.example.test/preferred",
       qrcode: "https://provider.example.test/fallback",
-    }).paymentUrl,
-    "https://provider.example.test/preferred",
+    }),
+    { paymentType: "redirect", paymentUrl: "https://provider.example.test/preferred" },
   );
-  assert.equal(
-    selectLiuhaoyiPaymentArtifact({ urlscheme: "weixin://wap/pay?prepayid=test" }).paymentUrl,
-    "weixin://wap/pay?prepayid=test",
+  assert.deepEqual(
+    selectLiuhaoyiPaymentArtifact({ qrcode: "weixin://wxpay/test" }),
+    { paymentType: "qrcode", qrCodeValue: "weixin://wxpay/test" },
   );
-  assert.equal(selectLiuhaoyiPaymentArtifact({ qrcode: "http://provider.example.test/insecure" }).paymentUrl, undefined);
-  assert.equal(selectLiuhaoyiPaymentArtifact({ payurl: "javascript:alert(1)", urlscheme: "intent://unsafe" }).paymentUrl, undefined);
+  assert.deepEqual(
+    selectLiuhaoyiPaymentArtifact({ urlscheme: "weixin://dl/business/?ticket=test" }),
+    { paymentType: "deeplink", deepLinkUrl: "weixin://dl/business/?ticket=test" },
+  );
+  assert.deepEqual(selectLiuhaoyiPaymentArtifact({ qrcode: "http://provider.example.test/insecure" }), { paymentType: "redirect" });
+  assert.deepEqual(selectLiuhaoyiPaymentArtifact({ payurl: "javascript:alert(1)", urlscheme: "intent://unsafe" }), { paymentType: "redirect" });
 });
 
-test("旧六号易 session 仅在指定渠道把 HTTPS qr_code_url 展示为付款页", () => {
+test("旧六号易 session 仅在读取时把 qr_code_url 识别为二维码内容", () => {
   assert.deepEqual(
     normalizeLiuhaoyiSessionPresentation({
       provider: "liuhaoyi",
@@ -213,9 +219,10 @@ test("旧六号易 session 仅在指定渠道把 HTTPS qr_code_url 展示为付�
       qrCodeUrl: "https://provider.example.test/legacy-cashier",
     }),
     {
-      paymentType: "redirect",
-      paymentUrl: "https://provider.example.test/legacy-cashier",
+      paymentType: "qrcode",
+      paymentUrl: undefined,
       qrCodeUrl: undefined,
+      qrCodeValue: "https://provider.example.test/legacy-cashier",
     },
   );
   assert.deepEqual(
@@ -231,6 +238,19 @@ test("旧六号易 session 仅在指定渠道把 HTTPS qr_code_url 展示为付�
       qrCodeUrl: "https://images.example.test/real-qr.png",
     },
   );
+});
+
+test("六号易二维码内容在本地渲染为 SVG 且不作为图片 URL 请求", () => {
+  const qrCodeValue = `https://liuhao.net/pay/jspay/${"T".repeat(512)}/`;
+  const markup = renderToStaticMarkup(createElement(QRCodeSVG, {
+    value: qrCodeValue,
+    size: 208,
+    level: "L",
+    marginSize: 4,
+  }));
+  assert.match(markup, /^<svg/);
+  assert.doesNotMatch(markup, /<img/i);
+  assert.doesNotMatch(markup, /src=/i);
 });
 
 test("return_url 只返回订单或充值展示页，不具备完成或入账能力", () => {

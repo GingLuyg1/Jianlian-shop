@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { copyWithFeedback } from "@/lib/ui/copy-feedback";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Clock3, Copy, ExternalLink, Headphones, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -44,9 +45,11 @@ type PaymentChannel = {
 type PaymentSession = {
   sessionNo: string;
   status: "pending" | "processing";
-  paymentType: "redirect" | "qrcode" | "address";
+  paymentType: "redirect" | "qrcode" | "address" | "deeplink";
   paymentUrl?: string;
   qrCodeUrl?: string;
+  qrCodeValue?: string;
+  deepLinkUrl?: string;
   walletAddress?: string;
   network?: string;
   currency: string;
@@ -807,7 +810,12 @@ function LiuhaoyiRechargePaymentPanel({
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">请核对金额后完成付款。支付结果以服务端异步回调和统一支付状态为准，请勿重复付款。</div>
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">支付宝 / 微信支付将额外收取 3% 支付通道手续费，由支付平台收取。充值到账金额不包含手续费，实际付款金额以支付页面为准。本地充值金额与六号易 API 金额不增加此费用。</div>
       {providerPaid ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">支付渠道已确认付款，正在完成余额入账，请勿重复付款。</div> : null}
-      {session.qrCodeUrl ? <div className="rounded-xl bg-slate-50 p-4 text-center"><img src={session.qrCodeUrl} alt="支付二维码" className="mx-auto h-52 w-52 rounded-lg object-contain" /><p className="mt-2 text-xs text-muted-foreground">请使用对应的支付宝或微信应用扫码</p></div> : null}
+      {session.qrCodeValue ? (
+        <LocalPaymentQr
+          value={session.qrCodeValue}
+          channelCode={recharge.channelCode}
+        />
+      ) : null}
       <div className="space-y-3 rounded-xl bg-slate-50 p-4 text-sm">
         <Info label="应付金额" value={`${session.payableAmount.toFixed(2)} CNY`} strong />
         <Info label="支付状态" value={getStatusText(sessionStatus || session.status)} />
@@ -815,7 +823,31 @@ function LiuhaoyiRechargePaymentPanel({
         <Info label="待支付剩余时间" value={`${Math.floor(remainingSeconds / 60)} 分 ${remainingSeconds % 60} 秒`} />
       </div>
       {session.paymentUrl ? <Button asChild className="w-full"><a href={session.paymentUrl} target="_blank" rel="noreferrer">打开付款页面<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
-      {!session.qrCodeUrl && !session.paymentUrl ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">渠道未返回可展示的付款入口，请勿付款并联系客服。</div> : null}
+      {session.deepLinkUrl ? <Button asChild className="w-full" variant="outline"><a href={session.deepLinkUrl}>在支付客户端中打开<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
+      {!session.qrCodeValue && !session.paymentUrl && !session.deepLinkUrl ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">渠道未返回可展示的付款入口，请勿付款并联系客服。</div> : null}
+    </div>
+  );
+}
+
+function LocalPaymentQr({ value, channelCode }: { value: string; channelCode?: string | null }) {
+  const instruction = channelCode === "wechat"
+    ? "请使用微信扫一扫完成支付"
+    : channelCode === "alipay"
+      ? "请使用支付宝扫码完成支付"
+      : "请使用对应的支付应用扫码";
+
+  return (
+    <div className="rounded-xl bg-slate-50 p-4 text-center">
+      <div className="mx-auto inline-flex rounded-lg bg-white p-2" data-local-payment-qr="true">
+        <QRCodeSVG
+          value={value}
+          size={208}
+          level="L"
+          marginSize={4}
+          title="支付二维码"
+        />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{instruction}</p>
     </div>
   );
 }
@@ -1296,10 +1328,11 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       剩余 {Math.floor(remainingSeconds / 60)} 分 {remainingSeconds % 60} 秒
                     </div>
 
-                    {session.qrCodeUrl ? (
-                      <div className="rounded-xl bg-white p-4 text-center">
-                        <img src={session.qrCodeUrl} alt="支付二维码" className="mx-auto h-48 w-48 rounded-lg object-contain" />
-                      </div>
+                    {session.qrCodeValue ? (
+                      <LocalPaymentQr
+                        value={session.qrCodeValue}
+                        channelCode={selectedChannel}
+                      />
                     ) : null}
 
                     {session.walletAddress ? (
@@ -1319,7 +1352,13 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       </Button>
                     ) : null}
 
-                    {!session.qrCodeUrl && !session.walletAddress && !session.paymentUrl ? (
+                    {session.deepLinkUrl ? (
+                      <Button asChild variant="outline">
+                        <a href={session.deepLinkUrl}>在支付客户端中打开</a>
+                      </Button>
+                    ) : null}
+
+                    {!session.qrCodeValue && !session.qrCodeUrl && !session.walletAddress && !session.paymentUrl && !session.deepLinkUrl ? (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                         该支付方式暂未返回可展示的支付信息，请更换支付方式或稍后重试。
                       </div>

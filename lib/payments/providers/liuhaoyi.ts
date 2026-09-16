@@ -117,7 +117,7 @@ async function createPayment(
 
   const paymentArtifact = selectLiuhaoyiPaymentArtifact(payload);
   const createIdentity = extractLiuhaoyiCreateIdentity(payload);
-  if (!paymentArtifact.paymentUrl) {
+  if (!paymentArtifact.paymentUrl && !paymentArtifact.qrCodeValue && !paymentArtifact.deepLinkUrl) {
     throw new LiuhaoyiProviderError("LIUHAOYI_PAYMENT_ARTIFACT_MISSING", "六号易未返回可用的付款信息");
   }
   return {

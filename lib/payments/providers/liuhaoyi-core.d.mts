@@ -9,19 +9,23 @@ export function extractLiuhaoyiCreateIdentity(
   payload: Record<string, unknown>
 ): { providerOrderNo?: string };
 export function selectLiuhaoyiPaymentArtifact(payload: Record<string, unknown>): {
-  paymentType: "redirect";
+  paymentType: "redirect" | "qrcode" | "deeplink";
   paymentUrl?: string;
-  qrCodeUrl: undefined;
+  qrCodeValue?: string;
+  deepLinkUrl?: string;
 };
 export function normalizeLiuhaoyiSessionPresentation(input: {
   provider?: string;
   channelCode?: string;
-  paymentType?: "redirect" | "qrcode" | "address";
+  paymentType?: "redirect" | "qrcode" | "address" | "deeplink";
   paymentUrl?: string;
   qrCodeUrl?: string;
+  qrCodeValue?: string;
 }): {
-  paymentType: "redirect" | "qrcode" | "address";
+  paymentType: "redirect" | "qrcode" | "address" | "deeplink";
   paymentUrl?: string;
   qrCodeUrl?: string;
+  qrCodeValue?: string;
+  deepLinkUrl?: string;
 };
 export function parseLiuhaoyiQuery(input: URLSearchParams | string): Record<string, string>;

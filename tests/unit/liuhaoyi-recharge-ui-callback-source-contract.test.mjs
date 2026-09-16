@@ -54,12 +54,19 @@ test("USDT V3 retains its existing independent 20 minute fingerprint window", ()
   assert.match(rechargeRoute, /isUsdtCnyRecharge[\s\S]*Date\.now\(\) \+ 20 \* 60 \* 1000/);
 });
 
-test("Liuhaoyi create success redirects directly while payment status page remains a manual fallback", () => {
-  assert.match(rechargeUi, /isLiuhaoyiRecharge && result\.paymentUrl[\s\S]{0,100}window\.location\.assign\(result\.paymentUrl\)/);
-  assert.match(checkout, /isLiuhaoyiPaymentMethod\(paymentMethod\) && result\?\.paymentSession\?\.paymentUrl[\s\S]{0,120}window\.location\.assign\(result\.paymentSession\.paymentUrl\)/);
+test("Liuhaoyi redirects only payurl sessions while qrcode remains on the local payment page", () => {
+  assert.match(rechargeUi, /result\.paymentType === "redirect" && result\.paymentUrl[\s\S]{0,100}window\.location\.assign\(result\.paymentUrl\)/);
+  assert.match(checkout, /result\?\.paymentSession\?\.paymentType === "redirect"[\s\S]{0,160}window\.location\.assign\(result\.paymentSession\.paymentUrl\)/);
   const fallbackPanel = paymentPage.slice(paymentPage.indexOf("function LiuhaoyiRechargePaymentPanel"));
   assert.match(fallbackPanel, /打开付款页面/);
   assert.doesNotMatch(paymentPage, /window\.location\.assign/);
+});
+
+test("provider qrcode is rendered locally and is never used as an image source", () => {
+  assert.match(paymentPage, /QRCodeSVG/);
+  assert.match(paymentPage, /value=\{session\.qrCodeValue\}/);
+  assert.match(paymentPage, /data-local-payment-qr="true"/);
+  assert.doesNotMatch(paymentPage, /<img src=\{session\.qrCodeUrl\}/);
 });
 
 test("legacy Liuhaoyi QR field is normalized only for presentation and never written back", () => {
