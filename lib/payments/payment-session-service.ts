@@ -12,6 +12,7 @@ import type {
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { assertLiuhaoyiAmountBreakdown, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { getPaymentProvider } from "@/lib/payments/providers";
+import { normalizeLiuhaoyiSessionPresentation } from "@/lib/payments/providers/liuhaoyi-core.mjs";
 import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -265,7 +266,7 @@ export async function closePaymentSession(sessionNo: string, userId: string) {
 }
 
 const sessionResponseSelect =
-  "session_no,status,payment_type,payment_url,qr_code_url,wallet_address,network,currency,requested_amount,fee_amount,payable_amount,expires_at,metadata";
+  "session_no,status,payment_type,payment_url,qr_code_url,wallet_address,network,currency,requested_amount,fee_amount,payable_amount,expires_at,metadata,provider,channel_code";
 
 async function reservePaymentSession(
   service: SupabaseClient,
@@ -497,12 +498,19 @@ async function loadEnabledChannel(service: SupabaseClient, code: string | null |
 }
 
 function toSessionResponse(row: Record<string, unknown>): PaymentSessionResponse {
-  return {
-    sessionNo: String(row.session_no),
-    status: normalizeSessionStatus(row.status) === "processing" ? "processing" : "pending",
+  const artifact = normalizeLiuhaoyiSessionPresentation({
+    provider: textOrUndefined(row.provider),
+    channelCode: textOrUndefined(row.channel_code),
     paymentType: normalizePaymentType(row.payment_type),
     paymentUrl: textOrUndefined(row.payment_url),
     qrCodeUrl: textOrUndefined(row.qr_code_url),
+  });
+  return {
+    sessionNo: String(row.session_no),
+    status: normalizeSessionStatus(row.status) === "processing" ? "processing" : "pending",
+    paymentType: artifact.paymentType,
+    paymentUrl: artifact.paymentUrl,
+    qrCodeUrl: artifact.qrCodeUrl,
     walletAddress: textOrUndefined(row.wallet_address),
     network: textOrUndefined(row.network),
     currency: row.currency === "USDT" ? "USDT" : "CNY",

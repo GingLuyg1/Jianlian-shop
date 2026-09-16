@@ -8,4 +8,20 @@ export function liuhaoyiCallbackResponseBody(ok: unknown): "success" | "fail";
 export function extractLiuhaoyiCreateIdentity(
   payload: Record<string, unknown>
 ): { providerOrderNo?: string };
+export function selectLiuhaoyiPaymentArtifact(payload: Record<string, unknown>): {
+  paymentType: "redirect";
+  paymentUrl?: string;
+  qrCodeUrl: undefined;
+};
+export function normalizeLiuhaoyiSessionPresentation(input: {
+  provider?: string;
+  channelCode?: string;
+  paymentType?: "redirect" | "qrcode" | "address";
+  paymentUrl?: string;
+  qrCodeUrl?: string;
+}): {
+  paymentType: "redirect" | "qrcode" | "address";
+  paymentUrl?: string;
+  qrCodeUrl?: string;
+};
 export function parseLiuhaoyiQuery(input: URLSearchParams | string): Record<string, string>;

@@ -643,6 +643,7 @@ export default function CheckoutPage() {
             code?: string;
             request_id?: string;
             warning_code?: string;
+            paymentSession?: { paymentUrl?: string };
           }
         | null;
 
@@ -700,6 +701,10 @@ export default function CheckoutPage() {
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
       window.sessionStorage.removeItem(checkoutSessionKey);
+      if (isLiuhaoyiPaymentMethod(paymentMethod) && result?.paymentSession?.paymentUrl) {
+        window.location.assign(result.paymentSession.paymentUrl);
+        return;
+      }
       router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
     } catch (submitError) {
       toast.error(getErrorText(submitError, "订单创建失败，请稍后重试"));

@@ -5,6 +5,8 @@ import test from "node:test";
 const rechargeUi = readFileSync(new URL("../../components/account/AccountRechargeContent.tsx", import.meta.url), "utf8");
 const paymentPage = readFileSync(new URL("../../app/payment/page.tsx", import.meta.url), "utf8");
 const rechargeRoute = readFileSync(new URL("../../app/api/recharges/route.ts", import.meta.url), "utf8");
+const checkout = readFileSync(new URL("../../app/checkout/page.tsx", import.meta.url), "utf8");
+const sessionService = readFileSync(new URL("../../lib/payments/payment-session-service.ts", import.meta.url), "utf8");
 const callbackService = readFileSync(new URL("../../lib/payments/payment-callback-service.ts", import.meta.url), "utf8");
 const provider = readFileSync(new URL("../../lib/payments/providers/liuhaoyi.ts", import.meta.url), "utf8");
 
@@ -50,4 +52,23 @@ test("late paid callback preserves evidence and routes to manual reconciliation 
 
 test("USDT V3 retains its existing independent 20 minute fingerprint window", () => {
   assert.match(rechargeRoute, /isUsdtCnyRecharge[\s\S]*Date\.now\(\) \+ 20 \* 60 \* 1000/);
+});
+
+test("Liuhaoyi create success redirects directly while payment status page remains a manual fallback", () => {
+  assert.match(rechargeUi, /isLiuhaoyiRecharge && result\.paymentUrl[\s\S]{0,100}window\.location\.assign\(result\.paymentUrl\)/);
+  assert.match(checkout, /isLiuhaoyiPaymentMethod\(paymentMethod\) && result\?\.paymentSession\?\.paymentUrl[\s\S]{0,120}window\.location\.assign\(result\.paymentSession\.paymentUrl\)/);
+  const fallbackPanel = paymentPage.slice(paymentPage.indexOf("function LiuhaoyiRechargePaymentPanel"));
+  assert.match(fallbackPanel, /打开付款页面/);
+  assert.doesNotMatch(paymentPage, /window\.location\.assign/);
+});
+
+test("legacy Liuhaoyi QR field is normalized only for presentation and never written back", () => {
+  assert.match(sessionService, /normalizeLiuhaoyiSessionPresentation/);
+  assert.match(sessionService, /metadata,provider,channel_code/);
+  assert.doesNotMatch(sessionService, /qr_code_url:\s*artifact\.qrCodeUrl/);
+});
+
+test("recharge TxHash fallback is restricted to USDT-BEP20", () => {
+  assert.match(paymentPage, /recharge\?\.channelCode === "usdt_bep20" && canTransfer/);
+  assert.match(paymentPage, /\{canSubmitRechargeTxHash \? \([\s\S]{0,220}TxHash fallback（可选）/);
 });

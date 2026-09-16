@@ -20,6 +20,7 @@ import {
   liuhaoyiChannelForType,
   liuhaoyiTypeForChannel,
   parseLiuhaoyiQuery,
+  selectLiuhaoyiPaymentArtifact,
   verifyLiuhaoyiMd5Signature,
 } from "@/lib/payments/providers/liuhaoyi-core.mjs";
 
@@ -114,21 +115,17 @@ async function createPayment(
     throw new LiuhaoyiProviderError("LIUHAOYI_CREATE_REJECTED", safeProviderMessage(payload, "六号易暂时无法创建支付单"));
   }
 
-  const paymentUrl = safeHttpUrl(payload.payurl);
-  const qrCodeUrl = safeHttpUrl(payload.qrcode);
-  const urlScheme = safePaymentDeepLink(payload.urlscheme);
+  const paymentArtifact = selectLiuhaoyiPaymentArtifact(payload);
   const createIdentity = extractLiuhaoyiCreateIdentity(payload);
-  if (!paymentUrl && !qrCodeUrl && !urlScheme) {
+  if (!paymentArtifact.paymentUrl) {
     throw new LiuhaoyiProviderError("LIUHAOYI_PAYMENT_ARTIFACT_MISSING", "六号易未返回可用的付款信息");
   }
   return {
     status: "pending",
-    paymentType: qrCodeUrl ? "qrcode" : "redirect",
-    paymentUrl: paymentUrl ?? urlScheme,
-    qrCodeUrl,
+    ...paymentArtifact,
     ...createIdentity,
     expiresAt: input.expiresAt,
-    metadata: { provider: "liuhaoyi", ...(urlScheme ? { urlScheme } : {}) },
+    metadata: { provider: "liuhaoyi" },
   };
 }
 
@@ -257,28 +254,6 @@ function boundedText(value: unknown, maximum: number) {
 function boundedOptionalText(value: unknown, maximum: number) {
   const text = boundedText(value, maximum);
   return text || undefined;
-}
-
-function safeHttpUrl(value: unknown) {
-  const text = boundedOptionalText(value, 2048);
-  if (!text) return undefined;
-  try {
-    const url = new URL(text);
-    return url.protocol === "https:" ? url.toString() : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function safePaymentDeepLink(value: unknown) {
-  const text = boundedOptionalText(value, 2048);
-  if (!text) return undefined;
-  try {
-    const url = new URL(text);
-    return ["alipay:", "alipays:", "weixin:", "weixinpay:"].includes(url.protocol.toLowerCase()) ? text : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function safeProviderMessage(payload: Record<string, unknown>, fallback: string) {

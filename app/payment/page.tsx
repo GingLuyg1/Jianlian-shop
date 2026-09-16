@@ -542,6 +542,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   const remainingSeconds = secondsLeft(recharge?.expiresAt) + nowTick * 0;
   const expiredByTime = Boolean(isLiuhaoyiRecharge && recharge?.expiresAt && isRechargePastDue(recharge.expiresAt));
   const canTransfer = ["pending", "waiting_payment"].includes(rechargeStatus) && remainingSeconds > 0;
+  const canSubmitRechargeTxHash = recharge?.channelCode === "usdt_bep20" && canTransfer;
   const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
 
   useEffect(() => {
@@ -555,7 +556,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   }
 
   async function verifyRechargeTxHash() {
-    if (!txHashValid || verifying || !canTransfer) return;
+    if (!txHashValid || verifying || !canSubmitRechargeTxHash) return;
     setVerifying(true);
     setError("");
     setVerifyMessage("");
@@ -667,7 +668,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                   </div>
                 ) : null}</>}
 
-                {canTransfer ? (
+                {canSubmitRechargeTxHash ? (
                   <div className="space-y-3 border-t pt-4">
                     <div>
                       <div className="text-sm font-medium">TxHash fallback（可选）</div>

@@ -76,7 +76,7 @@ test("account recharge stays scrollable and presents the minimal BEP20 flow", ()
 
 test("recharge creation enters an isolated payment recharge mode", () => {
   assert.match(ui, /router\.push\(`\/payment\?recharge=\$\{encodeURIComponent\(result\.rechargeNo\)\}`\)/);
-  assert.match(ui, /if \(!response\.ok\) throw[\s\S]{0,180}if \(result\?\.rechargeNo\) \{[\s\S]{0,120}router\.push/);
+  assert.match(ui, /if \(!response\.ok\) throw[\s\S]{0,180}if \(result\?\.rechargeNo\) \{[\s\S]{0,300}router\.push/);
   assert.match(ui, /client_request_id: clientRequestIdRef\.current/);
   assert.match(ui, /hasValidAmount && !isSubmitting/);
   assert.match(ui, /paymentChannels\.length >= 2 && "sm:grid-cols-2"/);

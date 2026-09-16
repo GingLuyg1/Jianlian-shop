@@ -11,6 +11,8 @@ import {
   liuhaoyiCallbackResponseBody,
   liuhaoyiChannelForType,
   liuhaoyiTypeForChannel,
+  normalizeLiuhaoyiSessionPresentation,
+  selectLiuhaoyiPaymentArtifact,
   verifyLiuhaoyiMd5Signature,
 } from "../../lib/payments/providers/liuhaoyi-core.mjs";
 import {
@@ -174,8 +176,61 @@ test("mapi trade_no becomes the bounded providerOrderNo persisted by payment ses
   assert.match(createPayment, /extractLiuhaoyiCreateIdentity\(payload\)/);
   assert.match(createPayment, /\.\.\.createIdentity/);
   assert.match(sessionService, /provider_order_no: providerResult\.providerOrderNo \?\? null/);
-  assert.match(createPayment, /if \(!paymentUrl && !qrCodeUrl && !urlScheme\)/);
+  assert.match(createPayment, /if \(!paymentArtifact\.paymentUrl\)/);
   assert.doesNotMatch(createPayment, /if \(!createIdentity/);
+});
+
+test("六号易 qrcode 是托管付款页 URL，不作为图片二维码输出", () => {
+  assert.deepEqual(
+    selectLiuhaoyiPaymentArtifact({ qrcode: "https://provider.example.test/cashier/123" }),
+    {
+      paymentType: "redirect",
+      paymentUrl: "https://provider.example.test/cashier/123",
+      qrCodeUrl: undefined,
+    },
+  );
+  assert.equal(
+    selectLiuhaoyiPaymentArtifact({
+      payurl: "https://provider.example.test/preferred",
+      qrcode: "https://provider.example.test/fallback",
+    }).paymentUrl,
+    "https://provider.example.test/preferred",
+  );
+  assert.equal(
+    selectLiuhaoyiPaymentArtifact({ urlscheme: "weixin://wap/pay?prepayid=test" }).paymentUrl,
+    "weixin://wap/pay?prepayid=test",
+  );
+  assert.equal(selectLiuhaoyiPaymentArtifact({ qrcode: "http://provider.example.test/insecure" }).paymentUrl, undefined);
+  assert.equal(selectLiuhaoyiPaymentArtifact({ payurl: "javascript:alert(1)", urlscheme: "intent://unsafe" }).paymentUrl, undefined);
+});
+
+test("旧六号易 session 仅在指定渠道把 HTTPS qr_code_url 展示为付款页", () => {
+  assert.deepEqual(
+    normalizeLiuhaoyiSessionPresentation({
+      provider: "liuhaoyi",
+      channelCode: "wechat",
+      paymentType: "qrcode",
+      qrCodeUrl: "https://provider.example.test/legacy-cashier",
+    }),
+    {
+      paymentType: "redirect",
+      paymentUrl: "https://provider.example.test/legacy-cashier",
+      qrCodeUrl: undefined,
+    },
+  );
+  assert.deepEqual(
+    normalizeLiuhaoyiSessionPresentation({
+      provider: "another_provider",
+      channelCode: "wechat",
+      paymentType: "qrcode",
+      qrCodeUrl: "https://images.example.test/real-qr.png",
+    }),
+    {
+      paymentType: "qrcode",
+      paymentUrl: undefined,
+      qrCodeUrl: "https://images.example.test/real-qr.png",
+    },
+  );
 });
 
 test("return_url 只返回订单或充值展示页，不具备完成或入账能力", () => {
