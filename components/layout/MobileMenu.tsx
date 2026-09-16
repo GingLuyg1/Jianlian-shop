@@ -51,9 +51,10 @@ const helpItems = [
 
 type MobileMenuProps = {
   onSupportOpen: () => void;
+  mobileNavigationUntilLg?: boolean;
 };
 
-export default function MobileMenu({ onSupportOpen }: MobileMenuProps) {
+export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = false }: MobileMenuProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const visibleCategoryHrefs = useVisibleStorefrontCategoryHrefs();
@@ -69,7 +70,12 @@ export default function MobileMenu({ onSupportOpen }: MobileMenuProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button data-storefront-menu-trigger variant="ghost" size="icon" className="md:hidden">
+        <Button
+          data-storefront-menu-trigger
+          variant="ghost"
+          size="icon"
+          className={mobileNavigationUntilLg ? "lg:hidden" : "md:hidden"}
+        >
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>

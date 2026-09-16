@@ -239,7 +239,7 @@ export default function AccountRechargeContent() {
   };
 
   return (
-    <PublicLayout contentClassName="px-4 py-6 md:px-6">
+    <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 px-4 py-6 sm:px-5 lg:mt-0 lg:px-6">
       <div className="mx-auto max-w-4xl space-y-4">
         <Card>
             <CardContent className="flex flex-col p-4 sm:p-6">
@@ -307,7 +307,7 @@ export default function AccountRechargeContent() {
                         <span>最低充值：{formatPaymentAmount(channel.minimumAmount, channel.currency)}</span>
                         <span>
                           {isLiuhaoyiPaymentMethod(channel.code)
-                            ? "支付平台另收 3% 通道手续费"
+                            ? "支付平台可能另收约 3% 通道手续费"
                             : channel.code === "usdt_bep20"
                               ? "手续费 0"
                               : channel.feeRate === 0 ? "0 手续费" : "以渠道配置为准"}
@@ -426,7 +426,7 @@ export default function AccountRechargeContent() {
 
                 {isLiuhaoyiRecharge ? (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-                    支付宝 / 微信支付将额外收取 3% 支付通道手续费，由支付平台收取。充值到账金额不包含手续费，实际付款金额以支付页面为准。本站仍按充值金额原额创建支付单并入账。
+                    支付平台可能额外收取约 3% 通道手续费，实际付款金额以支付页面为准；本站充值本金不增加，仍按充值金额原额创建支付单并入账。
                   </div>
                 ) : null}
 
@@ -560,7 +560,7 @@ function RechargeRecords({ records, loading, error, page, count, nowTick, onRetr
               {record.paymentTokenContract ? <RecordLine label="Token 合约" value={record.paymentTokenContract} /> : null}
               {record.actualReceivedUsdt ? <RecordLine label="实际到账" value={`${record.actualReceivedUsdt} USDT`} /> : null}
               <RecordLine label="本站手续费" value={record.feeAmount === 0 ? "0" : formatPaymentAmount(record.feeAmount, record.currency)} />
-              {isLiuhaoyi ? <RecordLine label="支付通道手续费" value="3%（支付平台额外收取）" /> : null}
+              {isLiuhaoyi ? <RecordLine label="支付通道手续费" value="可能约 3%（支付平台额外收取）" /> : null}
               {!record.expectedUsdtAmount ? <RecordLine label="应付金额" value={formatPaymentAmount(record.payableAmount, record.currency)} /> : null}
               <RecordLine label="到账金额" value={record.creditedCnyAmount ? `¥${record.creditedCnyAmount}` : formatPaymentAmount(record.creditedAmount, record.currency)} />
               <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />

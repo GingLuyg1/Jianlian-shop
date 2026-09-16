@@ -13,21 +13,32 @@ import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
 import RouteLoadingIndicator from "./RouteLoadingIndicator";
 import { OPEN_PUBLIC_SUPPORT_EVENT } from "@/lib/support/open-public-support";
+import { cn } from "@/lib/utils";
 
 interface PublicLayoutProps {
   children: ReactNode;
   contentClassName?: string;
   viewportLocked?: boolean;
+  mobileNavigationUntilLg?: boolean;
 }
 
 export default function PublicLayout({
   children,
-  contentClassName = "p-4 md:p-6 max-w-7xl mx-auto mt-12 md:mt-0",
+  contentClassName,
   viewportLocked = false,
+  mobileNavigationUntilLg = false,
 }: PublicLayoutProps) {
+  const resolvedContentClassName = contentClassName
+    ?? cn("p-4 md:p-6 max-w-7xl mx-auto mt-12", mobileNavigationUntilLg ? "lg:mt-0" : "md:mt-0");
   return (
     <SettingsProvider>
-      <PublicLayoutContent contentClassName={contentClassName} viewportLocked={viewportLocked}>{children}</PublicLayoutContent>
+      <PublicLayoutContent
+        contentClassName={resolvedContentClassName}
+        viewportLocked={viewportLocked}
+        mobileNavigationUntilLg={mobileNavigationUntilLg}
+      >
+        {children}
+      </PublicLayoutContent>
     </SettingsProvider>
   );
 }
@@ -40,7 +51,7 @@ function getSupportHref(value: string) {
   return "";
 }
 
-function PublicLayoutContent({ children, contentClassName, viewportLocked = false }: PublicLayoutProps) {
+function PublicLayoutContent({ children, contentClassName, viewportLocked = false, mobileNavigationUntilLg = false }: PublicLayoutProps) {
   const [supportOpen, setSupportOpen] = useState(false);
   const supportTrigger = useRef<HTMLElement | null>(null);
   const openSupport = useCallback(() => {
@@ -61,14 +72,19 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
 
   return (
-    <div className={viewportLocked
-      ? "h-dvh overflow-hidden bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px] lg:[--storefront-main-offset:195px] lg:[--storefront-sidebar-width:195px]"
-      : "min-h-screen overflow-x-hidden bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px] lg:[--storefront-main-offset:195px] lg:[--storefront-sidebar-width:195px]"}>
+    <div className={cn(
+      viewportLocked ? "h-dvh overflow-hidden" : "min-h-screen overflow-x-hidden",
+      "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:195px] lg:[--storefront-sidebar-width:195px]",
+      !mobileNavigationUntilLg && "md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px]",
+    )}>
       <RouteLoadingIndicator />
-      <PublicSidebar onSupportOpen={openSupport} />
+      <PublicSidebar onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
 
-      <div className="fixed left-0 right-0 top-0 z-40 flex items-center gap-3 border-b border-border bg-white px-3 py-2 md:hidden">
-        <MobileMenu onSupportOpen={openSupport} />
+      <div className={cn(
+        "fixed left-0 right-0 top-0 z-40 flex items-center gap-3 border-b border-border bg-white px-3 py-2",
+        mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
+      )}>
+        <MobileMenu onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
         <div className="flex items-center gap-2">
           <img
             src="/assets/jianlian-brand-logo.png"
@@ -84,7 +100,10 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
       </div>
 
-      <main className={viewportLocked ? "flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[var(--storefront-main-offset)]" : "min-h-screen min-w-0 md:ml-[var(--storefront-main-offset)]"}>
+      <main className={cn(
+        viewportLocked ? "flex h-dvh min-w-0 flex-col overflow-hidden" : "min-h-screen min-w-0",
+        mobileNavigationUntilLg ? "lg:ml-[var(--storefront-main-offset)]" : "md:ml-[var(--storefront-main-offset)]",
+      )}>
         <PublicTopInfoBar announcementText={announcement || undefined} />
         <div
           className={viewportLocked ? `min-h-0 flex-1 ${contentClassName}` : contentClassName}

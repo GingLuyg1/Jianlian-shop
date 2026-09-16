@@ -11,8 +11,9 @@ const callbackService = readFileSync(new URL("../../lib/payments/payment-callbac
 const provider = readFileSync(new URL("../../lib/payments/providers/liuhaoyi.ts", import.meta.url), "utf8");
 
 test("UI explains the provider 3 percent charge without adding it to local amounts", () => {
-  assert.match(rechargeUi, /额外收取 3% 支付通道手续费/);
-  assert.match(paymentPage, /额外收取 3% 支付通道手续费/);
+  assert.match(rechargeUi, /可能额外收取约 3% 通道手续费/);
+  assert.match(paymentPage, /可能额外收取约 3% 通道手续费/);
+  assert.match(checkout, /可能额外收取约 3% 通道手续费/);
   assert.match(rechargeRoute, /summary\.fee !== 0 \|\| summary\.payableAmount !== summary\.amount/);
   assert.match(provider, /assertLiuhaoyiAmountBreakdown\(input\.requestedAmount, input\.feeAmount, input\.payableAmount\)/);
   assert.doesNotMatch(provider, /\*\s*1\.03|1\.03\s*\*/);
@@ -70,6 +71,19 @@ test("provider qrcode is rendered locally and is never used as an image source",
   assert.match(paymentPage, /请使用微信扫一扫完成支付/);
   assert.match(paymentPage, /请使用微信打开支付/);
   assert.match(paymentPage, /打开微信支付/);
+  assert.match(paymentPage, /getQrPayloadOpenAction/);
+  assert.match(paymentPage, /openAction \? \(/);
+  assert.doesNotMatch(paymentPage, /useEffect\([\s\S]{0,200}openAction/);
+});
+
+test("payment-critical layouts keep mobile navigation through tablet width", () => {
+  const publicLayout = readFileSync(new URL("../../components/layout/PublicLayout.tsx", import.meta.url), "utf8");
+  const sidebar = readFileSync(new URL("../../components/layout/PublicSidebar.tsx", import.meta.url), "utf8");
+  assert.match(rechargeUi, /<PublicLayout mobileNavigationUntilLg/);
+  assert.match(paymentPage, /<PublicLayout mobileNavigationUntilLg/);
+  assert.match(checkout, /<PublicLayout mobileNavigationUntilLg/);
+  assert.match(publicLayout, /mobileNavigationUntilLg \? "lg:hidden" : "md:hidden"/);
+  assert.match(sidebar, /mobileNavigationUntilLg \? "lg:flex" : "md:flex"/);
 });
 
 test("legacy Liuhaoyi QR field is normalized only for presentation and never written back", () => {

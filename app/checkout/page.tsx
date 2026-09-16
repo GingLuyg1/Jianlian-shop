@@ -497,7 +497,7 @@ export default function CheckoutPage() {
 
   if (productLoading) {
     return (
-      <PublicLayout contentClassName="max-w-none px-4 md:px-6 py-5">
+      <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 max-w-none px-4 py-5 sm:px-5 lg:mt-0 lg:px-6">
         <Card>
           <CardContent className="py-20 text-center text-sm text-muted-foreground">
             正在加载商品...
@@ -509,7 +509,7 @@ export default function CheckoutPage() {
 
   if (!product || !productRow) {
     return (
-      <PublicLayout contentClassName="max-w-none px-4 md:px-6 py-5">
+      <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 max-w-none px-4 py-5 sm:px-5 lg:mt-0 lg:px-6">
         <Card>
           <CardContent className="py-20 text-center">
             <h2 className="text-lg font-semibold">商品未找到</h2>
@@ -719,7 +719,7 @@ export default function CheckoutPage() {
   };
 
   return (
-    <PublicLayout contentClassName="mt-12 max-w-none py-4 md:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
+    <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 max-w-none py-4 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
       <div data-testid="checkout-layout" className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
         <ProductDetailCard
           product={product}
@@ -831,6 +831,11 @@ export default function CheckoutPage() {
                 {selectedPaymentUnavailable ? (
                   <p className="mt-2 text-xs text-amber-700">
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
+                  </p>
+                ) : null}
+                {isLiuhaoyiPaymentMethod(paymentMethod) ? (
+                  <p className="mt-2 text-xs leading-5 text-amber-700">
+                    支付平台可能额外收取约 3% 通道手续费，实际付款金额以支付页面为准；本站订单本金不增加。
                   </p>
                 ) : null}
                 {paymentMethod === "balance" && balanceStatus === "error" ? (

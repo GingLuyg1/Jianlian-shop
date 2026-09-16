@@ -39,9 +39,10 @@ const helpItems = [
 
 type PublicSidebarProps = {
   onSupportOpen: () => void;
+  mobileNavigationUntilLg?: boolean;
 };
 
-export default function PublicSidebar({ onSupportOpen }: PublicSidebarProps) {
+export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg = false }: PublicSidebarProps) {
   const pathname = usePathname();
   const visibleCategoryHrefs = useVisibleStorefrontCategoryHrefs();
   const visibleMenuItems = menuItems.filter(
@@ -76,7 +77,10 @@ export default function PublicSidebar({ onSupportOpen }: PublicSidebarProps) {
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[var(--storefront-sidebar-width)] flex-col border-r border-border bg-white/95 md:flex">
+    <aside className={cn(
+      "fixed left-0 top-0 z-40 hidden h-screen w-[var(--storefront-sidebar-width)] flex-col border-r border-border bg-white/95",
+      mobileNavigationUntilLg ? "lg:flex" : "md:flex",
+    )}>
       <div className="flex h-[83px] items-center px-3">
         <Link
           href="/"

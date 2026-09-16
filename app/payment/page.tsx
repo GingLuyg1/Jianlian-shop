@@ -25,6 +25,7 @@ import {
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { getBep20TimingVisibility } from "@/lib/payments/bep20-presentation.mjs";
+import { getQrPayloadOpenAction } from "@/lib/payments/payment-artifact-presentation.mjs";
 import { isRechargePastDue } from "@/lib/payments/recharge-expiry.mjs";
 import { rechargeStatusLabel, type RechargeRecord } from "@/lib/payments/recharge-utils";
 import { openPublicSupport } from "@/lib/support/open-public-support";
@@ -584,7 +585,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   }
 
   return (
-    <PublicLayout>
+    <PublicLayout mobileNavigationUntilLg>
       <div className="mx-auto max-w-5xl space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -809,7 +810,7 @@ function LiuhaoyiRechargePaymentPanel({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">请核对金额后完成付款。支付结果以服务端异步回调和统一支付状态为准，请勿重复付款。</div>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">支付宝 / 微信支付将额外收取 3% 支付通道手续费，由支付平台收取。充值到账金额不包含手续费，实际付款金额以支付页面为准。本地充值金额与六号易 API 金额不增加此费用。</div>
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">支付平台可能额外收取约 3% 通道手续费，实际付款金额以支付页面为准；本站充值本金与六号易 API 金额均不增加。</div>
       {providerPaid ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">支付渠道已确认付款，正在完成余额入账，请勿重复付款。</div> : null}
       {session.qrCodeValue ? (
         <LocalPaymentQr
@@ -841,6 +842,7 @@ function LocalPaymentQr({
   clientDevice?: "pc" | "mobile" | "wechat" | "alipay";
 }) {
   const mobileContext = clientDevice !== undefined && clientDevice !== "pc";
+  const openAction = getQrPayloadOpenAction({ value, channelCode, clientDevice });
   const instruction = channelCode === "wechat"
     ? mobileContext
       ? "请使用微信打开支付"
@@ -852,17 +854,24 @@ function LocalPaymentQr({
       : "请使用对应的支付应用扫码";
 
   return (
-    <div className="rounded-xl bg-slate-50 p-4 text-center">
-      <div className="mx-auto inline-flex rounded-lg bg-white p-2" data-local-payment-qr="true">
+    <div className="min-w-0 rounded-xl bg-slate-50 p-4 text-center">
+      {openAction ? (
+        <Button asChild className="mb-4 min-h-11 w-full">
+          <a href={openAction.href}>{openAction.label}<ExternalLink className="ml-2 h-4 w-4" /></a>
+        </Button>
+      ) : null}
+      <div className="mx-auto inline-flex max-w-full rounded-lg bg-white p-2" data-local-payment-qr="true">
         <QRCodeSVG
           value={value}
-          size={208}
+          size={240}
           level="L"
           marginSize={4}
           title="支付二维码"
+          className="h-auto max-w-full"
         />
       </div>
       <p className="mt-2 text-xs text-muted-foreground">{instruction}</p>
+      {openAction ? <p className="mt-1 text-xs text-muted-foreground">{openAction.fallbackText}</p> : null}
     </div>
   );
 }
@@ -1214,7 +1223,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
   }
 
   return (
-    <PublicLayout>
+    <PublicLayout mobileNavigationUntilLg>
       <div className="mx-auto max-w-5xl space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
