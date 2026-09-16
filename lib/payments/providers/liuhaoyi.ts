@@ -23,6 +23,7 @@ import {
   selectLiuhaoyiPaymentArtifact,
   verifyLiuhaoyiMd5Signature,
 } from "@/lib/payments/providers/liuhaoyi-core.mjs";
+import { normalizePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -82,6 +83,7 @@ async function createPayment(
     throw new LiuhaoyiProviderError("LIUHAOYI_FEE_CONFIGURATION_INVALID", "六号易支付不得由本站附加买家手续费");
   }
   const channelType = liuhaoyiTypeForChannel(input.channel.code);
+  const clientDevice = normalizePaymentClientDevice(input.clientDevice);
   const clientIp = String(input.clientIp ?? "").trim();
   if (!clientIp) throw new LiuhaoyiProviderError("LIUHAOYI_CLIENT_IP_REQUIRED", "无法确认付款客户端 IP");
 
@@ -99,6 +101,7 @@ async function createPayment(
     name: boundedText(input.subject || `Jianlian ${input.businessType} ${input.businessNo}`, 127),
     money,
     clientip: clientIp,
+    device: clientDevice,
   };
   const form = new URLSearchParams({
     ...unsigned,
@@ -125,7 +128,7 @@ async function createPayment(
     ...paymentArtifact,
     ...createIdentity,
     expiresAt: input.expiresAt,
-    metadata: { provider: "liuhaoyi" },
+    metadata: { provider: "liuhaoyi", clientDevice },
   };
 }
 

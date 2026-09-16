@@ -9,6 +9,7 @@ import {
   PaymentSessionError,
 } from "@/lib/payments/payment-session-service";
 import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
+import { derivePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 import { evaluatePaymentRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 import { checkRateLimit, checkRequestSize, getBusinessRateLimitKey, getUserRateLimitKey } from "@/lib/security/rate-limit";
 
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
       channelCode: channel,
       userId: context.user.id,
       clientIp: getPaymentClientIp(request),
+      clientDevice: derivePaymentClientDevice(request.headers.get("user-agent")),
     });
     return NextResponse.json(session, { status: 201 });
   } catch (error) {

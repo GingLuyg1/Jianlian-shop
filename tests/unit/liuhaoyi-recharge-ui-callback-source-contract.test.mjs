@@ -67,6 +67,9 @@ test("provider qrcode is rendered locally and is never used as an image source",
   assert.match(paymentPage, /value=\{session\.qrCodeValue\}/);
   assert.match(paymentPage, /data-local-payment-qr="true"/);
   assert.doesNotMatch(paymentPage, /<img src=\{session\.qrCodeUrl\}/);
+  assert.match(paymentPage, /请使用微信扫一扫完成支付/);
+  assert.match(paymentPage, /请使用微信打开支付/);
+  assert.match(paymentPage, /打开微信支付/);
 });
 
 test("legacy Liuhaoyi QR field is normalized only for presentation and never written back", () => {

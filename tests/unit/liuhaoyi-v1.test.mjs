@@ -5,6 +5,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QRCodeSVG } from "qrcode.react";
 import { getPaymentChannelValidationError } from "../../lib/payments/manual-channel-readiness.mjs";
+import {
+  derivePaymentClientDevice,
+  normalizePaymentClientDevice,
+} from "../../lib/payments/request-client-device.mjs";
 
 import {
   buildLiuhaoyiSignContent,
@@ -51,13 +55,36 @@ test("六号易 MD5 签名按 ASCII 字段顺序稳定生成且不 URL encode", 
     return_url: "https://shop.example.test/payment?order=ORD001",
     name: "Test Order",
     money: "2000.00",
+    device: "pc",
     sign_type: "MD5",
   };
   assert.equal(
     buildLiuhaoyiSignContent(request),
-    "money=2000.00&name=Test Order&notify_url=https://shop.example.test/api/payments/callback/alipay&out_trade_no=PS202609140001&pid=merchant-demo&return_url=https://shop.example.test/payment?order=ORD001&type=alipay"
+    "device=pc&money=2000.00&name=Test Order&notify_url=https://shop.example.test/api/payments/callback/alipay&out_trade_no=PS202609140001&pid=merchant-demo&return_url=https://shop.example.test/payment?order=ORD001&type=alipay"
   );
-  assert.equal(createLiuhaoyiMd5Signature(request, merchantKey), "8161c8e722d9895c191aadea03dd4c75");
+  assert.equal(createLiuhaoyiMd5Signature(request, merchantKey), "1223a790162006c8a19168559af99476");
+});
+
+test("支付创建 User-Agent 仅派生受控的六号易 device 枚举", () => {
+  assert.equal(derivePaymentClientDevice("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140"), "pc");
+  assert.equal(derivePaymentClientDevice("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile Safari/604.1"), "mobile");
+  assert.equal(derivePaymentClientDevice("Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36"), "mobile");
+  assert.equal(derivePaymentClientDevice("Mozilla/5.0 (iPhone) Mobile MicroMessenger/8.0.50"), "wechat");
+  assert.equal(derivePaymentClientDevice("Mozilla/5.0 (Linux; Android 15) AlipayClient/10.6.0"), "alipay");
+  assert.equal(normalizePaymentClientDevice("jump"), "pc");
+  assert.equal(normalizePaymentClientDevice("attacker-controlled"), "pc");
+
+  const provider = source("lib/payments/providers/liuhaoyi.ts");
+  for (const route of [
+    "app/api/orders/route.ts",
+    "app/api/recharges/route.ts",
+    "app/api/payments/create/route.ts",
+  ]) {
+    assert.match(source(route), /derivePaymentClientDevice\(request\.headers\.get\("user-agent"\)\)/);
+  }
+  assert.match(provider, /device: clientDevice/);
+  assert.match(provider, /metadata: \{ provider: "liuhaoyi", clientDevice \}/);
+  assert.doesNotMatch(provider, /userAgent|user-agent/i);
 });
 
 test("正确回调签名通过，错误或篡改后的签名拒绝", () => {

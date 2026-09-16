@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
   PaymentBusinessType,
+  PaymentClientDevice,
   PaymentChannel,
   PaymentCurrency,
   PaymentSessionStatus,
@@ -38,6 +39,7 @@ export type CreatePaymentSessionInput = {
   channelCode: string;
   userId: string;
   clientIp?: string | null;
+  clientDevice?: PaymentClientDevice;
 };
 
 export type PaymentSessionResponse = {
@@ -48,6 +50,7 @@ export type PaymentSessionResponse = {
   qrCodeUrl?: string;
   qrCodeValue?: string;
   deepLinkUrl?: string;
+  clientDevice?: PaymentClientDevice;
   walletAddress?: string;
   network?: string;
   currency: PaymentCurrency;
@@ -146,6 +149,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
       payableAmount: business.payableAmount,
       expiresAt,
       clientIp: input.clientIp ?? undefined,
+      clientDevice: input.clientDevice,
     })) as ProviderCreatePaymentResult;
 
     const { data, error } = await service
@@ -500,6 +504,9 @@ async function loadEnabledChannel(service: SupabaseClient, code: string | null |
 }
 
 function toSessionResponse(row: Record<string, unknown>): PaymentSessionResponse {
+  const metadata = row.metadata && typeof row.metadata === "object"
+    ? row.metadata as Record<string, unknown>
+    : {};
   const artifact = normalizeLiuhaoyiSessionPresentation({
     provider: textOrUndefined(row.provider),
     channelCode: textOrUndefined(row.channel_code),
@@ -515,6 +522,7 @@ function toSessionResponse(row: Record<string, unknown>): PaymentSessionResponse
     qrCodeUrl: artifact.qrCodeUrl,
     qrCodeValue: artifact.qrCodeValue,
     deepLinkUrl: artifact.deepLinkUrl,
+    clientDevice: normalizeClientDevice(metadata.clientDevice),
     walletAddress: textOrUndefined(row.wallet_address),
     network: textOrUndefined(row.network),
     currency: row.currency === "USDT" ? "USDT" : "CNY",
@@ -533,6 +541,12 @@ function normalizeSessionStatus(value: unknown): PaymentSessionStatus {
 
 function normalizePaymentType(value: unknown): "redirect" | "qrcode" | "address" | "deeplink" {
   return value === "qrcode" || value === "address" || value === "deeplink" ? value : "redirect";
+}
+
+function normalizeClientDevice(value: unknown): PaymentClientDevice | undefined {
+  return ["pc", "mobile", "wechat", "alipay"].includes(String(value))
+    ? String(value) as PaymentClientDevice
+    : undefined;
 }
 
 function generateSessionNo() {

@@ -10,6 +10,7 @@ import type { PaymentChannel, RechargeStatus } from "@/lib/payments/channel-type
 import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { createPaymentSession } from "@/lib/payments/payment-session-service";
 import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
+import { derivePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 import {
   calculateExpectedUsdtAmount,
   compareRechargeDecimals,
@@ -409,6 +410,7 @@ export async function POST(request: Request) {
         channelCode: channel.code,
         userId: context.user.id,
         clientIp: getPaymentClientIp(request),
+        clientDevice: derivePaymentClientDevice(request.headers.get("user-agent")),
       });
       return NextResponse.json({ rechargeNo, ...result }, { status: 201 });
     } catch (providerError) {

@@ -9,6 +9,7 @@ import { normalizePaymentMethod } from "@/lib/payments/payment-methods";
 import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { createPaymentSession, PaymentSessionError } from "@/lib/payments/payment-session-service";
 import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
+import { derivePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 import { createBep20PaymentSession, getBep20ErrorMessage } from "@/lib/payments/bep20-chain-service";
 import { getUserBep20UnderpaymentWalletCredits } from "@/lib/payments/bep20-underpayment-user";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
@@ -698,6 +699,7 @@ export async function POST(request: Request) {
           channelCode: paymentMethod === "wechat_pay" ? "wechat" : "alipay",
           userId: user.id,
           clientIp: getPaymentClientIp(request),
+          clientDevice: derivePaymentClientDevice(request.headers.get("user-agent")),
         });
         logOrderPostProcess({ requestId: clientRequestId, stage: "LIUHAOYI_SESSION_COMPLETED", orderId, orderNo: completedOrder.orderNo });
         return NextResponse.json({

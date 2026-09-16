@@ -20,6 +20,7 @@ export type RechargeStatus = "pending" | "waiting_payment" | "submitted" | "revi
 export type PaymentSessionStatus = "pending" | "processing" | "paid" | "failed" | "expired" | "closed";
 export type PaymentBusinessType = "order" | "recharge" | "account_recharge";
 export type PaymentResultType = "redirect" | "qrcode" | "address" | "deeplink";
+export type PaymentClientDevice = "pc" | "mobile" | "wechat" | "alipay";
 
 export type ManualPaymentInstructions = {
   payment_address: string;
@@ -101,6 +102,7 @@ export type ProviderCreatePaymentInput = {
   notifyUrl?: string;
   returnUrl?: string;
   clientIp?: string;
+  clientDevice?: PaymentClientDevice;
   metadata?: Record<string, unknown>;
 };
 

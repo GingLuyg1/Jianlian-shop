@@ -50,6 +50,7 @@ type PaymentSession = {
   qrCodeUrl?: string;
   qrCodeValue?: string;
   deepLinkUrl?: string;
+  clientDevice?: "pc" | "mobile" | "wechat" | "alipay";
   walletAddress?: string;
   network?: string;
   currency: string;
@@ -814,6 +815,7 @@ function LiuhaoyiRechargePaymentPanel({
         <LocalPaymentQr
           value={session.qrCodeValue}
           channelCode={recharge.channelCode}
+          clientDevice={session.clientDevice}
         />
       ) : null}
       <div className="space-y-3 rounded-xl bg-slate-50 p-4 text-sm">
@@ -823,17 +825,30 @@ function LiuhaoyiRechargePaymentPanel({
         <Info label="待支付剩余时间" value={`${Math.floor(remainingSeconds / 60)} 分 ${remainingSeconds % 60} 秒`} />
       </div>
       {session.paymentUrl ? <Button asChild className="w-full"><a href={session.paymentUrl} target="_blank" rel="noreferrer">打开付款页面<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
-      {session.deepLinkUrl ? <Button asChild className="w-full" variant="outline"><a href={session.deepLinkUrl}>在支付客户端中打开<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
+      {session.deepLinkUrl ? <Button asChild className="w-full" variant="outline"><a href={session.deepLinkUrl}>{recharge.channelCode === "wechat" ? "打开微信支付" : recharge.channelCode === "alipay" ? "打开支付宝支付" : "在支付客户端中打开"}<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
       {!session.qrCodeValue && !session.paymentUrl && !session.deepLinkUrl ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">渠道未返回可展示的付款入口，请勿付款并联系客服。</div> : null}
     </div>
   );
 }
 
-function LocalPaymentQr({ value, channelCode }: { value: string; channelCode?: string | null }) {
+function LocalPaymentQr({
+  value,
+  channelCode,
+  clientDevice,
+}: {
+  value: string;
+  channelCode?: string | null;
+  clientDevice?: "pc" | "mobile" | "wechat" | "alipay";
+}) {
+  const mobileContext = clientDevice !== undefined && clientDevice !== "pc";
   const instruction = channelCode === "wechat"
-    ? "请使用微信扫一扫完成支付"
+    ? mobileContext
+      ? "请使用微信打开支付"
+      : "请使用微信扫一扫完成支付"
     : channelCode === "alipay"
-      ? "请使用支付宝扫码完成支付"
+      ? mobileContext
+        ? "请使用支付宝打开支付"
+        : "请使用支付宝扫码完成支付"
       : "请使用对应的支付应用扫码";
 
   return (
@@ -1332,6 +1347,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       <LocalPaymentQr
                         value={session.qrCodeValue}
                         channelCode={selectedChannel}
+                        clientDevice={session.clientDevice}
                       />
                     ) : null}
 
@@ -1354,7 +1370,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
 
                     {session.deepLinkUrl ? (
                       <Button asChild variant="outline">
-                        <a href={session.deepLinkUrl}>在支付客户端中打开</a>
+                        <a href={session.deepLinkUrl}>{selectedChannel === "wechat" ? "打开微信支付" : selectedChannel === "alipay" ? "打开支付宝支付" : "在支付客户端中打开"}</a>
                       </Button>
                     ) : null}
 
