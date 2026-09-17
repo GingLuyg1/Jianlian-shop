@@ -19,6 +19,7 @@ export async function runLiuhaoyiWechatRecoveryWorker({
   sessionNo,
   execute = false,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  queryTimeoutMs,
   fetchImpl = fetch,
   write = (line) => process.stdout.write(`${line}\n`),
 } = {}) {
@@ -30,7 +31,7 @@ export async function runLiuhaoyiWechatRecoveryWorker({
     const response = await fetchImpl(recoveryUrl(baseUrl), {
       method: "POST",
       headers: { "content-type": "application/json", "x-payment-reconciliation-secret": secret },
-      body: JSON.stringify({ sessionNo: sessionNo.trim(), execute: execute === true }),
+      body: JSON.stringify({ sessionNo: sessionNo.trim(), execute: execute === true, ...(queryTimeoutMs ? { queryTimeoutMs } : {}) }),
       signal: AbortSignal.timeout(timeoutMs),
     });
     httpStatus = response.status;
@@ -39,8 +40,10 @@ export async function runLiuhaoyiWechatRecoveryWorker({
     const summary = safeSummary(payload, httpStatus, true);
     write(JSON.stringify(summary));
     return { exitCode: 0, ...summary };
-  } catch {
-    const summary = safeSummary(null, httpStatus, false, mode, sessionNo);
+  } catch (error) {
+    const reason = error?.name === "TimeoutError" || error?.name === "AbortError"
+      ? "worker_timeout" : "worker_failed";
+    const summary = safeSummary(null, httpStatus, false, mode, sessionNo, reason);
     write(JSON.stringify(summary));
     return { exitCode: 1, ...summary };
   }
@@ -52,7 +55,7 @@ function validResponse(value, mode, sessionNo) {
     && Number.isInteger(value.ledger_count) && value.ledger_count >= 0;
 }
 
-function safeSummary(payload, httpStatus, success, mode = payload?.mode ?? null, sessionNo = payload?.session_no ?? null) {
+function safeSummary(payload, httpStatus, success, mode = payload?.mode ?? null, sessionNo = payload?.session_no ?? null, failureReason = null) {
   return {
     success, mode, http_status: httpStatus, session_no: sessionNo,
     session_found: payload?.session_found ?? null,
@@ -69,7 +72,8 @@ function safeSummary(payload, httpStatus, success, mode = payload?.mode ?? null,
     completed: payload?.completed ?? null,
     idempotent: payload?.idempotent ?? null,
     manual_review: payload?.manual_review ?? null,
-    reason: typeof payload?.reason === "string" ? payload.reason : null,
+    reason: failureReason ?? (typeof payload?.reason === "string" && /^[a-z0-9_]{1,80}$/.test(payload.reason)
+      ? payload.reason : null),
   };
 }
 

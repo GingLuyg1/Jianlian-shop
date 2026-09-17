@@ -255,7 +255,7 @@ export type PaymentProvider = {
   createPayment(
     input: CreatePaymentInput | ProviderCreatePaymentInput
   ): Promise<CreatePaymentResult | ProviderCreatePaymentResult>;
-  queryPayment(paymentNo: string): Promise<{ status: RechargeStatus } | ProviderQueryPaymentResult>;
+  queryPayment(paymentNo: string, options?: { timeoutMs?: number }): Promise<{ status: RechargeStatus } | ProviderQueryPaymentResult>;
   closePayment(paymentNo: string): Promise<{ closed: boolean } | ProviderClosePaymentResult>;
   verifyCallback(payload: unknown, signatureOrContext?: string | ProviderCallbackContext): Promise<boolean>;
   parseCallback(

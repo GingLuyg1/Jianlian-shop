@@ -1,29 +1,34 @@
-# 六号易微信账户充值 watcher V1（未启用）
+# 六号易微信账户充值 watcher V2（仅本地模板，未启用）
 
-本实现只复用已有的单会话微信 recovery API；不自行修改 `profiles`、`balance_transactions`、充值单或支付会话。截止本文更新，未在 Production 安装 timer/cron，未运行 watcher，未开启渠道。
+本轮只修改代码、测试、文档和 systemd 模板。没有安装服务、启用 timer、修改 Production 环境或运行自动入账。Watcher 仅编排现有单会话微信 recovery；资金完成仍是 `completePayment` 和数据库原子 RPC，不直接改余额或 ledger。默认 dry-run；真实模式同时要求 `LIUHAOYI_WECHAT_WATCHER_ENABLED=true`、`LIUHAOYI_WECHAT_WATCHER_EXECUTE_ENABLED=true` 和命令行 `--execute`。这些开关不得因部署自动开启。
 
-## 默认禁用与运行模式
+## 范围、节奏与容量
 
-`scripts/ops/liuhaoyi-wechat-recharge-watcher.mjs` 是一次性运行的编排器，不会自行常驻或调度。没有精确的 `LIUHAOYI_WECHAT_WATCHER_ENABLED=true` 时不查询数据库或 provider；启用后仍默认 dry-run。真实执行同时需要单独的 `LIUHAOYI_WECHAT_WATCHER_EXECUTE_ENABLED=true` 和命令行 `--execute`。这些开关本轮不写入任何 Production env。上线必须经过单独审批和观察窗口，不得因文件存在而自动启动。
+只读候选查询精确限定 `provider=liuhaoyi`、`channel_code=wechat`、`business_type=recharge`、`currency=CNY`、`status=pending`、`created_at <= now-60s`、`expires_at > now`。不扫描 processing、expired、paid、Alipay、USDT 或商城订单。自然 callback 有至少 60 秒优先机会。建议 timer 每分钟一次，但本轮不安装。
 
-一次运行最多读取 20 个候选，限定 `provider=liuhaoyi`、`channel_code=wechat`、`business_type∈{recharge,account_recharge}`、`currency=CNY`、状态 pending/processing/expired。仅检查创建至少 3 分钟的会话；到期后最多 60 分钟可继续**只读诊断**。距本地到期不足 5 秒或已过期时，即使全局执行已启用，也只发送 dry-run。达到 20 个候选时以非零状态明确告警；候选过多需要分页设计和单独上线评审，不得静默认为全量已覆盖。
+每批最多 4 单：3 个最新 eligible 会话 + 1 个按分钟轮转的旧 backlog 会话。正常负载下，新会话在满 60 秒后的 1–2 个调度周期内进入最新优先位；当每分钟持续超过 3 个新 eligible 会话时，不能保证该时延，应以 `backlog_present` 和 `remaining_count` 告警并暂停扩容上线。PostgREST `Prefer: count=exact` 必须返回总数；缺失计数时 fail closed。两次读取之间候选数量变化时，仅放弃不稳定的旧单轮转位、记录 `scan_changed`，仍检查已读取的 3 个最新候选。本轮不新增 next_check_at 或 migration。
 
-建议未来由受控、非重叠的 timer 每 3 分钟运行一次，从 `created_at + 3 分钟` 开始给自然 callback 留时间。此 cadence 是建议，不代表本轮安装/启用。每个候选经已有单会话服务再次读取关联充值、唯一 ledger 和六号易订单，并严格核对 owner/business/session、金额、`wxpay`、商户订单号、provider trade no、provider 付款时间与两处到期时间。provider unpaid、时间不明、付款晚于到期、已完成或任何不一致均不得自动入账。真正完成只通过 `completePayment` → 数据库原子 RPC。数据库到期 guard 是最终防线；接近到期的调用可能在 RPC 处失败，必须保留错误并进入人工复核，不得绕开 guard。
+候选读取各 4 秒超时、六号易单笔查询 6 秒超时、单会话内部 API 8 秒超时；每批最多 4 单，且有 45 秒 systemd 硬上限。单会话超时/网络错误只记录固定安全原因，下一轮再查，不推断支付成功。内部 API timeout 只限制 watcher 调用；服务端数据库事务可能比 HTTP 客户端超时晚结束，最终仍由数据库锁、到期 guard 和幂等约束保证一次入账。因此不能把客户端 timeout 当作事务回滚凭据。
 
-## 审计与保密
+结构化 stdout/journal 输出 `run_id`、`session_no`、安全原因、耗时，以及 `eligible_count`、`processed_count`、`paid_found_count`、`completed_count`、`skipped_count`、`timeout_count`、`remaining_count` 和 `backlog_present`。不输出 MerchantKey、带 key 的查询 URL、签名或完整 provider 交易号。此服务不经 PM2；若启用，日志进入 systemd journal。上线前仍应核查实际 journald 保留/权限及任何外部 APM/HTTP 客户端采集器，不得记录请求 URL/query。
 
-每次运行输出 JSON 记录：`run_id`、开始时间、运行模式、完成/禁用状态；每个候选输出 session no、时间、dry-run/execute、provider found/paid、type/amount/付款时间匹配布尔值、eligibility、固定 skip reason、completion 和幂等布尔值。它们是运维审计，不是支付凭证或资金决定。当前成功 recovery 不创建 `payment_reconciliations`；V1 复用结构化 stdout/journal，不需要新 DB schema。若需要不可篡改或长期查询的独立审计表，应另行设计 migration 并审批，不能在此任务执行。
+## 入账安全门禁
 
-不得在 stdout/journal/PM2/数据库错误字段记录 Merchant Key、完整六号易查询 URL、`sign`、内部认证 secret 或完整 provider transaction ID。脚本吞掉原始网络错误，仅输出固定错误类别。日志留存、访问权限、脱敏和容量仍需上线前运维验收。
+单会话 recovery 重新读取 session、recharge、已完成 ledger，并按 session pinned provider 查询六号易。必须同时满足 provider/微信充值/CNY、订单与用户归属、1:1 session-business 匹配、金额、wxpay、provider trade no、out_trade_no、本地 pending、ledger=0、provider paid time 在两处 expiry 内，才调用 canonical completion。provider unpaid、金额/渠道不符、交易号缺失、超时、5xx、错误 JSON、晚到账都不自动 credit。已 callback 入账的会话在候选读取或 recovery 复查时跳过。过期时数据库最终 guard 拒绝 completion；异常走原有人工核对，不绕过。
 
-## 并发与验收
+Callback 与 watcher、两个 watcher、以及任意先后顺序的重复完成都共享带行锁的原子 RPC 和唯一 ledger 约束。本地有行为模拟和 SQL source-contract 测试；**尚无隔离 PostgreSQL 真并发实测**，它是自动执行上线前的验收门槛。
 
-自然 callback、两个 watcher 或 watcher 后的 callback 都走相同 `completePayment` 数据库 RPC。RPC 对支付会话和充值单行加锁，优先对 paid 返回幂等结果；balance 与 ledger 由同一原子函数处理。此保证有本地行为测试和 SQL source-contract 测试，但本轮没有在 Production 制造并发真实支付。启用前仍应做隔离环境并发实测，以及健康、时钟、超时、日志和手动停用演练。
+## systemd 模板与互斥锁
 
-## Callback request ID 与 Nginx
+独立文件：`ops/systemd/jianlian-liuhaoyi-wechat-recovery.service`、`ops/systemd/jianlian-liuhaoyi-wechat-recovery.timer`。不复用支付宝单元。oneshot `TimeoutStartSec=45s`，timer `OnUnitActiveSec=1min`、`Persistent=false`。service 通过 `flock -n -E 0 /run/lock/jianlian-liuhaoyi-wechat-recovery.lock` 获取专用进程锁；`ReadWritePaths` 只开放锁目录。手工直接执行 Node 脚本时，入口会通过同一把 flock 锁重新启动自身；拿不到锁正常退出，不扫描订单。内部路由的进程级 `running` 只是附加保护，不代替 OS 锁。内部 `--watcher-lock-held` 标记只供锁包装后的子进程使用，不是人工运行参数，也不是恶意本机操作者的权限边界。
 
-应用 callback 已能从 `X-Request-ID` 读取安全格式 ID，或自行生成 ID 并输出结构化日志和响应头。当前 Production Nginx 未观察到显式 `X-Request-ID` 传递，access log 使用会包含 signed query 的 `$request`。另行评审的配置应给 Nginx 生成 `$request_id`、传入 app、在安全 access log 中只记 `$uri`、状态、耗时与 request ID。不要在本轮修改线上 Nginx。
+上线前需单独审核并配置仅 root 可读的 `/etc/jianlian/liuhaoyi-wechat-recovery.env`，包括 `JIANLIAN_NODE_BINARY` 的真实绝对路径、`JIANLIAN_RELEASE_DIR` 的 active immutable release、现有 Supabase/internal API 凭据及两个 watcher 开关；不能把 env 内容加入 Git。确认 `/usr/bin/flock`、Node 路径、release 路径、loopback API 地址、权限和健康后，才可由用户另行授权安装/启用。模板本身不会启动。手动运行时应复用 service 的 `ExecStart` 所示锁路径及环境，避免错用未锁命令。
 
-## 长期开放门槛
+立即停用命令（仅以后获得授权上线时使用）：
 
-微信已有两次 provider paid / 本站 callback 未见的事故，因此 watcher 即便部署也不等于可以长期开放。至少还需解决或明确隔离 callback ingress 故障；证明新 request ID 链路及安全日志；完成 watcher dry-run 观察、并发/幂等与超时演练、受控自动执行和告警。支付宝同样需先完成自身 callback 送达与 recovery 运维验收，不可沿用微信结论。
+```sh
+systemctl disable --now jianlian-liuhaoyi-wechat-recovery.timer
+systemctl stop jianlian-liuhaoyi-wechat-recovery.service
+```
+
+停 watcher 不影响自然 callback、USDT 或网站。没有 schema rollback。长期开放前需要先完成 dry-run 观测、锁竞争演练、隔离数据库真并发/到期测试、provider 超时测试、日志保密检查和一笔受控 ¥1 canary；不能把“模板就绪”解释为 Production 自动执行已安全开启。

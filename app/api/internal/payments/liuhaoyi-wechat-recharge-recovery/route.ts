@@ -24,14 +24,16 @@ export async function POST(request: Request) {
   if (!rateLimit.allowed) return rateLimit.response!;
   if (running) return NextResponse.json({ error: "六号易微信充值恢复任务正在执行" }, { status: 429 });
 
-  const body = await request.json().catch(() => null) as { sessionNo?: unknown; execute?: unknown } | null;
+  const body = await request.json().catch(() => null) as { sessionNo?: unknown; execute?: unknown; queryTimeoutMs?: unknown } | null;
   const sessionNo = typeof body?.sessionNo === "string" ? body.sessionNo.trim() : "";
   if (!sessionNo) return NextResponse.json({ error: "必须明确指定单个支付会话" }, { status: 400 });
   const execute = isExplicitLiuhaoyiRecoveryExecution(body?.execute);
 
   running = true;
   try {
-    const result = await runLiuhaoyiWechatRechargeRecovery({ sessionNo, execute });
+    const queryTimeoutMs = typeof body?.queryTimeoutMs === "number" && Number.isInteger(body.queryTimeoutMs)
+      && body.queryTimeoutMs >= 1_000 && body.queryTimeoutMs <= 8_000 ? body.queryTimeoutMs : undefined;
+    const result = await runLiuhaoyiWechatRechargeRecovery({ sessionNo, execute, queryTimeoutMs });
     return NextResponse.json({
       mode: result.mode,
       session_no: result.sessionNo,

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Jianlian Liuhaoyi WeChat recharge recovery watcher every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=false
+Unit=jianlian-liuhaoyi-wechat-recovery.service
+
+[Install]
+WantedBy=timers.target

@@ -33,7 +33,7 @@ export type WechatRecoveryResult = {
 const SESSION_SELECT = "id,session_no,business_type,business_id,business_no,user_id,channel_code,provider,provider_order_no,provider_transaction_id,status,payable_amount,currency,expires_at,created_at";
 
 export async function runLiuhaoyiWechatRechargeRecovery(
-  input: { sessionNo: string; execute?: boolean },
+  input: { sessionNo: string; execute?: boolean; queryTimeoutMs?: number },
   client?: SupabaseClient,
 ): Promise<WechatRecoveryResult> {
   const sessionNo = String(input.sessionNo ?? "").trim();
@@ -74,7 +74,10 @@ export async function runLiuhaoyiWechatRechargeRecovery(
     ledgerCount = Number(count ?? 0);
   }
 
-  const query = await resolveProviderForExistingSession(session).queryPayment(sessionNo) as Record<string, unknown>;
+  const query = await resolveProviderForExistingSession(session).queryPayment(sessionNo, {
+    timeoutMs: Number.isInteger(input.queryTimeoutMs) && (input.queryTimeoutMs ?? 0) >= 1_000
+      ? Math.min(input.queryTimeoutMs!, 8_000) : undefined,
+  }) as Record<string, unknown>;
   const rawSummary = query.rawSummary && typeof query.rawSummary === "object"
     ? query.rawSummary as Record<string, unknown>
     : {};

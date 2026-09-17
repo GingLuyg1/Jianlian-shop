@@ -162,14 +162,17 @@ async function createPayment(
   };
 }
 
-async function queryPayment(paymentNo: string): Promise<{ status: RechargeStatus } | ProviderQueryPaymentResult> {
+async function queryPayment(paymentNo: string, options?: { timeoutMs?: number }): Promise<{ status: RechargeStatus } | ProviderQueryPaymentResult> {
   const config = configuration();
   const endpoint = new URL("api.php", config.apiBaseUrl);
   endpoint.searchParams.set("act", "order");
   endpoint.searchParams.set("pid", config.merchantId);
   endpoint.searchParams.set("key", config.merchantKey);
   endpoint.searchParams.set("out_trade_no", paymentNo);
-  const payload = await fetchJson(endpoint, { method: "GET", cache: "no-store" }, config.timeoutMs, "六号易订单查询失败");
+  const queryTimeoutMs = Number.isInteger(options?.timeoutMs) && (options?.timeoutMs ?? 0) >= 1_000
+    ? Math.min(options!.timeoutMs!, config.timeoutMs)
+    : config.timeoutMs;
+  const payload = await fetchJson(endpoint, { method: "GET", cache: "no-store" }, queryTimeoutMs, "六号易订单查询失败");
   const found = String(payload.code ?? "") === "1";
   const paid = found && String(payload.status ?? "") === "1";
   const providerTradeNo = boundedOptionalText(payload.trade_no, 160);
