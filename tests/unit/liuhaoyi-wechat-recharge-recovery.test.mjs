@@ -56,6 +56,16 @@ test("provider payment after local expiry is manual review and never eligible", 
   assert.equal(decision.manualReview, true);
 });
 
+test("natural callback completed first makes WeChat recovery ineligible", () => {
+  const decision = evaluateLiuhaoyiWechatRechargeRecovery(candidate({
+    session: { localStatus: "paid" },
+    recharge: { status: "paid", creditedAmount: 1, completedAt: "2026-09-17T00:43:09+08:00" },
+    ledgerCount: 1,
+  }));
+  assert.equal(decision.eligible, false);
+  assert.equal(decision.reason, "session_not_active");
+});
+
 test("worker is single-session and dry-run by default; execute requires the explicit flag", async () => {
   const bodies = [];
   const payload = { mode: "dry_run", session_no: "PS-WX-RECOVERY-1", session_found: true, recharge_found: true, provider_found: true, provider_paid: true, provider_type_match: true, amount_match: true, paid_within_expiry: true, local_already_credited: false, ledger_count: 0, eligible: true, would_complete: true, completed: false, idempotent: false, manual_review: false, reason: "eligible" };
