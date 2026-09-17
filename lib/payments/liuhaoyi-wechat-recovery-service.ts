@@ -7,7 +7,7 @@ import {
   evaluateLiuhaoyiWechatRechargeRecovery,
   liuhaoyiPaidTimeMs,
 } from "@/lib/payments/liuhaoyi-recovery-policy.mjs";
-import { getPaymentProvider, normalizeProviderPaymentStatus } from "@/lib/payments/providers";
+import { normalizeProviderPaymentStatus, resolveProviderForExistingSession } from "@/lib/payments/providers";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type WechatRecoveryResult = {
@@ -50,6 +50,9 @@ export async function runLiuhaoyiWechatRechargeRecovery(
   if (sessionError) throw sessionError;
   if (!sessionRow) return emptyResult(sessionNo, execute, "session_not_found");
   const session = normalizeSession(sessionRow as Record<string, unknown>);
+  if (session.provider !== "liuhaoyi" || session.channelCode !== "wechat") {
+    throw new Error("WECHAT_RECOVERY_SESSION_PROVIDER_MISMATCH");
+  }
 
   const { data: rechargeRow, error: rechargeError } = await service
     .from("account_recharges")
@@ -71,7 +74,7 @@ export async function runLiuhaoyiWechatRechargeRecovery(
     ledgerCount = Number(count ?? 0);
   }
 
-  const query = await getPaymentProvider("liuhaoyi").queryPayment(sessionNo) as Record<string, unknown>;
+  const query = await resolveProviderForExistingSession(session).queryPayment(sessionNo) as Record<string, unknown>;
   const rawSummary = query.rawSummary && typeof query.rawSummary === "object"
     ? query.rawSummary as Record<string, unknown>
     : {};

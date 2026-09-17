@@ -17,15 +17,18 @@ function section(source, start, end) {
   return source.slice(source.indexOf(start), source.indexOf(end));
 }
 
-const loadChannel = section(
+const sessionLookup = section(
   callbackService,
-  "async function loadChannel",
   "async function findCallbackSession",
+  "async function isExpiredRechargePayment",
 );
 
-test("callback channel loader selects the public maximum amount configuration", () => {
-  assert.match(loadChannel, /\.select\("[^"]*configured,public_config"\)/);
-  assert.match(loadChannel, /normalizeChannelRow\(data as Record<string, unknown>\)/);
+test("callback resolves the persisted session before provider verification", () => {
+  assert.match(callbackService, /const session = await findCallbackSession\(service, sessionNoCandidate\)/);
+  assert.match(sessionLookup, /\.select\("id,session_no,[^"]*channel_code,provider,[^"]*"\)/);
+  assert.match(sessionLookup, /\.eq\("session_no", sessionNo\)/);
+  assert.match(callbackService, /callbackProvider = resolveProviderForExistingSession\(session\)/);
+  assert.doesNotMatch(callbackService, /loadChannel\(|channel\.provider/);
 });
 
 test("Liuhaoyi Alipay and WeChat normalize with maximum_amount 2000", () => {
@@ -65,10 +68,10 @@ test("missing public_config reproduces the rejected CNY fallback maximum", () =>
   );
 });
 
-test("disabled configured Liuhaoyi channels remain loadable for historical callbacks", () => {
-  assert.doesNotMatch(loadChannel, /\.eq\("enabled",\s*true\)/);
-  assert.doesNotMatch(loadChannel, /if\s*\(\s*!channel\.enabled|if\s*\(\s*!channel\.configured/);
-  assert.match(loadChannel, /if \(!channel\) throw new Error\("支付渠道不存在"\)/);
+test("disabled or changed current channel settings cannot replace the historical callback provider", () => {
+  assert.doesNotMatch(callbackService, /\.from\("payment_channels"\)/);
+  assert.doesNotMatch(sessionLookup, /enabled|configured|public_config/);
+  assert.match(callbackService, /if \(session\.channel_code !== channelCode\)/);
 });
 
 test("expired paid recharge callback records manual review before completion", () => {
@@ -85,5 +88,5 @@ test("expired paid recharge callback records manual review before completion", (
 test("normal callback verification and USDT paths are unchanged", () => {
   assert.match(callbackService, /const verified = await callbackProvider\.verifyCallback/);
   assert.match(callbackService, /const completion = await completePayment\(/);
-  assert.doesNotMatch(loadChannel, /usdt_bep20|crypto_address/);
+  assert.doesNotMatch(sessionLookup, /usdt_bep20|crypto_address/);
 });

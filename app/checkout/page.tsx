@@ -57,8 +57,7 @@ import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethodCode,
 } from "@/lib/payments/payment-methods";
-import { isLiuhaoyiAmountOverLimit, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
-import type { PaymentSubmitForm } from "@/lib/payments/channel-types";
+import type { PaymentChannel, PaymentSubmitForm } from "@/lib/payments/channel-types";
 import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import { Product } from "@/lib/types";
@@ -202,6 +201,7 @@ export default function CheckoutPage() {
   const [customerNote, setCustomerNote] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(DEFAULT_PAYMENT_METHOD);
+  const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
   const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
@@ -220,7 +220,7 @@ export default function CheckoutPage() {
   const [balanceRequiresLogin, setBalanceRequiresLogin] = useState(false);
   const [pendingBalanceOrder, setPendingBalanceOrder] = useState<PendingBalanceOrder | null>(null);
   const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
-  const [liuhaoyiLimitDialogOpen, setLiuhaoyiLimitDialogOpen] = useState(false);
+  const [amountLimitDialogOpen, setAmountLimitDialogOpen] = useState(false);
   const paymentDropdownRef = useRef<HTMLDivElement | null>(null);
   const clientRequestIdRef = useRef("");
   const balanceRequestVersionRef = useRef(0);
@@ -423,6 +423,17 @@ export default function CheckoutPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/recharges/channels", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as { channels?: PaymentChannel[] } | null;
+        if (active && response.ok) setPaymentChannels(payload?.channels ?? []);
+      })
+      .catch(() => { /* Server-side payment checks remain authoritative. */ });
+    return () => { active = false; };
+  }, []);
+
   const product = useMemo(
     () => (productRow ? mapCheckoutProduct(productRow) : null),
     [productRow]
@@ -453,6 +464,8 @@ export default function CheckoutPage() {
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
   const isShippingProduct = ["shipping", "physical"].includes(String(productRow?.delivery_type ?? ""));
   const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod);
+  const selectedPaymentChannel = paymentChannels.find((channel) =>
+    getPaymentMethodOption(paymentMethod)?.channelCodes.includes(channel.code)) ?? null;
   const isPurchasable = productRow?.status === "active" && (!hasSku || Boolean(selectedSku)) && (!selectedSku?.isDatabaseSku || selectedSku.status === "active") && effectiveStock > 0;
   const unavailableMessage =
     productRow?.status === "sold_out" || effectiveStock <= 0
@@ -462,6 +475,9 @@ export default function CheckoutPage() {
         : "";
   const unitPrice = product ? (hasSku ? selectedSku?.rmb ?? product.price : product.price) : 0;
   const orderAmount = unitPrice * quantity;
+  const paymentMaximum = selectedPaymentChannel?.maximumAmount;
+  const paymentOverLimit = typeof paymentMaximum === "number" && Number.isFinite(paymentMaximum)
+    && orderAmount > paymentMaximum;
   const priceLabel = product ? getPriceLabel(product, selectedSku) : "";
   const balanceSummary = useMemo(
     () => evaluateCheckoutBalance(orderAmount, availableBalance),
@@ -552,8 +568,8 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (isLiuhaoyiPaymentMethod(paymentMethod) && isLiuhaoyiAmountOverLimit(orderAmount)) {
-      setLiuhaoyiLimitDialogOpen(true);
+    if (paymentOverLimit) {
+      setAmountLimitDialogOpen(true);
       return;
     }
 
@@ -703,11 +719,10 @@ export default function CheckoutPage() {
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
       window.sessionStorage.removeItem(checkoutSessionKey);
-      if (isLiuhaoyiPaymentMethod(paymentMethod) && result?.paymentSession?.submitForm
+      if (result?.paymentSession?.submitForm
         && submitPaymentForm(result.paymentSession.submitForm)) return;
       if (
-        isLiuhaoyiPaymentMethod(paymentMethod)
-        && result?.paymentSession?.paymentType === "redirect"
+        result?.paymentSession?.paymentType === "redirect"
         && result.paymentSession.paymentUrl
       ) {
         window.location.assign(result.paymentSession.paymentUrl);
@@ -830,6 +845,7 @@ export default function CheckoutPage() {
                   rootRef={paymentDropdownRef}
                   onOpenChange={setPaymentDropdownOpen}
                   onSelect={setPaymentMethod}
+                  channels={paymentChannels}
                   disabled={orderConfigurationLocked}
                 />
                 {selectedPaymentUnavailable ? (
@@ -837,9 +853,9 @@ export default function CheckoutPage() {
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
                   </p>
                 ) : null}
-                {isLiuhaoyiPaymentMethod(paymentMethod) ? (
+                {selectedPaymentChannel?.providerExternalFeeDisclosure ? (
                   <p className="mt-2 text-xs leading-5 text-amber-700">
-                    支付平台可能额外收取支付通道手续费，实际付款金额以支付页面为准；本站订单本金不增加该费用。
+                    {selectedPaymentChannel.providerExternalFeeDisclosure}
                   </p>
                 ) : null}
                 {paymentMethod === "balance" && balanceStatus === "error" ? (
@@ -949,18 +965,18 @@ export default function CheckoutPage() {
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={liuhaoyiLimitDialogOpen} onOpenChange={setLiuhaoyiLimitDialogOpen}>
+      <Dialog open={amountLimitDialogOpen} onOpenChange={setAmountLimitDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>支付宝/微信支付金额超限</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-6 text-muted-foreground">
-            支付宝/微信单笔支付最高支持 ¥2000。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。
+            当前方式单笔最高支持 {typeof paymentMaximum === "number" ? `¥${paymentMaximum}` : "—"}。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。
           </p>
           <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setLiuhaoyiLimitDialogOpen(false)}>取消</Button>
-            <Button type="button" variant="outline" onClick={() => { setLiuhaoyiLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
-            <Button type="button" variant="outline" onClick={() => { setPaymentMethod("balance"); setLiuhaoyiLimitDialogOpen(false); }}>使用余额支付</Button>
+            <Button type="button" variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>
+            <Button type="button" variant="outline" onClick={() => { setAmountLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
+            <Button type="button" variant="outline" onClick={() => { setPaymentMethod("balance"); setAmountLimitDialogOpen(false); }}>使用余额支付</Button>
             <Button type="button" onClick={() => router.push("/products/account-recharge")}>去充值</Button>
           </div>
         </DialogContent>
@@ -986,6 +1002,7 @@ function PaymentMethodSelect({
   selected,
   onOpenChange,
   onSelect,
+  channels,
   disabled,
 }: {
   open: boolean;
@@ -993,9 +1010,16 @@ function PaymentMethodSelect({
   selected: PaymentMethodCode;
   onOpenChange: (open: boolean) => void;
   onSelect: (method: PaymentMethodCode) => void;
+  channels: PaymentChannel[];
   disabled?: boolean;
 }) {
   const selectedOption = getPaymentMethodOption(selected) ?? PAYMENT_METHOD_OPTIONS[0];
+  const descriptionFor = (option: typeof selectedOption) => {
+    const channel = channels.find((item) => option.channelCodes.includes(item.code));
+    return channel?.maximumAmount && channel.currency === "CNY"
+      ? `${option.label}，单笔最高 ¥${channel.maximumAmount}`
+      : option.description;
+  };
   const selectedIndex = Math.max(0, PAYMENT_METHOD_OPTIONS.findIndex((option) => option.code === selected));
   const [activeIndex, setActiveIndex] = useState(selectedIndex);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -1061,7 +1085,7 @@ function PaymentMethodSelect({
           <PaymentMethodIcon method={selectedOption.code} />
           <span className="min-w-0">
             <span className="block truncate font-medium text-slate-900">{selectedOption.label}</span>
-            <span className="block truncate text-xs text-muted-foreground">{selectedOption.description}</span>
+            <span className="block truncate text-xs text-muted-foreground">{descriptionFor(selectedOption)}</span>
           </span>
         </span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open ? "rotate-180" : "")} />
@@ -1102,7 +1126,7 @@ function PaymentMethodSelect({
                   <PaymentMethodIcon method={option.code} />
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{option.label}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{option.description}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{descriptionFor(option)}</span>
                   </span>
                 </span>
                 {unavailable ? (

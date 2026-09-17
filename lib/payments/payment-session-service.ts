@@ -12,8 +12,9 @@ import type {
   ProviderCreatePaymentResult,
 } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
+import { providerAmountWithinLimits, providerSupportsChannel } from "@/lib/payments/provider-contracts.mjs";
 import { assertLiuhaoyiAmountBreakdown, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
-import { getPaymentProvider } from "@/lib/payments/providers";
+import { getPaymentProviderCapabilities, resolveProviderForExistingSession, resolveProviderForNewPayment } from "@/lib/payments/providers";
 import { normalizeLiuhaoyiSessionPresentation } from "@/lib/payments/providers/liuhaoyi-core.mjs";
 import { normalizeLiuhaoyiSubmitForm } from "@/lib/payments/providers/liuhaoyi-submit.mjs";
 import { isReusablePaymentSession } from "@/lib/payments/payment-session-reuse.mjs";
@@ -51,6 +52,7 @@ export type PaymentSessionResponse = {
   paymentType: "redirect" | "qrcode" | "address" | "deeplink";
   paymentUrl?: string;
   submitForm?: PaymentSubmitForm;
+  providerExternalFeeDisclosure?: string;
   qrCodeUrl?: string;
   qrCodeValue?: string;
   deepLinkUrl?: string;
@@ -125,7 +127,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
   if (!channel.configured) {
     throw new PaymentSessionError("PROVIDER_NOT_CONFIGURED", "支付渠道尚未配置，无法创建真实支付会话。");
   }
-  if (isLiuhaoyiPaymentMethod(channel.code)) {
+  if (channel.provider === "liuhaoyi") {
     if (business.currency !== "CNY") {
       throw new PaymentSessionError("LIUHAOYI_CURRENCY_INVALID", "支付宝/微信支付仅支持人民币订单");
     }
@@ -137,6 +139,11 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
     if (!input.clientIp) {
       throw new PaymentSessionError("LIUHAOYI_CLIENT_IP_REQUIRED", "无法确认付款客户端 IP");
     }
+  }
+  const capability = getPaymentProviderCapabilities(channel.provider);
+  if (!providerSupportsChannel(capability, channel.code, business.currency)
+    || !providerAmountWithinLimits(capability, channel, business.payableAmount)) {
+    throw new PaymentSessionError("PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED", "支付渠道不支持该金额或币种");
   }
 
   const sessionNo = generateSessionNo();
@@ -162,7 +169,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
   }
 
   try {
-    const providerResult = (await getPaymentProvider(channel.provider).createPayment({
+    const providerResult = (await resolveProviderForNewPayment(channel).createPayment({
       sessionNo,
       businessType,
       businessNo: business.businessNo,
@@ -281,7 +288,7 @@ export async function closePaymentSession(sessionNo: string, userId: string) {
 
   if (data.provider && data.provider_order_no) {
     try {
-      await getPaymentProvider(data.provider).closePayment(data.provider_order_no);
+      await resolveProviderForExistingSession(data).closePayment(data.provider_order_no);
     } catch {
       // Local close remains authoritative when a provider does not support close.
     }
@@ -607,6 +614,9 @@ function toSessionResponse(row: Record<string, unknown>): PaymentSessionResponse
     paymentType: artifact.paymentType,
     paymentUrl: artifact.paymentUrl,
     submitForm: validSubmitForm,
+    providerExternalFeeDisclosure: typeof row.provider === "string"
+      ? getPaymentProviderCapabilities(row.provider as PaymentChannel["provider"]).providerExternalFeeDisclosure ?? undefined
+      : undefined,
     qrCodeUrl: artifact.qrCodeUrl,
     qrCodeValue: artifact.qrCodeValue,
     deepLinkUrl: artifact.deepLinkUrl,

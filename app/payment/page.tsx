@@ -51,6 +51,7 @@ type PaymentSession = {
   paymentType: "redirect" | "qrcode" | "address" | "deeplink";
   paymentUrl?: string;
   submitForm?: PaymentSubmitForm;
+  providerExternalFeeDisclosure?: string;
   qrCodeUrl?: string;
   qrCodeValue?: string;
   deepLinkUrl?: string;
@@ -546,9 +547,9 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   const rechargeStatus = String(recharge?.status ?? "");
   const terminal = RECHARGE_TERMINAL_STATUSES.has(rechargeStatus);
   const succeeded = rechargeStatus === "succeeded";
-  const isLiuhaoyiRecharge = ["alipay", "wechat", "wechat_pay"].includes(recharge?.channelCode ?? "");
+  const isCnyGatewayRecharge = ["alipay", "wechat", "wechat_pay"].includes(recharge?.channelCode ?? "");
   const remainingSeconds = secondsLeft(recharge?.expiresAt) + nowTick * 0;
-  const expiredByTime = Boolean(isLiuhaoyiRecharge && recharge?.expiresAt && isRechargePastDue(recharge.expiresAt));
+  const expiredByTime = Boolean(isCnyGatewayRecharge && recharge?.expiresAt && isRechargePastDue(recharge.expiresAt));
   const canTransfer = ["pending", "waiting_payment"].includes(rechargeStatus) && remainingSeconds > 0;
   const canSubmitRechargeTxHash = recharge?.channelCode === "usdt_bep20" && canTransfer;
   const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
@@ -594,7 +595,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
           <div>
             <h1 className="text-2xl font-bold text-foreground">账户充值付款</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {isLiuhaoyiRecharge ? "请使用六号易返回的支付宝/微信付款入口完成支付。" : "请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。"}
+              {isCnyGatewayRecharge ? "请使用支付渠道提供的付款入口完成支付。" : "请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。"}
             </p>
           </div>
           <Button variant="outline" asChild>
@@ -623,11 +624,11 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <ShieldCheck className="h-5 w-5 text-primary" />
-                  {isLiuhaoyiRecharge ? `${recharge.channelName || (recharge.channelCode === "alipay" ? "支付宝" : "微信支付")}付款信息` : "USDT-BEP20 付款信息"}
+                  {isCnyGatewayRecharge ? `${recharge.channelName || (recharge.channelCode === "alipay" ? "支付宝" : "微信支付")}付款信息` : "USDT-BEP20 付款信息"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                {isLiuhaoyiRecharge ? (succeeded ? (
+                {isCnyGatewayRecharge ? (succeeded ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                     <div className="font-semibold">充值成功</div>
                     <div className="mt-1">人民币余额入账由统一支付完成流程处理。</div>
@@ -704,9 +705,9 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
               <CardContent className="space-y-3 text-sm">
                 <Info label="充值单号" value={recharge.rechargeNo} copyable onCopy={() => void copyRechargeText(recharge.rechargeNo)} />
                 <Info label="申请充值" value={`${recharge.requestedCnyAmount ?? recharge.requestedAmount} CNY`} />
-                <Info label="精确应付" value={isLiuhaoyiRecharge ? `${recharge.payableAmount} CNY` : `${recharge.expectedUsdtAmount ?? "—"} USDT`} strong />
-                {!isLiuhaoyiRecharge ? <Info label="结算汇率" value={recharge.lockedSettlementRate ? `1 USDT = ${recharge.lockedSettlementRate} CNY` : "—"} /> : null}
-                {!isLiuhaoyiRecharge ? <Info label="实际到账" value={recharge.actualReceivedUsdt ? `${recharge.actualReceivedUsdt} USDT` : "—"} /> : null}
+                <Info label="精确应付" value={isCnyGatewayRecharge ? `${recharge.payableAmount} CNY` : `${recharge.expectedUsdtAmount ?? "—"} USDT`} strong />
+                {!isCnyGatewayRecharge ? <Info label="结算汇率" value={recharge.lockedSettlementRate ? `1 USDT = ${recharge.lockedSettlementRate} CNY` : "—"} /> : null}
+                {!isCnyGatewayRecharge ? <Info label="实际到账" value={recharge.actualReceivedUsdt ? `${recharge.actualReceivedUsdt} USDT` : "—"} /> : null}
                 <Info label="最终入账" value={recharge.creditedCnyAmount ? `${recharge.creditedCnyAmount} CNY` : "—"} />
                 <Info label="创建时间" value={formatDate(recharge.createdAt)} />
                 <div className="flex items-center justify-between gap-3 pt-2">
@@ -716,7 +717,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
               </CardContent>
             </Card>
 
-            {!isLiuhaoyiRecharge ? <Card className="lg:col-span-2">
+            {!isCnyGatewayRecharge ? <Card className="lg:col-span-2">
               <CardHeader className="pb-3"><CardTitle className="text-base">链上充值须知</CardTitle></CardHeader>
               <CardContent>
                 <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
@@ -813,7 +814,7 @@ function LiuhaoyiRechargePaymentPanel({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">请核对金额后完成付款。支付结果以服务端异步回调和统一支付状态为准，请勿重复付款。</div>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">支付平台可能额外收取支付通道手续费，实际付款金额以支付页面为准；本站充值本金不增加该费用，六号易 API 金额仍为充值本金。</div>
+      {session.providerExternalFeeDisclosure ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">{session.providerExternalFeeDisclosure}</div> : null}
       {providerPaid ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">支付渠道已确认付款，正在完成余额入账，请勿重复付款。</div> : null}
       {session.qrCodeValue ? (
         <LocalPaymentQr
@@ -1355,6 +1356,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                     </div>
                     <Info label="支付单号" value={session.sessionNo} copyable onCopy={() => copyText(session.sessionNo)} />
                     <Info label="支付金额" value={formatMoney(session.payableAmount, session.currency)} strong />
+                    {session.providerExternalFeeDisclosure ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">{session.providerExternalFeeDisclosure}</div> : null}
                     <Info label="支付币种" value={session.currency} />
                     {session.network ? <Info label="网络" value={session.network} /> : null}
                     <Info label="有效时间" value={formatDate(session.expiresAt)} />

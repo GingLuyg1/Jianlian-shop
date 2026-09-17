@@ -9,6 +9,8 @@ import {
 import type { PaymentChannel, RechargeStatus } from "@/lib/payments/channel-types";
 import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { createPaymentSession } from "@/lib/payments/payment-session-service";
+import { getPaymentProviderCapabilities } from "@/lib/payments/providers";
+import { providerAmountWithinLimits, providerSupportsChannel } from "@/lib/payments/provider-contracts.mjs";
 import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
 import { derivePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 import {
@@ -44,7 +46,7 @@ import { parseRechargeStatusStrict } from "@/lib/recharges/status-machine";
 export const dynamic = "force-dynamic";
 
 const rechargeSelect =
-  "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,expires_at,matched_at,match_method,status,created_at,paid_at,completed_at,review_reason,error_summary";
+  "recharge_no,provider,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,expires_at,matched_at,match_method,status,created_at,paid_at,completed_at,review_reason,error_summary";
 const allowedCreateKeys = new Set(["channel", "payment_method", "amount", "currency", "customer_note", "client_request_id", "clientRequestId"]);
 const reusableRechargeStatuses = [
   "pending",
@@ -91,7 +93,15 @@ export async function GET(request: Request) {
     const { data, error, count } = await query;
     if (error) throw error;
     return NextResponse.json({
-      data: ((data ?? []) as Record<string, unknown>[]).map(normalizeRechargeRow),
+      data: ((data ?? []) as Record<string, unknown>[]).map((row) => {
+        const record = normalizeRechargeRow(row);
+        return {
+          ...record,
+          providerExternalFeeDisclosure: record.provider
+            ? getPaymentProviderCapabilities(record.provider).providerExternalFeeDisclosure ?? undefined
+            : undefined,
+        };
+      }),
       count: count ?? 0,
       page,
       pageSize,
@@ -225,7 +235,7 @@ export async function POST(request: Request) {
     }
 
     const summary = isUsdtCnyRecharge ? null : calculateRechargeAmounts(channel, rawAmount);
-    if (isLiuhaoyiPaymentMethod(channel.code) && summary) {
+    if (channel.provider === "liuhaoyi" && summary) {
       if (summary.fee !== 0 || summary.payableAmount !== summary.amount) {
         return NextResponse.json(
           { error: "支付宝/微信渠道不得由本站附加买家手续费", code: "LIUHAOYI_FEE_CONFIGURATION_INVALID" },
@@ -240,6 +250,10 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+    }
+    if (summary && (!providerSupportsChannel(getPaymentProviderCapabilities(channel.provider), channel.code, channel.currency)
+      || !providerAmountWithinLimits(getPaymentProviderCapabilities(channel.provider), channel, summary.payableAmount))) {
+      return NextResponse.json({ error: "支付渠道不支持该金额或币种", code: "PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED" }, { status: 400 });
     }
     const amountRange = isUsdtCnyRecharge && theoreticalUsdtAmount
       ? classifyExactRange(theoreticalUsdtAmount, channel.minimumAmount, channel.maximumAmount ?? 0)

@@ -10,6 +10,8 @@ import {
   isPaymentSchemaUnavailable,
   normalizeChannelRow,
 } from "@/lib/payments/recharge-utils";
+import { getPaymentProviderCapabilities } from "@/lib/payments/providers";
+import { providerSupportsChannel } from "@/lib/payments/provider-contracts.mjs";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +53,20 @@ export async function GET() {
             && channel.status === "active",
           ),
       );
-    return NextResponse.json({ channels });
+    const effectiveChannels = channels.filter((channel) => {
+      if (channel.code === "usdt_bep20") return true; // Existing chain watcher is not a PaymentProvider adapter.
+      const capability = getPaymentProviderCapabilities(channel.provider);
+      return capability.supportsCreate && providerSupportsChannel(capability, channel.code, channel.currency);
+    }).map((channel) => {
+      const capability = getPaymentProviderCapabilities(channel.provider);
+      return {
+        ...channel,
+        minimumAmount: Math.max(channel.minimumAmount, capability.minimumAmount ?? 0),
+        maximumAmount: Math.min(channel.maximumAmount ?? Infinity, capability.maximumAmount ?? Infinity),
+        providerExternalFeeDisclosure: capability.providerExternalFeeDisclosure ?? undefined,
+      };
+    });
+    return NextResponse.json({ channels: effectiveChannels });
   } catch (error) {
     const schemaMissing = isPaymentSchemaUnavailable(error);
     const publicError = getSafePublicPaymentChannelError(

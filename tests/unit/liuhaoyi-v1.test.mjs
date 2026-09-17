@@ -180,7 +180,8 @@ test("out_trade_no 使用全局唯一 session_no，并由 callback 与 reconcili
   const reconciliation = source("lib/payments/reconciliation-service.ts");
   const coreMigration = source("supabase/migrations/20260623_payment_provider_core.sql");
   assert.match(provider, /out_trade_no: input\.sessionNo/);
-  assert.match(callbackService, /query = query\.eq\("session_no", parsed\.sessionNo\)/);
+  assert.match(callbackService, /\.eq\("session_no", sessionNo\)/);
+  assert.match(callbackService, /callbackSessionIdentityMatches\(\{ session, parsed, channelCode \}\)/);
   assert.match(reconciliation, /session\.provider === "liuhaoyi"[\s\S]*session\.sessionNo[\s\S]*session\.providerOrderNo \?\? session\.sessionNo/);
   assert.match(coreMigration, /session_no text not null unique/);
   assert.match(coreMigration, /payment_sessions_active_business_unique/);
@@ -298,11 +299,14 @@ test("独立 liuhaoyi Provider 保留 generic_api 占位，并由兼容 Migratio
   assert.match(migration, /'\{maximum_amount\}'[\s\S]*'2000'/);
 });
 
-test("前端只限制六号易，balance 和 usdt_bep20 大额路径不被误拦截", () => {
+test("前端以渠道能力限制法币金额，balance 和 usdt_bep20 不套用法币上限", () => {
   const checkout = source("app/checkout/page.tsx");
   const recharge = source("components/account/AccountRechargeContent.tsx");
-  assert.match(checkout, /isLiuhaoyiPaymentMethod\(paymentMethod\) && isLiuhaoyiAmountOverLimit\(orderAmount\)/);
-  assert.match(recharge, /isLiuhaoyiRecharge && summary && isLiuhaoyiAmountOverLimit\(summary\.payableAmount\)/);
+  assert.match(checkout, /selectedPaymentChannel\?\.maximumAmount/);
+  assert.match(checkout, /orderAmount > paymentMaximum/);
+  assert.match(recharge, /selectedChannel\?\.maximumAmount/);
+  assert.match(recharge, /summary\.payableAmount > maximumAmount/);
+  assert.match(recharge, /Boolean\(summary && typeof maximumAmount/);
   assert.equal(isLiuhaoyiPaymentMethod("balance") && isLiuhaoyiAmountOverLimit(5000), false);
   assert.equal(isLiuhaoyiPaymentMethod("usdt_bep20") && isLiuhaoyiAmountOverLimit(5000), false);
 });

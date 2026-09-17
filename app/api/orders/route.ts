@@ -8,6 +8,9 @@ import { recordOrderAgreementAcceptances, verifyCheckoutAgreements, type Agreeme
 import { normalizePaymentMethod } from "@/lib/payments/payment-methods";
 import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { createPaymentSession, PaymentSessionError } from "@/lib/payments/payment-session-service";
+import { getPaymentProviderCapabilities } from "@/lib/payments/providers";
+import { providerAmountWithinLimits, providerSupportsChannel } from "@/lib/payments/provider-contracts.mjs";
+import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
 import { derivePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 import { createBep20PaymentSession, getBep20ErrorMessage } from "@/lib/payments/bep20-chain-service";
@@ -399,6 +402,18 @@ export async function POST(request: Request) {
     }
 
     if (isLiuhaoyiPaymentMethod(paymentMethod)) {
+      const channelCode = paymentMethod === "wechat_pay" ? "wechat" : "alipay";
+      const { data: channelData, error: channelError } = await supabase
+        .from("payment_channels")
+        .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")
+        .or(`code.eq.${channelCode},channel.eq.${channelCode}`)
+        .eq("enabled", true)
+        .eq("configured", true)
+        .maybeSingle();
+      const channel = channelData ? normalizeChannelRow(channelData as Record<string, unknown>) : null;
+      if (channelError || !channel?.enabled) {
+        return NextResponse.json({ error: "支付渠道当前不可用", code: "CHANNEL_UNAVAILABLE" }, { status: 503 });
+      }
       const priceResult = skuId
         ? await supabase.from("product_skus").select("price").eq("id", skuId).eq("product_id", productId).eq("status", "active").maybeSingle()
         : await supabase.from("products").select("price").eq("id", productId).eq("status", "active").maybeSingle();
@@ -406,13 +421,20 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "无法确认支付宝/微信支付金额，请刷新后重试", code: "LIUHAOYI_AMOUNT_UNAVAILABLE" }, { status: 503 });
       }
       const payableAmount = (Number(priceResult.data.price) * quantity).toFixed(2);
-      try {
-        assertLiuhaoyiPaymentAmount(payableAmount);
-      } catch (amountError) {
-        return NextResponse.json(
-          { error: getOrderErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥2000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
-          { status: 400 }
-        );
+      if (channel.provider === "liuhaoyi") {
+        try {
+          assertLiuhaoyiPaymentAmount(payableAmount);
+        } catch (amountError) {
+          return NextResponse.json(
+            { error: getOrderErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥2000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
+            { status: 400 }
+          );
+        }
+      }
+      const capability = getPaymentProviderCapabilities(channel.provider);
+      if (!providerSupportsChannel(capability, channel.code, "CNY")
+        || !providerAmountWithinLimits(capability, channel, Number(payableAmount))) {
+        return NextResponse.json({ error: "支付渠道不支持该金额", code: "PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED" }, { status: 400 });
       }
     }
 

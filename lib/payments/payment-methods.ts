@@ -31,13 +31,13 @@ export const PAYMENT_METHOD_OPTIONS: PaymentMethodOption[] = [
   {
     code: "alipay",
     label: "支付宝",
-    description: "六号易支付宝，单笔最高 ¥2000",
+    description: "支付宝支付",
     channelCodes: ["alipay"],
   },
   {
     code: "wechat_pay",
     label: "微信支付",
-    description: "六号易微信支付，单笔最高 ¥2000",
+    description: "微信支付",
     channelCodes: ["wechat"],
   },
   {

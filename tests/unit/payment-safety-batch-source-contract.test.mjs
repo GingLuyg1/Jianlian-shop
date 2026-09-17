@@ -7,9 +7,10 @@ const source = (path) => readFileSync(new URL(`../../${path}`, import.meta.url),
 test("disabled channels remain eligible for existing-session callbacks without enabling new creation", () => {
   const callback = source("lib/payments/payment-callback-service.ts");
   const sessions = source("lib/payments/payment-session-service.ts");
-  const callbackLoad = callback.slice(callback.indexOf("async function loadChannel"), callback.indexOf("async function findCallbackSession"));
-  assert.doesNotMatch(callbackLoad, /\.eq\("enabled", true\)/);
-  assert.match(callbackLoad, /public_config/);
+  const callbackLoad = callback.slice(callback.indexOf("async function findCallbackSession"), callback.indexOf("async function isExpiredRechargePayment"));
+  assert.doesNotMatch(callbackLoad, /enabled|configured|public_config/);
+  assert.match(callbackLoad, /\.eq\("session_no", sessionNo\)/);
+  assert.match(callback, /resolveProviderForExistingSession\(session\)/);
   assert.match(sessions, /const reusable = await getReusableSession[\s\S]*const channel = await loadEnabledChannel/);
   assert.match(sessions, /loadEnabledChannel[\s\S]*\.eq\("enabled", true\)/);
 });

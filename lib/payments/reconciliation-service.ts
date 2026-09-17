@@ -12,7 +12,7 @@ import {
   LIUHAOYI_RECOVERY_MINIMUM_AGE_MS,
 } from "@/lib/payments/liuhaoyi-recovery-policy.mjs";
 import {
-  getPaymentProvider,
+  resolveProviderForExistingSession,
   normalizeProviderPaymentStatus,
   PaymentProviderError,
 } from "@/lib/payments/providers";
@@ -444,7 +444,7 @@ async function queryProvider(session: PaymentSession): Promise<ProviderSummary> 
     session.provider === "liuhaoyi"
       ? session.sessionNo
       : session.providerOrderNo ?? session.sessionNo;
-  const result = await getPaymentProvider(session.provider).queryPayment(
+  const result = await resolveProviderForExistingSession(session).queryPayment(
     paymentNo
   );
   const raw = result as {

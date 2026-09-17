@@ -3,11 +3,11 @@
 This guide describes the V2 contract. It does not authorize channel activation, migration, recovery execution or a Production payment. Preserve the existing financial completion path.
 
 1. **Provider interface.** Implement `PaymentProvider` in `lib/payments/providers/`; register it in `providers.ts` with truthful capabilities. Do not place provider logic in recharge/order routes.
-2. **Channel mapping.** Declare supported `alipay`, `wechat` or other channel codes independently of provider identity. A new default provider affects only new sessions; existing sessions retain their stored provider.
+2. **Channel mapping.** Declare supported `alipay`, `wechat` or other channel codes independently of provider identity. New payment: `channel → selected provider → payment_sessions.provider` snapshot. Existing payment: `payment_sessions.provider → pinned adapter`. A new channel default affects only new sessions.
 3. **Environment variables.** List required variable *names* in server-only readiness metadata. Never put merchant secrets in public config, metadata, responses, logs or tests. Do not create/change Production env as part of adapter work.
 4. **Create adapter.** Accept the generic session/business/user/channel/currency/amount/expiry/IP/device/subject/notify/return input. Generate signing and HTTP requests only inside the adapter, with bounded timeouts and safe errors. Never pass arbitrary browser-supplied device strings.
 5. **Artifact mapping.** Return one discriminated artifact: HTTPS `redirect`, raw `qrcode` payload, allowed `deeplink`, or wallet `address` plus network. A QR payload is not an image URL. The legacy flat fields remain for compatibility; use `paymentArtifactFromCreateResult` when adapting them.
-6. **Callback signature.** Verify merchant, signature and status against server-only credentials before any financial completion. Reject unsigned, mismatched or malformed callbacks; do not log signed URLs or raw payloads.
+6. **Callback bootstrap and signature.** The callback route uses only its channel and bounded, unverified `out_trade_no` as a candidate session lookup key. It reads that session's persisted `channel_code` and `provider`, selects the pinned adapter, then verifies the provider signature before parsing or trusting amount/status/trade ID. Unknown session is audited as `SESSION_NOT_FOUND`; never fall back to the channel's current provider. Reject unsigned, mismatched or malformed callbacks; do not log signed URLs or raw payloads.
 7. **Normalized callback.** Parse provider identifiers to `{provider, channelCode, sessionNo, providerTransactionId, status, amount, currency, paidAt}`. Match the pinned session/provider, amount, currency and channel before calling canonical completion. Do not duplicate balance or ledger writes.
 8. **Query API.** Normalize `found`, `paid`, `status`, amount, currency, channel, transaction-presence and paid time. Keep `rawSummarySafe` redacted; provider-specific status literals belong in the adapter, not the caller.
 9. **Recovery capability.** Define `ProviderRecoveryPolicy`: support, callback grace, interval, maximum window, auto-completion policy and paid-before-expiry requirement. A policy declaration does not enable a watcher. Require session ownership/business/channel/provider/amount/currency match, no completed ledger, confirmed paid transaction and valid payment time; use canonical completion only if separately authorized.
@@ -17,8 +17,26 @@ This guide describes the V2 contract. It does not authorize channel activation, 
 13. **Idempotency.** Repeated callback/query must not repeat paid transition or ledger credit. Pin provider on the session. No automatic fallback after an order may exist; a proven pre-submission rejection may only lead to an explicitly created new session.
 14. **Security checklist.** No secret in URL logs, client bundles, metadata, public config, error messages or fixtures. Verify request timeouts, HTTPS URLs, callback signature, bounded identifiers, redacted diagnostics and channel-disabled callback handling for existing sessions.
 15. **Tests.** Run the adapter conformance suite: create/query normalization, callback verification/parsing, amount/channel validation, artifact safety, secret redaction and idempotency assumptions. Add provider-specific success/failure tests, then payment/recharge/USDT regressions, typecheck and build. Test-only fake adapter lives only under `tests/` and must never enter the Production registry.
-16. **Production canary checklist.** Separately audit migration/config/env and callback ingress, deploy with rollback, keep channels closed, enable only one channel under user control, create a ¥1 canary, inspect artifact UI, disable channel before payment, observe natural callback, verify exactly one paid session/recharge/ledger and correct balance/completed timestamps. Never use return URL as proof of payment.
+16. **Submit compatibility.** `submitForm` is a shared presentation field consumed by checkout/recharge/status UI. The current validation and reconstruction of historical submit forms still lives in the Liuhaoyi compatibility path; a new submit-based provider must add its own safe server-side form validator before reuse. Only pre-signed public fields may reach the browser, never a merchant secret.
+17. **Production canary checklist.** Separately audit migration/config/env and callback ingress, deploy with rollback, keep channels closed, enable only one channel under user control, create a ¥1 canary, inspect artifact UI, disable channel before payment, observe natural callback, verify exactly one paid session/recharge/ledger and correct balance/completed timestamps. Never use return URL as proof of payment.
+
+## Callback bootstrap
+
+```text
+callback route channel + unverified out_trade_no
+  → bounded session_no lookup (missing: safe audit + SESSION_NOT_FOUND)
+  → require stored session.channel_code == route channel
+  → resolve adapter from stored session.provider, never current channel provider
+  → verify signature using that adapter's server-only credentials
+  → parse normalized callback
+  → require parsed provider/channel/session identity, amount and currency match
+  → existing canonical completion / expired-payment manual review
+```
+
+The unverified identifier cannot establish payment, amount, status or transaction ID. Channel `enabled=false` after a payment was created does not invalidate its historical callback.
 
 ## Current integration boundary
 
-The registry contracts and adapter-facing normalized fields are ready for another adapter, but live channel switching is **not** yet safe: callback routing currently resolves the provider from current channel configuration before reading the historical session. The finite provider allowlist and some UI limits/disclosures are also hardcoded. Address these in separately tested changes before activating a second live acquirer on an existing channel.
+The callback/query/recovery paths now use the historical session provider, while new sessions use the enabled channel's selected provider. Effective amount limits and optional external-fee disclosure are served as provider/channel capability data. A second acquirer still requires a deliberate registry entry, server-only configuration, callback format/verification tests, and Production migration/config/readiness review before activation. The historical submit-form reconstruction remains Liuhaoyi-specific compatibility code.
+
+Expected files for a non-submit acquirer: `lib/payments/providers/<name>.ts` (and protocol helper), `lib/payments/providers.ts` registry/capabilities/readiness, server-only env name examples, provider protocol tests and conformance tests, plus a controlled channel configuration change. Callback completion, balance credit, order/recharge core and basic payment-page artifact handling should not require provider-specific branches. A submit-based acquirer additionally needs a safe submit-form validator/compatibility adapter.

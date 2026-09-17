@@ -49,6 +49,8 @@ export type RechargeDatabaseDiagnostic = {
 
 export type RechargeRecord = {
   rechargeNo: string;
+  provider?: PaymentProviderCode | null;
+  providerExternalFeeDisclosure?: string;
   channelCode: string;
   channelName: string;
   currency: PaymentCurrency;
@@ -245,6 +247,7 @@ export function normalizeRechargeRow(row: AnyRow): RechargeRecord {
   const currency: PaymentCurrency = row.currency === "USDT" ? "USDT" : "CNY";
   return {
     rechargeNo: String(row.recharge_no ?? ""),
+    provider: typeof row.provider === "string" ? row.provider as PaymentProviderCode : null,
     channelCode: String(row.channel_code ?? row.channel ?? ""),
     channelName: String(row.channel_name ?? channelLabel(String(row.channel_code ?? row.channel ?? ""))),
     currency,

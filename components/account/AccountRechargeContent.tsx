@@ -14,7 +14,6 @@ import {
   formatPaymentAmount,
 } from "@/lib/payments/channels";
 import type { PaymentChannel, PaymentChannelCode, PaymentCurrency, PaymentSubmitForm } from "@/lib/payments/channel-types";
-import { isLiuhaoyiAmountOverLimit, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import {
   canContinueLiuhaoyiRechargePayment,
@@ -72,7 +71,7 @@ export default function AccountRechargeContent() {
   const [recordCount, setRecordCount] = useState(0);
   const [dailyRate, setDailyRate] = useState<RechargeRate | null>(null);
   const [rateError, setRateError] = useState<string | null>(null);
-  const [liuhaoyiLimitDialogOpen, setLiuhaoyiLimitDialogOpen] = useState(false);
+  const [amountLimitDialogOpen, setAmountLimitDialogOpen] = useState(false);
   const [historyNowTick, setHistoryNowTick] = useState(0);
 
   const selectedChannel =
@@ -97,9 +96,10 @@ export default function AccountRechargeContent() {
   const hasValidAmount = isUsdtCnyRecharge
     ? Boolean(requestedCnyAmount && expectedUsdtAmount && dailyRate && reachesMin)
     : Boolean(summary && summary.amount > 0 && reachesMin);
-  const isLiuhaoyiRecharge = isLiuhaoyiPaymentMethod(selectedChannel?.code);
-  const liuhaoyiOverLimit = Boolean(isLiuhaoyiRecharge && summary && isLiuhaoyiAmountOverLimit(summary.payableAmount));
-  const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting && !liuhaoyiOverLimit);
+  const maximumAmount = selectedChannel?.maximumAmount;
+  const channelOverLimit = Boolean(summary && typeof maximumAmount === "number"
+    && Number.isFinite(maximumAmount) && summary.payableAmount > maximumAmount);
+  const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting && !channelOverLimit);
 
   const loadRecords = useCallback(async (page: number) => {
     setRecordsLoading(true);
@@ -194,8 +194,8 @@ export default function AccountRechargeContent() {
 
   const createRecharge = async () => {
     if (!selectedChannel || (!summary && !isUsdtCnyRecharge)) return;
-    if (isLiuhaoyiRecharge && summary && isLiuhaoyiAmountOverLimit(summary.payableAmount)) {
-      setLiuhaoyiLimitDialogOpen(true);
+    if (channelOverLimit) {
+      setAmountLimitDialogOpen(true);
       return;
     }
     if (!canSubmit) return;
@@ -223,8 +223,8 @@ export default function AccountRechargeContent() {
       if (!response.ok) throw new Error(result?.error ?? "充值下单失败，请稍后重试");
 
       if (result?.rechargeNo) {
-        if (isLiuhaoyiRecharge && result.submitForm && submitPaymentForm(result.submitForm)) return;
-        if (isLiuhaoyiRecharge && result.paymentType === "redirect" && result.paymentUrl) {
+        if (result.submitForm && submitPaymentForm(result.submitForm)) return;
+        if (result.paymentType === "redirect" && result.paymentUrl) {
           window.location.assign(result.paymentUrl);
           return;
         }
@@ -308,8 +308,8 @@ export default function AccountRechargeContent() {
                       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <span>最低充值：{formatPaymentAmount(channel.minimumAmount, channel.currency)}</span>
                         <span>
-                          {isLiuhaoyiPaymentMethod(channel.code)
-                            ? "支付平台可能额外收取通道手续费"
+                          {channel.providerExternalFeeDisclosure
+                            ? "支付平台可能另收通道手续费"
                             : channel.code === "usdt_bep20"
                               ? "手续费 0"
                               : channel.feeRate === 0 ? "0 手续费" : "以渠道配置为准"}
@@ -404,13 +404,13 @@ export default function AccountRechargeContent() {
                     当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。
                   </p>
                 ) : null}
-                {liuhaoyiOverLimit ? (
+                {channelOverLimit ? (
                   <button
                     type="button"
                     className="mt-2 text-left text-xs text-red-600 underline-offset-2 hover:underline"
-                    onClick={() => setLiuhaoyiLimitDialogOpen(true)}
+                    onClick={() => setAmountLimitDialogOpen(true)}
                   >
-                    支付宝/微信单笔支付最高支持 ¥2000，点击查看其他方式。
+                    当前方式单笔最高支持 {selectedChannel && typeof maximumAmount === "number" ? formatPaymentAmount(maximumAmount, selectedChannel.currency) : "—"}，点击查看其他方式。
                   </button>
                 ) : null}
 
@@ -426,9 +426,9 @@ export default function AccountRechargeContent() {
                   </div>
                 ) : null}
 
-                {isLiuhaoyiRecharge ? (
+                {selectedChannel?.providerExternalFeeDisclosure ? (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-                    支付平台可能额外收取支付通道手续费，实际付款金额以支付页面为准；本站充值本金不增加该费用，仍按充值金额原额创建支付单并入账。
+                    {selectedChannel.providerExternalFeeDisclosure}
                   </div>
                 ) : null}
 
@@ -444,7 +444,7 @@ export default function AccountRechargeContent() {
                 <div className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 sm:gap-x-8">
                     <div>充值人民币金额：{isUsdtCnyRecharge && requestedCnyAmount ? `¥${requestedCnyAmount}` : selectedChannel && summary ? formatPaymentAmount(summary.amount, selectedChannel.currency) : "—"}</div>
-                    <div>本站手续费：{isUsdtCnyRecharge || isLiuhaoyiRecharge ? "0" : selectedChannel && summary ? (summary.fee === 0 ? "0" : formatPaymentAmount(summary.fee, selectedChannel.currency)) : "—"}</div>
+                    <div>本站手续费：{isUsdtCnyRecharge ? "0" : selectedChannel && summary ? (summary.fee === 0 ? "0" : formatPaymentAmount(summary.fee, selectedChannel.currency)) : "—"}</div>
                     <div className="font-medium text-slate-700">
                       预计应付：{isUsdtCnyRecharge ? (expectedUsdtAmount ? `${expectedUsdtAmount} USDT` : "—") : selectedChannel && summary ? formatPaymentAmount(summary.payableAmount, selectedChannel.currency) : "—"}
                     </div>
@@ -481,18 +481,18 @@ export default function AccountRechargeContent() {
           </CardContent>
         </Card>
       </div>
-      <Dialog open={liuhaoyiLimitDialogOpen} onOpenChange={setLiuhaoyiLimitDialogOpen}>
+      <Dialog open={amountLimitDialogOpen} onOpenChange={setAmountLimitDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>单笔支付金额超限</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-6 text-muted-foreground">
-            支付宝/微信单笔支付最高支持 ¥2000。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。
+            当前方式单笔最高支持 {selectedChannel && typeof maximumAmount === "number" ? formatPaymentAmount(maximumAmount, selectedChannel.currency) : "—"}。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="outline" onClick={() => setLiuhaoyiLimitDialogOpen(false)}>取消</Button>
-            <Button variant="outline" onClick={() => { setLiuhaoyiLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
-            <Button onClick={() => { setAmountText("2000"); clientRequestIdRef.current = null; setLiuhaoyiLimitDialogOpen(false); }}>改为 ¥2000</Button>
+            <Button variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>
+            <Button variant="outline" onClick={() => { setAmountLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
+            <Button onClick={() => { if (typeof maximumAmount === "number") setAmountText(String(maximumAmount)); clientRequestIdRef.current = null; setAmountLimitDialogOpen(false); }}>改为上限金额</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -538,12 +538,12 @@ function RechargeRecords({ records, loading, error, page, count, nowTick, onRetr
         {records.map((record) => {
           const now = new Date(Date.now() + nowTick * 0);
           const expired = record.status === "expired" || isRechargePastDue(record.expiresAt, now);
-          const canContinue = isLiuhaoyiPaymentMethod(record.channelCode)
+          const isExternalCny = record.channelCode === "alipay" || record.channelCode === "wechat";
+          const canContinue = isExternalCny
             ? canContinueLiuhaoyiRechargePayment(record as unknown as Record<string, unknown>, now)
             : Boolean(record.expectedUsdtAmount && ["pending", "waiting_payment"].includes(String(record.status)) && !expired);
           const status = expired ? "expired" : record.status;
           const remainingSeconds = secondsUntil(record.expiresAt, now);
-          const isLiuhaoyi = isLiuhaoyiPaymentMethod(record.channelCode);
           return <div key={record.rechargeNo} className="rounded-xl bg-slate-50 p-4 text-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <span className="truncate font-semibold text-slate-800" title={record.rechargeNo}>{record.rechargeNo}</span>
@@ -562,7 +562,7 @@ function RechargeRecords({ records, loading, error, page, count, nowTick, onRetr
               {record.paymentTokenContract ? <RecordLine label="Token 合约" value={record.paymentTokenContract} /> : null}
               {record.actualReceivedUsdt ? <RecordLine label="实际到账" value={`${record.actualReceivedUsdt} USDT`} /> : null}
               <RecordLine label="本站手续费" value={record.feeAmount === 0 ? "0" : formatPaymentAmount(record.feeAmount, record.currency)} />
-              {isLiuhaoyi ? <RecordLine label="支付通道手续费" value="可能由支付平台额外收取，以付款页面为准" /> : null}
+              {record.providerExternalFeeDisclosure ? <RecordLine label="支付通道手续费" value={record.providerExternalFeeDisclosure} /> : null}
               {!record.expectedUsdtAmount ? <RecordLine label="应付金额" value={formatPaymentAmount(record.payableAmount, record.currency)} /> : null}
               <RecordLine label="到账金额" value={record.creditedCnyAmount ? `¥${record.creditedCnyAmount}` : formatPaymentAmount(record.creditedAmount, record.currency)} />
               <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />

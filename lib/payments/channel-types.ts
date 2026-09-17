@@ -69,6 +69,7 @@ export type PaymentChannel = {
   configured: boolean;
   reviewMode?: "provider" | "manual";
   maximumAmount?: number;
+  providerExternalFeeDisclosure?: string;
   provider: PaymentProviderCode;
   sort_order: number;
   iconSrc?: string;
@@ -216,6 +217,7 @@ export type PaymentProviderCapabilities = {
   supportedChannels: readonly PaymentChannelCode[];
   minimumAmount: number | null;
   maximumAmount: number | null;
+  providerExternalFeeDisclosure?: string | null;
 };
 
 export type ProviderConfigCheck = {

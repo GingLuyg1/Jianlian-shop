@@ -9,6 +9,7 @@ import type {
   ProviderCallbackContext,
   ProviderParsedCallback,
 } from "@/lib/payments/channel-types";
+import { callbackSessionIdentityMatches, callbackSessionNoCandidate } from "@/lib/payments/callback-session-bootstrap.mjs";
 import {
   callbackObservationRecord,
   createCallbackObservation,
@@ -18,11 +19,10 @@ import { completePayment } from "@/lib/payments/complete-payment-service";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { assertPaymentStatusTransition } from "@/lib/payments/payment-status-machine";
 import {
-  getPaymentProvider,
   isPaymentChannelCode,
   normalizeProviderPaymentStatus,
+  resolveProviderForExistingSession,
 } from "@/lib/payments/providers";
-import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const UNIFIED_CALLBACK_IMPLEMENTED = true;
@@ -77,16 +77,30 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       payloadSummary: callbackPayloadSummary(observation, summarizePayload(payload)),
     });
 
-    const channel = await loadChannel(service, channelCode);
+    const sessionNoCandidate = callbackSessionNoCandidate(payload);
+    if (!sessionNoCandidate) {
+      await updateCallbackLog(service, logId, "business_not_found", "SESSION_ID_MISSING");
+      return observedResponse(response({ error: "支付会话编号缺失" }, 400), observation, { processResult: "business_not_found", httpStatus: 400 });
+    }
+    observation.sessionNo = sessionNoCandidate;
+    const session = await findCallbackSession(service, sessionNoCandidate);
+    if (!session) {
+      await updateCallbackLog(service, logId, "business_not_found", "SESSION_NOT_FOUND");
+      return observedResponse(response({ error: "支付会话不存在" }, 404), observation, { processResult: "business_not_found", httpStatus: 404 });
+    }
+    if (session.channel_code !== channelCode) {
+      await updateCallbackLog(service, logId, "processing_failed", "SESSION_CHANNEL_MISMATCH");
+      return observedResponse(response({ error: "支付渠道不匹配" }, 400), observation, { processResult: "processing_failed", httpStatus: 400 });
+    }
     const context: ProviderCallbackContext = {
       channelCode,
-      provider: channel.provider as PaymentProviderCode,
+      provider: session.provider as PaymentProviderCode,
       rawBody,
       headers: request.headers,
       requestUrl: request.url,
     };
-    observation.provider = channel.provider;
-    callbackProvider = getPaymentProvider(channel.provider);
+    observation.provider = String(session.provider);
+    callbackProvider = resolveProviderForExistingSession(session);
     const verified = await callbackProvider.verifyCallback(rawBody, context);
     if (!verified) {
       await updateCallbackLog(service, logId, "signature_failed", "回调验签失败或 Provider 未配置", {
@@ -110,10 +124,9 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       payload_summary: callbackPayloadSummary(observation, summarizeParsed(parsed)),
     });
 
-    const session = await findCallbackSession(service, parsed, channelCode);
-    if (!session) {
-      await updateCallbackLog(service, logId, "business_not_found", "未找到匹配的支付会话");
-      return observedResponse(providerResponse(callbackProvider, { ok: false, message: "支付会话不存在" }, { error: "支付会话不存在" }, 404), observation, { processResult: "business_not_found", httpStatus: 404 });
+    if (!callbackSessionIdentityMatches({ session, parsed, channelCode })) {
+      await updateCallbackLog(service, logId, "processing_failed", "SESSION_IDENTITY_MISMATCH");
+      return observedResponse(providerResponse(callbackProvider, { ok: false, message: "支付会话身份不匹配" }, { error: "支付会话身份不匹配" }, 400), observation, { processResult: "processing_failed", httpStatus: 400 });
     }
 
     const expiredRechargePayment = parsed.status === "paid"
@@ -257,32 +270,15 @@ function observedResponse(
   return callbackResponse;
 }
 
-async function loadChannel(service: SupabaseClient, channelCode: PaymentChannelCode) {
-  const { data, error } = await service
-    .from("payment_channels")
-    .select("channel,code,enabled,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,sort_order,configured,public_config")
-    .or(`code.eq.${channelCode},channel.eq.${channelCode}`)
-    .maybeSingle();
-  if (error) throw error;
-  const channel = data ? normalizeChannelRow(data as Record<string, unknown>) : null;
-  if (!channel) throw new Error("支付渠道不存在");
-  return channel;
-}
-
 async function findCallbackSession(
   service: SupabaseClient,
-  parsed: ProviderParsedCallback,
-  channelCode: PaymentChannelCode
+  sessionNo: string,
 ) {
-  let query = service
+  const { data, error } = await service
     .from("payment_sessions")
-    .select("id,business_type,business_id,business_no,status,payable_amount,currency,channel_code,provider,provider_transaction_id,expires_at")
-    .eq("channel_code", channelCode)
-    .limit(1);
-  if (parsed.sessionNo) query = query.eq("session_no", parsed.sessionNo);
-  else if (parsed.providerOrderNo) query = query.eq("provider_order_no", parsed.providerOrderNo);
-  else query = query.eq("business_no", parsed.businessNo);
-  const { data, error } = await query.maybeSingle();
+    .select("id,session_no,business_type,business_id,business_no,status,payable_amount,currency,channel_code,provider,provider_transaction_id,expires_at")
+    .eq("session_no", sessionNo)
+    .maybeSingle();
   if (error) throw error;
   return data;
 }

@@ -2,6 +2,7 @@ import type {
   CreatePaymentInput,
   CreatePaymentResult,
   PaymentChannelCode,
+  PaymentChannel,
   PaymentProviderCapabilities,
   PaymentProviderConfigStatus,
   PaymentProvider,
@@ -77,6 +78,19 @@ export function getPaymentProvider(provider: PaymentProviderCode) {
   return providers[provider] ?? unavailableProvider();
 }
 
+export function resolveProviderForNewPayment(channel: Pick<PaymentChannel, "provider">): PaymentProvider {
+  if (!Object.prototype.hasOwnProperty.call(providers, channel.provider)) throw new PaymentProviderError();
+  return getPaymentProvider(channel.provider);
+}
+
+export function resolveProviderForExistingSession(session: { provider?: unknown }): PaymentProvider {
+  const pinned = session.provider;
+  if (typeof pinned !== "string" || !Object.prototype.hasOwnProperty.call(providers, pinned)) {
+    throw new PaymentProviderError("支付会话 Provider 不存在", "SESSION_PROVIDER_UNKNOWN");
+  }
+  return getPaymentProvider(pinned as PaymentProviderCode);
+}
+
 export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCapabilities> = {
   liuhaoyi: {
     supportsCreate: true,
@@ -94,6 +108,7 @@ export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCa
     supportedChannels: ["alipay", "wechat"],
     minimumAmount: 1,
     maximumAmount: 2000,
+    providerExternalFeeDisclosure: "支付平台可能额外收取约 3% 通道手续费；实际付款金额以支付页面为准，本站本金不增加该费用。",
   },
   generic_api: {
     supportsCreate: false,
