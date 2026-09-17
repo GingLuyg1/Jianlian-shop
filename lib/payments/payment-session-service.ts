@@ -8,12 +8,14 @@ import type {
   PaymentChannel,
   PaymentCurrency,
   PaymentSessionStatus,
+  PaymentSubmitForm,
   ProviderCreatePaymentResult,
 } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { assertLiuhaoyiAmountBreakdown, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { getPaymentProvider } from "@/lib/payments/providers";
 import { normalizeLiuhaoyiSessionPresentation } from "@/lib/payments/providers/liuhaoyi-core.mjs";
+import { normalizeLiuhaoyiSubmitForm } from "@/lib/payments/providers/liuhaoyi-submit.mjs";
 import { isReusablePaymentSession } from "@/lib/payments/payment-session-reuse.mjs";
 import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -48,6 +50,7 @@ export type PaymentSessionResponse = {
   status: "pending" | "processing";
   paymentType: "redirect" | "qrcode" | "address" | "deeplink";
   paymentUrl?: string;
+  submitForm?: PaymentSubmitForm;
   qrCodeUrl?: string;
   qrCodeValue?: string;
   deepLinkUrl?: string;
@@ -589,11 +592,21 @@ function toSessionResponse(row: Record<string, unknown>): PaymentSessionResponse
     paymentUrl: textOrUndefined(row.payment_url),
     qrCodeUrl: textOrUndefined(row.qr_code_url),
   });
+  const submitForm = row.provider === "liuhaoyi" && metadata.checkoutMode === "submit"
+    ? normalizeLiuhaoyiSubmitForm(metadata.submitForm)
+    : null;
+  const validSubmitForm = submitForm && (row.channel_code === "wechat" || row.channel_code === "alipay")
+    && submitForm.fields.out_trade_no === row.session_no
+    && submitForm.fields.type === (row.channel_code === "wechat" ? "wxpay" : "alipay")
+    && Number(submitForm.fields.money) === finiteNumber(row.payable_amount)
+    ? submitForm
+    : undefined;
   return {
     sessionNo: String(row.session_no),
     status: normalizeSessionStatus(row.status) === "processing" ? "processing" : "pending",
     paymentType: artifact.paymentType,
     paymentUrl: artifact.paymentUrl,
+    submitForm: validSubmitForm,
     qrCodeUrl: artifact.qrCodeUrl,
     qrCodeValue: artifact.qrCodeValue,
     deepLinkUrl: artifact.deepLinkUrl,

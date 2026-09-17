@@ -13,8 +13,9 @@ import {
   calculateRechargeAmounts,
   formatPaymentAmount,
 } from "@/lib/payments/channels";
-import type { PaymentChannel, PaymentChannelCode, PaymentCurrency } from "@/lib/payments/channel-types";
+import type { PaymentChannel, PaymentChannelCode, PaymentCurrency, PaymentSubmitForm } from "@/lib/payments/channel-types";
 import { isLiuhaoyiAmountOverLimit, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
+import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import {
   canContinueLiuhaoyiRechargePayment,
   isRechargePastDue,
@@ -216,12 +217,13 @@ export default function AccountRechargeContent() {
         }),
       });
       const result = (await response.json().catch(() => null)) as
-        | { error?: string; rechargeNo?: string; paymentType?: string; paymentUrl?: string }
+        | { error?: string; rechargeNo?: string; paymentType?: string; paymentUrl?: string; submitForm?: PaymentSubmitForm }
         | null;
 
       if (!response.ok) throw new Error(result?.error ?? "充值下单失败，请稍后重试");
 
       if (result?.rechargeNo) {
+        if (isLiuhaoyiRecharge && result.submitForm && submitPaymentForm(result.submitForm)) return;
         if (isLiuhaoyiRecharge && result.paymentType === "redirect" && result.paymentUrl) {
           window.location.assign(result.paymentUrl);
           return;

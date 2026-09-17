@@ -134,6 +134,7 @@ export type ProviderCreatePaymentResult = {
   status: "pending" | "processing";
   paymentType: PaymentResultType;
   artifact?: PaymentArtifact;
+  submitForm?: PaymentSubmitForm;
   paymentUrl?: string;
   qrCodeUrl?: string;
   qrCodeValue?: string;
@@ -158,6 +159,22 @@ export type ProviderQueryPaymentResult = {
   currency?: PaymentCurrency;
   rawSummary?: Record<string, unknown>;
   rawSummarySafe?: Record<string, unknown>;
+};
+
+export type PaymentSubmitForm = {
+  action: string;
+  method: "POST";
+  fields: {
+    pid: string;
+    type: "alipay" | "wxpay";
+    out_trade_no: string;
+    notify_url: string;
+    return_url: string;
+    name: string;
+    money: string;
+    sign_type: "MD5";
+    sign: string;
+  };
 };
 
 export type ProviderClosePaymentResult = {

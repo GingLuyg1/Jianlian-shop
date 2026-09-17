@@ -58,6 +58,8 @@ import {
   type PaymentMethodCode,
 } from "@/lib/payments/payment-methods";
 import { isLiuhaoyiAmountOverLimit, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
+import type { PaymentSubmitForm } from "@/lib/payments/channel-types";
+import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -643,7 +645,7 @@ export default function CheckoutPage() {
             code?: string;
             request_id?: string;
             warning_code?: string;
-            paymentSession?: { paymentType?: string; paymentUrl?: string };
+            paymentSession?: { paymentType?: string; paymentUrl?: string; submitForm?: PaymentSubmitForm };
           }
         | null;
 
@@ -701,6 +703,8 @@ export default function CheckoutPage() {
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
       window.sessionStorage.removeItem(checkoutSessionKey);
+      if (isLiuhaoyiPaymentMethod(paymentMethod) && result?.paymentSession?.submitForm
+        && submitPaymentForm(result.paymentSession.submitForm)) return;
       if (
         isLiuhaoyiPaymentMethod(paymentMethod)
         && result?.paymentSession?.paymentType === "redirect"

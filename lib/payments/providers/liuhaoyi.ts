@@ -25,6 +25,7 @@ import {
 } from "@/lib/payments/providers/liuhaoyi-core.mjs";
 import { normalizePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 import { paymentArtifactFromCreateResult } from "@/lib/payments/provider-contracts.mjs";
+import { buildLiuhaoyiSubmitForm } from "@/lib/payments/providers/liuhaoyi-submit.mjs";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -34,6 +35,7 @@ type LiuhaoyiConfig = {
   apiBaseUrl: URL;
   siteUrl: URL;
   timeoutMs: number;
+  checkoutMode: "mapi" | "submit";
 };
 
 export class LiuhaoyiProviderError extends Error {
@@ -51,8 +53,12 @@ function configuration(): LiuhaoyiConfig {
   const merchantKey = String(process.env.LIUHAOYI_MERCHANT_KEY ?? "").trim();
   const apiBaseUrl = String(process.env.LIUHAOYI_API_BASE_URL ?? "").trim();
   const siteUrl = String(process.env.LIUHAOYI_SITE_URL ?? "").trim();
+  const checkoutMode = String(process.env.LIUHAOYI_CHECKOUT_MODE ?? "mapi").trim();
   if (!merchantId || !merchantKey || !apiBaseUrl || !siteUrl) {
     throw new LiuhaoyiProviderError("LIUHAOYI_NOT_CONFIGURED", "六号易支付渠道尚未配置");
+  }
+  if (checkoutMode !== "mapi" && checkoutMode !== "submit") {
+    throw new LiuhaoyiProviderError("LIUHAOYI_CHECKOUT_MODE_INVALID", "六号易结算模式配置无效");
   }
   return {
     merchantId,
@@ -60,6 +66,7 @@ function configuration(): LiuhaoyiConfig {
     apiBaseUrl: httpsUrl(apiBaseUrl, "六号易 API 地址配置无效"),
     siteUrl: httpsUrl(siteUrl, "六号易网站回调地址配置无效"),
     timeoutMs: boundedTimeout(process.env.LIUHAOYI_TIMEOUT_MS),
+    checkoutMode,
   };
 }
 
@@ -93,13 +100,34 @@ async function createPayment(
     ? `/payment?order=${encodeURIComponent(input.businessNo)}`
     : `/payment?recharge=${encodeURIComponent(input.businessNo)}`;
   const returnUrl = new URL(returnPath, config.siteUrl).toString();
+  const subject = boundedText(input.subject || `Jianlian ${input.businessType} ${input.businessNo}`, 127);
+  if (config.checkoutMode === "submit") {
+    const submitForm = buildLiuhaoyiSubmitForm({
+      apiBaseUrl: config.apiBaseUrl,
+      merchantId: config.merchantId,
+      merchantKey: config.merchantKey,
+      channelCode: input.channel.code,
+      sessionNo: input.sessionNo,
+      notifyUrl,
+      returnUrl,
+      subject,
+      money,
+    });
+    return {
+      status: "pending",
+      paymentType: "redirect",
+      submitForm,
+      expiresAt: input.expiresAt,
+      metadata: { provider: "liuhaoyi", clientDevice, checkoutMode: "submit", submitForm },
+    };
+  }
   const unsigned = {
     pid: config.merchantId,
     type: channelType,
     out_trade_no: input.sessionNo,
     notify_url: notifyUrl,
     return_url: returnUrl,
-    name: boundedText(input.subject || `Jianlian ${input.businessType} ${input.businessNo}`, 127),
+    name: subject,
     money,
     clientip: clientIp,
     device: clientDevice,

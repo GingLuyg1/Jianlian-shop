@@ -26,6 +26,8 @@ import {
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { getBep20TimingVisibility } from "@/lib/payments/bep20-presentation.mjs";
 import { getQrPayloadOpenAction } from "@/lib/payments/payment-artifact-presentation.mjs";
+import type { PaymentSubmitForm } from "@/lib/payments/channel-types";
+import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import { isRechargePastDue } from "@/lib/payments/recharge-expiry.mjs";
 import { rechargeStatusLabel, type RechargeRecord } from "@/lib/payments/recharge-utils";
 import { openPublicSupport } from "@/lib/support/open-public-support";
@@ -48,6 +50,7 @@ type PaymentSession = {
   status: "pending" | "processing";
   paymentType: "redirect" | "qrcode" | "address" | "deeplink";
   paymentUrl?: string;
+  submitForm?: PaymentSubmitForm;
   qrCodeUrl?: string;
   qrCodeValue?: string;
   deepLinkUrl?: string;
@@ -826,8 +829,9 @@ function LiuhaoyiRechargePaymentPanel({
         <Info label="待支付剩余时间" value={`${Math.floor(remainingSeconds / 60)} 分 ${remainingSeconds % 60} 秒`} />
       </div>
       {session.paymentUrl ? <Button asChild className="w-full"><a href={session.paymentUrl} target="_blank" rel="noreferrer">打开付款页面<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
+      {!providerPaid && session.submitForm ? <Button type="button" className="w-full" onClick={() => submitPaymentForm(session.submitForm)}>打开付款页面<ExternalLink className="ml-2 h-4 w-4" /></Button> : null}
       {session.deepLinkUrl ? <Button asChild className="w-full" variant="outline"><a href={session.deepLinkUrl}>{recharge.channelCode === "wechat" ? "打开微信支付" : recharge.channelCode === "alipay" ? "打开支付宝支付" : "在支付客户端中打开"}<ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}
-      {!session.qrCodeValue && !session.paymentUrl && !session.deepLinkUrl ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">渠道未返回可展示的付款入口，请勿付款并联系客服。</div> : null}
+      {!session.qrCodeValue && !session.paymentUrl && !session.deepLinkUrl && !session.submitForm ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">渠道未返回可展示的付款入口，请勿付款并联系客服。</div> : null}
     </div>
   );
 }
@@ -1384,6 +1388,12 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       </Button>
                     ) : null}
 
+                    {!sessionPaymentBlocked && session.submitForm ? (
+                      <Button type="button" onClick={() => submitPaymentForm(session.submitForm)}>
+                        打开支付页面
+                      </Button>
+                    ) : null}
+
                     {!sessionPaymentBlocked && session.deepLinkUrl ? (
                       <Button asChild variant="outline">
                         <a href={session.deepLinkUrl}>{selectedChannel === "wechat" ? "打开微信支付" : selectedChannel === "alipay" ? "打开支付宝支付" : "在支付客户端中打开"}</a>
@@ -1394,7 +1404,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                         该支付会话已结束或过期，不能继续扫码、打开付款入口或创建替代支付单。如已付款，请联系客服并提供订单编号。
                       </div>
-                    ) : !session.qrCodeValue && !session.qrCodeUrl && !session.walletAddress && !session.paymentUrl && !session.deepLinkUrl ? (
+                    ) : !session.qrCodeValue && !session.qrCodeUrl && !session.walletAddress && !session.paymentUrl && !session.deepLinkUrl && !session.submitForm ? (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                         该支付方式暂未返回可展示的支付信息，请更换支付方式或稍后重试。
                       </div>
