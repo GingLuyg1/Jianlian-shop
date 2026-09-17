@@ -123,7 +123,7 @@ test("金额不一致进入 reconciliation，验签失败和 Provider 失败不�
   const sessionService = source("lib/payments/payment-session-service.ts");
   assert.match(callbackService, /if \(!amountEqual\(session\.payable_amount, parsed\.amount, session\.currency\)\)/);
   assert.match(callbackService, /differenceType: "amount_mismatch"/);
-  assert.match(callbackService, /if \(!verified\)[\s\S]*signature_failed[\s\S]*return providerResponse/);
+  assert.match(callbackService, /if \(!verified\)[\s\S]*signature_failed[\s\S]*return observedResponse\(providerResponse/);
   assert.match(sessionService, /status: "failed"[\s\S]*\.neq\("status", "paid"\)/);
 });
 

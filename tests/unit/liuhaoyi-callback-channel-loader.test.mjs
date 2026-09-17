@@ -78,7 +78,7 @@ test("expired paid recharge callback records manual review before completion", (
   );
   assert.match(expiredBranch, /differenceType: "provider_paid_local_unpaid"/);
   assert.match(expiredBranch, /result: "manual_review"/);
-  assert.match(expiredBranch, /return providerResponse/);
+  assert.match(expiredBranch, /return observedResponse\(providerResponse/);
   assert.doesNotMatch(expiredBranch, /completePayment\(|credit|balance/i);
 });
 

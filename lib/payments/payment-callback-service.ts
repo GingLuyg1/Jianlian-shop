@@ -9,6 +9,11 @@ import type {
   ProviderCallbackContext,
   ProviderParsedCallback,
 } from "@/lib/payments/channel-types";
+import {
+  callbackObservationRecord,
+  createCallbackObservation,
+  type CallbackObservation,
+} from "@/lib/payments/callback-observability.mjs";
 import { completePayment } from "@/lib/payments/complete-payment-service";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { assertPaymentStatusTransition } from "@/lib/payments/payment-status-machine";
@@ -35,15 +40,19 @@ type CallbackStatus =
   | "success";
 
 export async function handlePaymentCallback(request: Request, routeChannel?: string) {
-  const service = getSupabaseServiceRoleClient();
-  if (!service) return response({ error: "服务端支付密钥未配置" }, 503);
-
-  const rawBody = await request.text();
   const url = new URL(request.url);
   const requestedChannel = String(
     routeChannel ?? url.searchParams.get("channel") ?? request.headers.get("x-payment-channel") ?? ""
   ).trim();
   const channelCode = requestedChannel === "wechat_pay" ? "wechat" : requestedChannel;
+  const observation = createCallbackObservation({ headers: request.headers, channel: channelCode });
+  const service = getSupabaseServiceRoleClient();
+  if (!service) return observedResponse(response({ error: "服务端支付密钥未配置" }, 503), observation, {
+    processResult: "processing_failed",
+    httpStatus: 503,
+  });
+
+  const rawBody = await request.text();
   const payload = request.method === "GET" ? Object.fromEntries(url.searchParams.entries()) : safeJson(rawBody);
   let logId: string | null = null;
   let callbackProvider: PaymentProvider | null = null;
@@ -53,16 +62,19 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       logId = await createCallbackLog(service, {
         channel: channelCode || null,
         status: "received",
-        payloadSummary: summarizePayload(payload),
+        payloadSummary: callbackPayloadSummary(observation, summarizePayload(payload)),
       });
       await updateCallbackLog(service, logId, "processing_failed", "支付渠道不在允许列表");
-      return response({ error: "支付渠道不支持" }, 400);
+      return observedResponse(response({ error: "支付渠道不支持" }, 400), observation, {
+        processResult: "processing_failed",
+        httpStatus: 400,
+      });
     }
 
     logId = await createCallbackLog(service, {
       channel: channelCode,
       status: "received",
-      payloadSummary: summarizePayload(payload),
+      payloadSummary: callbackPayloadSummary(observation, summarizePayload(payload)),
     });
 
     const channel = await loadChannel(service, channelCode);
@@ -73,28 +85,35 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       headers: request.headers,
       requestUrl: request.url,
     };
+    observation.provider = channel.provider;
     callbackProvider = getPaymentProvider(channel.provider);
     const verified = await callbackProvider.verifyCallback(rawBody, context);
     if (!verified) {
       await updateCallbackLog(service, logId, "signature_failed", "回调验签失败或 Provider 未配置", {
         signature_result: "failed",
       });
-      return providerResponse(callbackProvider, { ok: false, message: "回调验签失败" }, { error: "回调验签失败" }, 400);
+      return observedResponse(providerResponse(callbackProvider, { ok: false, message: "回调验签失败" }, { error: "回调验签失败" }, 400), observation, {
+        signatureResult: "failed",
+        processResult: "signature_failed",
+        httpStatus: 400,
+      });
     }
+    observation.signatureResult = "success";
     await updateCallbackLog(service, logId, "verified", null, { signature_result: "success" });
 
     const parsedRaw = (await callbackProvider.parseCallback(payload ?? rawBody, context)) as ProviderParsedCallback;
     const parsed = { ...parsedRaw, status: normalizeProviderPaymentStatus(parsedRaw.status) };
+    observation.sessionNo = parsed.sessionNo ?? null;
     await updateCallbackLog(service, logId, "parsed", null, {
       payment_no: parsed.businessNo,
       provider_trade_no: parsed.providerTransactionId || null,
-      payload_summary: summarizeParsed(parsed),
+      payload_summary: callbackPayloadSummary(observation, summarizeParsed(parsed)),
     });
 
     const session = await findCallbackSession(service, parsed, channelCode);
     if (!session) {
       await updateCallbackLog(service, logId, "business_not_found", "未找到匹配的支付会话");
-      return providerResponse(callbackProvider, { ok: false, message: "支付会话不存在" }, { error: "支付会话不存在" }, 404);
+      return observedResponse(providerResponse(callbackProvider, { ok: false, message: "支付会话不存在" }, { error: "支付会话不存在" }, 404), observation, { processResult: "business_not_found", httpStatus: 404 });
     }
 
     const expiredRechargePayment = parsed.status === "paid"
@@ -115,7 +134,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         errorCode: "CALLBACK_AMOUNT_MISMATCH",
         errorMessage: "支付回调金额与支付会话金额不一致",
       });
-      return providerResponse(callbackProvider, { ok: false, message: "支付金额不一致" }, { error: "支付金额不一致" }, 400);
+      return observedResponse(providerResponse(callbackProvider, { ok: false, message: "支付金额不一致" }, { error: "支付金额不一致" }, 400), observation, { processResult: "amount_mismatch", httpStatus: 400 });
     }
     if (String(session.currency).toUpperCase() !== String(parsed.currency).toUpperCase()) {
       await updateCallbackLog(service, logId, "currency_mismatch", "渠道币种与支付会话币种不一致");
@@ -127,7 +146,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         errorCode: "CALLBACK_CURRENCY_MISMATCH",
         errorMessage: "支付回调币种与支付会话币种不一致",
       });
-      return providerResponse(callbackProvider, { ok: false, message: "支付币种不一致" }, { error: "支付币种不一致" }, 400);
+      return observedResponse(providerResponse(callbackProvider, { ok: false, message: "支付币种不一致" }, { error: "支付币种不一致" }, 400), observation, { processResult: "currency_mismatch", httpStatus: 400 });
     }
 
     if (parsed.status !== "paid") {
@@ -142,7 +161,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
           errorCode: "CALLBACK_STATUS_TRANSITION_DENIED",
           errorMessage: transition.message,
         });
-        return providerResponse(callbackProvider, { ok: false, message: transition.message }, { error: transition.message }, 409);
+        return observedResponse(providerResponse(callbackProvider, { ok: false, message: transition.message }, { error: transition.message }, 409), observation, { processResult: "processing_failed", httpStatus: 409 });
       }
       await service
         .from("payment_sessions")
@@ -154,12 +173,12 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         .eq("id", session.id)
         .neq("status", "paid");
       await updateCallbackLog(service, logId, "success", null);
-      return providerResponse(callbackProvider, { ok: true }, { ok: true });
+      return observedResponse(providerResponse(callbackProvider, { ok: true }, { ok: true }), observation, { processResult: "success", httpStatus: 200 });
     }
 
     if (session.status === "paid") {
       await updateCallbackLog(service, logId, "duplicate", null, { is_duplicate: true });
-      return providerResponse(callbackProvider, { ok: true, duplicate: true }, { ok: true, duplicate: true });
+      return observedResponse(providerResponse(callbackProvider, { ok: true, duplicate: true }, { ok: true, duplicate: true }), observation, { processResult: "duplicate", httpStatus: 200 });
     }
 
     if (expiredRechargePayment) {
@@ -172,7 +191,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         errorMessage: latePaymentMessage,
       });
       await updateCallbackLog(service, logId, "processing_failed", latePaymentMessage);
-      return providerResponse(callbackProvider, { ok: true, message: latePaymentMessage }, { ok: true, manualReview: true });
+      return observedResponse(providerResponse(callbackProvider, { ok: true, message: latePaymentMessage }, { ok: true, manualReview: true }), observation, { processResult: "processing_failed", httpStatus: 200 });
     }
 
     const transition = assertPaymentStatusTransition(session.status, "paid");
@@ -186,7 +205,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
         errorCode: "CALLBACK_PAID_TRANSITION_DENIED",
         errorMessage: transition.message,
       });
-      return providerResponse(callbackProvider, { ok: false, message: transition.message }, { error: transition.message }, 409);
+      return observedResponse(providerResponse(callbackProvider, { ok: false, message: transition.message }, { error: transition.message }, 409), observation, { processResult: "processing_failed", httpStatus: 409 });
     }
 
     const completion = await completePayment(
@@ -205,12 +224,37 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       business_type: completion.businessType,
       business_id: completion.businessId,
     });
-    return providerResponse(callbackProvider, { ok: true, duplicate: completion.idempotent }, { ok: true, duplicate: completion.idempotent });
+    return observedResponse(providerResponse(callbackProvider, { ok: true, duplicate: completion.idempotent }, { ok: true, duplicate: completion.idempotent }), observation, {
+      processResult: completion.idempotent ? "duplicate" : "success",
+      httpStatus: 200,
+    });
   } catch (error) {
     const message = getSafeErrorMessage(error, "支付回调处理失败");
     if (logId) await updateCallbackLog(service, logId, "processing_failed", message);
-    return providerResponse(callbackProvider, { ok: false, message }, { error: message }, 400);
+    return observedResponse(providerResponse(callbackProvider, { ok: false, message }, { error: message }, 400), observation, { processResult: "processing_failed", httpStatus: 400 });
   }
+}
+
+function callbackPayloadSummary(observation: CallbackObservation, summary: Record<string, unknown>) {
+  return {
+    requestId: observation.requestId,
+    receivedAt: observation.receivedAt,
+    provider: observation.provider,
+    channel: observation.channel,
+    sessionNo: observation.sessionNo,
+    ...summary,
+  };
+}
+
+function observedResponse(
+  callbackResponse: Response,
+  observation: CallbackObservation,
+  update: Partial<CallbackObservation>,
+) {
+  const record = callbackObservationRecord(observation, update);
+  callbackResponse.headers.set("x-request-id", record.requestId);
+  console.info("[Payment callback]", record);
+  return callbackResponse;
 }
 
 async function loadChannel(service: SupabaseClient, channelCode: PaymentChannelCode) {
