@@ -924,6 +924,10 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
     ? "paid"
     : paymentStatus?.status ?? order?.payment_status ?? "unpaid";
   const remainingSeconds = secondsLeft(session?.expiresAt) + nowTick * 0;
+  const sessionPaymentBlocked = Boolean(session) && (
+    ["expired", "closed", "failed"].includes(String(paymentStatus?.status ?? ""))
+    || remainingSeconds <= 0
+  );
   const isBep20Order = order?.payment_method === "usdt_bep20";
   const preferredExternalChannel = order?.payment_method === "wechat_pay" || order?.payment_method === "wechat"
     ? "wechat"
@@ -1325,14 +1329,17 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       })}
                     </div>
 
-                    <Button
-                      type="button"
-                      disabled={!selectedChannel || creatingSession}
-                      onClick={() => createSession()}
-                    >
-                      {creatingSession ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      {session ? "重新获取支付信息" : "创建支付会话"}
-                    </Button>
+                    {!sessionPaymentBlocked ? (
+                      <Button
+                        type="button"
+                        disabled={!selectedChannel || creatingSession}
+                        onClick={() => createSession()}
+                        className="min-h-11"
+                      >
+                        {creatingSession ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        {session ? "重新获取支付信息" : "创建支付会话"}
+                      </Button>
+                    ) : null}
                   </>
                 )}
 
@@ -1352,7 +1359,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       剩余 {Math.floor(remainingSeconds / 60)} 分 {remainingSeconds % 60} 秒
                     </div>
 
-                    {session.qrCodeValue ? (
+                    {!sessionPaymentBlocked && session.qrCodeValue ? (
                       <LocalPaymentQr
                         value={session.qrCodeValue}
                         channelCode={selectedChannel}
@@ -1360,7 +1367,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       />
                     ) : null}
 
-                    {session.walletAddress ? (
+                    {!sessionPaymentBlocked && session.walletAddress ? (
                       <Info
                         label="收款地址"
                         value={session.walletAddress}
@@ -1369,7 +1376,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       />
                     ) : null}
 
-                    {session.paymentUrl ? (
+                    {!sessionPaymentBlocked && session.paymentUrl ? (
                       <Button asChild>
                         <a href={session.paymentUrl} target="_blank" rel="noreferrer">
                           打开支付页面
@@ -1377,13 +1384,17 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       </Button>
                     ) : null}
 
-                    {session.deepLinkUrl ? (
+                    {!sessionPaymentBlocked && session.deepLinkUrl ? (
                       <Button asChild variant="outline">
                         <a href={session.deepLinkUrl}>{selectedChannel === "wechat" ? "打开微信支付" : selectedChannel === "alipay" ? "打开支付宝支付" : "在支付客户端中打开"}</a>
                       </Button>
                     ) : null}
 
-                    {!session.qrCodeValue && !session.qrCodeUrl && !session.walletAddress && !session.paymentUrl && !session.deepLinkUrl ? (
+                    {sessionPaymentBlocked ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                        该支付会话已结束或过期，不能继续扫码、打开付款入口或创建替代支付单。如已付款，请联系客服并提供订单编号。
+                      </div>
+                    ) : !session.qrCodeValue && !session.qrCodeUrl && !session.walletAddress && !session.paymentUrl && !session.deepLinkUrl ? (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                         该支付方式暂未返回可展示的支付信息，请更换支付方式或稍后重试。
                       </div>

@@ -109,6 +109,15 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
     return toSessionResponse(existing);
   }
 
+  const latest = await getLatestMatchingSession(service, {
+    businessType,
+    business,
+    channelCode,
+  });
+  if (latest && (normalizeSessionStatus(latest.status) === "expired" || isExpiredAt(latest.expires_at))) {
+    throw new PaymentSessionError("SESSION_EXPIRED", "原支付会话已过期，不能创建替代支付单");
+  }
+
   const channel = await loadEnabledChannel(service, channelCode);
   if (!channel.configured) {
     throw new PaymentSessionError("PROVIDER_NOT_CONFIGURED", "支付渠道尚未配置，无法创建真实支付会话。");
@@ -507,6 +516,23 @@ async function getReusableSession(service: SupabaseClient, identity: ReusableSes
     .eq("channel_code", identity.channelCode)
     .in("status", ACTIVE_SESSION_STATUSES)
     .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (identity.provider) query = query.eq("provider", identity.provider);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function getLatestMatchingSession(service: SupabaseClient, identity: ReusableSessionIdentity) {
+  let query = service
+    .from("payment_sessions")
+    .select(sessionResponseSelect)
+    .eq("business_type", identity.businessType)
+    .eq("business_id", identity.business.id)
+    .eq("business_no", identity.business.businessNo)
+    .eq("user_id", identity.business.userId)
+    .eq("channel_code", identity.channelCode)
     .order("created_at", { ascending: false })
     .limit(1);
   if (identity.provider) query = query.eq("provider", identity.provider);

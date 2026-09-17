@@ -53,6 +53,8 @@ test("create flow checks exact existing session before enabled channel, while ne
   assert.match(source, /\.eq\("channel_code", identity\.channelCode\)/);
   assert.match(source, /\.eq\("enabled", true\)/);
   assert.match(source, /assertReusableSessionMatches\(existing/);
+  assert.match(source, /const latest = await getLatestMatchingSession[\s\S]*SESSION_EXPIRED/);
+  assert.match(source, /原支付会话已过期，不能创建替代支付单/);
 });
 
 test("concurrent reservation reuses only the one active business session", () => {
