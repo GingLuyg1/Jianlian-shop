@@ -835,7 +835,7 @@ export default function CheckoutPage() {
                 ) : null}
                 {isLiuhaoyiPaymentMethod(paymentMethod) ? (
                   <p className="mt-2 text-xs leading-5 text-amber-700">
-                    支付平台可能额外收取约 3% 通道手续费，实际付款金额以支付页面为准；本站订单本金不增加。
+                    支付平台可能额外收取支付通道手续费，实际付款金额以支付页面为准；本站订单本金不增加该费用。
                   </p>
                 ) : null}
                 {paymentMethod === "balance" && balanceStatus === "error" ? (

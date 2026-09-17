@@ -11,9 +11,9 @@ const callbackService = readFileSync(new URL("../../lib/payments/payment-callbac
 const provider = readFileSync(new URL("../../lib/payments/providers/liuhaoyi.ts", import.meta.url), "utf8");
 
 test("UI explains the provider 3 percent charge without adding it to local amounts", () => {
-  assert.match(rechargeUi, /可能额外收取约 3% 通道手续费/);
-  assert.match(paymentPage, /可能额外收取约 3% 通道手续费/);
-  assert.match(checkout, /可能额外收取约 3% 通道手续费/);
+  assert.match(rechargeUi, /可能额外收取支付通道手续费/);
+  assert.match(paymentPage, /可能额外收取支付通道手续费/);
+  assert.match(checkout, /可能额外收取支付通道手续费/);
   assert.match(rechargeRoute, /summary\.fee !== 0 \|\| summary\.payableAmount !== summary\.amount/);
   assert.match(provider, /assertLiuhaoyiAmountBreakdown\(input\.requestedAmount, input\.feeAmount, input\.payableAmount\)/);
   assert.doesNotMatch(provider, /\*\s*1\.03|1\.03\s*\*/);

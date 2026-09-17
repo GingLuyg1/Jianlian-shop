@@ -810,7 +810,7 @@ function LiuhaoyiRechargePaymentPanel({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">请核对金额后完成付款。支付结果以服务端异步回调和统一支付状态为准，请勿重复付款。</div>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">支付平台可能额外收取约 3% 通道手续费，实际付款金额以支付页面为准；本站充值本金与六号易 API 金额均不增加。</div>
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">支付平台可能额外收取支付通道手续费，实际付款金额以支付页面为准；本站充值本金不增加该费用，六号易 API 金额仍为充值本金。</div>
       {providerPaid ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">支付渠道已确认付款，正在完成余额入账，请勿重复付款。</div> : null}
       {session.qrCodeValue ? (
         <LocalPaymentQr
