@@ -345,6 +345,22 @@ test("provider transitions fail closed and incompatible providers are rejected",
   );
 });
 
+test("channel compatibility is separate from its historical default provider", () => {
+  assert.equal(isChannelProviderCompatible("wechat", "liuhaoyi"), true);
+  assert.equal(isChannelProviderCompatible("wechat", "generic_api"), true);
+  assert.equal(isChannelProviderCompatible("alipay", "generic_api"), true);
+  assert.equal(isChannelProviderCompatible("wechat", "binance"), false);
+  assert.deepEqual(resolvePaymentChannelState({
+    channel: "wechat",
+    currentReviewMode: "provider",
+    currentProvider: "liuhaoyi",
+    nextReviewMode: "provider",
+    nextProvider: "generic_api",
+    requestedEnabled: true,
+    providerTrustedConfigured: true,
+  }), { compatible: true, configured: false, enabled: false });
+});
+
 test("public manual readiness requires enabled, configured and complete BEP20 evidence", () => {
   const bep20 = {
     channel: "usdt_bep20",
