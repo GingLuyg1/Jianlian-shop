@@ -6,6 +6,7 @@ import type {
   PaymentProviderConfigStatus,
   PaymentProvider,
   PaymentProviderCode,
+  ProviderRecoveryPolicy,
   PaymentSessionStatus,
   ProviderConfigCheck,
   ProviderCallbackContext,
@@ -85,42 +86,89 @@ export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCa
     supportsRefund: false,
     supportsQrCode: true,
     supportsRedirect: true,
+    supportsDeepLink: true,
     supportsWalletAddress: false,
+    supportsRecoveryQuery: true,
     supportsSandbox: false,
+    supportedCurrencies: ["CNY"],
+    supportedChannels: ["alipay", "wechat"],
+    minimumAmount: 1,
+    maximumAmount: 2000,
   },
   generic_api: {
-    supportsCreate: true,
-    supportsQuery: true,
-    supportsClose: false,
-    supportsCallback: true,
-    supportsRefund: false,
-    supportsQrCode: true,
-    supportsRedirect: true,
-    supportsWalletAddress: false,
-    supportsSandbox: false,
-  },
-  binance: {
-    supportsCreate: true,
-    supportsQuery: true,
-    supportsClose: true,
-    supportsCallback: true,
-    supportsRefund: false,
-    supportsQrCode: true,
-    supportsRedirect: true,
-    supportsWalletAddress: false,
-    supportsSandbox: false,
-  },
-  crypto_address: {
-    supportsCreate: true,
+    supportsCreate: false,
     supportsQuery: false,
     supportsClose: false,
-    supportsCallback: true,
+    supportsCallback: false,
     supportsRefund: false,
     supportsQrCode: false,
     supportsRedirect: false,
-    supportsWalletAddress: true,
+    supportsDeepLink: false,
+    supportsWalletAddress: false,
+    supportsRecoveryQuery: false,
     supportsSandbox: false,
+    supportedCurrencies: ["CNY"],
+    supportedChannels: ["alipay", "wechat"],
+    minimumAmount: null,
+    maximumAmount: null,
   },
+  binance: {
+    supportsCreate: false,
+    supportsQuery: false,
+    supportsClose: false,
+    supportsCallback: false,
+    supportsRefund: false,
+    supportsQrCode: false,
+    supportsRedirect: false,
+    supportsDeepLink: false,
+    supportsWalletAddress: false,
+    supportsRecoveryQuery: false,
+    supportsSandbox: false,
+    supportedCurrencies: ["USDT"],
+    supportedChannels: ["binance_pay"],
+    minimumAmount: null,
+    maximumAmount: null,
+  },
+  crypto_address: {
+    supportsCreate: false,
+    supportsQuery: false,
+    supportsClose: false,
+    supportsCallback: false,
+    supportsRefund: false,
+    supportsQrCode: false,
+    supportsRedirect: false,
+    supportsDeepLink: false,
+    supportsWalletAddress: false, // Existing BEP20 flow is separate from this placeholder adapter.
+    supportsRecoveryQuery: false,
+    supportsSandbox: false,
+    supportedCurrencies: ["USDT"],
+    supportedChannels: ["usdt_trc20", "usdt_bep20"],
+    minimumAmount: null,
+    maximumAmount: null,
+  },
+};
+
+const noRecovery: ProviderRecoveryPolicy = {
+  supportsRecovery: false,
+  minimumCallbackGracePeriodMs: 0,
+  queryIntervalMs: 0,
+  maximumQueryWindowMs: 0,
+  allowAutoCompletion: false,
+  requirePaidBeforeExpiry: true,
+};
+
+export const providerRecoveryPolicies: Record<PaymentProviderCode, ProviderRecoveryPolicy> = {
+  liuhaoyi: {
+    supportsRecovery: true,
+    minimumCallbackGracePeriodMs: 30_000, // Existing single-session recovery gate.
+    queryIntervalMs: 180_000, // Diagnostic watcher cadence; watcher remains disabled.
+    maximumQueryWindowMs: 3_600_000,
+    allowAutoCompletion: false, // The watcher stays disabled until a separate rollout.
+    requirePaidBeforeExpiry: true,
+  },
+  generic_api: noRecovery,
+  binance: noRecovery,
+  crypto_address: noRecovery,
 };
 
 const providerRequiredEnvNames: Record<PaymentProviderCode, string[]> = {
@@ -154,8 +202,39 @@ export function getPaymentProviderCapabilities(provider: PaymentProviderCode): P
     supportsRefund: false,
     supportsQrCode: false,
     supportsRedirect: false,
+    supportsDeepLink: false,
     supportsWalletAddress: false,
+    supportsRecoveryQuery: false,
     supportsSandbox: false,
+    supportedCurrencies: [],
+    supportedChannels: [],
+    minimumAmount: null,
+    maximumAmount: null,
+  };
+}
+
+export function getPaymentProviderChannelReadiness(
+  provider: PaymentProviderCode,
+  channel: PaymentChannelCode,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const capabilities = getPaymentProviderCapabilities(provider);
+  const config = checkPaymentProviderConfig(provider, env);
+  const channelSupported = capabilities.supportedChannels.includes(channel);
+  const currency = channel.startsWith("usdt_") || channel === "binance_pay" ? "USDT" : "CNY";
+  const currencySupported = capabilities.supportedCurrencies.includes(currency);
+  return {
+    provider,
+    channel,
+    configured: config.configured,
+    channelSupported,
+    currencySupported,
+    createSupported: capabilities.supportsCreate,
+    querySupported: capabilities.supportsQuery,
+    callbackSupported: capabilities.supportsCallback,
+    recoverySupported: capabilities.supportsRecoveryQuery,
+    codeReady: config.configured && channelSupported && currencySupported
+      && capabilities.supportsCreate && capabilities.supportsQuery && capabilities.supportsCallback,
   };
 }
 
@@ -190,6 +269,9 @@ export function getPaymentProviderReadiness(env: NodeJS.ProcessEnv = process.env
   return (Object.keys(providerCapabilities) as PaymentProviderCode[]).map((provider) => ({
     ...checkPaymentProviderConfig(provider, env, env[`PAYMENT_PROVIDER_${provider.toUpperCase()}_VERIFIED`] === "true"),
     capabilities: getPaymentProviderCapabilities(provider),
+    recoveryPolicy: providerRecoveryPolicies[provider],
+    channels: providerCapabilities[provider].supportedChannels.map((channel) =>
+      getPaymentProviderChannelReadiness(provider, channel, env)),
   }));
 }
 

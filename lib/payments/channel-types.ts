@@ -22,6 +22,30 @@ export type PaymentBusinessType = "order" | "recharge" | "account_recharge";
 export type PaymentResultType = "redirect" | "qrcode" | "address" | "deeplink";
 export type PaymentClientDevice = "pc" | "mobile" | "wechat" | "alipay";
 
+// QR payloads are data to encode locally, never an <img src> or automatic redirect.
+export type PaymentArtifact =
+  | { type: "redirect"; url: string }
+  | { type: "qrcode"; payload: string; fallbackUrl?: string }
+  | { type: "deeplink"; url: string; fallbackUrl?: string }
+  | { type: "address"; address: string; network: string };
+
+export type PaymentFeeSemantics = {
+  principalAmount: number;
+  siteFee: number;
+  payableAmount: number;
+  creditedAmount: number;
+  providerExternalFee?: number | null; // Disclosure only; never add to local payable/credit.
+};
+
+export type ProviderRecoveryPolicy = {
+  supportsRecovery: boolean;
+  minimumCallbackGracePeriodMs: number;
+  queryIntervalMs: number;
+  maximumQueryWindowMs: number;
+  allowAutoCompletion: boolean;
+  requirePaidBeforeExpiry: boolean;
+};
+
 export type ManualPaymentInstructions = {
   payment_address: string;
   token_contract: string | null;
@@ -109,11 +133,13 @@ export type ProviderCreatePaymentInput = {
 export type ProviderCreatePaymentResult = {
   status: "pending" | "processing";
   paymentType: PaymentResultType;
+  artifact?: PaymentArtifact;
   paymentUrl?: string;
   qrCodeUrl?: string;
   qrCodeValue?: string;
   deepLinkUrl?: string;
   walletAddress?: string;
+  network?: string;
   providerOrderNo?: string;
   expiresAt?: string;
   metadata?: Record<string, unknown>;
@@ -121,11 +147,17 @@ export type ProviderCreatePaymentResult = {
 
 export type ProviderQueryPaymentResult = {
   status: PaymentSessionStatus;
+  found?: boolean;
+  paid?: boolean;
+  providerChannel?: PaymentChannelCode;
+  providerTransactionIdPresent?: boolean;
+  providerPaidAt?: string;
   providerTransactionId?: string;
   paidAt?: string;
   amount?: number | string;
   currency?: PaymentCurrency;
   rawSummary?: Record<string, unknown>;
+  rawSummarySafe?: Record<string, unknown>;
 };
 
 export type ProviderClosePaymentResult = {
@@ -159,8 +191,14 @@ export type PaymentProviderCapabilities = {
   supportsRefund: boolean;
   supportsQrCode: boolean;
   supportsRedirect: boolean;
+  supportsDeepLink: boolean;
   supportsWalletAddress: boolean;
+  supportsRecoveryQuery: boolean;
   supportsSandbox: boolean;
+  supportedCurrencies: readonly PaymentCurrency[];
+  supportedChannels: readonly PaymentChannelCode[];
+  minimumAmount: number | null;
+  maximumAmount: number | null;
 };
 
 export type ProviderConfigCheck = {
@@ -181,6 +219,7 @@ export type ProviderCallbackContext = {
 };
 
 export type ProviderParsedCallback = {
+  provider?: PaymentProviderCode;
   businessNo: string;
   sessionNo?: string;
   providerOrderNo?: string;

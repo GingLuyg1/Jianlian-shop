@@ -24,6 +24,7 @@ import {
   verifyLiuhaoyiMd5Signature,
 } from "@/lib/payments/providers/liuhaoyi-core.mjs";
 import { normalizePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
+import { paymentArtifactFromCreateResult } from "@/lib/payments/provider-contracts.mjs";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -126,6 +127,7 @@ async function createPayment(
   return {
     status: "pending",
     ...paymentArtifact,
+    artifact: paymentArtifactFromCreateResult(paymentArtifact) ?? undefined,
     ...createIdentity,
     expiresAt: input.expiresAt,
     metadata: { provider: "liuhaoyi", clientDevice },
@@ -143,11 +145,26 @@ async function queryPayment(paymentNo: string): Promise<{ status: RechargeStatus
   const found = String(payload.code ?? "") === "1";
   const paid = found && String(payload.status ?? "") === "1";
   const providerTradeNo = boundedOptionalText(payload.trade_no, 160);
+  const providerType = boundedOptionalText(payload.type, 32);
+  const providerChannel = providerType === "wxpay" ? "wechat" : providerType === "alipay" ? "alipay" : undefined;
+  const providerPaidAt = boundedOptionalText(payload.endtime, 64);
   return {
     status: paid ? "paid" : "pending",
+    found,
+    paid,
+    providerChannel,
+    providerTransactionIdPresent: Boolean(providerTradeNo),
+    providerPaidAt,
     providerTransactionId: providerTradeNo,
     amount: typeof payload.money === "string" || typeof payload.money === "number" ? payload.money : undefined,
     currency: "CNY",
+    rawSummarySafe: {
+      found,
+      paid,
+      providerChannel: providerChannel ?? null,
+      providerTransactionIdPresent: Boolean(providerTradeNo),
+      providerPaidAtPresent: Boolean(providerPaidAt),
+    },
     rawSummary: {
       found,
       paid,
@@ -191,6 +208,7 @@ async function parseCallback(_payload: unknown, context?: ProviderCallbackContex
   if (!sessionNo || !providerTransactionId) throw new LiuhaoyiProviderError("LIUHAOYI_CALLBACK_ID_INVALID", "六号易回调缺少支付单号");
   const amount = assertLiuhaoyiPaymentAmount(parameters.money);
   return {
+    provider: "liuhaoyi",
     businessNo: sessionNo,
     sessionNo,
     providerOrderNo: providerTransactionId,
