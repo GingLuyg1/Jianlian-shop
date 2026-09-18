@@ -64,7 +64,9 @@ do \$\$
 begin
   if (select balance from public.profiles where id='$user_id') <> 11.00
      or (select status from public.payment_sessions where id='$session_id') <> 'paid'
+     or (select paid_at is null from public.payment_sessions where id='$session_id')
      or (select status from public.account_recharges where id='$recharge_id') <> 'paid'
+     or (select completed_at is null from public.account_recharges where id='$recharge_id')
      or (select count(*) from public.balance_transactions
          where business_type='account_recharge' and business_id='RC-CI-${scenario}'
            and status='completed') <> 1
@@ -79,58 +81,66 @@ end
 SQL
 }
 
-run_true_race() {
-  local scenario="$1" suffix="$2" first="$3" second="$4"
+race_connection() {
+  local scenario="$1" suffix="$2" label="$3" barrier_ms="$4"
   local session_id="00000000-0000-4000-8000-0000000003${suffix}"
-  prepare_fixture "$scenario" "$suffix"
-  # First connection completes within a transaction, then holds its row lock.
-  # Start the second independent connection only after the first reports LOCK_HELD.
-  PGAPPNAME="ci_first_${scenario}" psql -X -v ON_ERROR_STOP=1 -qAt <<SQL >"$task_logs/${scenario}-${first}.log" &
+  PGAPPNAME="ci_race_${scenario}_${label}" psql -X -v ON_ERROR_STOP=1 -qAt <<SQL >"$task_logs/${scenario}-${label}.log"
 begin;
 set local request.jwt.claim.role = 'service_role';
+select pg_sleep(greatest(0, ${barrier_ms} / 1000.0 - extract(epoch from clock_timestamp())));
 select public.complete_payment_session('$session_id'::uuid,'CI-TRADE-${scenario}',1.00,'CNY',now())::text;
-select pg_sleep(3);
+select pg_sleep(0.75);
 commit;
 SQL
+}
+
+run_true_race() {
+  local scenario="$1" suffix="$2" first="$3" second="$4"
+  prepare_fixture "$scenario" "$suffix"
+  # Both independent connections wait at the same wall-clock barrier. The
+  # winner holds the actual payment row lock until commit; the loser waits.
+  local barrier_ms=$(( $(date +%s%3N) + 500 ))
+  race_connection "$scenario" "$suffix" "$first" "$barrier_ms" &
   local first_pid=$!
-  local ready=no
-  for _ in {1..50}; do
-    if [[ "$(psql -X -v ON_ERROR_STOP=1 -Atqc "select count(*) from pg_stat_activity where application_name='ci_first_${scenario}' and query like 'select pg_sleep(3)%' and state='active'")" == "1" ]]; then
-      ready=yes; break
-    fi
-    sleep 0.1
-  done
-  if [[ "$ready" != yes ]]; then wait "$first_pid" || true; echo "FIRST_CONNECTION_LOCK_NOT_HELD"; exit 1; fi
-  complete_once "$scenario" "$suffix" "$second" "ci_second_${scenario}" &
+  race_connection "$scenario" "$suffix" "$second" "$barrier_ms" &
   local second_pid=$!
   local lock_wait=no
-  for _ in {1..20}; do
-    if [[ "$(psql -X -v ON_ERROR_STOP=1 -Atqc "select count(*) from pg_stat_activity where application_name='ci_second_${scenario}' and wait_event_type='Lock'")" == "1" ]]; then
+  for _ in {1..35}; do
+    if [[ "$(psql -X -v ON_ERROR_STOP=1 -Atqc "select count(*) from pg_stat_activity where application_name like 'ci_race_${scenario}_%' and wait_event_type='Lock'")" == "1" ]]; then
       lock_wait=yes; break
     fi
-    sleep 0.1
+    sleep 0.05
   done
   wait "$first_pid"
   wait "$second_pid"
   test "$lock_wait" = yes
-  grep -q '"idempotent": true' "$task_logs/${scenario}-${second}.log"
+  grep -q '"idempotent": true' "$task_logs/${scenario}-${first}.log" "$task_logs/${scenario}-${second}.log"
+  grep -q '"idempotent": false' "$task_logs/${scenario}-${first}.log" "$task_logs/${scenario}-${second}.log"
   assert_exactly_once "$scenario" "$suffix"
 }
 
-run_true_race callback_recovery 01 callback watcher
+for iteration in $(seq -w 1 20); do
+  run_true_race "callback_recovery_${iteration}" "${iteration}" callback watcher
+done
 echo "REAL_DB_CALLBACK_RECOVERY_RACE=pass"
-run_true_race double_recovery 02 watcher_a watcher_b
+echo "CALLBACK_RECOVERY_RACE_ITERATIONS=20"
+for iteration in $(seq -w 1 20); do
+  suffix="$(printf '%02d' "$((10#$iteration + 20))")"
+  run_true_race "double_recovery_${iteration}" "$suffix" watcher_a watcher_b
+done
 echo "REAL_DB_DOUBLE_RECOVERY_RACE=pass"
+echo "DOUBLE_RECOVERY_RACE_ITERATIONS=20"
 
-prepare_fixture watcher_then_callback 03
-complete_once watcher_then_callback 03 watcher
-complete_once watcher_then_callback 03 callback
+prepare_fixture watcher_then_callback 41
+complete_once watcher_then_callback 41 watcher
+complete_once watcher_then_callback 41 callback
 grep -q '"idempotent": true' "$task_logs/watcher_then_callback-callback.log"
-assert_exactly_once watcher_then_callback 03
+assert_exactly_once watcher_then_callback 41
 
-prepare_fixture callback_then_watcher 04
-complete_once callback_then_watcher 04 callback
-complete_once callback_then_watcher 04 watcher
+prepare_fixture callback_then_watcher 42
+complete_once callback_then_watcher 42 callback
+complete_once callback_then_watcher 42 watcher
 grep -q '"idempotent": true' "$task_logs/callback_then_watcher-watcher.log"
-assert_exactly_once callback_then_watcher 04
+assert_exactly_once callback_then_watcher 42
 echo "REAL_DB_LEDGER_EXACTLY_ONCE=pass"
+echo "REAL_DB_BALANCE_EXACTLY_ONCE=pass"

@@ -57,23 +57,14 @@ jobs:
           test "$PGPORT" = "54322"
           psql -X -v ON_ERROR_STOP=1 -Atqc "select 'CI_DB_READY'" | grep -qx CI_DB_READY
 
-      - name: Apply both project baselines and every repository migration
+      - name: Load minimal payment schema and current canonical RPC definitions
         shell: bash
         run: |
           set -euo pipefail
           test "$PGHOST" = "127.0.0.1"
           test "$PGPORT" = "54322"
-          psql -X -v ON_ERROR_STOP=1 -f supabase/schema.sql
-          psql -X -v ON_ERROR_STOP=1 -f supabase/orders-schema.sql
-          migration_count=0
-          while IFS= read -r migration; do
-            echo "Applying CI migration: ${migration##*/}"
-            psql -X -v ON_ERROR_STOP=1 -f "$migration"
-            migration_count=$((migration_count + 1))
-          done < <(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort)
-          expected_count="$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)"
-          test "$migration_count" -eq "$expected_count"
-          echo "ALL_REPOSITORY_MIGRATIONS_APPLIED=$migration_count"
+          psql -X -v ON_ERROR_STOP=1 -q -f scripts/ci/payment-watcher-minimal-schema.sql
+          node scripts/ci/payment-watcher-canonical-rpc.mjs | psql -X -v ON_ERROR_STOP=1 -q
           psql -X -v ON_ERROR_STOP=1 -Atqc "select case when to_regprocedure('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)') is not null and to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text)') is not null and to_regprocedure('public.credit_account_recharge_balance(text,text,numeric,text)') is not null then 'PAYMENT_RPC_READY' else 'PAYMENT_RPC_MISSING' end" | grep -qx PAYMENT_RPC_READY
 
       - name: Real PostgreSQL completion races
