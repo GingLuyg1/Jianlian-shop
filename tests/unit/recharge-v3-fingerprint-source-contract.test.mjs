@@ -14,7 +14,8 @@ test("V3 reserves a four-decimal fingerprint with a reuse quarantine", () => {
   assert.match(migration, /reserve_account_recharge_usdt_fingerprint_v3/);
   assert.match(migration, /numeric\(36, 4\)/);
   assert.match(migration, /interval '24 hours'/);
-  assert.match(createRoute, /20 \* 60 \* 1000/);
+  assert.match(createRoute, /createPaymentExpiryWindow\(\)/);
+  assert.doesNotMatch(createRoute, /20 \* 60 \* 1000/);
   assert.match(createRoute, /reserve_account_recharge_usdt_fingerprint_v3/);
 });
 

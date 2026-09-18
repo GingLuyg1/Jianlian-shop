@@ -53,8 +53,9 @@ test("late paid callback preserves evidence and routes to manual reconciliation 
   assert.doesNotMatch(callbackService, /forceCredit|forcePaid|refundPayment/);
 });
 
-test("USDT V3 retains its existing independent 20 minute fingerprint window", () => {
-  assert.match(rechargeRoute, /isUsdtCnyRecharge[\s\S]*Date\.now\(\) \+ 20 \* 60 \* 1000/);
+test("USDT V3 uses the shared 15 minute payment window", () => {
+  assert.match(rechargeRoute, /createPaymentExpiryWindow\(\)/);
+  assert.doesNotMatch(rechargeRoute, /20 \* 60 \* 1000/);
 });
 
 test("Liuhaoyi redirects only payurl sessions while qrcode remains on the local payment page", () => {

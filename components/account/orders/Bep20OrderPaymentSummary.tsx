@@ -383,7 +383,7 @@ export function Bep20OrderPaymentSummary({
               <AlertDialogHeader>
                 <AlertDialogTitle>确认重新生成支付单？</AlertDialogTitle>
                 <AlertDialogDescription className="leading-6">
-                  重新生成后将创建新的 30 分钟支付会话。请按新支付单显示的金额和信息付款。如果你已经完成原支付单转账，请取消并联系在线客服，避免重复付款。
+                  重新生成后将创建新的 15 分钟支付会话。请按新支付单显示的金额和信息付款。如果你已经完成原支付单转账，请取消并联系在线客服，避免重复付款。
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

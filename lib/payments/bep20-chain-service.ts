@@ -13,6 +13,7 @@ import {
 } from "@/lib/payments/bep20-chain-logic.mjs";
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
 import { completePayment } from "@/lib/payments/complete-payment-service";
+import { createPaymentExpiryWindow } from "@/lib/payments/payment-expiry.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -50,7 +51,6 @@ type Bep20Config = {
   tokenDecimals: number;
   receiveAddress: string;
   requiredConfirmations: number;
-  expireMinutes: number;
   pricingMode: PricingMode;
   fixedRate: string | null;
   rateTtlSeconds: number;
@@ -261,7 +261,6 @@ export function getBep20ConfigStatus() {
     BSC_USDT_DECIMALS: checkConfigValue(process.env.BSC_USDT_DECIMALS, (value) => isIntegerInRange(value, 0, 36)),
     BSC_RECEIVE_ADDRESS: checkConfigValue(process.env.BSC_RECEIVE_ADDRESS, (value) => Boolean(normalizeAddress(value))),
     BSC_REQUIRED_CONFIRMATIONS: checkConfigValue(process.env.BSC_REQUIRED_CONFIRMATIONS, (value) => isIntegerInRange(value, 1, 10_000)),
-    BSC_PAYMENT_EXPIRE_MINUTES: checkConfigValue(process.env.BSC_PAYMENT_EXPIRE_MINUTES, (value) => isIntegerInRange(value, 5, 10_080)),
     USDT_PRICING_MODE: checkConfigValue(process.env.USDT_PRICING_MODE, (value) => value === "manual_fixed_rate"),
     CNY_USDT_FIXED_RATE:
       pricingMode === "provider_rate"
@@ -326,7 +325,7 @@ export async function createBep20PaymentSession(orderNo: string, userId: string)
   if (existing) return toBep20SessionResponse(order.order_no, existing, config);
 
   const pricing = createPricingSnapshot(order, config);
-  const expiresAt = new Date(Date.now() + config.expireMinutes * 60_000).toISOString();
+  const expiresAt = createPaymentExpiryWindow().expiresAt;
   const paymentSession = await ensurePaymentSession(service, order, config, pricing, expiresAt);
   const orderPaymentId = await ensureOrderPaymentRecord(service, order, paymentSession, pricing);
 
@@ -979,7 +978,6 @@ function readBep20Config(): Bep20Config {
   const receiveAddress = normalizeAddress(process.env.BSC_RECEIVE_ADDRESS);
   const tokenDecimals = Number(process.env.BSC_USDT_DECIMALS ?? 18);
   const requiredConfirmations = Math.max(1, Number(process.env.BSC_REQUIRED_CONFIRMATIONS ?? 12));
-  const expireMinutes = Math.max(5, Number(process.env.BSC_PAYMENT_EXPIRE_MINUTES ?? 30));
   const pricingMode = String(process.env.USDT_PRICING_MODE ?? "manual_fixed_rate").trim() as PricingMode;
   const fixedRate = String(process.env.CNY_USDT_FIXED_RATE ?? "").trim() || null;
   const rateTtlSeconds = Math.max(60, Number(process.env.CNY_USDT_RATE_TTL_SECONDS ?? 300));
@@ -994,9 +992,6 @@ function readBep20Config(): Bep20Config {
   }
   if (!Number.isInteger(requiredConfirmations) || requiredConfirmations < 1) {
     throw new Bep20PaymentError("BSC_REQUIRED_CONFIRMATIONS_INVALID", "BSC 确认数配置不正确。", 503);
-  }
-  if (!Number.isInteger(expireMinutes) || expireMinutes < 5) {
-    throw new Bep20PaymentError("BSC_PAYMENT_EXPIRE_MINUTES_INVALID", "BEP20 支付过期时间配置不正确。", 503);
   }
   if (!Number.isInteger(rateTtlSeconds) || rateTtlSeconds < 60) {
     throw new Bep20PaymentError("CNY_USDT_RATE_TTL_INVALID", "CNY/USDT 汇率有效期配置不正确。", 503);
@@ -1014,7 +1009,7 @@ function readBep20Config(): Bep20Config {
     throw new Bep20PaymentError("USDT_RATE_PROVIDER_NOT_CONFIGURED", "实时汇率 Provider 尚未接入，不能创建链上支付单。", 503);
   }
 
-  return { rpcUrl, chainId, tokenContract, tokenDecimals, receiveAddress, requiredConfirmations, expireMinutes, pricingMode, fixedRate, rateTtlSeconds, amountScale };
+  return { rpcUrl, chainId, tokenContract, tokenDecimals, receiveAddress, requiredConfirmations, pricingMode, fixedRate, rateTtlSeconds, amountScale };
 }
 
 function readBep20ManualVerificationConfig(): Bep20Config {

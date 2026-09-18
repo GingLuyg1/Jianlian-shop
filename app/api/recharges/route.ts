@@ -19,7 +19,7 @@ import {
   parseRequestedCnyAmount,
 } from "@/lib/payments/recharge-rate.mjs";
 import { loadCurrentRechargeDailyRate } from "@/lib/payments/recharge-rate-service";
-import { createLiuhaoyiRechargeWindow } from "@/lib/payments/recharge-expiry.mjs";
+import { createPaymentExpiryWindow } from "@/lib/payments/payment-expiry.mjs";
 import { expireOverdueLiuhaoyiRecharges } from "@/lib/payments/recharge-expiry-service";
 import {
   classifyPublicRechargeAmountRange,
@@ -307,20 +307,14 @@ export async function POST(request: Request) {
 
     failureOperation = "create";
 
+    const paymentWindow = createPaymentExpiryWindow();
     let rechargeId: string | null = null;
-    let expiresAt: string | null = null;
-    let createdAt: string | null = null;
+    const expiresAt = paymentWindow.expiresAt;
+    const createdAt = paymentWindow.createdAt;
     let expectedUsdtAmount = theoreticalUsdtAmount;
-
-    if (isLiuhaoyiPaymentMethod(channel.code)) {
-      const window = createLiuhaoyiRechargeWindow();
-      createdAt = window.createdAt;
-      expiresAt = window.expiresAt;
-    }
 
     if (isUsdtCnyRecharge) {
       rechargeId = randomUUID();
-      expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
       const paymentAddress = channel.manualPayment?.payment_address ?? "";
       if (!paymentAddress || !theoreticalUsdtAmount) {
         return NextResponse.json(

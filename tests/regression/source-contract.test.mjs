@@ -297,7 +297,6 @@ test("BEP20 configuration self-check exposes statuses without secret values", ()
     "BSC_USDT_DECIMALS",
     "BSC_RECEIVE_ADDRESS",
     "BSC_REQUIRED_CONFIRMATIONS",
-    "BSC_PAYMENT_EXPIRE_MINUTES",
     "USDT_PRICING_MODE",
     "CNY_USDT_FIXED_RATE",
     "CNY_USDT_RATE_TTL_SECONDS",
@@ -1863,7 +1862,7 @@ test("BEP20 order details render a compact payment summary without creating sess
   assert.match(summary, /fetch\("\/api\/payments\/bep20\/session",\s*\{[\s\S]*?method: "POST"/);
   assert.match(summary, /AlertDialog/);
   assert.match(summary, /确认重新生成支付单？/);
-  assert.match(summary, /重新生成后将创建新的 30 分钟支付会话/);
+  assert.match(summary, /重新生成后将创建新的 15 分钟支付会话/);
   assert.match(summary, /confirmRenewPaymentSession/);
   assert.match(summary, /onClick=\{confirmRenewPaymentSession\}/);
   assert.match(summary, /body: JSON\.stringify\(\{ order: order\.order_no \}\)/);

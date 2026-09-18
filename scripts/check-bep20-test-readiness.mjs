@@ -15,7 +15,6 @@ const requiredNames = [
   "BSC_USDT_DECIMALS",
   "BSC_RECEIVE_ADDRESS",
   "BSC_REQUIRED_CONFIRMATIONS",
-  "BSC_PAYMENT_EXPIRE_MINUTES",
   "USDT_PRICING_MODE",
   "CNY_USDT_FIXED_RATE",
   "USDT_AMOUNT_SCALE",
@@ -73,7 +72,7 @@ if (supabaseMatch && supabaseMatch[1] !== REQUIRED_SUPABASE_REF) {
 
 if (value("BSC_CHAIN_ID") && value("BSC_CHAIN_ID") !== "56") failures.push("BSC_CHAIN_ID: expected 56");
 
-for (const name of ["BSC_USDT_DECIMALS", "BSC_REQUIRED_CONFIRMATIONS", "BSC_PAYMENT_EXPIRE_MINUTES", "USDT_AMOUNT_SCALE"]) {
+for (const name of ["BSC_USDT_DECIMALS", "BSC_REQUIRED_CONFIRMATIONS", "USDT_AMOUNT_SCALE"]) {
   if (value(name) && !isPositiveInteger(value(name))) failures.push(`${name}: expected positive integer`);
 }
 

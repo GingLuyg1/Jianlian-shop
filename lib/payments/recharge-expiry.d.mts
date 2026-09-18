@@ -1,4 +1,4 @@
-export const LIUHAOYI_RECHARGE_TTL_MINUTES: 30;
+export const LIUHAOYI_RECHARGE_TTL_MINUTES: 15;
 
 export function createLiuhaoyiRechargeWindow(now?: Date): {
   createdAt: string;

@@ -39,7 +39,6 @@ Phase 1 does not include:
 | `BSC_USDT_DECIMALS` | `lib/payments/bep20-chain-service.ts` | Yes | Server only | `18` for BSC USDT | No |
 | `BSC_RECEIVE_ADDRESS` | `lib/payments/bep20-chain-service.ts` | Yes | Server only, returned to user after session creation | Dedicated test receive EVM address | Public address, operationally sensitive |
 | `BSC_REQUIRED_CONFIRMATIONS` | `lib/payments/bep20-chain-service.ts` | Yes | Server only | Positive integer, commonly `12` | No |
-| `BSC_PAYMENT_EXPIRE_MINUTES` | `lib/payments/bep20-chain-service.ts` | Yes | Server only | Integer `>= 5`, commonly `30` | No |
 | `BSC_EXPLORER_BASE_URL` | `lib/payments/bep20-chain-service.ts`, admin chain detail link | Optional | Server only generated link | `https://bscscan.com/tx` or explorer tx URL base | No |
 | `USDT_PRICING_MODE` | `lib/payments/bep20-chain-service.ts` | Yes | Server only | `manual_fixed_rate`; `provider_rate` is not implemented and blocks creation | No |
 | `CNY_USDT_FIXED_RATE` | `lib/payments/bep20-chain-service.ts` | Yes when `manual_fixed_rate` | Server only | Positive decimal CNY per 1 USDT, e.g. placeholder only | No secret, finance-sensitive |
@@ -272,7 +271,6 @@ Fill these manually in `.env.local` for test app integration:
 - `BSC_USDT_DECIMALS=18`
 - `BSC_RECEIVE_ADDRESS`
 - `BSC_REQUIRED_CONFIRMATIONS`
-- `BSC_PAYMENT_EXPIRE_MINUTES`
 - `USDT_PRICING_MODE=manual_fixed_rate`
 - `CNY_USDT_FIXED_RATE`
 - `CNY_USDT_RATE_TTL_SECONDS`

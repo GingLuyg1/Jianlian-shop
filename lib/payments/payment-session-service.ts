@@ -12,6 +12,7 @@ import type {
   ProviderCreatePaymentResult,
 } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
+import { createPaymentExpiryWindow } from "@/lib/payments/payment-expiry.mjs";
 import { providerAmountWithinLimits, providerSupportsChannel } from "@/lib/payments/provider-contracts.mjs";
 import { assertLiuhaoyiAmountBreakdown, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { getPaymentProviderCapabilities, resolveProviderForExistingSession, resolveProviderForNewPayment } from "@/lib/payments/providers";
@@ -149,7 +150,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
   const sessionNo = generateSessionNo();
   const expiresAt = businessType === "recharge" && business.expiresAt
     ? business.expiresAt
-    : new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    : createPaymentExpiryWindow().expiresAt;
   const providerNetwork =
     channel.code === "usdt_trc20" ? "TRON" : channel.code === "usdt_bep20" ? "BSC" : channel.network;
 
@@ -194,7 +195,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
         qr_code_url: providerResult.qrCodeValue ?? providerResult.qrCodeUrl ?? null,
         wallet_address: providerResult.walletAddress ?? null,
         provider_order_no: providerResult.providerOrderNo ?? null,
-        expires_at: providerResult.expiresAt ?? expiresAt,
+        expires_at: expiresAt,
         metadata: { initializing: false, ...(providerResult.metadata ?? {}) },
         last_error: null,
       })
