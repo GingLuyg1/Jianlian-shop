@@ -1,0 +1,94 @@
+name: Payment watcher isolated acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "codex/**"
+    paths:
+      - ".github/workflows/payment-watcher-concurrency.yml"
+      - "scripts/ci/payment-watcher-*"
+      - "lib/payments/liuhaoyi-wechat-*"
+      - "scripts/ops/liuhaoyi-wechat-*"
+      - "ops/systemd/jianlian-liuhaoyi-wechat-*"
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      PGHOST: 127.0.0.1
+      PGPORT: "54322"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+      SUPABASE_ACCESS_TOKEN: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+
+      - name: Start job-local Supabase PostgreSQL only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_ACCESS_TOKEN}"
+          test ! -e supabase/.temp/project-ref
+          ci_project="$(mktemp -d)"
+          cd "$ci_project"
+          supabase init
+          supabase db start
+          echo "CI_SUPABASE_PROJECT=$ci_project" >> "$GITHUB_ENV"
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+          test "$PGHOST" = "127.0.0.1"
+          test "$PGPORT" = "54322"
+          psql -X -v ON_ERROR_STOP=1 -Atqc "select 'CI_DB_READY'" | grep -qx CI_DB_READY
+
+      - name: Apply both project baselines and every repository migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = "127.0.0.1"
+          test "$PGPORT" = "54322"
+          psql -X -v ON_ERROR_STOP=1 -f supabase/schema.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/orders-schema.sql
+          migration_count=0
+          while IFS= read -r migration; do
+            echo "Applying CI migration: ${migration##*/}"
+            psql -X -v ON_ERROR_STOP=1 -f "$migration"
+            migration_count=$((migration_count + 1))
+          done < <(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort)
+          expected_count="$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)"
+          test "$migration_count" -eq "$expected_count"
+          echo "ALL_REPOSITORY_MIGRATIONS_APPLIED=$migration_count"
+          psql -X -v ON_ERROR_STOP=1 -Atqc "select case when to_regprocedure('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)') is not null and to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text)') is not null and to_regprocedure('public.credit_account_recharge_balance(text,text,numeric,text)') is not null then 'PAYMENT_RPC_READY' else 'PAYMENT_RPC_MISSING' end" | grep -qx PAYMENT_RPC_READY
+
+      - name: Real PostgreSQL completion races
+        run: bash scripts/ci/payment-watcher-real-db.sh
+
+      - name: Linux process lock and systemd syntax
+        run: bash scripts/ci/payment-watcher-linux.sh
+
+      - name: Runtime redaction, batch budget, and backlog rotation
+        run: node --test tests/ci/payment-watcher-runtime.test.mjs
+
+      - name: Payment and recovery regression
+        run: |
+          npm ci
+          node --test tests/unit/liuhaoyi-wechat-watcher.test.mjs tests/unit/liuhaoyi-wechat-recharge-recovery.test.mjs tests/unit/liuhaoyi-recovery-idempotency-behavior.test.mjs tests/unit/liuhaoyi-v1.test.mjs
+          npm test
+          npm run typecheck
+          npm run build
