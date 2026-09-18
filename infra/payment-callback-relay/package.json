@@ -1,0 +1,12 @@
+{
+  "name": "@jianlian/payment-callback-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node src/server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
