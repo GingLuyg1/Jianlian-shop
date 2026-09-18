@@ -79,15 +79,25 @@ jobs:
       - name: Real PostgreSQL completion races
         run: bash scripts/ci/payment-watcher-real-db.sh
 
+  runtime-static-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
       - name: Linux process lock and systemd syntax
         run: bash scripts/ci/payment-watcher-linux.sh
-
       - name: Runtime redaction, batch budget, and backlog rotation
         run: node --test tests/ci/payment-watcher-runtime.test.mjs
-
       - name: Payment and recovery regression
         run: |
-          npm ci
           node --test tests/unit/liuhaoyi-wechat-watcher.test.mjs tests/unit/liuhaoyi-wechat-recharge-recovery.test.mjs tests/unit/liuhaoyi-recovery-idempotency-behavior.test.mjs tests/unit/liuhaoyi-v1.test.mjs
           npm test
           npm run typecheck
