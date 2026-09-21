@@ -1,6 +1,7 @@
 export const LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE: "alipay_account_recharge_v1";
 export const LIUHAOYI_WECHAT_RECHARGE_RECOVERY_MODE: "wechat_account_recharge_v1";
 export const LIUHAOYI_RECOVERY_MINIMUM_AGE_MS: number;
+export const LIUHAOYI_ALIPAY_RECOVERY_MINIMUM_AGE_MS: number;
 export const LIUHAOYI_RECOVERY_EXPIRY_MARGIN_MS: number;
 export function isExplicitLiuhaoyiRecoveryExecution(value: unknown): boolean;
 
@@ -22,6 +23,9 @@ export function evaluateLiuhaoyiAlipayRechargeRecovery(input: {
   session?: {
     provider?: unknown;
     businessType?: unknown;
+    businessId?: unknown;
+    businessNo?: unknown;
+    userId?: unknown;
     channelCode?: unknown;
     localStatus?: unknown;
     expiresAt?: unknown;
@@ -32,7 +36,10 @@ export function evaluateLiuhaoyiAlipayRechargeRecovery(input: {
     providerOrderNo?: unknown;
     localTradeNo?: unknown;
   } | null;
-  recharge?: { status?: unknown; expiresAt?: unknown } | null;
+  recharge?: {
+    id?: unknown; rechargeNo?: unknown; userId?: unknown; status?: unknown; expiresAt?: unknown;
+    creditedAmount?: unknown; completedAt?: unknown;
+  } | null;
   provider?: {
     found?: unknown;
     status?: unknown;
@@ -41,10 +48,12 @@ export function evaluateLiuhaoyiAlipayRechargeRecovery(input: {
     type?: unknown;
     tradeNo?: unknown;
     outTradeNo?: unknown;
+    endtime?: unknown;
+    paidAt?: unknown;
   } | null;
+  ledgerCount?: number;
   nowMs?: number;
   minimumAgeMs?: number;
-  expiryMarginMs?: number;
 }): LiuhaoyiRecoveryDecision;
 
 export function evaluateLiuhaoyiWechatRechargeRecovery(input: {

@@ -12,6 +12,9 @@ function recoveryInput(overrides = {}) {
     session: {
       provider: "liuhaoyi",
       businessType: "recharge",
+      businessId: "recharge-id",
+      businessNo: "RC-BEHAVIOR-1",
+      userId: "user-1",
       channelCode: "alipay",
       localStatus: "pending",
       expiresAt: "2026-09-15T10:20:00.000Z",
@@ -24,8 +27,13 @@ function recoveryInput(overrides = {}) {
       ...overrides.session,
     },
     recharge: {
+      id: "recharge-id",
+      rechargeNo: "RC-BEHAVIOR-1",
+      userId: "user-1",
       status: "pending",
       expiresAt: "2026-09-15T10:20:00.000Z",
+      creditedAmount: 0,
+      completedAt: null,
       ...overrides.recharge,
     },
     provider: {
@@ -36,8 +44,10 @@ function recoveryInput(overrides = {}) {
       type: "alipay",
       tradeNo: "LHY-BEHAVIOR-1",
       outTradeNo: "PS-BEHAVIOR-1",
+      endtime: "2026-09-15 18:19:59",
       ...overrides.provider,
     },
+    ledgerCount: 0,
     nowMs,
   };
 }
@@ -98,18 +108,19 @@ test("two workers converge on one atomic credit and one ledger key", async () =>
   assert.deepEqual([...atomic.state.ledgerKeys], ["account_recharge:RC-BEHAVIOR-1"]);
 });
 
-test("expired boundary is fail-closed before the completion RPC", async () => {
+test("provider payment after persisted expiry is fail-closed before the completion RPC", async () => {
   const atomic = atomicCompletionHarness();
   let calls = 0;
   const result = await workerAttempt(
-    recoveryInput({ session: { expiresAt: "2026-09-15T10:00:05.000Z" } }),
+    recoveryInput({ session: { expiresAt: "2026-09-15T10:00:05.000Z" },
+      provider: { endtime: "2026-09-15 18:00:06" } }),
     async () => {
       calls += 1;
       return atomic.complete();
     },
   );
   assert.equal(result.attempted, false);
-  assert.equal(result.decision.reason, "session_expired_or_too_close");
+  assert.equal(result.decision.reason, "provider_paid_after_expiry");
   assert.equal(calls, 0);
   assert.equal(atomic.state.balance, 21);
   assert.equal(atomic.state.ledgerKeys.size, 0);

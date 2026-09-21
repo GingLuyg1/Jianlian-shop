@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - "codex/**"
     paths:
       - ".github/workflows/payment-watcher-concurrency.yml"
       - "scripts/ci/payment-watcher-*"
       - "lib/payments/liuhaoyi-wechat-*"
+      - "lib/payments/liuhaoyi-alipay-*"
       - "scripts/ops/liuhaoyi-wechat-*"
+      - "scripts/ops/liuhaoyi-alipay-*"
       - "ops/systemd/jianlian-liuhaoyi-wechat-*"
+      - "ops/systemd/jianlian-liuhaoyi-recovery.*"
 
 permissions:
   contents: read
@@ -89,7 +93,7 @@ jobs:
         run: node --test tests/ci/payment-watcher-runtime.test.mjs
       - name: Payment and recovery regression
         run: |
-          node --test tests/unit/liuhaoyi-wechat-watcher.test.mjs tests/unit/liuhaoyi-wechat-recharge-recovery.test.mjs tests/unit/liuhaoyi-recovery-idempotency-behavior.test.mjs tests/unit/liuhaoyi-v1.test.mjs
+          node --test tests/unit/liuhaoyi-alipay-watcher.test.mjs tests/unit/liuhaoyi-alipay-recharge-recovery.test.mjs tests/unit/liuhaoyi-wechat-watcher.test.mjs tests/unit/liuhaoyi-wechat-recharge-recovery.test.mjs tests/unit/liuhaoyi-recovery-idempotency-behavior.test.mjs tests/unit/liuhaoyi-v1.test.mjs
           npm test
           npm run typecheck
           npm run build

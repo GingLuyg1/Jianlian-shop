@@ -137,12 +137,10 @@ test("general reconciliation route cannot opt in to Liuhaoyi recovery", () => {
     "utf8",
   );
   assert.doesNotMatch(generalRoute, /recoveryMode|alipay_account_recharge_v1/);
-  assert.match(recoveryRoute, /recoveryMode: LIUHAOYI_ALIPAY_RECHARGE_RECOVERY_MODE/);
-  assert.match(recoveryRoute, /businessType: "recharge"/);
-  assert.match(recoveryRoute, /Math\.min\(20/);
+  assert.match(recoveryRoute, /runLiuhaoyiAlipayRechargeRecovery/);
+  assert.match(recoveryRoute, /if \(!sessionNo\)/);
   assert.match(recoveryRoute, /isExplicitLiuhaoyiRecoveryExecution\(body\?\.execute\)/);
-  assert.match(recoveryRoute, /dryRun: !execute/);
-  assert.match(recoveryRoute, /mode: execute \? "execute" : "dry_run"/);
+  assert.match(recoveryRoute, /LIUHAOYI_ALIPAY_WATCHER_EXECUTE_ENABLED !== "true"/);
 });
 
 test("dry-run exits before every reconciliation or payment state write", () => {
