@@ -21,7 +21,7 @@ Both systemd and direct manual watcher execution use:
 
 `/run/lock/jianlian-liuhaoyi-alipay-recovery.lock`
 
-The root-only environment file is `/etc/jianlian/liuhaoyi-alipay-recovery.env`. It must define the watcher enable flag, execute enable flag, local internal URL, internal reconciliation secret, Supabase URL, and Supabase service-role secret. Never print this file or place it in Git.
+The root-only environment file is `/etc/jianlian/liuhaoyi-alipay-recovery.env`. It must define `JIANLIAN_NODE_BINARY`, `JIANLIAN_RELEASE_DIR`, the watcher enable flag, execute enable flag, local internal URL, internal reconciliation secret, Supabase URL, and Supabase service-role secret. Never print this file or place it in Git.
 
 ## Deployment note
 

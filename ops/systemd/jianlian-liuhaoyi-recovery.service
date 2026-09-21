@@ -10,12 +10,13 @@ Group=root
 WorkingDirectory=/www/jianlian-shop
 EnvironmentFile=/etc/jianlian/liuhaoyi-alipay-recovery.env
 TimeoutStartSec=45s
-ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-liuhaoyi-alipay-recovery.lock /usr/bin/env node ${JIANLIAN_RELEASE_DIR}/scripts/ops/liuhaoyi-alipay-recharge-watcher.mjs --watcher-lock-held --execute
+ReadWritePaths=/run/lock
+ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-liuhaoyi-alipay-recovery.lock /bin/sh -c 'exec "$$JIANLIAN_NODE_BINARY" "$$JIANLIAN_RELEASE_DIR/scripts/ops/liuhaoyi-alipay-recharge-watcher.mjs" --watcher-lock-held --execute'
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/run/lock
 
 [Install]
 WantedBy=multi-user.target
