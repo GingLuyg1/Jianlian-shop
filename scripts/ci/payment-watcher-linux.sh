@@ -7,7 +7,9 @@ lock_cleanup=()
 trap 'for path in "${lock_cleanup[@]}"; do rm -f "$path"; done; rm -f "$lock_dir"/*; rmdir "$lock_dir"' EXIT
 
 test_process_lock() {
-  local name="$1" requested="$2" lock_file="$lock_dir/$name.lock"
+  local name="$1"
+  local requested="$2"
+  local lock_file="$lock_dir/$name.lock"
   if [[ ! -e "$requested" ]] &&
      ( set -C; umask 077; : > "$requested" ) 2>/dev/null; then
     lock_file="$requested"
