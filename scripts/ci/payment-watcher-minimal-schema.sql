@@ -3,6 +3,15 @@
 -- The primary/unique keys below retain the real payment and ledger idempotency contract.
 create extension if not exists pgcrypto;
 
+-- A destructive-test safety identity checked by payment-watcher-real-db.sh.
+-- This table must exist only in the job-local database built from this fixture.
+create table public.ci_payment_watcher_database_identity (
+  singleton boolean primary key default true check (singleton),
+  identity_token text not null unique
+);
+insert into public.ci_payment_watcher_database_identity(singleton, identity_token)
+values (true, 'jianlian-payment-watcher-ephemeral-v1');
+
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -71,14 +80,58 @@ create table public.payment_sessions (
   last_error text,
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint payment_sessions_amounts_non_negative_check
+    check (requested_amount >= 0 and fee_amount >= 0 and payable_amount >= 0)
 );
 create unique index payment_sessions_active_business_unique
   on public.payment_sessions(business_type,business_id)
   where status in ('pending','processing');
+create unique index payment_sessions_provider_order_unique
+  on public.payment_sessions(provider_order_no)
+  where provider_order_no is not null and provider_order_no <> '';
 create unique index payment_sessions_provider_transaction_unique
   on public.payment_sessions(provider_transaction_id)
   where provider_transaction_id is not null and provider_transaction_id <> '';
+
+create table public.payment_reconciliations (
+  id uuid primary key default gen_random_uuid(),
+  reconciliation_no text not null unique,
+  payment_session_id uuid,
+  business_type text not null check (business_type in ('order','recharge')),
+  business_id text,
+  channel_code text,
+  provider text,
+  local_status text,
+  provider_status text,
+  local_amount numeric(18,6) not null default 0,
+  provider_amount numeric(18,6),
+  currency text not null default 'CNY',
+  result text not null check (result in ('matched','mismatched','pending','query_failed','manual_review','resolved')),
+  difference_type text check (
+    difference_type is null or difference_type in (
+      'provider_paid_local_unpaid','local_paid_provider_unpaid','amount_mismatch',
+      'currency_mismatch','transaction_id_conflict','status_mismatch','provider_not_found'
+    )
+  ),
+  error_code text,
+  error_message text,
+  checked_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  resolution text,
+  risk_level text not null default 'normal' check (risk_level in ('normal','medium','high')),
+  provider_trade_no text,
+  local_trade_no text,
+  provider_summary jsonb not null default '{}'::jsonb,
+  recovery_action text,
+  recovery_status text,
+  recovery_error text,
+  dedupe_key text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index payment_reconciliations_dedupe_unique
+  on public.payment_reconciliations(dedupe_key);
 
 create table public.balance_transactions (
   id uuid primary key default gen_random_uuid(),

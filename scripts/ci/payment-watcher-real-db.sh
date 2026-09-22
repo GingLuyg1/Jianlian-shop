@@ -11,13 +11,61 @@ if [[ -n "${SUPABASE_ACCESS_TOKEN:-}" || -n "${DATABASE_URL:-}" || -n "${SUPABAS
   echo "REMOTE_DATABASE_CONFIGURATION_FORBIDDEN"
   exit 1
 fi
+if [[ -n "${PGHOSTADDR:-}" || -n "${PGSERVICE:-}" || -n "${PGSERVICEFILE:-}" || -n "${PGOPTIONS:-}" ]]; then
+  echo "LIBPQ_OVERRIDE_FORBIDDEN"
+  exit 1
+fi
+
+ci_db_identity="$(psql -X -v ON_ERROR_STOP=1 -Atqc "
+  select case
+    when current_database() = 'postgres'
+     and current_user = 'postgres'
+     and to_regclass('public.ci_payment_watcher_database_identity') is not null
+     and exists (
+       select 1 from public.ci_payment_watcher_database_identity
+       where singleton is true
+         and identity_token = 'jianlian-payment-watcher-ephemeral-v1'
+     )
+    then 'CI_PAYMENT_WATCHER_DB_CONFIRMED'
+    else 'CI_PAYMENT_WATCHER_DB_REJECTED'
+  end;
+")"
+if [[ "$ci_db_identity" != "CI_PAYMENT_WATCHER_DB_CONFIRMED" ]]; then
+  echo "CI_DATABASE_IDENTITY_UNCONFIRMED"
+  exit 1
+fi
 
 task_logs="$(mktemp -d)"
-trap 'rm -f "$task_logs"/*; rmdir "$task_logs"' EXIT
+cleanup() {
+  local status=$?
+  local cleanup_status=0
+  local pid
+  trap - EXIT
+  while read -r pid; do
+    [[ -n "$pid" ]] || continue
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  done < <(jobs -pr)
+  psql -X -v ON_ERROR_STOP=1 -q <<'SQL' >/dev/null 2>&1 || cleanup_status=$?
+delete from public.payment_reconciliations
+where reconciliation_no like 'REC-CI-ALIPAY-%';
+delete from public.balance_transactions
+where business_type = 'account_recharge' and business_id like 'RC-CI-%';
+delete from public.payment_sessions where session_no like 'PS-CI-%';
+delete from public.account_recharges where recharge_no like 'RC-CI-%';
+delete from public.profiles where email like 'ci-%@example.invalid';
+delete from auth.users where email like 'ci-%@example.invalid';
+SQL
+  rm -r -- "$task_logs" 2>/dev/null || cleanup_status=$?
+  if [[ $status -eq 0 && $cleanup_status -ne 0 ]]; then status=$cleanup_status; fi
+  exit "$status"
+}
+trap cleanup EXIT
 
 prepare_fixture() {
   local scenario="$1"
   local suffix="$2"
+  local channel="${3:-wechat}"
   local user_id="00000000-0000-4000-8000-0000000001${suffix}"
   local recharge_id="00000000-0000-4000-8000-0000000002${suffix}"
   local session_id="00000000-0000-4000-8000-0000000003${suffix}"
@@ -34,13 +82,13 @@ insert into public.account_recharges
   (id,recharge_no,user_id,channel,channel_code,provider,currency,amount,requested_amount,
    fee_amount,payable_amount,status,expires_at)
 values
-  ('$recharge_id','$recharge_no','$user_id','wechat','wechat','liuhaoyi','CNY',1.00,1.00,
+  ('$recharge_id','$recharge_no','$user_id','$channel','$channel','liuhaoyi','CNY',1.00,1.00,
    0,1.00,'pending',now() + interval '30 minutes');
 insert into public.payment_sessions
   (id,session_no,business_type,business_id,business_no,user_id,channel_code,provider,currency,
    requested_amount,fee_amount,payable_amount,status,expires_at,provider_order_no)
 values
-  ('$session_id','$session_no','recharge','$recharge_id','$recharge_no','$user_id','wechat',
+  ('$session_id','$session_no','recharge','$recharge_id','$recharge_no','$user_id','$channel',
    'liuhaoyi','CNY',1.00,0,1.00,'pending',now() + interval '30 minutes','CI-ORDER-${scenario}');
 SQL
 }
@@ -144,3 +192,46 @@ grep -q '"idempotent": true' "$task_logs/callback_then_watcher-watcher.log"
 assert_exactly_once callback_then_watcher 42
 echo "REAL_DB_LEDGER_EXACTLY_ONCE=pass"
 echo "REAL_DB_BALANCE_EXACTLY_ONCE=pass"
+
+prepare_fixture alipay_reconciliation_dedupe 43 alipay
+complete_once alipay_reconciliation_dedupe 43 first
+complete_once alipay_reconciliation_dedupe 43 replay
+grep -q '"idempotent": true' "$task_logs/alipay_reconciliation_dedupe-replay.log"
+psql -X -v ON_ERROR_STOP=1 -q <<'SQL'
+insert into public.payment_reconciliations
+  (reconciliation_no,payment_session_id,business_type,business_id,channel_code,provider,
+   result,provider_trade_no,dedupe_key)
+values
+  ('REC-CI-ALIPAY-1','00000000-0000-4000-8000-000000000343','recharge',
+   'RC-CI-alipay_reconciliation_dedupe','alipay','liuhaoyi','manual_review',
+   'CI-TRADE-alipay_reconciliation_dedupe',
+   'alipay-recovery:00000000-0000-4000-8000-000000000343:provider_paid_local_unpaid:CI-TRADE-alipay_reconciliation_dedupe')
+on conflict (dedupe_key) do update set updated_at=excluded.updated_at;
+
+insert into public.payment_reconciliations
+  (reconciliation_no,payment_session_id,business_type,business_id,channel_code,provider,
+   result,provider_trade_no,dedupe_key)
+values
+  ('REC-CI-ALIPAY-2','00000000-0000-4000-8000-000000000343','recharge',
+   'RC-CI-alipay_reconciliation_dedupe','alipay','liuhaoyi','manual_review',
+   'CI-TRADE-alipay_reconciliation_dedupe',
+   'alipay-recovery:00000000-0000-4000-8000-000000000343:provider_paid_local_unpaid:CI-TRADE-alipay_reconciliation_dedupe')
+on conflict (dedupe_key) do update set updated_at=excluded.updated_at;
+
+do $$
+begin
+  if (select count(*) from public.payment_reconciliations
+      where dedupe_key='alipay-recovery:00000000-0000-4000-8000-000000000343:provider_paid_local_unpaid:CI-TRADE-alipay_reconciliation_dedupe') <> 1
+     or (select count(*) from public.balance_transactions
+         where business_type='account_recharge'
+           and business_id='RC-CI-alipay_reconciliation_dedupe'
+           and status='completed') <> 1
+  then
+    raise exception 'CI_ALIPAY_RECONCILIATION_OR_LEDGER_DUPLICATED';
+  end if;
+end
+$$;
+SQL
+assert_exactly_once alipay_reconciliation_dedupe 43
+echo "REAL_DB_ALIPAY_RECONCILIATION_DEDUPE=pass"
+echo "REAL_DB_ALIPAY_LEDGER_REPLAY=pass"
