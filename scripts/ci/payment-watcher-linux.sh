@@ -37,7 +37,8 @@ systemd-analyze verify \
   ops/systemd/jianlian-liuhaoyi-wechat-recovery.service \
   ops/systemd/jianlian-liuhaoyi-wechat-recovery.timer \
   ops/systemd/jianlian-liuhaoyi-recovery.service \
-  ops/systemd/jianlian-liuhaoyi-recovery.timer
+  ops/systemd/jianlian-liuhaoyi-recovery.timer \
+  ops/systemd/jianlian-liuhaoyi-alipay-recovery-dry-run.service
 
 for service in \
   ops/systemd/jianlian-liuhaoyi-wechat-recovery.service \
@@ -50,6 +51,16 @@ grep -Fxq 'EnvironmentFile=/etc/jianlian/liuhaoyi-wechat-recovery.env' ops/syste
 grep -Fxq 'EnvironmentFile=/etc/jianlian/liuhaoyi-alipay-recovery.env' ops/systemd/jianlian-liuhaoyi-recovery.service
 grep -Fq 'ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-liuhaoyi-wechat-recovery.lock' ops/systemd/jianlian-liuhaoyi-wechat-recovery.service
 grep -Fq 'ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-liuhaoyi-alipay-recovery.lock' ops/systemd/jianlian-liuhaoyi-recovery.service
+grep -Fq -- '--watcher-lock-held --execute' ops/systemd/jianlian-liuhaoyi-recovery.service
+dry_run_service=ops/systemd/jianlian-liuhaoyi-alipay-recovery-dry-run.service
+grep -Fxq 'Type=oneshot' "$dry_run_service"
+grep -Fxq 'TimeoutStartSec=45s' "$dry_run_service"
+grep -Fxq 'EnvironmentFile=/etc/jianlian/liuhaoyi-alipay-recovery.env' "$dry_run_service"
+grep -Fxq 'ReadWritePaths=/run/lock' "$dry_run_service"
+grep -Fq 'ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-liuhaoyi-alipay-recovery.lock' "$dry_run_service"
+grep -Fq -- '--watcher-lock-held' "$dry_run_service"
+! grep -Fq -- '--execute' "$dry_run_service"
+! grep -Fxq '[Install]' "$dry_run_service"
 for timer in \
   ops/systemd/jianlian-liuhaoyi-wechat-recovery.timer \
   ops/systemd/jianlian-liuhaoyi-recovery.timer; do

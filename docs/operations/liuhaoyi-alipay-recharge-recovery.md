@@ -23,6 +23,14 @@ Both systemd and direct manual watcher execution use:
 
 The root-only environment file is `/etc/jianlian/liuhaoyi-alipay-recovery.env`. It must define `JIANLIAN_NODE_BINARY`, `JIANLIAN_RELEASE_DIR`, the watcher enable flag, execute enable flag, local internal URL, internal reconciliation secret, Supabase URL, and Supabase service-role secret. Never print this file or place it in Git.
 
+## Execute and dry-run services
+
+`jianlian-liuhaoyi-recovery.service` is the funds-execution path. It passes `--execute`, but execution still requires `LIUHAOYI_ALIPAY_WATCHER_EXECUTE_ENABLED=true` as the second gate.
+
+`jianlian-liuhaoyi-alipay-recovery-dry-run.service` is for a single, manually approved Production observation and acceptance run. It uses the same root-only environment, release watcher script, lock, timeout, and systemd hardening as the execute service, but never passes `--execute`. Even when the watcher is enabled, this service remains dry-run only: it does not call `completePayment()` or automatically credit funds.
+
+The dry-run unit has no `[Install]` section and no timer. Repository changes do not install, enable, or start it. Any future timer requires separate review and approval.
+
 ## Deployment note
 
 Committing these files does not install or start the timer. Deployment, environment changes, channel enablement, and real payment testing require a separate Production-approved procedure. The existing `20260915210000_liuhaoyi_recharge_recovery_expiry_guards.sql` migration already supplies the required atomic/idempotent completion guard; V2 requires no new migration.

@@ -15,6 +15,7 @@ on:
       - "scripts/ops/liuhaoyi-alipay-*"
       - "ops/systemd/jianlian-liuhaoyi-wechat-*"
       - "ops/systemd/jianlian-liuhaoyi-recovery.*"
+      - "ops/systemd/jianlian-liuhaoyi-alipay-recovery-dry-run.service"
 
 permissions:
   contents: read

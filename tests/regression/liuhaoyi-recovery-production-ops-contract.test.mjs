@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const service = readFileSync(new URL("../../ops/systemd/jianlian-liuhaoyi-recovery.service", import.meta.url), "utf8");
+const dryRunService = readFileSync(new URL("../../ops/systemd/jianlian-liuhaoyi-alipay-recovery-dry-run.service", import.meta.url), "utf8");
 const timer = readFileSync(new URL("../../ops/systemd/jianlian-liuhaoyi-recovery.timer", import.meta.url), "utf8");
 const watcher = readFileSync(new URL("../../scripts/ops/liuhaoyi-alipay-recharge-watcher.mjs", import.meta.url), "utf8");
 const guide = readFileSync(new URL("../../docs/operations/liuhaoyi-alipay-recharge-recovery.md", import.meta.url), "utf8");
@@ -18,12 +19,29 @@ test("systemd service uses root-only env, bounded execution and a separate flock
   assert.doesNotMatch(service, /LIUHAOYI_MERCHANT_KEY=|PAYMENT_RECONCILIATION_SECRET=/);
 });
 
+test("dry-run service shares the production boundaries without enabling execution", () => {
+  assert.match(dryRunService, /Type=oneshot/);
+  assert.match(dryRunService, /User=root/);
+  assert.match(dryRunService, /Group=root/);
+  assert.match(dryRunService, /TimeoutStartSec=45s/);
+  assert.match(dryRunService, /EnvironmentFile=\/etc\/jianlian\/liuhaoyi-alipay-recovery\.env/);
+  assert.match(dryRunService, /flock -n -E 0 \/run\/lock\/jianlian-liuhaoyi-alipay-recovery\.lock/);
+  assert.match(dryRunService, /JIANLIAN_RELEASE_DIR\/scripts\/ops\/liuhaoyi-alipay-recharge-watcher\.mjs/);
+  assert.match(dryRunService, /--watcher-lock-held/);
+  assert.match(dryRunService, /ReadWritePaths=\/run\/lock/);
+  assert.doesNotMatch(dryRunService, /--execute/);
+  assert.doesNotMatch(dryRunService, /^\[Install\]$/m);
+  assert.doesNotMatch(dryRunService, /LIUHAOYI_MERCHANT_KEY=|PAYMENT_RECONCILIATION_SECRET=/);
+  assert.doesNotMatch(dryRunService, /systemctl\s+(?:enable|start)/);
+  assert.match(service, /--watcher-lock-held --execute/);
+});
+
 test("timer is one-minute cadence but repository changes do not enable it", () => {
   assert.match(timer, /OnUnitActiveSec=1min/);
   assert.match(timer, /Persistent=false/);
   assert.doesNotMatch(timer, /Persistent=true/);
   assert.match(timer, /WantedBy=timers\.target/);
-  assert.doesNotMatch(watcher + service + timer, /systemctl\s+(?:enable|start)/);
+  assert.doesNotMatch(watcher + service + dryRunService + timer, /systemctl\s+(?:enable|start)/);
   assert.match(guide, /does not install or start the timer/);
 });
 
