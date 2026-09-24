@@ -26,9 +26,12 @@ test("dry-run service shares the production boundaries without enabling executio
   assert.match(dryRunService, /TimeoutStartSec=45s/);
   assert.match(dryRunService, /EnvironmentFile=\/etc\/jianlian\/liuhaoyi-alipay-recovery\.env/);
   assert.match(dryRunService, /flock -n -E 0 \/run\/lock\/jianlian-liuhaoyi-alipay-recovery\.lock/);
+  assert.match(dryRunService, /exec \/usr\/bin\/node "\$\$JIANLIAN_RELEASE_DIR\/scripts\/ops\/liuhaoyi-alipay-recharge-watcher\.mjs" --watcher-lock-held/);
   assert.match(dryRunService, /JIANLIAN_RELEASE_DIR\/scripts\/ops\/liuhaoyi-alipay-recharge-watcher\.mjs/);
   assert.match(dryRunService, /--watcher-lock-held/);
+  assert.match(dryRunService, /^ProtectHome=true$/m);
   assert.match(dryRunService, /ReadWritePaths=\/run\/lock/);
+  assert.doesNotMatch(dryRunService, /JIANLIAN_NODE_BINARY|\/root\//);
   assert.doesNotMatch(dryRunService, /--execute/);
   assert.doesNotMatch(dryRunService, /^\[Install\]$/m);
   assert.doesNotMatch(dryRunService, /LIUHAOYI_MERCHANT_KEY=|PAYMENT_RECONCILIATION_SECRET=/);
