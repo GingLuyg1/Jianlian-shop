@@ -13,9 +13,12 @@ test("systemd service uses root-only env, bounded execution and a separate flock
   assert.match(service, /User=root/);
   assert.match(service, /TimeoutStartSec=45s/);
   assert.match(service, /EnvironmentFile=\/etc\/jianlian\/liuhaoyi-alipay-recovery\.env/);
-  assert.match(service, /liuhaoyi-alipay-recharge-watcher\.mjs" --watcher-lock-held --execute/);
+  assert.match(service, /exec \/usr\/bin\/node "\$\$JIANLIAN_RELEASE_DIR\/scripts\/ops\/liuhaoyi-alipay-recharge-watcher\.mjs" --watcher-lock-held --execute/);
   assert.match(service, /flock -n -E 0 \/run\/lock\/jianlian-liuhaoyi-alipay-recovery\.lock/);
   assert.match(service, /ReadWritePaths=\/run\/lock/);
+  assert.match(service, /^ProtectHome=true$/m);
+  assert.doesNotMatch(service, /JIANLIAN_NODE_BINARY|\/root\//);
+  assert.doesNotMatch(service, /^\[Install\]$/m);
   assert.doesNotMatch(service, /LIUHAOYI_MERCHANT_KEY=|PAYMENT_RECONCILIATION_SECRET=/);
 });
 

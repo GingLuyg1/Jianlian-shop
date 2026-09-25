@@ -51,7 +51,12 @@ grep -Fxq 'EnvironmentFile=/etc/jianlian/liuhaoyi-wechat-recovery.env' ops/syste
 grep -Fxq 'EnvironmentFile=/etc/jianlian/liuhaoyi-alipay-recovery.env' ops/systemd/jianlian-liuhaoyi-recovery.service
 grep -Fq 'ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-liuhaoyi-wechat-recovery.lock' ops/systemd/jianlian-liuhaoyi-wechat-recovery.service
 grep -Fq 'ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-liuhaoyi-alipay-recovery.lock' ops/systemd/jianlian-liuhaoyi-recovery.service
+grep -Fq 'exec /usr/bin/node "$$JIANLIAN_RELEASE_DIR/scripts/ops/liuhaoyi-alipay-recharge-watcher.mjs" --watcher-lock-held --execute' ops/systemd/jianlian-liuhaoyi-recovery.service
 grep -Fq -- '--watcher-lock-held --execute' ops/systemd/jianlian-liuhaoyi-recovery.service
+grep -Fxq 'ProtectHome=true' ops/systemd/jianlian-liuhaoyi-recovery.service
+! grep -Fq 'JIANLIAN_NODE_BINARY' ops/systemd/jianlian-liuhaoyi-recovery.service
+! grep -Fq '/root/' ops/systemd/jianlian-liuhaoyi-recovery.service
+! grep -Fxq '[Install]' ops/systemd/jianlian-liuhaoyi-recovery.service
 dry_run_service=ops/systemd/jianlian-liuhaoyi-alipay-recovery-dry-run.service
 grep -Fxq 'Type=oneshot' "$dry_run_service"
 grep -Fxq 'TimeoutStartSec=45s' "$dry_run_service"
