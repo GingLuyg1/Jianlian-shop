@@ -235,3 +235,72 @@ SQL
 assert_exactly_once alipay_reconciliation_dedupe 43
 echo "REAL_DB_ALIPAY_RECONCILIATION_DEDUPE=pass"
 echo "REAL_DB_ALIPAY_LEDGER_REPLAY=pass"
+
+prepare_expired_fixture() {
+  local scenario="$1" suffix="$2"
+  prepare_fixture "$scenario" "$suffix" alipay
+  psql -X -v ON_ERROR_STOP=1 -q <<SQL
+update public.account_recharges
+set created_at=now()-interval '30 minutes', expires_at=now()-interval '10 minutes'
+where id='00000000-0000-4000-8000-0000000002${suffix}';
+update public.payment_sessions
+set created_at=now()-interval '30 minutes', expires_at=now()-interval '10 minutes'
+where id='00000000-0000-4000-8000-0000000003${suffix}';
+SQL
+}
+
+complete_at() {
+  local scenario="$1" suffix="$2" paid_at_sql="$3"
+  PGAPPNAME="ci_expiry_${scenario}" psql -X -v ON_ERROR_STOP=1 -qAt <<SQL >"$task_logs/${scenario}-expiry.log"
+set request.jwt.claim.role = 'service_role';
+select public.complete_payment_session(
+  '00000000-0000-4000-8000-0000000003${suffix}'::uuid,
+  'CI-TRADE-${scenario}',1.00,'CNY',${paid_at_sql}
+)::text;
+SQL
+}
+
+assert_zero_completion() {
+  local scenario="$1" suffix="$2"
+  psql -X -v ON_ERROR_STOP=1 -qAt <<SQL | grep -qx ZERO_MUTATION
+select case when
+  (select balance from public.profiles where id='00000000-0000-4000-8000-0000000001${suffix}')=10.00
+  and (select status from public.payment_sessions where id='00000000-0000-4000-8000-0000000003${suffix}')='pending'
+  and (select status from public.account_recharges where id='00000000-0000-4000-8000-0000000002${suffix}')='pending'
+  and not exists (select 1 from public.balance_transactions where business_id='RC-CI-${scenario}')
+then 'ZERO_MUTATION' else 'UNEXPECTED_MUTATION' end;
+SQL
+}
+
+# Core regression: the provider accepted payment before expiry while the
+# canonical recovery transaction runs after expiry.
+prepare_expired_fixture paid_before_expiry_processed_late 44
+complete_at paid_before_expiry_processed_late 44 "now()-interval '11 minutes'"
+assert_exactly_once paid_before_expiry_processed_late 44
+echo "REAL_DB_PAID_BEFORE_EXPIRY_PROCESSED_LATE=pass"
+
+prepare_expired_fixture paid_at_expiry_boundary 45
+complete_at paid_at_expiry_boundary 45 "(select expires_at from public.payment_sessions where id='00000000-0000-4000-8000-000000000345')"
+assert_exactly_once paid_at_expiry_boundary 45
+echo "REAL_DB_PAID_AT_EXPIRY_BOUNDARY=pass"
+
+prepare_expired_fixture paid_after_expiry_rejected 46
+if complete_at paid_after_expiry_rejected 46 "now()-interval '9 minutes'"; then
+  echo "LATE_PAYMENT_UNEXPECTEDLY_COMPLETED"; exit 1
+fi
+assert_zero_completion paid_after_expiry_rejected 46
+echo "REAL_DB_PAID_AFTER_EXPIRY_REJECTED=pass"
+
+prepare_expired_fixture missing_paid_time_rejected 47
+if complete_at missing_paid_time_rejected 47 "null"; then
+  echo "MISSING_PAID_TIME_UNEXPECTEDLY_COMPLETED"; exit 1
+fi
+assert_zero_completion missing_paid_time_rejected 47
+echo "REAL_DB_MISSING_PAID_TIME_REJECTED=pass"
+
+prepare_expired_fixture paid_before_creation_rejected 48
+if complete_at paid_before_creation_rejected 48 "now()-interval '31 minutes'"; then
+  echo "PRE_CREATION_PAYMENT_UNEXPECTEDLY_COMPLETED"; exit 1
+fi
+assert_zero_completion paid_before_creation_rejected 48
+echo "REAL_DB_PRE_CREATION_PAID_TIME_REJECTED=pass"

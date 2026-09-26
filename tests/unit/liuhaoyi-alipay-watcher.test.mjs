@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { WATCHER_MINIMUM_AGE_MS, WATCHER_BATCH_SIZE, WATCHER_QUERY_TIMEOUT_MS,
+import { WATCHER_MINIMUM_AGE_MS, WATCHER_RECOVERY_LOOKBACK_MS, WATCHER_BATCH_SIZE, WATCHER_QUERY_TIMEOUT_MS,
   WATCHER_ITEM_TIMEOUT_MS, WATCHER_BATCH_TIMEOUT_MS, candidateMode,
   runLiuhaoyiAlipayWatcher } from "../../lib/payments/liuhaoyi-alipay-watcher.mjs";
 
@@ -45,15 +45,19 @@ test("candidate scan is only one-minute-old pending Liuhaoyi Alipay CNY recharge
   const { value } = await run({ fetchImpl: async (url, init) => {
     for (const [key, expected] of Object.entries({ provider: "eq.liuhaoyi", channel_code: "eq.alipay",
       business_type: "eq.recharge", currency: "eq.CNY", status: "eq.pending",
-      created_at: "lte." + new Date(nowMs - WATCHER_MINIMUM_AGE_MS).toISOString(),
-      expires_at: "gt." + new Date(nowMs).toISOString(), order: "created_at.desc,session_no.desc",
+      order: "created_at.desc,session_no.desc",
       limit: String(WATCHER_BATCH_SIZE) })) assert.equal(url.searchParams.get(key), expected);
+    assert.deepEqual(url.searchParams.getAll("created_at"), [
+      "gte." + new Date(nowMs - WATCHER_RECOVERY_LOOKBACK_MS).toISOString(),
+      "lte." + new Date(nowMs - WATCHER_MINIMUM_AGE_MS).toISOString(),
+    ]);
     assert.equal(init.headers.Prefer, "count=exact"); return response([active]);
   } });
   assert.equal(value.status, "finished");
   assert.equal(candidateMode({ ...active, status: "processing" }, nowMs, true), "skip");
   assert.equal(candidateMode({ ...active, created_at: new Date(nowMs - 59_999).toISOString() }, nowMs, true), "skip");
-  assert.equal(candidateMode({ ...active, expires_at: new Date(nowMs).toISOString() }, nowMs, true), "skip");
+  assert.equal(candidateMode({ ...active, expires_at: new Date(nowMs).toISOString() }, nowMs, true), "execute");
+  assert.equal(candidateMode({ ...active, created_at: new Date(nowMs - WATCHER_RECOVERY_LOOKBACK_MS - 1).toISOString() }, nowMs, true), "skip");
 });
 
 test("newest three are selected and fourth rotates through old backlog", async () => {

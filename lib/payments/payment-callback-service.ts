@@ -131,8 +131,8 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
 
     const expiredRechargePayment = parsed.status === "paid"
       && String(session.business_type) === "recharge"
-      && await isExpiredRechargePayment(service, session);
-    const latePaymentMessage = "支付渠道在充值订单过期后确认付款，禁止自动入账，等待人工客服核对";
+      && await expiredRechargePaymentRequiresManualReview(service, session, parsed.paidAt);
+    const latePaymentMessage = "充值订单已过期且缺少有效期内的可信渠道付款时间，禁止自动入账，等待人工客服核对";
     if (expiredRechargePayment) {
       await preserveLateRechargePaymentEvidence(service, session, parsed, latePaymentMessage);
     }
@@ -276,22 +276,42 @@ async function findCallbackSession(
 ) {
   const { data, error } = await service
     .from("payment_sessions")
-    .select("id,session_no,business_type,business_id,business_no,status,payable_amount,currency,channel_code,provider,provider_transaction_id,expires_at")
+    .select("id,session_no,business_type,business_id,business_no,status,payable_amount,currency,channel_code,provider,provider_transaction_id,expires_at,created_at")
     .eq("session_no", sessionNo)
     .maybeSingle();
   if (error) throw error;
   return data;
 }
 
-async function isExpiredRechargePayment(service: SupabaseClient, session: Record<string, unknown>) {
-  if (String(session.status) === "expired" || isPastDue(session.expires_at)) return true;
+async function expiredRechargePaymentRequiresManualReview(
+  service: SupabaseClient,
+  session: Record<string, unknown>,
+  providerPaidAt: string | undefined,
+) {
   const { data, error } = await service
     .from("account_recharges")
-    .select("status,expires_at")
+    .select("status,expires_at,created_at")
     .eq("id", String(session.business_id ?? ""))
     .maybeSingle();
   if (error) throw error;
-  return data?.status === "expired" || isPastDue(data?.expires_at);
+  const expired = String(session.status) === "expired" || isPastDue(session.expires_at)
+    || data?.status === "expired" || isPastDue(data?.expires_at);
+  if (!expired) return false;
+
+  const paidAtMs = trustedProviderPaidAtMs(providerPaidAt);
+  const sessionCreatedMs = Date.parse(String(session.created_at ?? ""));
+  const rechargeCreatedMs = Date.parse(String(data?.created_at ?? ""));
+  const sessionExpiryMs = Date.parse(String(session.expires_at ?? ""));
+  const rechargeExpiryMs = Date.parse(String(data?.expires_at ?? ""));
+  return !Number.isFinite(paidAtMs)
+    || !Number.isFinite(sessionCreatedMs)
+    || !Number.isFinite(rechargeCreatedMs)
+    || !Number.isFinite(sessionExpiryMs)
+    || !Number.isFinite(rechargeExpiryMs)
+    || paidAtMs < sessionCreatedMs
+    || paidAtMs < rechargeCreatedMs
+    || paidAtMs > sessionExpiryMs
+    || paidAtMs > rechargeExpiryMs;
 }
 
 async function preserveLateRechargePaymentEvidence(
@@ -336,6 +356,14 @@ async function preserveLateRechargePaymentEvidence(
 function isPastDue(value: unknown) {
   const expiresAt = Date.parse(String(value ?? ""));
   return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+}
+
+function trustedProviderPaidAtMs(value: unknown) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(text)) {
+    return Number.NaN;
+  }
+  return Date.parse(text);
 }
 
 async function createCallbackLog(

@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL("../../supabase/migrations/20260915210000_liuhaoyi_recharge_recovery_expiry_guards.sql", import.meta.url),
   "utf8",
 );
+const paidBeforeExpiryMigration = readFileSync(
+  new URL("../../supabase/migrations/20260926130000_liuhaoyi_paid_before_expiry_completion.sql", import.meta.url),
+  "utf8",
+);
 const callback = readFileSync(
   new URL("../../lib/payments/payment-callback-service.ts", import.meta.url),
   "utf8",
@@ -76,6 +80,21 @@ test("migration is forward-only, guarded, and preserves function signatures and 
   assert.match(migration, /security definer[\s\S]*set search_path = public/);
   assert.match(migration, /from public, anon, authenticated;[\s\S]*to service_role;/);
   assert.doesNotMatch(migration, /alter table|delete from|truncate/i);
+});
+
+test("paid-before-expiry repair is forward-only and passes trusted paid time through both locked functions", () => {
+  assert.match(paidBeforeExpiryMigration, /^begin;$/m);
+  assert.match(paidBeforeExpiryMigration, /^commit;$/m);
+  assert.match(paidBeforeExpiryMigration,
+    /complete_account_recharge\(uuid,text,numeric,text,timestamp with time zone\)/);
+  assert.match(paidBeforeExpiryMigration, /v_effective_paid_at > v_session\.expires_at/);
+  assert.match(paidBeforeExpiryMigration, /v_effective_paid_at > v_recharge\.expires_at/);
+  assert.match(paidBeforeExpiryMigration,
+    /public\.complete_account_recharge\([\s\S]*v_effective_paid_at/);
+  assert.match(paidBeforeExpiryMigration, /from public\.payment_sessions[\s\S]*for update/);
+  assert.match(paidBeforeExpiryMigration, /from public\.account_recharges[\s\S]*for update/);
+  assert.match(paidBeforeExpiryMigration, /from public, anon, authenticated;[\s\S]*to service_role;/);
+  assert.doesNotMatch(paidBeforeExpiryMigration, /alter table|truncate|delete from/i);
 });
 
 test("session paid idempotency precedes status and recharge expiry guards", () => {

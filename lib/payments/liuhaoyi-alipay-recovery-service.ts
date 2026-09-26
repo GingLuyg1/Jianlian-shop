@@ -53,7 +53,7 @@ export async function runLiuhaoyiAlipayRechargeRecovery(
 
   const { data: rechargeRow, error: rechargeError } = await service
     .from("account_recharges")
-    .select("id,recharge_no,user_id,status,expires_at,credited_amount,completed_at")
+    .select("id,recharge_no,user_id,status,expires_at,created_at,credited_amount,completed_at")
     .eq("id", session.businessId).maybeSingle();
   if (rechargeError) throw rechargeError;
   const recharge = rechargeRow ? normalizeRecharge(rechargeRow as Record<string, unknown>) : null;
@@ -136,7 +136,8 @@ function normalizeSession(row: Record<string, unknown>) {
 function normalizeRecharge(row: Record<string, unknown>) {
   return {
     id: String(row.id), rechargeNo: String(row.recharge_no), userId: String(row.user_id),
-    status: String(row.status), expiresAt: text(row.expires_at), creditedAmount: row.credited_amount,
+    status: String(row.status), expiresAt: text(row.expires_at), createdAt: text(row.created_at),
+    creditedAmount: row.credited_amount,
     completedAt: text(row.completed_at),
   };
 }

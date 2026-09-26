@@ -11,6 +11,9 @@ on:
       - "scripts/ci/payment-watcher-*"
       - "lib/payments/liuhaoyi-wechat-*"
       - "lib/payments/liuhaoyi-alipay-*"
+      - "lib/payments/payment-callback-service.ts"
+      - "lib/payments/providers/liuhaoyi*"
+      - "supabase/migrations/*liuhaoyi*"
       - "scripts/ops/liuhaoyi-wechat-*"
       - "scripts/ops/liuhaoyi-alipay-*"
       - "ops/systemd/jianlian-liuhaoyi-wechat-*"
@@ -70,7 +73,7 @@ jobs:
           test "$PGPORT" = "54322"
           psql -X -v ON_ERROR_STOP=1 -q -f scripts/ci/payment-watcher-minimal-schema.sql
           node scripts/ci/payment-watcher-canonical-rpc.mjs | psql -X -v ON_ERROR_STOP=1 -q
-          psql -X -v ON_ERROR_STOP=1 -Atqc "select case when to_regprocedure('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)') is not null and to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text)') is not null and to_regprocedure('public.credit_account_recharge_balance(text,text,numeric,text)') is not null then 'PAYMENT_RPC_READY' else 'PAYMENT_RPC_MISSING' end" | grep -qx PAYMENT_RPC_READY
+          psql -X -v ON_ERROR_STOP=1 -Atqc "select case when to_regprocedure('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)') is not null and to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text)') is not null and to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)') is not null and to_regprocedure('public.credit_account_recharge_balance(text,text,numeric,text)') is not null then 'PAYMENT_RPC_READY' else 'PAYMENT_RPC_MISSING' end" | grep -qx PAYMENT_RPC_READY
 
       - name: Real PostgreSQL completion races
         run: bash scripts/ci/payment-watcher-real-db.sh

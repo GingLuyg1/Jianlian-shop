@@ -19,6 +19,7 @@ import {
   liuhaoyiCallbackResponseBody,
   liuhaoyiChannelForType,
   liuhaoyiTypeForChannel,
+  normalizeLiuhaoyiPaidAt,
   parseLiuhaoyiQuery,
   selectLiuhaoyiPaymentArtifact,
   verifyLiuhaoyiMd5Signature,
@@ -179,6 +180,7 @@ async function queryPayment(paymentNo: string, options?: { timeoutMs?: number })
   const providerType = boundedOptionalText(payload.type, 32);
   const providerChannel = providerType === "wxpay" ? "wechat" : providerType === "alipay" ? "alipay" : undefined;
   const providerPaidAt = boundedOptionalText(payload.endtime, 64);
+  const paidAt = normalizeLiuhaoyiPaidAt(providerPaidAt);
   return {
     status: paid ? "paid" : "pending",
     found,
@@ -186,6 +188,7 @@ async function queryPayment(paymentNo: string, options?: { timeoutMs?: number })
     providerChannel,
     providerTransactionIdPresent: Boolean(providerTradeNo),
     providerPaidAt,
+    paidAt: paidAt ?? undefined,
     providerTransactionId: providerTradeNo,
     amount: typeof payload.money === "string" || typeof payload.money === "number" ? payload.money : undefined,
     currency: "CNY",
@@ -238,6 +241,11 @@ async function parseCallback(_payload: unknown, context?: ProviderCallbackContex
   const providerTransactionId = boundedOptionalText(parameters.trade_no, 160);
   if (!sessionNo || !providerTransactionId) throw new LiuhaoyiProviderError("LIUHAOYI_CALLBACK_ID_INVALID", "六号易回调缺少支付单号");
   const amount = assertLiuhaoyiPaymentAmount(parameters.money);
+  const rawPaidAt = boundedOptionalText(parameters.endtime, 64);
+  const paidAt = normalizeLiuhaoyiPaidAt(rawPaidAt);
+  if (rawPaidAt && !paidAt) {
+    throw new LiuhaoyiProviderError("LIUHAOYI_PAID_AT_INVALID", "六号易支付时间无效");
+  }
   return {
     provider: "liuhaoyi",
     businessNo: sessionNo,
@@ -248,7 +256,12 @@ async function parseCallback(_payload: unknown, context?: ProviderCallbackContex
     amount,
     currency: "CNY",
     channelCode: callbackChannel,
-    rawSummary: { tradeStatus: "TRADE_SUCCESS", providerTransactionIdPresent: true },
+    paidAt: paidAt ?? undefined,
+    rawSummary: {
+      tradeStatus: "TRADE_SUCCESS",
+      providerTransactionIdPresent: true,
+      providerPaidAtPresent: Boolean(paidAt),
+    },
   };
 }
 

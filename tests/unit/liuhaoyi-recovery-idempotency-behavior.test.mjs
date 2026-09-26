@@ -5,7 +5,7 @@ import {
   evaluateLiuhaoyiAlipayRechargeRecovery,
 } from "../../lib/payments/liuhaoyi-recovery-policy.mjs";
 
-const nowMs = Date.parse("2026-09-15T10:00:00.000Z");
+const nowMs = Date.parse("2026-09-15T10:25:00.000Z");
 
 function recoveryInput(overrides = {}) {
   return {
@@ -31,6 +31,7 @@ function recoveryInput(overrides = {}) {
       rechargeNo: "RC-BEHAVIOR-1",
       userId: "user-1",
       status: "pending",
+      createdAt: "2026-09-15T09:59:00.000Z",
       expiresAt: "2026-09-15T10:20:00.000Z",
       creditedAmount: 0,
       completedAt: null,

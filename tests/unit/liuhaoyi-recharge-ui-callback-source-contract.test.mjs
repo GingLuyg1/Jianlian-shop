@@ -43,9 +43,11 @@ test("recharge history exposes order number, countdown, continue payment and cus
 });
 
 test("late paid callback preserves evidence and routes to manual reconciliation before completion", () => {
-  const lateGuard = callbackService.indexOf("isExpiredRechargePayment");
+  const lateGuard = callbackService.indexOf("expiredRechargePaymentRequiresManualReview");
   const completion = callbackService.indexOf("const completion = await completePayment");
   assert.ok(lateGuard >= 0 && completion > lateGuard);
+  assert.match(callbackService, /paidAtMs > sessionExpiryMs/);
+  assert.match(callbackService, /paidAtMs > rechargeExpiryMs/);
   assert.match(callbackService, /provider_paid_local_unpaid/);
   assert.match(callbackService, /provider_transaction_id: providerTransactionId/);
   assert.match(callbackService, /provider_trade_no: providerTransactionId/);

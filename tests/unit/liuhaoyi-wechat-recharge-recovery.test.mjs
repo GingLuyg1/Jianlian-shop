@@ -20,7 +20,8 @@ function candidate(overrides = {}) {
     },
     recharge: {
       id: "recharge-id", rechargeNo: "RC-WX-1", userId: "user-1", status: "pending",
-      expiresAt: "2026-09-17T01:12:40+08:00", creditedAmount: 0, completedAt: null,
+      createdAt: "2026-09-17T00:42:40+08:00", expiresAt: "2026-09-17T01:12:40+08:00",
+      creditedAmount: 0, completedAt: null,
       ...overrides.recharge,
     },
     provider: {
@@ -50,7 +51,9 @@ test("WeChat recovery rejects cross-channel, ownership, amount, type, credited a
 });
 
 test("provider payment after local expiry is manual review and never eligible", () => {
-  const decision = evaluateLiuhaoyiWechatRechargeRecovery(candidate({ provider: { endtime: "2026-09-17 01:12:41" } }));
+  const input = candidate({ provider: { endtime: "2026-09-17 01:12:41" } });
+  input.nowMs = Date.parse("2026-09-17T01:15:00+08:00");
+  const decision = evaluateLiuhaoyiWechatRechargeRecovery(input);
   assert.equal(decision.eligible, false);
   assert.equal(decision.reason, "provider_paid_after_expiry");
   assert.equal(decision.manualReview, true);

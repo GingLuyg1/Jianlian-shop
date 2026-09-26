@@ -13,8 +13,8 @@ const files = ["supabase/schema.sql", ...readdirSync(migrationDir)
   .sort()
   .map((name) => path.join(migrationDir, name))];
 
-function latestDefinition(name) {
-  const argumentsPattern = name === "is_admin" ? "\\(\\s*user_id\\s+uuid\\s*\\)" : "\\(";
+function latestDefinition(name, argumentsPattern = "\\(") {
+  if (name === "is_admin") argumentsPattern = "\\(\\s*user_id\\s+uuid\\s*\\)";
   const pattern = new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${name}\\s*${argumentsPattern}`, "ig");
   let latest = null;
   for (const file of files) {
@@ -29,18 +29,21 @@ function latestDefinition(name) {
   return latest;
 }
 
-const names = [
-  "is_admin",
-  "credit_account_recharge_balance",
-  "complete_account_recharge",
-  "complete_payment_session",
-];
-const definitions = new Map(names.map((name) => [name, latestDefinition(name)]));
+const definitions = new Map([
+  ["is_admin", latestDefinition("is_admin")],
+  ["credit_account_recharge_balance", latestDefinition("credit_account_recharge_balance")],
+  ["complete_account_recharge_trusted_paid_at", latestDefinition("complete_account_recharge",
+    "\\([\\s\\S]*?p_paid_at\\s+timestamptz[\\s\\S]*?\\)")],
+  ["complete_account_recharge_compat", latestDefinition("complete_account_recharge",
+    "\\([\\s\\S]*?p_currency\\s+text\\s+default\\s+'CNY'\\s*\\)")],
+  ["complete_payment_session", latestDefinition("complete_payment_session")],
+]);
 const expected = {
   is_admin: "20260715_admin_users_super_admin_model.sql",
   credit_account_recharge_balance: "20260916170000_account_recharge_completed_at_forward_repair.sql",
-  complete_account_recharge: "20260915210000_liuhaoyi_recharge_recovery_expiry_guards.sql",
-  complete_payment_session: "20260915210000_liuhaoyi_recharge_recovery_expiry_guards.sql",
+  complete_account_recharge_trusted_paid_at: "20260926130000_liuhaoyi_paid_before_expiry_completion.sql",
+  complete_account_recharge_compat: "20260926130000_liuhaoyi_paid_before_expiry_completion.sql",
+  complete_payment_session: "20260926130000_liuhaoyi_paid_before_expiry_completion.sql",
 };
 for (const [name, entry] of definitions) {
   assert.equal(path.basename(entry.file), expected[name], `Canonical ${name} source changed: re-audit fixture dependencies`);
@@ -68,12 +71,13 @@ for (const match of combined.matchAll(/\b(?:from|join|update|into)\s+public\.([a
   referenced.add(match[1].toLowerCase());
 }
 for (const name of referenced) {
-  if (names.includes(name) || name === "complete_order_payment") continue;
+  if (["is_admin", "credit_account_recharge_balance", "complete_account_recharge",
+    "complete_payment_session", "complete_order_payment"].includes(name)) continue;
   assert.match(fixture, new RegExp(`create\\s+table\\s+public\\.${name}\\s*\\(`, "i"),
     `Canonical RPC relation absent from CI schema: ${name}`);
 }
 
 const hash = createHash("sha256").update(combined).digest("hex");
-process.stderr.write(`PAYMENT_RPC_SOURCE_FILES=${[...new Set(names.slice(1).map((name) => definitions.get(name).file))].join(",")}\n`);
+process.stderr.write(`PAYMENT_RPC_SOURCE_FILES=${[...new Set([...definitions.values()].slice(1).map((entry) => entry.file))].join(",")}\n`);
 process.stderr.write(`RPC_FIXTURE_DRIFT_GUARD=canonical_source_dynamic_extract,source_sha256:${hash}\n`);
 process.stdout.write(`${combined}\n`);

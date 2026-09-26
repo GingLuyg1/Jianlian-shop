@@ -17,7 +17,9 @@ import {
   isExpectedLiuhaoyiMerchant,
   liuhaoyiCallbackResponseBody,
   liuhaoyiChannelForType,
+  liuhaoyiPaidTimeMs,
   liuhaoyiTypeForChannel,
+  normalizeLiuhaoyiPaidAt,
   normalizeLiuhaoyiSessionPresentation,
   selectLiuhaoyiPaymentArtifact,
   verifyLiuhaoyiMd5Signature,
@@ -41,6 +43,23 @@ const callback = {
   param: "order",
   sign_type: "MD5",
 };
+
+test("Liuhaoyi paid time is interpreted as Asia/Shanghai and ambiguous timestamps fail closed", () => {
+  assert.equal(liuhaoyiPaidTimeMs("2026-09-25 21:21:04"),
+    Date.parse("2026-09-25T21:21:04+08:00"));
+  assert.equal(normalizeLiuhaoyiPaidAt("2026-09-25 21:21:04"), "2026-09-25T13:21:04.000Z");
+  assert.equal(normalizeLiuhaoyiPaidAt("2026-09-25T13:21:04Z"), "2026-09-25T13:21:04.000Z");
+  assert.equal(Number.isNaN(liuhaoyiPaidTimeMs("2026/09/25 21:21:04")), true);
+  assert.equal(normalizeLiuhaoyiPaidAt("not-a-time"), null);
+});
+
+test("signed callback paid time is normalized before canonical completion", () => {
+  const provider = source("lib/payments/providers/liuhaoyi.ts");
+  assert.match(provider, /rawPaidAt = boundedOptionalText\(parameters\.endtime/);
+  assert.match(provider, /normalizeLiuhaoyiPaidAt\(rawPaidAt\)/);
+  assert.match(provider, /LIUHAOYI_PAID_AT_INVALID/);
+  assert.match(provider, /paidAt: paidAt \?\? undefined/);
+});
 
 function source(path) {
   return readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");

@@ -6,6 +6,7 @@ import ts from "typescript";
 import { runLiuhaoyiAlipayWatcher } from "../../lib/payments/liuhaoyi-alipay-watcher.mjs";
 import { evaluateLiuhaoyiAlipayRechargeRecovery, liuhaoyiPaidTimeMs }
   from "../../lib/payments/liuhaoyi-recovery-policy.mjs";
+import * as liuhaoyiCore from "../../lib/payments/providers/liuhaoyi-core.mjs";
 
 const nowMs = Date.parse("2026-09-17T03:10:00.000Z");
 const sessionNo = "PS20260917ALIPAYINTEGRATION";
@@ -68,7 +69,7 @@ function loadLiuhaoyiProvider() {
   const testRequire = (specifier) => {
     if (specifier === "server-only") return {};
     if (specifier === "@/lib/payments/liuhaoyi-limits.mjs") return {};
-    if (specifier === "@/lib/payments/providers/liuhaoyi-core.mjs") return {};
+    if (specifier === "@/lib/payments/providers/liuhaoyi-core.mjs") return liuhaoyiCore;
     if (specifier === "@/lib/payments/request-client-device.mjs") return {};
     if (specifier === "@/lib/payments/provider-contracts.mjs") return {};
     if (specifier === "@/lib/payments/providers/liuhaoyi-submit.mjs") return {};
@@ -94,7 +95,8 @@ function initialDatabase() {
     account_recharges: [{
       id: "00000000-0000-4000-8000-000000000201", recharge_no: "RC-ALIPAY-INTEGRATION",
       user_id: "00000000-0000-4000-8000-000000000101", status: "pending",
-      expires_at: "2026-09-17T03:20:00.000Z", credited_amount: "0.00", completed_at: null,
+      created_at: "2026-09-17T03:00:00.000Z", expires_at: "2026-09-17T03:20:00.000Z",
+      credited_amount: "0.00", completed_at: null,
       updated_at: "2026-09-17T03:00:00.000Z",
     }],
     balance_transactions: [], payment_reconciliations: [],

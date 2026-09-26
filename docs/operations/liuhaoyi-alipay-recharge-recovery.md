@@ -6,10 +6,11 @@ This watcher is limited to Liuhaoyi `alipay` CNY account recharges. It does not 
 
 - Dry-run is the default.
 - Execute mode requires both `--execute` and `LIUHAOYI_ALIPAY_WATCHER_EXECUTE_ENABLED=true`.
-- The candidate must be pending, at least 60 seconds old, and not currently expired.
+- The candidate must be pending, at least 60 seconds old, and no more than 24 hours old. Expired sessions may be queried only so a payment that the provider proves occurred before expiry can be recovered.
 - The payment session, recharge, user, recharge number, amount, currency, provider trade number, and merchant trade number must match exactly.
 - The recharge must not be credited or completed, and its completed ledger count must be zero.
-- Provider `endtime`/`paidAt` is required and must be parseable. It may equal, but cannot exceed, either persisted expiry.
+- Provider `endtime`/`paidAt` is required and is interpreted as China Standard Time (`UTC+08:00`). It may equal, but cannot exceed, either persisted expiry and cannot precede either persisted creation time.
+- Processing time is not payment time. A trusted payment made before expiry may complete after expiry; a payment made after expiry, a missing timestamp, or an impossible timestamp fails closed for manual review.
 - Provider-paid cases that fail a safety check are recorded once using a reconciliation `dedupe_key` and require manual review.
 - Automatic completion uses only `completePayment()` and the existing database locking/idempotency chain.
 
@@ -33,4 +34,4 @@ The dry-run unit has no `[Install]` section and no timer. Repository changes do 
 
 ## Deployment note
 
-Committing these files does not install or start the timer. Deployment, environment changes, channel enablement, and real payment testing require a separate Production-approved procedure. The existing `20260915210000_liuhaoyi_recharge_recovery_expiry_guards.sql` migration already supplies the required atomic/idempotent completion guard; V2 requires no new migration.
+Committing these files does not install or start the timer. Deployment, environment changes, channel enablement, and real payment testing require a separate Production-approved procedure. The forward migration `20260926130000_liuhaoyi_paid_before_expiry_completion.sql` preserves the atomic/idempotent completion chain while passing trusted provider payment time through both expiry guards. It does not update historical rows; do not rerun historical migrations.

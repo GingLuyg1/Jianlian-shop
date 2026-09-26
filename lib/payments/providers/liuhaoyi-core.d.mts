@@ -29,3 +29,5 @@ export function normalizeLiuhaoyiSessionPresentation(input: {
   deepLinkUrl?: string;
 };
 export function parseLiuhaoyiQuery(input: URLSearchParams | string): Record<string, string>;
+export function liuhaoyiPaidTimeMs(value: unknown): number;
+export function normalizeLiuhaoyiPaidAt(value: unknown): string | null;

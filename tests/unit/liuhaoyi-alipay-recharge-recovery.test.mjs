@@ -10,7 +10,7 @@ import {
 } from "../../lib/payments/liuhaoyi-recovery-policy.mjs";
 import { runLiuhaoyiAlipayRecoveryWorker } from "../../scripts/ops/liuhaoyi-alipay-recharge-recovery.mjs";
 
-const nowMs = Date.parse("2026-09-15T10:00:00+08:00");
+const nowMs = Date.parse("2026-09-15T10:25:00+08:00");
 function candidate(overrides = {}) {
   return {
     session: {
@@ -23,7 +23,8 @@ function candidate(overrides = {}) {
     },
     recharge: overrides.recharge === null ? null : {
       id: "recharge-id", rechargeNo: "RC-ALI-1", userId: "user-1", status: "pending",
-      expiresAt: "2026-09-15T10:20:00+08:00", creditedAmount: 0, completedAt: null,
+      createdAt: "2026-09-15T09:58:59+08:00", expiresAt: "2026-09-15T10:20:00+08:00",
+      creditedAmount: 0, completedAt: null,
       ...overrides.recharge,
     },
     provider: {
@@ -32,7 +33,7 @@ function candidate(overrides = {}) {
       ...overrides.provider,
     },
     ledgerCount: overrides.ledgerCount ?? 0,
-    nowMs,
+    nowMs: overrides.nowMs ?? nowMs,
   };
 }
 const decision = (overrides = {}) => evaluateLiuhaoyiAlipayRechargeRecovery(candidate(overrides));
@@ -49,8 +50,10 @@ test("execution requires literal true and recovery mode remains Alipay account r
 });
 
 test("callback gets a full minute and inactive session/recharge cannot recover", () => {
-  assert.equal(decision({ session: { createdAt: "2026-09-15T09:59:00.001+08:00" } }).reason, "callback_grace_period");
-  assert.equal(decision({ session: { createdAt: "2026-09-15T09:59:00+08:00" } }).eligible, true);
+  const graceNow = Date.parse("2026-09-15T10:00:00+08:00");
+  assert.equal(decision({ nowMs: graceNow, session: { createdAt: "2026-09-15T09:59:00.001+08:00" } }).reason, "callback_grace_period");
+  assert.equal(decision({ nowMs: graceNow, session: { createdAt: "2026-09-15T09:59:00+08:00" },
+    provider: { endtime: "2026-09-15 09:59:30" } }).eligible, true);
   assert.equal(decision({ session: { localStatus: "expired" } }).reason, "session_not_active");
   assert.equal(decision({ recharge: { status: "expired" } }).reason, "recharge_not_active");
 });
@@ -87,6 +90,25 @@ test("paid time is required, parseable, and may equal but never exceed either ex
   assert.equal(late.reason, "provider_paid_after_expiry");
   assert.equal(late.manualReview, true);
   assert.equal(decision({ recharge: { expiresAt: "2026-09-15T10:19:58+08:00" } }).reason, "provider_paid_after_expiry");
+});
+
+test("paid in time remains eligible when recovery runs after expiry", () => {
+  const afterExpiry = evaluateLiuhaoyiAlipayRechargeRecovery({
+    ...candidate(),
+    nowMs,
+  });
+  assert.deepEqual(afterExpiry, {
+    eligible: true, reason: "eligible", manualReview: false,
+    differenceType: "provider_paid_local_unpaid",
+  });
+});
+
+test("untrusted or impossible provider paid time fails closed", () => {
+  assert.equal(decision({ provider: { endtime: "2026-09-15T09:58:58" } }).reason,
+    "provider_paid_time_invalid");
+  assert.equal(decision({ recharge: { createdAt: null } }).reason, "provider_paid_time_invalid");
+  assert.equal(decision({ provider: { endtime: "2026-09-15T10:00:00" },
+    session: { createdAt: "2026-09-15T10:00:01+08:00" } }).reason, "provider_paid_time_invalid");
 });
 
 test("worker defaults dry-run and redacts malformed or exceptional provider output", async () => {
