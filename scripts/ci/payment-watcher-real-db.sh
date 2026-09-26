@@ -243,9 +243,27 @@ prepare_expired_fixture() {
 update public.account_recharges
 set created_at=now()-interval '30 minutes', expires_at=now()-interval '10 minutes'
 where id='00000000-0000-4000-8000-0000000002${suffix}';
-update public.payment_sessions
-set created_at=now()-interval '30 minutes', expires_at=now()-interval '10 minutes'
-where id='00000000-0000-4000-8000-0000000003${suffix}';
+update public.payment_sessions ps
+set created_at=ar.created_at,
+    expires_at=ar.expires_at
+from public.account_recharges ar
+where ps.business_id=ar.id
+  and ps.id='00000000-0000-4000-8000-0000000003${suffix}';
+
+do \$\$
+begin
+  if not exists (
+    select 1
+    from public.payment_sessions ps
+    join public.account_recharges ar on ar.id=ps.business_id
+    where ps.id='00000000-0000-4000-8000-0000000003${suffix}'
+      and ps.created_at=ar.created_at
+      and ps.expires_at=ar.expires_at
+  ) then
+    raise exception 'CI_EXPIRY_FIXTURE_TIMESTAMP_DRIFT';
+  end if;
+end
+\$\$;
 SQL
 }
 
