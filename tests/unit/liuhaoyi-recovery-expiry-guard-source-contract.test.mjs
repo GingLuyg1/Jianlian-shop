@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const migration = readFileSync(
   new URL("../../supabase/migrations/20260915210000_liuhaoyi_recharge_recovery_expiry_guards.sql", import.meta.url),
@@ -30,6 +32,11 @@ const originalRechargeMigration = readFileSync(
   new URL("../../supabase/migrations/20260623_payment_provider_core.sql", import.meta.url),
   "utf8",
 );
+const baselineFixturePath = fileURLToPath(new URL(
+  "../../scripts/ci/payment-watcher-migration-baseline.mjs",
+  import.meta.url,
+));
+const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 function fn(name) {
   const match = migration.match(new RegExp(
@@ -95,6 +102,46 @@ test("paid-before-expiry repair is forward-only and passes trusted paid time thr
   assert.match(paidBeforeExpiryMigration, /from public\.account_recharges[\s\S]*for update/);
   assert.match(paidBeforeExpiryMigration, /from public, anon, authenticated;[\s\S]*to service_role;/);
   assert.doesNotMatch(paidBeforeExpiryMigration, /alter table|truncate|delete from/i);
+});
+
+test("paid-before-expiry preflight accepts only guarded or exact known Production baselines", () => {
+  assert.match(paidBeforeExpiryMigration, /v_guarded_baseline/);
+  assert.match(paidBeforeExpiryMigration, /v_known_production_unguarded_baseline/);
+  assert.match(paidBeforeExpiryMigration, /20b8f9520804d5f276e3adf3dc0cc9b7/);
+  assert.match(paidBeforeExpiryMigration, /db036718d11bd8e48e946272b7a952d2/);
+  assert.match(paidBeforeExpiryMigration, /auth\.role\(\) <> ''service_role''/);
+  assert.match(paidBeforeExpiryMigration, /v_recharge\.status = ''paid''/);
+  assert.match(paidBeforeExpiryMigration, /ar\.provider_trade_no = nullif/);
+  assert.match(paidBeforeExpiryMigration, /received amount does not match frozen payment session amount/);
+  assert.match(paidBeforeExpiryMigration, /received currency does not match payment session currency/);
+  assert.match(paidBeforeExpiryMigration, /public\.complete_order_payment/);
+  assert.match(paidBeforeExpiryMigration, /public\.complete_account_recharge/);
+  assert.match(paidBeforeExpiryMigration, /PAID_BEFORE_EXPIRY_PREFLIGHT_UNKNOWN_BASELINE/);
+  assert.match(paidBeforeExpiryMigration, /PAID_BEFORE_EXPIRY_POSTCHECK_WRAPPER_INVALID/);
+  assert.match(paidBeforeExpiryMigration, /PAID_BEFORE_EXPIRY_POSTCHECK_PRIVILEGES_INVALID/);
+  assert.match(paidBeforeExpiryMigration, /has_function_privilege\([\s\S]*?'service_role'/);
+  assert.match(paidBeforeExpiryMigration, /has_function_privilege\([\s\S]*?'anon'/);
+  assert.match(paidBeforeExpiryMigration, /has_function_privilege\([\s\S]*?'authenticated'/);
+  assert.doesNotMatch(paidBeforeExpiryMigration, /or\s+v_account_structure_ok\s*;/i);
+});
+
+test("migration compatibility fixture extracts historical guarded and Production definitions", () => {
+  const run = (mode) => execFileSync(
+    process.execPath,
+    [baselineFixturePath, mode],
+    { cwd: repositoryRoot, encoding: "utf8" },
+  );
+  const guarded = run("guarded");
+  const production = run("production");
+  const unknown = run("unknown");
+
+  assert.match(guarded, /v_recharge\.expires_at <= now\(\)/);
+  assert.match(guarded, /v_session\.expires_at <= now\(\)/);
+  assert.doesNotMatch(production, /expires_at/);
+  assert.match(production, /received amount does not match frozen payment session amount/);
+  assert.doesNotMatch(unknown, /received amount does not match frozen payment session amount/);
+  assert.match(unknown, /public\.complete_order_payment/);
+  assert.match(unknown, /public\.complete_account_recharge/);
 });
 
 test("session paid idempotency precedes status and recharge expiry guards", () => {

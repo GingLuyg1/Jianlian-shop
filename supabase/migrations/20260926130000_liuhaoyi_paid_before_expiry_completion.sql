@@ -15,6 +15,12 @@ declare
   v_session_security_definer boolean;
   v_account_config text[];
   v_session_config text[];
+  v_account_md5 text;
+  v_session_md5 text;
+  v_account_structure_ok boolean;
+  v_session_structure_ok boolean;
+  v_guarded_baseline boolean;
+  v_known_production_unguarded_baseline boolean;
 begin
   if to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text)') is null
      or to_regprocedure('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)') is null
@@ -35,17 +41,57 @@ begin
   from pg_catalog.pg_proc p
   where p.oid = 'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)'::regprocedure;
 
-  if v_account_security_definer is distinct from true
-     or v_account_config is distinct from array['search_path=public']::text[]
-     or position('v_recharge.expires_at <= now()' in v_account_definition) = 0
-     or position('public.credit_account_recharge_balance' in v_account_definition) = 0 then
-    raise exception 'PAID_BEFORE_EXPIRY_PREFLIGHT_ACCOUNT_BASELINE_MISMATCH';
-  end if;
-  if v_session_security_definer is distinct from true
-     or v_session_config is distinct from array['search_path=public']::text[]
-     or position('v_session.expires_at <= now()' in v_session_definition) = 0
-     or position('public.complete_account_recharge' in v_session_definition) = 0 then
-    raise exception 'PAID_BEFORE_EXPIRY_PREFLIGHT_SESSION_BASELINE_MISMATCH';
+  v_account_md5 := md5(v_account_definition);
+  v_session_md5 := md5(v_session_definition);
+
+  v_account_structure_ok :=
+    v_account_security_definer is true
+    and v_account_config is not distinct from array['search_path=public']::text[]
+    and position('auth.role() <> ''service_role''' in v_account_definition) > 0
+    and position('from public.account_recharges' in v_account_definition) > 0
+    and position('for update' in lower(v_account_definition)) > 0
+    and position('v_recharge.status = ''paid''' in v_account_definition) > 0
+    and position('''alreadyCompleted'', true' in v_account_definition) > 0
+    and position('v_recharge.status in (''closed'',''expired'',''failed'',''refunded'')' in v_account_definition) > 0
+    and position('ar.provider_trade_no = nullif(p_provider_transaction_id, '''')' in v_account_definition) > 0
+    and position('public.credit_account_recharge_balance' in v_account_definition) > 0;
+
+  v_session_structure_ok :=
+    v_session_security_definer is true
+    and v_session_config is not distinct from array['search_path=public']::text[]
+    and position('auth.role() <> ''service_role''' in v_session_definition) > 0
+    and position('from public.payment_sessions' in v_session_definition) > 0
+    and position('for update' in lower(v_session_definition)) > 0
+    and position('v_session.status = ''paid''' in v_session_definition) > 0
+    and position('''idempotent'', true' in v_session_definition) > 0
+    and position('v_session.status in (''expired'',''closed'',''failed'')' in v_session_definition) > 0
+    and position('received amount does not match frozen payment session amount' in v_session_definition) > 0
+    and position('received currency does not match payment session currency' in v_session_definition) > 0
+    and position('ps.provider_transaction_id = nullif(p_provider_transaction_id, '''')' in v_session_definition) > 0
+    and position('public.complete_order_payment' in v_session_definition) > 0
+    and position('public.complete_account_recharge' in v_session_definition) > 0;
+
+  v_guarded_baseline :=
+    v_account_structure_ok
+    and v_session_structure_ok
+    and position('v_recharge.expires_at <= now()' in v_account_definition) > 0
+    and position('v_session.expires_at <= now()' in v_session_definition) > 0;
+
+  -- This exact MD5 pair was captured from the manually audited Production
+  -- functions. MD5 is additional evidence only: every security, locking,
+  -- idempotency, validation, identity, and canonical-call invariant above is
+  -- still mandatory, and both functions must be the known unguarded pair.
+  v_known_production_unguarded_baseline :=
+    v_account_md5 = '20b8f9520804d5f276e3adf3dc0cc9b7'
+    and v_session_md5 = 'db036718d11bd8e48e946272b7a952d2'
+    and v_account_structure_ok
+    and v_session_structure_ok
+    and position('expires_at' in lower(v_account_definition)) = 0
+    and position('expires_at' in lower(v_session_definition)) = 0;
+
+  if not v_guarded_baseline
+     and not v_known_production_unguarded_baseline then
+    raise exception 'PAID_BEFORE_EXPIRY_PREFLIGHT_UNKNOWN_BASELINE';
   end if;
 end;
 $$;
@@ -350,6 +396,9 @@ declare
   v_definition text;
   v_security_definer boolean;
   v_config text[];
+  v_wrapper_definition text;
+  v_wrapper_security_definer boolean;
+  v_wrapper_config text[];
 begin
   if to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)') is null then
     raise exception 'PAID_BEFORE_EXPIRY_POSTCHECK_OVERLOAD_MISSING';
@@ -379,6 +428,66 @@ begin
      or position('public.credit_account_recharge_balance' in v_definition) = 0
      or position('for update' in v_definition) = 0 then
     raise exception 'PAID_BEFORE_EXPIRY_POSTCHECK_ACCOUNT_INVALID';
+  end if;
+
+  select pg_catalog.pg_get_functiondef(p.oid), p.prosecdef, p.proconfig
+    into v_wrapper_definition, v_wrapper_security_definer, v_wrapper_config
+  from pg_catalog.pg_proc p
+  where p.oid = 'public.complete_account_recharge(uuid,text,numeric,text)'::regprocedure;
+
+  if v_wrapper_security_definer is distinct from true
+     or v_wrapper_config is distinct from array['search_path=public']::text[]
+     or position('public.complete_account_recharge' in v_wrapper_definition) = 0
+     or position('statement_timestamp()' in v_wrapper_definition) = 0 then
+    raise exception 'PAID_BEFORE_EXPIRY_POSTCHECK_WRAPPER_INVALID';
+  end if;
+
+  if not has_function_privilege(
+       'service_role',
+       'public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)',
+       'EXECUTE'
+     )
+     or not has_function_privilege(
+       'service_role',
+       'public.complete_account_recharge(uuid,text,numeric,text)',
+       'EXECUTE'
+     )
+     or not has_function_privilege(
+       'service_role',
+       'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'anon',
+       'public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'authenticated',
+       'public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'anon',
+       'public.complete_account_recharge(uuid,text,numeric,text)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'authenticated',
+       'public.complete_account_recharge(uuid,text,numeric,text)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'anon',
+       'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'authenticated',
+       'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)',
+       'EXECUTE'
+     ) then
+    raise exception 'PAID_BEFORE_EXPIRY_POSTCHECK_PRIVILEGES_INVALID';
   end if;
 end;
 $$;

@@ -62,6 +62,109 @@ SQL
 }
 trap cleanup EXIT
 
+migration_file="supabase/migrations/20260926130000_liuhaoyi_paid_before_expiry_completion.sql"
+
+install_completion_baseline() {
+  local mode="$1"
+  psql -X -v ON_ERROR_STOP=1 -q <<'SQL'
+drop function if exists public.complete_account_recharge(uuid,text,numeric,text,timestamptz);
+SQL
+  node scripts/ci/payment-watcher-migration-baseline.mjs "$mode" |
+    psql -X -v ON_ERROR_STOP=1 -q
+}
+
+assert_paid_before_expiry_postcheck() {
+  psql -X -v ON_ERROR_STOP=1 -Atqc "
+    select case when
+      to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)') is not null
+      and to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text)') is not null
+      and to_regprocedure('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)') is not null
+      and exists (
+        select 1 from pg_proc p
+        where p.oid='public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)'::regprocedure
+          and p.prosecdef is true
+          and p.proconfig is not distinct from array['search_path=public']::text[]
+          and position('v_effective_paid_at > v_recharge.expires_at' in pg_get_functiondef(p.oid)) > 0
+          and position('public.credit_account_recharge_balance' in pg_get_functiondef(p.oid)) > 0
+          and position('for update' in lower(pg_get_functiondef(p.oid))) > 0
+      )
+      and exists (
+        select 1 from pg_proc p
+        where p.oid='public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)'::regprocedure
+          and p.prosecdef is true
+          and p.proconfig is not distinct from array['search_path=public']::text[]
+          and position('v_effective_paid_at > v_session.expires_at' in pg_get_functiondef(p.oid)) > 0
+          and position('public.complete_account_recharge' in pg_get_functiondef(p.oid)) > 0
+          and position('for update' in lower(pg_get_functiondef(p.oid))) > 0
+      )
+      and exists (
+        select 1 from pg_proc p
+        where p.oid='public.complete_account_recharge(uuid,text,numeric,text)'::regprocedure
+          and p.prosecdef is true
+          and p.proconfig is not distinct from array['search_path=public']::text[]
+          and position('statement_timestamp()' in pg_get_functiondef(p.oid)) > 0
+      )
+      and has_function_privilege('service_role', 'public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)', 'EXECUTE')
+      and has_function_privilege('service_role', 'public.complete_account_recharge(uuid,text,numeric,text)', 'EXECUTE')
+      and has_function_privilege('service_role', 'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)', 'EXECUTE')
+      and not has_function_privilege('anon', 'public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)', 'EXECUTE')
+      and not has_function_privilege('authenticated', 'public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)', 'EXECUTE')
+      and not has_function_privilege('anon', 'public.complete_account_recharge(uuid,text,numeric,text)', 'EXECUTE')
+      and not has_function_privilege('authenticated', 'public.complete_account_recharge(uuid,text,numeric,text)', 'EXECUTE')
+      and not has_function_privilege('anon', 'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)', 'EXECUTE')
+      and not has_function_privilege('authenticated', 'public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)', 'EXECUTE')
+    then 'PAID_BEFORE_EXPIRY_POSTCHECK_PASS'
+    else 'PAID_BEFORE_EXPIRY_POSTCHECK_FAIL' end;
+  " | grep -qx PAID_BEFORE_EXPIRY_POSTCHECK_PASS
+}
+
+run_migration_compatibility_matrix() {
+  local production_md5 before_unknown after_unknown
+
+  install_completion_baseline guarded
+  psql -X -v ON_ERROR_STOP=1 -q -f "$migration_file"
+  assert_paid_before_expiry_postcheck
+  echo "MIGRATION_GUARDED_BASELINE_TEST=pass"
+
+  install_completion_baseline production
+  production_md5="$(psql -X -v ON_ERROR_STOP=1 -Atqc "
+    select md5(pg_get_functiondef('public.complete_account_recharge(uuid,text,numeric,text)'::regprocedure))
+      || ':' || md5(pg_get_functiondef('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)'::regprocedure));
+  ")"
+  test "$production_md5" = "20b8f9520804d5f276e3adf3dc0cc9b7:db036718d11bd8e48e946272b7a952d2"
+  echo "PROD_BASELINE_MD5_REPRODUCED=yes"
+  psql -X -v ON_ERROR_STOP=1 -q -f "$migration_file"
+  assert_paid_before_expiry_postcheck
+  echo "MIGRATION_PRODUCTION_BASELINE_TEST=pass"
+
+  install_completion_baseline unknown
+  before_unknown="$(psql -X -v ON_ERROR_STOP=1 -Atqc "
+    select md5(pg_get_functiondef('public.complete_account_recharge(uuid,text,numeric,text)'::regprocedure))
+      || ':' || md5(pg_get_functiondef('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)'::regprocedure));
+  ")"
+  if psql -X -v ON_ERROR_STOP=1 -q -f "$migration_file" >"$task_logs/unknown-baseline.log" 2>&1; then
+    echo "UNKNOWN_BASELINE_UNEXPECTEDLY_ACCEPTED"
+    return 1
+  fi
+  grep -q PAID_BEFORE_EXPIRY_PREFLIGHT_UNKNOWN_BASELINE "$task_logs/unknown-baseline.log"
+  after_unknown="$(psql -X -v ON_ERROR_STOP=1 -Atqc "
+    select md5(pg_get_functiondef('public.complete_account_recharge(uuid,text,numeric,text)'::regprocedure))
+      || ':' || md5(pg_get_functiondef('public.complete_payment_session(uuid,text,numeric,text,timestamp with time zone)'::regprocedure));
+  ")"
+  test "$before_unknown" = "$after_unknown"
+  test "$(psql -X -v ON_ERROR_STOP=1 -Atqc "select to_regprocedure('public.complete_account_recharge(uuid,text,numeric,text,timestamp with time zone)') is null;")" = t
+  echo "MIGRATION_UNKNOWN_BASELINE_REJECT_TEST=pass"
+  echo "MIGRATION_ROLLBACK_TEST=pass"
+
+  # Leave the shared job-local database on the canonical post-migration
+  # definitions before running the existing race/idempotency scenarios.
+  install_completion_baseline production
+  psql -X -v ON_ERROR_STOP=1 -q -f "$migration_file"
+  assert_paid_before_expiry_postcheck
+}
+
+run_migration_compatibility_matrix
+
 prepare_fixture() {
   local scenario="$1"
   local suffix="$2"
