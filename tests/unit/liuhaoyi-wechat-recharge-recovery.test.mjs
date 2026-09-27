@@ -41,6 +41,16 @@ test("current paid-within-expiry WeChat incident is eligible in dry-run policy",
   });
 });
 
+test("paid before or exactly at expiry remains eligible when recovery runs after expiry", () => {
+  const paidBefore = candidate({ provider: { endtime: "2026-09-17 01:12:39" } });
+  paidBefore.nowMs = Date.parse("2026-09-17T01:20:00+08:00");
+  assert.equal(evaluateLiuhaoyiWechatRechargeRecovery(paidBefore).eligible, true);
+
+  const paidAtExpiry = candidate({ provider: { endtime: "2026-09-17 01:12:40" } });
+  paidAtExpiry.nowMs = Date.parse("2026-09-17T01:20:00+08:00");
+  assert.equal(evaluateLiuhaoyiWechatRechargeRecovery(paidAtExpiry).eligible, true);
+});
+
 test("WeChat recovery rejects cross-channel, ownership, amount, type, credited and ledger mismatches", () => {
   assert.equal(evaluateLiuhaoyiWechatRechargeRecovery(candidate({ session: { channelCode: "alipay" } })).reason, "scope_not_allowed");
   assert.equal(evaluateLiuhaoyiWechatRechargeRecovery(candidate({ recharge: { userId: "other" } })).reason, "ownership_mismatch");
@@ -57,6 +67,36 @@ test("provider payment after local expiry is manual review and never eligible", 
   assert.equal(decision.eligible, false);
   assert.equal(decision.reason, "provider_paid_after_expiry");
   assert.equal(decision.manualReview, true);
+});
+
+test("missing or invalid provider paid time is manual review and never eligible", () => {
+  for (const endtime of [undefined, "invalid-paid-time"]) {
+    const decision = evaluateLiuhaoyiWechatRechargeRecovery(candidate({ provider: { endtime } }));
+    assert.equal(decision.eligible, false);
+    assert.equal(decision.manualReview, true);
+    assert.equal(decision.reason, "provider_paid_time_missing");
+  }
+});
+
+test("WeChat recovery rejects every identity, currency, completion and ledger conflict", () => {
+  const cases = [
+    [candidate({ provider: { currency: "USD" } }), "currency_mismatch"],
+    [candidate({ provider: { type: "alipay" } }), "provider_type_mismatch"],
+    [candidate({ session: { localTradeNo: "OTHER-TRADE" } }), "provider_transaction_id_conflict"],
+    [candidate({ provider: { tradeNo: "OTHER-PROVIDER-ORDER" } }), "provider_order_no_mismatch"],
+    [candidate({ provider: { outTradeNo: "PS-WRONG-SESSION" } }), "out_trade_no_mismatch"],
+    [candidate({ ledgerCount: 1 }), "completed_ledger_exists"],
+    [candidate({ recharge: { creditedAmount: 1 } }), "recharge_already_credited"],
+    [candidate({ recharge: { completedAt: "2026-09-17T00:43:09+08:00" } }), "recharge_already_credited"],
+    [candidate({ recharge: { userId: "other-user" } }), "ownership_mismatch"],
+    [candidate({ recharge: { rechargeNo: "RC-WRONG" } }), "ownership_mismatch"],
+    [candidate({ session: { businessId: "wrong-recharge-id" } }), "ownership_mismatch"],
+  ];
+  for (const [input, reason] of cases) {
+    const decision = evaluateLiuhaoyiWechatRechargeRecovery(input);
+    assert.equal(decision.eligible, false);
+    assert.equal(decision.reason, reason);
+  }
 });
 
 test("natural callback completed first makes WeChat recovery ineligible", () => {

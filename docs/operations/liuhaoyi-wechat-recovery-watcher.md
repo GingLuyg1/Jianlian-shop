@@ -1,10 +1,10 @@
-# 六号易微信账户充值 watcher V2（仅本地模板，未启用）
+# 六号易微信账户充值 watcher V2
 
-本轮只修改代码、测试、文档和 systemd 模板。没有安装服务、启用 timer、修改 Production 环境或运行自动入账。Watcher 仅编排现有单会话微信 recovery；资金完成仍是 `completePayment` 和数据库原子 RPC，不直接改余额或 ledger。默认 dry-run；真实模式同时要求 `LIUHAOYI_WECHAT_WATCHER_ENABLED=true`、`LIUHAOYI_WECHAT_WATCHER_EXECUTE_ENABLED=true` 和命令行 `--execute`。这些开关不得因部署自动开启。
+Watcher 仅编排现有单会话微信 recovery；资金完成仍是 `completePayment` 和数据库原子 RPC，不直接改余额或 ledger。默认 dry-run；真实模式同时要求 `LIUHAOYI_WECHAT_WATCHER_ENABLED=true`、`LIUHAOYI_WECHAT_WATCHER_EXECUTE_ENABLED=true` 和命令行 `--execute`。部署代码或更新 systemd unit 不得自动改变这些开关或公开微信渠道。
 
 ## 范围、节奏与容量
 
-只读候选查询精确限定 `provider=liuhaoyi`、`channel_code=wechat`、`business_type=recharge`、`currency=CNY`、`status=pending`、`created_at <= now-60s`、`expires_at > now`。不扫描 processing、expired、paid、Alipay、USDT 或商城订单。自然 callback 有至少 60 秒优先机会。建议 timer 每分钟一次，但本轮不安装。
+只读候选查询精确限定 `provider=liuhaoyi`、`channel_code=wechat`、`business_type=recharge`、`currency=CNY`、`status=pending`，并要求 `created_at` 位于 `now-24h` 到 `now-60s` 的有界窗口内。候选必须有合法 `expires_at`，但不再要求查询时仍未过期：这样用户在有效期内已付款、而 callback 或 timer 延迟到过期后才处理的会话仍可进入 recovery worker。它不扫描 processing、expired、paid、Alipay、USDT 或商城订单；超过 24 小时的历史 pending 也不扫描。自然 callback 有至少 60 秒优先机会，timer 每分钟一次。
 
 每批最多 4 单：3 个最新 eligible 会话 + 1 个按分钟轮转的旧 backlog 会话。正常负载下，新会话在满 60 秒后的 1–2 个调度周期内进入最新优先位；当每分钟持续超过 3 个新 eligible 会话时，不能保证该时延，应以 `backlog_present` 和 `remaining_count` 告警并暂停扩容上线。PostgREST `Prefer: count=exact` 必须返回总数；缺失计数时 fail closed。两次读取之间候选数量变化时，仅放弃不稳定的旧单轮转位、记录 `scan_changed`，仍检查已读取的 3 个最新候选。本轮不新增 next_check_at 或 migration。
 
@@ -14,15 +14,15 @@
 
 ## 入账安全门禁
 
-单会话 recovery 重新读取 session、recharge、已完成 ledger，并按 session pinned provider 查询六号易。必须同时满足 provider/微信充值/CNY、订单与用户归属、1:1 session-business 匹配、金额、wxpay、provider trade no、out_trade_no、本地 pending、ledger=0、provider paid time 在两处 expiry 内，才调用 canonical completion。provider unpaid、金额/渠道不符、交易号缺失、超时、5xx、错误 JSON、晚到账都不自动 credit。已 callback 入账的会话在候选读取或 recovery 复查时跳过。过期时数据库最终 guard 拒绝 completion；异常走原有人工核对，不绕过。
+单会话 recovery 重新读取 session、recharge、已完成 ledger，并按 session pinned provider 查询六号易。必须同时满足 provider/微信充值/CNY、订单与用户归属、1:1 session-business 匹配、金额、wxpay、provider trade no、out_trade_no、本地 pending、ledger=0，并且可信 provider paid time 不晚于 session 与 recharge 两处 expiry，才调用 canonical completion。当前处理时间晚于 expiry 本身不否定一笔有效期内已完成的付款；`paid_at == expires_at` 允许，`paid_at > expires_at` 或缺失/非法 paid time 必须拒绝自动入账并进入人工复核。provider unpaid、金额/渠道不符、交易号缺失、超时、5xx 或错误 JSON 都不自动 credit。已 callback 入账的会话在候选读取或 recovery 复查时跳过，数据库 canonical completion 继续执行最终行锁、到期语义和幂等保护。
 
-Callback 与 watcher、两个 watcher、以及任意先后顺序的重复完成都共享带行锁的原子 RPC 和唯一 ledger 约束。本地有行为模拟和 SQL source-contract 测试；**尚无隔离 PostgreSQL 真并发实测**，它是自动执行上线前的验收门槛。
+Callback 与 watcher、两个 watcher、以及任意先后顺序的重复完成都共享带行锁的原子 RPC 和唯一 ledger 约束。本地行为测试、SQL source-contract 测试和 CI 隔离 PostgreSQL 真并发测试共同覆盖 callback/recovery race、double recovery 与 exactly-once ledger。
 
 ## systemd 模板与互斥锁
 
 独立文件：`ops/systemd/jianlian-liuhaoyi-wechat-recovery.service`、`ops/systemd/jianlian-liuhaoyi-wechat-recovery.timer`。不复用支付宝单元。oneshot `TimeoutStartSec=45s`，timer `OnUnitActiveSec=1min`、`Persistent=false`。service 通过 `flock -n -E 0 /run/lock/jianlian-liuhaoyi-wechat-recovery.lock` 获取专用进程锁；`ReadWritePaths` 只开放锁目录。手工直接执行 Node 脚本时，入口会通过同一把 flock 锁重新启动自身；拿不到锁正常退出，不扫描订单。内部路由的进程级 `running` 只是附加保护，不代替 OS 锁。内部 `--watcher-lock-held` 标记只供锁包装后的子进程使用，不是人工运行参数，也不是恶意本机操作者的权限边界。
 
-上线前需单独审核并配置仅 root 可读的 `/etc/jianlian/liuhaoyi-wechat-recovery.env`，包括 `JIANLIAN_NODE_BINARY` 的真实绝对路径、`JIANLIAN_RELEASE_DIR` 的 active immutable release、现有 Supabase/internal API 凭据及两个 watcher 开关；不能把 env 内容加入 Git。确认 `/usr/bin/flock`、Node 路径、release 路径、loopback API 地址、权限和健康后，才可由用户另行授权安装/启用。模板本身不会启动。手动运行时应复用 service 的 `ExecStart` 所示锁路径及环境，避免错用未锁命令。
+Production 的 `/etc/jianlian/liuhaoyi-wechat-recovery.env` 必须保持 root-only，并包含 `JIANLIAN_NODE_BINARY` 的真实绝对路径、`JIANLIAN_RELEASE_DIR` 的 active immutable release、现有 Supabase/internal API 凭据及两个 watcher 开关；env 内容不得加入 Git。每次发布后都要确认 `/usr/bin/flock`、Node 路径、release 路径、loopback API 地址、权限、unit 实际 `ExecStart` 与健康状态。更新 unit source 不等于启用公开微信渠道，也不得创建第二套 timer。
 
 立即停用命令（仅以后获得授权上线时使用）：
 

@@ -167,6 +167,19 @@ test("合法签名也必须通过独立 pid 校验，错误 pid 被拒绝", () =
   assert.match(source("lib/payments/providers/liuhaoyi.ts"), /isExpectedLiuhaoyiMerchant\(parameters, config\.merchantId\)/);
 });
 
+test("localhost Host never bypasses Liuhaoyi MD5 callback verification", () => {
+  const callbackRoute = source("app/api/payments/callback/[channel]/route.ts");
+  const callbackService = source("lib/payments/payment-callback-service.ts");
+  const invalid = { ...callback, sign: "invalid-signature" };
+  const localhostRequest = new Request("https://localhost/api/payments/callback/wechat", {
+    headers: { Host: "localhost" },
+  });
+  assert.equal(localhostRequest.headers.get("host"), "localhost");
+  assert.equal(verifyLiuhaoyiMd5Signature(invalid, merchantKey), false);
+  assert.doesNotMatch(callbackRoute, /localhost[\s\S]{0,300}(?:signature|verify)/i);
+  assert.match(callbackService, /if \(!verified\)[\s\S]*signature_failed/);
+});
+
 test("已签名但 type 或 trade_status 不合法的回调不能进入完成流程", () => {
   const provider = source("lib/payments/providers/liuhaoyi.ts");
   assert.throws(() => liuhaoyiChannelForType("wechat"), /不支持/);

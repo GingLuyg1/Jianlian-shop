@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-import { WATCHER_MINIMUM_AGE_MS, WATCHER_BATCH_SIZE, WATCHER_QUERY_TIMEOUT_MS,
+import { WATCHER_MINIMUM_AGE_MS, WATCHER_RECOVERY_LOOKBACK_MS, WATCHER_BATCH_SIZE, WATCHER_QUERY_TIMEOUT_MS,
   WATCHER_ITEM_TIMEOUT_MS, WATCHER_BATCH_TIMEOUT_MS, candidateMode,
   runLiuhaoyiWechatWatcher } from "../../lib/payments/liuhaoyi-wechat-watcher.mjs";
 import { runLiuhaoyiWechatRecoveryWorker } from "../../scripts/ops/liuhaoyi-wechat-recharge-recovery.mjs";
@@ -17,7 +17,8 @@ const env = {
   PAYMENT_RECONCILIATION_SECRET: "test-worker-secret-do-not-log",
   JIANLIAN_INTERNAL_BASE_URL: "http://127.0.0.1:3001",
 };
-const active = { session_no: sessionNo, status: "pending",
+const active = { session_no: sessionNo, provider: "liuhaoyi", channel_code: "wechat",
+  business_type: "recharge", currency: "CNY", status: "pending",
   created_at: "2026-09-17T02:59:43.000Z", expires_at: "2026-09-17T03:29:43.339Z" };
 const result = (overrides = {}) => ({
   success: true, provider_found: true, provider_paid: false, provider_type_match: false,
@@ -54,25 +55,70 @@ test("watcher is disabled by default, dry-run by default, execute needs two gate
   assert.equal(execCalls[0].timeoutMs, WATCHER_ITEM_TIMEOUT_MS);
 });
 
-test("candidate query is strictly one-minute-old pending WeChat recharge and unexpired", async () => {
+test("candidate query is bounded to one-minute-old pending WeChat recharge within 24 hours", async () => {
   const { value } = await run({ fetchImpl: async (url, init) => {
     for (const [key, expected] of Object.entries({
       provider: "eq.liuhaoyi", channel_code: "eq.wechat", business_type: "eq.recharge",
       currency: "eq.CNY", status: "eq.pending",
-      created_at: "lte." + new Date(nowMs - WATCHER_MINIMUM_AGE_MS).toISOString(),
-      expires_at: "gt." + new Date(nowMs).toISOString(),
       order: "created_at.desc,session_no.desc", limit: String(WATCHER_BATCH_SIZE),
     })) assert.equal(url.searchParams.get(key), expected);
+    assert.deepEqual(url.searchParams.getAll("created_at"), [
+      "gte." + new Date(nowMs - WATCHER_RECOVERY_LOOKBACK_MS).toISOString(),
+      "lte." + new Date(nowMs - WATCHER_MINIMUM_AGE_MS).toISOString(),
+    ]);
+    assert.equal(url.searchParams.has("expires_at"), false);
     assert.equal(init.headers.Prefer, "count=exact");
     assert.equal(init.headers.apikey, env.SUPABASE_SECRET_KEY);
     return response([active]);
   } });
   assert.equal(value.status, "finished");
   assert.equal(candidateMode({ ...active, status: "processing" }, nowMs, true), "skip");
+  for (const scopedOut of [
+    { provider: "other" }, { channel_code: "alipay" }, { business_type: "order" }, { currency: "USD" },
+  ]) assert.equal(candidateMode({ ...active, ...scopedOut }, nowMs, true), "skip");
   assert.equal(candidateMode({ ...active, created_at: new Date(nowMs - 59_999).toISOString() }, nowMs, true), "skip");
+  assert.equal(candidateMode({ ...active, created_at: new Date(nowMs - WATCHER_RECOVERY_LOOKBACK_MS - 1).toISOString() }, nowMs, true), "skip");
   assert.equal(candidateMode({ ...active, status: "expired" }, nowMs, true), "skip");
-  assert.equal(candidateMode({ ...active, expires_at: new Date(nowMs).toISOString() }, nowMs, true), "skip");
+  assert.equal(candidateMode({ ...active, expires_at: "invalid" }, nowMs, true), "skip");
+  assert.equal(candidateMode({ ...active, expires_at: new Date(nowMs).toISOString() }, nowMs, true), "execute");
   assert.equal(candidateMode({ ...active, expires_at: new Date(nowMs + 1_000).toISOString() }, nowMs, true), "dry_run");
+  assert.equal(candidateMode(active, nowMs, true), "execute");
+  assert.equal(candidateMode(active, nowMs, false), "dry_run");
+});
+
+test("expired pending candidate reaches worker within lookback and preserves execute dual gate", async () => {
+  const expired = {
+    ...active,
+    created_at: new Date(nowMs - 2 * WATCHER_MINIMUM_AGE_MS).toISOString(),
+    expires_at: new Date(nowMs - 1_000).toISOString(),
+  };
+  const executeCalls = [];
+  const executed = await run({
+    args: ["--execute"],
+    fetchImpl: async () => response([expired]),
+    worker: async (input) => { executeCalls.push(input); return result(); },
+  });
+  assert.equal(executed.value.processed_count, 1);
+  assert.equal(executeCalls.length, 1);
+  assert.equal(executeCalls[0].execute, true);
+
+  const dryRunCalls = [];
+  const dryRun = await run({
+    fetchImpl: async () => response([expired]),
+    worker: async (input) => { dryRunCalls.push(input); return result(); },
+  });
+  assert.equal(dryRun.value.processed_count, 1);
+  assert.equal(dryRunCalls.length, 1);
+  assert.equal(dryRunCalls[0].execute, false);
+
+  let oldWorkerCalled = false;
+  const tooOld = await run({
+    fetchImpl: async () => response([{ ...expired,
+      created_at: new Date(nowMs - WATCHER_RECOVERY_LOOKBACK_MS - 1).toISOString() }]),
+    worker: async () => { oldWorkerCalled = true; return result(); },
+  });
+  assert.equal(tooOld.value.processed_count, 0);
+  assert.equal(oldWorkerCalled, false);
 });
 
 test("newest three always selected and fourth rotates through old backlog with exact metrics", async () => {

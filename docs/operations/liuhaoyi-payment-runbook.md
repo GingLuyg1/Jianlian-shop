@@ -55,7 +55,7 @@
 ## 7. 过期订单
 
 - `expires_at <= now()` 后不显示扫码/移动打开按钮，不创建或重新打开旧 session。
-- provider 在本地过期后才确认 paid：保持 session/recharge expired，记录 `provider_paid_local_unpaid` 与 manual review，不自动 credit、complete 或 fulfillment。
+- provider 在本地过期后才被系统查询到 paid 时，必须以可信 provider `paid_at` 判断：`paid_at` 不晚于 session/recharge expiry 的付款可经 recovery 与 canonical completion 完成；`paid_at` 晚于 expiry、缺失或非法时保持未完成，记录 `provider_paid_local_unpaid` 与 manual review，不自动 credit、complete 或 fulfillment。
 - 用户侧提示联系客服并提供业务单号。不得 backfill、force paid 或 refund。
 
 ## 8. Provider 已付、本地 Pending
@@ -68,9 +68,7 @@
 
 ## 9. Recovery 禁止事项与微信方案
 
-现有恢复模式只适用于六号易支付宝账户充值，不能用于微信。
-
-微信恢复若后续获批实现，必须是新的 `wechat recharge only` 模式，并满足：
+现有恢复模式分别提供支付宝与微信账户充值 watcher；两者拥有独立开关、systemd unit 和进程锁。微信恢复必须保持 `wechat recharge only` 范围，并满足：
 
 - `provider=liuhaoyi`、`channel=wechat`、business type 为 recharge，session/recharge 用户与业务 ID 一致；
 - provider query 明确 found + paid，type 为 `wxpay`，币种 CNY，金额精确匹配，out trade number 与 session number 匹配；

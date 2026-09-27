@@ -121,8 +121,10 @@ test("historical NULL-expiry fallback remains 30 minutes", () => {
   assert.doesNotMatch(migration, /create or replace function public\.(?:expire_unpaid_order|list_expirable_unpaid_orders)/i);
 });
 
-test("watcher and recovery continue using persisted expiry without extending it", () => {
-  assert.match(watcher, /expires_at:\s*"gt\." \+ new Date\(nowMs\)\.toISOString\(\)/);
+test("watcher uses bounded recovery lookback while recovery enforces persisted paid-time expiry", () => {
+  assert.match(watcher, /WATCHER_RECOVERY_LOOKBACK_MS = 24 \* 60 \* 60_000/);
+  assert.match(watcher, /created_at"\s*,\s*"gte\." \+ new Date\(nowMs - WATCHER_RECOVERY_LOOKBACK_MS\)/);
+  assert.doesNotMatch(watcher, /expires_at:\s*"gt\." \+ new Date\(nowMs\)\.toISOString\(\)/);
   assert.match(recovery, /paidAtMs <= Date\.parse\(String\(session\.expiresAt/);
   assert.match(recovery, /paidAtMs <= Date\.parse\(String\(recharge\?\.expiresAt/);
 });

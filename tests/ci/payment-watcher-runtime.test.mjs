@@ -18,6 +18,10 @@ const env = {
 };
 const rows = Array.from({ length: 10 }, (_, index) => ({
   session_no: `PS20260918CIWATCHER${index.toString().padStart(2, "0")}`,
+  provider: "liuhaoyi",
+  channel_code: "wechat",
+  business_type: "recharge",
+  currency: "CNY",
   status: "pending",
   created_at: new Date(nowMs - (index + 2) * 60_000).toISOString(),
   expires_at: new Date(nowMs + 20 * 60_000).toISOString(),
