@@ -12,6 +12,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
+import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
 import {
   CreditCard,
@@ -81,11 +82,13 @@ const PRICE_LABELS: Record<string, string> = {
 
 type SkuOption = {
   id: string;
+  code?: string | null;
   label: string;
   rmb: number;
   stock?: number;
   status?: string;
   isDatabaseSku?: boolean;
+  isCompatibilityPlaceholder?: boolean;
 };
 
 type LegalDocument = {
@@ -124,13 +127,14 @@ const AGREEMENT_LABELS: Record<string, string> = {
 const SKU_OPTIONS_BY_PRODUCT_ID: Record<string, SkuOption[]> = {
   "gift-apple-us": [2, 3, 4, 5, 10, 15, 20, 25, 50, 100].map((usd) => ({
     id: `${usd}-usd`,
+    code: `${usd}-usd`,
     label: `${usd} USD`,
     rmb: usd * 7 * 1.06,
   })),
   "gift-giffgaff-topup": [
-    { id: "10-gbp", label: "10英镑", rmb: 14 * 7 * 1.1 },
-    { id: "15-gbp", label: "15英镑", rmb: 21 * 7 * 1.1 },
-    { id: "20-gbp", label: "20英镑", rmb: 28 * 7 * 1.1 },
+    { id: "10-gbp", code: "10-gbp", label: "10英镑", rmb: 14 * 7 * 1.1 },
+    { id: "15-gbp", code: "15-gbp", label: "15英镑", rmb: 21 * 7 * 1.1 },
+    { id: "20-gbp", code: "20-gbp", label: "20英镑", rmb: 28 * 7 * 1.1 },
   ],
 };
 
@@ -441,6 +445,7 @@ export default function CheckoutPage() {
 
   const databaseSkuOptions: SkuOption[] = productSkus.map((sku) => ({
     id: sku.id,
+    code: sku.sku_code,
     label: sku.sku_title || sku.sku_code || sku.id,
     rmb: Number(sku.price ?? productRow?.price ?? 0),
     stock: Number(sku.stock ?? 0),
@@ -448,17 +453,19 @@ export default function CheckoutPage() {
     isDatabaseSku: true,
   }));
   const skuOptions = product
-    ? databaseSkuOptions.length > 0
-      ? databaseSkuOptions
-      : SKU_OPTIONS_BY_PRODUCT_ID[product.id] ?? []
+    ? mergeCheckoutSkuOptions(databaseSkuOptions, SKU_OPTIONS_BY_PRODUCT_ID[product.id] ?? [])
     : [];
   const selectedSku =
-    skuOptions.find((sku) => sku.id === selectedSkuId) ??
+    findCheckoutSkuOption(skuOptions, selectedSkuId) ??
     skuOptions.find((sku) => sku.status === "active" && Number(sku.stock ?? 0) > 0) ??
     skuOptions[0];
   const hasSku = skuOptions.length > 0;
   const selectedDatabaseSkuId = selectedSku?.isDatabaseSku ? selectedSku.id : null;
-  const effectiveStock = selectedSku?.isDatabaseSku ? Number(selectedSku.stock ?? 0) : Number(product?.stock ?? 0);
+  const effectiveStock = selectedSku?.isCompatibilityPlaceholder
+    ? 0
+    : selectedSku?.isDatabaseSku
+      ? Number(selectedSku.stock ?? 0)
+      : Number(product?.stock ?? 0);
   const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) => legalDocuments.find((doc) => doc.document_type === type));
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
@@ -466,7 +473,7 @@ export default function CheckoutPage() {
   const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod);
   const selectedPaymentChannel = paymentChannels.find((channel) =>
     getPaymentMethodOption(paymentMethod)?.channelCodes.includes(channel.code)) ?? null;
-  const isPurchasable = productRow?.status === "active" && (!hasSku || Boolean(selectedSku)) && (!selectedSku?.isDatabaseSku || selectedSku.status === "active") && effectiveStock > 0;
+  const isPurchasable = productRow?.status === "active" && (!hasSku || Boolean(selectedSku)) && (!selectedSku?.status || selectedSku.status === "active") && effectiveStock > 0;
   const unavailableMessage =
     productRow?.status === "sold_out" || effectiveStock <= 0
       ? "该商品已售罄"

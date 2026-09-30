@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
 
 export type CategoryStatus = "active" | "inactive";
 export type ProductStatus = "draft" | "active" | "inactive" | "sold_out";
@@ -459,8 +460,12 @@ export async function setProductStatus(id: string, status: ProductStatus) {
 }
 
 export async function listProductSkus(productId: string) {
-  const result = await adminCatalogRequest<{ skus: Array<Record<string, unknown>> }>(`/api/admin/products/${encodeURIComponent(productId)}/skus`);
-  return (result.skus ?? []).map(normalizeProductSku);
+  return (await getProductSkuWorkspace(productId)).skus;
+}
+
+export async function getProductSkuWorkspace(productId: string) {
+  const result = await adminCatalogRequest<{ skus: Array<Record<string, unknown>>; diagnostics: CatalogSkuDiagnostics }>(`/api/admin/products/${encodeURIComponent(productId)}/skus`);
+  return { skus: (result.skus ?? []).map(normalizeProductSku), diagnostics: result.diagnostics };
 }
 
 export async function createProductSku(productId: string, payload: ProductSkuPayload) {

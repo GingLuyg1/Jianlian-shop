@@ -28,6 +28,9 @@ test("supplier binding provides friendly SKU choices and saves website SKU mappi
   assert.match(sheet, /成本:/);
   assert.match(sheet, /库存:/);
   assert.match(sheet, /website_sku_id/);
+  assert.match(sheet, /BUSINESS_DECISION_REQUIRED/);
+  assert.match(sheet, /detail\.id === 15/);
+  assert.match(sheet, /option\.sku === "14"/);
   assert.match(route, /from\("product_skus"\)/);
   assert.match(route, /DAJU_SUPPLIER_SKU_REQUIRED/);
   assert.match(route, /supplier_stock_snapshot/);
@@ -42,6 +45,8 @@ test("stock sync preserves snapshots and never performs supplier purchase", () =
   assert.match(service, /resolveDajuSkuStockBinding\(metadataOf\(productRow\.metadata\), metadata, rows\.length === 1\)/);
   assert.match(service, /effectiveRows\.push\(\{ status: row\.status, stock: row\.stock \}\)/);
   assert.match(service, /buildSupplierStockAggregateUpdate/);
+  assert.match(file("lib/providers/daju/stock.mjs"), /supplier_stock_stale: true/);
+  assert.match(file("lib/providers/daju/stock.mjs"), /supplier_stock_sync_attempted_at/);
   assert.match(batchRoute, /from\("product_skus"\)/);
   assert.match(batchRoute, /collectDajuBoundProductIds/);
   assert.doesNotMatch(service, /\.purchase\s*\(/);
@@ -55,7 +60,8 @@ test("checkout prioritizes database SKU above email and disables unavailable var
   const selector = checkout.indexOf("<SkuSelector");
   const email = checkout.indexOf("联系邮箱", selector);
   assert.ok(selector > 0 && selector < email);
-  assert.match(checkout, /databaseSkuOptions\.length > 0/);
+  assert.match(checkout, /mergeCheckoutSkuOptions\(databaseSkuOptions/);
+  assert.match(checkout, /isCompatibilityPlaceholder/);
   assert.match(checkout, /sku\.status !== "active" \|\| Number\(sku\.stock \?\? 0\) <= 0/);
   assert.match(checkout, /sku_id: selectedDatabaseSkuId/);
   assert.match(checkout, /unitPrice = product \? \(hasSku \? selectedSku\?\.rmb/);

@@ -13,7 +13,8 @@ test("SKU table replaces duplicate price-stock form and preserves product sortin
   assert.match(editor, /<table/);
   assert.match(editor, /h-8/);
   assert.match(editor, /<details/);
-  assert.match(editor, /sku_title: "默认规格", sku_code: "DEFAULT", \.\.\.defaultsRef\.current/);
+  assert.doesNotMatch(editor, /sku_title: "默认规格", sku_code: "DEFAULT"/);
+  assert.match(editor, /current\.filter\(\(row\) => row\.key !== "legacy"\)/);
 });
 test("SKU save validates rows, excludes blank draft, and remembers partial successful inserts", () => {
   const editor = file("components/admin/products/AdminProductSkuManager.tsx");

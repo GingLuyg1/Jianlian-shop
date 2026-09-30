@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { auditCatalogAction, requireCatalogAdmin } from "../../../catalog/_shared";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { syncSkuProductSummary } from "@/lib/products/sku-summary";
+import { buildCatalogSkuDiagnostics, inspectCatalogSkuSchema } from "@/lib/products/catalog-readiness.mjs";
 
 const SKU_FIELDS = "id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,created_at,updated_at";
 const STATUSES = new Set(["active", "inactive", "sold_out", "draft"]);
@@ -19,8 +20,19 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
   const service = getSupabaseServiceRoleClient() ?? admin.supabase;
-  const { data, error } = await service.from("product_skus").select(SKU_FIELDS).eq("product_id", params.id).order("sort_order").order("created_at");
-  return error ? json({ error: "SKU 读取失败", requestId }, 500) : json({ skus: data ?? [], requestId });
+  const [schemaReadiness, skuResult, productResult] = await Promise.all([
+    inspectCatalogSkuSchema(service),
+    service.from("product_skus").select(SKU_FIELDS).eq("product_id", params.id).order("sort_order").order("created_at"),
+    service.from("products").select("id,slug,stock,metadata").eq("id", params.id).maybeSingle(),
+  ]);
+  if (skuResult.error && schemaReadiness.ready) return json({ error: "SKU 读取失败", requestId }, 500);
+  if (productResult.error || !productResult.data) return json({ error: "商品不存在", requestId }, 404);
+  const skuRows = skuResult.error ? [] : skuResult.data ?? [];
+  return json({
+    skus: skuRows,
+    diagnostics: buildCatalogSkuDiagnostics(productResult.data, skuRows, schemaReadiness),
+    requestId,
+  });
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
@@ -28,6 +40,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
   const service = getSupabaseServiceRoleClient();
+  if (service) {
+    const schemaReadiness = await inspectCatalogSkuSchema(service);
+    if (!schemaReadiness.ready) return json({ error: "SKU schema 尚未就绪，写入已安全阻止", code: "CATALOG_SKU_SCHEMA_NOT_READY", diagnostics: schemaReadiness, requestId }, 503);
+  }
   if (!service) return json({ error: "SKU 保存权限不可用", requestId }, 503);
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const title = text(body?.sku_title);

@@ -1,0 +1,30 @@
+export type CatalogSchemaIssue = { code: string; message: string; [key: string]: unknown };
+export type CatalogSchemaReadiness = { ready: boolean; issues: CatalogSchemaIssue[] };
+export type CatalogSkuDiagnosticRow = {
+  sku_id: string;
+  sku_code: string | null;
+  website_stock: number;
+  supplier_expected: boolean;
+  supplier_bound: boolean;
+  supplier_product_id: unknown;
+  supplier_sku: unknown;
+  supplier_stock_snapshot: unknown;
+  supplier_stock_sync_status: unknown;
+  supplier_stock_sync_error: unknown;
+  supplier_stock_last_success_at: unknown;
+  supplier_stock_sync_attempted_at: unknown;
+  supplier_stock_stale: boolean;
+};
+export type CatalogSkuDiagnostics = {
+  schema_ready: boolean;
+  schema_issues: CatalogSchemaIssue[];
+  legacy_expected_count: number;
+  legacy_missing_codes: string[];
+  legacy_db_sku_missing: boolean;
+  supplier_unbound_count: number;
+  supplier_stale_count: number;
+  supplier_problem_count: number;
+  supplier_rows: CatalogSkuDiagnosticRow[];
+};
+export function inspectCatalogSkuSchema(service: any): Promise<CatalogSchemaReadiness>;
+export function buildCatalogSkuDiagnostics(product: Record<string, unknown> | null, skus: Array<Record<string, unknown>>, schemaReadiness: CatalogSchemaReadiness): CatalogSkuDiagnostics;
