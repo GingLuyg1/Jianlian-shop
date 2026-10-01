@@ -8,5 +8,9 @@ export type CheckoutSkuOption = {
   isDatabaseSku?: boolean;
   isCompatibilityPlaceholder?: boolean;
 };
-export function mergeCheckoutSkuOptions(databaseOptions: CheckoutSkuOption[], legacyOptions: CheckoutSkuOption[]): CheckoutSkuOption[];
+export function mergeCheckoutSkuOptions(
+  databaseOptions: CheckoutSkuOption[],
+  legacyOptions: CheckoutSkuOption[],
+  options?: { productHasSkus?: boolean },
+): CheckoutSkuOption[];
 export function findCheckoutSkuOption(options: CheckoutSkuOption[], requestedIdOrCode: string | null | undefined): CheckoutSkuOption | undefined;

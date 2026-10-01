@@ -10,7 +10,7 @@ import {
 } from "@/lib/catalog/effective-category-visibility.mjs";
 
 const PRODUCT_SELECT =
-  "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,delivery_type,status,sort_order,metadata,created_at,updated_at";
+  "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,has_skus,delivery_type,status,sort_order,metadata,created_at,updated_at";
 
 const SKU_SELECT =
   "id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata";

@@ -7,6 +7,7 @@ import {
   buildEffectiveCategoryVisibility,
   filterEffectivelyVisibleCategories,
 } from "@/lib/catalog/effective-category-visibility.mjs";
+import { derivePublicCatalogSkuSummary } from "@/lib/products/public-catalog-sku-summary.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ type ProductRow = {
   price: number | string | null;
   original_price: number | string | null;
   stock: number | string | null;
+  has_skus: boolean | null;
   delivery_type: string | null;
   status: string | null;
   image_url: string | null;
@@ -155,7 +157,7 @@ export async function GET(request: Request) {
 function buildProductQuery(supabase: ReturnType<typeof getSupabaseServerClient>, categoryIds: string[]) {
   let query = supabase
     .from("products")
-    .select("id,category_id,name,slug,short_description,price,original_price,stock,status,delivery_type,image_url,sort_order,updated_at")
+    .select("id,category_id,name,slug,short_description,price,original_price,stock,has_skus,status,delivery_type,image_url,sort_order,updated_at")
     .in("status", PRODUCT_STATUSES)
     .order("sort_order", { ascending: true })
     .limit(MAX_INTERNAL_PRODUCTS);
@@ -197,17 +199,8 @@ function groupSkusByProduct(skus: SkuRow[]) {
 
 function enrichProduct(product: ProductRow, skus: SkuRow[], categoryMap: Map<string, CategoryRow>): ProductView {
   const activeSkus = skus.filter((sku) => sku.status === "active" || sku.status === "sold_out");
-  const skuPrices = activeSkus.map((sku) => numberOrZero(sku.price)).filter((price) => Number.isFinite(price));
-  const hasSkus = activeSkus.length > 0;
-  const minPrice = hasSkus && skuPrices.length > 0 ? Math.min(...skuPrices) : numberOrZero(product.price);
-  const maxPrice = hasSkus && skuPrices.length > 0 ? Math.max(...skuPrices) : numberOrZero(product.price);
-  const effectiveStock = hasSkus
-    ? activeSkus
-        .filter((sku) => sku.status === "active")
-        .reduce((sum, sku) => sum + Math.max(0, Math.trunc(numberOrZero(sku.stock))), 0)
-    : product.status === "sold_out"
-      ? 0
-      : Math.max(0, Math.trunc(numberOrZero(product.stock)));
+  const { productHasSkus: hasSkus, minPrice, maxPrice, effectiveStock } =
+    derivePublicCatalogSkuSummary(product, activeSkus);
   const preferredImage = activeSkus.find((sku) => sku.image_url)?.image_url ?? product.image_url;
   const deliveryType = activeSkus.find((sku) => sku.delivery_type)?.delivery_type ?? product.delivery_type ?? "manual";
 

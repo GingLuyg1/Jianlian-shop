@@ -6,6 +6,7 @@ import test from "node:test";
 import { buildCatalogSkuDiagnostics, inspectCatalogSkuSchema } from "../../lib/products/catalog-readiness.mjs";
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "../../lib/products/checkout-sku-options.mjs";
 import { LEGACY_SKU_DEFINITIONS, planLegacySkuBackfill } from "../../lib/products/legacy-sku-backfill.mjs";
+import { derivePublicCatalogSkuSummary } from "../../lib/products/public-catalog-sku-summary.mjs";
 
 const root = process.cwd();
 const file = (name) => readFileSync(join(root, name), "utf8");
@@ -66,7 +67,7 @@ test("database checkout SKU wins while partial legacy entries remain visible but
     { id: "3-usd", code: "3-usd", label: "3 USD", rmb: 22.26 },
   ];
   const database = [{ id: "db-2", code: "2-usd", label: "Database 2 USD", rmb: 15, stock: 8, status: "active", isDatabaseSku: true }];
-  const merged = mergeCheckoutSkuOptions(database, legacy);
+  const merged = mergeCheckoutSkuOptions(database, legacy, { productHasSkus: true });
   assert.equal(merged.length, 2);
   assert.equal(merged[0].id, "db-2");
   assert.equal(merged[0].rmb, 15);
@@ -78,7 +79,52 @@ test("database checkout SKU wins while partial legacy entries remain visible but
 
 test("legacy checkout compatibility remains unchanged before any DB SKU exists", () => {
   const legacy = [{ id: "2-usd", code: "2-usd", label: "2 USD", rmb: 14.84 }];
-  assert.equal(mergeCheckoutSkuOptions([], legacy), legacy);
+  assert.equal(mergeCheckoutSkuOptions([], legacy, { productHasSkus: false }), legacy);
+});
+
+test("migrated products with only hidden database SKUs expose fail-closed legacy placeholders", () => {
+  const legacy = [
+    { id: "2-usd", code: "2-usd", label: "2 USD", rmb: 14.84 },
+    { id: "3-usd", code: "3-usd", label: "3 USD", rmb: 22.26 },
+  ];
+  const merged = mergeCheckoutSkuOptions([], legacy, { productHasSkus: true });
+  assert.deepEqual(merged, legacy.map((option) => ({
+    ...option,
+    stock: 0,
+    status: "draft",
+    isDatabaseSku: false,
+    isCompatibilityPlaceholder: true,
+  })));
+  const requested = findCheckoutSkuOption(merged, "2-usd");
+  assert.equal(requested?.isCompatibilityPlaceholder, true);
+  assert.equal(requested?.status, "draft");
+  assert.equal(requested?.stock, 0);
+});
+
+test("active database SKU remains authoritative while missing legacy codes fail closed", () => {
+  const legacy = [
+    { id: "2-usd", code: "2-usd", label: "2 USD", rmb: 14.84 },
+    { id: "3-usd", code: "3-usd", label: "3 USD", rmb: 22.26 },
+  ];
+  const database = [{ id: "db-2", code: "2-usd", label: "DB 2 USD", rmb: 15.5, stock: 7, status: "active", isDatabaseSku: true }];
+  const merged = mergeCheckoutSkuOptions(database, legacy, { productHasSkus: true });
+  assert.deepEqual(findCheckoutSkuOption(merged, "2-usd"), database[0]);
+  assert.equal(findCheckoutSkuOption(merged, "db-2")?.rmb, 15.5);
+  assert.equal(findCheckoutSkuOption(merged, "3-usd")?.isCompatibilityPlaceholder, true);
+});
+
+test("migrated products never reuse positive parent stock when all public SKUs are hidden", () => {
+  const summary = derivePublicCatalogSkuSummary(
+    { has_skus: true, price: 14.84, stock: 999, status: "active" },
+    [],
+  );
+  assert.deepEqual(summary, { productHasSkus: true, minPrice: 14.84, maxPrice: 14.84, effectiveStock: 0 });
+
+  const legacySummary = derivePublicCatalogSkuSummary(
+    { has_skus: false, price: 14.84, stock: 999, status: "active" },
+    [],
+  );
+  assert.equal(legacySummary.effectiveStock, 999);
 });
 
 test("schema readiness passes and fails closed on products.has_skus", async () => {

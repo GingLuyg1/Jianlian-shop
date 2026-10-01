@@ -453,7 +453,11 @@ export default function CheckoutPage() {
     isDatabaseSku: true,
   }));
   const skuOptions = product
-    ? mergeCheckoutSkuOptions(databaseSkuOptions, SKU_OPTIONS_BY_PRODUCT_ID[product.id] ?? [])
+    ? mergeCheckoutSkuOptions(
+        databaseSkuOptions,
+        SKU_OPTIONS_BY_PRODUCT_ID[product.id] ?? [],
+        { productHasSkus: productRow?.has_skus === true },
+      )
     : [];
   const selectedSku =
     findCheckoutSkuOption(skuOptions, selectedSkuId) ??

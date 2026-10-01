@@ -41,6 +41,7 @@ export type PublicProductRow = {
   price: number;
   original_price: number | null;
   stock: number;
+  has_skus: boolean;
   delivery_type: string;
   status: string;
   sort_order: number;
@@ -51,7 +52,6 @@ export type PublicProductRow = {
 
 export type PublicCatalogProductRow = PublicProductRow & {
   category_path?: string | null;
-  has_skus?: boolean;
   min_price?: number | null;
   max_price?: number | null;
   effective_stock?: number | null;
@@ -108,7 +108,7 @@ export type PublicCatalogConfig = {
 };
 
 const productSelect =
-  "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,delivery_type,status,sort_order,metadata,created_at,updated_at";
+  "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,has_skus,delivery_type,status,sort_order,metadata,created_at,updated_at";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 
@@ -150,6 +150,7 @@ export function normalizePublicProduct(row: Record<string, unknown>): PublicProd
         ? null
         : normalizeNumber(row.original_price),
     stock: normalizeNumber(row.stock),
+    has_skus: row.has_skus === true,
     delivery_type: row.delivery_type ? String(row.delivery_type) : "manual",
     status: row.status ? String(row.status) : "draft",
     sort_order: normalizeNumber(row.sort_order),

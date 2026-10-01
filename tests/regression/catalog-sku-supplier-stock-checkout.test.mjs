@@ -60,11 +60,22 @@ test("checkout prioritizes database SKU above email and disables unavailable var
   const selector = checkout.indexOf("<SkuSelector");
   const email = checkout.indexOf("联系邮箱", selector);
   assert.ok(selector > 0 && selector < email);
-  assert.match(checkout, /mergeCheckoutSkuOptions\(databaseSkuOptions/);
+  assert.match(checkout, /mergeCheckoutSkuOptions\(\s*databaseSkuOptions/);
+  assert.match(checkout, /productHasSkus: productRow\?\.has_skus === true/);
   assert.match(checkout, /isCompatibilityPlaceholder/);
   assert.match(checkout, /sku\.status !== "active" \|\| Number\(sku\.stock \?\? 0\) <= 0/);
   assert.match(checkout, /sku_id: selectedDatabaseSkuId/);
   assert.match(checkout, /unitPrice = product \? \(hasSku \? selectedSku\?\.rmb/);
+});
+
+test("public catalog preserves the has_skus migration boundary without exposing draft SKUs", () => {
+  const detail = file("app/api/catalog/products/[identifier]/route.ts");
+  const list = file("app/api/catalog/products/route.ts");
+  assert.match(detail, /stock,has_skus,delivery_type/);
+  assert.match(detail, /\.in\("status", VISIBLE_PRODUCT_STATUSES\)/);
+  assert.match(list, /stock,has_skus,status,delivery_type/);
+  assert.match(list, /derivePublicCatalogSkuSummary\(product, activeSkus\)/);
+  assert.match(list, /\.in\("status", SKU_STATUSES\)/);
 });
 
 test("legacy balance summary is removed and insufficient balance uses retained-order dialog", () => {
