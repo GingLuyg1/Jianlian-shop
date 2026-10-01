@@ -150,7 +150,7 @@ test("Admin diagnostics expose legacy and supplier readiness without mutations",
   }], { ready: true, issues: [] });
   assert.equal(diagnostics.legacy_db_sku_missing, true);
   assert.equal(diagnostics.legacy_missing_codes.length, 9);
-  assert.equal(diagnostics.supplier_unbound_count, 0);
+  assert.equal(diagnostics.supplier_unbound_count, 1);
   assert.equal(diagnostics.supplier_stale_count, 1);
   assert.equal(diagnostics.supplier_problem_count, 1);
 

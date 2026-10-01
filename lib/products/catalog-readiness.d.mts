@@ -14,6 +14,10 @@ export type CatalogSkuDiagnosticRow = {
   supplier_stock_last_success_at: unknown;
   supplier_stock_sync_attempted_at: unknown;
   supplier_stock_stale: boolean;
+  inventory_state: unknown;
+  local_available_count: number;
+  activation_readiness: import("./sku-activation-readiness.mjs").SkuActivationReadiness;
+  parent_supplier_binding_ignored: boolean;
 };
 export type CatalogSkuDiagnostics = {
   schema_ready: boolean;
@@ -25,6 +29,7 @@ export type CatalogSkuDiagnostics = {
   supplier_stale_count: number;
   supplier_problem_count: number;
   supplier_rows: CatalogSkuDiagnosticRow[];
+  summary: ReturnType<typeof import("./sku-activation-readiness.mjs").summarizeSkuReadiness>;
 };
 export function inspectCatalogSkuSchema(service: any): Promise<CatalogSchemaReadiness>;
-export function buildCatalogSkuDiagnostics(product: Record<string, unknown> | null, skus: Array<Record<string, unknown>>, schemaReadiness: CatalogSchemaReadiness): CatalogSkuDiagnostics;
+export function buildCatalogSkuDiagnostics(product: Record<string, unknown> | null, skus: Array<Record<string, unknown>>, schemaReadiness: CatalogSchemaReadiness, activationReadinessBySku?: Record<string, import("./sku-activation-readiness.mjs").SkuActivationReadiness>): CatalogSkuDiagnostics;
