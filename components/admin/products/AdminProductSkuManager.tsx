@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { deriveSkuProductSummary, ensureTrailingEmptySkuRow, isSkuDraftEmpty, validateSkuDraft } from "@/lib/products/sku-editor.mjs";
-import { createProductSku, deleteProductSku, listProductSkus, updateProductSku, ProductSkuWriteError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuPayload, type ProductStatus } from "@/lib/supabase/admin-catalog";
+import { createProductSku, deleteProductSku, getProductSkuWorkspace, listProductSkus, updateProductSku, ProductSkuWriteError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuPayload, type ProductStatus } from "@/lib/supabase/admin-catalog";
+import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
 
 type Draft = { sku_title: string; sku_code: string; price: string; stock: string; original_price: string; image_url: string; sort_order: string; status: ProductStatus; delivery_type: DeliveryType | ""; touched?: boolean };
 type EditorRow = { key: string; sku?: AdminProductSku; draft: Draft };
@@ -18,13 +19,12 @@ const emptyRow = (): EditorRow => ({ key: crypto.randomUUID(), draft: emptyDraft
 const toDraft = (sku: AdminProductSku): Draft => ({ sku_title: sku.sku_title ?? "", sku_code: sku.sku_code ?? "", price: String(sku.price), stock: String(sku.stock), original_price: sku.original_price == null ? "" : String(sku.original_price), image_url: sku.image_url ?? "", sort_order: String(sku.sort_order), status: sku.status, delivery_type: sku.delivery_type ?? "" });
 const payload = (draft: Draft): ProductSkuPayload => ({ sku_title: draft.sku_title.trim(), sku_code: draft.sku_code.trim(), price: Number(draft.price), stock: Number(draft.stock), original_price: draft.original_price === "" ? null : Number(draft.original_price), image_url: draft.image_url.trim() || null, sort_order: Number(draft.sort_order), status: draft.status, delivery_type: draft.delivery_type || null });
 
-const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(function AdminProductSkuManager({ product, refreshKey = 0, defaults, onSummary, onSupplierBinding }, ref) {
+const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(function AdminProductSkuManager({ product, refreshKey = 0, onSummary, onSupplierBinding }, ref) {
   const [rows, setRows] = useState<EditorRow[]>([]);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
-  const defaultsRef = useRef(defaults);
-  defaultsRef.current = defaults;
   const [errors, setErrors] = useState<Record<string, Record<string, string>>>({});
+  const [diagnostics, setDiagnostics] = useState<CatalogSkuDiagnostics | null>(null);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -36,10 +36,12 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   const load = useCallback(async () => {
     setLoading(true); setLoadError("");
     try {
-      const skus = productId ? await listProductSkus(productId) : [];
+      const workspace = productId ? await getProductSkuWorkspace(productId) : { skus: [], diagnostics: null };
+      const skus = workspace.skus;
+      setDiagnostics(workspace.diagnostics);
       setRows((current) => {
         if (!skus.length && !current.some((row) => row.sku)) {
-          return current.length ? current : [{ key: "legacy", draft: { ...emptyDraft(), sku_title: "默认规格", sku_code: "DEFAULT", ...defaultsRef.current } }, emptyRow()];
+          return ensureTrailingEmptySkuRow(current.filter((row) => row.key !== "legacy"), emptyRow);
         }
         const persisted = skus.map((sku) => {
           const previous = current.find((row) => row.sku?.id === sku.id);
@@ -59,12 +61,6 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     void load();
   }, [load, productId]);
   useEffect(() => { if (refreshKey) void load(); }, [load, refreshKey]);
-  useEffect(() => {
-    // A fresher product read may arrive after the legacy row was first seeded.
-    // Never replace user edits with that background read.
-    setRows((current) => current.map((row) => row.key === "legacy" && !row.sku && !row.draft.touched
-      ? { ...row, draft: { ...row.draft, ...defaultsRef.current } } : row));
-  }, [defaults.price, defaults.original_price, defaults.stock, defaults.delivery_type, defaults.status]);
 
   function validate() {
     if (loading || loadError || flight.current) { toast.warning("请等待 SKU 读取完成后再保存"); return false; }
@@ -121,6 +117,15 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   return <div className="min-w-0 space-y-2">
     <div className="flex justify-end"><Button type="button" size="sm" variant="ghost" disabled={loading || busy} onClick={() => void load()}><RefreshCw className="mr-1 h-3.5 w-3.5" />刷新</Button></div>
     {loadError ? <p role="alert" className="text-sm text-red-600">{loadError}</p> : null}
+    {diagnostics && (!diagnostics.schema_ready || diagnostics.legacy_expected_count > 0 || diagnostics.supplier_rows.some((row) => row.supplier_expected)) ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+      <div className="font-semibold">Catalog / SKU readiness</div>
+      {!diagnostics.schema_ready ? <div>SKU schema 未就绪；所有 SKU 写入会 fail closed，需先执行已审核 migration。</div> : null}
+      {diagnostics.legacy_db_sku_missing ? <div>Legacy SKU 尚未完整写入数据库：{diagnostics.legacy_missing_codes.join("、")}</div> : null}
+      {diagnostics.legacy_expected_count > 0 && !diagnostics.legacy_db_sku_missing ? <div>Legacy SKU 已完整迁移到数据库。</div> : null}
+      {diagnostics.supplier_unbound_count > 0 ? <div>{diagnostics.supplier_unbound_count} 个 SKU 尚未绑定 exact supplier SKU。</div> : null}
+      {diagnostics.supplier_problem_count > 0 ? <div>{diagnostics.supplier_problem_count} 个 SKU 的 supplier stock 为 stale / partial / error；网站保留 last-known-good stock。</div> : null}
+      {diagnostics.supplier_rows.map((row) => <div key={row.sku_id} className="font-mono">{row.sku_code ?? row.sku_id}: mapping={String(row.supplier_product_id ?? "-")}/{String(row.supplier_sku ?? "-")} website={row.website_stock} supplier={String(row.supplier_stock_snapshot ?? "-")} status={String(row.supplier_stock_sync_status ?? "-")} last={String(row.supplier_stock_last_success_at ?? "-")}</div>)}
+    </div> : null}
     {loading ? <div className="flex items-center gap-2 py-4 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />正在读取 SKU</div> : <div className="max-w-full overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full min-w-[850px] table-fixed text-left text-xs">
         <thead className="sticky top-0 bg-slate-50 text-slate-600"><tr>{["名称", "Code", "价格", "库存", "交付方式", "状态", "绑定供货商"].map((label) => <th key={label} className="px-2 py-2 text-left font-medium last:w-[190px]">{label}</th>)}</tr></thead>

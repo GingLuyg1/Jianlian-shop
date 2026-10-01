@@ -91,8 +91,9 @@ test("legacy SKU backfill is dry-run by default, idempotent and never invents st
   assert.equal(second.skip.length, 10);
   assert.equal(second.conflict.length, 0);
   const script = file("scripts/backfill-legacy-product-skus.mjs");
-  assert.match(script, /process\.argv\.includes\("--apply"\)/);
-  assert.match(script, /if \(!apply\) process\.exit\(0\)/);
+  assert.match(script, /process\.argv\.includes\("--execute"\)/);
+  assert.match(script, /if \(!execute\) process\.exit\(0\)/);
+  assert.match(script, /--apply is not supported/);
 });
 
 test("Admin category product table uses semantic column alignment and stable widths", () => {

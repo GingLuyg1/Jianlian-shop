@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { auditCatalogAction, requireCatalogAdmin } from "../../../../catalog/_shared";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { syncSkuProductSummary } from "@/lib/products/sku-summary";
+import { inspectCatalogSkuSchema } from "@/lib/products/catalog-readiness.mjs";
 
 const SKU_FIELDS = "id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,created_at,updated_at";
 const ALLOWED = new Set(["sku_code", "sku_title", "price", "original_price", "stock", "status", "delivery_type", "image_url", "sort_order"]);
@@ -17,6 +18,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
   const service = getSupabaseServiceRoleClient();
+  if (service) {
+    const schemaReadiness = await inspectCatalogSkuSchema(service);
+    if (!schemaReadiness.ready) return json({ error: "SKU schema 尚未就绪，写入已安全阻止", code: "CATALOG_SKU_SCHEMA_NOT_READY", diagnostics: schemaReadiness, requestId }, 503);
+  }
   if (!service) return json({ error: "SKU 保存权限不可用", requestId }, 503);
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return json({ error: "SKU 参数无效", requestId }, 400);
@@ -49,6 +54,10 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
   const service = getSupabaseServiceRoleClient();
+  if (service) {
+    const schemaReadiness = await inspectCatalogSkuSchema(service);
+    if (!schemaReadiness.ready) return json({ error: "SKU schema 尚未就绪，删除已安全阻止", code: "CATALOG_SKU_SCHEMA_NOT_READY", diagnostics: schemaReadiness, requestId }, 503);
+  }
   if (!service) return json({ error: "SKU 删除权限不可用", requestId }, 503);
   const { data: before } = await service.from("product_skus").select(SKU_FIELDS).eq("id", params.skuId).eq("product_id", params.id).maybeSingle();
   if (!before) return json({ error: "SKU 不存在", requestId }, 404);
