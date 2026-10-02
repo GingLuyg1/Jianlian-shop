@@ -5,6 +5,7 @@ import { auditCatalogAction, requireCatalogAdmin } from "../../../../catalog/_sh
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { syncSkuProductSummary } from "@/lib/products/sku-summary";
 import { inspectCatalogSkuSchema } from "@/lib/products/catalog-readiness.mjs";
+import { formatSkuActivationReasons, isAutomaticSkuActivation, readSkuActivationReadiness } from "@/lib/products/sku-activation-readiness.mjs";
 
 const SKU_FIELDS = "id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,created_at,updated_at";
 const ALLOWED = new Set(["sku_code", "sku_title", "price", "original_price", "stock", "status", "delivery_type", "image_url", "sort_order"]);
@@ -39,8 +40,17 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   for (const key of ["stock", "sort_order"]) {
     if (payload[key] !== undefined) { const value = Number(payload[key]); if (!Number.isSafeInteger(value) || value < 0) return json({ error: `SKU ${key} 无效`, requestId }, 400); payload[key] = value; }
   }
-  const { data: before } = await service.from("product_skus").select(SKU_FIELDS).eq("id", params.skuId).eq("product_id", params.id).maybeSingle();
+  const [{ data: before }, { data: product, error: productError }] = await Promise.all([
+    service.from("product_skus").select(SKU_FIELDS).eq("id", params.skuId).eq("product_id", params.id).maybeSingle(),
+    service.from("products").select("id,delivery_type").eq("id", params.id).maybeSingle(),
+  ]);
   if (!before) return json({ error: "SKU 不存在", requestId }, 404);
+  if (productError || !product) return json({ error: "商品不存在", code: "PRODUCT_NOT_FOUND", requestId }, 404);
+  const nextSku = { ...before, ...payload };
+  if (isAutomaticSkuActivation(before.status, nextSku.status, product, nextSku)) {
+    const readiness = await readSkuActivationReadiness(service, product, nextSku);
+    if (!readiness.ready) return json({ error: `SKU 激活条件未满足：${formatSkuActivationReasons(readiness.reasons)}`, code: "SKU_ACTIVATION_NOT_READY", reasons: readiness.reasons, readiness, requestId }, readiness.reasons.includes("READINESS_CHECK_FAILED") ? 503 : 409);
+  }
   const { data, error } = await service.from("product_skus").update(payload).eq("id", params.skuId).eq("product_id", params.id).select(SKU_FIELDS).single();
   if (error || !data) return json({ error: error?.code === "23505" ? "SKU Code 已存在" : "SKU 保存失败", requestId }, error?.code === "23505" ? 409 : 500);
   await auditCatalogAction({ request, user: admin.user, action: "update_product_sku", module: "products", targetType: "product_sku", targetId: params.skuId, targetLabel: String(data.sku_title ?? ""), result: "success", beforeSummary: before, afterSummary: data });

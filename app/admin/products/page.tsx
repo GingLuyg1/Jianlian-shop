@@ -61,6 +61,7 @@ import {
   type ProductStatus,
 } from "@/lib/supabase/admin-catalog";
 import { cn } from "@/lib/utils";
+import { getSupplierStockEvidence } from "@/lib/products/sku-activation-readiness.mjs";
 
 const DEFAULT_PRODUCT_PAGE_SIZE = 20;
 const PRODUCT_PAGE_SIZE_OPTIONS = [20, 50, 100];
@@ -1187,7 +1188,13 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
     : "";
   if (!supplier) return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500">未绑定</Badge>;
   const definition = getSupplierUiDefinition(supplier);
-  return <div className="flex flex-col items-center gap-0.5"><Badge variant="outline" className={definition ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}>{definition?.name ?? supplier}</Badge>{supplierProductId ? <span className="font-mono text-[10px] text-slate-500">#{supplierProductId}</span> : null}</div>;
+  const evidence = getSupplierStockEvidence(metadata);
+  const stockLabel = evidence.ready
+    ? null
+    : evidence.sync_status && evidence.sync_status !== "synced"
+      ? "供应商库存：需复核"
+      : "供应商库存：未同步";
+  return <div className="flex flex-col items-center gap-0.5"><Badge variant="outline" className={definition ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}>{definition?.name ?? supplier}</Badge>{supplierProductId ? <span className="font-mono text-[10px] text-slate-500">#{supplierProductId}</span> : null}{stockLabel ? <span className="text-[10px] font-medium text-amber-700">{stockLabel}</span> : null}</div>;
 }
 
 function ProductTable({
@@ -1298,6 +1305,7 @@ function ProductTable({
                       >
                         {product.name}
                       </div>
+                      {product.has_skus ? <Badge variant="outline" className="mt-1 h-5 border-blue-200 bg-blue-50 px-1.5 text-[10px] text-blue-700">多 SKU</Badge> : null}
                       {product.short_description && (
                         <div className="mt-0.5 truncate text-xs text-slate-500" title={product.short_description}>
                           {product.short_description}
@@ -1323,7 +1331,7 @@ function ProductTable({
                   ¥{product.price.toFixed(2)}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS, product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600")}>
-                  <div>{product.stock}</div>
+                  <div>{product.has_skus ? `SKU 汇总库存 ${product.stock}` : `库存 ${product.stock}`}</div>
                   {product.metadata?.supplier_stock_sync_status === "synced" ? <div className="mt-0.5 text-[10px] font-normal text-blue-600" title={typeof product.metadata.supplier_stock_synced_at === "string" ? `最后同步：${formatAdminDate(product.metadata.supplier_stock_synced_at)}` : "供应商同步"}>供应商同步</div> : null}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>
@@ -1454,9 +1462,10 @@ function ProductFormDialog({
       onClose={onClose}
     >
       {form && (
-        <form onSubmit={(event) => {
+        <form onSubmit={async (event) => {
           event.preventDefault();
           if (!skuManagerRef.current?.validate()) return;
+          if (!await skuManagerRef.current.prepareSave()) return;
           onSubmit(event, (savedProduct) => skuManagerRef.current!.saveAll(savedProduct));
         }} className="flex max-h-[calc(100vh-48px)] flex-col">
           {submitError && (
