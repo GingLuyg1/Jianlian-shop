@@ -2,7 +2,7 @@
 
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -62,6 +62,16 @@ import {
 } from "@/lib/supabase/admin-catalog";
 import { cn } from "@/lib/utils";
 import { getSupplierStockEvidence } from "@/lib/products/sku-activation-readiness.mjs";
+import {
+  parseAdminCatalogOperationFilters,
+  serializeAdminCatalogFilterState,
+  type AdminCatalogInventoryVerification,
+  type AdminCatalogProductType,
+  type AdminCatalogSkuStatus,
+  type AdminCatalogStockLevel,
+  type AdminCatalogSupplierBinding,
+  type AdminCatalogSupplierStock,
+} from "@/lib/products/admin-catalog-operations.mjs";
 
 const DEFAULT_PRODUCT_PAGE_SIZE = 20;
 const PRODUCT_PAGE_SIZE_OPTIONS = [20, 50, 100];
@@ -231,20 +241,34 @@ function CategoryTreeSkeleton() {
 
 export default function AdminProductsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const initialFilters = useRef(parseAdminCatalogOperationFilters(searchParams).filters).current;
   const activeView = searchParams.get("view") === "categories" ? "categories" : "products";
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [productCount, setProductCount] = useState(0);
-  const [productSearch, setProductSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [primaryFilter, setPrimaryFilter] = useState("all");
-  const [secondaryFilter, setSecondaryFilter] = useState("all");
-  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatus | "all">("all");
-  const [deliveryFilter, setDeliveryFilter] = useState<DeliveryType | "all">("all");
-  const [stockFilter, setStockFilter] = useState<"all" | "low">(searchParams.get("stockLevel") === "low" ? "low" : "all");
-  const [sortBy, setSortBy] = useState<ProductSortBy>("updated_at");
-  const [productPageSize, setProductPageSize] = useState(DEFAULT_PRODUCT_PAGE_SIZE);
-  const [productPage, setProductPage] = useState(1);
+  const [productSearch, setProductSearch] = useState(initialFilters.search);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters.search);
+  const [primaryFilter, setPrimaryFilter] = useState(searchParams.get("primaryCategory") || "all");
+  const [secondaryFilter, setSecondaryFilter] = useState(searchParams.get("secondaryCategory") || "all");
+  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatus | "all">(initialFilters.productStatus);
+  const [deliveryFilter, setDeliveryFilter] = useState<DeliveryType | "all">(initialFilters.deliveryType);
+  const [productTypeFilter, setProductTypeFilter] = useState<AdminCatalogProductType>(initialFilters.productType);
+  const [skuStatusFilter, setSkuStatusFilter] = useState<AdminCatalogSkuStatus>(initialFilters.skuStatus);
+  const [stockFilter, setStockFilter] = useState<AdminCatalogStockLevel>(initialFilters.stockLevel);
+  const [supplierBindingFilter, setSupplierBindingFilter] = useState<AdminCatalogSupplierBinding>(initialFilters.supplierBinding);
+  const [supplierStockFilter, setSupplierStockFilter] = useState<AdminCatalogSupplierStock>(initialFilters.supplierStock);
+  const [inventoryVerificationFilter, setInventoryVerificationFilter] = useState<AdminCatalogInventoryVerification>(initialFilters.inventoryVerification);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(
+    initialFilters.skuStatus !== "any"
+      || initialFilters.supplierBinding !== "all"
+      || initialFilters.supplierStock !== "all"
+      || initialFilters.inventoryVerification !== "all"
+  );
+  const [sortBy, setSortBy] = useState<ProductSortBy>(initialFilters.sortBy);
+  const [productPageSize, setProductPageSize] = useState(initialFilters.pageSize);
+  const [productPage, setProductPage] = useState(initialFilters.page);
   const [isProductLoading, setIsProductLoading] = useState(false);
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -296,8 +320,26 @@ export default function AdminProductsPage() {
     secondaryFilter !== "all" ||
     productStatusFilter !== "all" ||
     deliveryFilter !== "all" ||
-    stockFilter !== "all"
+    productTypeFilter !== "all" ||
+    skuStatusFilter !== "any" ||
+    stockFilter !== "all" ||
+    supplierBindingFilter !== "all" ||
+    supplierStockFilter !== "all" ||
+    inventoryVerificationFilter !== "all"
   );
+  const activeProductFilters = useMemo(() => [
+    debouncedSearch ? `搜索：${debouncedSearch}` : "",
+    primaryFilter !== "all" ? "一级分类" : "",
+    secondaryFilter !== "all" ? "二级分类" : "",
+    productTypeFilter === "multi_sku" ? "多 SKU" : productTypeFilter === "single_product" ? "普通商品" : "",
+    productStatusFilter !== "all" ? productStatusLabel[productStatusFilter] : "",
+    deliveryFilter !== "all" ? deliveryLabel[deliveryFilter] : "",
+    skuStatusFilter !== "any" ? ({ has_active_sku: "存在 Active SKU", all_draft: "SKU 全为 Draft", has_sold_out_sku: "存在售罄 SKU", no_active_sku: "无 Active SKU" } as const)[skuStatusFilter] : "",
+    stockFilter === "zero_stock" ? "零库存" : stockFilter === "low_stock" ? "低库存" : stockFilter === "in_stock" ? "有库存" : "",
+    supplierBindingFilter === "supplier_bound" ? "供应商已绑定" : supplierBindingFilter === "supplier_unbound" ? "存在未绑定" : "",
+    supplierStockFilter !== "all" ? `供应商库存：${({ unknown: "未同步", fresh: "正常", stale: "陈旧", error: "错误" } as const)[supplierStockFilter]}` : "",
+    inventoryVerificationFilter === "requires_verification" ? "待验证" : inventoryVerificationFilter === "no_verification_flag" ? "无待验证标记" : "",
+  ].filter(Boolean), [debouncedSearch, deliveryFilter, inventoryVerificationFilter, primaryFilter, productStatusFilter, productTypeFilter, secondaryFilter, skuStatusFilter, stockFilter, supplierBindingFilter, supplierStockFilter]);
   const isRefreshing = isProductLoading || isCategoryLoading;
   const productDirty = useMemo(
     () => (productForm ? skuEditsDirty || isProductDirty(productForm, productInitialForm) : false),
@@ -332,7 +374,12 @@ export default function AdminProductsPage() {
         categoryIds: productCategoryIds && productCategoryIds.length > 1 ? productCategoryIds : undefined,
         status: productStatusFilter,
         deliveryType: deliveryFilter,
+        productType: productTypeFilter,
+        skuStatus: skuStatusFilter,
         stockLevel: stockFilter,
+        supplierBinding: supplierBindingFilter,
+        supplierStock: supplierStockFilter,
+        inventoryVerification: inventoryVerificationFilter,
         sortBy,
         page: productPage,
         pageSize: productPageSize,
@@ -346,7 +393,7 @@ export default function AdminProductsPage() {
     } finally {
       if (productListRequestRef.current === requestSequence) setIsProductLoading(false);
     }
-  }, [debouncedSearch, deliveryFilter, productCategoryIds, productPage, productPageSize, productStatusFilter, sortBy, stockFilter]);
+  }, [debouncedSearch, deliveryFilter, inventoryVerificationFilter, productCategoryIds, productPage, productPageSize, productStatusFilter, productTypeFilter, skuStatusFilter, sortBy, stockFilter, supplierBindingFilter, supplierStockFilter]);
 
   useEffect(() => {
     loadCategories();
@@ -357,12 +404,37 @@ export default function AdminProductsPage() {
   }, [loadProducts]);
 
   useEffect(() => {
+    if (productSearch === debouncedSearch) return;
     const timer = window.setTimeout(() => {
       setDebouncedSearch(productSearch);
       setProductPage(1);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [productSearch]);
+  }, [debouncedSearch, productSearch]);
+
+  useEffect(() => {
+    const params = serializeAdminCatalogFilterState({
+      view: activeView,
+      search: debouncedSearch,
+      primaryCategory: primaryFilter,
+      secondaryCategory: secondaryFilter,
+      productType: productTypeFilter,
+      productStatus: productStatusFilter,
+      deliveryType: deliveryFilter,
+      skuStatus: skuStatusFilter,
+      stockLevel: stockFilter,
+      supplierBinding: supplierBindingFilter,
+      supplierStock: supplierStockFilter,
+      inventoryVerification: inventoryVerificationFilter,
+      sortBy,
+      page: productPage,
+      pageSize: productPageSize,
+    });
+    const next = params.toString();
+    if (next !== searchParams.toString()) {
+      router.replace(`${pathname}${next ? `?${next}` : ""}`, { scroll: false });
+    }
+  }, [activeView, debouncedSearch, deliveryFilter, inventoryVerificationFilter, pathname, primaryFilter, productPage, productPageSize, productStatusFilter, productTypeFilter, router, searchParams, secondaryFilter, skuStatusFilter, sortBy, stockFilter, supplierBindingFilter, supplierStockFilter]);
 
   useEffect(() => {
     const shouldBlock = productDirty || categoryDirty || isSaving;
@@ -825,7 +897,12 @@ export default function AdminProductsPage() {
     setSecondaryFilter("all");
     setProductStatusFilter("all");
     setDeliveryFilter("all");
+    setProductTypeFilter("all");
+    setSkuStatusFilter("any");
     setStockFilter("all");
+    setSupplierBindingFilter("all");
+    setSupplierStockFilter("all");
+    setInventoryVerificationFilter("all");
     setSortBy("updated_at");
     setProductPageSize(DEFAULT_PRODUCT_PAGE_SIZE);
     setProductPage(1);
@@ -901,7 +978,7 @@ export default function AdminProductsPage() {
               </div>
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pb-0 pt-0">
-              <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(240px,1fr)_170px_170px_145px_165px_145px_145px_80px]">
+              <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
@@ -947,6 +1024,17 @@ export default function AdminProductsPage() {
                   ))}
                 </NativeSelect>
                 <NativeSelect
+                  value={productTypeFilter}
+                  onChange={(value) => {
+                    setProductTypeFilter(value as AdminCatalogProductType);
+                    setProductPage(1);
+                  }}
+                >
+                  <option value="all">全部商品类型</option>
+                  <option value="single_product">普通商品</option>
+                  <option value="multi_sku">多 SKU 商品</option>
+                </NativeSelect>
+                <NativeSelect
                   value={productStatusFilter}
                   onChange={(value) => {
                     setProductStatusFilter(value as ProductStatus | "all");
@@ -987,17 +1075,88 @@ export default function AdminProductsPage() {
                 <NativeSelect
                   value={stockFilter}
                   onChange={(value) => {
-                    setStockFilter(value as "all" | "low");
+                    setStockFilter(value as AdminCatalogStockLevel);
                     setProductPage(1);
                   }}
                 >
                   <option value="all">全部库存水平</option>
-                  <option value="low">低库存（1–5）</option>
+                  <option value="zero_stock">零库存</option>
+                  <option value="low_stock">低库存（1–5）</option>
+                  <option value="in_stock">有库存</option>
                 </NativeSelect>
                 <Button variant="outline" onClick={resetProductFilters}>
                   重置
                 </Button>
               </div>
+
+              <details
+                className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2"
+                open={moreFiltersOpen}
+                onToggle={(event) => setMoreFiltersOpen(event.currentTarget.open)}
+              >
+                <summary className="cursor-pointer select-none text-sm font-medium text-slate-700">
+                  更多运营筛选
+                </summary>
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <NativeSelect
+                    value={skuStatusFilter}
+                    onChange={(value) => {
+                      setSkuStatusFilter(value as AdminCatalogSkuStatus);
+                      setProductPage(1);
+                    }}
+                  >
+                    <option value="any">全部 SKU 状态</option>
+                    <option value="has_active_sku">存在 Active SKU</option>
+                    <option value="all_draft">SKU 全为 Draft</option>
+                    <option value="has_sold_out_sku">存在售罄 SKU</option>
+                    <option value="no_active_sku">无 Active SKU</option>
+                  </NativeSelect>
+                  <NativeSelect
+                    value={supplierBindingFilter}
+                    onChange={(value) => {
+                      setSupplierBindingFilter(value as AdminCatalogSupplierBinding);
+                      setProductPage(1);
+                    }}
+                  >
+                    <option value="all">全部供应商绑定</option>
+                    <option value="supplier_bound">供应商已完整绑定</option>
+                    <option value="supplier_unbound">存在未绑定 SKU/商品</option>
+                  </NativeSelect>
+                  <NativeSelect
+                    value={supplierStockFilter}
+                    onChange={(value) => {
+                      setSupplierStockFilter(value as AdminCatalogSupplierStock);
+                      setProductPage(1);
+                    }}
+                  >
+                    <option value="all">全部供应商库存状态</option>
+                    <option value="unknown">未同步 / 未知</option>
+                    <option value="fresh">同步正常</option>
+                    <option value="stale">库存陈旧</option>
+                    <option value="error">同步错误</option>
+                  </NativeSelect>
+                  <NativeSelect
+                    value={inventoryVerificationFilter}
+                    onChange={(value) => {
+                      setInventoryVerificationFilter(value as AdminCatalogInventoryVerification);
+                      setProductPage(1);
+                    }}
+                  >
+                    <option value="all">全部库存验证状态</option>
+                    <option value="requires_verification">待验证</option>
+                    <option value="no_verification_flag">无待验证标记</option>
+                  </NativeSelect>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">未绑定供应商不等于无法履约；商品仍可能使用 SKU 级本地数字库存。</p>
+              </details>
+
+              {activeProductFilters.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                  <span className="font-medium">已启用 {activeProductFilters.length} 个筛选</span>
+                  {activeProductFilters.map((label) => <Badge key={label} variant="outline" className="bg-white">{label}</Badge>)}
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={resetProductFilters}>清除筛选</Button>
+                </div>
+              ) : null}
 
               {isProductLoading ? (
                 <ProductTableSkeleton />
@@ -1178,6 +1337,28 @@ function formatAdminDate(value: string | null | undefined) {
 }
 
 function SupplierBindingBadge({ product }: { product: AdminProduct }) {
+  const summary = product.operational_summary;
+  if (product.has_skus && summary) {
+    const stockIssue = summary.supplier_stock_error > 0
+      ? `${summary.supplier_stock_error} 同步错误`
+      : summary.supplier_stock_stale > 0
+        ? `${summary.supplier_stock_stale} 库存陈旧`
+        : summary.supplier_stock_unknown > 0
+          ? `${summary.supplier_stock_unknown} 未同步`
+          : "";
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <Badge
+          variant="outline"
+          className={summary.supplier_unbound > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-blue-200 bg-blue-50 text-blue-700"}
+          title={summary.supplier_unbound > 0 ? "未绑定供应商不等于无法履约；SKU 仍可能使用本地数字库存。" : "所有 SKU 均具备完整供应商绑定"}
+        >
+          {summary.supplier_unbound > 0 ? `${summary.supplier_unbound} SKU 未绑定` : "SKU 全部已绑定"}
+        </Badge>
+        {stockIssue ? <span className="text-[10px] font-medium text-amber-700">{stockIssue}</span> : null}
+      </div>
+    );
+  }
   const metadata = product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata)
     ? product.metadata
     : {};
@@ -1195,6 +1376,21 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
       ? "供应商库存：需复核"
       : "供应商库存：未同步";
   return <div className="flex flex-col items-center gap-0.5"><Badge variant="outline" className={definition ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}>{definition?.name ?? supplier}</Badge>{supplierProductId ? <span className="font-mono text-[10px] text-slate-500">#{supplierProductId}</span> : null}{stockLabel ? <span className="text-[10px] font-medium text-amber-700">{stockLabel}</span> : null}</div>;
+}
+
+function ProductOperationsSummary({ product }: { product: AdminProduct }) {
+  const summary = product.operational_summary;
+  if (!product.has_skus || !summary) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-600">
+      <span>{summary.sku_total} SKU</span>
+      <span>· {summary.sku_active} Active</span>
+      <span>· {summary.sku_draft} Draft</span>
+      <span>· Active 库存 {summary.effective_stock}</span>
+      {summary.requires_verification > 0 ? <Badge variant="outline" className="h-5 border-orange-200 bg-orange-50 px-1.5 text-[10px] text-orange-700">{summary.requires_verification} 待验证</Badge> : null}
+      {summary.supplier_unbound > 0 ? <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">{summary.supplier_unbound} 未绑定</Badge> : null}
+    </div>
+  );
 }
 
 function ProductTable({
@@ -1269,9 +1465,12 @@ function ProductTable({
               const categoryPath = getCategoryPath(product.category_id, categoryMap);
               const category = product.category_id ? categoryMap.get(product.category_id) : null;
               const hasCategoryIssue = Boolean(!category || hasChildren(categories, product.category_id ?? ""));
+              const effectiveStock = product.has_skus
+                ? product.operational_summary?.effective_stock ?? 0
+                : product.stock;
 
               return (
-              <TableRow key={product.id} className={cn("h-14 hover:bg-slate-50/70", hasCategoryIssue && "bg-orange-50/40")}>
+              <TableRow key={product.id} className={cn("min-h-14 hover:bg-slate-50/70", hasCategoryIssue && "bg-orange-50/40")}>
                 <TableCell className="min-w-0 px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div className="group relative h-9 w-9 shrink-0 overflow-visible">
@@ -1306,6 +1505,7 @@ function ProductTable({
                         {product.name}
                       </div>
                       {product.has_skus ? <Badge variant="outline" className="mt-1 h-5 border-blue-200 bg-blue-50 px-1.5 text-[10px] text-blue-700">多 SKU</Badge> : null}
+                      <ProductOperationsSummary product={product} />
                       {product.short_description && (
                         <div className="mt-0.5 truncate text-xs text-slate-500" title={product.short_description}>
                           {product.short_description}
@@ -1330,8 +1530,8 @@ function ProductTable({
                 <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
                   ¥{product.price.toFixed(2)}
                 </TableCell>
-                <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS, product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600")}>
-                  <div>{product.has_skus ? `SKU 汇总库存 ${product.stock}` : `库存 ${product.stock}`}</div>
+                <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS, effectiveStock === 0 ? "text-red-600" : effectiveStock <= 5 ? "text-orange-600" : "text-green-600")}>
+                  <div>{product.has_skus ? `SKU 汇总库存（仅 Active） ${effectiveStock}` : `库存 ${effectiveStock}`}</div>
                   {product.metadata?.supplier_stock_sync_status === "synced" ? <div className="mt-0.5 text-[10px] font-normal text-blue-600" title={typeof product.metadata.supplier_stock_synced_at === "string" ? `最后同步：${formatAdminDate(product.metadata.supplier_stock_synced_at)}` : "供应商同步"}>供应商同步</div> : null}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>

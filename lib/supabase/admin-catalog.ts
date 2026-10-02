@@ -1,6 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
+import type {
+  AdminCatalogInventoryVerification,
+  AdminCatalogProductType,
+  AdminCatalogSkuStatus,
+  AdminCatalogStockLevel,
+  AdminCatalogSupplierBinding,
+  AdminCatalogSupplierStock,
+  AdminProductOperationalSummary,
+} from "@/lib/products/admin-catalog-operations.mjs";
 
 export type CategoryStatus = "active" | "inactive";
 export type ProductStatus = "draft" | "active" | "inactive" | "sold_out";
@@ -39,6 +48,7 @@ export type AdminProduct = {
   sort_order: number;
   has_skus?: boolean;
   metadata?: Record<string, unknown> | null;
+  operational_summary?: AdminProductOperationalSummary | null;
   updated_at: string | null;
   created_at?: string | null;
 };
@@ -69,7 +79,12 @@ export type ProductFilters = {
   categoryIds?: string[];
   status?: ProductStatus | "all";
   deliveryType?: DeliveryType | "all";
-  stockLevel?: "all" | "low";
+  productType?: AdminCatalogProductType;
+  skuStatus?: AdminCatalogSkuStatus;
+  stockLevel?: AdminCatalogStockLevel | "low";
+  supplierBinding?: AdminCatalogSupplierBinding;
+  supplierStock?: AdminCatalogSupplierStock;
+  inventoryVerification?: AdminCatalogInventoryVerification;
   sortBy?: "sort_order" | "updated_at";
   page?: number;
   pageSize?: number;
@@ -78,6 +93,7 @@ export type ProductFilters = {
 export type ProductListResult = {
   products: AdminProduct[];
   count: number;
+  queryCount: number;
 };
 
 export type ProductPayload = {
@@ -235,6 +251,23 @@ function normalizeProduct(row: Record<string, unknown>): AdminProduct {
       row.metadata && typeof row.metadata === "object"
         ? (row.metadata as Record<string, unknown>)
         : null,
+    operational_summary:
+      row.operational_summary && typeof row.operational_summary === "object"
+        ? {
+            sku_total: normalizeNumber((row.operational_summary as Record<string, unknown>).sku_total),
+            sku_active: normalizeNumber((row.operational_summary as Record<string, unknown>).sku_active),
+            sku_draft: normalizeNumber((row.operational_summary as Record<string, unknown>).sku_draft),
+            sku_sold_out: normalizeNumber((row.operational_summary as Record<string, unknown>).sku_sold_out),
+            effective_stock: normalizeNumber((row.operational_summary as Record<string, unknown>).effective_stock),
+            supplier_unbound: normalizeNumber((row.operational_summary as Record<string, unknown>).supplier_unbound),
+            supplier_bound: (row.operational_summary as Record<string, unknown>).supplier_bound === true,
+            requires_verification: normalizeNumber((row.operational_summary as Record<string, unknown>).requires_verification),
+            supplier_stock_unknown: normalizeNumber((row.operational_summary as Record<string, unknown>).supplier_stock_unknown),
+            supplier_stock_fresh: normalizeNumber((row.operational_summary as Record<string, unknown>).supplier_stock_fresh),
+            supplier_stock_stale: normalizeNumber((row.operational_summary as Record<string, unknown>).supplier_stock_stale),
+            supplier_stock_error: normalizeNumber((row.operational_summary as Record<string, unknown>).supplier_stock_error),
+          }
+        : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
     created_at: row.created_at ? String(row.created_at) : null,
   };
@@ -330,7 +363,12 @@ export async function listProducts({
   categoryIds,
   status = "all",
   deliveryType = "all",
+  productType = "all",
+  skuStatus = "any",
   stockLevel = "all",
+  supplierBinding = "all",
+  supplierStock = "all",
+  inventoryVerification = "all",
   sortBy = "sort_order",
   page = 1,
   pageSize = 10,
@@ -341,7 +379,12 @@ export async function listProducts({
   if (categoryIds && categoryIds.length > 0) params.set("categoryIds", categoryIds.join(","));
   if (status !== "all") params.set("status", status);
   if (deliveryType !== "all") params.set("deliveryType", deliveryType);
+  if (productType !== "all") params.set("type", productType);
+  if (skuStatus !== "any") params.set("skuStatus", skuStatus);
   if (stockLevel !== "all") params.set("stockLevel", stockLevel);
+  if (supplierBinding !== "all") params.set("supplierBinding", supplierBinding);
+  if (supplierStock !== "all") params.set("supplierStock", supplierStock);
+  if (inventoryVerification !== "all") params.set("inventoryVerification", inventoryVerification);
   params.set("sortBy", sortBy);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
@@ -349,13 +392,15 @@ export async function listProducts({
   const result = await adminCatalogEnvelopeRequest<{
     products?: Array<Record<string, unknown>>;
     count?: number;
-    data?: { products?: Array<Record<string, unknown>>; count?: number };
+    query_count?: number;
+    data?: { products?: Array<Record<string, unknown>>; count?: number; query_count?: number };
   }>(`/api/admin/products?${params.toString()}`);
   const products = result.products ?? result.data?.products ?? [];
   const count = Number(result.count ?? result.data?.count ?? products.length);
   return {
     products: products.map(normalizeProduct),
     count: Number.isFinite(count) ? count : 0,
+    queryCount: normalizeNumber(result.query_count ?? result.data?.query_count, 1),
   };
 }
 

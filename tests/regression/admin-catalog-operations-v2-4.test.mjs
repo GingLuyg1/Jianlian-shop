@@ -51,7 +51,8 @@ test("reorder endpoint validates exact category membership, integer order, audit
 test("product operations default to updated time and remove only original price UI", () => {
   const page = file("app/admin/products/page.tsx");
   const categories = file("app/admin/categories/page.tsx");
-  assert.match(page, /useState<ProductSortBy>\("updated_at"\)/);
+  assert.match(page, /useState<ProductSortBy>\(initialFilters\.sortBy\)/);
+  assert.match(page, /parseAdminCatalogOperationFilters\(searchParams\)/);
   assert.match(page, /setSortBy\("updated_at"\)/);
   assert.doesNotMatch(page, />原价</);
   assert.doesNotMatch(categories, /label="原价"/);

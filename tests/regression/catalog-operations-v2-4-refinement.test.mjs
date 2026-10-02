@@ -6,14 +6,15 @@ import { createHash } from "node:crypto";
 const read = (path) => readFileSync(path, "utf8");
 test("category changes select category order without resetting it on secondary filters", () => {
   const source = read("app/admin/products/page.tsx");
-  assert.match(source, /useState<ProductSortBy>\("updated_at"\)/);
+  assert.match(source, /useState<ProductSortBy>\(initialFilters\.sortBy\)/);
+  assert.match(source, /parseAdminCatalogOperationFilters\(searchParams\)/);
   assert.match(source, /setPrimaryFilter\(value\);[\s\S]*?setSortBy\(value === "all" \? "updated_at" : "sort_order"\)/);
   assert.match(source, /setSecondaryFilter\(value\);\s*setSortBy\(primaryFilter !== "all"/);
   for (const name of ["setProductStatusFilter", "setDeliveryFilter", "setStockFilter", "setProductSearch"]) {
     const handler = source.match(new RegExp(`${name}\\(value[^;]*;([\\s\\S]*?)\\}\\}`))?.[1];
     if (handler) assert.doesNotMatch(handler, /setSortBy/);
   }
-  assert.match(read("app/api/admin/catalog/products/route.ts"), /sortedQuery\.order\("id", \{ ascending: true \}\)\.range/);
+  assert.match(read("app/api/admin/catalog/products/route.ts"), /sortedQuery\s*\.order\("id", \{ ascending: true \}\)\s*\.range/);
 });
 test("table viewport hides its own horizontal scrollbar and keeps one synchronized rail", () => {
   const rail = read("components/admin/AdminSyncedHorizontalScroller.tsx");
