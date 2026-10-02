@@ -15,7 +15,18 @@ import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 import { revalidateProductCache } from "@/lib/cache/cache-tags";
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import {
+  decorateAdminCatalogProducts,
+  filterAndPaginateAdminCatalogProducts,
+  hasOperationalScanFilters,
+  parseAdminCatalogOperationFilters,
+} from "@/lib/products/admin-catalog-operations.mjs";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
+const SKU_OPERATION_FIELDS = "id,product_id,status,stock,metadata";
+const PRODUCT_SCAN_LIMIT = 5000;
+const SKU_PRODUCT_BATCH_SIZE = 200;
+const SKU_BATCH_ROW_LIMIT = 5000;
 
 function getRequestId(request: Request) {
   return request.headers.get("x-request-id") || request.headers.get("x-correlation-id") || randomUUID();
@@ -37,10 +48,26 @@ function safeSupabaseError(error: unknown) {
   };
 }
 
-function getQueryInteger(value: string | null, fallback: number, min: number, max: number) {
-  const next = Number(value);
-  if (!Number.isFinite(next)) return fallback;
-  return Math.min(max, Math.max(min, Math.trunc(next)));
+async function readOperationalSkuRows(service: SupabaseClient, productIds: string[]) {
+  if (productIds.length === 0) return { rows: [] as Array<Record<string, unknown>>, queryCount: 0 };
+  const batches: string[][] = [];
+  for (let index = 0; index < productIds.length; index += SKU_PRODUCT_BATCH_SIZE) {
+    batches.push(productIds.slice(index, index + SKU_PRODUCT_BATCH_SIZE));
+  }
+  const results = await Promise.all(batches.map((ids) => service
+    .from("product_skus")
+    .select(SKU_OPERATION_FIELDS)
+    .in("product_id", ids)
+    .range(0, SKU_BATCH_ROW_LIMIT - 1)));
+  const rows: Array<Record<string, unknown>> = [];
+  for (const result of results) {
+    if (result.error) return { rows: [], queryCount: batches.length, error: result.error };
+    if ((result.data ?? []).length >= SKU_BATCH_ROW_LIMIT) {
+      return { rows: [], queryCount: batches.length, overflow: true };
+    }
+    rows.push(...((result.data ?? []) as Array<Record<string, unknown>>));
+  }
+  return { rows, queryCount: batches.length };
 }
 
 export async function GET(request: Request) {
@@ -50,25 +77,31 @@ export async function GET(request: Request) {
   const service = getSupabaseServiceRoleClient() ?? admin.supabase;
 
   const url = new URL(request.url);
-  const search = (url.searchParams.get("search") ?? "").trim();
+  const parsedFilters = parseAdminCatalogOperationFilters(url.searchParams);
+  if (!parsedFilters.ok) {
+    return productFailureResponse(
+      "PRODUCT_INVALID_FILTER",
+      `未知的商品筛选条件：${parsedFilters.invalid.join(", ")}`,
+      requestId,
+      400
+    );
+  }
+  const filters = parsedFilters.filters;
+  const search = filters.search;
   const categoryId = (url.searchParams.get("categoryId") ?? "all").trim();
   const categoryIds = (url.searchParams.get("categoryIds") ?? "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, 100);
-  const status = (url.searchParams.get("status") ?? "all").trim();
-  const deliveryType = (url.searchParams.get("deliveryType") ?? "all").trim();
-  const stockLevel = (url.searchParams.get("stockLevel") ?? "all").trim();
-  const sortBy = (url.searchParams.get("sortBy") ?? "sort_order").trim();
-  const page = getQueryInteger(url.searchParams.get("page"), 1, 1, 100000);
-  const pageSize = getQueryInteger(url.searchParams.get("pageSize"), 20, 1, 100);
+  const status = filters.productStatus;
+  const deliveryType = filters.deliveryType;
+  const sortBy = filters.sortBy;
+  const page = filters.page;
+  const pageSize = filters.pageSize;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
-
-  if (!["all", "low"].includes(stockLevel)) {
-    return productFailureResponse("PRODUCT_INVALID_STOCK_LEVEL", "未知的库存筛选条件", requestId, 400);
-  }
+  const operationalScan = hasOperationalScanFilters(filters);
 
   let query = service.from("products").select(PRODUCT_FIELDS, { count: "exact" });
 
@@ -83,20 +116,64 @@ export async function GET(request: Request) {
   }
   if (status && status !== "all") query = query.eq("status", status);
   if (deliveryType && deliveryType !== "all") query = query.eq("delivery_type", deliveryType);
-  if (stockLevel === "low") query = query.gt("stock", 0).lte("stock", 5);
+  if (filters.productType === "multi_sku") query = query.eq("has_skus", true);
+  if (filters.productType === "single_product") query = query.eq("has_skus", false);
 
   const sortedQuery =
     sortBy === "updated_at"
       ? query.order("updated_at", { ascending: false }).order("sort_order", { ascending: true })
       : query.order("sort_order", { ascending: true }).order("updated_at", { ascending: false });
 
-  const { data, error, count } = await sortedQuery.order("id", { ascending: true }).range(from, to);
+  const { data, error, count } = await sortedQuery
+    .order("id", { ascending: true })
+    .range(operationalScan ? 0 : from, operationalScan ? PRODUCT_SCAN_LIMIT - 1 : to);
   if (error) {
     console.error("[AdminProductList] read failed", { requestId, code: error.code, message: error.message });
     return productFailureResponse("PRODUCT_LIST_READ_FAILED", "商品列表读取失败，请稍后重试", requestId, 500);
   }
 
-  const response = jsonResponse({ success: true, data: { products: data ?? [], count: count ?? 0 }, products: data ?? [], count: count ?? 0, request_id: requestId });
+  if (operationalScan && (count ?? 0) > PRODUCT_SCAN_LIMIT) {
+    return productFailureResponse(
+      "PRODUCT_FILTER_SCOPE_TOO_LARGE",
+      "当前筛选范围过大，请先增加搜索、分类或商品状态条件",
+      requestId,
+      400
+    );
+  }
+
+  const productRows = (data ?? []) as Array<Record<string, unknown>>;
+  const multiSkuProductIds = productRows
+    .filter((row) => row.has_skus === true)
+    .map((row) => String(row.id));
+  const skuResult = await readOperationalSkuRows(service, multiSkuProductIds);
+  if (skuResult.error || skuResult.overflow) {
+    console.error("[AdminProductList] SKU operations read failed", {
+      requestId,
+      code: skuResult.error?.code ?? (skuResult.overflow ? "SKU_FILTER_SCOPE_TOO_LARGE" : "UNKNOWN"),
+    });
+    return productFailureResponse(
+      skuResult.overflow ? "SKU_FILTER_SCOPE_TOO_LARGE" : "PRODUCT_SKU_SUMMARY_READ_FAILED",
+      skuResult.overflow ? "SKU 筛选范围过大，请缩小商品范围" : "SKU 运营状态读取失败，请稍后重试",
+      requestId,
+      skuResult.overflow ? 400 : 500
+    );
+  }
+
+  const filtered = operationalScan
+    ? filterAndPaginateAdminCatalogProducts(productRows, skuResult.rows, filters)
+    : { products: decorateAdminCatalogProducts(productRows, skuResult.rows, filters), count: count ?? 0 };
+  const products = filtered.products;
+  const filteredCount = filtered.count;
+  const queryCount = 1 + skuResult.queryCount;
+
+  const response = jsonResponse({
+    success: true,
+    data: { products, count: filteredCount, query_count: queryCount },
+    products,
+    count: filteredCount,
+    query_count: queryCount,
+    request_id: requestId,
+  });
   response.headers.set("X-Request-ID", requestId);
   return response;
 }

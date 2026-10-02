@@ -70,11 +70,13 @@ test("low-stock and recharge links share their destination filter contracts", ()
   const productPage = file("app/admin/products/page.tsx");
   const dashboard = file("app/admin/page.tsx");
   const productRoute = file("app/api/admin/catalog/products/route.ts");
+  const catalogOperations = file("lib/products/admin-catalog-operations.mjs");
   const rechargeRoute = file("app/api/admin/recharges/route.ts");
   const rechargePredicate = file("lib/recharges/admin-attention.ts");
-  assert.match(productPage, /searchParams\.get\("stockLevel"\) === "low"/);
-  assert.match(productRoute, /\.gt\("stock", 0\)\.lte\("stock", 5\)/);
-  assert.match(productRoute, /PRODUCT_INVALID_STOCK_LEVEL/);
+  assert.match(productPage, /parseAdminCatalogOperationFilters\(searchParams\)/);
+  assert.match(catalogOperations, /if \(raw === "low"\) return "low_stock"/);
+  assert.match(catalogOperations, /summary\.effective_stock >= 1 && summary\.effective_stock <= 5/);
+  assert.match(productRoute, /PRODUCT_INVALID_FILTER/);
   assert.match(dashboard, /pageSize: 1, stockLevel: "low"/);
   assert.match(rechargeRoute, /requiresRechargeAdminAttention/);
   assert.match(rechargePredicate, /ACTIVE_REVIEW_STATUSES/);

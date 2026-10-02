@@ -6,7 +6,7 @@ import { getServerAdminContext } from "@/lib/auth/require-admin";
 import type { CategoryPayload, DeliveryType, ProductPayload, ProductStatus } from "@/lib/supabase/admin-catalog";
 
 export const PRODUCT_FIELDS =
-  "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,delivery_type,status,sort_order,metadata,updated_at,created_at";
+  "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,has_skus,delivery_type,status,sort_order,metadata,updated_at,created_at";
 export const CATEGORY_FIELDS =
   "id,parent_id,level,name,slug,icon,description,sort_order,is_active,updated_at,created_at";
 
