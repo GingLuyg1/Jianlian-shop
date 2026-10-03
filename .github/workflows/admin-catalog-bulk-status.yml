@@ -1,0 +1,71 @@
+name: Admin catalog transactional bulk status
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "codex/**"
+    paths:
+      - ".github/workflows/admin-catalog-bulk-status.yml"
+      - "scripts/ci/admin-catalog-bulk-status-*"
+      - "supabase/migrations/*admin_catalog_transactional_bulk_status*"
+      - "lib/products/admin-sku-bulk-operations.*"
+      - "app/api/admin/products/**/skus/bulk/**"
+      - "components/admin/products/AdminProductSkuManager.tsx"
+      - "tests/**/admin-sku-bulk-*"
+
+permissions:
+  contents: read
+
+jobs:
+  real-postgresql-atomicity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      PGHOST: 127.0.0.1
+      PGPORT: "54322"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+      SUPABASE_ACCESS_TOKEN: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+      - name: Start job-local Supabase PostgreSQL only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_ACCESS_TOKEN}"
+          test ! -e supabase/.temp/project-ref
+          ci_project="$(mktemp -d)"
+          cd "$ci_project"
+          supabase init
+          supabase db start
+          echo "CI_SUPABASE_PROJECT=$ci_project" >> "$GITHUB_ENV"
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+          psql -X -v ON_ERROR_STOP=1 -Atqc "select 'CI_DB_READY'" | grep -qx CI_DB_READY
+      - name: Load minimal schema
+        run: psql -X -v ON_ERROR_STOP=1 -q -f scripts/ci/admin-catalog-bulk-status-minimal-schema.sql
+      - name: Real PostgreSQL atomicity and concurrency
+        run: bash scripts/ci/admin-catalog-bulk-status-real-db.sh
+
+  application-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/unit/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-rpc-migration.test.mjs
+      - run: npm run typecheck

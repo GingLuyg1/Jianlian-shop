@@ -20,6 +20,15 @@ function auditSummary(result: Awaited<ReturnType<typeof readSkuBulkOperation>>) 
   };
 }
 
+function safeRpcErrorCode(error: { message?: string; code?: string } | null) {
+  const known = [
+    "BULK_SKU_PRODUCT_ID_REQUIRED", "EMPTY_SKU_SELECTION",
+    "SKU_BATCH_LIMIT_EXCEEDED", "NULL_SKU_ID", "DUPLICATE_SKU_ID", "BULK_STATUS_TARGET_NOT_ALLOWED",
+    "PRODUCT_NOT_FOUND", "BULK_SKU_OWNERSHIP_MISMATCH",
+  ];
+  return known.find((code) => error?.message?.includes(code)) ?? (error?.code === "55P03" ? "BULK_STATUS_LOCK_TIMEOUT" : "BULK_STATUS_TRANSACTION_FAILED");
+}
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
@@ -55,14 +64,44 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
   const beforeSummary = auditSummary(result);
 
+  if (result.preview.action === "activate") {
+    const execution = await executeSkuBulkStatusUpdate({ preview: result.preview });
+    await auditCatalogAction({ request, user: admin.user, action: "bulk_update_product_skus", module: "products", targetType: "product_sku_batch", targetId: params.id, targetLabel: result.preview.action, result: "failed", beforeSummary, afterSummary: { updated_count: 0 }, errorMessage: execution.code });
+    return bulkJson({ error: "批量激活需要独立的事务型 readiness 保护，当前仅支持预检", code: execution.code, preview: result.preview, updated_count: 0, requestId }, 409, requestId);
+  }
   if (!result.preview.can_execute) {
     await auditCatalogAction({ request, user: admin.user, action: "bulk_update_product_skus", module: "products", targetType: "product_sku_batch", targetId: params.id, targetLabel: result.preview.action, result: "failed", beforeSummary, errorMessage: "BULK_OPERATION_BLOCKED" });
-    return bulkJson({ error: "批量操作已被 readiness 检查阻止，请重新预检", code: "BULK_OPERATION_BLOCKED", preview: result.preview, requestId }, 409, requestId);
+    return bulkJson({ error: "批量操作已被检查阻止，请重新预检", code: "BULK_OPERATION_BLOCKED", preview: result.preview, requestId }, 409, requestId);
   }
-  const execution = await executeSkuBulkStatusUpdate({ preview: result.preview });
-  await auditCatalogAction({ request, user: admin.user, action: "bulk_update_product_skus", module: "products", targetType: "product_sku_batch", targetId: params.id, targetLabel: result.preview.action, result: "failed", beforeSummary, afterSummary: { updated_count: 0 }, errorMessage: execution.code });
-  const message = execution.code === "BULK_ACTIVATION_DEFERRED_FOR_ATOMICITY"
-    ? "批量激活需要事务型原子保护，当前仅支持预检"
-    : "当前仅支持批量预检；安全的批量状态写入将在事务型后端完成后开放";
-  return bulkJson({ error: message, code: execution.code, preview: result.preview, updated_count: 0, requestId }, 409, requestId);
+
+  try {
+    const execution = await executeSkuBulkStatusUpdate({
+      preview: result.preview,
+      productId: params.id,
+      skuIds: result.skuIds,
+      runTransaction: async ({ productId, skuIds, targetStatus }) => {
+        const { data, error } = await service.rpc("admin_bulk_update_product_sku_status", {
+          p_product_id: productId,
+          p_sku_ids: skuIds,
+          p_target_status: targetStatus,
+        });
+        if (error) throw Object.assign(new Error(safeRpcErrorCode(error)), { rpcCode: safeRpcErrorCode(error) });
+        return data as Record<string, unknown>;
+      },
+    });
+    if (!execution.ok) throw Object.assign(new Error(execution.code), { rpcCode: execution.code });
+    await auditCatalogAction({ request, user: admin.user, action: "bulk_update_product_skus", module: "products", targetType: "product_sku_batch", targetId: params.id, targetLabel: result.preview.action, result: "success", beforeSummary, afterSummary: { rpc_success: true, selected_count: execution.selected_count, updated_count: execution.updated_count, no_change_count: execution.no_change_count, product_summary: execution.product_summary } });
+    return bulkJson({ ok: true, code: execution.code, updated_count: execution.updated_count, no_change_count: execution.no_change_count, product_summary: execution.product_summary, requestId }, 200, requestId);
+  } catch (error) {
+    const code = typeof (error as { rpcCode?: unknown })?.rpcCode === "string" ? String((error as { rpcCode: string }).rpcCode) : "BULK_STATUS_TRANSACTION_FAILED";
+    await auditCatalogAction({ request, user: admin.user, action: "bulk_update_product_skus", module: "products", targetType: "product_sku_batch", targetId: params.id, targetLabel: result.preview.action, result: "failed", beforeSummary, afterSummary: { updated_count: 0 }, errorMessage: code });
+    const stale = code === "BULK_SKU_OWNERSHIP_MISMATCH" || code === "PRODUCT_NOT_FOUND";
+    const committedUnknown = code === "BULK_STATUS_COMMITTED_RESPONSE_INVALID";
+    const message = stale
+      ? "SKU 数据已变化，请重新预检后再执行"
+      : committedUnknown
+        ? "事务已完成但响应无法确认，请刷新数据后重新预检"
+        : "批量 SKU 状态更新失败，事务已回滚";
+    return bulkJson({ error: message, code, updated_count: 0, requestId }, stale ? 409 : committedUnknown ? 502 : 503, requestId);
+  }
 }

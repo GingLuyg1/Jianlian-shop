@@ -91,6 +91,12 @@ export type ProductSkuBulkPreview = {
     readiness: Record<string, unknown> | null;
   }>;
 };
+export type ProductSkuBulkExecution = {
+  ok: boolean;
+  updated_count: number;
+  no_change_count: number;
+  product_summary: { has_skus: boolean; stock: number; price: number | null };
+};
 export class ProductSkuWriteError extends Error {
   constructor(message: string, public savedSku: AdminProductSku) { super(message); }
 }
@@ -558,7 +564,7 @@ export async function previewProductSkuBulkAction(productId: string, skuIds: str
 }
 
 export async function executeProductSkuBulkAction(productId: string, skuIds: string[], action: ProductSkuBulkAction) {
-  return adminCatalogRequest<{ ok: boolean; updated_count: number; no_change_count: number }>(
+  return adminCatalogRequest<ProductSkuBulkExecution>(
     `/api/admin/products/${encodeURIComponent(productId)}/skus/bulk/execute`,
     { method: "POST", body: JSON.stringify({ sku_ids: skuIds, action }) },
   );

@@ -36,8 +36,10 @@ export function buildSkuBulkPreview(input: {
 }): SkuBulkPreview;
 export function executeSkuBulkStatusUpdate(input: {
   preview: SkuBulkPreview;
-  updateStatuses?: (skuIds: string[], targetStatus: string) => Promise<Array<Record<string, any>>>;
+  productId?: string;
+  skuIds?: string[];
+  runTransaction?: (input: { productId?: string; skuIds: string[]; targetStatus: string }) => Promise<Record<string, any>>;
 }): Promise<
-  | { ok: true; code: string; updated_count: number; rows: Array<Record<string, any>> }
-  | { ok: false; code: string; updated_count: number; rows: Array<Record<string, any>> }
+  | ({ ok: true; code: string; updated_count: number; no_change_count: number } & Record<string, any>)
+  | { ok: false; code: string; updated_count: number; no_change_count: number }
 >;
