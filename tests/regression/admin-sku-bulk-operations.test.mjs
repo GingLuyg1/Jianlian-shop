@@ -21,15 +21,18 @@ test("bulk preview and execute routes enforce admin, schema, ownership and autho
   assert.match(shared, /isAutomaticSkuActivation\(sku\.status, "active", product, sku\)/);
 });
 
-test("execute revalidates from the database, uses one constrained update and defers activation", () => {
+test("execute revalidates from the database and defers every write for atomicity", () => {
   const execute = file("app/api/admin/products/[id]/skus/bulk/execute/route.ts");
+  const helper = file("lib/products/admin-sku-bulk-operations.mjs");
   assert.match(execute, /readSkuBulkOperation\(service, params\.id, body\)/);
   assert.match(execute, /BULK_OPERATION_BLOCKED/);
   assert.match(execute, /BULK_ACTIVATION_DEFERRED_FOR_ATOMICITY/);
-  assert.match(execute, /\.from\("product_skus"\)[\s\S]*?\.update\(\{ status: targetStatus \}\)[\s\S]*?\.eq\("product_id", params\.id\)[\s\S]*?\.in\("id", skuIds\)/);
-  assert.doesNotMatch(execute, /for\s*\([^)]*sku/);
+  assert.match(helper, /BULK_STATUS_EXECUTION_DEFERRED_FOR_ATOMICITY/);
+  assert.doesNotMatch(helper, /await updateStatuses/);
+  assert.doesNotMatch(execute, /\.from\("product_skus"\)[\s\S]*?\.update\(/);
+  assert.doesNotMatch(execute, /syncSkuProductSummary/);
+  assert.doesNotMatch(execute, /result:\s*"success"/);
   assert.match(execute, /auditCatalogAction/);
-  assert.match(execute, /syncSkuProductSummary/);
 });
 
 test("bulk request contract exposes no force, override or arbitrary target status", () => {
@@ -50,7 +53,8 @@ test("Admin SKU manager provides scoped selection, preview, blocked reasons and 
   assert.match(manager, /bulkPreview\.blocked_count/);
   assert.match(manager, /formatSkuActivationReasons\(item\.reasons\)/);
   assert.match(manager, /!bulkPreview\.execution_supported/);
-  assert.match(manager, /setSelectedSkuIds\(new Set\(\)\)[\s\S]*?await load\(\)/);
+  assert.match(manager, /当前仅支持批量预检；安全的批量状态写入将在事务型后端完成后开放/);
+  assert.doesNotMatch(manager, /executeProductSkuBulkAction/);
   assert.match(manager, /onOpenChange=\{\(open\) => \{ if \(!open && !bulkBusy\) setBulkPreview\(null\); \}\}/);
   assert.match(manager, /previousProductId\.current !== productId/);
 });

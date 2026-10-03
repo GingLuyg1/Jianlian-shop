@@ -45,6 +45,7 @@ test("set_draft preview separates changes and no-op rows without blocking", () =
     blocked: preview.blocked_count,
     canExecute: preview.can_execute,
   }, { selected: 3, willChange: 2, noChange: 1, blocked: 0, canExecute: true });
+  assert.equal(preview.execution_supported, false);
 });
 
 test("set_sold_out preview preserves no-op semantics", () => {
@@ -55,6 +56,7 @@ test("set_sold_out preview preserves no-op semantics", () => {
   assert.equal(preview.will_change_count, 1);
   assert.equal(preview.no_change_count, 1);
   assert.equal(preview.blocked_count, 0);
+  assert.equal(preview.execution_supported, false);
 });
 
 test("ten Apple-style zero-stock unbound SKUs all fail authoritative activation readiness", () => {
@@ -96,28 +98,41 @@ test("one blocked SKU blocks the entire activation batch and performs zero write
   assert.equal(writeCalls, 0, "BLOCKED_BATCH_WRITES must stay zero");
 });
 
-test("draft execution performs one exact batch update and verifies returned rows", async () => {
-  const rows = [sku(1, { status: "active" }), sku(2, { status: "active" }), sku(3, { status: "draft" })];
+test("all three execute actions fail closed even when preview can_execute is true", async () => {
+  const readyRows = [sku(1, { stock: 1 }), sku(2, { stock: 2 })];
+  const readyBySku = Object.fromEntries(readyRows.map((row) => [row.id, evaluateSkuActivationReadiness({ product, sku: row, localAvailableCount: row.stock })]));
+  const cases = [
+    { action: "set_draft", preview: buildSkuBulkPreview({ action: "set_draft", skus: [sku(1, { status: "active" })] }), code: "BULK_STATUS_EXECUTION_DEFERRED_FOR_ATOMICITY" },
+    { action: "set_sold_out", preview: buildSkuBulkPreview({ action: "set_sold_out", skus: [sku(1, { status: "active" })] }), code: "BULK_STATUS_EXECUTION_DEFERRED_FOR_ATOMICITY" },
+    { action: "activate", preview: buildSkuBulkPreview({ action: "activate", skus: readyRows, readinessBySku: readyBySku, activationGuardBySku: { [readyRows[0].id]: true, [readyRows[1].id]: true } }), code: "BULK_ACTIVATION_DEFERRED_FOR_ATOMICITY" },
+  ];
+  for (const scenario of cases) {
+    let writeCalls = 0;
+    const execution = await executeSkuBulkStatusUpdate({ preview: scenario.preview, updateStatuses: async () => { writeCalls += 1; return []; } });
+    assert.equal(scenario.preview.can_execute, true, `${scenario.action} preview should remain functional`);
+    assert.equal(execution.ok, false);
+    assert.equal(execution.code, scenario.code);
+    assert.equal(execution.updated_count, 0);
+    assert.equal(writeCalls, 0, `${scenario.action} WRITE_CALLS must stay zero`);
+  }
+});
+
+test("hypothetical ten selected and nine matched never reaches the update callback", async () => {
+  const rows = Array.from({ length: 10 }, (_, index) => sku(index + 1, { status: "active" }));
   const preview = buildSkuBulkPreview({ action: "set_draft", skus: rows });
-  const calls = [];
+  let writeCalls = 0;
   const execution = await executeSkuBulkStatusUpdate({
     preview,
     updateStatuses: async (skuIds, targetStatus) => {
-      calls.push({ skuIds, targetStatus });
-      return skuIds.map((skuId) => ({ id: skuId, status: targetStatus }));
+      writeCalls += 1;
+      return skuIds.slice(0, 9).map((skuId) => ({ id: skuId, status: targetStatus }));
     },
   });
-  assert.equal(execution.ok, true);
-  assert.equal(execution.updated_count, 2);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0], { skuIds: [id(1), id(2)], targetStatus: "draft" });
-});
-
-test("batch result count mismatch is never reported as success", async () => {
-  const preview = buildSkuBulkPreview({ action: "set_sold_out", skus: [sku(1), sku(2)] });
-  const execution = await executeSkuBulkStatusUpdate({ preview, updateStatuses: async (skuIds, targetStatus) => [{ id: skuIds[0], status: targetStatus }] });
-  assert.equal(execution.ok, false);
-  assert.equal(execution.code, "BULK_UPDATE_COUNT_MISMATCH");
+  assert.equal(preview.selected_count, 10);
+  assert.equal(preview.will_change_count, 10);
+  assert.equal(execution.code, "BULK_STATUS_EXECUTION_DEFERRED_FOR_ATOMICITY");
+  assert.equal(execution.updated_count, 0);
+  assert.equal(writeCalls, 0, "BULK_STATUS_BLOCKED_BATCH_WRITES must stay zero before any hypothetical 9-row result");
 });
 
 test("parent product stock and binding never substitute for exact SKU evidence", () => {
