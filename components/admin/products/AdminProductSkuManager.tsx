@@ -5,10 +5,11 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { deriveSkuProductSummary, ensureTrailingEmptySkuRow, isSkuDraftEmpty, validateSkuDraft } from "@/lib/products/sku-editor.mjs";
-import { createProductSku, deleteProductSku, getProductSkuWorkspace, listProductSkus, updateProductSku, ProductSkuWriteError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuPayload, type ProductStatus } from "@/lib/supabase/admin-catalog";
+import { createProductSku, deleteProductSku, executeProductSkuBulkAction, getProductSkuWorkspace, listProductSkus, previewProductSkuBulkAction, updateProductSku, ProductSkuWriteError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuBulkAction, type ProductSkuBulkPreview, type ProductSkuPayload, type ProductStatus } from "@/lib/supabase/admin-catalog";
 import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
 import { evaluateSkuActivationReadiness, formatSkuActivationReasons, summarizeSkuReadiness } from "@/lib/products/sku-activation-readiness.mjs";
 
@@ -30,6 +31,9 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [selectedSkuIds, setSelectedSkuIds] = useState<Set<string>>(new Set());
+  const [bulkPreview, setBulkPreview] = useState<ProductSkuBulkPreview | null>(null);
   const flight = useRef(false);
   const [deleting, setDeleting] = useState<EditorRow | null>(null);
   const [activationBlocked, setActivationBlocked] = useState<Array<{ code: string; stock: number; supplierBound: boolean; localAvailable: number; inventoryState: string | null; reasons: string[] }>>([]);
@@ -44,6 +48,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       const workspace = productId ? await getProductSkuWorkspace(productId) : { skus: [], diagnostics: null };
       const skus = workspace.skus;
       setDiagnostics(workspace.diagnostics);
+      setSelectedSkuIds((current) => new Set(Array.from(current).filter((id) => skus.some((sku) => sku.id === id))));
       setRows((current) => {
         if (!skus.length && !current.some((row) => row.sku)) {
           return ensureTrailingEmptySkuRow(current.filter((row) => row.key !== "legacy"), emptyRow);
@@ -59,8 +64,10 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     finally { setLoading(false); }
   }, [productId]);
   useEffect(() => {
-    if (previousProductId.current && productId && previousProductId.current !== productId) {
+    if (previousProductId.current !== productId) {
       setRows([]); rowsRef.current = [];
+      setSelectedSkuIds(new Set());
+      setBulkPreview(null);
     }
     previousProductId.current = productId;
     void load();
@@ -177,13 +184,56 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     finally { flight.current = false; setBusy(false); }
   }
 
+  function toggleSkuSelection(skuId: string, selected: boolean) {
+    setSelectedSkuIds((current) => {
+      const next = new Set(current);
+      if (selected) next.add(skuId); else next.delete(skuId);
+      return next;
+    });
+  }
+
+  async function openBulkPreview(action: ProductSkuBulkAction) {
+    if (!product || selectedSkuIds.size === 0 || bulkBusy || busy) return;
+    if (rowsRef.current.some((row) => row.sku && selectedSkuIds.has(row.sku.id) && row.draft.touched)) {
+      toast.warning("选中的 SKU 有未保存修改，请先保存或刷新后再批量操作");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      setBulkPreview(await previewProductSkuBulkAction(product.id, Array.from(selectedSkuIds), action));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "批量操作预检失败");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function executeBulkPreview() {
+    if (!product || !bulkPreview || !bulkPreview.can_execute || !bulkPreview.execution_supported || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const result = await executeProductSkuBulkAction(product.id, bulkPreview.items.map((item) => item.sku_id), bulkPreview.action);
+      toast.success(`已将 ${result.updated_count} 个 SKU 设为 ${bulkPreview.target_status}`);
+      setBulkPreview(null);
+      setSelectedSkuIds(new Set());
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "BULK_OPERATION_BLOCKED");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const readinessSummary = useMemo(() => summarizeSkuReadiness(
     rows.filter((row) => row.sku).map((row) => ({ ...row.sku!, ...payload(row.draft) })),
     diagnostics?.supplier_rows ?? [],
   ), [diagnostics, rows]);
+  const visibleSkuIds = rows.flatMap((row) => row.sku ? [row.sku.id] : []);
+  const allVisibleSelected = visibleSkuIds.length > 0 && visibleSkuIds.every((id) => selectedSkuIds.has(id));
+  const bulkActionLabel: Record<ProductSkuBulkAction, string> = { set_draft: "批量设为 Draft", set_sold_out: "批量设为 Sold Out", activate: "批量 Activate" };
 
   return <div className="min-w-0 space-y-2">
-    <div className="flex justify-end"><Button type="button" size="sm" variant="ghost" disabled={loading || busy} onClick={() => void load()}><RefreshCw className="mr-1 h-3.5 w-3.5" />刷新</Button></div>
+    <div className="flex justify-end"><Button type="button" size="sm" variant="ghost" disabled={loading || busy || bulkBusy} onClick={() => void load()}><RefreshCw className="mr-1 h-3.5 w-3.5" />刷新</Button></div>
     {loadError ? <p role="alert" className="text-sm text-red-600">{loadError}</p> : null}
     {(product?.has_skus || readinessSummary.total > 0) ? <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
       <div className="font-semibold text-slate-900">SKU readiness 汇总</div>
@@ -195,6 +245,13 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       {readinessSummary.no_verified_source > 0 ? <div className="mt-1 font-medium text-amber-800">{readinessSummary.no_verified_source} 个 SKU 当前无可验证履约来源。未绑定供应商不一定是错误；SKU 级本地可用库存也可以构成履约来源。</div> : null}
     </div> : null}
     {activationBlocked.length ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><div className="font-semibold">SKU 激活已阻止</div>{activationBlocked.map((item) => <div key={item.code}><span className="font-mono">{item.code}</span>：库存 {item.stock}；SKU 供应商绑定 {item.supplierBound ? "完整" : "未完整"}；本地可用库存 {item.localAvailable}；库存验证 {item.inventoryState === "requires_verification" ? "待验证" : "无待验证标记"}；{formatSkuActivationReasons(item.reasons)}</div>)}</div> : null}
+    {selectedSkuIds.size > 0 ? <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950">
+      <span className="font-semibold">已选择 {selectedSkuIds.size} 个 SKU</span>
+      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("set_draft")}>设为 Draft</Button>
+      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("set_sold_out")}>设为 Sold Out</Button>
+      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("activate")}>预检 Activate</Button>
+      <Button type="button" size="sm" variant="ghost" disabled={busy || bulkBusy} onClick={() => setSelectedSkuIds(new Set())}>清除选择</Button>
+    </div> : null}
     {diagnostics && (!diagnostics.schema_ready || diagnostics.legacy_expected_count > 0 || diagnostics.supplier_rows.some((row) => row.supplier_expected)) ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
       <div className="font-semibold">Catalog / SKU readiness</div>
       {!diagnostics.schema_ready ? <div>SKU schema 未就绪；所有 SKU 写入会 fail closed，需先执行已审核 migration。</div> : null}
@@ -205,9 +262,10 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       {diagnostics.supplier_rows.map((row) => <div key={row.sku_id} className="font-mono">{row.sku_code ?? row.sku_id}: mapping={String(row.supplier_product_id ?? "-")}/{String(row.supplier_sku ?? "-")} website={row.website_stock} supplier={String(row.supplier_stock_snapshot ?? "-")} status={String(row.supplier_stock_sync_status ?? "-")} last={String(row.supplier_stock_last_success_at ?? "-")}</div>)}
     </div> : null}
     {loading ? <div className="flex items-center gap-2 py-4 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />正在读取 SKU</div> : <div className="max-w-full overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full min-w-[850px] table-fixed text-left text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-slate-600"><tr>{["名称", "Code", "价格", "库存", "交付方式", "状态", "绑定供货商"].map((label) => <th key={label} className="px-2 py-2 text-left font-medium last:w-[190px]">{label}</th>)}</tr></thead>
+      <table className="w-full min-w-[900px] table-fixed text-left text-xs">
+        <thead className="sticky top-0 bg-slate-50 text-slate-600"><tr><th className="w-10 px-2 py-2"><Checkbox aria-label="选择当前列表全部 SKU" checked={allVisibleSelected} disabled={visibleSkuIds.length === 0 || busy || bulkBusy} onCheckedChange={(checked) => setSelectedSkuIds(checked === true ? new Set(visibleSkuIds) : new Set())} /></th>{["名称", "Code", "价格", "库存", "交付方式", "状态", "绑定供货商"].map((label) => <th key={label} className="px-2 py-2 text-left font-medium last:w-[190px]">{label}</th>)}</tr></thead>
         <tbody>{rows.map((row) => <tr key={row.key} className="border-t border-slate-100 align-top hover:bg-slate-50/50">
+          <td className="p-2"><Checkbox aria-label={`选择 SKU ${row.draft.sku_code || row.draft.sku_title || "未保存"}`} checked={row.sku ? selectedSkuIds.has(row.sku.id) : false} disabled={!row.sku || busy || bulkBusy} onCheckedChange={(checked) => { if (row.sku) toggleSkuSelection(row.sku.id, checked === true); }} /></td>
           {(["sku_title", "sku_code", "price", "stock"] as const).map((key) => <td key={key} className="p-2"><Input aria-label={key === "sku_title" ? "SKU 名称" : key === "sku_code" ? "SKU Code" : key === "price" ? "售价" : "库存"} aria-invalid={Boolean(errors[row.key]?.[key])} className="h-8 px-2 text-xs" type={key === "price" || key === "stock" ? "number" : "text"} min="0" step={key === "price" ? "0.01" : "1"} value={row.draft[key]} placeholder={key === "sku_title" ? "SKU 名称" : key === "sku_code" ? "SKU Code" : ""} disabled={busy} onChange={(e) => change(row, key, e.target.value)} />{errors[row.key]?.[key] ? <p className="mt-1 text-red-600">{errors[row.key][key]}</p> : null}</td>)}
           <td className="p-2"><select aria-label="SKU 交付方式" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.delivery_type} disabled={busy} onChange={(e) => change(row, "delivery_type", e.target.value)}><option value="">继承商品</option><option value="manual">人工处理</option><option value="automatic">自动发货</option><option value="shipping">物流发货</option></select></td>
           <td className="p-2"><select aria-label="SKU 状态" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.status} disabled={busy} onChange={(e) => change(row, "status", e.target.value)}><option value="active">启用</option><option value="inactive">停用</option><option value="sold_out">售罄</option><option value="draft">草稿</option></select></td>
@@ -231,6 +289,14 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     </div>}
     <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open && !busy) setDeleting(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>删除 SKU</AlertDialogTitle><AlertDialogDescription>确认删除“{deleting?.draft.sku_title}”？若已有订单引用，服务端会阻止删除。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={busy}>取消</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={(event) => { event.preventDefault(); void removeRow(); }}>确认删除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     <AlertDialog open={Boolean(activationConfirmation)} onOpenChange={(open) => { if (!open && activationConfirmationResolver.current) resolveActivationConfirmation(false); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认激活 SKU</AlertDialogTitle><AlertDialogDescription>激活后该 SKU 将可能在前台进入可售范围。请再次确认库存和履约来源。</AlertDialogDescription></AlertDialogHeader><div className="space-y-1 text-sm">{activationConfirmation?.map((item) => <div key={item.code}><span className="font-mono">{item.code}</span> · 库存 {item.stock} · 来源 {item.source === "supplier" ? "精确供应商绑定" : "SKU 级本地库存"} · 供应商绑定 {item.supplierBound ? "完整" : "未完整"} · 本地可用 {item.localAvailable} · 验证状态 {item.inventoryState === "requires_verification" ? "待验证" : "通过现有证据"}</div>)}</div><AlertDialogFooter><AlertDialogCancel disabled={busy} onClick={() => resolveActivationConfirmation(false)}>取消</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={(event) => { event.preventDefault(); resolveActivationConfirmation(true); }}>确认激活并保存</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <AlertDialog open={Boolean(bulkPreview)} onOpenChange={(open) => { if (!open && !bulkBusy) setBulkPreview(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{bulkPreview ? bulkActionLabel[bulkPreview.action] : "批量 SKU 操作"}</AlertDialogTitle><AlertDialogDescription>{bulkPreview?.action === "activate" ? "激活会使这些 SKU 进入可售状态；执行前服务端仍会重新读取并校验。" : "执行前服务端会重新读取全部 SKU，不会沿用预检作为授权。"}</AlertDialogDescription></AlertDialogHeader>
+      {bulkPreview ? <div className="space-y-3 text-sm">
+        <div className="grid grid-cols-2 gap-2 rounded-md bg-slate-50 p-3"><span>已选：{bulkPreview.selected_count}</span><span>将修改：{bulkPreview.will_change_count}</span><span>无需修改：{bulkPreview.no_change_count}</span><span>被阻止：{bulkPreview.blocked_count}</span></div>
+        {bulkPreview.action === "activate" ? <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-3">{bulkPreview.items.map((item) => <div key={item.sku_id} className={item.disposition === "blocked" ? "text-red-800" : "text-emerald-800"}><span className="font-mono">{item.sku_code ?? item.sku_id}</span>：{item.disposition === "blocked" ? `BLOCKED · ${formatSkuActivationReasons(item.reasons)}` : item.disposition === "no_change" ? "NO_CHANGE · 已是 active" : "READY"}</div>)}</div> : null}
+        {bulkPreview.action === "activate" && !bulkPreview.execution_supported ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">批量激活目前仅提供权威 readiness 预检；缺少事务型原子执行边界，执行按钮保持禁用。</div> : null}
+      </div> : null}
+      <AlertDialogFooter><AlertDialogCancel disabled={bulkBusy}>关闭</AlertDialogCancel>{bulkPreview?.can_execute ? <AlertDialogAction disabled={bulkBusy || !bulkPreview.execution_supported} onClick={(event) => { event.preventDefault(); void executeBulkPreview(); }}>{bulkPreview.execution_supported ? `确认将 ${bulkPreview.will_change_count} 个 SKU 设为 ${bulkPreview.target_status}` : "批量 Activate 尚未开放"}</AlertDialogAction> : null}</AlertDialogFooter>
+    </AlertDialogContent></AlertDialog>
   </div>;
 });
 export default AdminProductSkuManager;
