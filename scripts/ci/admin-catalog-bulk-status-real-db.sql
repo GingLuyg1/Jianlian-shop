@@ -1,6 +1,4 @@
 \set ON_ERROR_STOP on
-select set_config('request.jwt.claim.role', 'service_role', false);
-
 create or replace function pg_temp.assert_true(value boolean, label text) returns void
 language plpgsql as $$ begin if value is not true then raise exception 'ASSERT_FAILED: %', label; end if; end $$;
 

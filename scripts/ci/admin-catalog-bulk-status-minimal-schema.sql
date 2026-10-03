@@ -1,10 +1,5 @@
 \set ON_ERROR_STOP on
 
-create schema if not exists auth;
-create or replace function auth.role() returns text
-language sql stable
-as $$ select nullif(current_setting('request.jwt.claim.role', true), '') $$;
-
 create table public.ci_admin_catalog_guard (
   marker text primary key check (marker = 'JOB_LOCAL_ADMIN_CATALOG_DB')
 );

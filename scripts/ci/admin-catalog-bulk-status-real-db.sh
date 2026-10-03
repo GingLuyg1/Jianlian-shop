@@ -29,7 +29,7 @@ pid_a=$!
 sleep 0.5
 race_started_at="$(date +%s)"
 set +e
-"${psql_safe[@]}" -q -c "select set_config('request.jwt.claim.role','service_role',false); select public.admin_bulk_update_product_sku_status('10000000-0000-4000-8000-000000000001', array(select ('20000000-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid from generate_series(1,10) i), 'draft');" >"$race_dir/b.out" 2>&1
+"${psql_safe[@]}" -q -c "select public.admin_bulk_update_product_sku_status('10000000-0000-4000-8000-000000000001', array(select ('20000000-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid from generate_series(1,10) i), 'draft');" >"$race_dir/b.out" 2>&1
 race_rc=$?
 set -e
 race_elapsed=$(( $(date +%s) - race_started_at ))
