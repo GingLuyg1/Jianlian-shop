@@ -69,6 +69,28 @@ export type AdminProductSku = {
 };
 
 export type ProductSkuPayload = Omit<AdminProductSku, "id" | "product_id" | "metadata">;
+export type ProductSkuBulkAction = "set_draft" | "set_sold_out" | "activate";
+export type ProductSkuBulkPreview = {
+  action: ProductSkuBulkAction;
+  target_status: ProductStatus;
+  selected_count: number;
+  executable_count: number;
+  will_change_count: number;
+  no_change_count: number;
+  blocked_count: number;
+  can_execute: boolean;
+  execution_supported: boolean;
+  items: Array<{
+    sku_id: string;
+    sku_code: string | null;
+    current_status: ProductStatus;
+    target_status: ProductStatus;
+    disposition: "will_change" | "no_change" | "blocked";
+    can_execute: boolean;
+    reasons: string[];
+    readiness: Record<string, unknown> | null;
+  }>;
+};
 export class ProductSkuWriteError extends Error {
   constructor(message: string, public savedSku: AdminProductSku) { super(message); }
 }
@@ -525,4 +547,19 @@ export async function updateProductSku(productId: string, skuId: string, payload
 
 export async function deleteProductSku(productId: string, skuId: string) {
   await adminCatalogRequest<{ ok: boolean }>(`/api/admin/products/${encodeURIComponent(productId)}/skus/${encodeURIComponent(skuId)}`, { method: "DELETE" });
+}
+
+export async function previewProductSkuBulkAction(productId: string, skuIds: string[], action: ProductSkuBulkAction) {
+  const result = await adminCatalogRequest<{ preview: ProductSkuBulkPreview }>(
+    `/api/admin/products/${encodeURIComponent(productId)}/skus/bulk/preview`,
+    { method: "POST", body: JSON.stringify({ sku_ids: skuIds, action }) },
+  );
+  return result.preview;
+}
+
+export async function executeProductSkuBulkAction(productId: string, skuIds: string[], action: ProductSkuBulkAction) {
+  return adminCatalogRequest<{ ok: boolean; updated_count: number; no_change_count: number }>(
+    `/api/admin/products/${encodeURIComponent(productId)}/skus/bulk/execute`,
+    { method: "POST", body: JSON.stringify({ sku_ids: skuIds, action }) },
+  );
 }
