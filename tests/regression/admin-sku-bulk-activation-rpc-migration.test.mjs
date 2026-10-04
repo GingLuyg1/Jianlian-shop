@@ -47,6 +47,30 @@ test("readiness matches exact SKU evidence and never uses parent stock or bindin
   assert.doesNotMatch(normalized, /products\.metadata/);
 });
 
+test("readiness evaluator is STABLE and uses canonical JSON numeric evidence", () => {
+  const evaluator = normalized.match(/create or replace function public\.admin_evaluate_product_sku_activation[\s\S]*?\$\$;/)?.[0] ?? "";
+  assert.match(evaluator, /language plpgsql stable security invoker set search_path = pg_catalog/);
+  assert.doesNotMatch(evaluator, /\bimmutable\b|security definer/);
+
+  for (const field of ["supplier_product_id", "supplier_stock_snapshot"]) {
+    assert.match(evaluator, new RegExp(`jsonb_typeof\\(v_metadata->'${field}'\\) = 'number'`));
+  }
+  assert.match(evaluator, /v_product_id_numeric <= 9007199254740991/);
+  assert.match(evaluator, /trunc\(v_product_id_numeric\) = v_product_id_numeric/);
+  assert.match(evaluator, /v_snapshot_numeric <= 9007199254740991/);
+  assert.match(evaluator, /trunc\(v_snapshot_numeric\) = v_snapshot_numeric/);
+  assert.doesNotMatch(evaluator, /supplier_(?:product_id|stock_snapshot)'?\)?\s*!?~?\s*'\^\[1-9\]\[0-9\]\*\$'/);
+});
+
+test("readiness evaluator accepts only timezone-explicit canonical supplier timestamps", () => {
+  const evaluator = normalized.match(/create or replace function public\.admin_evaluate_product_sku_activation[\s\S]*?\$\$;/)?.[0] ?? "";
+  assert.match(evaluator, /jsonb_typeof\(v_metadata->'supplier_stock_last_success_at'\) = 'string'/);
+  assert.match(evaluator, /\[0-9\]\{4\}-\[0-9\]\{2\}-\[0-9\]\{2\}t/);
+  assert.match(evaluator, /\(z\|\[\+-\]\[0-9\]\{2\}:\[0-9\]\{2\}\)\$/);
+  assert.match(evaluator, /supplier_stock_last_success_at'\)::timestamptz/);
+  assert.match(evaluator, /exception when others then/);
+});
+
 test("blocked rows return before the only activation update and summary stays transactional", () => {
   assert.match(normalized, /'code', 'bulk_activation_not_ready'/);
   assert.match(normalized, /'updated_count', 0/);

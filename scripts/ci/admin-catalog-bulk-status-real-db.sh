@@ -17,6 +17,9 @@ psql_safe=(psql -X -v ON_ERROR_STOP=1)
 "${psql_safe[@]}" -q -f supabase/migrations/20261004120000_admin_catalog_transactional_bulk_status_p2_2.sql
 "${psql_safe[@]}" -q -f scripts/ci/admin-catalog-bulk-status-real-db.sql | grep -q ADMIN_CATALOG_BULK_STATUS_ATOMICITY_CASES_PASS
 "${psql_safe[@]}" -q -f supabase/migrations/20261004180000_admin_catalog_transactional_bulk_activation_p2_3.sql
+node scripts/ci/render-admin-sku-activation-readiness-fixtures.mjs \
+  | "${psql_safe[@]}" -q \
+  | grep -q ADMIN_SKU_ACTIVATION_READINESS_FIXTURES_PASS
 "${psql_safe[@]}" -q -f scripts/ci/admin-catalog-bulk-activation-real-db.sql | grep -q ADMIN_CATALOG_BULK_ACTIVATION_ATOMICITY_CASES_PASS
 
 race_dir="$(mktemp -d)"

@@ -13,7 +13,7 @@ create or replace function public.admin_evaluate_product_sku_activation(
 )
 returns jsonb
 language plpgsql
-immutable
+stable
 security invoker
 set search_path = pg_catalog
 as $$
@@ -32,7 +32,8 @@ declare
   v_reasons jsonb := '[]'::jsonb;
   v_mapping jsonb;
   v_cost_text text;
-  v_snapshot_text text;
+  v_product_id_numeric numeric;
+  v_snapshot_numeric numeric;
   v_product_id_valid boolean := false;
   v_supplier_sku_valid boolean := false;
   v_mapping_valid boolean := false;
@@ -56,9 +57,12 @@ begin
   end;
   v_cost_text := btrim(coalesce(v_metadata->>'supplier_max_unit_cost', ''));
 
-  if jsonb_typeof(v_metadata->'supplier_product_id') = 'number'
-     and (v_metadata->>'supplier_product_id') ~ '^[1-9][0-9]*$' then
-    v_product_id_valid := (v_metadata->>'supplier_product_id')::numeric <= 9007199254740991;
+  if jsonb_typeof(v_metadata->'supplier_product_id') = 'number' then
+    v_product_id_numeric := (v_metadata->'supplier_product_id')::numeric;
+    v_product_id_valid :=
+      v_product_id_numeric > 0
+      and v_product_id_numeric <= 9007199254740991
+      and trunc(v_product_id_numeric) = v_product_id_numeric;
   end if;
   v_supplier_sku_valid :=
     not (v_metadata ? 'supplier_sku')
@@ -88,15 +92,19 @@ begin
     and v_mapping_valid
     and v_cost_valid;
 
-  v_snapshot_text := btrim(coalesce(v_metadata->>'supplier_stock_snapshot', ''));
-  if v_snapshot_text ~ '^[0-9]+$' then
-    if v_snapshot_text::numeric between 1 and 9007199254740991 then
-      v_snapshot := v_snapshot_text::bigint;
+  if jsonb_typeof(v_metadata->'supplier_stock_snapshot') = 'number' then
+    v_snapshot_numeric := (v_metadata->'supplier_stock_snapshot')::numeric;
+    if v_snapshot_numeric > 0
+       and v_snapshot_numeric <= 9007199254740991
+       and trunc(v_snapshot_numeric) = v_snapshot_numeric then
+      v_snapshot := v_snapshot_numeric::bigint;
       v_snapshot_valid := true;
     end if;
   end if;
 
-  if coalesce(v_metadata->>'supplier_stock_last_success_at', '') <> '' then
+  if jsonb_typeof(v_metadata->'supplier_stock_last_success_at') = 'string'
+     and (v_metadata->>'supplier_stock_last_success_at')
+       ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$' then
     begin
       perform (v_metadata->>'supplier_stock_last_success_at')::timestamptz;
       v_last_success_valid := true;

@@ -28,6 +28,7 @@ export type SkuActivationReadiness = {
 export const SKU_ACTIVATION_REASON_LABELS: Readonly<Record<SkuActivationReason, string>>;
 export function getEffectiveSkuDeliveryType(product: Record<string, unknown> | null, sku: Record<string, unknown>): string;
 export function isAutomaticSkuActivation(previousStatus: unknown, nextStatus: unknown, product: Record<string, unknown> | null, sku: Record<string, unknown>): boolean;
+export function validSupplierStockTimestamp(value: unknown): boolean;
 export function getSupplierStockEvidence(metadata: unknown): SkuActivationReadiness["supplier"];
 export function evaluateSkuActivationReadiness(input: { product: Record<string, unknown> | null; sku: Record<string, unknown>; localAvailableCount?: number; localInventoryError?: boolean }): SkuActivationReadiness;
 export function readSkuActivationReadiness(service: any, product: Record<string, unknown> | null, sku: Record<string, unknown>): Promise<SkuActivationReadiness>;
