@@ -21,17 +21,18 @@ test("bulk preview and execute routes enforce admin, schema, ownership and autho
   assert.match(shared, /isAutomaticSkuActivation\(sku\.status, "active", product, sku\)/);
 });
 
-test("execute revalidates from the database and defers every write for atomicity", () => {
+test("execute revalidates then uses the single transactional RPC for status actions", () => {
   const execute = file("app/api/admin/products/[id]/skus/bulk/execute/route.ts");
   const helper = file("lib/products/admin-sku-bulk-operations.mjs");
   assert.match(execute, /readSkuBulkOperation\(service, params\.id, body\)/);
   assert.match(execute, /BULK_OPERATION_BLOCKED/);
-  assert.match(execute, /BULK_ACTIVATION_DEFERRED_FOR_ATOMICITY/);
-  assert.match(helper, /BULK_STATUS_EXECUTION_DEFERRED_FOR_ATOMICITY/);
-  assert.doesNotMatch(helper, /await updateStatuses/);
+  assert.match(helper, /BULK_ACTIVATION_DEFERRED_FOR_ATOMICITY/);
+  assert.match(execute, /service\.rpc\("admin_bulk_update_product_sku_status"/);
+  assert.equal(execute.match(/service\.rpc\("admin_bulk_update_product_sku_status"/g)?.length, 1);
+  assert.match(helper, /await runTransaction/);
   assert.doesNotMatch(execute, /\.from\("product_skus"\)[\s\S]*?\.update\(/);
   assert.doesNotMatch(execute, /syncSkuProductSummary/);
-  assert.doesNotMatch(execute, /result:\s*"success"/);
+  assert.match(execute, /result:\s*"success"/);
   assert.match(execute, /auditCatalogAction/);
 });
 
@@ -53,8 +54,14 @@ test("Admin SKU manager provides scoped selection, preview, blocked reasons and 
   assert.match(manager, /bulkPreview\.blocked_count/);
   assert.match(manager, /formatSkuActivationReasons\(item\.reasons\)/);
   assert.match(manager, /!bulkPreview\.execution_supported/);
-  assert.match(manager, /当前仅支持批量预检；安全的批量状态写入将在事务型后端完成后开放/);
-  assert.doesNotMatch(manager, /executeProductSkuBulkAction/);
+  assert.match(manager, /批量 Activate 当前仅支持预检/);
+  assert.match(manager, /executeProductSkuBulkAction/);
+  assert.match(manager, /bulkPreview\.will_change_count > 0/);
+  assert.match(manager, /bulkPreview\.action === "activate"/);
+  assert.match(manager, /bulkPreview\.action === "activate"[\s\S]*?return/);
+  assert.match(manager, /setSelectedSkuIds\(new Set\(\)\)/);
+  assert.match(manager, /await load\(\)/);
+  assert.match(manager, /catch \(error\)[\s\S]*?请重新预检/);
   assert.match(manager, /onOpenChange=\{\(open\) => \{ if \(!open && !bulkBusy\) setBulkPreview\(null\); \}\}/);
   assert.match(manager, /previousProductId\.current !== productId/);
 });

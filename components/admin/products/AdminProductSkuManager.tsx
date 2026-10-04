@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { deriveSkuProductSummary, ensureTrailingEmptySkuRow, isSkuDraftEmpty, validateSkuDraft } from "@/lib/products/sku-editor.mjs";
-import { createProductSku, deleteProductSku, getProductSkuWorkspace, listProductSkus, previewProductSkuBulkAction, updateProductSku, ProductSkuWriteError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuBulkAction, type ProductSkuBulkPreview, type ProductSkuPayload, type ProductStatus } from "@/lib/supabase/admin-catalog";
+import { createProductSku, deleteProductSku, executeProductSkuBulkAction, getProductSkuWorkspace, listProductSkus, previewProductSkuBulkAction, updateProductSku, ProductSkuWriteError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuBulkAction, type ProductSkuBulkPreview, type ProductSkuPayload, type ProductStatus } from "@/lib/supabase/admin-catalog";
 import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
 import { evaluateSkuActivationReadiness, formatSkuActivationReasons, summarizeSkuReadiness } from "@/lib/products/sku-activation-readiness.mjs";
 
@@ -208,6 +208,26 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     }
   }
 
+  async function executeBulkStatus() {
+    if (!product || !bulkPreview || bulkBusy || bulkPreview.action === "activate"
+      || !bulkPreview.execution_supported || !bulkPreview.can_execute
+      || bulkPreview.blocked_count > 0 || bulkPreview.will_change_count === 0) return;
+    setBulkBusy(true);
+    try {
+      const skuIds = bulkPreview.items.map((item) => item.sku_id);
+      const result = await executeProductSkuBulkAction(product.id, skuIds, bulkPreview.action);
+      toast.success(`批量更新完成：修改 ${result.updated_count}，无需修改 ${result.no_change_count}`);
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock });
+      setSelectedSkuIds(new Set());
+      setBulkPreview(null);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? `${error.message}；请重新预检` : "批量更新失败；请重新预检");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const readinessSummary = useMemo(() => summarizeSkuReadiness(
     rows.filter((row) => row.sku).map((row) => ({ ...row.sku!, ...payload(row.draft) })),
     diagnostics?.supplier_rows ?? [],
@@ -277,9 +297,10 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       {bulkPreview ? <div className="space-y-3 text-sm">
         <div className="grid grid-cols-2 gap-2 rounded-md bg-slate-50 p-3"><span>已选：{bulkPreview.selected_count}</span><span>将修改：{bulkPreview.will_change_count}</span><span>无需修改：{bulkPreview.no_change_count}</span><span>被阻止：{bulkPreview.blocked_count}</span></div>
         {bulkPreview.action === "activate" ? <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-3">{bulkPreview.items.map((item) => <div key={item.sku_id} className={item.disposition === "blocked" ? "text-red-800" : "text-emerald-800"}><span className="font-mono">{item.sku_code ?? item.sku_id}</span>：{item.disposition === "blocked" ? `BLOCKED · ${formatSkuActivationReasons(item.reasons)}` : item.disposition === "no_change" ? "NO_CHANGE · 已是 active" : "READY"}</div>)}</div> : null}
-        {!bulkPreview.execution_supported ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">当前仅支持批量预检；安全的批量状态写入将在事务型后端完成后开放。</div> : null}
+        {!bulkPreview.execution_supported ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">批量 Activate 当前仅支持预检；事务型 readiness 执行将在后续阶段开放。</div> : null}
+        {bulkPreview.execution_supported && bulkPreview.will_change_count === 0 ? <div role="status" className="rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">所选 SKU 已是目标状态，无需修改。</div> : null}
       </div> : null}
-      <AlertDialogFooter><AlertDialogCancel disabled={bulkBusy}>关闭</AlertDialogCancel></AlertDialogFooter>
+      <AlertDialogFooter><AlertDialogCancel disabled={bulkBusy}>关闭</AlertDialogCancel>{bulkPreview?.execution_supported && bulkPreview.can_execute && bulkPreview.blocked_count === 0 && bulkPreview.will_change_count > 0 ? <AlertDialogAction disabled={bulkBusy} onClick={(event) => { event.preventDefault(); void executeBulkStatus(); }}>{bulkBusy ? "执行中…" : `确认${bulkActionLabel[bulkPreview.action]}`}</AlertDialogAction> : null}</AlertDialogFooter>
     </AlertDialogContent></AlertDialog>
   </div>;
 });
