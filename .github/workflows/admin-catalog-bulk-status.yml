@@ -1,4 +1,4 @@
-name: Admin catalog transactional bulk status
+name: Admin catalog transactional bulk operations
 
 on:
   workflow_dispatch:
@@ -8,8 +8,8 @@ on:
       - "codex/**"
     paths:
       - ".github/workflows/admin-catalog-bulk-status.yml"
-      - "scripts/ci/admin-catalog-bulk-status-*"
-      - "supabase/migrations/*admin_catalog_transactional_bulk_status*"
+      - "scripts/ci/admin-catalog-bulk-*"
+      - "supabase/migrations/*admin_catalog_transactional_bulk_*"
       - "lib/products/admin-sku-bulk-operations.*"
       - "app/api/admin/products/**/skus/bulk/**"
       - "components/admin/products/AdminProductSkuManager.tsx"
@@ -67,5 +67,5 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
-      - run: node --test tests/unit/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-rpc-migration.test.mjs
+      - run: node --test tests/unit/admin-sku-bulk-operations.test.mjs tests/unit/admin-sku-activation-readiness-parity.test.mjs tests/unit/catalog-sku-activation-readiness.test.mjs tests/regression/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-rpc-migration.test.mjs tests/regression/admin-sku-bulk-activation-rpc-migration.test.mjs
       - run: npm run typecheck

@@ -10,6 +10,7 @@ create table public.products (
   price numeric(12,2) not null,
   stock integer not null default 0,
   has_skus boolean not null default false,
+  delivery_type text not null default 'automatic',
   updated_at timestamptz not null default now()
 );
 
@@ -35,6 +36,17 @@ create or replace function public.set_updated_at() returns trigger
 language plpgsql as $$ begin new.updated_at = now(); return new; end $$;
 create trigger product_skus_set_updated_at before update on public.product_skus
 for each row execute function public.set_updated_at();
+
+create table public.digital_inventory (
+  id uuid primary key,
+  product_id uuid not null references public.products(id) on delete cascade,
+  sku_id uuid references public.product_skus(id) on delete set null,
+  status text not null check (status in ('available', 'reserved', 'delivered', 'disabled', 'expired')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index digital_inventory_product_sku_status_idx
+  on public.digital_inventory(product_id, sku_id, status, updated_at desc);
 
 insert into public.products(id, price, stock, has_skus) values
   ('10000000-0000-4000-8000-000000000001', 99, 55, true),

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   SKU_BULK_BATCH_LIMIT,
   buildSkuBulkPreview,
+  executeSkuBulkActivation,
   executeSkuBulkStatusUpdate,
   parseSkuBulkOperationRequest,
 } from "../../lib/products/admin-sku-bulk-operations.mjs";
@@ -75,13 +76,13 @@ test("ten Apple-style zero-stock unbound SKUs all fail authoritative activation 
   }
 });
 
-test("all ready activation preview passes readiness but execution remains deferred for atomicity", () => {
+test("all ready activation preview enables transactional execution", () => {
   const rows = [sku(1, { stock: 1 }), sku(2, { stock: 2 })];
   const readinessBySku = Object.fromEntries(rows.map((row) => [row.id, evaluateSkuActivationReadiness({ product, sku: row, localAvailableCount: row.stock })]));
   const preview = buildSkuBulkPreview({ action: "activate", skus: rows, readinessBySku, activationGuardBySku: { [rows[0].id]: true, [rows[1].id]: true } });
   assert.equal(preview.can_execute, true);
   assert.equal(preview.blocked_count, 0);
-  assert.equal(preview.execution_supported, false);
+  assert.equal(preview.execution_supported, true);
 });
 
 test("one blocked SKU blocks the entire activation batch and performs zero writes", async () => {
@@ -90,46 +91,77 @@ test("one blocked SKU blocks the entire activation batch and performs zero write
   const activationGuardBySku = Object.fromEntries(rows.map((row) => [row.id, true]));
   const preview = buildSkuBulkPreview({ action: "activate", skus: rows, readinessBySku, activationGuardBySku });
   let writeCalls = 0;
-  const execution = await executeSkuBulkStatusUpdate({ preview, runTransaction: async () => { writeCalls += 1; return {}; } });
+  const execution = await executeSkuBulkActivation({ preview, runTransaction: async () => { writeCalls += 1; return {}; } });
   assert.equal(preview.blocked_count, 1);
   assert.equal(preview.can_execute, false);
-  assert.equal(execution.code, "BULK_ACTIVATION_DEFERRED_FOR_ATOMICITY");
+  assert.equal(execution.code, "BULK_ACTIVATION_NOT_READY");
   assert.equal(execution.updated_count, 0);
   assert.equal(writeCalls, 0, "BLOCKED_BATCH_WRITES must stay zero");
 });
 
-test("draft and sold-out call the transactional RPC exactly once while activate remains zero-write", async () => {
+test("draft, sold-out and ready activation each call their transactional RPC exactly once", async () => {
   const readyRows = [sku(1, { stock: 1 }), sku(2, { stock: 2 })];
   const readyBySku = Object.fromEntries(readyRows.map((row) => [row.id, evaluateSkuActivationReadiness({ product, sku: row, localAvailableCount: row.stock })]));
   const statusRows = [sku(1, { status: "active" })];
   const cases = [
     { action: "set_draft", preview: buildSkuBulkPreview({ action: "set_draft", skus: statusRows }), writeCalls: 1 },
     { action: "set_sold_out", preview: buildSkuBulkPreview({ action: "set_sold_out", skus: statusRows }), writeCalls: 1 },
-    { action: "activate", preview: buildSkuBulkPreview({ action: "activate", skus: readyRows, readinessBySku: readyBySku, activationGuardBySku: { [readyRows[0].id]: true, [readyRows[1].id]: true } }), writeCalls: 0 },
+    { action: "activate", preview: buildSkuBulkPreview({ action: "activate", skus: readyRows, readinessBySku: readyBySku, activationGuardBySku: { [readyRows[0].id]: true, [readyRows[1].id]: true } }), writeCalls: 1 },
   ];
   for (const scenario of cases) {
     let writeCalls = 0;
     const selected = scenario.preview.items.map((item) => item.sku_id);
-    const execution = await executeSkuBulkStatusUpdate({
+    const runner = scenario.action === "activate" ? executeSkuBulkActivation : executeSkuBulkStatusUpdate;
+    const execution = await runner({
       preview: scenario.preview,
       productId: product.id,
       skuIds: selected,
       runTransaction: async () => {
         writeCalls += 1;
-        return { ok: true, selected_count: selected.length, updated_count: selected.length, no_change_count: 0, selected_sku_ids: selected, product_summary: { has_skus: true, stock: 0, price: 1 } };
+        return { ok: true, code: scenario.action === "activate" ? "BULK_ACTIVATION_COMPLETED" : undefined, selected_count: selected.length, updated_count: selected.length, no_change_count: 0, blocked_count: 0, selected_sku_ids: selected, updated_sku_ids: selected, unchanged_sku_ids: [], product_summary: { has_skus: true, stock: 0, price: 1 } };
       },
     });
     assert.equal(scenario.preview.can_execute, true, `${scenario.action} preview should remain functional`);
     assert.equal(writeCalls, scenario.writeCalls);
-    if (scenario.action === "activate") {
-      assert.equal(execution.ok, false);
-      assert.equal(execution.code, "BULK_ACTIVATION_DEFERRED_FOR_ATOMICITY");
-    } else {
-      assert.equal(execution.ok, true);
-      assert.equal(execution.code, "BULK_STATUS_UPDATED");
-      assert.equal(execution.updated_count, 1);
-    }
+    assert.equal(execution.ok, true);
+    assert.equal(execution.code, scenario.action === "activate" ? "BULK_ACTIVATION_COMPLETED" : "BULK_STATUS_UPDATED");
+    assert.equal(execution.updated_count, scenario.action === "activate" ? 2 : 1);
   }
+});
+
+test("activation helper rejects a stale blocked transaction response with zero reported writes", async () => {
+  const rows = [sku(1, { stock: 1 }), sku(2, { stock: 1 })];
+  const readinessBySku = Object.fromEntries(rows.map((row) => [row.id, evaluateSkuActivationReadiness({ product, sku: row, localAvailableCount: 1 })]));
+  const preview = buildSkuBulkPreview({ action: "activate", skus: rows, readinessBySku, activationGuardBySku: { [rows[0].id]: true, [rows[1].id]: true } });
+  const selected = rows.map((row) => row.id);
+  let calls = 0;
+  const result = await executeSkuBulkActivation({
+    preview,
+    productId: product.id,
+    skuIds: selected,
+    runTransaction: async () => {
+      calls += 1;
+      return { ok: false, code: "BULK_ACTIVATION_NOT_READY", selected_count: 2, updated_count: 0, no_change_count: 0, blocked_count: 1, selected_sku_ids: selected, blocked_items: [{ sku_id: rows[1].id, reasons: ["ZERO_STOCK"] }] };
+    },
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "BULK_ACTIVATION_NOT_READY");
+  assert.equal(result.updated_count, 0);
+});
+
+test("activation helper rejects a non-exact committed identity set", async () => {
+  const rows = [sku(1, { stock: 1 }), sku(2, { stock: 1 })];
+  const readinessBySku = Object.fromEntries(rows.map((row) => [row.id, evaluateSkuActivationReadiness({ product, sku: row, localAvailableCount: 1 })]));
+  const preview = buildSkuBulkPreview({ action: "activate", skus: rows, readinessBySku, activationGuardBySku: { [rows[0].id]: true, [rows[1].id]: true } });
+  const result = await executeSkuBulkActivation({
+    preview,
+    productId: product.id,
+    skuIds: rows.map((row) => row.id),
+    runTransaction: async () => ({ ok: true, code: "BULK_ACTIVATION_COMPLETED", selected_count: 2, updated_count: 2, no_change_count: 0, blocked_count: 0, selected_sku_ids: [rows[0].id, id(99)] }),
+  });
+  assert.equal(result.code, "BULK_ACTIVATION_RESPONSE_INVALID");
+  assert.equal(result.updated_count, 0);
 });
 
 test("invalid committed response never reports a guessed partial success", async () => {

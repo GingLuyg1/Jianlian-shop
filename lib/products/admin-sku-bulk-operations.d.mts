@@ -43,3 +43,9 @@ export function executeSkuBulkStatusUpdate(input: {
   | ({ ok: true; code: string; updated_count: number; no_change_count: number } & Record<string, any>)
   | { ok: false; code: string; updated_count: number; no_change_count: number }
 >;
+export function executeSkuBulkActivation(input: {
+  preview: SkuBulkPreview;
+  productId?: string;
+  skuIds?: string[];
+  runTransaction?: (input: { productId?: string; skuIds: string[] }) => Promise<Record<string, any>>;
+}): Promise<Record<string, any>>;

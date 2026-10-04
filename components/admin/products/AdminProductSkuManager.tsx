@@ -209,20 +209,27 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   }
 
   async function executeBulkStatus() {
-    if (!product || !bulkPreview || bulkBusy || bulkPreview.action === "activate"
-      || !bulkPreview.execution_supported || !bulkPreview.can_execute
+    if (!product || !bulkPreview || bulkBusy || !bulkPreview.execution_supported || !bulkPreview.can_execute
       || bulkPreview.blocked_count > 0 || bulkPreview.will_change_count === 0) return;
     setBulkBusy(true);
     try {
       const skuIds = bulkPreview.items.map((item) => item.sku_id);
       const result = await executeProductSkuBulkAction(product.id, skuIds, bulkPreview.action);
-      toast.success(`批量更新完成：修改 ${result.updated_count}，无需修改 ${result.no_change_count}`);
+      toast.success(bulkPreview.action === "activate"
+        ? `批量激活完成：激活 ${result.updated_count}，无需修改 ${result.no_change_count}`
+        : `批量更新完成：修改 ${result.updated_count}，无需修改 ${result.no_change_count}`);
       onSummary({ price: result.product_summary.price, stock: result.product_summary.stock });
       setSelectedSkuIds(new Set());
       setBulkPreview(null);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? `${error.message}；请重新预检` : "批量更新失败；请重新预检");
+      toast.error(error instanceof Error ? `${error.message}；SKU 状态或履约条件可能已变化，请重新预检` : "批量更新失败；请重新预检");
+      try {
+        const selected = bulkPreview.items.map((item) => item.sku_id);
+        setBulkPreview(await previewProductSkuBulkAction(product.id, selected, bulkPreview.action));
+      } catch {
+        // Keep the existing selection and last safe preview when the refresh itself fails.
+      }
     } finally {
       setBulkBusy(false);
     }
@@ -297,10 +304,10 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       {bulkPreview ? <div className="space-y-3 text-sm">
         <div className="grid grid-cols-2 gap-2 rounded-md bg-slate-50 p-3"><span>已选：{bulkPreview.selected_count}</span><span>将修改：{bulkPreview.will_change_count}</span><span>无需修改：{bulkPreview.no_change_count}</span><span>被阻止：{bulkPreview.blocked_count}</span></div>
         {bulkPreview.action === "activate" ? <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-3">{bulkPreview.items.map((item) => <div key={item.sku_id} className={item.disposition === "blocked" ? "text-red-800" : "text-emerald-800"}><span className="font-mono">{item.sku_code ?? item.sku_id}</span>：{item.disposition === "blocked" ? `BLOCKED · ${formatSkuActivationReasons(item.reasons)}` : item.disposition === "no_change" ? "NO_CHANGE · 已是 active" : "READY"}</div>)}</div> : null}
-        {!bulkPreview.execution_supported ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">批量 Activate 当前仅支持预检；事务型 readiness 执行将在后续阶段开放。</div> : null}
+        {!bulkPreview.execution_supported ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">当前操作仅支持预检，事务型执行尚未开放。</div> : null}
         {bulkPreview.execution_supported && bulkPreview.will_change_count === 0 ? <div role="status" className="rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">所选 SKU 已是目标状态，无需修改。</div> : null}
       </div> : null}
-      <AlertDialogFooter><AlertDialogCancel disabled={bulkBusy}>关闭</AlertDialogCancel>{bulkPreview?.execution_supported && bulkPreview.can_execute && bulkPreview.blocked_count === 0 && bulkPreview.will_change_count > 0 ? <AlertDialogAction disabled={bulkBusy} onClick={(event) => { event.preventDefault(); void executeBulkStatus(); }}>{bulkBusy ? "执行中…" : `确认${bulkActionLabel[bulkPreview.action]}`}</AlertDialogAction> : null}</AlertDialogFooter>
+      <AlertDialogFooter><AlertDialogCancel disabled={bulkBusy}>关闭</AlertDialogCancel>{bulkPreview?.execution_supported && bulkPreview.can_execute && bulkPreview.blocked_count === 0 && bulkPreview.will_change_count > 0 ? <AlertDialogAction disabled={bulkBusy} onClick={(event) => { event.preventDefault(); void executeBulkStatus(); }}>{bulkBusy ? "执行中…" : bulkPreview.action === "activate" ? `确认激活 ${bulkPreview.will_change_count} 个 SKU` : `确认${bulkActionLabel[bulkPreview.action]}`}</AlertDialogAction> : null}</AlertDialogFooter>
     </AlertDialogContent></AlertDialog>
   </div>;
 });
