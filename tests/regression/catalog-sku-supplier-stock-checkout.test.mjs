@@ -15,8 +15,9 @@ test("admin product edit exposes database SKU management and existing supplier b
   assert.match(manager, /SKU Code/);
   assert.match(manager, /绑定供货商/);
   assert.match(manager, /onSupplierBinding\(product, row\.sku!/);
-  assert.match(manager, /createProductSku/);
-  assert.match(manager, /updateProductSku/);
+  assert.match(manager, /saveProductSkuWorkspace/);
+  assert.match(manager, /buildSkuWorkspaceOperations/);
+  assert.doesNotMatch(manager, /createProductSku|updateProductSku/);
   assert.match(manager, /deleteProductSku/);
 });
 

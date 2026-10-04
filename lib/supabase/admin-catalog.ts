@@ -66,9 +66,23 @@ export type AdminProductSku = {
   image_url: string | null;
   sort_order: number;
   metadata: Record<string, unknown> | null;
+  updated_at: string | null;
 };
 
-export type ProductSkuPayload = Omit<AdminProductSku, "id" | "product_id" | "metadata">;
+export type ProductSkuPayload = Omit<AdminProductSku, "id" | "product_id" | "metadata" | "updated_at">;
+export type ProductSkuWorkspaceOperation =
+  | { type: "create"; client_id: string; payload: ProductSkuPayload }
+  | { type: "update"; sku_id: string; expected_updated_at: string; payload: ProductSkuPayload };
+export type ProductSkuWorkspaceResult = {
+  ok: boolean;
+  code: string;
+  created_count: number;
+  updated_count: number;
+  no_change_count: number;
+  created_mappings: Array<{ client_id: string; sku_id: string }>;
+  skus: AdminProductSku[];
+  product_summary: { has_skus: boolean; stock: number; price: number | null };
+};
 export type ProductSkuBulkAction = "set_draft" | "set_sold_out" | "activate";
 export type ProductSkuBulkPreview = {
   action: ProductSkuBulkAction;
@@ -99,6 +113,13 @@ export type ProductSkuBulkExecution = {
 };
 export class ProductSkuWriteError extends Error {
   constructor(message: string, public savedSku: AdminProductSku) { super(message); }
+}
+export class ProductSkuWorkspaceError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public blockedItems: Array<{ sku_id: string | null; sku_code: string | null; reasons: string[] }> = [],
+  ) { super(message); }
 }
 
 export type ProductFilters = {
@@ -442,6 +463,7 @@ function normalizeProductSku(row: Record<string, unknown>): AdminProductSku {
     delivery_type: row.delivery_type ? row.delivery_type as DeliveryType : null,
     image_url: row.image_url ? String(row.image_url) : null, sort_order: normalizeNumber(row.sort_order),
     metadata: row.metadata && typeof row.metadata === "object" ? row.metadata as Record<string, unknown> : null,
+    updated_at: row.updated_at ? String(row.updated_at) : null,
   };
 }
 
@@ -549,6 +571,55 @@ export async function createProductSku(productId: string, payload: ProductSkuPay
 export async function updateProductSku(productId: string, skuId: string, payload: Partial<ProductSkuPayload>) {
   const result = await adminCatalogRequest<{ sku: Record<string, unknown> }>(`/api/admin/products/${encodeURIComponent(productId)}/skus/${encodeURIComponent(skuId)}`, { method: "PATCH", body: JSON.stringify(payload) });
   return normalizeProductSku(result.sku);
+}
+
+export async function saveProductSkuWorkspace(productId: string, operations: ProductSkuWorkspaceOperation[]) {
+  const response = await fetch(`/api/admin/products/${encodeURIComponent(productId)}/skus/workspace`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ operations }),
+    cache: "no-store",
+  });
+  const body = await response.json().catch(() => ({})) as {
+    error?: string;
+    code?: string;
+    blocked_items?: Array<{ sku_id?: unknown; sku_code?: unknown; reasons?: unknown }>;
+    created_count?: unknown;
+    updated_count?: unknown;
+    no_change_count?: unknown;
+    created_mappings?: Array<{ client_id?: unknown; sku_id?: unknown }>;
+    skus?: Array<Record<string, unknown>>;
+    product_summary?: { has_skus?: unknown; stock?: unknown; price?: unknown };
+  };
+  if (!response.ok) {
+    throw new ProductSkuWorkspaceError(
+      typeof body.error === "string" ? body.error : "SKU workspace 保存失败",
+      typeof body.code === "string" ? body.code : "SKU_WORKSPACE_SAVE_FAILED",
+      Array.isArray(body.blocked_items) ? body.blocked_items.map((item) => ({
+        sku_id: typeof item.sku_id === "string" ? item.sku_id : null,
+        sku_code: typeof item.sku_code === "string" ? item.sku_code : null,
+        reasons: Array.isArray(item.reasons) ? item.reasons.filter((reason): reason is string => typeof reason === "string") : [],
+      })) : [],
+    );
+  }
+  const summary = body.product_summary ?? {};
+  return {
+    ok: true,
+    code: typeof body.code === "string" ? body.code : "SKU_WORKSPACE_SAVED",
+    created_count: normalizeNumber(body.created_count),
+    updated_count: normalizeNumber(body.updated_count),
+    no_change_count: normalizeNumber(body.no_change_count),
+    created_mappings: Array.isArray(body.created_mappings) ? body.created_mappings.flatMap((item) =>
+      typeof item.client_id === "string" && typeof item.sku_id === "string"
+        ? [{ client_id: item.client_id, sku_id: item.sku_id }]
+        : []) : [],
+    skus: Array.isArray(body.skus) ? body.skus.map(normalizeProductSku) : [],
+    product_summary: {
+      has_skus: Boolean(summary.has_skus),
+      stock: normalizeNumber(summary.stock),
+      price: summary.price == null ? null : normalizeNumber(summary.price),
+    },
+  } satisfies ProductSkuWorkspaceResult;
 }
 
 export async function deleteProductSku(productId: string, skuId: string) {

@@ -36,6 +36,12 @@ create or replace function public.set_updated_at() returns trigger
 language plpgsql as $$ begin new.updated_at = now(); return new; end $$;
 create trigger product_skus_set_updated_at before update on public.product_skus
 for each row execute function public.set_updated_at();
+create unique index product_skus_product_code_uidx
+  on public.product_skus(product_id, lower(btrim(sku_code)))
+  where sku_code is not null and btrim(sku_code) <> '';
+create unique index product_skus_product_combination_uidx
+  on public.product_skus(product_id, combination_key)
+  where combination_key is not null and combination_key <> '';
 
 create table public.digital_inventory (
   id uuid primary key,

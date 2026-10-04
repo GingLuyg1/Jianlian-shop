@@ -9,7 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { deriveSkuProductSummary, ensureTrailingEmptySkuRow, isSkuDraftEmpty, validateSkuDraft } from "@/lib/products/sku-editor.mjs";
-import { createProductSku, deleteProductSku, executeProductSkuBulkAction, getProductSkuWorkspace, listProductSkus, previewProductSkuBulkAction, updateProductSku, ProductSkuWriteError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuBulkAction, type ProductSkuBulkPreview, type ProductSkuPayload, type ProductStatus } from "@/lib/supabase/admin-catalog";
+import { buildSkuWorkspaceOperations, SkuWorkspaceInputError } from "@/lib/products/admin-sku-workspace.mjs";
+import { deleteProductSku, executeProductSkuBulkAction, getProductSkuWorkspace, previewProductSkuBulkAction, saveProductSkuWorkspace, ProductSkuWorkspaceError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuBulkAction, type ProductSkuBulkPreview, type ProductSkuPayload, type ProductSkuWorkspaceOperation, type ProductStatus } from "@/lib/supabase/admin-catalog";
 import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
 import { evaluateSkuActivationReadiness, formatSkuActivationReasons, summarizeSkuReadiness } from "@/lib/products/sku-activation-readiness.mjs";
 
@@ -145,23 +146,39 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     if (!validate()) throw new Error("SKU 尚未填写完整");
     flight.current = true; setBusy(true);
     try {
-      for (const row of rowsRef.current.filter((item) => item.sku || !isSkuDraftEmpty(item.draft))) {
-        if (row.sku && !row.draft.touched) continue;
-        let sku: AdminProductSku;
-        try {
-          sku = row.sku ? await updateProductSku(savedProduct.id, row.sku.id, payload(row.draft)) : await createProductSku(savedProduct.id, payload(row.draft));
-        } catch (error) {
-          if (error instanceof ProductSkuWriteError) {
-            const savedSku = error.savedSku;
-            const next = rowsRef.current.map((item) => item.key === row.key ? { key: savedSku.id, sku: savedSku, draft: { ...toDraft(savedSku), touched: true } } : item);
-            rowsRef.current = next; setRows(next);
-          }
-          throw error;
-        }
-        const next = rowsRef.current.map((item) => item.key === row.key ? { key: sku.id, sku, draft: toDraft(sku) } : item);
-        rowsRef.current = next; setRows(next);
+      const operations: ProductSkuWorkspaceOperation[] = buildSkuWorkspaceOperations({
+        rows: rowsRef.current,
+        buildPayload: payload,
+        isEmptyDraft: isSkuDraftEmpty,
+      });
+      if (!operations.length) {
+        onSummary(deriveSkuProductSummary(rowsRef.current.flatMap((row) => row.sku ? [row.sku] : [])));
+        return;
       }
-      onSummary(deriveSkuProductSummary(await listProductSkus(savedProduct.id)));
+      const result = await saveProductSkuWorkspace(savedProduct.id, operations);
+      const next = ensureTrailingEmptySkuRow(result.skus.map((sku) => ({ key: sku.id, sku, draft: toDraft(sku) })), emptyRow);
+      rowsRef.current = next; setRows(next);
+      setActivationBlocked([]);
+      setSelectedSkuIds((current) => new Set(Array.from(current).filter((id) => result.skus.some((sku) => sku.id === id))));
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock });
+      toast.success(`SKU 已保存：新增 ${result.created_count}，更新 ${result.updated_count}`);
+    } catch (error) {
+      if (error instanceof ProductSkuWorkspaceError || error instanceof SkuWorkspaceInputError) {
+        if (error.code === "SKU_WORKSPACE_STALE") {
+          toast.error("SKU 已被其他操作修改，请刷新后重新确认");
+        } else if (error instanceof ProductSkuWorkspaceError && error.code === "SKU_ACTIVATION_NOT_READY") {
+          setActivationBlocked(error.blockedItems.map((item) => ({
+            code: item.sku_code ?? item.sku_id ?? "SKU",
+            stock: 0,
+            supplierBound: false,
+            localAvailable: 0,
+            inventoryState: null,
+            reasons: item.reasons,
+          })));
+          toast.error("SKU 激活条件未满足，请先处理下方 readiness 问题");
+        }
+      }
+      throw error;
     } finally { flight.current = false; setBusy(false); }
   }
   useImperativeHandle(ref, () => ({ validate, prepareSave, saveAll }));

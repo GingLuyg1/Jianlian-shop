@@ -16,22 +16,23 @@ test("SKU table replaces duplicate price-stock form and preserves product sortin
   assert.doesNotMatch(editor, /sku_title: "默认规格", sku_code: "DEFAULT"/);
   assert.match(editor, /current\.filter\(\(row\) => row\.key !== "legacy"\)/);
 });
-test("SKU save validates rows, excludes blank draft, and remembers partial successful inserts", () => {
+test("SKU save validates rows, excludes blank draft, and submits one atomic workspace", () => {
   const editor = file("components/admin/products/AdminProductSkuManager.tsx");
   const page = file("app/admin/products/page.tsx");
   assert.match(editor, /ensureTrailingEmptySkuRow/);
   assert.match(editor, /validateSkuDraft/);
   assert.match(editor, /aria-invalid=\{Boolean\(errors\[row.key\]\?\.original_price\)\}/);
   assert.match(editor, /errors\[row.key\]\.sort_order/);
-  assert.match(editor, /item\.sku \|\| !isSkuDraftEmpty/);
-  assert.match(editor, /error instanceof ProductSkuWriteError/);
-  assert.match(editor, /sku: savedSku/);
+  assert.match(editor, /buildSkuWorkspaceOperations/);
+  assert.match(editor, /saveProductSkuWorkspace/);
+  assert.match(editor, /result\.skus\.map/);
+  assert.doesNotMatch(editor, /ProductSkuWriteError|createProductSku|updateProductSku/);
   assert.match(page, /skuManagerRef\.current\?\.validate\(\)/);
   assert.match(page, /await saveSkus\(savedProduct\)/);
   assert.match(page, /saveSkus \? basePayload : updatePayload/);
   assert.match(page, /skuEditsDirty \|\| isProductDirty/);
 });
-test("all SKU write routes derive product summary server-side without migrations or new RPC", () => {
+test("single-SKU compatibility routes retain server-side summary while workspace uses one RPC", () => {
   for (const name of ["app/api/admin/products/[id]/skus/route.ts", "app/api/admin/products/[id]/skus/[skuId]/route.ts"]) {
     const route = file(name);
     assert.match(route, /requireCatalogAdmin/);
@@ -39,6 +40,8 @@ test("all SKU write routes derive product summary server-side without migrations
     assert.match(route, /await syncSkuProductSummary\(service, params\.id\)/);
     assert.doesNotMatch(route, /\.rpc\(/);
   }
+  const workspace = file("app/api/admin/products/[id]/skus/workspace/route.ts");
+  assert.equal(workspace.match(/service\.rpc\("admin_save_product_sku_workspace"/g)?.length, 1);
   const summary = file("lib/products/sku-summary.ts");
   assert.match(summary, /\.range\(offset, offset \+ 499\)/);
   assert.match(summary, /deriveSkuProductSummary/);
