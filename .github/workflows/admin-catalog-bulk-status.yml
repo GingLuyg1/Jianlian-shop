@@ -9,13 +9,19 @@ on:
     paths:
       - ".github/workflows/admin-catalog-bulk-status.yml"
       - "scripts/ci/admin-catalog-bulk-*"
+      - "scripts/ci/admin-catalog-sku-workspace-*"
       - "scripts/ci/render-admin-sku-activation-readiness-fixtures.mjs"
       - "supabase/migrations/*admin_catalog_transactional_bulk_*"
+      - "supabase/migrations/*admin_catalog_transactional_sku_workspace_*"
       - "lib/products/admin-sku-bulk-operations.*"
+      - "lib/products/admin-sku-workspace.*"
       - "lib/products/sku-activation-readiness.*"
+      - "lib/supabase/admin-catalog.ts"
       - "app/api/admin/products/**/skus/bulk/**"
+      - "app/api/admin/products/**/skus/workspace/**"
       - "components/admin/products/AdminProductSkuManager.tsx"
       - "tests/**/admin-sku-bulk-*"
+      - "tests/**/admin-sku-workspace-*"
       - "tests/fixtures/admin-sku-activation-readiness.mjs"
       - "tests/unit/admin-sku-activation-readiness-parity.test.mjs"
 
@@ -60,6 +66,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -q -f scripts/ci/admin-catalog-bulk-status-minimal-schema.sql
       - name: Real PostgreSQL atomicity and concurrency
         run: bash scripts/ci/admin-catalog-bulk-status-real-db.sh
+      - name: Transactional SKU workspace atomicity and concurrency
+        run: bash scripts/ci/admin-catalog-sku-workspace-real-db.sh
 
   application-contracts:
     runs-on: ubuntu-latest
@@ -71,5 +79,5 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
-      - run: node --test tests/unit/admin-sku-bulk-operations.test.mjs tests/unit/admin-sku-activation-readiness-parity.test.mjs tests/unit/catalog-sku-activation-readiness.test.mjs tests/regression/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-rpc-migration.test.mjs tests/regression/admin-sku-bulk-activation-rpc-migration.test.mjs
+      - run: node --test tests/unit/admin-sku-bulk-operations.test.mjs tests/unit/admin-sku-workspace.test.mjs tests/unit/admin-sku-activation-readiness-parity.test.mjs tests/unit/catalog-sku-activation-readiness.test.mjs tests/regression/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-rpc-migration.test.mjs tests/regression/admin-sku-bulk-activation-rpc-migration.test.mjs tests/regression/admin-sku-workspace-rpc-migration.test.mjs tests/regression/admin-sku-workspace-save.test.mjs
       - run: npm run typecheck
