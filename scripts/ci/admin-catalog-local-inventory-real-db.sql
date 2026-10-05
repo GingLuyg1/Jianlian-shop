@@ -33,6 +33,13 @@ returns jsonb language sql stable set search_path = pg_catalog as $$
   where inventory.id = any(p_ids)
 $$;
 
+create or replace function public.ci_local_inventory_operation_count(p_request_id uuid default null)
+returns bigint language sql stable security definer set search_path = pg_catalog as $$
+  select count(*)
+  from public.admin_local_inventory_operations as operation
+  where p_request_id is null or operation.request_id = p_request_id
+$$;
+
 set role authenticated;
 select set_config('request.jwt.claim.sub', '90000000-0000-4000-8000-000000000001', false);
 select set_config(
@@ -97,7 +104,7 @@ declare v_before_inventory bigint; v_before_audit bigint; v_before_ops bigint;
 begin
   select count(*) into v_before_inventory from public.digital_inventory;
   select count(*) into v_before_audit from public.admin_audit_logs;
-  select count(*) into v_before_ops from public.admin_local_inventory_operations;
+  select public.ci_local_inventory_operation_count() into v_before_ops;
   begin
     perform public.admin_import_local_inventory(
       '10000000-0000-4000-8000-000000000001',
@@ -112,7 +119,7 @@ begin
   end;
   perform public.ci_assert((select count(*) from public.digital_inventory) = v_before_inventory, 'invalid batch inventory rollback');
   perform public.ci_assert((select count(*) from public.admin_audit_logs) = v_before_audit, 'invalid batch audit rollback');
-  perform public.ci_assert((select count(*) from public.admin_local_inventory_operations) = v_before_ops, 'invalid batch operation rollback');
+  perform public.ci_assert(public.ci_local_inventory_operation_count() = v_before_ops, 'invalid batch operation rollback');
 end
 $$;
 
@@ -203,10 +210,10 @@ begin
   exception when check_violation then null;
   end;
   perform public.ci_assert((select count(*) from public.digital_inventory) = v_before, 'audit failure import rollback');
-  perform public.ci_assert(not exists (
-    select 1 from public.admin_local_inventory_operations
-    where request_id = '70000000-0000-4000-8000-000000000007'
-  ), 'audit failure operation rollback');
+  perform public.ci_assert(
+    public.ci_local_inventory_operation_count('70000000-0000-4000-8000-000000000007') = 0,
+    'audit failure operation rollback'
+  );
 end
 $$;
 reset role;
@@ -423,7 +430,10 @@ begin
   exception when check_violation then null;
   end;
   perform public.ci_assert((select status='available' from public.digital_inventory where id=v_id), 'transition audit rollback');
-  perform public.ci_assert(not exists(select 1 from public.admin_local_inventory_operations where request_id='70000000-0000-4000-8000-000000000019'), 'transition operation rollback');
+  perform public.ci_assert(
+    public.ci_local_inventory_operation_count('70000000-0000-4000-8000-000000000019') = 0,
+    'transition operation rollback'
+  );
 end
 $$;
 reset role;
