@@ -1,10 +1,17 @@
 \set ON_ERROR_STOP on
 
-select case
-  when (select marker from public.ci_admin_local_inventory_guard) = 'JOB_LOCAL_ADMIN_INVENTORY_DB'
-  then 'LOCAL_INVENTORY_DB_GUARD_PASS'
-  else public.__local_inventory_guard_missing()
-end;
+do $$
+begin
+  if not exists (
+    select 1
+    from public.ci_admin_local_inventory_guard
+    where marker = 'JOB_LOCAL_ADMIN_INVENTORY_DB'
+  ) then
+    raise exception 'LOCAL_INVENTORY_DB_GUARD_FAILED';
+  end if;
+end
+$$;
+select 'LOCAL_INVENTORY_DB_GUARD_PASS';
 
 create or replace function public.ci_assert(p_condition boolean, p_message text)
 returns void language plpgsql set search_path = pg_catalog as $$
