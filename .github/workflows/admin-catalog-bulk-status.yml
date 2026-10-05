@@ -10,9 +10,11 @@ on:
       - ".github/workflows/admin-catalog-bulk-status.yml"
       - "scripts/ci/admin-catalog-bulk-*"
       - "scripts/ci/admin-catalog-sku-workspace-*"
+      - "scripts/ci/admin-catalog-local-inventory-*"
       - "scripts/ci/render-admin-sku-activation-readiness-fixtures.mjs"
       - "supabase/migrations/*admin_catalog_transactional_bulk_*"
       - "supabase/migrations/*admin_catalog_transactional_sku_workspace_*"
+      - "supabase/migrations/*admin_catalog_transactional_local_inventory_*"
       - "lib/products/admin-sku-bulk-operations.*"
       - "lib/products/admin-sku-workspace.*"
       - "lib/products/sku-activation-readiness.*"
@@ -22,6 +24,7 @@ on:
       - "components/admin/products/AdminProductSkuManager.tsx"
       - "tests/**/admin-sku-bulk-*"
       - "tests/**/admin-sku-workspace-*"
+      - "tests/**/admin-local-inventory-*"
       - "tests/fixtures/admin-sku-activation-readiness.mjs"
       - "tests/unit/admin-sku-activation-readiness-parity.test.mjs"
 
@@ -79,5 +82,43 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
-      - run: node --test tests/unit/admin-sku-bulk-operations.test.mjs tests/unit/admin-sku-workspace.test.mjs tests/unit/admin-sku-activation-readiness-parity.test.mjs tests/unit/catalog-sku-activation-readiness.test.mjs tests/regression/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-rpc-migration.test.mjs tests/regression/admin-sku-bulk-activation-rpc-migration.test.mjs tests/regression/admin-sku-workspace-rpc-migration.test.mjs tests/regression/admin-sku-workspace-save.test.mjs
+      - run: node --test tests/unit/admin-sku-bulk-operations.test.mjs tests/unit/admin-sku-workspace.test.mjs tests/unit/admin-sku-activation-readiness-parity.test.mjs tests/unit/catalog-sku-activation-readiness.test.mjs tests/regression/admin-sku-bulk-operations.test.mjs tests/regression/admin-sku-bulk-rpc-migration.test.mjs tests/regression/admin-sku-bulk-activation-rpc-migration.test.mjs tests/regression/admin-sku-workspace-rpc-migration.test.mjs tests/regression/admin-sku-workspace-save.test.mjs tests/regression/admin-local-inventory-rpc-migration.test.mjs
       - run: npm run typecheck
+
+  local-inventory-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      PGHOST: 127.0.0.1
+      PGPORT: "54322"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+      SUPABASE_ACCESS_TOKEN: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+      - name: Start job-local Supabase PostgreSQL only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_ACCESS_TOKEN}"
+          test ! -e supabase/.temp/project-ref
+          ci_project="$(mktemp -d)"
+          cd "$ci_project"
+          supabase init
+          supabase db start
+          echo "CI_SUPABASE_PROJECT=$ci_project" >> "$GITHUB_ENV"
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+          psql -X -v ON_ERROR_STOP=1 -Atqc "select 'CI_DB_READY'" | grep -qx CI_DB_READY
+      - name: Load local-inventory minimal schema
+        run: psql -X -v ON_ERROR_STOP=1 -q -f scripts/ci/admin-catalog-local-inventory-minimal-schema.sql
+      - name: Transactional local-inventory atomicity and concurrency
+        run: bash scripts/ci/admin-catalog-local-inventory-real-db.sh
