@@ -21,9 +21,10 @@ import {
   hasOperationalScanFilters,
   parseAdminCatalogOperationFilters,
 } from "@/lib/products/admin-catalog-operations.mjs";
+import { readSkuLocalInventoryDiagnostics } from "@/lib/products/fulfillment-inventory-diagnostics.mjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const SKU_OPERATION_FIELDS = "id,product_id,status,stock,metadata";
+const SKU_OPERATION_FIELDS = "id,product_id,sku_code,sku_title,status,stock,delivery_type,metadata";
 const PRODUCT_SCAN_LIMIT = 5000;
 const SKU_PRODUCT_BATCH_SIZE = 200;
 const SKU_BATCH_ROW_LIMIT = 5000;
@@ -56,13 +57,13 @@ async function readOperationalSkuRows(service: SupabaseClient, productIds: strin
   }
   const results = await Promise.all(batches.map((ids) => service
     .from("product_skus")
-    .select(SKU_OPERATION_FIELDS)
+    .select(SKU_OPERATION_FIELDS, { count: "exact" })
     .in("product_id", ids)
     .range(0, SKU_BATCH_ROW_LIMIT - 1)));
   const rows: Array<Record<string, unknown>> = [];
   for (const result of results) {
     if (result.error) return { rows: [], queryCount: batches.length, error: result.error };
-    if ((result.data ?? []).length >= SKU_BATCH_ROW_LIMIT) {
+    if (result.count === null || result.count !== (result.data ?? []).length || (result.data ?? []).length >= SKU_BATCH_ROW_LIMIT) {
       return { rows: [], queryCount: batches.length, overflow: true };
     }
     rows.push(...((result.data ?? []) as Array<Record<string, unknown>>));
@@ -141,6 +142,10 @@ export async function GET(request: Request) {
     );
   }
 
+  if (operationalScan && (count === null || count !== (data ?? []).length)) {
+    return productFailureResponse("PRODUCT_FILTER_SCAN_INCOMPLETE", "筛选数据未完整返回，请缩小范围后重试", requestId, 503);
+  }
+
   const productRows = (data ?? []) as Array<Record<string, unknown>>;
   const multiSkuProductIds = productRows
     .filter((row) => row.has_skus === true)
@@ -158,13 +163,24 @@ export async function GET(request: Request) {
       skuResult.overflow ? 400 : 500
     );
   }
+  const inventoryResult = await readSkuLocalInventoryDiagnostics(service, skuResult.rows);
+  if (inventoryResult.error) {
+    console.warn("[AdminProductList] local inventory diagnostics unavailable; response will fail closed", {
+      requestId,
+      overflow: inventoryResult.overflow,
+    });
+  }
+  const inventoryContext = {
+    availableBySku: inventoryResult.availableBySku,
+    error: inventoryResult.error,
+  };
 
   const filtered = operationalScan
-    ? filterAndPaginateAdminCatalogProducts(productRows, skuResult.rows, filters)
-    : { products: decorateAdminCatalogProducts(productRows, skuResult.rows, filters), count: count ?? 0 };
+    ? filterAndPaginateAdminCatalogProducts(productRows, skuResult.rows, filters, inventoryContext)
+    : { products: decorateAdminCatalogProducts(productRows, skuResult.rows, filters, inventoryContext), count: count ?? 0 };
   const products = filtered.products;
   const filteredCount = filtered.count;
-  const queryCount = 1 + skuResult.queryCount;
+  const queryCount = 1 + skuResult.queryCount + inventoryResult.queryCount;
 
   const response = jsonResponse({
     success: true,

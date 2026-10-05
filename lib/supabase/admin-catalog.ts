@@ -3,6 +3,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
 import type {
   AdminCatalogInventoryVerification,
+  AdminCatalogFulfillmentHealth,
   AdminCatalogProductType,
   AdminCatalogSkuStatus,
   AdminCatalogStockLevel,
@@ -134,6 +135,7 @@ export type ProductFilters = {
   supplierBinding?: AdminCatalogSupplierBinding;
   supplierStock?: AdminCatalogSupplierStock;
   inventoryVerification?: AdminCatalogInventoryVerification;
+  fulfillmentHealth?: AdminCatalogFulfillmentHealth;
   sortBy?: "sort_order" | "updated_at";
   page?: number;
   pageSize?: number;
@@ -315,6 +317,13 @@ function normalizeProduct(row: Record<string, unknown>): AdminProduct {
             supplier_stock_fresh: normalizeNumber((row.operational_summary as Record<string, unknown>).supplier_stock_fresh),
             supplier_stock_stale: normalizeNumber((row.operational_summary as Record<string, unknown>).supplier_stock_stale),
             supplier_stock_error: normalizeNumber((row.operational_summary as Record<string, unknown>).supplier_stock_error),
+            fulfillment_ready: normalizeNumber((row.operational_summary as Record<string, unknown>).fulfillment_ready),
+            fulfillment_attention: normalizeNumber((row.operational_summary as Record<string, unknown>).fulfillment_attention),
+            fulfillment_blocked: normalizeNumber((row.operational_summary as Record<string, unknown>).fulfillment_blocked),
+            fulfillment_unknown: normalizeNumber((row.operational_summary as Record<string, unknown>).fulfillment_unknown),
+            fulfillment_no_source: normalizeNumber((row.operational_summary as Record<string, unknown>).fulfillment_no_source),
+            local_inventory_available: normalizeNumber((row.operational_summary as Record<string, unknown>).local_inventory_available),
+            inventory_diagnostics_failed: (row.operational_summary as Record<string, unknown>).inventory_diagnostics_failed === true,
           }
         : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
@@ -418,6 +427,7 @@ export async function listProducts({
   supplierBinding = "all",
   supplierStock = "all",
   inventoryVerification = "all",
+  fulfillmentHealth = "all",
   sortBy = "sort_order",
   page = 1,
   pageSize = 10,
@@ -434,6 +444,7 @@ export async function listProducts({
   if (supplierBinding !== "all") params.set("supplierBinding", supplierBinding);
   if (supplierStock !== "all") params.set("supplierStock", supplierStock);
   if (inventoryVerification !== "all") params.set("inventoryVerification", inventoryVerification);
+  if (fulfillmentHealth !== "all") params.set("fulfillmentHealth", fulfillmentHealth);
   params.set("sortBy", sortBy);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));

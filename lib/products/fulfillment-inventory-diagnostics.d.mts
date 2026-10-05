@@ -1,0 +1,34 @@
+export type FulfillmentSource = "local_inventory" | "supplier" | "hybrid" | "none" | "manual" | "shipping" | "unknown";
+export type SupplierStockDiagnosticState = "fresh" | "stale" | "error" | "unknown" | "not_applicable";
+export type FulfillmentHealth = "ready" | "attention" | "blocked" | "unknown";
+export type SkuOperationalDiagnostic = {
+  sku_id: string;
+  sku_code: string | null;
+  sku_title: string | null;
+  status: string;
+  delivery_type: string | null;
+  effective_delivery_type: string;
+  stock: number;
+  fulfillment_source: FulfillmentSource;
+  local_inventory: { available_count: number | null; state: "available" | "empty" | "error" };
+  supplier: { bound: boolean; binding_complete: boolean; provider: string | null; supplier_product_id_present: boolean; supplier_sku_id_present: boolean };
+  supplier_stock: { state: SupplierStockDiagnosticState; quantity: number | null; checked_at: string | null; age_seconds: number | null; error_code: string | null };
+  verification: { required: boolean };
+  activation: { ready: boolean; reasons: string[] };
+  health: FulfillmentHealth;
+  next_actions: string[];
+  diagnostic_issues: string[];
+};
+export type SkuOperationalDiagnosticSummary = {
+  ready: number;
+  attention: number;
+  blocked: number;
+  unknown: number;
+  no_source: number;
+  local_inventory_available: number;
+  supplier_bound: number;
+};
+export function getSupplierDiagnosticState(metadata: unknown): SupplierStockDiagnosticState;
+export function buildSkuOperationalDiagnostic(input: { product: Record<string, unknown> | null; sku: Record<string, unknown>; localAvailableCount?: number; localInventoryError?: boolean; activationReadiness?: import("./sku-activation-readiness.mjs").SkuActivationReadiness; now?: number }): SkuOperationalDiagnostic;
+export function summarizeSkuOperationalDiagnostics(rows: SkuOperationalDiagnostic[]): SkuOperationalDiagnosticSummary;
+export function readSkuLocalInventoryDiagnostics(service: any, skuRows: Array<Record<string, unknown>>): Promise<{ availableBySku: Record<string, number>; queryCount: number; error: boolean; overflow: boolean }>;
