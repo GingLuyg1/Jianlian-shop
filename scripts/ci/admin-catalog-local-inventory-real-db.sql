@@ -193,7 +193,8 @@ $$;
 
 -- Audit failure must roll back the entire import.
 reset role;
-alter table public.admin_audit_logs add constraint ci_block_import_audit check (action <> 'import_local_inventory');
+alter table public.admin_audit_logs
+  add constraint ci_block_import_audit check (action <> 'import_local_inventory') not valid;
 set role authenticated;
 do $$
 declare v_before bigint;
@@ -415,7 +416,8 @@ $$;
 
 -- Transition audit failure is atomic.
 reset role;
-alter table public.admin_audit_logs add constraint ci_block_transition_audit check (action <> 'transition_local_inventory');
+alter table public.admin_audit_logs
+  add constraint ci_block_transition_audit check (action <> 'transition_local_inventory') not valid;
 set role authenticated;
 do $$
 declare v_id uuid; v_items jsonb;
