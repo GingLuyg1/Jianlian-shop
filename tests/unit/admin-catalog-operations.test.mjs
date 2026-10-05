@@ -157,6 +157,7 @@ test("URL filter serialization and parsing are refresh-safe and omit defaults", 
     supplierBinding: "supplier_unbound",
     supplierStock: "unknown",
     inventoryVerification: "requires_verification",
+    fulfillmentHealth: "blocked",
     sortBy: "updated_at",
     page: 2,
     pageSize: 50,
@@ -166,6 +167,7 @@ test("URL filter serialization and parsing are refresh-safe and omit defaults", 
   assert.equal(parsed.filters.search, "apple");
   assert.equal(parsed.filters.productType, "multi_sku");
   assert.equal(parsed.filters.stockLevel, "zero_stock");
+  assert.equal(parsed.filters.fulfillmentHealth, "blocked");
   assert.equal(parsed.filters.page, 2);
   assert.equal(params.get("primaryCategory"), "gift-cards");
   assert.equal(params.get("secondaryCategory"), "apple");
@@ -187,6 +189,13 @@ test("gift-apple-us fixture exposes the expected operational summary", () => {
     supplier_stock_fresh: 0,
     supplier_stock_stale: 0,
     supplier_stock_error: 0,
+    fulfillment_ready: 0,
+    fulfillment_attention: 0,
+    fulfillment_blocked: 10,
+    fulfillment_unknown: 0,
+    fulfillment_no_source: 10,
+    local_inventory_available: 0,
+    inventory_diagnostics_failed: false,
   });
 });
 
@@ -195,6 +204,18 @@ test("dig-apple-id-us fixture is single, supplier-bound and stock-unknown", () =
   assert.equal(summary.supplier_bound, true);
   assert.equal(summary.supplier_stock_unknown, 1);
   assert.equal(summary.effective_stock, 8);
+  assert.equal(summary.fulfillment_ready, 0);
+});
+
+test("fulfillment health filter is server-side, filter-before-pagination and uses local inventory evidence", () => {
+  const rows = [sku(1, { id: "sku-ready", status: "active", stock: 2, metadata: {} })];
+  const inventoryContext = { availableBySku: { "sku-ready": 2 }, error: false };
+  const summary = buildAdminProductOperationalSummary(product(), rows, inventoryContext);
+  assert.equal(summary.fulfillment_ready, 1);
+  assert.equal(matchesAdminCatalogOperations(product(), summary, filters({ fulfillmentHealth: "ready" })), true);
+  const result = filterAndPaginateAdminCatalogProducts([product()], rows, filters({ fulfillmentHealth: "ready", page: 1, pageSize: 20 }), inventoryContext);
+  assert.equal(result.count, 1);
+  assert.equal(result.products[0].operational_summary.local_inventory_available, 1);
 });
 
 test("API uses bounded batch SKU reads and the UI keeps filters in URL state", () => {
@@ -203,6 +224,8 @@ test("API uses bounded batch SKU reads and the UI keeps filters in URL state", (
   assert.match(route, /SKU_PRODUCT_BATCH_SIZE/);
   assert.match(route, /\.from\("product_skus"\)/);
   assert.match(route, /Promise\.all\(batches\.map/);
+  assert.match(route, /readSkuLocalInventoryDiagnostics/);
+  assert.match(route, /queryCount = 1 \+ skuResult\.queryCount \+ inventoryResult\.queryCount/);
   assert.doesNotMatch(route, /supplier.*fetch|sync_daju_supplier_stock/i);
   assert.match(page, /serializeAdminCatalogFilterState/);
   assert.match(page, /router\.replace/);

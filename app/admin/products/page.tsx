@@ -66,6 +66,7 @@ import {
   parseAdminCatalogOperationFilters,
   serializeAdminCatalogFilterState,
   type AdminCatalogInventoryVerification,
+  type AdminCatalogFulfillmentHealth,
   type AdminCatalogProductType,
   type AdminCatalogSkuStatus,
   type AdminCatalogStockLevel,
@@ -260,11 +261,13 @@ export default function AdminProductsPage() {
   const [supplierBindingFilter, setSupplierBindingFilter] = useState<AdminCatalogSupplierBinding>(initialFilters.supplierBinding);
   const [supplierStockFilter, setSupplierStockFilter] = useState<AdminCatalogSupplierStock>(initialFilters.supplierStock);
   const [inventoryVerificationFilter, setInventoryVerificationFilter] = useState<AdminCatalogInventoryVerification>(initialFilters.inventoryVerification);
+  const [fulfillmentHealthFilter, setFulfillmentHealthFilter] = useState<AdminCatalogFulfillmentHealth>(initialFilters.fulfillmentHealth);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(
     initialFilters.skuStatus !== "any"
       || initialFilters.supplierBinding !== "all"
       || initialFilters.supplierStock !== "all"
       || initialFilters.inventoryVerification !== "all"
+      || initialFilters.fulfillmentHealth !== "all"
   );
   const [sortBy, setSortBy] = useState<ProductSortBy>(initialFilters.sortBy);
   const [productPageSize, setProductPageSize] = useState(initialFilters.pageSize);
@@ -325,7 +328,8 @@ export default function AdminProductsPage() {
     stockFilter !== "all" ||
     supplierBindingFilter !== "all" ||
     supplierStockFilter !== "all" ||
-    inventoryVerificationFilter !== "all"
+    inventoryVerificationFilter !== "all" ||
+    fulfillmentHealthFilter !== "all"
   );
   const activeProductFilters = useMemo(() => [
     debouncedSearch ? `搜索：${debouncedSearch}` : "",
@@ -339,7 +343,8 @@ export default function AdminProductsPage() {
     supplierBindingFilter === "supplier_bound" ? "供应商已绑定" : supplierBindingFilter === "supplier_unbound" ? "存在未绑定" : "",
     supplierStockFilter !== "all" ? `供应商库存：${({ unknown: "未同步", fresh: "正常", stale: "陈旧", error: "错误" } as const)[supplierStockFilter]}` : "",
     inventoryVerificationFilter === "requires_verification" ? "待验证" : inventoryVerificationFilter === "no_verification_flag" ? "无待验证标记" : "",
-  ].filter(Boolean), [debouncedSearch, deliveryFilter, inventoryVerificationFilter, primaryFilter, productStatusFilter, productTypeFilter, secondaryFilter, skuStatusFilter, stockFilter, supplierBindingFilter, supplierStockFilter]);
+    fulfillmentHealthFilter !== "all" ? `履约健康：${({ ready: "Ready", blocked: "Blocked", attention: "Attention", no_source: "No Source" } as const)[fulfillmentHealthFilter]}` : "",
+  ].filter(Boolean), [debouncedSearch, deliveryFilter, fulfillmentHealthFilter, inventoryVerificationFilter, primaryFilter, productStatusFilter, productTypeFilter, secondaryFilter, skuStatusFilter, stockFilter, supplierBindingFilter, supplierStockFilter]);
   const isRefreshing = isProductLoading || isCategoryLoading;
   const productDirty = useMemo(
     () => (productForm ? skuEditsDirty || isProductDirty(productForm, productInitialForm) : false),
@@ -380,6 +385,7 @@ export default function AdminProductsPage() {
         supplierBinding: supplierBindingFilter,
         supplierStock: supplierStockFilter,
         inventoryVerification: inventoryVerificationFilter,
+        fulfillmentHealth: fulfillmentHealthFilter,
         sortBy,
         page: productPage,
         pageSize: productPageSize,
@@ -393,7 +399,7 @@ export default function AdminProductsPage() {
     } finally {
       if (productListRequestRef.current === requestSequence) setIsProductLoading(false);
     }
-  }, [debouncedSearch, deliveryFilter, inventoryVerificationFilter, productCategoryIds, productPage, productPageSize, productStatusFilter, productTypeFilter, skuStatusFilter, sortBy, stockFilter, supplierBindingFilter, supplierStockFilter]);
+  }, [debouncedSearch, deliveryFilter, fulfillmentHealthFilter, inventoryVerificationFilter, productCategoryIds, productPage, productPageSize, productStatusFilter, productTypeFilter, skuStatusFilter, sortBy, stockFilter, supplierBindingFilter, supplierStockFilter]);
 
   useEffect(() => {
     loadCategories();
@@ -426,6 +432,7 @@ export default function AdminProductsPage() {
       supplierBinding: supplierBindingFilter,
       supplierStock: supplierStockFilter,
       inventoryVerification: inventoryVerificationFilter,
+      fulfillmentHealth: fulfillmentHealthFilter,
       sortBy,
       page: productPage,
       pageSize: productPageSize,
@@ -434,7 +441,7 @@ export default function AdminProductsPage() {
     if (next !== searchParams.toString()) {
       router.replace(`${pathname}${next ? `?${next}` : ""}`, { scroll: false });
     }
-  }, [activeView, debouncedSearch, deliveryFilter, inventoryVerificationFilter, pathname, primaryFilter, productPage, productPageSize, productStatusFilter, productTypeFilter, router, searchParams, secondaryFilter, skuStatusFilter, sortBy, stockFilter, supplierBindingFilter, supplierStockFilter]);
+  }, [activeView, debouncedSearch, deliveryFilter, fulfillmentHealthFilter, inventoryVerificationFilter, pathname, primaryFilter, productPage, productPageSize, productStatusFilter, productTypeFilter, router, searchParams, secondaryFilter, skuStatusFilter, sortBy, stockFilter, supplierBindingFilter, supplierStockFilter]);
 
   useEffect(() => {
     const shouldBlock = productDirty || categoryDirty || isSaving;
@@ -903,6 +910,7 @@ export default function AdminProductsPage() {
     setSupplierBindingFilter("all");
     setSupplierStockFilter("all");
     setInventoryVerificationFilter("all");
+    setFulfillmentHealthFilter("all");
     setSortBy("updated_at");
     setProductPageSize(DEFAULT_PRODUCT_PAGE_SIZE);
     setProductPage(1);
@@ -1097,7 +1105,7 @@ export default function AdminProductsPage() {
                 <summary className="cursor-pointer select-none text-sm font-medium text-slate-700">
                   更多运营筛选
                 </summary>
-                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                   <NativeSelect
                     value={skuStatusFilter}
                     onChange={(value) => {
@@ -1145,6 +1153,19 @@ export default function AdminProductsPage() {
                     <option value="all">全部库存验证状态</option>
                     <option value="requires_verification">待验证</option>
                     <option value="no_verification_flag">无待验证标记</option>
+                  </NativeSelect>
+                  <NativeSelect
+                    value={fulfillmentHealthFilter}
+                    onChange={(value) => {
+                      setFulfillmentHealthFilter(value as AdminCatalogFulfillmentHealth);
+                      setProductPage(1);
+                    }}
+                  >
+                    <option value="all">全部履约健康</option>
+                    <option value="ready">Ready</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="attention">Attention</option>
+                    <option value="no_source">No Source</option>
                   </NativeSelect>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">未绑定供应商不等于无法履约；商品仍可能使用 SKU 级本地数字库存。</p>
@@ -1387,8 +1408,16 @@ function ProductOperationsSummary({ product }: { product: AdminProduct }) {
       <span>· {summary.sku_active} Active</span>
       <span>· {summary.sku_draft} Draft</span>
       <span>· Active 库存 {summary.effective_stock}</span>
+      <Badge variant="outline" className="h-5 border-emerald-200 bg-emerald-50 px-1.5 text-[10px] text-emerald-700">{summary.fulfillment_ready} Ready</Badge>
+      {summary.fulfillment_blocked > 0 ? <Badge variant="outline" className="h-5 border-red-200 bg-red-50 px-1.5 text-[10px] text-red-700">{summary.fulfillment_blocked} Blocked</Badge> : null}
+      {summary.fulfillment_attention > 0 ? <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">{summary.fulfillment_attention} Attention</Badge> : null}
+      {summary.fulfillment_unknown > 0 ? <Badge variant="outline" className="h-5 border-slate-200 bg-slate-50 px-1.5 text-[10px] text-slate-600">{summary.fulfillment_unknown} Unknown</Badge> : null}
+      {summary.fulfillment_no_source > 0 ? <Badge variant="outline" className="h-5 border-red-200 bg-white px-1.5 text-[10px] text-red-700">{summary.fulfillment_no_source} No Source</Badge> : null}
+      {summary.local_inventory_available > 0 ? <span>· {summary.local_inventory_available} Local</span> : null}
       {summary.requires_verification > 0 ? <Badge variant="outline" className="h-5 border-orange-200 bg-orange-50 px-1.5 text-[10px] text-orange-700">{summary.requires_verification} 待验证</Badge> : null}
       {summary.supplier_unbound > 0 ? <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">{summary.supplier_unbound} 未绑定</Badge> : null}
+      {summary.supplier_stock_unknown > 0 ? <span>· Snapshot {summary.supplier_stock_unknown} unknown</span> : null}
+      {summary.inventory_diagnostics_failed ? <Badge variant="outline" className="h-5 border-red-200 bg-red-50 px-1.5 text-[10px] text-red-700">诊断读取失败</Badge> : null}
     </div>
   );
 }

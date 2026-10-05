@@ -12,7 +12,8 @@ import { deriveSkuProductSummary, ensureTrailingEmptySkuRow, isSkuDraftEmpty, va
 import { buildSkuWorkspaceOperations, SkuWorkspaceInputError } from "@/lib/products/admin-sku-workspace.mjs";
 import { deleteProductSku, executeProductSkuBulkAction, getProductSkuWorkspace, previewProductSkuBulkAction, saveProductSkuWorkspace, ProductSkuWorkspaceError, type AdminProduct, type AdminProductSku, type DeliveryType, type ProductSkuBulkAction, type ProductSkuBulkPreview, type ProductSkuPayload, type ProductSkuWorkspaceOperation, type ProductStatus } from "@/lib/supabase/admin-catalog";
 import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
-import { evaluateSkuActivationReadiness, formatSkuActivationReasons, summarizeSkuReadiness } from "@/lib/products/sku-activation-readiness.mjs";
+import type { SkuOperationalDiagnostic } from "@/lib/products/fulfillment-inventory-diagnostics.mjs";
+import { evaluateSkuActivationReadiness, formatSkuActivationReasons, SKU_ACTIVATION_REASON_LABELS, summarizeSkuReadiness } from "@/lib/products/sku-activation-readiness.mjs";
 
 type Draft = { sku_title: string; sku_code: string; price: string; stock: string; original_price: string; image_url: string; sort_order: string; status: ProductStatus; delivery_type: DeliveryType | ""; touched?: boolean };
 type EditorRow = { key: string; sku?: AdminProductSku; draft: Draft };
@@ -22,6 +23,52 @@ const emptyDraft = (): Draft => ({ sku_title: "", sku_code: "", price: "", stock
 const emptyRow = (): EditorRow => ({ key: crypto.randomUUID(), draft: emptyDraft() });
 const toDraft = (sku: AdminProductSku): Draft => ({ sku_title: sku.sku_title ?? "", sku_code: sku.sku_code ?? "", price: String(sku.price), stock: String(sku.stock), original_price: sku.original_price == null ? "" : String(sku.original_price), image_url: sku.image_url ?? "", sort_order: String(sku.sort_order), status: sku.status, delivery_type: sku.delivery_type ?? "" });
 const payload = (draft: Draft): ProductSkuPayload => ({ sku_title: draft.sku_title.trim(), sku_code: draft.sku_code.trim(), price: Number(draft.price), stock: Number(draft.stock), original_price: draft.original_price === "" ? null : Number(draft.original_price), image_url: draft.image_url.trim() || null, sort_order: Number(draft.sort_order), status: draft.status, delivery_type: draft.delivery_type || null });
+
+const fulfillmentSourceLabel: Record<SkuOperationalDiagnostic["fulfillment_source"], string> = {
+  local_inventory: "Local", supplier: "Supplier", hybrid: "Hybrid", none: "No Source",
+  manual: "Manual", shipping: "Shipping", unknown: "Unknown",
+};
+const supplierStockLabel: Record<SkuOperationalDiagnostic["supplier_stock"]["state"], string> = {
+  fresh: "Fresh", stale: "Stale", error: "Error", unknown: "Unknown", not_applicable: "N/A",
+};
+const diagnosticNextActionLabels: Record<string, string> = {
+  RETRY_DIAGNOSTICS: "刷新诊断；若仍失败，请检查数据与读取权限",
+  VERIFY_STOCK: "核验 SKU 独立库存，不使用父商品库存替代",
+  ADD_LOCAL_INVENTORY_OR_BIND_SUPPLIER: "补充 SKU 级本地库存或确认供应商履约来源",
+  COMPLETE_SUPPLIER_BINDING: "确认 exact supplier product / SKU 和成本上限",
+  REFRESH_SUPPLIER_STOCK_EVIDENCE: "通过另行授权的流程核验供应商库存快照",
+  VERIFY_INVENTORY: "人工核验库存和履约证据",
+};
+
+function SkuOperationalDiagnostics({ diagnostic }: { diagnostic?: SkuOperationalDiagnostic }) {
+  if (!diagnostic) return <Badge variant="outline" className="mt-1 border-slate-200 text-slate-500">Diagnostics Unknown</Badge>;
+  const healthClass = diagnostic.health === "ready"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : diagnostic.health === "blocked"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : diagnostic.health === "attention"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-slate-200 bg-slate-50 text-slate-600";
+  return <div className="mt-1 space-y-1 text-[10px] leading-4 text-slate-600">
+    <div className="flex flex-wrap gap-1">
+      <Badge variant="outline" className={`h-5 px-1.5 text-[10px] ${healthClass}`}>{diagnostic.health.toUpperCase()}</Badge>
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Fulfillment {fulfillmentSourceLabel[diagnostic.fulfillment_source]}</Badge>
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Local {diagnostic.local_inventory.state === "error" ? "读取失败" : diagnostic.local_inventory.available_count}</Badge>
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Supplier {diagnostic.supplier.bound ? "Bound" : "Unbound"}</Badge>
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Snapshot {supplierStockLabel[diagnostic.supplier_stock.state]}</Badge>
+      {diagnostic.verification.required ? <Badge variant="outline" title="Verification Required" className="h-5 border-orange-200 bg-orange-50 px-1.5 text-[10px] text-orange-700">库存待验证</Badge> : null}
+      <Badge variant="outline" className={`h-5 px-1.5 text-[10px] ${diagnostic.activation.ready ? "border-emerald-200 text-emerald-700" : "border-red-200 text-red-700"}`}>Activation {diagnostic.activation.ready ? "Ready" : "Blocked"}</Badge>
+    </div>
+    {diagnostic.activation.reasons.length || diagnostic.diagnostic_issues.length ? <details>
+      <summary className="cursor-pointer font-medium text-slate-600">诊断详情</summary>
+      <div className="mt-1 space-y-0.5 rounded border border-slate-200 bg-white p-1.5">
+        {diagnostic.activation.reasons.map((reason) => <div key={reason}><span className="font-mono">{reason}</span>：{SKU_ACTIVATION_REASON_LABELS[reason as keyof typeof SKU_ACTIVATION_REASON_LABELS] ?? reason}</div>)}
+        {diagnostic.diagnostic_issues.map((issue) => <div key={issue} className="text-red-700"><span className="font-mono">{issue}</span>：诊断读取失败，请刷新后重试</div>)}
+        {diagnostic.next_actions.map((action) => <div key={action}>下一步：{diagnosticNextActionLabels[action] ?? action}</div>)}
+      </div>
+    </details> : null}
+  </div>;
+}
 
 const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(function AdminProductSkuManager({ product, refreshKey = 0, defaults, onSummary, onSupplierBinding }, ref) {
   const [rows, setRows] = useState<EditorRow[]>([]);
@@ -61,7 +108,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
         });
         return [...persisted, ...current.filter((row) => !row.sku && row.key !== "legacy" && !isSkuDraftEmpty(row.draft)), emptyRow()];
       });
-    } catch (error) { setLoadError(error instanceof Error ? error.message : "SKU 读取失败"); }
+    } catch (error) { setDiagnostics(null); setLoadError(error instanceof Error ? error.message : "SKU 读取失败"); }
     finally { setLoading(false); }
   }, [productId]);
   useEffect(() => {
@@ -256,6 +303,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     rows.filter((row) => row.sku).map((row) => ({ ...row.sku!, ...payload(row.draft) })),
     diagnostics?.supplier_rows ?? [],
   ), [diagnostics, rows]);
+  const operationalBySku = useMemo(() => new Map((diagnostics?.operational_rows ?? []).map((row) => [row.sku_id, row])), [diagnostics]);
+  const operationalSummary = diagnostics?.operational_summary;
   const visibleSkuIds = rows.flatMap((row) => row.sku ? [row.sku.id] : []);
   const allVisibleSelected = visibleSkuIds.length > 0 && visibleSkuIds.every((id) => selectedSkuIds.has(id));
   const bulkActionLabel: Record<ProductSkuBulkAction, string> = { set_draft: "批量设为 Draft", set_sold_out: "批量设为 Sold Out", activate: "批量 Activate" };
@@ -264,13 +313,15 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     <div className="flex justify-end"><Button type="button" size="sm" variant="ghost" disabled={loading || busy || bulkBusy} onClick={() => void load()}><RefreshCw className="mr-1 h-3.5 w-3.5" />刷新</Button></div>
     {loadError ? <p role="alert" className="text-sm text-red-600">{loadError}</p> : null}
     {(product?.has_skus || readinessSummary.total > 0) ? <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
-      <div className="font-semibold text-slate-900">SKU readiness 汇总</div>
+      <div className="font-semibold text-slate-900">Fulfillment / Inventory diagnostics</div>
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
         <span>{readinessSummary.total} 个 SKU</span><span>{readinessSummary.active} active</span><span>{readinessSummary.draft} draft</span>
         <span>{readinessSummary.zero_stock} 零库存</span><span>{readinessSummary.supplier_unbound} 未绑定供应商</span>
         <span>{readinessSummary.requires_verification} 待库存验证</span><span>{readinessSummary.local_inventory_available} 个具有本地库存</span>
+        {operationalSummary ? <><span>{operationalSummary.ready} Ready</span><span>{operationalSummary.attention} Attention</span><span>{operationalSummary.blocked} Blocked</span><span>{operationalSummary.unknown} Unknown</span><span>{operationalSummary.supplier_bound} Supplier Bound</span></> : null}
       </div>
       {readinessSummary.no_verified_source > 0 ? <div className="mt-1 font-medium text-amber-800">{readinessSummary.no_verified_source} 个 SKU 当前无可验证履约来源。未绑定供应商不一定是错误；SKU 级本地可用库存也可以构成履约来源。</div> : null}
+      <div className="mt-2 border-t border-slate-200 pt-2 text-[10px] text-slate-500">Ready：满足当前 activation readiness；Blocked：当前不能安全激活；Supplier Stale：供应商快照已被现有 freshness contract 标记陈旧；Verification Required：需人工确认；No Source：automatic SKU 无本地库存或可信 supplier 来源。</div>
     </div> : null}
     {activationBlocked.length ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><div className="font-semibold">SKU 激活已阻止</div>{activationBlocked.map((item) => <div key={item.code}><span className="font-mono">{item.code}</span>：库存 {item.stock}；SKU 供应商绑定 {item.supplierBound ? "完整" : "未完整"}；本地可用库存 {item.localAvailable}；库存验证 {item.inventoryState === "requires_verification" ? "待验证" : "无待验证标记"}；{formatSkuActivationReasons(item.reasons)}</div>)}</div> : null}
     {selectedSkuIds.size > 0 ? <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950">
@@ -287,7 +338,6 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       {diagnostics.legacy_expected_count > 0 && !diagnostics.legacy_db_sku_missing ? <div>Legacy SKU 已完整迁移到数据库。</div> : null}
       {diagnostics.supplier_unbound_count > 0 ? <div>{diagnostics.supplier_unbound_count} 个 SKU 尚未绑定 exact supplier SKU。</div> : null}
       {diagnostics.supplier_problem_count > 0 ? <div>{diagnostics.supplier_problem_count} 个 SKU 的 supplier stock 为 stale / partial / error；网站保留 last-known-good stock。</div> : null}
-      {diagnostics.supplier_rows.map((row) => <div key={row.sku_id} className="font-mono">{row.sku_code ?? row.sku_id}: mapping={String(row.supplier_product_id ?? "-")}/{String(row.supplier_sku ?? "-")} website={row.website_stock} supplier={String(row.supplier_stock_snapshot ?? "-")} status={String(row.supplier_stock_sync_status ?? "-")} last={String(row.supplier_stock_last_success_at ?? "-")}</div>)}
     </div> : null}
     {loading ? <div className="flex items-center gap-2 py-4 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />正在读取 SKU</div> : <div className="max-w-full overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full min-w-[900px] table-fixed text-left text-xs">
@@ -298,8 +348,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
           <td className="p-2"><select aria-label="SKU 交付方式" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.delivery_type} disabled={busy} onChange={(e) => change(row, "delivery_type", e.target.value)}><option value="">继承商品</option><option value="manual">人工处理</option><option value="automatic">自动发货</option><option value="shipping">物流发货</option></select></td>
           <td className="p-2"><select aria-label="SKU 状态" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.status} disabled={busy} onChange={(e) => change(row, "status", e.target.value)}><option value="active">启用</option><option value="inactive">停用</option><option value="sold_out">售罄</option><option value="draft">草稿</option></select></td>
           <td className="p-2">{row.sku && product ? <Button type="button" variant="outline" className="h-8 w-full justify-start px-2 text-xs" disabled={busy} onClick={() => onSupplierBinding(product, row.sku!)}>{row.sku.metadata?.supplier === "daju" ? `大橘 #${String(row.sku.metadata.supplier_product_id)} · ${String(row.sku.metadata.supplier_sku ?? "无规格")}` : "未绑定 · 绑定"}</Button> : <span className="inline-flex h-8 items-center text-slate-400">保存后绑定</span>}
-            {row.sku?.metadata?.inventory_state === "requires_verification" ? <Badge variant="outline" className="mt-1 border-amber-200 bg-amber-50 text-amber-800">库存待验证</Badge> : null}
-            {row.sku && diagnostics?.supplier_rows.find((item) => item.sku_id === row.sku?.id)?.local_available_count ? <div className="mt-1 text-[10px] text-emerald-700">本地可用库存 {diagnostics.supplier_rows.find((item) => item.sku_id === row.sku?.id)?.local_available_count}</div> : null}
+            {row.sku ? <SkuOperationalDiagnostics diagnostic={operationalBySku.get(row.sku.id)} /> : null}
             {!isSkuDraftEmpty(row.draft) ? <details className="mt-1" open={errors[row.key]?.original_price || errors[row.key]?.sort_order ? true : undefined}>
               <summary className="cursor-pointer text-slate-500">更多设置</summary>
               <div className="mt-2 space-y-2">

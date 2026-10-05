@@ -5,7 +5,8 @@ import { auditCatalogAction, requireCatalogAdmin } from "../../../catalog/_share
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { syncSkuProductSummary } from "@/lib/products/sku-summary";
 import { buildCatalogSkuDiagnostics, inspectCatalogSkuSchema } from "@/lib/products/catalog-readiness.mjs";
-import { formatSkuActivationReasons, isAutomaticSkuActivation, readSkuActivationReadiness } from "@/lib/products/sku-activation-readiness.mjs";
+import { readSkuLocalInventoryDiagnostics } from "@/lib/products/fulfillment-inventory-diagnostics.mjs";
+import { evaluateSkuActivationReadiness, formatSkuActivationReasons, isAutomaticSkuActivation, readSkuActivationReadiness } from "@/lib/products/sku-activation-readiness.mjs";
 
 const SKU_FIELDS = "id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,created_at,updated_at";
 const STATUSES = new Set(["active", "inactive", "sold_out", "draft"]);
@@ -29,10 +30,16 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   if (skuResult.error && schemaReadiness.ready) return json({ error: "SKU 读取失败", requestId }, 500);
   if (productResult.error || !productResult.data) return json({ error: "商品不存在", requestId }, 404);
   const skuRows = skuResult.error ? [] : skuResult.data ?? [];
-  const activationReadinessBySku = Object.fromEntries(await Promise.all(skuRows.map(async (sku) => [
+  const inventoryResult = await readSkuLocalInventoryDiagnostics(service, skuRows);
+  const activationReadinessBySku = Object.fromEntries(skuRows.map((sku) => [
     String(sku.id),
-    await readSkuActivationReadiness(service, productResult.data, sku),
-  ])));
+    evaluateSkuActivationReadiness({
+      product: productResult.data,
+      sku,
+      localAvailableCount: inventoryResult.availableBySku[String(sku.id)] ?? 0,
+      localInventoryError: inventoryResult.error,
+    }),
+  ]));
   return json({
     skus: skuRows,
     diagnostics: buildCatalogSkuDiagnostics(productResult.data, skuRows, schemaReadiness, activationReadinessBySku),

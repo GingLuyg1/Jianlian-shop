@@ -29,6 +29,8 @@ export type CatalogSkuDiagnostics = {
   supplier_stale_count: number;
   supplier_problem_count: number;
   supplier_rows: CatalogSkuDiagnosticRow[];
+  operational_rows: import("./fulfillment-inventory-diagnostics.mjs").SkuOperationalDiagnostic[];
+  operational_summary: import("./fulfillment-inventory-diagnostics.mjs").SkuOperationalDiagnosticSummary;
   summary: ReturnType<typeof import("./sku-activation-readiness.mjs").summarizeSkuReadiness>;
 };
 export function inspectCatalogSkuSchema(service: any): Promise<CatalogSchemaReadiness>;
