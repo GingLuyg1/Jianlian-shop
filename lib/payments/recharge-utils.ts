@@ -11,6 +11,7 @@ import {
   getPaymentChannelPairValidationError,
   getPaymentChannelValidationError,
   getSafePublicManualPaymentForRow,
+  isChannelProviderCompatible,
   isPublicPaymentChannelReady,
   paymentReviewMode,
 } from "@/lib/payments/manual-channel-readiness.mjs";
@@ -162,14 +163,8 @@ export function normalizeChannelRow(row: AnyRow): PaymentChannel | null {
 
   if (row.currency !== "USDT" && row.currency !== "CNY") return null;
   const currency: PaymentCurrency = row.currency;
-  const providerValue = row.provider;
-  if (
-    providerValue !== "liuhaoyi"
-    && providerValue !== "generic_api"
-    && providerValue !== "binance"
-    && providerValue !== "crypto_address"
-  ) return null;
-  const provider = providerValue;
+  const provider = normalizeProvider(row.provider, code);
+  if (!provider) return null;
   const enabled = row.enabled === true;
   const publicConfig = row.public_config && typeof row.public_config === "object" ? row.public_config as Record<string, unknown> : {};
   const maximumAmountInput = publicConfig.maximum_amount
@@ -320,11 +315,13 @@ function isKnownChannel(value: string): value is PaymentChannelCode {
   return ["alipay", "wechat", "binance_pay", "usdt_trc20", "usdt_bep20"].includes(value);
 }
 
-function normalizeProvider(value: unknown, code: PaymentChannelCode): PaymentProviderCode {
-  if (value === "liuhaoyi" || value === "generic_api" || value === "binance" || value === "crypto_address") return value;
-  if (code === "alipay" || code === "wechat") return "liuhaoyi";
-  if (code === "binance_pay") return "binance";
-  return "crypto_address";
+export function normalizeProvider(
+  value: unknown,
+  code: PaymentChannelCode,
+): PaymentProviderCode | null {
+  return typeof value === "string" && isChannelProviderCompatible(code, value)
+    ? value as PaymentProviderCode
+    : null;
 }
 
 function normalizeNetwork(value: unknown, code: PaymentChannelCode): PaymentNetwork | undefined {
