@@ -9,6 +9,7 @@ import {
   getPaymentChannelPairValidationError,
   getPaymentChannelPatchRuntimeError,
   getPaymentChannelValidationError,
+  getAdminPaymentProviderOptions,
   getSafePublicManualPaymentForRow,
   getSafePublicPaymentChannelError,
   getSafePublicPaymentChannelLog,
@@ -17,6 +18,7 @@ import {
   hasMatchingPaymentChannelVersion,
   hasConfiguredText,
   isChannelProviderCompatible,
+  isAdminProviderTrustedConfigured,
   isKnownPaymentChannelCode,
   isManualPaymentReady,
   isPaymentChannelReady,
@@ -46,6 +48,37 @@ import {
   selectDirtyPaymentChannels,
   updatePaymentChannelNumericDraft,
 } from "../../lib/payments/payment-settings-state.mjs";
+
+test("admin provider options expose only audited channel-compatible choices", () => {
+  assert.deepEqual(getAdminPaymentProviderOptions("alipay"), ["liuhaoyi", "snpay"]);
+  assert.deepEqual(getAdminPaymentProviderOptions("wechat"), ["liuhaoyi", "snpay"]);
+  assert.deepEqual(getAdminPaymentProviderOptions("usdt_bep20"), ["crypto_address"]);
+  assert.deepEqual(getAdminPaymentProviderOptions("binance_pay"), ["binance"]);
+  assert.equal(getAdminPaymentProviderOptions("alipay").includes("generic_api"), false);
+});
+
+test("SNPAY admin readiness requires connected verification", () => {
+  assert.equal(isAdminProviderTrustedConfigured({
+    provider: "snpay",
+    configured: true,
+    status: "pending_verification",
+  }), false);
+  assert.equal(isAdminProviderTrustedConfigured({
+    provider: "snpay",
+    configured: true,
+    status: "partially_configured",
+  }), false);
+  assert.equal(isAdminProviderTrustedConfigured({
+    provider: "snpay",
+    configured: true,
+    status: "connected",
+  }), true);
+  assert.equal(isAdminProviderTrustedConfigured({
+    provider: "liuhaoyi",
+    configured: true,
+    status: "pending_verification",
+  }), true);
+});
 
 test("public recharge amount accepts only positive ordinary decimal strings", () => {
   for (const value of [
@@ -343,6 +376,93 @@ test("provider transitions fail closed and incompatible providers are rejected",
     ),
     false,
   );
+
+  for (const channel of ["alipay", "wechat"]) {
+    assert.equal(isChannelProviderCompatible(channel, "snpay"), true);
+    assert.equal(
+      getPaymentChannelValidationError({
+        channel,
+        currency: "CNY",
+        provider: "snpay",
+        feeRate: 0,
+        minimumAmount: 1,
+        maximumAmount: 2000,
+        network: null,
+      }),
+      null,
+    );
+  }
+  assert.match(
+    getPaymentChannelValidationError({
+      channel: "usdt_bep20",
+      currency: "USDT",
+      provider: "snpay",
+      feeRate: 0,
+      minimumAmount: 1,
+      maximumAmount: 2000,
+      network: "BSC",
+    }),
+    /incompatible provider/,
+  );
+  assert.match(
+    getPaymentChannelValidationError({
+      channel: "binance_pay",
+      currency: "USDT",
+      provider: "snpay",
+      feeRate: 0,
+      minimumAmount: 1,
+      maximumAmount: 2000,
+      network: null,
+    }),
+    /incompatible provider/,
+  );
+});
+
+test("connected provider switches configure safely without enabling in the same request", () => {
+  const switched = resolvePaymentChannelState({
+    channel: "alipay",
+    currentReviewMode: "provider",
+    currentProvider: "liuhaoyi",
+    nextReviewMode: "provider",
+    nextProvider: "snpay",
+    requestedEnabled: true,
+    providerTrustedConfigured: true,
+  });
+  assert.deepEqual(switched, {
+    compatible: true,
+    configured: true,
+    enabled: false,
+  });
+
+  const unverified = resolvePaymentChannelState({
+    channel: "alipay",
+    currentReviewMode: "provider",
+    currentProvider: "liuhaoyi",
+    nextReviewMode: "provider",
+    nextProvider: "snpay",
+    requestedEnabled: true,
+    providerTrustedConfigured: false,
+  });
+  assert.deepEqual(unverified, {
+    compatible: true,
+    configured: false,
+    enabled: false,
+  });
+
+  const laterEnable = resolvePaymentChannelState({
+    channel: "alipay",
+    currentReviewMode: "provider",
+    currentProvider: "snpay",
+    nextReviewMode: "provider",
+    nextProvider: "snpay",
+    requestedEnabled: true,
+    providerTrustedConfigured: true,
+  });
+  assert.deepEqual(laterEnable, {
+    compatible: true,
+    configured: true,
+    enabled: true,
+  });
 });
 
 test("channel compatibility is separate from its historical default provider", () => {
@@ -358,7 +478,7 @@ test("channel compatibility is separate from its historical default provider", (
     nextProvider: "generic_api",
     requestedEnabled: true,
     providerTrustedConfigured: true,
-  }), { compatible: true, configured: false, enabled: false });
+  }), { compatible: true, configured: true, enabled: false });
 });
 
 test("public manual readiness requires enabled, configured and complete BEP20 evidence", () => {
@@ -637,8 +757,10 @@ test("settings edits disable channels immediately on mode or provider changes", 
       ...current,
       review_mode: "provider",
     },
-    { provider: "binance" },
+    { provider: "snpay", provider_name: "snpay" },
   );
+  assert.equal(providerChange.provider, "snpay");
+  assert.equal(providerChange.provider_name, "snpay");
   assert.equal(providerChange.configured, false);
   assert.equal(providerChange.enabled, false);
 });

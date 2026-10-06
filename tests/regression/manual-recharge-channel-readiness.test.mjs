@@ -49,7 +49,9 @@ test("admin payment channel settings synchronize compatibility and runtime field
     /return\s+NextResponse\.json\([\s\S]{0,500}\bsecret_config\b/,
   );
   assert.match(route, /resolvePaymentChannelState/);
-  assert.match(route, /providerTrustedConfigured:\s*checkPaymentProviderConfig\(provider\)\.configured/);
+  assert.match(route, /PAYMENT_PROVIDER_\$\{provider\.toUpperCase\(\)\}_VERIFIED/);
+  assert.match(route, /isAdminProviderTrustedConfigured/);
+  assert.match(route, /provider_name:\s*provider,[\s\S]*?\n\s*provider,/);
   assert.match(route, /PAYMENT_CHANNEL_CONFLICT_STATUS/);
   assert.match(route, /hasMatchingPaymentChannelVersion/);
   assert.match(route, /parseSinglePaymentChannelPatchPayload/);
@@ -76,6 +78,22 @@ test("admin payment channel settings synchronize compatibility and runtime field
   assert.doesNotMatch(
     panel,
     /channels:\s*channels\.map\(/,
+  );
+  assert.match(panel, /getAdminPaymentProviderOptions/);
+  assert.match(panel, /snpay:\s*"德云付"/);
+  assert.match(route, /isChannelProviderCompatible\(channel,\s*value\)/);
+  assert.match(route, /isChannelProviderCompatible\(channel,\s*rawProvider\)/);
+  assert.doesNotMatch(
+    route.slice(route.indexOf("function normalizeProvider"), route.indexOf("function normalizeConfig")),
+    /value === "liuhaoyi"/,
+  );
+  assert.doesNotMatch(route, /\.from\("payment_sessions"\)/);
+  assert.match(route, /action:\s*"update_payment_channel_config"/);
+  assert.match(route, /beforeSummary:[\s\S]*safeChannelSummary\(current\)/);
+  assert.match(route, /afterSummary:[\s\S]*safeChannelSummary\(row\)/);
+  assert.doesNotMatch(
+    route.slice(route.indexOf("function safeChannelSummary"), route.indexOf("function nextText")),
+    /private_key|signature|secret_config|provider_payload/i,
   );
 });
 

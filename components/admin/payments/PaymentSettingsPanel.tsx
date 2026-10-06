@@ -12,6 +12,7 @@ import {
 } from "@/lib/payments/admin-payment-types";
 import {
   expectedProviderForChannel,
+  getAdminPaymentProviderOptions,
   isPaymentChannelReady,
 } from "@/lib/payments/manual-channel-readiness.mjs";
 import {
@@ -740,17 +741,15 @@ export default function PaymentSettingsPanel() {
                           );
                         }}
                       >
-                        <option
-                          value={defaultProvider(
-                            channel.channel,
-                          )}
-                        >
-                          {providerLabel(
-                            defaultProvider(
-                              channel.channel,
-                            ),
-                          )}
-                        </option>
+                        {getAdminPaymentProviderOptions(
+                          channel.channel,
+                        ).map((provider) => (
+                          <option key={provider} value={provider}>
+                            {providerLabel(
+                              provider as PaymentProviderCode,
+                            )}
+                          </option>
+                        ))}
                       </select>
                     </Field>
 
