@@ -2,7 +2,16 @@ import type { PaymentChannelCode, PaymentSessionStatus } from "../channel-types"
 
 export class SnpayCoreError extends Error {
   code: string;
+  providerBusinessCode?: string;
+  providerBusinessMessageSafe?: string;
+  providerErrorResponseSignatureVerified?: boolean;
 }
+
+export function getSnpayBusinessErrorDiagnostics(error: unknown, sensitiveValues?: unknown[]): {
+  providerBusinessCode?: string;
+  providerBusinessMessageSafe?: string;
+  providerErrorResponseSignatureVerified?: boolean;
+};
 
 export function snpayCanonicalString(parameters: Record<string, unknown>): string;
 export function normalizeSnpayPrivateKey(value: unknown): string;

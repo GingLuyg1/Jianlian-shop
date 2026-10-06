@@ -53,3 +53,22 @@ Recommended permissions for a future formal secret directory are directory `0700
 6. Only after both canaries pass may a later change route new sessions to SNPAY. Existing sessions remain pinned to their original provider.
 
 Any signature, timestamp, identity, amount, channel, paid-time, or exactly-once discrepancy stops promotion. Automatic recovery remains a separate reviewed stage.
+
+## Business-rejection diagnostics
+
+HTTP-success JSON responses with a nonzero business code still fail closed with
+`SNPAY_API_REJECTED`. Only a bounded primitive business code, sanitized message,
+and `providerErrorResponseSignatureVerified` are retained on the error and failed
+session metadata. Message candidates are `msg`, `message`, `error`, then `errmsg`.
+HTML, JSON, URLs, canonical/signature assignments and key material are rejected;
+opaque tokens are redacted and messages are limited to 200 Unicode characters.
+Existing reservation metadata is preserved; `last_error` and public recharge
+errors remain generic. Structured server logs contain only the diagnostic
+allowlist, operation, HTTP status and elapsed time.
+
+Error-response signature availability is not assumed. The existing platform RSA
+and timestamp verifier is attempted: missing, invalid or stale signatures yield
+`false`. Such messages are untrusted diagnostics, never payment evidence. Even
+a verified error response cannot create a payment artifact, complete a session,
+credit a balance or start recovery. Successful responses retain mandatory RSA
+and timestamp verification. Prior failed sessions are not repaired or retried.

@@ -18,6 +18,7 @@ import { assertLiuhaoyiAmountBreakdown, isLiuhaoyiPaymentMethod } from "@/lib/pa
 import { getPaymentProviderCapabilities, resolveProviderForExistingSession, resolveProviderForNewPayment } from "@/lib/payments/providers";
 import { normalizeLiuhaoyiSessionPresentation } from "@/lib/payments/providers/liuhaoyi-core.mjs";
 import { normalizeLiuhaoyiSubmitForm } from "@/lib/payments/providers/liuhaoyi-submit.mjs";
+import { getSnpayBusinessErrorDiagnostics } from "@/lib/payments/providers/snpay-core.mjs";
 import { isReusablePaymentSession } from "@/lib/payments/payment-session-reuse.mjs";
 import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -221,7 +222,15 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
       .update({
         status: "failed",
         last_error: message,
-        metadata: { initializing: false, errorCode: errorCode(error) },
+        metadata: channel.provider === "snpay"
+          ? {
+            ...(reserved.session.metadata && typeof reserved.session.metadata === "object"
+              && !Array.isArray(reserved.session.metadata) ? reserved.session.metadata : {}),
+            initializing: false,
+            errorCode: errorCode(error),
+            ...getSnpayBusinessErrorDiagnostics(error),
+          }
+          : { initializing: false, errorCode: errorCode(error) },
       })
       .eq("session_no", sessionNo)
       .neq("status", "paid");
