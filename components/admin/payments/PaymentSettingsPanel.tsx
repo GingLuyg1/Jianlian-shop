@@ -62,6 +62,7 @@ function defaultProvider(
 function providerLabel(provider: PaymentProviderCode) {
   return {
     liuhaoyi: "六号易",
+    snpay: "德云付",
     generic_api: "Generic API",
     binance: "Binance",
     crypto_address: "Crypto Address",

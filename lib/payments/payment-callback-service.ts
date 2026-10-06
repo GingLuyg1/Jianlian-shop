@@ -77,7 +77,9 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       payloadSummary: callbackPayloadSummary(observation, summarizePayload(payload)),
     });
 
-    const sessionNoCandidate = callbackSessionNoCandidate(payload);
+    // Candidate extraction is deliberately untrusted. Form callbacks need the raw body
+    // only to locate the persisted session/provider before provider-specific verification.
+    const sessionNoCandidate = callbackSessionNoCandidate(payload ?? rawBody);
     if (!sessionNoCandidate) {
       await updateCallbackLog(service, logId, "business_not_found", "SESSION_ID_MISSING");
       return observedResponse(response({ error: "支付会话编号缺失" }, 400), observation, { processResult: "business_not_found", httpStatus: 400 });

@@ -18,6 +18,7 @@ import type {
   RechargeStatus,
 } from "@/lib/payments/channel-types";
 import { liuhaoyiProvider } from "@/lib/payments/providers/liuhaoyi";
+import { snpayProvider } from "@/lib/payments/providers/snpay";
 
 export const PROVIDER_INTERFACE_COMPLETE = true;
 
@@ -61,6 +62,7 @@ function unavailableProvider(): PaymentProvider {
 
 const providers: Record<PaymentProviderCode, PaymentProvider> = {
   liuhaoyi: liuhaoyiProvider,
+  snpay: snpayProvider,
   generic_api: unavailableProvider(),
   binance: unavailableProvider(),
   crypto_address: unavailableProvider(),
@@ -109,6 +111,24 @@ export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCa
     minimumAmount: 1,
     maximumAmount: 2000,
     providerExternalFeeDisclosure: "支付平台可能额外收取约 3% 通道手续费；实际付款金额以支付页面为准，本站本金不增加该费用。",
+  },
+  snpay: {
+    supportsCreate: true,
+    supportsQuery: true,
+    supportsClose: false,
+    supportsCallback: true,
+    supportsRefund: false,
+    supportsQrCode: true,
+    supportsRedirect: true,
+    supportsDeepLink: true,
+    supportsWalletAddress: false,
+    supportsRecoveryQuery: true,
+    supportsSandbox: false,
+    supportedCurrencies: ["CNY"],
+    supportedChannels: ["alipay", "wechat"],
+    minimumAmount: 0.01,
+    maximumAmount: null,
+    providerExternalFeeDisclosure: null,
   },
   generic_api: {
     supportsCreate: false,
@@ -181,6 +201,7 @@ export const providerRecoveryPolicies: Record<PaymentProviderCode, ProviderRecov
     allowAutoCompletion: false, // The watcher stays disabled until a separate rollout.
     requirePaidBeforeExpiry: true,
   },
+  snpay: noRecovery,
   generic_api: noRecovery,
   binance: noRecovery,
   crypto_address: noRecovery,
@@ -192,6 +213,13 @@ const providerRequiredEnvNames: Record<PaymentProviderCode, string[]> = {
     "LIUHAOYI_MERCHANT_ID",
     "LIUHAOYI_MERCHANT_KEY",
     "LIUHAOYI_SITE_URL",
+  ],
+  snpay: [
+    "SNPAY_MERCHANT_ID",
+    "SNPAY_API_BASE",
+    "SNPAY_PRIVATE_KEY_FILE",
+    "SNPAY_PLATFORM_PUBLIC_KEY_FILE",
+    "SNPAY_SITE_URL",
   ],
   generic_api: [
     "GENERIC_PAYMENT_API_BASE_URL",
