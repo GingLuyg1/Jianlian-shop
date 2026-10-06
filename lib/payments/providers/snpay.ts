@@ -16,6 +16,7 @@ import type {
 } from "@/lib/payments/channel-types";
 import {
   createSnpayClient,
+  getSnpayBusinessErrorDiagnostics,
   SnpayCoreError,
 } from "@/lib/payments/providers/snpay-core.mjs";
 
@@ -24,6 +25,9 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 
 export class SnpayProviderError extends Error {
   code: string;
+  providerBusinessCode?: string;
+  providerBusinessMessageSafe?: string;
+  providerErrorResponseSignatureVerified?: boolean;
 
   constructor(code: string, message: string) {
     super(message);
@@ -192,7 +196,11 @@ async function parseCallback(_payload: unknown, context?: ProviderCallbackContex
 
 function providerError(error: unknown) {
   if (error instanceof SnpayProviderError) return error;
-  if (error instanceof SnpayCoreError) return new SnpayProviderError(error.code, error.message);
+  if (error instanceof SnpayCoreError) {
+    const converted = new SnpayProviderError(error.code, error.message);
+    Object.assign(converted, getSnpayBusinessErrorDiagnostics(error));
+    return converted;
+  }
   return new SnpayProviderError("SNPAY_REQUEST_FAILED", "SNPAY 请求失败");
 }
 
