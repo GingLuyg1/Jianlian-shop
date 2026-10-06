@@ -141,6 +141,14 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
       throw new PaymentSessionError("LIUHAOYI_CLIENT_IP_REQUIRED", "无法确认付款客户端 IP");
     }
   }
+  if (channel.provider === "snpay") {
+    if (business.currency !== "CNY") {
+      throw new PaymentSessionError("SNPAY_CURRENCY_INVALID", "SNPAY 支付仅支持人民币订单");
+    }
+    if (!input.clientIp) {
+      throw new PaymentSessionError("SNPAY_CLIENT_IP_REQUIRED", "无法确认付款客户端 IP");
+    }
+  }
   const capability = getPaymentProviderCapabilities(channel.provider);
   if (!providerSupportsChannel(capability, channel.code, business.currency)
     || !providerAmountWithinLimits(capability, channel, business.payableAmount)) {

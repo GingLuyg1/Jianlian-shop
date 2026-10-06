@@ -1,7 +1,7 @@
 export type PaymentCurrency = "CNY" | "USDT";
 export type PaymentNetwork = "TRC20" | "BEP20";
 export type ProviderNetwork = PaymentNetwork | "TRON" | "BSC";
-export type PaymentProviderCode = "liuhaoyi" | "generic_api" | "binance" | "crypto_address";
+export type PaymentProviderCode = "liuhaoyi" | "snpay" | "generic_api" | "binance" | "crypto_address";
 export type PaymentProviderEnvironment = "sandbox" | "production";
 export type PaymentProviderConfigStatus =
   | "not_configured"
@@ -162,6 +162,15 @@ export type ProviderQueryPaymentResult = {
   rawSummarySafe?: Record<string, unknown>;
 };
 
+export type ProviderQueryPaymentOptions = {
+  timeoutMs?: number;
+  expectedSessionNo?: string;
+  expectedProviderOrderNo?: string;
+  expectedAmount?: number;
+  expectedCurrency?: PaymentCurrency;
+  expectedChannel?: PaymentChannelCode;
+};
+
 export type PaymentSubmitForm = {
   action: string;
   method: "POST";
@@ -255,7 +264,7 @@ export type PaymentProvider = {
   createPayment(
     input: CreatePaymentInput | ProviderCreatePaymentInput
   ): Promise<CreatePaymentResult | ProviderCreatePaymentResult>;
-  queryPayment(paymentNo: string, options?: { timeoutMs?: number }): Promise<{ status: RechargeStatus } | ProviderQueryPaymentResult>;
+  queryPayment(paymentNo: string, options?: ProviderQueryPaymentOptions): Promise<{ status: RechargeStatus } | ProviderQueryPaymentResult>;
   closePayment(paymentNo: string): Promise<{ closed: boolean } | ProviderClosePaymentResult>;
   verifyCallback(payload: unknown, signatureOrContext?: string | ProviderCallbackContext): Promise<boolean>;
   parseCallback(
