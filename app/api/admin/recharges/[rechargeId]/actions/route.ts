@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { handleSnpayLatePaymentApproval } from "@/lib/recharges/snpay-late-payment-admin";
 import {
   classifyRechargeReviewError,
   processRechargeReview,
@@ -25,6 +26,14 @@ export async function POST(
 ) {
   const admin = await getServerAdminContext();
   if (!admin.ok) {
+    const attempted = await request.clone().json().catch(() => null);
+    if (attempted?.action === "approve_late_payment") {
+      await writeAdminAuditLog({
+        request, action: "recharge_approve_late_payment", module: "recharges",
+        targetType: "account_recharge", targetId: params.rechargeId, result: "denied",
+        errorMessage: "过期付款人工入账需要已认证管理员。",
+      }).catch(() => undefined);
+    }
     return NextResponse.json(
       { error: admin.message },
       { status: admin.status },
@@ -35,6 +44,10 @@ export async function POST(
     | { action?: unknown; reason?: unknown }
     | null;
   const action = String(body?.action ?? "") as RechargeReviewAction;
+  if (action === ("approve_late_payment" as string)) {
+    // Dedicated exception; never add expired to the normal review state machine.
+    return handleSnpayLatePaymentApproval(request, params.rechargeId, admin.user, body?.reason);
+  }
   const reason = typeof body?.reason === "string"
     ? body.reason.trim().slice(0, 500)
     : "";
