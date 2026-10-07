@@ -773,7 +773,11 @@ function LiuhaoyiRechargePaymentPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ businessType: "recharge", businessNo: recharge.rechargeNo, channel }),
         });
-        const payload = await response.json().catch(() => null) as (PaymentSession & { error?: string }) | null;
+        const payload = await response.json().catch(() => null) as (PaymentSession & { error?: string; code?: string }) | null;
+        if (payload?.code === "SESSION_FAILED_REQUIRES_REVIEW") {
+          if (active) setError("此前支付会话创建结果未确认，请勿重复创建或付款，请刷新充值记录或联系客服。");
+          return; // No retry: createStarted is UX only; the RPC is the safety boundary.
+        }
         if (!response.ok || !payload?.sessionNo) throw new Error(payload?.error ?? "付款会话创建失败");
         if (active) {
           setSession(payload);

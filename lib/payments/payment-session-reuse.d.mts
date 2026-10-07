@@ -12,3 +12,4 @@ export function isReusablePaymentSession(
   identity: ReusablePaymentSessionIdentity,
   now?: Date,
 ): boolean;
+export const FAILED_SESSION_REVIEW_MESSAGE: string;

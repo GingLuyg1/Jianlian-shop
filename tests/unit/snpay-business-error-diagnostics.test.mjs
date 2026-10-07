@@ -163,7 +163,7 @@ async function serviceHarness(providerCode = "snpay", payload = signed({ code: 1
     rpc: async (name, parameters) => {
       assert.equal(name, "reserve_payment_session");
       rpcCalls.push(parameters);
-      return { data: { created: true, session: { metadata: originalMetadata } }, error: null };
+      return { data: { created: true, retryGuardVersion: 1, session: { metadata: originalMetadata } }, error: null };
     },
     from: (table) => {
       assert.ok(["account_recharges", "payment_sessions", "payment_channels"].includes(table), `Forbidden funding table: ${table}`);

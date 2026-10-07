@@ -19,7 +19,7 @@ import { getPaymentProviderCapabilities, resolveProviderForExistingSession, reso
 import { normalizeLiuhaoyiSessionPresentation } from "@/lib/payments/providers/liuhaoyi-core.mjs";
 import { normalizeLiuhaoyiSubmitForm } from "@/lib/payments/providers/liuhaoyi-submit.mjs";
 import { getSnpayBusinessErrorDiagnostics } from "@/lib/payments/providers/snpay-core.mjs";
-import { isReusablePaymentSession } from "@/lib/payments/payment-session-reuse.mjs";
+import { FAILED_SESSION_REVIEW_MESSAGE, isReusablePaymentSession } from "@/lib/payments/payment-session-reuse.mjs";
 import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -91,6 +91,7 @@ type BusinessRecord = {
   currency: PaymentCurrency;
   channelCode?: string | null;
   expiresAt?: string | null;
+  provider?: string | null;
 };
 
 type ReservedSession = {
@@ -102,30 +103,56 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
   const service = getRequiredServiceClient();
   const businessType = normalizeBusinessType(input.businessType);
   const business = await loadBusinessRecord(service, businessType, input.businessNo, input.userId);
-  ensureBusinessCanCreatePayment(business);
+  if (businessType === "order") ensureBusinessCanCreatePayment(business);
+  if (businessType === "recharge" && ["succeeded", "paid"].includes(business.status)) {
+    throw new PaymentSessionError("BUSINESS_ALREADY_PAID", "业务单已支付，不能重复创建支付会话");
+  }
 
   const channelCode = normalizeChannelCode(input.channelCode || business.channelCode);
   const reusable = await getReusableSession(service, {
     businessType,
     business,
     channelCode,
+    provider: businessType === "recharge" ? business.provider ?? undefined : undefined,
   });
   if (reusable) {
+    ensureBusinessCanCreatePayment(business);
     const existing = await waitForInitializedSession(service, reusable);
+    if (businessType === "recharge" && existing.status === "failed") {
+      throw new PaymentSessionError("SESSION_FAILED_REQUIRES_REVIEW", FAILED_SESSION_REVIEW_MESSAGE);
+    }
     assertReusableSessionMatches(existing, { businessType, business, channelCode });
     return toSessionResponse(existing);
   }
+
+  // Only CNY gateway recharge retries change. Never infer upstream non-creation
+  // from missing provider_order_no, expiry, or the latest row alone.
+  if (businessType === "recharge" && isLiuhaoyiPaymentMethod(channelCode)) {
+    let failedQuery = service.from("payment_sessions").select("id")
+      .eq("business_type", businessType).eq("business_id", business.id)
+      .eq("business_no", business.businessNo).eq("user_id", business.userId)
+      .eq("channel_code", channelCode).eq("status", "failed").limit(1);
+    if (business.provider) failedQuery = failedQuery.eq("provider", business.provider);
+    const { data: failed, error: failedError } = await failedQuery.maybeSingle();
+    if (failedError) throw failedError;
+    if (failed) throw new PaymentSessionError("SESSION_FAILED_REQUIRES_REVIEW", FAILED_SESSION_REVIEW_MESSAGE);
+  }
+  ensureBusinessCanCreatePayment(business);
 
   const latest = await getLatestMatchingSession(service, {
     businessType,
     business,
     channelCode,
+    provider: businessType === "recharge" ? business.provider ?? undefined : undefined,
   });
   if (latest && (normalizeSessionStatus(latest.status) === "expired" || isExpiredAt(latest.expires_at))) {
     throw new PaymentSessionError("SESSION_EXPIRED", "原支付会话已过期，不能创建替代支付单");
   }
 
   const channel = await loadEnabledChannel(service, channelCode);
+  if (businessType === "recharge" && business.provider && channel.provider !== business.provider) {
+    throw new PaymentSessionError("SESSION_IDENTITY_CONFLICT", "支付渠道与原充值单不一致，请联系客服。");
+  }
   if (!channel.configured) {
     throw new PaymentSessionError("PROVIDER_NOT_CONFIGURED", "支付渠道尚未配置，无法创建真实支付会话。");
   }
@@ -174,6 +201,9 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
 
   if (!reserved.created) {
     const existing = await waitForInitializedSession(service, reserved.session);
+    if (businessType === "recharge" && existing.status === "failed") {
+      throw new PaymentSessionError("SESSION_FAILED_REQUIRES_REVIEW", FAILED_SESSION_REVIEW_MESSAGE);
+    }
     assertReusableSessionMatches(existing, { businessType, business, channelCode: channel.code, provider: channel.provider });
     return toSessionResponse(existing);
   }
@@ -353,13 +383,28 @@ async function reservePaymentSession(
   });
 
   if (!error && data && typeof data === "object") {
-    const result = data as { created?: unknown; session?: unknown };
+    const result = data as { created?: unknown; session?: unknown; blocked?: unknown; blockCode?: unknown; retryGuardVersion?: unknown };
+    const guardedRecharge = input.businessType === "recharge" && isLiuhaoyiPaymentMethod(input.channel.code);
+    if (guardedRecharge && result.blocked === true) {
+      if (result.blockCode === "SESSION_FAILED_REQUIRES_REVIEW") {
+        throw new PaymentSessionError("SESSION_FAILED_REQUIRES_REVIEW", FAILED_SESSION_REVIEW_MESSAGE);
+      }
+      const code = ["BUSINESS_ALREADY_PAID", "BUSINESS_STATUS_INVALID", "SESSION_IDENTITY_CONFLICT"].includes(String(result.blockCode))
+        ? String(result.blockCode) : "SESSION_RECHARGE_GUARD_NOT_READY";
+      throw new PaymentSessionError(code, "支付会话无法安全创建，请刷新充值记录或联系客服。");
+    }
+    if (guardedRecharge && result.retryGuardVersion !== 1) {
+      throw new PaymentSessionError("SESSION_RECHARGE_GUARD_NOT_READY", "支付会话安全保护尚未就绪，请联系客服。");
+    }
     if (result.session && typeof result.session === "object") {
       return { created: result.created === true, session: result.session as Record<string, unknown> };
     }
   }
 
   if (error && !isMissingFunction(error)) throw error;
+  if (input.businessType === "recharge" && isLiuhaoyiPaymentMethod(input.channel.code)) {
+    throw new PaymentSessionError("SESSION_RECHARGE_GUARD_NOT_READY", "支付会话安全保护尚未就绪，请联系客服。");
+  }
   return reservePaymentSessionFallback(service, input);
 }
 
@@ -476,7 +521,7 @@ async function loadBusinessRecord(
 
   const { data, error } = await service
     .from("account_recharges")
-    .select("id,recharge_no,user_id,status,amount,requested_amount,fee_amount,payable_amount,currency,channel_code,channel,expires_at")
+    .select("id,recharge_no,user_id,status,amount,requested_amount,fee_amount,payable_amount,currency,channel_code,channel,expires_at,provider")
     .eq("recharge_no", normalizedNo)
     .maybeSingle();
   if (error) throw error;
@@ -495,6 +540,7 @@ async function loadBusinessRecord(
     currency: data.currency === "USDT" ? "USDT" : "CNY",
     channelCode: textOrNull(data.channel_code ?? data.channel),
     expiresAt: textOrNull(data.expires_at),
+    provider: textOrNull(data.provider),
   };
 }
 
