@@ -18,7 +18,7 @@ import {
   snpayTypeForChannel,
   verifySnpaySignedPayload,
 } from "../../lib/payments/providers/snpay-core.mjs";
-import { callbackSessionNoCandidate } from "../../lib/payments/callback-session-bootstrap.mjs";
+import { callbackSessionNoCandidate, callbackSessionIdentityMatches } from "../../lib/payments/callback-session-bootstrap.mjs";
 import { evaluateProviderRecoveryEvidence } from "../../lib/payments/provider-contracts.mjs";
 
 const NOW = Date.parse("2026-10-06T03:00:00.000Z");
@@ -48,21 +48,28 @@ function signed(parameters, privateKey = platformKeys.privateKey) {
   return payload;
 }
 
-function responsePayload(request, overrides = {}) {
+// Create and query have different official response schemas. Never use query
+// identity fields to make an otherwise-invalid create implementation pass.
+function responsePayload(request, overrides = {}, operation = "query") {
+  const { __privateKey, ...fields } = overrides;
   const payload = {
     code: 0,
-    pid: TEST_MERCHANT_ID,
     timestamp: String(Math.floor(NOW / 1000)),
-    out_trade_no: request.out_trade_no ?? "PS_TEST_12345678",
     trade_no: request.trade_no ?? "SN_TEST_123",
-    type: request.type ?? "alipay",
-    money: request.money ?? "1.00",
-    status: "1",
-    endtime: "2026-10-06 10:59:00",
-    pay_info: "https://pay.example.test/checkout",
-    ...overrides,
+    ...(operation === "create" ? {
+      pay_type: "jump",
+      pay_info: "https://pay.example.test/checkout",
+    } : {
+      pid: TEST_MERCHANT_ID,
+      out_trade_no: request.out_trade_no ?? "PS_TEST_12345678",
+      type: request.type ?? "alipay",
+      money: request.money ?? "1.00",
+      status: "1",
+      endtime: "2026-10-06 10:59:00",
+    }),
+    ...fields,
   };
-  return signed(payload, overrides.__privateKey ?? platformKeys.privateKey);
+  return signed(payload, __privateKey ?? platformKeys.privateKey);
 }
 
 function mockFetch(options = {}) {
@@ -80,7 +87,7 @@ function mockFetch(options = {}) {
     const request = Object.fromEntries(new URLSearchParams(String(init.body)).entries());
     assert.equal(verifySnpaySignedPayload(request, merchantKeys.publicKey, { now: NOW }), true);
     const overrides = typeof options.overrides === "function" ? options.overrides(request, String(url)) : (options.overrides ?? {});
-    const payload = responsePayload(request, overrides);
+    const payload = responsePayload(request, overrides, new URL(url).pathname === "/api/pay/create" ? "create" : "query");
     if (options.tamperSignature) payload.money = "999.00";
     return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
   };
@@ -200,16 +207,20 @@ test("unsafe script payment URL is rejected", () => {
   assert.throws(() => selectSnpayPaymentArtifact({ pay_info: "https://user:password@pay.example.test/a" }), /不安全/);
 });
 
-test("Alipay create uses exact V2 endpoint and returns verified provider identity", async () => {
+test("minimal official create response returns a signed entry and captured provider order, not paid evidence", async () => {
   const { value, mock } = client();
   const result = await value.createPayment(createInput);
   assert.equal(mock.calls[0].url, "https://www.snpay.cn/api/pay/create");
   assert.equal(result.providerOrderNo, "SN_TEST_123");
   assert.equal(result.paymentType, "redirect");
+  assert.deepEqual(Object.keys(result.payload).sort(), ["code", "trade_no", "pay_type", "pay_info", "timestamp", "sign", "sign_type"].sort());
+  assert.equal(result.artifact.url, "https://pay.example.test/checkout");
+  assert.equal("paid" in result, false);
+  assert.equal("paidAt" in result, false);
 });
 
 test("WeChat create maps channel to wxpay", async () => {
-  const { value, mock } = client({ overrides: (request) => ({ type: request.type, pay_info: "weixin://wxpay/test" }) });
+  const { value, mock } = client({ overrides: (request) => ({ type: request.type, pay_type: "urlscheme", pay_info: "weixin://wxpay/test" }) });
   const result = await value.createPayment({ ...createInput, channelCode: "wechat", notifyUrl: "https://jianlian.shop/api/payments/callback/wechat" });
   assert.equal(Object.fromEntries(new URLSearchParams(mock.calls[0].init.body)).type, "wxpay");
   assert.equal(result.paymentType, "deeplink");
@@ -231,14 +242,28 @@ test("create rejects an invalid response signature", async () => {
   await assert.rejects(value.createPayment(createInput), { code: "SNPAY_RESPONSE_SIGNATURE_INVALID" });
 });
 
-test("create rejects merchant identity mismatch", async () => {
+test("create does not interpret undocumented pid as merchant evidence", async () => {
   const { value } = client({ overrides: { pid: "9999" } });
-  await assert.rejects(value.createPayment(createInput), { code: "SNPAY_MERCHANT_MISMATCH" });
+  assert.equal((await value.createPayment(createInput)).providerOrderNo, "SN_TEST_123");
 });
 
-test("create rejects merchant order identity mismatch", async () => {
+test("create does not interpret undocumented out_trade_no as completion evidence", async () => {
   const { value } = client({ overrides: { out_trade_no: "PS_FOREIGN_12345678" } });
-  await assert.rejects(value.createPayment(createInput), { code: "SNPAY_ORDER_IDENTITY_MISMATCH" });
+  assert.equal((await value.createPayment(createInput)).providerOrderNo, "SN_TEST_123");
+});
+
+test("create accepts absence of each undocumented create-response identity field", async (t) => {
+  for (const field of ["pid", "out_trade_no", "type", "money"]) await t.test(field, async () => {
+    const { value } = client({ overrides: { [field]: undefined } });
+    assert.equal((await value.createPayment(createInput)).providerOrderNo, "SN_TEST_123");
+  });
+});
+
+test("optional type and money must match when present, including invalid null values", async () => {
+  assert.equal((await client({ overrides: { type: "alipay", money: "1.00" } }).value.createPayment(createInput)).providerOrderNo, "SN_TEST_123");
+  for (const [overrides, code] of [[{ type: null }, "SNPAY_CHANNEL_MISMATCH"], [{ money: null }, "SNPAY_AMOUNT_INVALID"]]) {
+    await assert.rejects(client({ overrides }).value.createPayment(createInput), { code });
+  }
 });
 
 test("create rejects amount mismatch when amount is returned", async () => {
@@ -254,6 +279,38 @@ test("create rejects channel mismatch", async () => {
 test("create rejects missing provider order identity", async () => {
   const { value } = client({ overrides: { trade_no: "" } });
   await assert.rejects(value.createPayment(createInput), { code: "SNPAY_PROVIDER_ORDER_MISSING" });
+});
+
+test("create rejects malformed or oversized provider order identities", async () => {
+  for (const trade_no of ["bad order", "<id>", "x".repeat(161), {}, ["SN_TEST_123"], 1.5, -1]) {
+    await assert.rejects(client({ overrides: { trade_no } }).value.createPayment(createInput));
+  }
+});
+
+test("create requires official pay_info and a supported safe payment type", async () => {
+  for (const [overrides, code] of [
+    [{ pay_info: undefined }, "SNPAY_PAYMENT_ARTIFACT_MISSING"],
+    [{ pay_info: "" }, "SNPAY_PAYMENT_ARTIFACT_MISSING"],
+    [{ pay_info: {} }, "SNPAY_PAYMENT_ARTIFACT_MISSING"],
+    [{ pay_info: ["opaque-qr"] }, "SNPAY_PAYMENT_ARTIFACT_MISSING"],
+    [{ pay_type: undefined }, "SNPAY_PAYMENT_TYPE_UNSUPPORTED"],
+    [{ pay_type: "html" }, "SNPAY_PAYMENT_TYPE_UNSUPPORTED"],
+    [{ pay_type: "unknown" }, "SNPAY_PAYMENT_TYPE_UNSUPPORTED"],
+    [{ pay_type: "jump", pay_info: "opaque-qr" }, "SNPAY_PAYMENT_ARTIFACT_UNSAFE"],
+    [{ pay_type: "urlscheme", pay_info: "https://pay.example.test/a" }, "SNPAY_PAYMENT_ARTIFACT_UNSAFE"],
+    [{ pay_type: "qrcode", pay_info: "<form>unsafe</form>" }, "SNPAY_PAYMENT_ARTIFACT_UNSAFE"],
+    [{ pay_info: "javascript:alert(1)" }, "SNPAY_PAYMENT_ARTIFACT_UNSAFE"],
+  ]) await assert.rejects(client({ overrides }).value.createPayment(createInput), { code });
+  const qr = await client({ overrides: { pay_type: "qrcode", pay_info: "opaque-provider-qr" } }).value.createPayment(createInput);
+  assert.equal(qr.paymentType, "qrcode");
+  assert.equal(qr.qrCodeValue, "opaque-provider-qr");
+});
+
+test("create still rejects business errors and invalid signed timestamps", async () => {
+  await assert.rejects(client({ overrides: { code: -1 } }).value.createPayment(createInput), { code: "SNPAY_API_REJECTED" });
+  for (const timestamp of [undefined, "123", String(Math.floor(NOW / 1000) - 301), String(Math.floor(NOW / 1000) + 301)]) {
+    await assert.rejects(client({ overrides: { timestamp } }).value.createPayment(createInput), { code: "SNPAY_RESPONSE_SIGNATURE_INVALID" });
+  }
 });
 
 test("paid query requires verified business response and normalizes paid", async () => {
@@ -286,6 +343,13 @@ test("query rejects amount mismatch", async () => {
 test("query rejects merchant order mismatch", async () => {
   const { value } = client({ overrides: { out_trade_no: "PS_FOREIGN_12345678" } });
   await assert.rejects(value.queryPayment(queryInput), { code: "SNPAY_ORDER_IDENTITY_MISMATCH" });
+});
+
+test("query retains merchant validation and rejects missing identity/type/amount fields", async () => {
+  await assert.rejects(client({ overrides: { pid: "9999" } }).value.queryPayment(queryInput), { code: "SNPAY_MERCHANT_MISMATCH" });
+  for (const [field, code] of [["pid", "SNPAY_MERCHANT_MISMATCH"], ["out_trade_no", "SNPAY_ORDER_IDENTITY_MISMATCH"], ["type", "SNPAY_CHANNEL_MISMATCH"], ["money", "SNPAY_AMOUNT_INVALID"]]) {
+    await assert.rejects(client({ overrides: { [field]: undefined } }).value.queryPayment(queryInput), { code });
+  }
 });
 
 test("query rejects provider order mismatch", async () => {
@@ -349,6 +413,16 @@ test("callback merchant mismatch is rejected even with a valid signature", () =>
   const { value } = client();
   const body = formBody(callbackPayload({ pid: "9999" }));
   assert.equal(value.verifyCallback(body, { channelCode: "alipay" }), false);
+  assert.throws(() => value.parseCallback(body, { channelCode: "alipay" }), { code: "SNPAY_CALLBACK_SIGNATURE_INVALID" });
+});
+
+test("callback foreign order cannot match the persisted session in the canonical pipeline", () => {
+  const { value } = client();
+  const parsed = value.parseCallback(formBody(callbackPayload({ out_trade_no: "PS_FOREIGN_12345678" })), { channelCode: "alipay" });
+  assert.equal(callbackSessionIdentityMatches({
+    session: { session_no: "PS_TEST_12345678", provider: "snpay", channel_code: "alipay" },
+    parsed: { ...parsed, provider: "snpay" }, channelCode: "alipay",
+  }), false);
 });
 
 test("callback channel mismatch is rejected even with a valid signature", () => {
