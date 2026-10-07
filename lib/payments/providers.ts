@@ -128,7 +128,7 @@ export const providerCapabilities: Record<PaymentProviderCode, PaymentProviderCa
     supportedChannels: ["alipay", "wechat"],
     minimumAmount: 0.01,
     maximumAmount: null,
-    providerExternalFeeDisclosure: null,
+    providerExternalFeeDisclosure: "本站手续费与支付平台额外费用分别计算。支付平台可能额外收取约 3% 通道手续费；实际付款金额以支付页面为准，额外费用不增加充值本金或到账金额。",
   },
   generic_api: {
     supportsCreate: false,
