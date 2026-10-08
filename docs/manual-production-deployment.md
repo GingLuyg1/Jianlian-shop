@@ -9,6 +9,7 @@
 - 持久仓库：`/www/jianlian-shop`
 - Releases：`/www/releases/jianlian-shop-<full_sha>`
 - PM2 process：`jianlian-shop`
+- PM2 home：脚本统一固定 `PM2_HOME=/root/.pm2`，不继承调用方选择。
 - Production port：`3001`
 - 隔离 smoke port：`3002`
 - 发布脚本：`/www/jianlian-shop/scripts/production-release.sh`
@@ -42,7 +43,9 @@ git fetch origin main
 bash scripts/production-release.sh preflight <FULL_SHA> /www/releases/jianlian-shop-<ROLLBACK_FULL_SHA>
 ```
 
-Preflight 检查 commit 存在、当前 PM2 cwd、目标 release 不存在、rollback 是不同于当前版本的完整可运行 release、`/www` 空间、inode 和 env。默认至少需要 3 GiB 和 150,000 inode，为约 1.1 GiB release 的安装与构建峰值留出余量；不足时禁止继续 `npm ci/build`。
+Preflight 检查 commit 存在、当前 PM2 cwd、目标 release 不存在、rollback 是不同于 candidate 的完整可读可运行 release、`/www` 空间、inode 和 env。允许当前已验证 live release 作为 rollback；不允许 candidate 自身作为 rollback。默认至少需要 3 GiB 和 150,000 inode，为约 1.1 GiB release 的安装与构建峰值留出余量；不足时禁止继续 `npm ci/build`。
+
+Preflight/prepare 的 rollback 参数只用于验证安全回退版本并保护清理计划；switch 没有该参数，自动恢复的是切换前现场记录并验证的当前 live。显式 rollback 则使用传入的目标目录。两者不要混淆。
 
 仅当空间不足时先列出清理候选（第一次调用必定只列出并停止），人工核对后才确认：
 
@@ -78,6 +81,8 @@ bash scripts/production-release.sh switch <FULL_SHA>
 脚本重新检查 SHA、`.next`、env 与 prepare/build/ready marker，记录并验证当前 release 后，使用受控 fresh activation 切换：只删除名为 `jianlian-shop` 的现有 PM2 process，再以目标 `JIANLIAN_RELEASE_DIR` 和唯一的 `ecosystem.production.config.cjs` 执行全新 `pm2 start`。禁止用 `startOrReload` 跨 release 切换，因为 PM2 reload 不会可靠采用新的 cwd 或 script path。
 
 Fresh activation 最多用 60 秒、每 2 秒检查一次 PM2 process、online 状态、PID、`/proc/<pid>/cwd`、`pm_cwd` 和 `pm_exec_path`，随后最多再用 60 秒等待 localhost `3001/api/health`。短暂 Production downtime 是预期行为。目标 health 和正式首页/login 全部通过后才 `pm2 save`；任一步失败只调用一次相同的 fresh activation 恢复已记录的 previous release，恢复版本完整通过后才保存。自动恢复失败时停止并要求人工恢复，禁止递归回滚、`pm2 delete all` 或 `pm2 kill`。
+
+成功 switch/rollback 输出 `PM2_SAVE=PASS`；成功自动恢复输出 `RECOVERY_PM2_SAVE=PASS` 和 `PREVIOUS_RELEASE_RESTORED=PASS`，随后原发布仍返回失败。恢复 save 失败不能报告恢复成功；最终 save 失败表示运行目标已切换但持久化未确认，需要人工复查，而不是声称没有运行 save。发布脚本内置验证不等于支付业务验收，继续完成 [只读外部验收清单](operations/production-release-post-switch-verification.md)。
 
 ## Release 保留策略
 

@@ -41,11 +41,12 @@ test("production release script enforces immutable release and recovery gates", 
   assert.match(script, /exec \.\/node_modules\/\.bin\/next start -p "\$SMOKE_PORT"/);
   assert.match(script, /for path in \/api\/health \/ \/login/);
   assert.match(script, /restore_previous_release/);
-  assert.match(script, /previous release restored and pm2 save was not run/);
+  assert.match(script, /previous release restored and its PM2 state saved/);
+  assert.doesNotMatch(script, /pm2 save was not run/);
   assert.match(script, /activate_release_fresh\(\)/);
   assert.doesNotMatch(script, /startOrReload/);
-  assert.match(script, /pm2 delete "\$APP_NAME"/);
-  assert.match(script, /JIANLIAN_RELEASE_DIR="\$target" pm2 start "\$REPO\/ecosystem\.production\.config\.cjs" --only "\$APP_NAME"/);
+  assert.match(script, /run_pm2 delete "\$APP_NAME"/);
+  assert.match(script, /JIANLIAN_RELEASE_DIR="\$target" run_pm2 start "\$REPO\/ecosystem\.production\.config\.cjs" --only "\$APP_NAME"/);
   assert.doesNotMatch(script, /pm2 delete all|pm2 kill/);
   assert.match(script, /for attempt in \$\(seq 0 30\)/);
   assert.match(script, /sleep 2/);

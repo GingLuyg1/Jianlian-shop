@@ -33,6 +33,9 @@ KNOWN_OPTIONAL_ENV=(
 die() { printf 'BLOCKED: %s\n' "$*" >&2; exit 1; }
 status() { printf '%s=%s\n' "$1" "$2"; }
 
+# Never inherit a caller's PM2 daemon selection.
+run_pm2() { PM2_HOME=/root/.pm2 pm2 "$@"; }
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -73,17 +76,17 @@ assert_release_path() {
 
 current_pm2_cwd() {
   local pid
-  pid="$(pm2 pid "$APP_NAME" 2>/dev/null | tr -d '[:space:]')"
+  pid="$(run_pm2 pid "$APP_NAME" 2>/dev/null | tr -d '[:space:]')"
   [[ "$pid" =~ ^[0-9]+$ ]] && [[ "$pid" != 0 ]] || die "PM2 process $APP_NAME is not running"
   readlink -f "/proc/$pid/cwd"
 }
 
 pm2_app_exists() {
-  pm2 describe "$APP_NAME" >/dev/null 2>&1
+  run_pm2 describe "$APP_NAME" >/dev/null 2>&1
 }
 
 pm2_process_metadata() {
-  pm2 jlist 2>/dev/null | node -e '
+  run_pm2 jlist 2>/dev/null | node -e '
     let input = "";
     process.stdin.on("data", (chunk) => { input += chunk; });
     process.stdin.on("end", () => {
@@ -106,7 +109,7 @@ wait_for_pm2_release() {
   expected_exec="$(readlink -f "$expected/node_modules/next/dist/bin/next")"
   [[ -n "$expected_exec" && -f "$expected_exec" ]] || return 1
   for attempt in $(seq 0 30); do
-    pid="$(pm2 pid "$APP_NAME" 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $1 != 0 { value = $1 } END { print value }')"
+    pid="$(run_pm2 pid "$APP_NAME" 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $1 != 0 { value = $1 } END { print value }')"
     metadata="$(pm2_process_metadata 2>/dev/null || true)"
     listed_pid=''; process_status=''; pm_cwd=''; pm_exec_path=''
     IFS=$'\t' read -r listed_pid process_status pm_cwd pm_exec_path <<<"$metadata"
@@ -158,9 +161,9 @@ activate_release_fresh() {
   assert_release_path "$target"
   verify_runtime_release "$target"
   if pm2_app_exists; then
-    pm2 delete "$APP_NAME"
+    run_pm2 delete "$APP_NAME" || return 1
   fi
-  if ! JIANLIAN_RELEASE_DIR="$target" pm2 start "$REPO/ecosystem.production.config.cjs" --only "$APP_NAME"; then
+  if ! JIANLIAN_RELEASE_DIR="$target" run_pm2 start "$REPO/ecosystem.production.config.cjs" --only "$APP_NAME"; then
     return 1
   fi
   wait_for_pm2_release "$target" || return 1
@@ -274,7 +277,10 @@ verify_runtime_release() {
   assert_release_path "$target"
   sha="${target##*-}"
   git -C "$REPO" cat-file -e "${sha}^{commit}" 2>/dev/null || die "release commit does not exist in persistent repository"
+  [[ -d "$target" && -r "$target" && -x "$target" ]] || die "release directory is missing or unreadable"
   [[ -d "$target" && ! -L "$target/.next" && -d "$target/.next" && -f "$target/.next/BUILD_ID" && ! -L "$target/.next/BUILD_ID" ]] || die "release build output is incomplete"
+  [[ -d "$target/.next/server" && -r "$target/.next/server" && -f "$target/.next/routes-manifest.json" && -r "$target/.next/routes-manifest.json" && -f "$target/.next/required-server-files.json" && -r "$target/.next/required-server-files.json" ]] || die "release server build artifacts are incomplete or unreadable"
+  [[ -r "$target/.next/BUILD_ID" && -s "$target/.next/BUILD_ID" && -r "$target/package.json" && -d "$target/node_modules" && -r "$target/node_modules/next/dist/bin/next" && -f "$target/node_modules/next/dist/bin/next" ]] || die "release runtime artifacts are incomplete or unreadable"
   [[ -f "$target/.env.production.local" && ! -L "$target/.env.production.local" ]] || die "release environment must be a regular file"
   verify_release_tree "$sha" "$target"
   report_env "$target/.env.production.local"
@@ -361,10 +367,11 @@ preflight() {
   current="$(current_pm2_cwd)"
   assert_release_path "$current"
   status CURRENT_PM2_CWD "$current"
+  status PM2_HOME /root/.pm2
   status TARGET_COMMIT "$sha"
+  [[ "$rollback" != "$target" && "${rollback##*-}" != "$sha" ]] || die "designated rollback release must differ from candidate"
   [[ ! -e "$target" ]] || die "target release already exists"
   [[ -d "$rollback" ]] || die "designated rollback release does not exist"
-  [[ "$rollback" != "$current" ]] || die "designated rollback release must differ from current Production"
   verify_runtime_release "$rollback"
   disk_preflight
   preflight_env
@@ -410,7 +417,11 @@ restore_previous_release() {
   local previous="$1"
   activate_release_fresh "$previous" || return 1
   verify_public_endpoints || return 1
-  pm2 save
+  if ! run_pm2 save; then
+    status RECOVERY_PM2_SAVE FAIL
+    return 1
+  fi
+  status RECOVERY_PM2_SAVE PASS
   status PREVIOUS_RELEASE_RESTORED PASS
 }
 
@@ -471,13 +482,14 @@ switch_release() {
   status PREVIOUS_PRODUCTION_RELEASE "$current"
   if ! activate_release_fresh "$target"; then
     restore_previous_release "$current" || die "target switch failed and previous release could not be verified; manual recovery required"
-    die "target switch failed; previous release restored and pm2 save was not run"
+    die "target switch failed; previous release restored and its PM2 state saved"
   fi
   if ! verify_public_endpoints; then
     restore_previous_release "$current" || die "public validation failed and previous release could not be verified; manual recovery required"
-    die "public Production endpoint failed; previous release restored and pm2 save was not run"
+    die "public Production endpoint failed; previous release restored and its PM2 state saved"
   fi
-  pm2 save
+  run_pm2 save || die "target is active but PM2 save failed; persistence requires manual review"
+  status PM2_SAVE PASS
   status PRODUCTION_SWITCH PASS
 }
 
@@ -492,13 +504,14 @@ rollback_release() {
   sha="${target##*-}"
   if ! activate_release_fresh "$target"; then
     restore_previous_release "$current" || die "rollback switch failed and previous release could not be verified; manual recovery required"
-    die "rollback switch failed; previous release restored and pm2 save was not run"
+    die "rollback switch failed; previous release restored and its PM2 state saved"
   fi
   if ! verify_public_endpoints; then
     restore_previous_release "$current" || die "rollback public validation failed and previous release could not be verified; manual recovery required"
-    die "rollback public endpoint failed; previous release restored and pm2 save was not run"
+    die "rollback public endpoint failed; previous release restored and its PM2 state saved"
   fi
-  pm2 save
+  run_pm2 save || die "rollback target is active but PM2 save failed; persistence requires manual review"
+  status PM2_SAVE PASS
   status ROLLBACK_ASSESSMENT PASS
 }
 
