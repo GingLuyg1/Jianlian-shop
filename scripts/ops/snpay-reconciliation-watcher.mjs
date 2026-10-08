@@ -14,8 +14,8 @@ if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
     process.exitCode=p.error?1:p.status??1;
   }else{
     createRequire(import.meta.url)('@next/env').loadEnvConfig(fileURLToPath(new URL('../../',import.meta.url)),false,{info(){},error(){}});
-    const result=await runSnpayReconciliationWatcher({args,write:line=>process.stdout.write(line+'\n'),heartbeat:async value=>{
-      let previous={};try{previous=JSON.parse(readFileSync(state,'utf8'));}catch{}
+    let previous={};try{previous=JSON.parse(readFileSync(state,'utf8'));}catch{}
+    const result=await runSnpayReconciliationWatcher({args,scanCursor:previous.scan_cursor,write:line=>process.stdout.write(line+'\n'),heartbeat:async value=>{
       const tmp=state+'.tmp';writeFileSync(tmp,JSON.stringify({...value,last_successful_run:value.last_successful_run??previous.last_successful_run??null}),{mode:0o600});renameSync(tmp,state);
     }});if(!['finished','disabled'].includes(result.status))process.exitCode=1;
   }

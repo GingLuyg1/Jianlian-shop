@@ -73,3 +73,49 @@ test('systemd runtime contract is root oneshot/flock, explicit Node, preserves h
  assert.ok(source('scripts/ops/snpay-reconciliation-watcher.mjs').includes('loadEnvConfig'));
  assert.ok(source('scripts/ops/snpay-reconciliation-watcher.mjs').includes('renameSync'));
 });
+
+test('route holds admission before body parsing and releases after malformed/auth/throw paths',async()=>{
+ const previous=process.env.PAYMENT_RECONCILIATION_SECRET;process.env.PAYMENT_RECONCILIATION_SECRET='CI-LOCK';
+ let active=0,max=0,calls=0,throwService=false,releaseBody;
+ const route=loadTs('app/api/internal/payments/snpay-reconciliation/route.ts',{'node:crypto':{timingSafeEqual},'next/server':{NextResponse:{json:Response.json}},'@/lib/payments/snpay-reconciliation-service':{reconcileSnpaySession:async()=>{calls++;active++;max=Math.max(max,active);try{if(throwService)throw Error('CI_SERVICE_ERROR');await new Promise(r=>setTimeout(r,5));return{};}finally{active--;}}},'@/lib/security/rate-limit':{checkRequestSize:()=>null,checkRateLimit:()=>({allowed:true}),getInternalTaskRateLimitKey:()=>''}});
+ const req=(body=JSON.stringify({sessionId:s.id,execute:false}),secret='CI-LOCK')=>new Request('http://localhost/internal',{method:'POST',headers:{'x-payment-reconciliation-secret':secret},body});
+ try{
+  const first=req();first.json=()=>new Promise(resolve=>{releaseBody=()=>resolve({sessionId:s.id,execute:false});});
+  const pending=route.POST(first);assert.equal((await route.POST(req())).status,429);assert.equal(calls,0);releaseBody();assert.equal((await pending).status,200);
+  assert.equal((await route.POST(req('{'))).status,400);assert.equal((await route.POST(req())).status,200);
+  assert.equal((await route.POST(req(undefined,'BAD'))).status,403);assert.equal((await route.POST(req())).status,200);
+  throwService=true;assert.equal((await route.POST(req())).status,500);throwService=false;assert.equal((await route.POST(req())).status,200);
+  const concurrent=await Promise.all([route.POST(req()),route.POST(req())]);assert.deepEqual(concurrent.map(x=>x.status).sort(),[200,429]);assert.equal(max,1);
+ }finally{if(previous===undefined)delete process.env.PAYMENT_RECONCILIATION_SECRET;else process.env.PAYMENT_RECONCILIATION_SECRET=previous;}
+});
+
+function scanFixture(invalidCount,validCount=1){
+ const rows=Array.from({length:invalidCount+validCount},(_,i)=>({...s,id:'10000000-0000-4000-8000-'+String(i).padStart(12,'0'),provider_order_no:i<invalidCount?'   ':'CI-TX'}));
+ let pages=0,calls=0,active=0,max=0;const states=[];
+ return {states,get pages(){return pages;},get calls(){return calls;},get max(){return max;},
+  fetch:async(u)=>{const url=new URL(u);if(url.hostname==='db.test'){
+   pages++;assert.equal(url.searchParams.get('limit'),'40');assert.deepEqual(url.searchParams.getAll('provider_order_no'),['not.is.null','neq.']);assert.equal(url.searchParams.get('order'),'created_at.asc,id.asc');
+   const after=url.searchParams.get('and')?.match(/id.gt.([0-9a-f-]+)/)?.[1];return Response.json(rows.filter(r=>!after||r.id>after).slice(0,40));}
+   calls++;active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,1));active--;return Response.json({kind:'unpaid',queried:true,paid:false});},
+  heartbeat:async h=>states.push(h)};
+}
+test('40 invalid prefix cannot starve the 41st valid row; serial and bounded',async()=>{
+ const f=scanFixture(40);const r=await runSnpayReconciliationWatcher({env,nowMs:now,fetchImpl:f.fetch,heartbeat:f.heartbeat});
+ assert.equal(f.pages,2);assert.equal(f.calls,1);assert.equal(f.max,1);assert.equal(r.scanned,41);assert.equal(r.skipped_invalid,40);assert.equal(r.provider_queries,1);assert.equal(r.progress_made,true);assert.equal(r.status,'finished');assert.ok(f.states[0].last_successful_run);
+});
+test('scan cap is 160 and saved cursor resumes beyond a longer invalid prefix next run',async()=>{
+ const f=scanFixture(200);const a=await runSnpayReconciliationWatcher({env,nowMs:now,fetchImpl:f.fetch,heartbeat:f.heartbeat});
+ assert.equal(a.scanned,160);assert.equal(f.pages,4);assert.equal(f.calls,0);assert.equal(a.status,'no_progress');assert.equal(a.stop_reason,'scan_limit');assert.equal(a.remaining,true);assert.equal(f.states[0].last_successful_run,null);
+ const b=await runSnpayReconciliationWatcher({env,nowMs:now,scanCursor:f.states[0].scan_cursor,fetchImpl:f.fetch,heartbeat:f.heartbeat});
+ assert.equal(b.scanned,41);assert.equal(f.calls,1);assert.equal(b.progress_made,true);assert.equal(b.remaining,false);assert.equal(f.states[1].scan_cursor,null);
+});
+test('heartbeat distinguishes empty queue, all-invalid queue and safe bounded logs',async()=>{
+ for(const [count,status,reason] of [[0,'finished','empty'],[5,'no_progress','no_effective_candidates']]){
+  const f=scanFixture(count,0),logs=[];const r=await runSnpayReconciliationWatcher({env,nowMs:now,fetchImpl:f.fetch,heartbeat:f.heartbeat,write:x=>logs.push(x)});
+  assert.equal(r.status,status);assert.equal(r.stop_reason,reason);assert.equal(r.progress_made,false);assert.equal(r.provider_queries,0);assert.equal(r.remaining,false);assert.equal(logs.length,1);assert.ok(!logs[0].includes('scan_cursor'));assert.ok(!logs[0].includes(s.session_no));
+ }
+});
+test('provider errors stop at two and do not mark successful heartbeat',async()=>{
+ const f=scanFixture(0,8);let queries=0;const r=await runSnpayReconciliationWatcher({env,nowMs:now,heartbeat:f.heartbeat,fetchImpl:async(u)=>new URL(u).hostname==='db.test'?f.fetch(u):(queries++,Response.json({kind:'query_error',queried:true}))});
+ assert.equal(queries,2);assert.equal(r.provider_queries,2);assert.equal(r.error_count,2);assert.equal(r.stop_reason,'error_guard');assert.equal(r.status,'partial_failure');assert.equal(f.states[0].last_successful_run,null);
+});

@@ -26,10 +26,13 @@ limited expired tail catches paid-in-window/missed-callback evidence without
 permanently polling abandoned historical orders. It deliberately does not rescue
 orders older than 24h; those require separately authorized exact review.
 
-DB candidate query uses each status's persisted cadence; scans at most 40 rows,
-dispatches at most 4 items, serially. Oldest last_synced first provides rotation
-after successful claims. Missing/corrupt identities can reduce batch throughput;
-operators should inspect skips rather than increase lookback/batch automatically.
+DB candidate query uses each status's persisted cadence and excludes NULL/empty
+identity, NULL expiry and nonpositive amount before pagination. Stable keyset
+order is created_at/id: four pages of 40 rows maximum (160 inspected), at most
+4 dispatches serially. The last inspected key is saved in root-only heartbeat
+metadata and resumed next run, then reset on exhaustion. Invalid/whitespace or
+parent-excluded rows therefore cannot permanently pin the first page. Dry-run
+does not write database throttles; the local cursor still provides fairness.
 7s Provider timeout, 10s internal HTTP timeout, 45s worker budget; stop after two
 query/HTTP errors. systemd has 50s outer timeout. Provider outages cannot run an
 instant retry loop. Every execution first conditionally claims last_synced_at
@@ -78,6 +81,22 @@ skipped/duration), no IDs, URLs, payloads or credentials. Atomic root-only
 through failed runs; runtime directory persists after oneshot exit, not reboot.
 Future alert should distinguish disabled/not-installed from a stale last success
 (suggested >5min). Alert integration itself is not installed by this patch.
+
+Each aggregate summary distinguishes scanned/eligible/processed/skipped_invalid,
+provider_queries/resolved/error_count, progress_made, stop_reason and remaining
+(boolean queue tail evidence, not an exact backlog count; null if unknown).
+An empty queue is healthy idle. An inspected queue with zero effective queries
+is no_progress, does not refresh last_successful_run, and returns a nonzero CLI
+exit. Errors and scan/batch/time limits are explicit. One bounded aggregate log
+per run contains no cursor or row identities; only root-only heartbeat stores
+the cursor. Filtering means invalid rows outside the query are not backlog counts.
+
+Internal route admission is process-local, acquired before body parsing and
+released in finally on malformed input, gate denial or service error. It is not
+a replica-wide lock. The V1 deployment contract is one flock-owned worker to
+one localhost app; existing CAS claims and canonical database transactions
+protect same-session competing processes and callbacks. Multi-replica global
+query concurrency is not provided and requires a separately reviewed design.
 
 ## Acceptance / stop / rollback plan
 
