@@ -83,7 +83,7 @@ export async function runSnpayDbMatrix({sql,reset,uid,rid,sid,call,rpc,accountin
     const previousSecret=process.env.PAYMENT_RECONCILIATION_SECRET;process.env.PAYMENT_RECONCILIATION_SECRET='CI-ONLY-INTERNAL';
     try{const summary=await runSnpayReconciliationWatcher({env:{SNPAY_RECONCILIATION_ENABLED:'true',SNPAY_RECONCILIATION_EXECUTE_ENABLED:'true',NEXT_PUBLIC_SUPABASE_URL:'https://db.test',SUPABASE_SECRET_KEY:'CI-ONLY-KEY',PAYMENT_RECONCILIATION_SECRET:'CI-ONLY-INTERNAL',JIANLIAN_INTERNAL_BASE_URL:'http://127.0.0.1:3001'},args:['--execute'],nowMs:now,fetchImpl:async(u,i)=>{
       if(new URL(u).hostname==='db.test')return Response.json((await client.from('payment_sessions').select('*')).data);
-      assert.equal(new URL(u).pathname,'/api/internal/payments/snpay-reconciliation');return route.POST(new Request(u,i));
+      assert.equal(new URL(u).pathname,'/api/internal/payments/snpay-reconciliation');return i.method==='GET'?route.GET(new Request(u,i)):route.POST(new Request(u,i));
     }});assert.equal(summary.completed,1);assert.equal(summary.checked,1);assert.equal(queries,1);await accounting();}finally{if(previousSecret===undefined)delete process.env.PAYMENT_RECONCILIATION_SECRET;else process.env.PAYMENT_RECONCILIATION_SECRET=previousSecret;}
     console.log('SNPAY_WATCHER_WORKER_RSA_DB_CHAIN_PASS=yes');
     console.log('REAL_DB_RECONCILIATION_MATRIX_PASS=yes');console.log('EXACTLY_ONCE_RECONCILIATION_PASS=yes');

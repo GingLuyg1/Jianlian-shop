@@ -9,7 +9,7 @@ protected alternate PM2 tree. Main PM2 is exclusively `/root/.pm2`.
 ## Runtime chain and gate matrix
 
 Timer -> root oneshot -> flock -> exact-release Node CLI -> `@next/env` -> REST
-candidate scan -> authenticated loopback POST -> app route -> reconciliation
+authenticated no-I/O gate GET -> candidate scan -> authenticated loopback POST -> app route -> reconciliation
 service -> pinned SNPAY adapter -> verified evidence -> canonical
 `completePayment(source: reconciliation)` -> `complete_payment_session` -> atomic
 recharge/ledger/balance. No direct balance SQL, status resurrection or expiry edit.
@@ -50,7 +50,13 @@ saves PM2. `pm2 save` persists a process definition; it does not update dotenv o
 systemd and does not make future fresh release starts inherit the desired gate.
 The authenticated **GET** on the existing internal reconciliation endpoint
 returns only `{executeEnabled: boolean}` with no-store: authoritative app-runtime
-evidence, no candidate reads/query/completion. It shares secret/rate admission.
+evidence, no candidate reads/query/completion. Worker checks it before any scan.
+Wrong/missing credentials, old-route405, malformed probe or a closed execute
+gate prevent sensitive candidate reads. Authenticated dry-run accepts a false
+app gate but still never completes. Readiness GET has a distinct authenticated
+6/min budget, separate from SNPAY POST's 4/min budget. Generic internal jobs
+retain their existing 3/5min limit. This avoids probes consuming write admission
+and aligns four-candidate batches with the conservative minute cadence.
 Old releases without GET are `unknown`, **not** ready.
 
 ## Architecture decision
@@ -267,3 +273,23 @@ not by trying to execute TypeScript in Node22. CI tests both majors; isolated SQ
 matrix uses real PostgreSQL with RSA mock transport (no real Provider). Keep
 explicit `/usr/bin/node` while its version is audited; do not change Production
 Node during this task. Runtime warnings/lockfile changes require independent review.
+
+## Development evidence (2026-10-09, not Production activation)
+
+- Exact base: `ef263f9122bf884bc9d1718bb2a892addd9b27ab`.
+- Gate/admission/readiness + reconciliation tests: 56/56.
+- Payment regressions: 450/450; release regression/contracts: 25/25.
+- Node20.20.2 and Node22.22.3 targeted RSA/gate/release suites: 150/150 each.
+- Typecheck and local build passed. Initial sandbox build could not fetch public
+  Google Fonts; retry with authorized public network access passed, no code workaround.
+- Full Windows suite: 1251/1258. Existing failures reproduced in untouched base
+  worktree: one Daju snapshot formatting contract + six migration-runner platform
+  tests. Do not label this full local suite PASS or change unrelated contracts.
+- Fresh isolated native PostgreSQL: fail-closed, pending/processing/expired
+  exactly-once, RSA-to-worker-to-route-to-RPC chain, evidence dedupe, worker/worker
+  and worker/callback races (10 rounds each) passed; mock Provider transport only.
+- Production read-only: active ef263f, both worker gates false, app gate missing
+  (disabled), timer disabled/inactive, service inactive, channels closed except
+  USDT, business counts35/26/20, completed third canary unchanged.
+- Actual GitHub exact-commit Actions conclusion must be recorded separately;
+  neither the above nor a push is CI/Production activation approval.
