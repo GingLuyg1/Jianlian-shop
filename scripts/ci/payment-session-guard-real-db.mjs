@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { harness, fixture, failedRow, deferred, source, uid, rid } from '../../tests/helpers/payment-session-guard-harness.mjs';
+import { fixtureProvider } from '../../tests/helpers/snpay-deeplink-fixture.mjs';
 
 const expected={CI:'true',GITHUB_ACTIONS:'true',PGHOST:'127.0.0.1',PGPORT:'54329',
   PGDATABASE:'ci_payment_session_guard',PGUSER:'postgres',PGPASSWORD:'ci-only-disposable-password'};
@@ -110,6 +111,50 @@ try {
   }
   console.log('CONCURRENT_CREATE_SINGLE_PROVIDER_REAL_DB_PASS=yes,rounds=10');
   console.log('REAL_DB_FAILED_GUARD_PASS=yes');
+  // Use the historical real table constraint, then the exact forward migration.
+  data=await reset('snpay','wechat');
+  const beforeMock=fixtureProvider('urlscheme');
+  const broken=harness({data,backend,providerCreate:input=>beforeMock.provider.createPayment(input)});
+  await assert.rejects(broken.create(),/payment_sessions_payment_type_check/);
+  assert.equal(beforeMock.calls.length,1,'create succeeded upstream exactly once');
+  assert.equal((await read('payment_sessions'))[0].status,'failed');
+  const blocked=harness({data,backend,providerCreate:input=>beforeMock.provider.createPayment(input)});
+  await assert.rejects(blocked.create(),e=>e.code==='SESSION_FAILED_REQUIRES_REVIEW');
+  assert.equal(beforeMock.calls.length,1,'no repeat dispatch after local CHECK failure');
+  data=await reset('snpay','wechat');
+  for(const type of ['redirect','qrcode','address']) {
+    await insert('payment_sessions',failedRow(data,{payment_type:type}));
+  }
+  const unchanged=await read('payment_sessions'),fundsBefore=await funds();
+  await assert.rejects(insert('payment_sessions',failedRow(data,{payment_type:'deeplink'})),
+    /payment_sessions_payment_type_check/);
+  console.log('POSTGRES_DEEPLINK_BEFORE_MIGRATION_REJECTED=yes');
+  await sql(source('supabase/migrations/20261008082216_payment_sessions_deeplink_contract.sql'));
+  assert.deepEqual(await read('payment_sessions'),unchanged);
+  assert.equal(await funds(),fundsBefore);
+  await assert.rejects(insert('payment_sessions',failedRow(data,{payment_type:'invalid_payment_type'})),
+    /payment_sessions_payment_type_check/);
+  assert.equal(await sql("select convalidated from pg_constraint where conrelid='public.payment_sessions'::regclass and conname='payment_sessions_payment_type_check';"),'t');
+  console.log('POSTGRES_EXISTING_ROWS_UNCHANGED=yes');
+  console.log('POSTGRES_INVALID_VALUE_STILL_REJECTED=yes');
+  for(const type of ['redirect','qrcode','address','deeplink']) {
+    data=await reset('snpay','wechat');await insert('payment_sessions',failedRow(data,{payment_type:type}));
+    assert.equal((await read('payment_sessions'))[0].payment_type,type);
+  }
+  console.log('POSTGRES_EXISTING_VALUES_PASS=yes');
+  console.log('POSTGRES_DEEPLINK_AFTER_MIGRATION_ACCEPTED=yes');
+  for(const [payType,channel,expected] of [['urlscheme','wechat','deeplink'],['jump','alipay','redirect'],['qrcode','wechat','qrcode']]) {
+    data=await reset('snpay',channel);const mock=fixtureProvider(payType);
+    const h=harness({data,backend,providerCreate:input=>mock.provider.createPayment(input)});
+    const result=await h.create();assert.equal(result.paymentType,expected);
+    const rows=await read('payment_sessions');assert.equal(rows.length,1);
+    assert.equal(rows[0].payment_type,expected);assert.equal(rows[0].status,'pending');
+    assert.equal(rows[0].provider_order_no,'SN_FIXTURE_ORDER');assert.equal(rows[0].metadata.signatureVerified,true);
+    assert.equal(expected==='qrcode'?rows[0].qr_code_url:rows[0].payment_url,mock.artifact);
+    assert.equal(mock.calls.length,1);assert.equal(await funds(),fundsBefore);
+  }
+  console.log('SNPAY_WECHAT_SESSION_PERSISTENCE_PASS=yes');
+  console.log('POSTGRES_CONSTRAINT_REGRESSION_PASS=yes');
 } finally {
   if(owned) {
     assert.equal(await sql('select identity from public.guard_ci_identity;'),'payment-session-guard-ci-only');
