@@ -15,6 +15,7 @@ import {
   resolveProviderForExistingSession,
   normalizeProviderPaymentStatus,
   PaymentProviderError,
+  providerRecoveryPolicies,
 } from "@/lib/payments/providers";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -330,11 +331,22 @@ async function reconcileOne(
       } else {
         await attemptAutomaticCompletion(supabase, currentSession, provider, comparison);
       }
-    } else if (dryRun) {
-      comparison.result = "manual_review";
-      comparison.recoveryStatus = "dry_run";
     } else {
-      await attemptAutomaticCompletion(supabase, currentSession, provider, comparison);
+      const policy = currentSession.provider ? providerRecoveryPolicies[currentSession.provider] : null;
+      // Providers are query-only for reconciliation until their explicit recovery policy is enabled.
+      // In particular, SNPAY Stage 1 must never turn a query result into an automatic credit.
+      if (!policy?.supportsRecovery || !policy.allowAutoCompletion) {
+        comparison.result = "manual_review";
+        comparison.errorCode = `${currentSession.provider ?? "provider"}_recovery_not_enabled`;
+        comparison.errorMessage = "渠道查询已确认付款，但该 Provider 的自动恢复尚未启用，已转人工复核。";
+        comparison.recoveryAction = null;
+        comparison.recoveryStatus = dryRun ? "dry_run" : "manual_review";
+      } else if (dryRun) {
+        comparison.result = "manual_review";
+        comparison.recoveryStatus = "dry_run";
+      } else {
+        await attemptAutomaticCompletion(supabase, currentSession, provider, comparison);
+      }
     }
   }
 
@@ -445,7 +457,14 @@ async function queryProvider(session: PaymentSession): Promise<ProviderSummary> 
       ? session.sessionNo
       : session.providerOrderNo ?? session.sessionNo;
   const result = await resolveProviderForExistingSession(session).queryPayment(
-    paymentNo
+    paymentNo,
+    {
+      expectedSessionNo: session.sessionNo,
+      expectedProviderOrderNo: session.providerOrderNo ?? undefined,
+      expectedAmount: session.localAmount,
+      expectedCurrency: session.currency === "USDT" ? "USDT" : "CNY",
+      expectedChannel: session.channelCode === "wechat" ? "wechat" : session.channelCode === "alipay" ? "alipay" : undefined,
+    },
   );
   const raw = result as {
     status?: unknown;
@@ -464,7 +483,7 @@ async function queryProvider(session: PaymentSession): Promise<ProviderSummary> 
   const rawStatus = text(raw.status);
   const found = rawSummary?.found === true;
   return {
-    status: found === false && session.provider === "liuhaoyi"
+    status: rawSummary?.found === false
       ? "not_found"
       : normalizeProviderStatus(raw.status),
     amount: raw.amount == null ? null : number(raw.amount),

@@ -1,0 +1,93 @@
+name: Paid-before-expiry expired-state isolated acceptance
+on:
+  push:
+    branches: [codex/paid-before-expiry-expired-state-completion, codex/snpay-reconciliation-v1]
+  pull_request:
+    paths:
+      - supabase/migrations/20261008103916_paid_before_expiry_expired_state_completion.sql
+      - scripts/ci/payment-expired-state-real-db.mjs
+      - tests/fixtures/paid-before-expiry-production-functions.sql
+      - tests/integration/payment-expired-state-contract.test.mjs
+      - .github/workflows/payment-expired-state-completion.yml
+      - lib/payments/snpay-reconciliation-*
+      - lib/payments/providers/snpay.ts
+      - tests/helpers/snpay-reconciliation-db-matrix.mjs
+      - tests/integration/snpay-reconciliation-v1.test.mjs
+      - scripts/ops/snpay-reconciliation-watcher.mjs
+      - app/api/internal/payments/snpay-reconciliation/route.ts
+      - ops/systemd/jianlian-snpay-reconciliation.*
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: ci_payment_expired_state
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-disposable-password
+        ports: ['127.0.0.1:54330:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      CI: 'true'
+      PGHOST: 127.0.0.1
+      PGPORT: '54330'
+      PGDATABASE: ci_payment_expired_state
+      PGUSER: postgres
+      PGPASSWORD: ci-only-disposable-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: psql --version
+      - name: Native PostgreSQL state boundary, security and exactly-once matrix
+        run: node scripts/ci/payment-expired-state-real-db.mjs
+  payment-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      APP_ENV: test
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key-not-for-production
+      PAYMENT_PROVIDER_MODE: disabled
+      DISABLE_EXTERNAL_PROVIDERS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: >-
+          node --test tests/integration/payment-expired-state-contract.test.mjs
+          tests/integration/snpay-reconciliation-v1.test.mjs
+          tests/integration/payment-session-failed-guard.test.mjs
+          tests/integration/snpay-late-payment-manual-review.test.mjs
+          tests/integration/snpay-deeplink-contract.test.mjs
+          tests/unit/snpay-*.test.mjs tests/unit/liuhaoyi-*.test.mjs
+          tests/unit/bep20-*.test.mjs tests/unit/payment-*.test.mjs
+      - run: npm run typecheck
+      - run: npm test
+  snpay-runtime-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: systemd-analyze verify ops/systemd/jianlian-snpay-reconciliation.service ops/systemd/jianlian-snpay-reconciliation.timer
+      - run: node --test tests/integration/snpay-reconciliation-v1.test.mjs

@@ -12,6 +12,7 @@ import {
 } from "@/lib/payments/admin-payment-types";
 import {
   expectedProviderForChannel,
+  getAdminPaymentProviderOptions,
   isPaymentChannelReady,
 } from "@/lib/payments/manual-channel-readiness.mjs";
 import {
@@ -62,6 +63,7 @@ function defaultProvider(
 function providerLabel(provider: PaymentProviderCode) {
   return {
     liuhaoyi: "六号易",
+    snpay: "德云付",
     generic_api: "Generic API",
     binance: "Binance",
     crypto_address: "Crypto Address",
@@ -739,17 +741,15 @@ export default function PaymentSettingsPanel() {
                           );
                         }}
                       >
-                        <option
-                          value={defaultProvider(
-                            channel.channel,
-                          )}
-                        >
-                          {providerLabel(
-                            defaultProvider(
-                              channel.channel,
-                            ),
-                          )}
-                        </option>
+                        {getAdminPaymentProviderOptions(
+                          channel.channel,
+                        ).map((provider) => (
+                          <option key={provider} value={provider}>
+                            {providerLabel(
+                              provider as PaymentProviderCode,
+                            )}
+                          </option>
+                        ))}
                       </select>
                     </Field>
 

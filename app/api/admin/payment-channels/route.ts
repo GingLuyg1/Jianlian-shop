@@ -17,6 +17,8 @@ import {
   getPaymentChannelPatchRuntimeError,
   getPaymentChannelValidationError,
   hasMatchingPaymentChannelVersion,
+  isAdminProviderTrustedConfigured,
+  isChannelProviderCompatible,
   isPaymentChannelConditionalUpdateConflict,
   parseSinglePaymentChannelPatchPayload,
   PAYMENT_CHANNEL_CONFLICT_STATUS,
@@ -104,12 +106,10 @@ function normalizeProvider(
   channel: PaymentChannelCode,
 ): PaymentProviderCode {
   if (
-    value === "liuhaoyi"
-    || value === "generic_api"
-    || value === "binance"
-    || value === "crypto_address"
+    typeof value === "string"
+    && isChannelProviderCompatible(channel, value)
   ) {
-    return value;
+    return value as PaymentProviderCode;
   }
 
   return defaultProvider(channel);
@@ -367,16 +367,14 @@ function buildChannelRow(
       ?? current.provider_name
       ?? expectedProviderForChannel(channel);
   if (
-    rawProvider !== "liuhaoyi"
-    && rawProvider !== "generic_api"
-    && rawProvider !== "binance"
-    && rawProvider !== "crypto_address"
+    typeof rawProvider !== "string"
+    || !isChannelProviderCompatible(channel, rawProvider)
   ) {
     throw new ChannelValidationError(
       `${channel} has an unsupported provider`,
     );
   }
-  const provider = rawProvider;
+  const provider = rawProvider as PaymentProviderCode;
 
   const currentReviewMode = paymentReviewMode(
     currentPublicConfig,
@@ -439,6 +437,12 @@ function buildChannelRow(
     payment_instructions: paymentInstructions,
   };
 
+  const providerConfig = checkPaymentProviderConfig(
+    provider,
+    process.env,
+    process.env[`PAYMENT_PROVIDER_${provider.toUpperCase()}_VERIFIED`]
+      === "true",
+  );
   const state = resolvePaymentChannelState({
     channel,
     currentReviewMode,
@@ -451,7 +455,11 @@ function buildChannelRow(
     paymentInstructions,
     // Only the boolean server-side readiness result is used; credential
     // values are never returned through this Admin API.
-    providerTrustedConfigured: checkPaymentProviderConfig(provider).configured,
+    providerTrustedConfigured: isAdminProviderTrustedConfigured({
+      provider,
+      configured: providerConfig.configured,
+      status: providerConfig.status,
+    }),
   });
 
   const modeOrProviderChanged =

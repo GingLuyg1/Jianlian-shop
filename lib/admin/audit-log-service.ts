@@ -42,6 +42,7 @@ export type AdminAuditInput = {
 };
 
 export const HIGH_RISK_AUDIT_ACTIONS = new Set([
+  "recharge_approve_late_payment",
   "adjust_user_balance",
   "approve_refund",
   "reject_refund",
