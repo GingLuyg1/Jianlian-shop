@@ -143,6 +143,8 @@ async function queryPayment(
         found: result.found,
         paid: result.paid,
         signatureVerified: true,
+        timestampVerified: true,
+        identityVerified: true,
         providerTransactionIdPresent: Boolean(providerTransactionId),
         providerPaidAtPresent: Boolean(result.paidAt),
       },

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {loadTs} from '../../tests/helpers/payment-session-guard-harness.mjs';
+import {runSnpayDbMatrix} from '../../tests/helpers/snpay-reconciliation-db-matrix.mjs';
 const env={CI:'true',PGHOST:'127.0.0.1',PGPORT:'54330',PGDATABASE:'ci_payment_expired_state',
   PGUSER:'postgres',PGPASSWORD:'ci-only-disposable-password'};
 for(const[k,v]of Object.entries(env))assert.equal(process.env[k],v,'UNSAFE_DB_ENV:'+k);
@@ -146,6 +147,7 @@ try{
  await reject('ATOMIC_ROLLBACK_AFTER_CREDIT','',rpc(),'TEST_AFTER_CREDIT');
  await sql('drop trigger ci_fail_after_credit on public.payment_sessions;drop function public.ci_fail_after_credit();');
  console.log('FAIL_CLOSED_MATRIX_PASS=yes');console.log('REAL_POSTGRES_TESTS_PASS=yes');
+ await runSnpayDbMatrix({sql,reset,uid,rid,sid,call,rpc,accounting});
 }finally{
  if(owned){assert.equal(await sql("select identity_token from public.ci_payment_watcher_database_identity where singleton;"),'jianlian-payment-watcher-ephemeral-v1');
  await sql('drop schema public cascade;drop schema auth cascade;create schema public;drop role anon;drop role authenticated;drop role service_role;');console.log('CI_DB_CLEANUP_PASS=yes');}

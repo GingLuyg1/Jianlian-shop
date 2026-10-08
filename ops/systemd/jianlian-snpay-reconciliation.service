@@ -1,0 +1,22 @@
+[Unit]
+Description=Jianlian SNPAY pinned recharge reconciliation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/www/jianlian-shop
+EnvironmentFile=/etc/jianlian/snpay-reconciliation.env
+RuntimeDirectory=jianlian-snpay-reconciliation
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+TimeoutStartSec=50s
+ReadWritePaths=/run/lock /run/jianlian-snpay-reconciliation
+ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-snpay-reconciliation.lock /bin/sh -c 'exec "$$JIANLIAN_NODE_PATH" "$$JIANLIAN_RELEASE_DIR/scripts/ops/snpay-reconciliation-watcher.mjs" --watcher-lock-held --execute'
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

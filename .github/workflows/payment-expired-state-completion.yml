@@ -1,7 +1,7 @@
 name: Paid-before-expiry expired-state isolated acceptance
 on:
   push:
-    branches: [codex/paid-before-expiry-expired-state-completion]
+    branches: [codex/paid-before-expiry-expired-state-completion, codex/snpay-reconciliation-v1]
   pull_request:
     paths:
       - supabase/migrations/20261008103916_paid_before_expiry_expired_state_completion.sql
@@ -9,6 +9,13 @@ on:
       - tests/fixtures/paid-before-expiry-production-functions.sql
       - tests/integration/payment-expired-state-contract.test.mjs
       - .github/workflows/payment-expired-state-completion.yml
+      - lib/payments/snpay-reconciliation-*
+      - lib/payments/providers/snpay.ts
+      - tests/helpers/snpay-reconciliation-db-matrix.mjs
+      - tests/integration/snpay-reconciliation-v1.test.mjs
+      - scripts/ops/snpay-reconciliation-watcher.mjs
+      - app/api/internal/payments/snpay-reconciliation/route.ts
+      - ops/systemd/jianlian-snpay-reconciliation.*
   workflow_dispatch:
 permissions:
   contents: read
@@ -64,6 +71,7 @@ jobs:
       - run: npm ci
       - run: >-
           node --test tests/integration/payment-expired-state-contract.test.mjs
+          tests/integration/snpay-reconciliation-v1.test.mjs
           tests/integration/payment-session-failed-guard.test.mjs
           tests/integration/snpay-late-payment-manual-review.test.mjs
           tests/integration/snpay-deeplink-contract.test.mjs
@@ -71,3 +79,15 @@ jobs:
           tests/unit/bep20-*.test.mjs tests/unit/payment-*.test.mjs
       - run: npm run typecheck
       - run: npm test
+  snpay-runtime-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: systemd-analyze verify ops/systemd/jianlian-snpay-reconciliation.service ops/systemd/jianlian-snpay-reconciliation.timer
+      - run: node --test tests/integration/snpay-reconciliation-v1.test.mjs
