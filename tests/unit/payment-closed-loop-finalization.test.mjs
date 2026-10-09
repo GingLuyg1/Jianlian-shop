@@ -7,6 +7,7 @@ import { fixture, harness, loadTs } from "../helpers/payment-session-guard-harne
 import * as crypto from "node:crypto";
 import * as chainLogic from "../../lib/payments/bep20-chain-logic.mjs";
 import * as expiry from "../../lib/payments/payment-expiry.mjs";
+import ts from "typescript";
 
 const capability = { supportedCurrencies: ["CNY"], minimumAmount: 0.01, maximumAmount: 2000 };
 const source = path => readFileSync(new URL("../../" + path, import.meta.url), "utf8");
@@ -121,6 +122,32 @@ test("both existing styled dialogs show exact customer-service copy; limit prece
   assert.ok(recharge.indexOf("if (channelOverLimit)") < recharge.indexOf('fetch("/api/recharges",'));
   const checkout = source("app/checkout/page.tsx");
   assert.ok(checkout.indexOf("if (paymentOverLimit)") < checkout.indexOf('fetch("/api/orders"'));
+});
+
+test("actual checkout submit handler opens the limit dialog with zero create calls", async () => {
+  const ast = ts.createSourceFile("checkout.tsx", source("app/checkout/page.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let initializer;
+  const visit = node => {
+    if (ts.isVariableDeclaration(node) && node.name.getText(ast) === "handleSubmit") initializer = node.initializer;
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.ok(initializer);
+  const body = ts.transpileModule(`const submit = ${initializer.getText(ast)};`, {
+    compilerOptions: {target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+  }).outputText;
+  let creates = 0; const events = [];
+  const blocked = () => {creates++; throw Error("CREATE_FORBIDDEN");};
+  const submit = new Function("fetch", "setAmountLimitDialogOpen", `
+    const productRow = {}, submitLoading=false, submissionGuardRef={current:{isActive:()=>false}},
+      hasSku=false, selectedSku=null, isPurchasable=true, legalLoading=false,
+      legalError=null, agreementsReady=true, confirmed=true, selectedPaymentUnavailable=false,
+      paymentOverLimit=true;
+    ${body}
+    return submit;
+  `)(blocked, value=>events.push(value));
+  await submit();
+  assert.deepEqual(events, [true]); assert.equal(creates, 0);
 });
 test("no accounting/migration change is needed for external cashier fee", () => {
   const rpc = source("supabase/migrations/20261008103916_paid_before_expiry_expired_state_completion.sql");
