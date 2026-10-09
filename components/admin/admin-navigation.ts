@@ -57,6 +57,8 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
   },
   { type: "link", label: "数字库存", href: "/admin/inventory", icon: PackageCheck },
   { type: "link", label: "供应商管理", href: "/admin/suppliers", icon: Factory },
+  { type: "link", label: "供应商履约", href: "/admin/supplier-fulfillment", icon: Factory },
+  { type: "link", label: "余额流水", href: "/admin/balance-ledger", icon: WalletCards },
   { type: "link", label: "媒体资源", href: "/admin/media", icon: ImageIcon },
   { type: "link", label: "支付管理", href: "/admin/payments", icon: WalletCards },
   { type: "link", label: "充值管理", href: "/admin/recharges", icon: WalletCards },
@@ -75,6 +77,7 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     routePrefixes: ["/admin/system"],
     children: [
       { label: "生产看板", href: "/admin/system/production-readiness" },
+      { label: "Worker 状态", href: "/admin/system/workers" },
       { label: "异常中心", href: "/admin/system-errors" },
       { label: "请求追踪", href: "/admin/system/request-traces" },
       { label: "事务补偿", href: "/admin/system/compensations" },

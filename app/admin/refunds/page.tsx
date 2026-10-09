@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -8,6 +8,8 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { AdminListPagination } from "@/components/admin/v2/AdminList";
+import { listPagination } from "@/lib/admin/list-pagination.mjs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +80,10 @@ export default function AdminRefundsPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
+  const requestVersion = useRef(0);
   const [selected, setSelected] = useState<RefundRow | null>(null);
   const [action, setAction] = useState("approve_balance");
   const [approvedAmount, setApprovedAmount] = useState("");
@@ -87,26 +93,32 @@ export default function AdminRefundsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const loadRefunds = useCallback(async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ status, pageSize: "50" });
+    const params = new URLSearchParams({ status, page: String(page), pageSize: String(pageSize) });
     if (query.trim()) params.set("q", query.trim());
     try {
       const response = await fetch(`/api/admin/refunds?${params.toString()}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
+      if (version !== requestVersion.current) return;
       if (!response.ok) throw new Error(payload.error || "退款列表读取失败");
       setRefunds(Array.isArray(payload.refunds) ? payload.refunds : []);
+      setTotal(listPagination(payload.total, page, pageSize).count);
     } catch (err) {
+      if (version !== requestVersion.current) return;
       const message = err instanceof Error ? err.message : "退款列表读取失败";
       setError(message);
       setRefunds([]);
+      setTotal(0);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [query, status]);
+  }, [query, status, page]);
 
   useEffect(() => {
     loadRefunds();
+    return () => { requestVersion.current += 1; };
   }, [loadRefunds]);
 
   const counts = useMemo(() => {
@@ -121,6 +133,7 @@ export default function AdminRefundsPage() {
     );
   }, [refunds]);
   const hasFilters = Boolean(query.trim() || status !== "all");
+  const pagination = listPagination(total, page, pageSize);
   const isDestructiveAction = ["reject", "cancel", "fail"].includes(action);
 
   function openDrawer(row: RefundRow) {
@@ -194,17 +207,17 @@ export default function AdminRefundsPage() {
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
 
       <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="当前结果" value={counts.total} />
-        <StatCard label="待审核" value={counts.pending} />
-        <StatCard label="处理中" value={counts.processing} />
+        <StatCard label="本页记录" value={counts.total} />
+        <StatCard label="本页待审核" value={counts.pending} />
+        <StatCard label="本页处理中" value={counts.processing} />
       </div>
 
       <div className="grid shrink-0 gap-3 rounded-xl border bg-white p-3 shadow-sm md:grid-cols-[minmax(280px,1fr)_180px]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索退款单号、订单号、用户邮箱" className="h-9 pl-9" />
+          <Input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="搜索退款单号、订单号、用户邮箱" className="h-9 pl-9" />
         </div>
-        <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 rounded-md border bg-white px-3 text-sm">
+        <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="h-9 rounded-md border bg-white px-3 text-sm">
           {STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </select>
       </div>
@@ -248,6 +261,14 @@ export default function AdminRefundsPage() {
           </table>
         </div>
         )}
+        <AdminListPagination
+          summary={error ? "读取失败，记录总数未知" : loading ? "正在读取退款记录..." : `符合筛选共 ${total} 条 · 本页 ${refunds.length} 条`}
+          page={page}
+          totalPages={pagination.totalPages}
+          loading={loading || Boolean(error)}
+          onPrevious={() => setPage((value) => Math.max(1, value - 1))}
+          onNext={() => setPage((value) => value + 1)}
+        />
       </div>
 
       {selected ? (

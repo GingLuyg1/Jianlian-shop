@@ -3097,7 +3097,9 @@ test("account profile initialization never grants admin role from ordinary user 
   assert.match(route, /Object\.entries\(body\)\.filter/);
   assert.match(route, /\.eq\("id", context\.user\.id\)/);
 
-  assert.match(sharedProfile, /role: "user"/);
+  assert.match(sharedProfile, /fetch\("\/api\/account\/profile"/);
+  assert.doesNotMatch(sharedProfile, /\.(insert|upsert)\(/);
+  assert.match(route, /const created = await service/);
   assert.doesNotMatch(sharedProfile, /gac000189@gmail\.com/i);
 });
 

@@ -1,0 +1,31 @@
+name: Backend Operations Profile Security
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  isolated-profiles-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: profiles_security_isolated
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      CI: 'true'
+      PROFILE_SECURITY_ISOLATED: 'true'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: isolated-ci-only
+      PGDATABASE: profiles_security_isolated
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - run: bash scripts/ci/profiles-security-real-db.sh

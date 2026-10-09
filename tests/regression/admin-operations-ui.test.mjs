@@ -34,7 +34,9 @@ test("payments, recharges, refunds and users keep operations UI and API contract
   assert.match(paymentWorkspace, /window\.confirm/);
 
   assert.match(refunds, /fetch\(`\/api\/admin\/refunds\?\$\{params\.toString\(\)\}`/);
-  assert.match(refunds, /new URLSearchParams\(\{ status, pageSize: "50" \}\)/);
+  assert.match(refunds, /const pageSize = 50/);
+  assert.match(refunds, /new URLSearchParams\(\{ status, page: String\(page\), pageSize: String\(pageSize\) \}\)/);
+  assert.match(refunds, /<AdminListPagination/);
   assert.match(refunds, /params\.set\("q", query\.trim\(\)\)/);
   assert.match(refunds, /fetch\(`\/api\/admin\/refunds\/\$\{selected\.id\}`/);
   assert.match(refunds, /method: "PATCH"/);

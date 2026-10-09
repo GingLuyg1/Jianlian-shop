@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
+import { boundedListInteger } from "@/lib/admin/list-pagination.mjs";
 import { maskEmail, normalizeRefundError } from "@/lib/refunds/refund-utils";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -114,8 +115,8 @@ export async function GET(request: Request) {
   const delivered = searchParams.get("delivered")?.trim();
   const start = searchParams.get("start")?.trim();
   const end = searchParams.get("end")?.trim();
-  const page = Math.max(Number(searchParams.get("page") ?? 1), 1);
-  const pageSize = Math.min(Math.max(Number(searchParams.get("pageSize") ?? 20), 1), 100);
+  const page = boundedListInteger(searchParams.get("page"), 1, 1, 100000);
+  const pageSize = boundedListInteger(searchParams.get("pageSize"), 20, 1, 100);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
