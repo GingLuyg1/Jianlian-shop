@@ -82,4 +82,6 @@ test('readonly workspaces expose only GET and no operational execution control',
   assert.match(api,/kind === 'ledger' \? await requireApiSuperAdmin/);
   assert.doesNotMatch(ui,/method:\s*['"](?:POST|PATCH|PUT|DELETE)|force.complete|retry.fulfillment/);
   assert.match(ui,/controller.abort\(\)/);assert.match(ui,/暂无记录/);assert.match(ui,/role="alert"/);assert.match(ui,/overflow|AdminTableViewport/);
+  assert.match(ui,/\/admin\/orders\?search=\$\{encodeURIComponent/);
+  assert.doesNotMatch(ui,/\/admin\/orders\/\$\{/);
 });

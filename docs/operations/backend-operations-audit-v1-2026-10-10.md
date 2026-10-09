@@ -5,11 +5,11 @@
 
 ## 结论及证据边界
 
-本轮完成 exact repo 的后台页面、API、权限入口、运营关联数据、关键 RPC 和测试审计，以及 Production SSH/SQL SELECT-only 检查。两处低风险缺口仅在本地修复：退款分页、库存批次全局搜索字段。
+本轮完成 exact repo 的后台页面、API、权限入口、运营关联数据、关键 RPC 和测试审计，以及 Production SSH/SQL SELECT-only 检查。初轮修复退款分页、库存批次全局搜索；续任务补齐 profile 权限加固和三个只读运营工作台，均未部署 Production。
 
 没有可控制的已认证管理员浏览器。本报告中的“实现完整”指代码/已有测试链完整，不代表真实管理员 UI 已逐项验收。匿名 307/401 是正确的鉴权行为，不能当作已登录页面加载 PASS。退款、人工履约、SKU 批量操作等生产写路径均未执行。
 
-用户确认两笔真实支付 E2E 已完成，本任务接受该冻结前提；未重新查 Provider、重跑 completion 或复核历史 canary。支付核心、reconciliation、migration 不在改动范围。
+用户确认两笔真实支付 E2E 已完成，本任务接受该冻结前提；未重新查 Provider、重跑 completion 或复核历史 canary。支付核心/reconciliation 和历史 migrations 不变；续任务唯一新增 migration 是 profiles INSERT ACL 撤销，仅在 isolated DB 验证，Production 未应用。
 
 ## Production 只读取证
 
