@@ -9,6 +9,7 @@ import * as readiness from "../../lib/payments/manual-channel-readiness.mjs";
 import * as contracts from "../../lib/payments/provider-contracts.mjs";
 import * as expiry from "../../lib/payments/recharge-expiry.mjs";
 import * as rate from "../../lib/payments/recharge-rate.mjs";
+import * as onlinePolicy from "../../lib/payments/online-payment-policy.mjs";
 
 const root = new URL("../../", import.meta.url);
 const source = (path) => readFileSync(new URL(path, root), "utf8");
@@ -85,19 +86,31 @@ async function publicChannels(rows) {
   return JSON.parse(JSON.stringify(result.body)).channels;
 }
 
-function renderRecharge(channel) {
+function renderRecharge(channel, options = {}) {
   const states = [[channel], channel.code, false, null, "1", "", null, false,
     [], false, null, 1, 0, null, null, false, 0];
   let stateIndex = 0;
+  if (options.amount) states[4] = options.amount;
   const hooks = {
     ...React,
-    useState: (initial) => [stateIndex < states.length ? states[stateIndex++] : initial, noNetwork],
+    useState: (initial) => {
+      const index = stateIndex++;
+      return [index < states.length ? states[index] : initial,
+        options.events ? (value) => options.events.push([index, value]) : noNetwork];
+    },
     useEffect: () => {}, useMemo: (fn) => fn(), useCallback: (fn) => fn,
     useRef: (value) => ({ current: value }),
   };
   const box = ({ children }) => React.createElement("div", null, children);
   const input = ({ value, placeholder }) => React.createElement("input", { value, placeholder, readOnly: true });
-  const button = ({ children, disabled }) => React.createElement("button", { disabled }, children);
+  const button = ({ children, disabled, onClick }) => {
+    if (options.buttons) options.buttons.push({ children, disabled, onClick });
+    return React.createElement("button", { disabled }, children);
+  };
+  const feeSummary = load("components/payments/ExternalCashierFeeSummary.tsx", {
+    "react/jsx-runtime": jsxRuntime,
+    "@/lib/payments/online-payment-policy.mjs": onlinePolicy,
+  });
   const ui = load("components/account/AccountRechargeContent.tsx", {
     react: hooks,
     "react/jsx-runtime": jsxRuntime,
@@ -117,9 +130,29 @@ function renderRecharge(channel) {
     "@/lib/payments/recharge-rate.mjs": rate,
     "@/lib/utils": { cn: (...values) => values.filter(Boolean).join(" ") },
     "@/lib/support/open-public-support": { openPublicSupport: noNetwork },
+    "@/components/payments/ExternalCashierFeeSummary": feeSummary,
   });
   return renderToStaticMarkup(ui.default());
 }
+
+test("actual recharge handler opens the limit dialog before any create request", async () => {
+  const [channel] = await publicChannels([row()]);
+  const events = [], buttons = [];
+  renderRecharge(channel, { amount: "2000.01", events, buttons });
+  const create = buttons.find(button => button.children === "创建充值");
+  assert.equal(create.disabled, false);
+  await create.onClick(); // Primary action explains the limit, without dispatch.
+  assert.deepEqual(events, [[15, true]]);
+});
+
+test("actual recharge page separates 100 principal from estimated 3 fee and 103 cashier total", async () => {
+  const [channel] = await publicChannels([row()]);
+  const html = renderRecharge(channel, { amount: "100" });
+  assert.match(html, /本站本金\/商品金额：¥100\.00/);
+  assert.match(html, /约 ¥3\.00/);
+  assert.match(html, /付款总额约 ¥103\.00/);
+  assert.match(html, /预计到账金额：¥100\.00/);
+});
 
 test("SNPAY disclosure separates site fee, approximate provider fee and credited principal", () => {
   const text = registry.getPaymentProviderCapabilities("snpay").providerExternalFeeDisclosure;

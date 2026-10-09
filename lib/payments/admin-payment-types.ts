@@ -51,6 +51,7 @@ export type AdminPaymentRecord = {
   business_no: string | null;
   user_email: string | null;
   channel: string | null;
+  provider?: string | null;
   network: string | null;
   business_amount: number;
   business_currency: string | null;

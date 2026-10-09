@@ -14,6 +14,7 @@ import {
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
 import { completePayment } from "@/lib/payments/complete-payment-service";
 import { createPaymentExpiryWindow } from "@/lib/payments/payment-expiry.mjs";
+import { isOnlineCnyOverLimit, ONLINE_PAYMENT_LIMIT_MESSAGE } from "@/lib/payments/online-payment-policy.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -316,10 +317,21 @@ function isPositiveDecimal(value: string) {
 
 export async function createBep20PaymentSession(orderNo: string, userId: string): Promise<Bep20SessionResponse> {
   const service = requiredServiceClient();
-  const config = readBep20Config();
-  await assertConfiguredTokenDecimals(config);
   const order = await loadOwnedOrder(service, orderNo, userId);
   ensureOrderAllowsBep20(order);
+
+  // New chain sessions must obey canonical channel state too. Do not block
+  // verification of already-paid transfers when an operator closes a channel.
+  const { data: channel, error: channelError } = await service.from("payment_channels")
+    .select("enabled,configured").eq("channel", "usdt_bep20").maybeSingle();
+  if (channelError || channel?.enabled !== true || channel?.configured !== true) {
+    throw new Bep20PaymentError("CHANNEL_UNAVAILABLE", "支付渠道当前不可用", 503);
+  }
+  if (order.currency === "CNY" && isOnlineCnyOverLimit(order.total_amount)) {
+    throw new Bep20PaymentError("ONLINE_PAYMENT_LIMIT_EXCEEDED", ONLINE_PAYMENT_LIMIT_MESSAGE, 400);
+  }
+  const config = readBep20Config();
+  await assertConfiguredTokenDecimals(config);
 
   const existing = await getReusableChainSession(service, order.id);
   if (existing) return toBep20SessionResponse(order.order_no, existing, config);

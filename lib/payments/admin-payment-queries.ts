@@ -161,6 +161,7 @@ export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
   return {
     id: String(row.id ?? ""),
     source: "account_recharges",
+    provider: stringOrNull(row.provider),
     payment_no: String(row.recharge_no ?? ""),
     business_type: "recharge",
     business_no: String(row.recharge_no ?? ""),

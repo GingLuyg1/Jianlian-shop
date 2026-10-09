@@ -10,6 +10,7 @@ import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/paym
 import { createPaymentSession, PaymentSessionError } from "@/lib/payments/payment-session-service";
 import { getPaymentProviderCapabilities } from "@/lib/payments/providers";
 import { providerAmountWithinLimits, providerSupportsChannel } from "@/lib/payments/provider-contracts.mjs";
+import { isOnlineCnyOverLimit, onlineOrderPrincipal, ONLINE_PAYMENT_LIMIT_MESSAGE } from "@/lib/payments/online-payment-policy.mjs";
 import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
 import { derivePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
@@ -401,8 +402,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Please select a complete product SKU." }, { status: 400 });
     }
 
-    if (isLiuhaoyiPaymentMethod(paymentMethod)) {
-      const channelCode = paymentMethod === "wechat_pay" ? "wechat" : "alipay";
+    if (isLiuhaoyiPaymentMethod(paymentMethod) || paymentMethod === "usdt_bep20") {
+      const channelCode = paymentMethod === "usdt_bep20" ? "usdt_bep20" : paymentMethod === "wechat_pay" ? "wechat" : "alipay";
       const { data: channelData, error: channelError } = await supabase
         .from("payment_channels")
         .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")
@@ -420,7 +421,16 @@ export async function POST(request: Request) {
       if (priceResult.error || !priceResult.data) {
         return NextResponse.json({ error: "无法确认支付宝/微信支付金额，请刷新后重试", code: "LIUHAOYI_AMOUNT_UNAVAILABLE" }, { status: 503 });
       }
-      const payableAmount = (Number(priceResult.data.price) * quantity).toFixed(2);
+      const payableAmount = onlineOrderPrincipal(priceResult.data.price, quantity);
+      if (!payableAmount) {
+        return NextResponse.json({ error: "商品金额格式无效", code: "ORDER_AMOUNT_INVALID" }, { status: 400 });
+      }
+      if (isOnlineCnyOverLimit(payableAmount)) {
+        return NextResponse.json({ error: ONLINE_PAYMENT_LIMIT_MESSAGE, code: "ONLINE_PAYMENT_LIMIT_EXCEEDED" }, { status: 400 });
+      }
+      if (channel.provider === "snpay" && channel.feeRate !== 0) {
+        return NextResponse.json({ error: "支付平台手续费由收银台收取，本站不得重复加费", code: "SNPAY_FEE_CONFIGURATION_INVALID" }, { status: 503 });
+      }
       if (channel.provider === "liuhaoyi") {
         try {
           assertLiuhaoyiPaymentAmount(payableAmount);
@@ -432,8 +442,8 @@ export async function POST(request: Request) {
         }
       }
       const capability = getPaymentProviderCapabilities(channel.provider);
-      if (!providerSupportsChannel(capability, channel.code, "CNY")
-        || !providerAmountWithinLimits(capability, channel, Number(payableAmount))) {
+      if (paymentMethod !== "usdt_bep20" && (!providerSupportsChannel(capability, channel.code, "CNY")
+        || !providerAmountWithinLimits(capability, channel, Number(payableAmount)))) {
         return NextResponse.json({ error: "支付渠道不支持该金额", code: "PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED" }, { status: 400 });
       }
     }

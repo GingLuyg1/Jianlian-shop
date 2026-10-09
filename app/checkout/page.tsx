@@ -61,6 +61,7 @@ import {
 import type { PaymentChannel, PaymentSubmitForm } from "@/lib/payments/channel-types";
 import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import { openPublicSupport } from "@/lib/support/open-public-support";
+import ExternalCashierFeeSummary from "@/components/payments/ExternalCashierFeeSummary";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
@@ -488,7 +489,8 @@ export default function CheckoutPage() {
   const orderAmount = unitPrice * quantity;
   const paymentMaximum = selectedPaymentChannel?.maximumAmount;
   const paymentOverLimit = typeof paymentMaximum === "number" && Number.isFinite(paymentMaximum)
-    && orderAmount > paymentMaximum;
+    && orderAmount > paymentMaximum
+    || (paymentMethod !== "balance" && orderAmount > 2000);
   const priceLabel = product ? getPriceLabel(product, selectedSku) : "";
   const balanceSummary = useMemo(
     () => evaluateCheckoutBalance(orderAmount, availableBalance),
@@ -865,9 +867,10 @@ export default function CheckoutPage() {
                   </p>
                 ) : null}
                 {selectedPaymentChannel?.providerExternalFeeDisclosure ? (
-                  <p className="mt-2 text-xs leading-5 text-amber-700">
+                  <div className="mt-2 text-xs leading-5 text-amber-700">
                     {selectedPaymentChannel.providerExternalFeeDisclosure}
-                  </p>
+                    <ExternalCashierFeeSummary principal={orderAmount} provider={selectedPaymentChannel.provider} currency={selectedPaymentChannel.currency} />
+                  </div>
                 ) : null}
                 {paymentMethod === "balance" && balanceStatus === "error" ? (
                   <div className="mt-2 flex items-center justify-between gap-3 text-xs text-red-700">
@@ -982,7 +985,7 @@ export default function CheckoutPage() {
             <DialogTitle>支付宝/微信支付金额超限</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-6 text-muted-foreground">
-            当前方式单笔最高支持 {typeof paymentMaximum === "number" ? `¥${paymentMaximum}` : "—"}。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。
+            支付金额大于2000联系人工客服处理。
           </p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>

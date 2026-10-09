@@ -45,6 +45,7 @@ import { formatCurrency } from "@/lib/i18n/money";
 import { decideRechargeReviewActionResponse } from "@/lib/recharges/review-ui-state.mjs";
 import { parseRechargeStatusStrict } from "@/lib/recharges/status-machine";
 import { cn } from "@/lib/utils";
+import ExternalCashierFeeSummary from "@/components/payments/ExternalCashierFeeSummary";
 
 type Props = { mode: "payments" | "recharges" };
 type ListPayload = { payments?: AdminPaymentRecord[]; count?: number; error?: string };
@@ -410,6 +411,8 @@ function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackEr
               </div>
               <div className="space-y-4">
                 <DetailGroup title="关键字段" rows={[["支付单号", detail.payment_no], ["业务类型", getBusinessTypeLabel(detail.business_type)], ["创建时间", formatDate(detail.created_at)], ["支付时间", formatDate(detail.paid_at)]]} />
+                <DetailGroup title="Provider 金额口径" rows={[["冻结 Provider", detail.provider ?? "历史记录未提供，请核对支付会话"], ["本站手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency)], ["外部收银台实付/上游结算成本", "未持久化；不可将 API money 当作收银台总额或上游净额"]]} />
+                <ExternalCashierFeeSummary principal={detail.business_amount} provider={detail.provider ?? undefined} currency={detail.business_currency ?? undefined} />
                 <DetailGroup title="关联业务" rows={[["业务单号", detail.business_no ?? "—"], ["用户邮箱", detail.user_email ?? "—"], ["用户备注", detail.user_note ?? "—"], ["管理员备注", detail.admin_note ?? "—"]]} />
                 {isRechargePage ? <DetailGroup title="金额与汇率" rows={[["申请充值", formatRechargeRequested(detail)], ["应付", formatRechargeExpected(detail)], ["实际到账", formatRechargeActual(detail)], ["入账", formatRechargeCredited(detail)]]} /> : <DetailGroup title="金额与费率" rows={[["业务金额", formatPaymentMoney(detail.business_amount, detail.business_currency)], ["手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency ?? detail.business_currency)], ["应付金额", formatPaymentMoney(detail.payable_amount, detail.payable_currency)], ["到账金额", formatPaymentMoney(detail.received_amount, detail.received_currency)], ["平台净额", formatPaymentMoney(detail.platform_net_amount, detail.received_currency)]]} />}
                 <DetailGroup title="渠道信息" rows={[["网络", detail.channel === "alipay" || detail.channel === "wechat" ? "—" : detail.network ?? "—"], ["渠道交易号", detail.provider_trade_no ?? "—", detail.provider_trade_no ? () => copyText(detail.provider_trade_no) : undefined], ["交易参考号", detail.transaction_reference ?? "—"], ["钱包地址", maskWallet(null)]]} />

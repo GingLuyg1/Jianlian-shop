@@ -1,7 +1,7 @@
 name: Paid-before-expiry expired-state isolated acceptance
 on:
   push:
-    branches: [codex/paid-before-expiry-expired-state-completion, codex/snpay-reconciliation-v1, codex/snpay-reconciliation-execute-gate-hardening-v1]
+    branches: [codex/paid-before-expiry-expired-state-completion, codex/snpay-reconciliation-v1, codex/snpay-reconciliation-execute-gate-hardening-v1, codex/payment-closed-loop-finalization-v1]
   pull_request:
     paths:
       - supabase/migrations/20261008103916_paid_before_expiry_expired_state_completion.sql
