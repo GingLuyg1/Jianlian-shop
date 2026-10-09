@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuditErrorMessage } from "@/lib/admin/audit-log-service";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,10 @@ async function readProfile(supabase: ReturnType<typeof getSupabaseServerClient>,
 }
 
 async function createProfileOnce(supabase: ReturnType<typeof getSupabaseServerClient>, user: { id: string; email?: string | null; phone?: string | null }) {
+  // This user is from auth.getUser(), never from request JSON. Missing-profile
+  // repair must not require broad authenticated INSERT on financial columns.
+  const service = getSupabaseServiceRoleClient();
+  if (!service) return { profile: null, error: { code: "PROFILE_BOOTSTRAP_UNAVAILABLE" } };
   const payload = {
     id: user.id,
     email: user.email?.toLowerCase() ?? null,
@@ -101,7 +106,7 @@ async function createProfileOnce(supabase: ReturnType<typeof getSupabaseServerCl
     promotion_balance: 0,
   };
 
-  const created = await supabase
+  const created = await service
     .from("profiles")
     .insert(payload)
     .select(PROFILE_BASE_SELECT)

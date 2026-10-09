@@ -259,14 +259,14 @@ export async function runAdminGlobalSearch(supabase: SupabaseClient, rawKeyword:
   const batchRows = await safeQuery<Record<string, unknown>>(() =>
     supabase
       .from("digital_inventory_batches")
-      .select("id,batch_no,batch_name,status,total_count,available_count,created_at")
+      .select("id,batch_no,batch_name,import_status,total_count,available_count,created_at")
       .or(`batch_no.ilike.${like},batch_name.ilike.${like}`)
       .order("created_at", { ascending: false })
       .limit(8)
   );
   groups.push({ group: "inventory", label: GROUP_LABELS.inventory, error: batchRows.error, results: sortResults(batchRows.rows.map((row) => {
     const no = text(row.batch_no) ?? String(row.id);
-    return { id: String(row.id), group: "inventory" as const, typeLabel: "库存批次", businessNo: no, title: text(row.batch_name) ?? no, subtitle: `可用 ${Number(row.available_count ?? 0)} / 总计 ${Number(row.total_count ?? 0)}`, userLabel: null, amountLabel: null, status: text(row.status), createdAt: text(row.created_at), href: `/admin/inventory?batch=${encodeURIComponent(no)}`, exact: exactCandidate ? no.toLowerCase() === exactCandidate : false };
+    return { id: String(row.id), group: "inventory" as const, typeLabel: "库存批次", businessNo: no, title: text(row.batch_name) ?? no, subtitle: `可用 ${Number(row.available_count ?? 0)} / 总计 ${Number(row.total_count ?? 0)}`, userLabel: null, amountLabel: null, status: text(row.import_status), createdAt: text(row.created_at), href: `/admin/inventory?batch=${encodeURIComponent(no)}`, exact: exactCandidate ? no.toLowerCase() === exactCandidate : false };
   })) });
 
   const nonEmptyGroups = groups.map((group) => ({ ...group, results: group.results.slice(0, 10) }));

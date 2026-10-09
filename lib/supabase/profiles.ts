@@ -112,45 +112,18 @@ export async function getOrCreateProfile(
     return userToProfile(user);
   }
 
-  const profilePayload: UserProfileInsert = {
-    id: user.id,
-    email: user.email?.toLowerCase() ?? null,
-    phone: user.phone ?? null,
-    role: "user",
-    balance: 0,
-    promotion_balance: 0,
-  };
-
-  const createPromise = Promise.resolve(
-    supabase
-      .from("profiles")
-      .insert(profilePayload)
-      .select(PROFILE_SELECT_FIELDS)
-      .maybeSingle()
-  ).then(({ data: createdProfile, error: insertError }) => {
-      if (insertError) {
-        if (insertError.code === "23505") {
-          return supabase
-            .from("profiles")
-            .select(PROFILE_SELECT_FIELDS)
-            .eq("id", user.id)
-            .maybeSingle()
-            .then(({ data: retryProfile, error: retryError }) => {
-              if (retryProfile && !retryError) return normalizeProfile(retryProfile, user);
-              profileCreateFailures.add(user.id);
-              return userToProfile(user);
-            });
-        }
-
-        console.error("[Supabase Auth] Failed to create profile", {
-          code: insertError.code,
-          message: insertError.message,
-        });
-        profileCreateFailures.add(user.id);
-        return userToProfile(user);
-      }
-      if (!createdProfile) return userToProfile(user);
-      return normalizeProfile(createdProfile, user);
+  // No browser INSERT, upsert or client-supplied identity/role/balance.
+  // The existing authenticated endpoint derives identity via auth.getUser().
+  const createPromise = fetch("/api/account/profile", { method: "POST", credentials: "same-origin", cache: "no-store" })
+    .then(async (response) => {
+      if (!response.ok) throw new Error("PROFILE_BOOTSTRAP_FAILED");
+      const payload = await response.json();
+      if (!payload.profile || payload.profile.id !== user.id) throw new Error("PROFILE_BOOTSTRAP_IDENTITY_MISMATCH");
+      return normalizeProfile(payload.profile, user);
+    })
+    .catch(() => {
+      profileCreateFailures.add(user.id);
+      return userToProfile(user);
     })
     .finally(() => {
       profileCreateInFlight.delete(user.id);
