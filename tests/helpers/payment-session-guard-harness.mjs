@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import ts from "typescript";
 import * as contracts from "../../lib/payments/provider-contracts.mjs";
+import * as onlinePolicy from "../../lib/payments/online-payment-policy.mjs";
 import * as expiry from "../../lib/payments/payment-expiry.mjs";
 import * as limits from "../../lib/payments/liuhaoyi-limits.mjs";
 import * as reuse from "../../lib/payments/payment-session-reuse.mjs";
@@ -23,6 +24,7 @@ export function loadTs(file, imports, text = source(file), globals = {}) {
   const m = { exports: {} };
   new Function("require", "module", "exports", "fetch", ...Object.keys(extra), code)(name => {
     if (name === "server-only") return {};
+    if (name === "@/lib/payments/online-payment-policy.mjs") return onlinePolicy;
     if (Object.hasOwn(imports, name)) return imports[name];
     throw Error("UNMOCKED_IMPORT:" + name);
   }, m, m.exports, fetchImpl, ...Object.values(extra));
@@ -169,7 +171,7 @@ export function harness({ data = fixture(), backend, beforeReserve = async () =>
     "@/lib/recharges/status-machine":{parseRechargeStatusStrict:s=>s},
   });
   const input={businessType:"recharge",businessNo:data.account_recharges[0]?.recharge_no??"RC_TEST_GUARD",channelCode:data.payment_channels[0].code,userId:uid,clientIp:"127.0.0.1"};
-  return {data,stats,client,service,input,
+  return {data,stats,client,service,input,rechargeRoute,
     create:(overrides={})=>service.createPaymentSession({...input,...overrides}),
     paymentPost:(businessNo=input.businessNo)=>route.POST(new Request("https://test.invalid/api/payments/create",{method:"POST",body:JSON.stringify({businessType:"recharge",businessNo,channel:input.channelCode})})),
     rechargePost:()=>rechargeRoute.POST(new Request("https://test.invalid/api/recharges",{method:"POST",body:JSON.stringify({channel:input.channelCode,currency:"CNY",amount:"1.00",client_request_id:"guard-request"})})),

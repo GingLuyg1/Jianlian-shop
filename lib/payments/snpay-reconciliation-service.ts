@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { completePayment } from "@/lib/payments/complete-payment-service";
 import { resolveProviderForExistingSession } from "@/lib/payments/providers";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
-import { SNPAY_RECONCILIATION, snpayCandidateReason, snpayPaidDecision } from "@/lib/payments/snpay-reconciliation-policy.mjs";
+import { SNPAY_RECONCILIATION, snpayCandidateReason, snpayPaidDecision, snpayOrderParentReason, snpayOrderPaidDecision } from "@/lib/payments/snpay-reconciliation-policy.mjs";
 
 type Row = Record<string, any>;
 type Dependencies = {client?: SupabaseClient; query?: (session: Row) => Promise<Row>; nowMs?: number};
@@ -33,7 +33,7 @@ async function queryPinned(s:Row):Promise<Row> {
 async function evidence(service:SupabaseClient,s:Row,q:Row|null,kind:string,reason:string,checkedAt:string) {
   const {error} = await service.from("payment_reconciliations").upsert({
     reconciliation_no:`REC${randomUUID().replace(/-/g,"")}`,
-    payment_session_id:s.id,business_type:"recharge",business_id:s.business_no,
+    payment_session_id:s.id,business_type:s.business_type === "order" ? "order" : "recharge",business_id:s.business_no,
     channel_code:s.channel_code,provider:"snpay",local_status:s.status,
     provider_status:q?.status ?? null,local_amount:s.payable_amount,
     provider_amount:q && Number.isFinite(Number(q.amount)) ? Number(q.amount) : null,currency:s.currency,
@@ -42,11 +42,16 @@ async function evidence(service:SupabaseClient,s:Row,q:Row|null,kind:string,reas
     provider_summary:{found:q ? q.found === true : null,paid:q ? q.paid === true : null,paidAt:q?.paidAt ?? null,
       signatureVerified:q?.rawSummarySafe?.signatureVerified === true,
       timestampVerified:q?.rawSummarySafe?.timestampVerified === true,
+      identityVerified:q?.rawSummarySafe?.identityVerified === true,
+      businessType:s.business_type === "order" ? "order" : "recharge",
+      manualReviewReason:kind === "manual_review" ? reason : null,
       paidTimeUntrusted:reason === "paid_time_untrusted",
       manualReviewPolicy:reason === "snpay_late_payment_manual_v1" ? reason : null},
     recovery_action:kind === "completed" ? "complete_payment" : null,
     recovery_status:kind,checked_at:checkedAt,updated_at:checkedAt,
-    dedupe_key:`snpay-reconciliation-v1:${s.id}:${kind}:${reason}`,
+    // Local terminal evidence must never overwrite previously verified paid
+    // evidence when a later timer deliberately performs zero network queries.
+    dedupe_key:`snpay-reconciliation-v1:${s.id}:${kind}:${reason}${q === null && ["order_inventory_released","order_terminal_before_reconciliation"].includes(reason) ? ":local" : ""}`,
   },{onConflict:"dedupe_key"});
   if(error) throw Error("evidence_write_failed");
 }
@@ -62,9 +67,17 @@ export async function reconcileSnpaySession(
   if(!s) return result("skipped","session_missing");
   const exclusion = snpayCandidateReason(s,nowMs);
   if(exclusion) return result("skipped",exclusion);
-  const r = await read(service,"account_recharges",s.business_id);
-  if(!parentMatches(s,r)) return result("skipped","parent_context_excluded");
-  const siblings = await service.from("payment_sessions").select("id").eq("business_id",s.business_id).in("business_type",["recharge","account_recharge"]);
+  const isOrder = s.business_type === "order", parentTable = isOrder ? "orders" : "account_recharges";
+  const r = await read(service,parentTable,s.business_id);
+  const parentReason = isOrder ? snpayOrderParentReason(s,r) : parentMatches(s,r) ? null : "parent_context_excluded";
+  if(parentReason) {
+    const kind = ["order_inventory_released","order_terminal_before_reconciliation"].includes(parentReason) ? "manual_review" : "skipped";
+    // Terminal parents require zero network, but remain visible and deduped.
+    if(execute && kind === "manual_review") await evidence(service,s,null,kind,parentReason,checkedAt);
+    return result(kind,parentReason);
+  }
+  const decide = isOrder ? snpayOrderPaidDecision : snpayPaidDecision;
+  const siblings = await service.from("payment_sessions").select("id").eq("business_id",s.business_id).in("business_type",isOrder ? ["order"] : ["recharge","account_recharge"]);
   if(siblings.error) throw Error("read_failed");
   if(siblings.data?.length !== 1) return result("skipped","ambiguous_session");
   // Atomic compare-and-set claim: no status/amount writes. Two workers cannot
@@ -86,21 +99,26 @@ export async function reconcileSnpaySession(
     if(execute) await evidence(service,s,null,kind,reason,checkedAt);
     return result(kind,reason,{queried:true,paid:unsafePaidTime});
   }
-  const decision = snpayPaidDecision(s,r!,q,nowMs);
+  const decision = decide(s,r!,q,nowMs);
   let outcome = result(decision.kind,decision.reason,{queried:true,paid:q.paid === true});
   if(decision.kind === "complete") {
     // Re-read state and ownership after network I/O; terminal states never get
     // revived. Canonical RPC remains the final transactional race authority.
-    const current = await read(service,"payment_sessions",s.id), parent = await read(service,"account_recharges",s.business_id);
-    if(current?.status === "paid" && ["paid","succeeded"].includes(parent?.status))
+    const current = await read(service,"payment_sessions",s.id), parent = await read(service,parentTable,s.business_id);
+    if(current?.status === "paid" && (isOrder ? parent?.payment_status === "paid" : ["paid","succeeded"].includes(parent?.status)))
       return result("skipped","already_completed",{queried:true,paid:true,idempotent:true});
-    if(!current || !parentMatches(current,parent) || !["pending","processing","expired"].includes(current.status)
+    if(!current || (isOrder ? snpayOrderParentReason(current,parent) !== null : !parentMatches(current,parent)) || !["pending","processing","expired"].includes(current.status)
       || current.provider_order_no !== s.provider_order_no || current.session_no !== s.session_no
       || current.business_id !== s.business_id || current.user_id !== s.user_id || current.business_no !== s.business_no
+      || current.business_type !== s.business_type || current.created_at !== s.created_at || parent?.created_at !== r?.created_at
       || current.provider !== s.provider || current.channel_code !== s.channel_code || current.currency !== s.currency
       || Number(current.payable_amount) !== Number(s.payable_amount)
-      || snpayPaidDecision(current,parent!,q,nowMs).kind !== "complete")
-      return result("skipped","state_changed",{queried:true,paid:true});
+      || current.expires_at !== s.expires_at || parent?.[isOrder ? "payment_expires_at" : "expires_at"] !== r?.[isOrder ? "payment_expires_at" : "expires_at"]
+      || decide(current,parent!,q,nowMs).kind !== "complete") {
+      const reason = isOrder ? snpayOrderParentReason(current ?? s,parent) ?? "order_state_changed" : "state_changed";
+      if(isOrder && execute) await evidence(service,{...s,status:current?.status ?? s.status},q,"manual_review",reason,checkedAt);
+      return result(isOrder ? "manual_review" : "skipped",reason,{queried:true,paid:true});
+    }
     if(!execute) return result("would_complete","paid_before_expiry",{queried:true,paid:true});
     try {
       const done = await completePayment({paymentSessionId:s.id,providerTransactionId:q.providerTransactionId,

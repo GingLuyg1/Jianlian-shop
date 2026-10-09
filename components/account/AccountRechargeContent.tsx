@@ -30,6 +30,7 @@ import {
 } from "@/lib/payments/recharge-rate.mjs";
 import { cn } from "@/lib/utils";
 import { openPublicSupport } from "@/lib/support/open-public-support";
+import ExternalCashierFeeSummary from "@/components/payments/ExternalCashierFeeSummary";
 
 type RechargeListError = {
   message: string;
@@ -98,8 +99,12 @@ export default function AccountRechargeContent() {
     : Boolean(summary && summary.amount > 0 && reachesMin);
   const maximumAmount = selectedChannel?.maximumAmount;
   const channelOverLimit = Boolean(summary && typeof maximumAmount === "number"
-    && Number.isFinite(maximumAmount) && summary.payableAmount > maximumAmount);
-  const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting && !channelOverLimit);
+    && Number.isFinite(maximumAmount) && summary.payableAmount > maximumAmount)
+    || (isUsdtCnyRecharge && requestedCnyAmount !== null
+      && compareRechargeDecimals(requestedCnyAmount, "2000") === 1);
+  // Allow the primary button to explain the limit; createRecharge returns
+  // before fetch when over-limit. Never silently leave an unusable button.
+  const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting);
 
   const loadRecords = useCallback(async (page: number) => {
     setRecordsLoading(true);
@@ -410,7 +415,7 @@ export default function AccountRechargeContent() {
                     className="mt-2 text-left text-xs text-red-600 underline-offset-2 hover:underline"
                     onClick={() => setAmountLimitDialogOpen(true)}
                   >
-                    当前方式单笔最高支持 {selectedChannel && typeof maximumAmount === "number" ? formatPaymentAmount(maximumAmount, selectedChannel.currency) : "—"}，点击查看其他方式。
+                    当前方式单笔最高支持 {isUsdtCnyRecharge ? "¥2000 充值本金" : selectedChannel && typeof maximumAmount === "number" ? formatPaymentAmount(Math.min(maximumAmount, 2000), selectedChannel.currency) : "—"}，点击联系客服处理。
                   </button>
                 ) : null}
 
@@ -429,6 +434,7 @@ export default function AccountRechargeContent() {
                 {selectedChannel?.providerExternalFeeDisclosure ? (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
                     {selectedChannel.providerExternalFeeDisclosure}
+                    <ExternalCashierFeeSummary principal={amountText} provider={selectedChannel.provider} currency={selectedChannel.currency} />
                   </div>
                 ) : null}
 
@@ -487,12 +493,12 @@ export default function AccountRechargeContent() {
             <DialogTitle>单笔支付金额超限</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-6 text-muted-foreground">
-            当前方式单笔最高支持 {selectedChannel && typeof maximumAmount === "number" ? formatPaymentAmount(maximumAmount, selectedChannel.currency) : "—"}。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。
+            支付金额大于2000联系人工客服处理。
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>
             <Button variant="outline" onClick={() => { setAmountLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
-            <Button onClick={() => { if (typeof maximumAmount === "number") setAmountText(String(maximumAmount)); clientRequestIdRef.current = null; setAmountLimitDialogOpen(false); }}>改为上限金额</Button>
+            <Button onClick={() => { if (typeof maximumAmount === "number") setAmountText(String(isUsdtCnyRecharge ? 2000 : Math.min(maximumAmount, 2000))); clientRequestIdRef.current = null; setAmountLimitDialogOpen(false); }}>改为上限金额</Button>
           </div>
         </DialogContent>
       </Dialog>

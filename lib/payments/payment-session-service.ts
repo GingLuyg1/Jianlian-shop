@@ -14,6 +14,7 @@ import type {
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { createPaymentExpiryWindow } from "@/lib/payments/payment-expiry.mjs";
 import { providerAmountWithinLimits, providerSupportsChannel } from "@/lib/payments/provider-contracts.mjs";
+import { isOnlineCnyOverLimit, ONLINE_PAYMENT_LIMIT_MESSAGE } from "@/lib/payments/online-payment-policy.mjs";
 import { assertLiuhaoyiAmountBreakdown, isLiuhaoyiPaymentMethod } from "@/lib/payments/liuhaoyi-limits.mjs";
 import { getPaymentProviderCapabilities, resolveProviderForExistingSession, resolveProviderForNewPayment } from "@/lib/payments/providers";
 import { normalizeLiuhaoyiSessionPresentation } from "@/lib/payments/providers/liuhaoyi-core.mjs";
@@ -178,6 +179,13 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
     }
   }
   const capability = getPaymentProviderCapabilities(channel.provider);
+  if (business.currency === "CNY" && isOnlineCnyOverLimit(business.payableAmount)) {
+    throw new PaymentSessionError("ONLINE_PAYMENT_LIMIT_EXCEEDED", ONLINE_PAYMENT_LIMIT_MESSAGE);
+  }
+  if (channel.provider === "snpay" && (channel.feeRate !== 0
+    || business.feeAmount !== 0 || business.payableAmount !== business.requestedAmount)) {
+    throw new PaymentSessionError("SNPAY_FEE_CONFIGURATION_INVALID", "支付平台手续费由收银台收取，本站不得重复加费");
+  }
   if (!providerSupportsChannel(capability, channel.code, business.currency)
     || !providerAmountWithinLimits(capability, channel, business.payableAmount)) {
     throw new PaymentSessionError("PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED", "支付渠道不支持该金额或币种");

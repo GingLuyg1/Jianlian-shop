@@ -7,6 +7,7 @@ import * as core from "../../lib/payments/providers/snpay-core.mjs";
 import * as readiness from "../../lib/payments/manual-channel-readiness.mjs";
 import * as expiry from "../../lib/payments/payment-expiry.mjs";
 import * as contracts from "../../lib/payments/provider-contracts.mjs";
+import * as onlinePolicy from "../../lib/payments/online-payment-policy.mjs";
 import * as limits from "../../lib/payments/liuhaoyi-limits.mjs";
 import * as liuhaoyi from "../../lib/payments/providers/liuhaoyi-core.mjs";
 import * as submit from "../../lib/payments/providers/liuhaoyi-submit.mjs";
@@ -193,7 +194,8 @@ async function serviceHarness(providerCode = "snpay", payload = signed({ code: 1
     },
   };
   deps["@/lib/payments/recharge-utils"] = loadTs("lib/payments/recharge-utils.ts", { "@/lib/payments/manual-channel-readiness.mjs": readiness, "@/lib/recharges/status-machine": status });
-  const service = loadTs("lib/payments/payment-session-service.ts", deps);
+  const service = loadTs("lib/payments/payment-session-service.ts", { ...deps,
+    "@/lib/payments/online-payment-policy.mjs": onlinePolicy });
   const previous = console.error;
   console.error = (...args) => f.logs.push(args);
   try {

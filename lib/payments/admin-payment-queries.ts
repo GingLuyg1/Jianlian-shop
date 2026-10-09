@@ -46,7 +46,7 @@ export const adminOrderPaymentSelect = `
   callback_status,
   exception_type,
   error_summary,
-  orders(order_no,total_amount,customer_email,payment_status,status)
+  orders(order_no,total_amount,customer_email,payment_status,status,fulfillment_status)
 `;
 
 export const adminRechargeSelect = `
@@ -116,6 +116,7 @@ export function normalizeOrderPaymentRow(row: AnyRow): AdminPaymentRecord {
   return {
     id: String(row.id ?? ""),
     source: "order_payments",
+    fulfillment_status: stringOrNull(order?.fulfillment_status),
     payment_no: String(row.payment_no ?? ""),
     business_type: "order",
     business_no: stringOrNull(order?.order_no),
@@ -161,6 +162,7 @@ export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
   return {
     id: String(row.id ?? ""),
     source: "account_recharges",
+    provider: stringOrNull(row.provider),
     payment_no: String(row.recharge_no ?? ""),
     business_type: "recharge",
     business_no: String(row.recharge_no ?? ""),

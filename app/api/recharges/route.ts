@@ -11,6 +11,7 @@ import { assertLiuhaoyiPaymentAmount, isLiuhaoyiPaymentMethod } from "@/lib/paym
 import { createPaymentSession } from "@/lib/payments/payment-session-service";
 import { getPaymentProviderCapabilities } from "@/lib/payments/providers";
 import { providerAmountWithinLimits, providerSupportsChannel } from "@/lib/payments/provider-contracts.mjs";
+import { isOnlineCnyOverLimit, isStrictPositiveCny, ONLINE_PAYMENT_LIMIT_MESSAGE } from "@/lib/payments/online-payment-policy.mjs";
 import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
 import { derivePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 import {
@@ -140,6 +141,12 @@ export async function POST(request: Request) {
   const customerNote = typeof body.customer_note === "string" ? body.customer_note.trim() : "";
   const rawAmount = parsePublicRechargeAmount(body.amount, 6);
   const requestedCnyAmount = parseRequestedCnyAmount(body.amount);
+  if (currency === "CNY" && !isStrictPositiveCny(body.amount)) {
+    return NextResponse.json({ error: "充值金额必须为正数且最多两位小数", code: "RECHARGE_AMOUNT_INVALID" }, { status: 400 });
+  }
+  if (currency === "CNY" && isOnlineCnyOverLimit(body.amount)) {
+    return NextResponse.json({ error: ONLINE_PAYMENT_LIMIT_MESSAGE, code: "ONLINE_PAYMENT_LIMIT_EXCEEDED" }, { status: 400 });
+  }
   const clientRequestId = normalizeRequestId(body.client_request_id ?? body.clientRequestId);
   if (!isKnownPaymentChannelCode(channelCode)) {
     return NextResponse.json(
@@ -235,6 +242,10 @@ export async function POST(request: Request) {
     }
 
     const summary = isUsdtCnyRecharge ? null : calculateRechargeAmounts(channel, rawAmount);
+    if (channel.provider === "snpay" && summary
+      && (channel.feeRate !== 0 || summary.fee !== 0 || summary.payableAmount !== summary.amount)) {
+      return NextResponse.json({ error: "支付平台手续费由收银台收取，本站不得重复加费", code: "SNPAY_FEE_CONFIGURATION_INVALID" }, { status: 503 });
+    }
     if (channel.provider === "liuhaoyi" && summary) {
       if (summary.fee !== 0 || summary.payableAmount !== summary.amount) {
         return NextResponse.json(

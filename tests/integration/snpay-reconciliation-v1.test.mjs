@@ -12,7 +12,8 @@ const paid={found:true,paid:true,status:'paid',currency:'CNY',amount:1,providerC
 test('SNPAY candidate policy admits recharge pending/processing/expired only, with frozen provider pinning',()=>{
  for(const status of ['pending','processing','expired'])assert.equal(snpayCandidateReason({...s,status},now),null);
  for(const status of ['failed','closed','paid','succeeded','refunded'])assert.equal(snpayCandidateReason({...s,status},now),'state_excluded');
- for(const patch of [{provider:'liuhaoyi'},{business_type:'order'},{channel_code:'usdt_bep20'}])assert.equal(snpayCandidateReason({...s,...patch},now),'scope_excluded');
+ assert.equal(snpayCandidateReason({...s,business_type:'order'},now),null);
+ for(const patch of [{provider:'liuhaoyi'},{business_type:'unknown'},{channel_code:'usdt_bep20'}])assert.equal(snpayCandidateReason({...s,...patch},now),'scope_excluded');
  assert.equal(snpayCandidateReason({...s,provider_order_no:null},now),'provider_identity_missing');
 });
 test('conservative persisted throttling and finite 24h lookback',()=>{
