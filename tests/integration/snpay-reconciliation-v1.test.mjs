@@ -41,6 +41,7 @@ const env={SNPAY_RECONCILIATION_ENABLED:'true',SNPAY_RECONCILIATION_EXECUTE_ENAB
 test('watcher at most 4 sequential candidates; output/heartbeat contain no identifiers or credentials',async()=>{
  let active=0,max=0,calls=0;const logs=[],heartbeats=[];const rows=Array.from({length:8},(_,i)=>({...s,id:'10000000-0000-4000-8000-00000000000'+i}));
  const result=await runSnpayReconciliationWatcher({env,args:['--execute'],nowMs:now,write:x=>logs.push(x),heartbeat:async x=>heartbeats.push(x),fetchImpl:async(u,i)=>{
+   if(i?.method==='GET')return Response.json({executeEnabled:true});
    if(new URL(u).hostname==='db.test'){assert.equal(i.headers.Authorization,undefined);assert.equal(new URL(u).searchParams.get('provider'),'eq.snpay');return Response.json(rows);}
    active++;max=Math.max(max,active);calls++;await new Promise(r=>setTimeout(r,2));active--;return Response.json({kind:'unpaid',queried:true,paid:false});
  }});assert.equal(calls,4);assert.equal(max,1);assert.equal(result.unpaid,4);assert.equal(heartbeats.length,1);assert.ok(heartbeats[0].last_successful_run);
@@ -48,7 +49,7 @@ test('watcher at most 4 sequential candidates; output/heartbeat contain no ident
 });
 test('outage stops after two errors, no immediate retry or provider request storm',async()=>{
  let calls=0;const rows=Array.from({length:5},(_,i)=>({...s,id:'10000000-0000-4000-8000-00000000000'+i}));
- const r=await runSnpayReconciliationWatcher({env,args:['--execute'],nowMs:now,fetchImpl:async(u)=>{if(new URL(u).hostname==='db.test')return Response.json(rows);calls++;return Response.json({kind:'query_error',queried:true});}});
+ const r=await runSnpayReconciliationWatcher({env,args:['--execute'],nowMs:now,fetchImpl:async(u,i)=>{if(i?.method==='GET')return Response.json({executeEnabled:true});if(new URL(u).hostname==='db.test')return Response.json(rows);calls++;return Response.json({kind:'query_error',queried:true});}});
  assert.equal(calls,2);assert.equal(r.query_error,2);assert.equal(r.status,'partial_failure');
 });
 test('disabled/execution-denied modes make zero network calls, remote internal URL fails closed',async()=>{
@@ -93,7 +94,7 @@ function scanFixture(invalidCount,validCount=1){
  const rows=Array.from({length:invalidCount+validCount},(_,i)=>({...s,id:'10000000-0000-4000-8000-'+String(i).padStart(12,'0'),provider_order_no:i<invalidCount?'   ':'CI-TX'}));
  let pages=0,calls=0,active=0,max=0;const states=[];
  return {states,get pages(){return pages;},get calls(){return calls;},get max(){return max;},
-  fetch:async(u)=>{const url=new URL(u);if(url.hostname==='db.test'){
+  fetch:async(u,i)=>{if(i?.method==='GET')return Response.json({executeEnabled:true});const url=new URL(u);if(url.hostname==='db.test'){
    pages++;assert.equal(url.searchParams.get('limit'),'40');assert.deepEqual(url.searchParams.getAll('provider_order_no'),['not.is.null','neq.']);assert.equal(url.searchParams.get('order'),'created_at.asc,id.asc');
    const after=url.searchParams.get('and')?.match(/id.gt.([0-9a-f-]+)/)?.[1];return Response.json(rows.filter(r=>!after||r.id>after).slice(0,40));}
    calls++;active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,1));active--;return Response.json({kind:'unpaid',queried:true,paid:false});},
@@ -116,6 +117,6 @@ test('heartbeat distinguishes empty queue, all-invalid queue and safe bounded lo
  }
 });
 test('provider errors stop at two and do not mark successful heartbeat',async()=>{
- const f=scanFixture(0,8);let queries=0;const r=await runSnpayReconciliationWatcher({env,nowMs:now,heartbeat:f.heartbeat,fetchImpl:async(u)=>new URL(u).hostname==='db.test'?f.fetch(u):(queries++,Response.json({kind:'query_error',queried:true}))});
+ const f=scanFixture(0,8);let queries=0;const r=await runSnpayReconciliationWatcher({env,nowMs:now,heartbeat:f.heartbeat,fetchImpl:async(u,i)=>i?.method==='GET'?Response.json({executeEnabled:true}):new URL(u).hostname==='db.test'?f.fetch(u):(queries++,Response.json({kind:'query_error',queried:true}))});
  assert.equal(queries,2);assert.equal(r.provider_queries,2);assert.equal(r.error_count,2);assert.equal(r.stop_reason,'error_guard');assert.equal(r.status,'partial_failure');assert.equal(f.states[0].last_successful_run,null);
 });

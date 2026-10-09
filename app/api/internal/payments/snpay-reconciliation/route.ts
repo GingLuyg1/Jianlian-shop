@@ -4,15 +4,27 @@ import { reconcileSnpaySession } from "@/lib/payments/snpay-reconciliation-servi
 import { checkRequestSize, checkRateLimit, getInternalTaskRateLimitKey } from "@/lib/security/rate-limit";
 export const dynamic = "force-dynamic";
 let running = false;
-export async function POST(request:Request) {
+function authorize(request:Request,readiness=false) {
   const expected = process.env.PAYMENT_RECONCILIATION_SECRET ?? process.env.INTERNAL_API_SECRET ?? "";
   const supplied = request.headers.get("x-payment-reconciliation-secret") ?? "";
   const expectedBytes = Buffer.from(expected), suppliedBytes = Buffer.from(supplied);
   if(!expected || suppliedBytes.length !== expectedBytes.length || !timingSafeEqual(suppliedBytes,expectedBytes))
-    return NextResponse.json({error:"unauthorized"},{status:403});
-  const sizeError = checkRequestSize(request,2048); if(sizeError) return sizeError;
-  const rate = checkRateLimit("internal_task",getInternalTaskRateLimitKey(expected,"snpay_reconciliation"));
+  return NextResponse.json({error:"unauthorized"},{status:403});
+  const rate = checkRateLimit(readiness?"snpay_reconciliation_readiness":"snpay_reconciliation_execute",
+    getInternalTaskRateLimitKey(expected,"snpay_reconciliation"));
   if(!rate.allowed) return rate.response!;
+  return null;
+}
+// Process-runtime evidence only: no candidate reads, provider I/O or completion.
+// Authentication is identical to POST; never expose credential values.
+export async function GET(request:Request) {
+  const denied = authorize(request,true); if(denied) return denied;
+  return NextResponse.json({executeEnabled:process.env.SNPAY_RECONCILIATION_EXECUTE_ENABLED === "true"},
+    {headers:{"Cache-Control":"no-store"}});
+}
+export async function POST(request:Request) {
+  const denied = authorize(request); if(denied) return denied;
+  const sizeError = checkRequestSize(request,2048); if(sizeError) return sizeError;
   if(running) return NextResponse.json({error:"already_running"},{status:429});
   // Process-local admission: acquire synchronously before parsing can yield.
   running = true;
