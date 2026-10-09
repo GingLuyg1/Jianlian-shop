@@ -12,6 +12,10 @@ on:
       - lib/payments/snpay-reconciliation-*
       - lib/payments/providers/snpay.ts
       - tests/helpers/snpay-reconciliation-db-matrix.mjs
+      - tests/helpers/snpay-order-db-matrix.mjs
+      - tests/fixtures/snpay-order-runtime-schema.sql
+      - tests/integration/snpay-order-reconciliation.test.mjs
+      - supabase/migrations/20261009180000_order_reconciliation_inventory_boundary.sql
       - tests/integration/snpay-reconciliation-v1.test.mjs
       - tests/integration/snpay-execute-gate-hardening.test.mjs
       - scripts/ops/snpay-reconciliation-readiness.mjs
@@ -75,6 +79,7 @@ jobs:
       - run: >-
           node --test tests/integration/payment-expired-state-contract.test.mjs
           tests/integration/snpay-reconciliation-v1.test.mjs
+          tests/integration/snpay-order-reconciliation.test.mjs
           tests/integration/snpay-execute-gate-hardening.test.mjs
           tests/integration/payment-session-failed-guard.test.mjs
           tests/integration/snpay-late-payment-manual-review.test.mjs
@@ -100,6 +105,7 @@ jobs:
       - run: systemd-analyze verify ops/systemd/jianlian-snpay-reconciliation.service ops/systemd/jianlian-snpay-reconciliation.timer
       - run: >-
           node --test tests/integration/snpay-reconciliation-v1.test.mjs
+          tests/integration/snpay-order-reconciliation.test.mjs
           tests/integration/snpay-execute-gate-hardening.test.mjs
           tests/regression/production-release-hardening.test.mjs
       - run: bash -n scripts/production-release.sh

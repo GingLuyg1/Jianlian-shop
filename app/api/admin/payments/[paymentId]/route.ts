@@ -18,6 +18,7 @@ import {
   recheckAdminBep20ChainPaymentSession,
 } from "@/lib/payments/bep20-chain-service";
 import type { AdminPaymentCallback } from "@/lib/payments/admin-payment-types";
+import { enrichAdminOrderSessionEvidence } from "@/lib/payments/admin-order-session-evidence";
 import type { AdminBep20OverpaymentWallet } from "@/lib/payments/admin-payment-types";
 
 export const dynamic = "force-dynamic";
@@ -100,7 +101,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     const payment =
       source === "account_recharges"
         ? normalizeRechargeRow(rawPaymentRow)
-        : normalizeOrderPaymentRow(rawPaymentRow);
+        : await enrichAdminOrderSessionEvidence(admin.supabase,rawPaymentRow,normalizeOrderPaymentRow(rawPaymentRow));
 
     let callbacks: AdminPaymentCallback[] = [];
     let callbackError = "";

@@ -1,4 +1,4 @@
-# Payment closed-loop finalization V1
+# Payment closed-loop finalization V1 + V2
 
 Base: `2780bf3d9a2147522a564d00bb742dc5f15a92ef`. Development only;
 no Production deploy, migration, channel change or payment is authorized here.
@@ -76,28 +76,82 @@ returns without fetch. The server also enforces limits and rejects overprecision
   the CNY order limit before chain network/reservation. Existing transfer
   verification is intentionally unaffected by channel closure.
 
-### Explicit remaining blockers (do not report complete shop recovery coverage)
+## V2 order reconciliation policy and proof
 
-1. SNPAY reconciliation V1 deliberately excludes `business_type=order`. The
-   default reconciliation path also does not grant automatic SNPAY order credit.
-   A missing purchase callback therefore has no equivalent worker completion.
-2. Current paid-before-expiry expired-state RPC exception is recharge-specific.
-   The existing isolated test explicitly preserves rejection of expired orders.
-   Delayed purchase callbacks can require a separate transactional order-expiry
-   design/migration and stock reservation policy; do not relax it incidentally.
-3. Isolated native DB tests here prove recharge races, **not** real order-payment/
-   supplier-claim races. Supplier and order unit/source-contract passes cannot
-   be relabelled as full native DB/Production fulfillment proof.
-4. Admin recharge normalization now exposes the frozen Provider, and separates
-   cashier estimate from API payable/credit. Historical order payment records
-   do not expose a pinned Provider in this API; explicitly show unavailable,
-   never infer it from today's channel. Actual cashier gross and settlement cost
-   are not persisted and must remain unknown, not manufactured as accounting.
+The existing worker scans recharge/account_recharge **and order**. There is no
+second reconciliation engine. Shared signed query validation binds frozen
+session number, Provider order number, amount, currency and channel. Parent
+policies remain separate: recharge expiry recovery does not authorize order
+resurrection.
 
-No new migration is needed for the fee-disclosure/limit patch. Completing
-purchase expiry parity may require a separately reviewed development migration;
-no migration has been created or executed by this patch. Full closed-loop readiness
-remains blocked by the purchase gaps, even if this patch's CI passes.
+An order is automatically completable only while `pending_payment`, unpaid and
+`reservation_released_at IS NULL`. Session/order ID, business number, user,
+payment method, CNY principal snapshot, original creation/expiry boundaries
+must agree. No catalog price is reread. Failed/closed sessions never query.
+Terminal/released orders produce deduped manual-review evidence with **zero
+Provider queries**, and already-paid orders do not complete again. Such local
+evidence marks Provider paid status **unknown**, not a fabricated payment.
+
+After a trusted paid query, the service rereads both rows and frozen lifetimes.
+State changes, late/untrusted payment time or identity/amount mismatch cannot
+complete. If expiration released inventory during query, verified paid evidence
+is preserved in `payment_reconciliations`, business_type order, searchable order
+number, signed/timestamp/identity booleans and safe paid time; no raw payload,
+signature, URL or key. Stable session/kind/reason dedupe prevents evidence growth
+on repeated timer ticks. Refund, replacement and manual resolution are Admin
+decisions outside the automatic worker.
+
+Only `completePayment(source: reconciliation)` invokes `complete_payment_session`
+then the existing `complete_order_payment` and `deliverDigitalOrder`. No direct
+order/stock/payment writes are added to the service.
+
+### Required development migration (NOT executed in Production)
+
+`20261009180000_order_reconciliation_inventory_boundary.sql` is a minimal,
+fail-closed, transaction-wrapped function patch; it does not update business
+rows or create tables. Existing unknown/already-patched function definitions
+abort the whole migration. Trusted-server ACL is asserted and preserved.
+
+The session RPC acquires order before session, matching `expire_unpaid_order`,
+avoiding their former lock inversion. Within the already-locked order branch,
+**SNPAY only** gets authoritative pending/unpaid/unreleased, frozen context and
+both paid-time lifetime guards. `complete_order_payment` itself is unchanged;
+BEP20's USDT received/CNY principal conversion and manual paths are not given
+SNPAY's CNY equality rule. Recharge RPC bodies/expiry policy are unchanged.
+
+Payment wins: expiration sees paid/final and skips release. Expiration wins:
+session/order become terminal, inventory releases once, completion fails closed,
+and worker paid evidence becomes manual review. Paid plus released is forbidden.
+
+The isolated native PostgreSQL runner now extracts the actual canonical order
+payment, expiration, inventory release, digital delivery, supplier claims/outcomes
+and delivery patches from migrations. It uses the real TS completion, delivery,
+supplier router and DAJU adapter with fake signed SNPAY and fake supplier network.
+No simplified SQL payment/delivery function replaces these runtime bodies.
+
+Coverage: unpaid zero business writes; reserved digital paid delivery once;
+manual orders no automatic delivery; supplier procurement once; callback/worker
+and worker/worker 10 rounds each; expiration 10 rounds with deterministic both
+winners plus concurrent SQL transactions; product/SKU/digital release once;
+late payment manual review; delivery error leaves payment paid, then fulfillment-
+only retry produces one delivery without another query/completion; BEP20
+conversion regression. Existing recharge RSA/native race matrix remains intact.
+
+Query budget is unchanged: four serial dispatches, stop after two query errors,
+24h lookback, 60s minimum age, persisted cadence/CAS, four 40-row pages, saved
+cursor, heartbeat and process flock. Logs now separate order/recharge candidates;
+long invalid order prefixes cannot reset/starve the cursor indefinitely.
+
+### Admin evidence boundary
+
+Order payment detail enriches frozen Provider from a bounded, exact historical
+session relation (business ID/number/user/channel/currency/principal and AUTO
+session number or matching transaction). Missing/ambiguous evidence is explicitly
+unavailable, never inferred from current payment channels. Detail shows principal,
+site fee, API payable, received, transaction/paid time, session/reconciliation,
+fulfillment and delivery error. Actual cashier fee/gross and settlement cost remain
+unavailable: estimated 3% is never labeled actual. The reconciliation panel already
+supports order references and manual review search.
 
 ## Final Production real E2E runbook (not executed)
 
@@ -117,12 +171,18 @@ remains blocked by the purchase gaps, even if this patch's CI passes.
    Observe duplicate callbacks/normal worker passes without triggering another
    completion as an idempotency test. Timeout/mismatch becomes an incident,
    not another payment or a forced status change.
-5. Purchase using available balance can validate order and fulfillment without
-   a second *external* payment, after separately authorized purchase/stock actions.
-   It does NOT validate SNPAY purchase callback/reconciliation. End-to-end SNPAY
-   external purchase proof requires a second distinct paid order and the purchase
-   recovery/expiry gaps resolved first. Never equate balance purchase with it.
-6. Channels remain closed unless the user separately authorizes rollout. A/W
+5. **E2E-B Shop Order:** a second, distinct small externally paid SNPAY order is
+   required to prove the shop callback/worker/fulfillment chain, after verifying
+   real independent inventory/supplier readiness. Brief enable -> one new order
+   -> immediate disable -> minimal pre-pay signed identity/time check -> one user
+   payment -> ordinary callback/worker only. Read-only check one paid session,
+   one canonical order payment, reserved ownership not released, one delivery or
+   supplier request/outcome, no repeated card delivery, principal/site fee contract.
+   Do not intentionally suppress callbacks or force expiration in Production.
+   An expired/released paid order goes manual review, never auto-resurrection.
+   Balance purchase does not substitute for this SNPAY external purchase proof.
+6. **FINAL_REAL_PAYMENT_COUNT_REQUIRED=2** (E2E-A recharge and E2E-B shop).
+   Channels remain closed unless the user separately authorizes rollout. A/W
    real new paid automatic reconciliation E2E remains `not_tested` here.
 
 ## Validation record
@@ -139,3 +199,15 @@ public health 200; app/worker gates true; reconciliation timer enabled/active;
 Alipay/WeChat false, USDT true; 35 sessions, 26 recharges, 20 balance transactions;
 historical third WeChat paid once, one principal ledger, profile balance 30.
 No Provider query or business mutation was performed by this task.
+
+## Deployment sequencing (plan only)
+
+User creates one PR after final exact branch CI; no merge/deploy performed here.
+Before app deployment, separately approve the new migration read-only preflight
+and manual SQL execution, then verify the guarded RPC/ACL and zero business-row
+changes. The worker must not gain order scope before that schema prerequisite.
+Then separately approve release prepare/isolated smoke/switch, retain rollback,
+verify channels remain closed and existing reconciliation timer/gates unchanged.
+No new timer/unit installation or cadence change is needed for V2.
+Migration is forward-only: a code rollback can stop new order processing but
+must not remove released-inventory guards or restore terminal orders.
