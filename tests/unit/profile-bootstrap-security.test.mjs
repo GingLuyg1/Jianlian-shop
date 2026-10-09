@@ -5,8 +5,9 @@ import { loadTs } from '../helpers/payment-session-guard-harness.mjs';
 const uid='00000000-0000-4000-8000-000000000001';
 function fixture({existing=null,authorized=true,serviceAvailable=true,duplicate=false}={}) {
   const writes=[];
+  let reads=0;
   const session={auth:{getUser:async()=>({data:{user:authorized?{id:uid,email:'verified@example.invalid'}:null},error:null})},
-    from(){const q={select(){return q;},eq(k,v){assert.equal(k,'id');assert.equal(v,uid);return q;},maybeSingle:async()=>({data:existing,error:null}),insert(){throw Error('AUTHENTICATED_INSERT_FORBIDDEN');}};return q;}};
+    from(){const q={select(){return q;},eq(k,v){assert.equal(k,'id');assert.equal(v,uid);return q;},maybeSingle:async()=>({data:duplicate && reads++ === 0 ? null : existing,error:null}),insert(){throw Error('AUTHENTICATED_INSERT_FORBIDDEN');}};return q;}};
   const service={from(table){assert.equal(table,'profiles');let payload;const q={insert(v){payload=v;writes.push(v);return q;},select(){return q;},maybeSingle:async()=>({data:duplicate?null:payload,error:duplicate?{code:'23505'}:null})};return q;}};
   const route=loadTs('app/api/account/profile/route.ts',{
     'next/server':{NextResponse:{json:Response.json}},'@/lib/admin/audit-log-service':{getAuditErrorMessage:()=>''},
@@ -22,6 +23,10 @@ test('unauthorized, existing profile and missing service credentials never inser
   for(const config of [{authorized:false},{existing:{id:uid,role:'user'}},{serviceAvailable:false}]){
     const f=fixture(config);const r=await f.route.POST();assert.equal(f.writes.length,0);assert.equal(r.status,config.authorized===false?401:config.serviceAvailable===false?500:200);
   }
+});
+test('concurrent server bootstrap unique conflict rereads without upsert or overwrite',async()=>{
+  const f=fixture({duplicate:true,existing:{id:uid,role:'user',balance:12}});
+  const r=await f.route.POST();assert.equal(r.status,200);assert.equal((await r.json()).profile.balance,12);assert.equal(f.writes.length,1);
 });
 test('browser bootstrap is body-free, authenticated, identity-checked and financial fallback stays zero',async()=>{
   const f=fixture();const calls=[];

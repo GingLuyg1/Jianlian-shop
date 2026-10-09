@@ -153,7 +153,7 @@ PostgreSQL 17 原生临时实例，127.0.0.1 独占端口；合成 auth.users、
 - `/admin/supplier-fulfillment`：实际 uppercase supplier status/重试属性/订单关联/尝试次数/安全错误码/时间，分页和筛选；不暴露 attempt_token、交付正文、费用，也没有重试/强制完成按钮。
 - `/admin/balance-ledger`：superadmin-only 全历史服务端精确计数、稳定二级排序分页；用户/邮箱/流水号搜索、业务/方向/状态/UTC日期/金额/币种/reference，无调账或删除。过宽用户搜索拒绝，不静默截断。
 - Refund race test 执行实际 loader source：旧慢 error 不能覆盖新筛选第二页；empty/error 清空结果与计数。Inventory search 执行实际 search service，import_status 映射通过。
-- 最终补充测试：新针对性 21/21；相关 suite 811/811；typecheck/build PASS。完整 suite 1361 total /1354 PASS /同 7 baseline FAIL。支付核心、callback/reconciliation/RPC 与历史 migration 未修改。
+- 最终补充测试：新针对性 22/22；相关 suite 812/812；typecheck/build PASS。完整 suite 1362 total /1355 PASS /同 7 baseline FAIL。另补齐 Production 第三个 updated_at trigger 的真实顺序，并验证并发 bootstrap 唯一键冲突只重读、不覆盖。支付核心、callback/reconciliation/RPC 与历史 migration 未修改。
 - Production 只读复查：live exact305d849、PM2 online、health/home/login200、匿名 Admin307/API401、timer enabled/active、heartbeat finished；渠道 false/false/true。未调用 Provider，未改 Production 行或文件。
 
 真实管理员 desktop/small-screen UI 未验收，因无可用已认证浏览器工具；唯一人工 UI checklist 在 rollout gate 文档。不得把静态/unit 验证写成真实页面点击证据。

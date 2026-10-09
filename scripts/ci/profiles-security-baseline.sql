@@ -239,6 +239,12 @@ $function$;
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
 create trigger profiles_protect_referral_fields before update on public.profiles for each row execute function public.protect_profile_referral_fields();
 create trigger profiles_protect_sensitive_fields before update on public.profiles for each row execute function public.protect_profile_sensitive_fields();
+-- Preserve the third Production trigger and its alphabetical execution order.
+create function public.handle_updated_at() returns trigger language plpgsql as $$
+begin new.updated_at=now(); return new; end;
+$$;
+create trigger profiles_updated_at before update on public.profiles
+for each row execute function public.handle_updated_at();
 alter table public.profiles enable row level security;
 grant select,insert on public.profiles to authenticated;
 grant update(display_name,phone,recipient_name,shipping_address,avatar_url) on public.profiles to authenticated;
