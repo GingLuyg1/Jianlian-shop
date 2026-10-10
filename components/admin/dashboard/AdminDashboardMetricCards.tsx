@@ -55,12 +55,12 @@ export function AdminMetricTrendCard({
 }: AdminMetricTrendCardProps) {
   return (
     <MetricSurface href={href}>
-      <div className="flex min-h-[112px] flex-col px-3 py-2.5 sm:px-3.5">
+      <div className="flex min-h-[120px] flex-col px-2.5 py-2.5 sm:min-h-[112px] sm:px-3.5">
         <div className="truncate text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{label}</div>
-        <div className="mt-1 truncate text-[22px] font-semibold leading-7 tracking-tight text-[var(--admin-v2-text-primary)]">
+        <div className="mt-1 break-all text-[18px] font-semibold leading-6 tracking-tight text-[var(--admin-v2-text-primary)] sm:truncate sm:text-[22px] sm:leading-7">
           {loading ? "..." : value}
         </div>
-        <div className="mt-auto grid min-w-0 grid-cols-[minmax(0,1fr)_72px] items-end gap-2 pt-2">
+        <div className="mt-auto grid min-w-0 grid-cols-[minmax(0,1fr)_48px] items-end gap-1.5 pt-2 sm:grid-cols-[minmax(0,1fr)_72px] sm:gap-2">
           <div className="min-w-0 text-[11px] leading-4 text-[var(--admin-v2-text-muted)]">
             <div className="truncate">{comparison || "暂无对比"}</div>
             <div className="truncate">{description}</div>
@@ -117,13 +117,13 @@ export function AdminMiniTrendChart({
   loading?: boolean;
 }) {
   if (loading) {
-    return <div className="h-10 w-[72px] animate-pulse rounded bg-[var(--admin-v2-surface-muted)]" />;
+    return <div className="h-10 w-12 animate-pulse rounded bg-[var(--admin-v2-surface-muted)] sm:w-[72px]" />;
   }
 
   const finiteValues = values.filter((value): value is number => value !== null && Number.isFinite(value));
   if (finiteValues.length < 2) {
     return (
-      <div className="flex h-10 w-[72px] items-end justify-end text-[10px] text-[var(--admin-v2-text-muted)]">
+      <div className="flex h-10 w-12 items-end justify-end text-[10px] text-[var(--admin-v2-text-muted)] sm:w-[72px]">
         暂无趋势
       </div>
     );
@@ -159,7 +159,7 @@ export function AdminMiniTrendChart({
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="h-10 w-[72px] overflow-visible"
+      className="h-10 w-12 overflow-visible sm:w-[72px]"
       role="img"
       aria-label={`${label}近 7 天趋势`}
     >
