@@ -27,7 +27,7 @@ test("Dashboard uses compact status and task structures without fabricated data"
   const metrics = file("components/admin/dashboard/AdminDashboardMetricCards.tsx");
 
   assert.match(dashboard, /variant="v2"/);
-  assert.match(dashboard, /xl:grid-cols-\[2fr_1fr\]/);
+  assert.match(dashboard, /xl:grid-cols-\[minmax\(0,2fr\)_minmax\(0,1fr\)\]/);
   assert.match(dashboard, /<AdminMetricValueCard[\s\S]*?compact/);
   assert.match(dashboard, /gap-px bg-\[var\(--admin-v2-border\)\]/);
   assert.match(metrics, /compact \? "min-h-\[68px\]"/);
