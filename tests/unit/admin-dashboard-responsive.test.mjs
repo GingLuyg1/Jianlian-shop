@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { loadDashboardUi, renderDashboard } from '../helpers/admin-dashboard-ui-harness.mjs';
 const source = path => readFileSync(path, 'utf8');
 
@@ -57,10 +57,12 @@ test('channel amounts are not truncated and shared wide tables offer keyboard sc
   assert.match(lists, /role="region" aria-label="数据表，可左右滑动" tabIndex=\{0\}/);
 });
 
-test('dashboard queries, aggregation and business rules are byte-identical to exact Production base', () => {
-  const before = execFileSync('git', ['-c', `safe.directory=${process.cwd().replaceAll('\\', '/')}`, 'show', '4575d802d653e4dca726427bce826aa68c93d9e2:app/admin/page.tsx'], { encoding: 'utf8' });
+test('dashboard queries, aggregation and business rules match the Production base digest', () => {
+  // SHA-256 of app/admin/page.tsx before the component at Production commit 4575d802.
+  const baseDigest = '47e5de1ca8f0d848603f172dc40c516e0985bd8aa1ce3f5a00b31ad4a7700766';
   const prefix = text => text.replaceAll('\r\n', '\n').split('export default function AdminDashboardPage')[0];
-  assert.equal(prefix(source('app/admin/page.tsx')), prefix(before));
+  const digest = createHash('sha256').update(prefix(source('app/admin/page.tsx'))).digest('hex');
+  assert.equal(digest, baseDigest);
 });
 
 test('chart day inspection and metric toggles update display state without network or business actions', () => {
