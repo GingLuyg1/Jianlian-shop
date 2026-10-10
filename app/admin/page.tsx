@@ -1253,23 +1253,23 @@ function CompactTableCard({
             <div className="hidden min-w-0 overflow-x-auto sm:block">
               <Table>
                 <TableHeader>
-              <TableRow>
-                {headers.map((header) => (
-                  <TableHead key={header} className="h-8 whitespace-nowrap text-xs">{header}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.slice(0, 8).map((row, index) => (
-                <TableRow key={`${title}-${index}`}>
-                  {row.map((cell, cellIndex) => (
-                    <TableCell key={`${title}-${index}-${cellIndex}`} className="max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
-                      {cell}
-                    </TableCell>
+                  <TableRow>
+                    {headers.map((header) => (
+                      <TableHead key={header} className="h-8 whitespace-nowrap text-xs">{header}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.slice(0, 8).map((row, index) => (
+                    <TableRow key={`${title}-${index}`}>
+                      {row.map((cell, cellIndex) => (
+                        <TableCell key={`${title}-${index}-${cellIndex}`} className="max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
+                          {cell}
+                        </TableCell>
+                      ))}
+                    </TableRow>
                   ))}
-                </TableRow>
-              ))}
-            </TableBody>
+                </TableBody>
               </Table>
             </div>
           </>
