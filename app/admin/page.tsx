@@ -956,7 +956,7 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
         <div className="relative h-full min-h-[200px] min-w-[640px] sm:min-w-0">
         <svg
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          className="h-full min-h-[200px] w-full touch-pan-y"
+          className="h-full min-h-[200px] w-full touch-auto"
           role="img"
           aria-label="支付、充值、订单与访问综合趋势折线图"
           onPointerMove={(event) => {
