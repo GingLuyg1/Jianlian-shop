@@ -22,6 +22,7 @@ test("trend, channels, and recent activity offer mobile-friendly browsing", () =
 
   assert.ok(page.includes('aria-label="经营趋势图，可横向滚动"'));
   assert.ok(page.includes("min-w-[640px] sm:min-w-0"));
+  assert.ok(page.includes('className="h-full min-h-[200px] w-full touch-auto"'));
   assert.ok(page.includes("左右滑动图表查看完整趋势"));
   assert.ok(page.includes("grid grid-cols-2 gap-1.5 text-center text-xs sm:grid-cols-5"));
   assert.ok(page.includes("space-y-2 sm:hidden"));
