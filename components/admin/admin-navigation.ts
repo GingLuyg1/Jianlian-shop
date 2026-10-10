@@ -77,7 +77,7 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     routePrefixes: ["/admin/system"],
     children: [
       { label: "生产看板", href: "/admin/system/production-readiness" },
-      { label: "Worker 状态", href: "/admin/system/workers" },
+      { label: "自动任务运行状态", href: "/admin/system/workers" },
       { label: "异常中心", href: "/admin/system-errors" },
       { label: "请求追踪", href: "/admin/system/request-traces" },
       { label: "事务补偿", href: "/admin/system/compensations" },

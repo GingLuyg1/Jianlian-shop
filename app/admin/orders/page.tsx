@@ -1,4 +1,6 @@
 ﻿"use client";
+import { statusLabel } from '@/lib/admin/display-labels';
+
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -644,7 +646,7 @@ function RelationSection({
                             </div>
                             <div className="shrink-0 text-right text-xs text-slate-500">
                               {item.amount ? <div className="font-semibold text-primary">{item.amount}</div> : null}
-                              {item.status ? <div>{item.status}</div> : null}
+                              {item.status ? <div>{statusLabel(item.status)}</div> : null}
                             </div>
                           </div>
                           <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
@@ -690,7 +692,7 @@ function RelationSection({
                       </div>
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
-                      <span>{event.status || "—"}</span>
+                      <span>{statusLabel(event.status)}</span>
                       {event.href ? <Link href={event.href.trim()} className="text-primary hover:underline">查看来源</Link> : null}
                     </div>
                   </div>

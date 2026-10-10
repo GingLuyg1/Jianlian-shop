@@ -25,7 +25,7 @@ const EXPORT_TYPES = [
   ["refunds", "退款"],
   ["users", "用户摘要"],
   ["product-sales", "商品销售"],
-  ["sku-sales", "SKU 销售"],
+  ["sku-sales", "商品规格销售"],
   ["inventory", "库存摘要"],
   ["deliveries", "交付记录摘要"],
   ["balance", "余额流水"],
@@ -217,10 +217,10 @@ export default function AdminReportsPage() {
             <MiniList title="订单金额区间" rows={Object.entries(report?.orderPayment?.amountBuckets ?? {}).map(([key, value]) => [key, String(value)])} />
           </DataCard>
 
-          <DataCard title="商品和 SKU 分析">
+          <DataCard title="商品和商品规格分析">
             <MiniList title="销量排行" rows={(report?.products?.salesRanking ?? []).slice(0, 6).map((row: any) => [row.name, `${row.quantity} 件 / ${money(row.amount)}`])} />
             <MiniList title="低库存商品" rows={(report?.products?.lowStockProducts ?? []).slice(0, 6).map((row: any) => [row.name, `库存 ${row.stock ?? 0}`])} empty="暂无低库存商品" />
-            <MiniList title="SKU 销量排行" rows={(report?.products?.skuSalesRanking ?? []).slice(0, 6).map((row: any) => [row.name, `${row.quantity} 件 / ${money(row.amount)}`])} />
+            <MiniList title="商品规格销量排行" rows={(report?.products?.skuSalesRanking ?? []).slice(0, 6).map((row: any) => [row.name, `${row.quantity} 件 / ${money(row.amount)}`])} />
           </DataCard>
 
           <DataCard title="用户经营分析">

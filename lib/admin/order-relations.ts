@@ -1,3 +1,4 @@
+import { businessTypeLabel, directionLabel } from '@/lib/admin/display-labels';
 ﻿import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -169,7 +170,7 @@ export async function loadAdminOrderRelations(
   const orderItems = itemsResult.rows;
   groups.push(group("items", orderItems.map((item) => relationItem({
     id: String(item.id),
-    label: text(item.sku_code) ? "SKU 订单项" : "订单项",
+    label: text(item.sku_code) ? "商品规格订单项" : "订单项",
     businessNo: text(item.sku_code),
     summary: `${text(item.product_name) ?? "订单商品"}${text(item.sku_title) ? ` / ${text(item.sku_title)}` : ""} x ${Number(item.quantity ?? 0)}`,
     status: text(item.delivery_status) ?? text(item.delivery_type),
@@ -302,7 +303,7 @@ export async function loadAdminOrderRelations(
     id: String(tx.id),
     label: "余额流水",
     businessNo: text(tx.transaction_no),
-    summary: `${text(tx.business_type) ?? "余额"} / ${text(tx.direction) ?? "变动"}`,
+    summary: `${businessTypeLabel(tx.business_type)} / ${directionLabel(tx.direction)}`,
     status: text(tx.status),
     amount: money(tx.amount, tx.currency),
     createdAt: text(tx.created_at),

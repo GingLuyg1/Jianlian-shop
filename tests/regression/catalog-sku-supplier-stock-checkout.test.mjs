@@ -11,8 +11,8 @@ test("admin product edit exposes database SKU management and existing supplier b
   const manager = file("components/admin/products/AdminProductSkuManager.tsx");
   assert.match(page, /AdminProductSkuManager/);
   assert.match(manager, /ensureTrailingEmptySkuRow/);
-  assert.match(manager, /SKU 名称/);
-  assert.match(manager, /SKU Code/);
+  assert.match(manager, /商品规格名称/);
+  assert.match(manager, /商品规格编码/);
   assert.match(manager, /绑定供货商/);
   assert.match(manager, /onSupplierBinding\(product, row\.sku!/);
   assert.match(manager, /saveProductSkuWorkspace/);
@@ -25,11 +25,11 @@ test("supplier binding provides friendly SKU choices and saves website SKU mappi
   const sheet = file("components/admin/suppliers/AdminSupplierBindingSheet.tsx");
   const route = file("app/api/admin/suppliers/daju/bindings/[productId]/route.ts");
   assert.match(sheet, /listDajuSkuStockOptions/);
-  assert.match(sheet, /Supplier SKU:/);
+  assert.match(sheet, /供应商商品规格:/);
   assert.match(sheet, /成本:/);
   assert.match(sheet, /库存:/);
   assert.match(sheet, /website_sku_id/);
-  assert.match(sheet, /BUSINESS_DECISION_REQUIRED/);
+  assert.match(sheet, /需要确认经营方案/);
   assert.match(sheet, /detail\.id === 15/);
   assert.match(sheet, /option\.sku === "14"/);
   assert.match(route, /from\("product_skus"\)/);

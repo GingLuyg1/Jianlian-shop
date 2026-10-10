@@ -29,8 +29,8 @@ test("Admin SKU save is a single workspace call with no row-by-row partial save"
   assert.equal(save.match(/saveProductSkuWorkspace\(/g)?.length, 1);
   assert.doesNotMatch(save, /createProductSku|updateProductSku|listProductSkus/);
   assert.doesNotMatch(save, /for\s*\([^)]*\)\s*\{[\s\S]*?await/);
-  assert.match(save, /SKU 已被其他操作修改，请刷新后重新确认/);
-  assert.match(save, /SKU 已保存：新增 \$\{result\.created_count\}，更新 \$\{result\.updated_count\}/);
+  assert.match(save, /商品规格已被其他操作修改，请刷新后重新确认/);
+  assert.match(save, /商品规格已保存：新增 \$\{result\.created_count\}，更新 \$\{result\.updated_count\}/);
   assert.match(save, /result\.skus\.map/);
 });
 

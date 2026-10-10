@@ -42,7 +42,7 @@ test("database status workspace stays read-only and reports real probe sources",
   }
   assert.match(page, /fetch\("\/api\/admin\/system\/database"/);
   assert.match(page, /method: "GET"/);
-  assert.match(page, /“未登记”不代表 migration 未执行/);
+  assert.match(page, /“未登记”不代表 数据库结构升级 未执行/);
   assert.doesNotMatch(page, />\s*(?:执行 Migration|运行 SQL|Vacuum|Reindex)\s*</i);
 
   assert.match(route, /requireApiAdmin\(\)/);

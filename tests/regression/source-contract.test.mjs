@@ -504,7 +504,7 @@ test("BEP20 valid overpayment uses one service-role atomic settlement and existi
   assert.match(balanceEvents, /window\.dispatchEvent\(new Event\(ACCOUNT_BALANCE_UPDATED_EVENT\)\)/);
   assert.match(orderSummary, /session\?\.overpaymentCredit/);
   assert.match(adminRoute, /settlement_source/);
-  assert.match(adminPage, /自动原子结算/);
+  assert.match(adminPage, /自动一次性安全结算/);
 });
 
 test("BEP20 automatic overpayment risk limits fail closed and manual credit elevates after super-admin auth", () => {
@@ -1162,7 +1162,7 @@ test("admin user management compatibility restores named RPCs and accurate readi
   assert.match(listRoute, /loadUserManagementCompatibility\(admin\.supabase\)/);
   assert.match(detailRoute, /ADMIN_USER_PROFILE_CORE_SELECT/);
   assert.match(detailRoute, /profileResult\.schemaReady && compatibility\.schemaReady/);
-  assert.match(page, /用户管理关键字段或 RPC 兼容合同尚未就绪/);
+  assert.match(page, /用户管理关键字段或 数据库事务处理 兼容合同尚未就绪/);
 
   for (const audit of [precheck, postcheck]) {
     assert.match(audit, /begin;/i);

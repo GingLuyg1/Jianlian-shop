@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { statusLabel } from '@/lib/admin/display-labels';
 import { Loader2, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -225,7 +226,7 @@ export default function AdminLegalSettingsPage() {
                   <div key={doc.id} className="grid gap-3 p-4 lg:grid-cols-[1fr_auto]">
                     <button className="min-w-0 text-left" onClick={() => setSelected(doc)}>
                       <div className="font-semibold text-slate-950">{doc.title}</div>
-                      <div className="mt-1 text-sm text-slate-500">{DOCUMENT_TYPE_LABELS[doc.document_type] ?? doc.document_type} / {doc.version} / {doc.status}</div>
+                      <div className="mt-1 text-sm text-slate-500">{DOCUMENT_TYPE_LABELS[doc.document_type] ?? doc.document_type} / {doc.version} / {statusLabel(doc.status)}</div>
                       <div className="mt-1 truncate font-mono text-xs text-slate-400">{doc.content_hash}</div>
                     </button>
                     <div className="flex items-center gap-2">
@@ -250,7 +251,7 @@ export default function AdminLegalSettingsPage() {
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">{selected.title}</h2>
-                <p className="mt-1 text-sm text-slate-500">{DOCUMENT_TYPE_LABELS[selected.document_type] ?? selected.document_type} / {selected.version} / {selected.status}</p>
+                <p className="mt-1 text-sm text-slate-500">{DOCUMENT_TYPE_LABELS[selected.document_type] ?? selected.document_type} / {selected.version} / {statusLabel(selected.status)}</p>
               </div>
               <Button variant="ghost" onClick={() => setSelected(null)}>关闭</Button>
             </div>

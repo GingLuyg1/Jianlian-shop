@@ -1,4 +1,7 @@
 "use client";
+import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+
+import { statusLabel as displayStatusLabel } from '@/lib/admin/display-labels';
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -147,9 +150,9 @@ export default function AdminRiskPage() {
 }
 
 function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: readonly (readonly [string, string])[] }) { return <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={cn(adminListControlClass, "px-3 outline-none")}>{options.map(([option, optionLabel]) => <option key={option} value={option}>{optionLabel}</option>)}</select>; }
-function RiskBadge({ level, score }: { level: string; score: number }) { const tone: AdminStatusTone = level === "critical" || level === "high" ? "danger" : level === "medium" ? "warning" : "success"; return <AdminStatusBadge tone={tone}>{level} · {score}</AdminStatusBadge>; }
+function RiskBadge({ level, score }: { level: string; score: number }) { const tone: AdminStatusTone = level === "critical" || level === "high" ? "danger" : level === "medium" ? "warning" : "success"; return <AdminStatusBadge tone={tone}>{displayStatusLabel(level)} · {score}</AdminStatusBadge>; }
 function businessLabel(value: string) { return Object.fromEntries(BUSINESS_TYPES)[value] ?? value; }
-function statusLabel(value: string) { return Object.fromEntries(STATUSES)[value] ?? value; }
+function statusLabel(value: string) { return Object.fromEntries(STATUSES)[value] ?? adminUnknownStatusLabel(value); }
 function shortId(value: string) { return `${value.slice(0, 8)}…`; }
 function businessHref(event: RiskEvent) { const search = encodeURIComponent(event.businessId ?? ""); if (event.businessType === "order") return `/admin/orders?search=${search}`; if (event.businessType === "payment") return `/admin/payments?search=${search}`; if (event.businessType === "recharge") return `/admin/recharges?search=${search}`; if (event.businessType === "account" || event.businessType === "login") return `/admin/users?search=${encodeURIComponent(event.userId ?? event.businessId ?? "")}`; return undefined; }
 function formatDate(value: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }

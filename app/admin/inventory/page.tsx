@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Ban, Eye, FileText, Loader2, PackageCheck, RefreshCw, RotateCcw, Upload, X } from "lucide-react";
@@ -670,7 +672,7 @@ function InventoryStatusBadge({ status }: { status: string }) {
     : status === "delivered" ? "bg-blue-50 text-blue-700 border-blue-200"
     : status === "reserved" ? "bg-amber-50 text-amber-700 border-amber-200"
     : "bg-red-50 text-red-700 border-red-200";
-  return <Badge variant="outline" className={cn("whitespace-nowrap", tone)}>{STATUS_LABELS[status] ?? status}</Badge>;
+  return <Badge variant="outline" className={cn("whitespace-nowrap", tone)}>{STATUS_LABELS[status] ?? adminUnknownStatusLabel(status)}</Badge>;
 }
 
 function BatchStatusBadge({ status }: { status: string }) {
@@ -678,5 +680,5 @@ function BatchStatusBadge({ status }: { status: string }) {
     : status === "processing" ? "bg-blue-50 text-blue-700 border-blue-200"
     : status === "partial_failed" ? "bg-amber-50 text-amber-700 border-amber-200"
     : "bg-red-50 text-red-700 border-red-200";
-  return <Badge variant="outline" className={cn("whitespace-nowrap", tone)}>{BATCH_STATUS_LABELS[status] ?? status}</Badge>;
+  return <Badge variant="outline" className={cn("whitespace-nowrap", tone)}>{BATCH_STATUS_LABELS[status] ?? adminUnknownStatusLabel(status)}</Badge>;
 }

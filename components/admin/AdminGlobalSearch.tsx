@@ -1,4 +1,6 @@
 ﻿"use client";
+import { statusLabel } from '@/lib/admin/display-labels';
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -205,7 +207,7 @@ export default function AdminGlobalSearch() {
                               </div>
                               <div className="shrink-0 text-right text-xs text-[var(--admin-v2-text-muted)]">
                                 {result.amountLabel ? <div className="font-semibold text-[var(--admin-v2-primary)]">{result.amountLabel}</div> : null}
-                                {result.status ? <div>{result.status}</div> : null}
+                                {result.status ? <div>{statusLabel(result.status)}</div> : null}
                                 <div>{formatDate(result.createdAt)}</div>
                               </div>
                             </div>

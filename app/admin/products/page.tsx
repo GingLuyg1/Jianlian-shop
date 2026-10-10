@@ -335,10 +335,10 @@ export default function AdminProductsPage() {
     debouncedSearch ? `搜索：${debouncedSearch}` : "",
     primaryFilter !== "all" ? "一级分类" : "",
     secondaryFilter !== "all" ? "二级分类" : "",
-    productTypeFilter === "multi_sku" ? "多 SKU" : productTypeFilter === "single_product" ? "普通商品" : "",
+    productTypeFilter === "multi_sku" ? "多商品规格" : productTypeFilter === "single_product" ? "普通商品" : "",
     productStatusFilter !== "all" ? productStatusLabel[productStatusFilter] : "",
     deliveryFilter !== "all" ? deliveryLabel[deliveryFilter] : "",
-    skuStatusFilter !== "any" ? ({ has_active_sku: "存在 Active SKU", all_draft: "SKU 全为 Draft", has_sold_out_sku: "存在售罄 SKU", no_active_sku: "无 Active SKU" } as const)[skuStatusFilter] : "",
+    skuStatusFilter !== "any" ? ({ has_active_sku: "存在 Active 商品规格", all_draft: "商品规格全为 草稿", has_sold_out_sku: "存在售罄商品规格", no_active_sku: "无 Active 商品规格" } as const)[skuStatusFilter] : "",
     stockFilter === "zero_stock" ? "零库存" : stockFilter === "low_stock" ? "低库存" : stockFilter === "in_stock" ? "有库存" : "",
     supplierBindingFilter === "supplier_bound" ? "供应商已绑定" : supplierBindingFilter === "supplier_unbound" ? "存在未绑定" : "",
     supplierStockFilter !== "all" ? `供应商库存：${({ unknown: "未同步", fresh: "正常", stale: "陈旧", error: "错误" } as const)[supplierStockFilter]}` : "",
@@ -1040,7 +1040,7 @@ export default function AdminProductsPage() {
                 >
                   <option value="all">全部商品类型</option>
                   <option value="single_product">普通商品</option>
-                  <option value="multi_sku">多 SKU 商品</option>
+                  <option value="multi_sku">多商品规格商品</option>
                 </NativeSelect>
                 <NativeSelect
                   value={productStatusFilter}
@@ -1113,11 +1113,11 @@ export default function AdminProductsPage() {
                       setProductPage(1);
                     }}
                   >
-                    <option value="any">全部 SKU 状态</option>
-                    <option value="has_active_sku">存在 Active SKU</option>
-                    <option value="all_draft">SKU 全为 Draft</option>
-                    <option value="has_sold_out_sku">存在售罄 SKU</option>
-                    <option value="no_active_sku">无 Active SKU</option>
+                    <option value="any">全部商品规格状态</option>
+                    <option value="has_active_sku">存在 Active 商品规格</option>
+                    <option value="all_draft">商品规格全为 草稿</option>
+                    <option value="has_sold_out_sku">存在售罄商品规格</option>
+                    <option value="no_active_sku">无 Active 商品规格</option>
                   </NativeSelect>
                   <NativeSelect
                     value={supplierBindingFilter}
@@ -1128,7 +1128,7 @@ export default function AdminProductsPage() {
                   >
                     <option value="all">全部供应商绑定</option>
                     <option value="supplier_bound">供应商已完整绑定</option>
-                    <option value="supplier_unbound">存在未绑定 SKU/商品</option>
+                    <option value="supplier_unbound">存在未绑定商品规格/商品</option>
                   </NativeSelect>
                   <NativeSelect
                     value={supplierStockFilter}
@@ -1162,13 +1162,13 @@ export default function AdminProductsPage() {
                     }}
                   >
                     <option value="all">全部履约健康</option>
-                    <option value="ready">Ready</option>
-                    <option value="blocked">Blocked</option>
-                    <option value="attention">Attention</option>
-                    <option value="no_source">No Source</option>
+                    <option value="ready">可以销售</option>
+                    <option value="blocked">暂不可销售</option>
+                    <option value="attention">需要注意</option>
+                    <option value="no_source">没有供货来源</option>
                   </NativeSelect>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">未绑定供应商不等于无法履约；商品仍可能使用 SKU 级本地数字库存。</p>
+                <p className="mt-2 text-xs text-slate-500">未绑定供应商不等于无法履约；商品仍可能使用商品规格级本地数字库存。</p>
               </details>
 
               {activeProductFilters.length > 0 ? (
@@ -1372,9 +1372,9 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
         <Badge
           variant="outline"
           className={summary.supplier_unbound > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-blue-200 bg-blue-50 text-blue-700"}
-          title={summary.supplier_unbound > 0 ? "未绑定供应商不等于无法履约；SKU 仍可能使用本地数字库存。" : "所有 SKU 均具备完整供应商绑定"}
+          title={summary.supplier_unbound > 0 ? "未绑定供应商不等于无法履约；商品规格仍可能使用本地数字库存。" : "所有商品规格均具备完整供应商绑定"}
         >
-          {summary.supplier_unbound > 0 ? `${summary.supplier_unbound} SKU 未绑定` : "SKU 全部已绑定"}
+          {summary.supplier_unbound > 0 ? `${summary.supplier_unbound} 商品规格未绑定` : "商品规格全部已绑定"}
         </Badge>
         {stockIssue ? <span className="text-[10px] font-medium text-amber-700">{stockIssue}</span> : null}
       </div>
@@ -1404,15 +1404,15 @@ function ProductOperationsSummary({ product }: { product: AdminProduct }) {
   if (!product.has_skus || !summary) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-600">
-      <span>{summary.sku_total} SKU</span>
+      <span>{summary.sku_total} 商品规格</span>
       <span>· {summary.sku_active} Active</span>
-      <span>· {summary.sku_draft} Draft</span>
+      <span>· {summary.sku_draft} 草稿</span>
       <span>· Active 库存 {summary.effective_stock}</span>
-      <Badge variant="outline" className="h-5 border-emerald-200 bg-emerald-50 px-1.5 text-[10px] text-emerald-700">{summary.fulfillment_ready} Ready</Badge>
-      {summary.fulfillment_blocked > 0 ? <Badge variant="outline" className="h-5 border-red-200 bg-red-50 px-1.5 text-[10px] text-red-700">{summary.fulfillment_blocked} Blocked</Badge> : null}
-      {summary.fulfillment_attention > 0 ? <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">{summary.fulfillment_attention} Attention</Badge> : null}
-      {summary.fulfillment_unknown > 0 ? <Badge variant="outline" className="h-5 border-slate-200 bg-slate-50 px-1.5 text-[10px] text-slate-600">{summary.fulfillment_unknown} Unknown</Badge> : null}
-      {summary.fulfillment_no_source > 0 ? <Badge variant="outline" className="h-5 border-red-200 bg-white px-1.5 text-[10px] text-red-700">{summary.fulfillment_no_source} No Source</Badge> : null}
+      <Badge variant="outline" className="h-5 border-emerald-200 bg-emerald-50 px-1.5 text-[10px] text-emerald-700">{summary.fulfillment_ready} 可以销售</Badge>
+      {summary.fulfillment_blocked > 0 ? <Badge variant="outline" className="h-5 border-red-200 bg-red-50 px-1.5 text-[10px] text-red-700">{summary.fulfillment_blocked} 暂不可销售</Badge> : null}
+      {summary.fulfillment_attention > 0 ? <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">{summary.fulfillment_attention} 需要注意</Badge> : null}
+      {summary.fulfillment_unknown > 0 ? <Badge variant="outline" className="h-5 border-slate-200 bg-slate-50 px-1.5 text-[10px] text-slate-600">{summary.fulfillment_unknown} 暂未获取</Badge> : null}
+      {summary.fulfillment_no_source > 0 ? <Badge variant="outline" className="h-5 border-red-200 bg-white px-1.5 text-[10px] text-red-700">{summary.fulfillment_no_source} 没有供货来源</Badge> : null}
       {summary.local_inventory_available > 0 ? <span>· {summary.local_inventory_available} Local</span> : null}
       {summary.requires_verification > 0 ? <Badge variant="outline" className="h-5 border-orange-200 bg-orange-50 px-1.5 text-[10px] text-orange-700">{summary.requires_verification} 待验证</Badge> : null}
       {summary.supplier_unbound > 0 ? <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">{summary.supplier_unbound} 未绑定</Badge> : null}
@@ -1466,7 +1466,7 @@ function ProductTable({
         <TableHeader className="sticky top-0 z-20 bg-slate-50 [&_th]:bg-slate-50">
           <TableRow>
             <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>Slug</TableHead>
+            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品网址标识</TableHead>
             <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
@@ -1533,7 +1533,7 @@ function ProductTable({
                       >
                         {product.name}
                       </div>
-                      {product.has_skus ? <Badge variant="outline" className="mt-1 h-5 border-blue-200 bg-blue-50 px-1.5 text-[10px] text-blue-700">多 SKU</Badge> : null}
+                      {product.has_skus ? <Badge variant="outline" className="mt-1 h-5 border-blue-200 bg-blue-50 px-1.5 text-[10px] text-blue-700">多商品规格</Badge> : null}
                       <ProductOperationsSummary product={product} />
                       {product.short_description && (
                         <div className="mt-0.5 truncate text-xs text-slate-500" title={product.short_description}>
@@ -1560,7 +1560,7 @@ function ProductTable({
                   ¥{product.price.toFixed(2)}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS, effectiveStock === 0 ? "text-red-600" : effectiveStock <= 5 ? "text-orange-600" : "text-green-600")}>
-                  <div>{product.has_skus ? `SKU 汇总库存（仅 Active） ${effectiveStock}` : `库存 ${effectiveStock}`}</div>
+                  <div>{product.has_skus ? `商品规格汇总库存（仅 Active） ${effectiveStock}` : `库存 ${effectiveStock}`}</div>
                   {product.metadata?.supplier_stock_sync_status === "synced" ? <div className="mt-0.5 text-[10px] font-normal text-blue-600" title={typeof product.metadata.supplier_stock_synced_at === "string" ? `最后同步：${formatAdminDate(product.metadata.supplier_stock_synced_at)}` : "供应商同步"}>供应商同步</div> : null}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>
@@ -1805,7 +1805,7 @@ function ProductFormDialog({
               </Field>
             </FormSection>
 
-            <FormSection title="价格与库存 / SKU" className="md:col-span-2">
+            <FormSection title="价格与库存 / 商品规格" className="md:col-span-2">
               <AdminProductSkuManager ref={skuManagerRef} product={product} refreshKey={skuRefreshKey}
                 defaults={{ price: form.price, original_price: form.original_price, stock: form.stock, delivery_type: form.delivery_type, status: form.status }}
                 onSummary={(summary) => { onSkuDirty(); onUpdate({ ...form, price: String(summary.price ?? form.price), stock: String(summary.stock) }); }}
