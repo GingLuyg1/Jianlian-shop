@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -115,7 +117,7 @@ export default function AdminUsersPage() {
         <AdminListStat label="本页风险账户" value={pageSummary.risk} tone={pageSummary.risk ? "warning" : "neutral"} />
         <AdminListStat label="本页余额合计" value={money(pageSummary.balance)} />
       </AdminListStats>
-      {!schemaReady ? <Notice>用户管理关键字段或 RPC 兼容合同尚未就绪；当前仅显示可以安全读取的资料。</Notice> : null}
+      {!schemaReady ? <Notice>用户管理关键字段或 数据库事务处理 兼容合同尚未就绪；当前仅显示可以安全读取的资料。</Notice> : null}
       {Object.keys(partialErrors).length ? <Notice>部分用户管理能力检查失败：{Object.values(partialErrors).join("、")}</Notice> : null}
 
       <AdminListSurface>
@@ -161,7 +163,7 @@ export default function AdminUsersPage() {
 
 function Select({ children, label, value, onChange }: { children: React.ReactNode; label: string; value: string; onChange: (value: string) => void }) { return <select aria-label={label} className={cn(adminListControlClass, "px-3")} value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>; }
 function Notice({ children }: { children: React.ReactNode }) { return <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{children}</div>; }
-function StatusBadge({ value, labels, kind }: { value: string; labels: Record<string, string>; kind: "account" | "risk" }) { const good = kind === "account" ? value === "active" : value === "normal"; const warn = kind === "account" ? value === "restricted" : value === "watch"; const tone: AdminStatusTone = good ? "success" : warn ? "warning" : "danger"; return <AdminStatusBadge tone={tone}>{labels[value] ?? value}</AdminStatusBadge>; }
+function StatusBadge({ value, labels, kind }: { value: string; labels: Record<string, string>; kind: "account" | "risk" }) { const good = kind === "account" ? value === "active" : value === "normal"; const warn = kind === "account" ? value === "restricted" : value === "watch"; const tone: AdminStatusTone = good ? "success" : warn ? "warning" : "danger"; return <AdminStatusBadge tone={tone}>{labels[value] ?? adminUnknownStatusLabel(value)}</AdminStatusBadge>; }
 function money(value: unknown) { const parsed = Number(value); return `¥${Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00"}`; }
 function formatDate(value: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }
 function normalizeFilter(value: string | null, labels: Record<string, string>) { return value && Object.hasOwn(labels, value) ? value : "all"; }

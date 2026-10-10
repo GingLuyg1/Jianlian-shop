@@ -21,7 +21,7 @@ test('actual refund loader ignores a slow old response after a fast filter switc
   assert.equal(state.error,'SAFE ERROR');assert.equal(state.total,0);assert.equal(state.loading,false);
 });
 test('actual global inventory search returns import_status and no card content',async()=>{
-  const search=loadTs('lib/admin/global-search.ts',{'@/lib/business/business-ids':{normalizeBusinessKeyword:v=>v,isUuid:()=>false,isLikelyBusinessNo:()=>false}});
+  const search=loadTs('lib/admin/global-search.ts',{'@/lib/admin/display-labels':loadTs('lib/admin/display-labels.ts',{}),'@/lib/business/business-ids':{normalizeBusinessKeyword:v=>v,isUuid:()=>false,isLikelyBusinessNo:()=>false}});
   const c={from(table){const q={select(columns){if(table==='digital_inventory_batches')assert.equal(columns,'id,batch_no,batch_name,import_status,total_count,available_count,created_at');return q;},or(){return q;},order(){return q;},limit(){return q;},in(){return q;},
     then(ok,bad){return Promise.resolve({data:table==='digital_inventory_batches'?[{id:'x',batch_no:'B_TEST',import_status:'completed',available_count:0,total_count:2}]:[],error:null}).then(ok,bad);}};return q;}};
   const result=await search.runAdminGlobalSearch(c,'B_TEST');const inventory=result.groups.find(g=>g.group==='inventory');

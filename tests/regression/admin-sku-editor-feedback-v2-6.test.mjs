@@ -6,10 +6,10 @@ const file = (name) => fs.readFileSync(new URL("../../" + name, import.meta.url)
 test("SKU table replaces duplicate price-stock form and preserves product sorting", () => {
   const page = file("app/admin/products/page.tsx");
   const editor = file("components/admin/products/AdminProductSkuManager.tsx");
-  assert.match(page, /title="价格与库存 \/ SKU"/);
-  assert.doesNotMatch(page, /title="SKU \/ 规格与供应商绑定"|title="价格与库存"/);
+  assert.match(page, /title="价格与库存 \/ 商品规格"/);
+  assert.doesNotMatch(page, /title="商品规格 \/ 规格与供应商绑定"|title="价格与库存"/);
   assert.match(page, /label="商品排序"/);
-  assert.match(editor, /\["名称", "Code", "价格", "库存", "交付方式", "状态", "绑定供货商"\]/);
+  assert.match(editor, /\["名称", "编码", "价格", "库存", "交付方式", "状态", "绑定供货商"\]/);
   assert.match(editor, /<table/);
   assert.match(editor, /h-8/);
   assert.match(editor, /<details/);

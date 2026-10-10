@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -198,7 +200,7 @@ function StatusBadge({ value }: { value: string }) {
   const good = value === "completed";
   const pending = ["requested", "verifying", "blocked", "approved", "processing"].includes(value);
   const tone: AdminStatusTone = good ? "success" : pending ? "warning" : "neutral";
-  return <AdminStatusBadge tone={tone}>{STATUS_LABELS[value] ?? value}</AdminStatusBadge>;
+  return <AdminStatusBadge tone={tone}>{STATUS_LABELS[value] ?? adminUnknownStatusLabel(value)}</AdminStatusBadge>;
 }
 function formatDate(value: string | null) {
   if (!value) return "—";

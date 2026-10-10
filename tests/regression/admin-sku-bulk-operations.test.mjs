@@ -49,19 +49,19 @@ test("bulk request contract exposes no force, override or arbitrary target statu
 
 test("Admin SKU manager provides scoped selection, preview, blocked reasons and safe confirmation", () => {
   const manager = file("components/admin/products/AdminProductSkuManager.tsx");
-  assert.match(manager, /已选择 \{selectedSkuIds\.size\} 个 SKU/);
-  assert.match(manager, /选择当前列表全部 SKU/);
+  assert.match(manager, /已选择 \{selectedSkuIds\.size\} 个商品规格/);
+  assert.match(manager, /选择当前列表全部商品规格/);
   assert.match(manager, />清除选择</);
   assert.match(manager, /previewProductSkuBulkAction/);
   assert.match(manager, /bulkPreview\.blocked_count/);
   assert.match(manager, /formatSkuActivationReasons\(item\.reasons\)/);
-  assert.match(manager, /确认激活 \$\{bulkPreview\.will_change_count\} 个 SKU/);
+  assert.match(manager, /确认激活 \$\{bulkPreview\.will_change_count\} 个商品规格/);
   assert.match(manager, /executeProductSkuBulkAction/);
   assert.match(manager, /bulkPreview\.will_change_count > 0/);
   assert.match(manager, /bulkPreview\.action === "activate"/);
   assert.match(manager, /setSelectedSkuIds\(new Set\(\)\)/);
   assert.match(manager, /await load\(\)/);
-  assert.match(manager, /catch \(error\)[\s\S]*?SKU 状态或履约条件可能已变化，请重新预检/);
+  assert.match(manager, /catch \(error\)[\s\S]*?商品规格状态或履约条件可能已变化，请重新预检/);
   assert.match(manager, /setBulkPreview\(await previewProductSkuBulkAction/);
   assert.match(manager, /onOpenChange=\{\(open\) => \{ if \(!open && !bulkBusy\) setBulkPreview\(null\); \}\}/);
   assert.match(manager, /previousProductId\.current !== productId/);

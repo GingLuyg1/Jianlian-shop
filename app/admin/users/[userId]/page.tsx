@@ -1,4 +1,6 @@
 "use client";
+import { businessTypeLabel, directionLabel, statusLabel, detailLabel } from '@/lib/admin/display-labels';
+
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -62,12 +64,12 @@ export default function AdminUserDetailPage() {
             {detail.errors && Object.keys(detail.errors).length ? <Notice>部分关联数据读取失败：{Object.values(detail.errors).join("、")}</Notice> : null}
 
             <AdminSection title={profile.email || profile.displayName || "用户账户"} description={profile.id} action={<div className="flex flex-wrap gap-2"><AdminStatusBadge tone={accountTone(profile.accountStatus)}>{ACCOUNT_LABELS[profile.accountStatus] ?? profile.accountStatus}</AdminStatusBadge><AdminStatusBadge tone={riskTone(profile.riskStatus)}>{RISK_LABELS[profile.riskStatus] ?? profile.riskStatus}</AdminStatusBadge></div>}>
-              <AdminInfoGrid columns={3}><AdminInfoItem label="当前余额" value={money(detail.summary.balance)} className="tabular-nums" /><AdminInfoItem label="角色" value={profile.role} /><AdminInfoItem label="最近活动" value={formatDate(profile.lastLoginAt)} /></AdminInfoGrid>
+              <AdminInfoGrid columns={3}><AdminInfoItem label="当前余额" value={money(detail.summary.balance)} className="tabular-nums" /><AdminInfoItem label="角色" value={detailLabel(profile.role)} /><AdminInfoItem label="最近活动" value={formatDate(profile.lastLoginAt)} /></AdminInfoGrid>
             </AdminSection>
 
             <div className="min-w-0 space-y-4">
               <div className="min-w-0 space-y-4">
-                <AdminSection title="基本资料" description="用户身份与账户事实"><AdminInfoGrid columns={3}><AdminInfoItem label="用户 ID" value={profile.id} mono /><AdminInfoItem label="邮箱" value={profile.email ?? "—"} /><AdminInfoItem label="显示名称" value={profile.displayName ?? "—"} /><AdminInfoItem label="角色" value={profile.role} /><AdminInfoItem label="注册时间" value={formatDate(profile.createdAt)} /><AdminInfoItem label="资料更新时间" value={formatDate(profile.updatedAt)} /></AdminInfoGrid></AdminSection>
+                <AdminSection title="基本资料" description="用户身份与账户事实"><AdminInfoGrid columns={3}><AdminInfoItem label="用户 ID" value={profile.id} mono /><AdminInfoItem label="邮箱" value={profile.email ?? "—"} /><AdminInfoItem label="显示名称" value={profile.displayName ?? "—"} /><AdminInfoItem label="角色" value={detailLabel(profile.role)} /><AdminInfoItem label="注册时间" value={formatDate(profile.createdAt)} /><AdminInfoItem label="资料更新时间" value={formatDate(profile.updatedAt)} /></AdminInfoGrid></AdminSection>
 
                 <AdminSection title="关联资源" description="使用现有列表筛选查看相关业务"><div className="divide-y divide-[var(--admin-v2-border)] px-4 pb-1 sm:px-5"><AdminRelatedLink icon={<ShoppingBag className="h-4 w-4" />} label="关联订单" detail={profile.email || userId} href={`/admin/orders?search=${relatedSearch}`} /><AdminRelatedLink icon={<CreditCard className="h-4 w-4" />} label="关联支付" detail={profile.email || userId} href={`/admin/payments?search=${relatedSearch}`} /><AdminRelatedLink icon={<WalletCards className="h-4 w-4" />} label="关联充值" detail={profile.email || userId} href={`/admin/recharges?search=${relatedSearch}`} /><AdminRelatedLink icon={<ShieldAlert className="h-4 w-4" />} label="关联风险" detail={userId} href={`/admin/risk?search=${encodeURIComponent(userId)}`} /></div></AdminSection>
 
@@ -81,8 +83,8 @@ export default function AdminUserDetailPage() {
 
               <aside className="grid min-w-0 gap-4 xl:grid-cols-3">
                 <AdminSection title="账户摘要" description="金额仅汇总当前接口返回的最近记录"><AdminInfoGrid><AdminInfoItem label="充值金额（最近记录）" value={money(detail.summary.totalRecharge)} className="tabular-nums" /><AdminInfoItem label="消费金额（最近记录）" value={money(detail.summary.totalSpend)} className="tabular-nums" /><AdminInfoItem label="当前余额" value={money(detail.summary.balance)} className="tabular-nums" /><AdminInfoItem label="账户 / 风险状态" value={`${ACCOUNT_LABELS[profile.accountStatus] ?? profile.accountStatus} / ${RISK_LABELS[profile.riskStatus] ?? profile.riskStatus}`} /></AdminInfoGrid></AdminSection>
-                <AdminSection title="账户状态时间线" description="最近状态变更"><AdminTimeline items={detail.statusHistory.map((row, index) => ({ id: String(row.id ?? index), title: `${safeText(row.old_status)} → ${safeText(row.new_status)}`, time: formatDate(typeof row.created_at === "string" ? row.created_at : null), actor: safeText(row.admin_email), message: safeText(row.reason) }))} empty={<AdminEmptyState title="暂无状态记录" className="min-h-[140px]" />} /></AdminSection>
-                <AdminSection title="风险状态时间线" description="最近风险标记变更"><AdminTimeline items={detail.riskRecords.map((row, index) => ({ id: String(row.id ?? index), title: `${safeText(row.old_risk_status)} → ${safeText(row.new_risk_status)}`, time: formatDate(typeof row.created_at === "string" ? row.created_at : null), actor: safeText(row.admin_email), message: safeText(row.reason) }))} empty={<AdminEmptyState title="暂无风险状态记录" className="min-h-[140px]" />} /></AdminSection>
+                <AdminSection title="账户状态时间线" description="最近状态变更"><AdminTimeline items={detail.statusHistory.map((row, index) => ({ id: String(row.id ?? index), title: `${statusLabel(row.old_status)} → ${statusLabel(row.new_status)}`, time: formatDate(typeof row.created_at === "string" ? row.created_at : null), actor: safeText(row.admin_email), message: safeText(row.reason) }))} empty={<AdminEmptyState title="暂无状态记录" className="min-h-[140px]" />} /></AdminSection>
+                <AdminSection title="风险状态时间线" description="最近风险标记变更"><AdminTimeline items={detail.riskRecords.map((row, index) => ({ id: String(row.id ?? index), title: `${statusLabel(row.old_risk_status)} → ${statusLabel(row.new_risk_status)}`, time: formatDate(typeof row.created_at === "string" ? row.created_at : null), actor: safeText(row.admin_email), message: safeText(row.reason) }))} empty={<AdminEmptyState title="暂无风险状态记录" className="min-h-[140px]" />} /></AdminSection>
               </aside>
             </div>
 
@@ -108,7 +110,7 @@ function RecordList({ rows, columns, moneyKeys = [], detailBase, icon }: { rows:
   );
 }
 function Notice({ children }: { children: React.ReactNode }) { return <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">{children}</div>; }
-function renderValue(key: string, value: unknown, moneyKeys: string[]) { if (moneyKeys.includes(key)) return money(value); if (/(?:At|_at)$/.test(key)) return formatDate(typeof value === "string" ? value : null); return safeText(value); }
+function renderValue(key: string, value: unknown, moneyKeys: string[]) { if (moneyKeys.includes(key)) return money(value); if (/(?:At|_at)$/.test(key)) return formatDate(typeof value === "string" ? value : null); if (key === 'businessType') return businessTypeLabel(value); if (key === 'direction') return directionLabel(value); if (/status$/i.test(key)) return statusLabel(value); return safeText(value); }
 function safeText(value: unknown) { if (value === null || value === undefined || value === "") return "—"; return typeof value === "string" ? value : String(value); }
 function money(value: unknown) { const parsed = Number(value); return `¥${Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00"}`; }
 function formatDate(value: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }

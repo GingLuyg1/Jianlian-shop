@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -74,7 +76,7 @@ export default function AdminPrivacyRequestDetailPage() {
         {error ? <AdminErrorState title="隐私请求详情加载失败" description={error} onRetry={() => void loadDetail()} /> : loading && !detail ? <AdminTableSkeleton rows={10} /> : detail && item ? (
           <div className="space-y-4">
             {detail.errors && Object.keys(detail.errors).length ? <Notice>部分关联数据读取失败：{Object.values(detail.errors).join("、")}</Notice> : null}
-            <AdminSection title={TYPE_LABELS[item.requestType] ?? item.requestType} description={item.requestNo || item.id} action={<AdminStatusBadge tone={statusTone(item.status)}>{STATUS_LABELS[item.status] ?? item.status}</AdminStatusBadge>}>
+            <AdminSection title={TYPE_LABELS[item.requestType] ?? item.requestType} description={item.requestNo || item.id} action={<AdminStatusBadge tone={statusTone(item.status)}>{STATUS_LABELS[item.status] ?? adminUnknownStatusLabel(item.status)}</AdminStatusBadge>}>
               <AdminInfoGrid columns={3}>
                 <AdminInfoItem label="申请人" value={item.userEmail || item.userLabel || "—"} secondary={item.userId || undefined} />
                 <AdminInfoItem label="提交时间" value={formatDate(item.createdAt)} />
@@ -92,7 +94,7 @@ export default function AdminPrivacyRequestDetailPage() {
                     <AdminInfoItem label="请求编号" value={item.requestNo || "—"} mono />
                     <AdminInfoItem label="请求 ID" value={item.id} mono />
                     <AdminInfoItem label="请求类型" value={TYPE_LABELS[item.requestType] ?? item.requestType} />
-                    <AdminInfoItem label="请求状态" value={STATUS_LABELS[item.status] ?? item.status} />
+                    <AdminInfoItem label="请求状态" value={STATUS_LABELS[item.status] ?? adminUnknownStatusLabel(item.status)} />
                     <AdminInfoItem label="关联用户" value={item.userLabel || item.userEmail || "—"} secondary={item.userId || undefined} />
                     <AdminInfoItem label="联系邮箱" value={item.userEmail || "—"} />
                     <AdminInfoItem label="用户申请说明" value={item.reasonDetail || "—"} />

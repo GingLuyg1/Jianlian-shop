@@ -57,7 +57,7 @@ const STATUS_OPTIONS = [
 
 const PURPOSE_OPTIONS = [
   ["product", "商品主图"],
-  ["sku", "SKU 图片"],
+  ["sku", "商品规格图片"],
   ["category", "分类图"],
   ["logo", "Logo"],
   ["favicon", "Favicon"],
@@ -196,7 +196,7 @@ export default function AdminMediaPage() {
     <AdminPageShell
       variant="v2"
       title="媒体资源"
-      description="集中上传、筛选和维护商品、SKU、分类及站点使用的图片资源。"
+      description="集中上传、筛选和维护商品、商品规格、分类及站点使用的图片资源。"
       actions={(
         <Button variant="outline" onClick={loadAssets} disabled={loading}>
           <RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> 刷新
@@ -238,7 +238,7 @@ export default function AdminMediaPage() {
             {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         <div className="col-span-full flex flex-wrap gap-2 text-xs text-[var(--admin-v2-text-muted)]">
-          <span>Owner 与状态由后端筛选。</span>
+          <span>归属 与状态由后端筛选。</span>
           <span>关键词只搜索当前已加载的 {assets.length} 条结果。</span>
         </div>
       </AdminFilterBar>
@@ -299,7 +299,7 @@ export default function AdminMediaPage() {
           <AdminEmptyState
             icon={<ImageIcon className="h-5 w-5" />}
             title={query.trim() ? "当前关键词没有匹配资源" : "暂无媒体资源"}
-            description={query.trim() ? "请调整当前结果关键词；Owner 与状态筛选仍由后端应用。" : "上传商品图、SKU 图、分类图或站点资源后，会显示在这里。"}
+            description={query.trim() ? "请调整当前结果关键词；归属 与状态筛选仍由后端应用。" : "上传商品图、商品规格图、分类图或站点资源后，会显示在这里。"}
           />
         )}
       </AdminListSurface>

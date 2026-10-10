@@ -51,9 +51,9 @@ const TEST_DATA_SCAN_RULES: TestDataScanRule[] = [
   { table: "profiles", label: "测试用户", fields: ["email", "display_name", "full_name"], note: "邮箱、昵称或显示名称命中测试关键字" },
   { table: "categories", label: "测试分类", fields: ["name", "slug", "description"], note: "分类名称、标识或说明命中测试关键字" },
   { table: "products", label: "测试商品", fields: ["name", "slug", "short_description", "description"], note: "商品名称、标识或说明命中测试关键字" },
-  { table: "product_skus", label: "测试 SKU", fields: ["sku_code", "title"], note: "SKU 编码或标题命中测试关键字" },
+  { table: "product_skus", label: "测试商品规格", fields: ["sku_code", "title"], note: "商品规格编码或标题命中测试关键字" },
   { table: "orders", label: "测试订单", fields: ["order_no", "customer_email", "customer_name", "customer_note", "admin_note"], note: "订单号、客户信息或备注命中测试关键字" },
-  { table: "payment_sessions", label: "测试支付会话", fields: ["payment_no", "provider", "channel_code", "provider_order_no", "provider_transaction_id"], note: "支付单号、Provider、渠道单号命中测试关键字" },
+  { table: "payment_sessions", label: "测试支付会话", fields: ["payment_no", "provider", "channel_code", "provider_order_no", "provider_transaction_id"], note: "支付单号、支付平台、渠道单号命中测试关键字" },
   { table: "account_recharges", label: "测试充值", fields: ["recharge_no", "payment_channel", "provider_transaction_id"], note: "充值单号、渠道或交易号命中测试关键字" },
   { table: "refund_requests", label: "测试退款", fields: ["refund_no", "reason", "admin_note"], note: "退款编号、原因或备注命中测试关键字" },
   { table: "balance_transactions", label: "测试余额流水", fields: ["business_no", "description"], note: "业务编号或说明命中测试关键字" },
@@ -156,13 +156,13 @@ async function loadConfigurationChecks(
   const suspectedCount = scans.reduce((sum, scan) => sum + (scan.suspectedCount ?? 0), 0);
 
   return [
-    item("database", "数据库结构状态", settingsCount.error ? "warning" : "pass", settingsCount.error || "关键配置表可读取。", "如提示缺表，请先执行已审核 migration。"),
+    item("database", "数据库结构状态", settingsCount.error ? "warning" : "pass", settingsCount.error || "关键配置表可读取。", "如提示缺表，请先执行已审核 数据库结构升级。"),
     item("super_admin", "超级管理员状态", (adminCount.count ?? 0) > 0 ? "pass" : "blocked", `管理员账号数量：${adminCount.count ?? "未知"}`, "缺少管理员时，请在 Supabase Auth 创建账号并设置 profiles.role=admin。"),
     item("site_config", "站点配置状态", (settingsCount.count ?? 0) > 0 ? "pass" : "warning", `站点配置记录：${settingsCount.count ?? "未知"}`, "上线前确认网站名称、域名、默认币种、默认时区、协议和公告。"),
-    item("payment", "支付配置状态", (enabledPaymentChannels.count ?? 0) > 0 ? "warning" : "pass", `已启用支付渠道：${enabledPaymentChannels.count ?? "未知"}`, "未接真实 Provider 前支付渠道应保持关闭；启用渠道需人工核对密钥和回调。"),
-    item("catalog", "商品与库存状态", (activeProductsCount.count ?? 0) > 0 ? "pass" : "warning", `商品总数：${productsCount.count ?? "未知"}；上架商品：${activeProductsCount.count ?? "未知"}；数字库存：${inventoryCount.count ?? "未知"}`, "上线前确认上架商品、SKU、库存和自动发货配置。"),
+    item("payment", "支付配置状态", (enabledPaymentChannels.count ?? 0) > 0 ? "warning" : "pass", `已启用支付渠道：${enabledPaymentChannels.count ?? "未知"}`, "未接真实 支付平台 前支付渠道应保持关闭；启用渠道需人工核对密钥和回调。"),
+    item("catalog", "商品与库存状态", (activeProductsCount.count ?? 0) > 0 ? "pass" : "warning", `商品总数：${productsCount.count ?? "未知"}；上架商品：${activeProductsCount.count ?? "未知"}；数字库存：${inventoryCount.count ?? "未知"}`, "上线前确认上架商品、商品规格、库存和自动发货配置。"),
     item("test_data", "测试数据风险", suspectedCount > 0 ? "warning" : "pass", `疑似测试记录：${suspectedCount}`, "疑似测试数据必须人工核对，不得自动删除真实业务数据。"),
-    item("hardcoded", "硬编码占位风险", "warning", "代码中保留空状态文案和未接入 Provider 降级，不生成假支付成功。", "上线前继续检查二维码、钱包地址、固定统计数字和测试密钥。"),
+    item("hardcoded", "代码固定值占位风险", "warning", "代码中保留空状态文案和未接入 支付平台 降级，不生成假支付成功。", "上线前继续检查二维码、钱包地址、固定统计数字和测试密钥。"),
   ];
 }
 

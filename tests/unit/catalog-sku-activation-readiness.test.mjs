@@ -173,11 +173,11 @@ test("SKU write routes enforce readiness before insert/update and expose structu
 test("Admin UI exposes multi-SKU stock semantics, readiness badges and activation confirmation", () => {
   const page = file("app/admin/products/page.tsx");
   const manager = file("components/admin/products/AdminProductSkuManager.tsx");
-  assert.match(page, />多 SKU</);
-  assert.match(page, /SKU 汇总库存/);
+  assert.match(page, />多商品规格</);
+  assert.match(page, /商品规格汇总库存/);
   assert.match(page, /供应商库存：未同步/);
   assert.match(manager, />库存待验证</);
-  assert.match(manager, /SKU 激活已阻止/);
-  assert.match(manager, /激活后该 SKU 将可能在前台进入可售范围/);
+  assert.match(manager, /商品规格激活已阻止/);
+  assert.match(manager, /激活后该商品规格将可能在前台进入可售范围/);
   assert.match(manager, /当前无可验证履约来源/);
 });

@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel } from '@/lib/admin/display-labels';
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Eye, RefreshCcw, Search } from "lucide-react";
@@ -181,8 +183,8 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
                   <Td mono>{row.payment_session_id ?? "—"}</Td>
                   <Td mono>{row.business_id ?? "—"}</Td>
                   <Td>{row.channel_code ?? "—"}</Td>
-                  <Td>{row.local_status ?? "—"}</Td>
-                  <Td>{row.provider_status ?? "—"}</Td>
+                  <Td>{statusLabel(row.local_status)}</Td>
+                  <Td>{statusLabel(row.provider_status)}</Td>
                   <Td>{formatMoney(row.local_amount, row.currency)}</Td>
                   <Td>{row.provider_amount === null ? "—" : formatMoney(row.provider_amount, row.currency)}</Td>
                   <Td><span className={cn(row.risk_level === "high" && "text-red-600")}>{getDifferenceTypeLabel(row.difference_type)}</span></Td>
@@ -191,7 +193,7 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
                   <Td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => loadDetail(row)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button>
-                      <Button variant="outline" size="sm" disabled={!row.provider || recheckingId === row.id || !["mismatched", "query_failed", "manual_review"].includes(row.result)} onClick={() => setPendingRecheck(row)} title={!row.provider ? "Provider 未配置，无法重新检查" : !["mismatched", "query_failed", "manual_review"].includes(row.result) ? "当前对账状态不允许重新检查" : "重新检查渠道状态"}><RefreshCcw className="mr-1 h-3.5 w-3.5" />重查</Button>
+                      <Button variant="outline" size="sm" disabled={!row.provider || recheckingId === row.id || !["mismatched", "query_failed", "manual_review"].includes(row.result)} onClick={() => setPendingRecheck(row)} title={!row.provider ? "支付平台 未配置，无法重新检查" : !["mismatched", "query_failed", "manual_review"].includes(row.result) ? "当前对账状态不允许重新检查" : "重新检查渠道状态"}><RefreshCcw className="mr-1 h-3.5 w-3.5" />重查</Button>
                     </div>
                   </Td>
                 </tr>
@@ -239,8 +241,8 @@ function ReconciliationDrawer({ selected, detail, detailLoading, detailError, on
           {!detailLoading && !detailError ? (
             <div className="space-y-4">
               {item.risk_level === "high" ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />高风险异常</div><p className="mt-1 text-xs">系统不会自动回滚余额、订单或已交付库存，请人工核查。</p></div> : null}
-              <DetailGroup title="本地支付信息" rows={[["业务类型", item.business_type === "recharge" ? "账户充值" : "商品订单"], ["支付会话", item.payment_session_id ?? "—"], ["业务单号", item.business_id ?? "—"], ["本地状态", item.local_status ?? "—"], ["本地金额", formatMoney(item.local_amount, item.currency)]]} />
-              <DetailGroup title="渠道查询摘要" rows={[["渠道", item.channel_code ?? "—"], ["Provider", item.provider ?? "—"], ["渠道状态", item.provider_status ?? "—"], ["渠道交易号", item.provider_trade_no ? "已脱敏保存" : "—"]]} />
+              <DetailGroup title="本地支付信息" rows={[["业务类型", item.business_type === "recharge" ? "账户充值" : "商品订单"], ["支付会话", item.payment_session_id ?? "—"], ["业务单号", item.business_id ?? "—"], ["本地状态", statusLabel(item.local_status)], ["本地金额", formatMoney(item.local_amount, item.currency)]]} />
+              <DetailGroup title="渠道查询摘要" rows={[["渠道", item.channel_code ?? "—"], ["Provider", item.provider ?? "—"], ["渠道状态", statusLabel(item.provider_status)], ["渠道交易号", item.provider_trade_no ? "已脱敏保存" : "—"]]} />
               <DetailGroup title="状态对比" rows={[["结果", getReconciliationResultLabel(item.result)], ["差异类型", getDifferenceTypeLabel(item.difference_type)], ["风险等级", getRiskLevelLabel(item.risk_level)]]} />
               <DetailGroup title="金额对比" rows={[["本地金额", formatMoney(item.local_amount, item.currency)], ["渠道金额", item.provider_amount === null ? "—" : formatMoney(item.provider_amount, item.currency)], ["币种", item.currency]]} />
               <DetailGroup title="恢复动作" rows={[["动作", item.recovery_action ?? "—"], ["状态", item.recovery_status ?? "—"], ["说明", item.recovery_error ?? "—"]]} />

@@ -1,4 +1,6 @@
 ﻿"use client";
+import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
@@ -178,7 +180,7 @@ export default function AdminCompensationsPage() {
                   <th className="px-3 py-2">失败步骤</th>
                   <th className="px-3 py-2">状态</th>
                   <th className="px-3 py-2">错误</th>
-                  <th className="px-3 py-2">Request ID</th>
+                  <th className="px-3 py-2">请求追踪编号</th>
                   <th className="px-3 py-2">尝试</th>
                   <th className="px-3 py-2">时间</th>
                   <th className="px-3 py-2">操作</th>
@@ -193,7 +195,7 @@ export default function AdminCompensationsPage() {
                       <td className="px-3 py-3 font-mono text-xs">{task.business_no ?? task.business_id ?? "-"}</td>
                       <td className="px-3 py-3">{task.operation ?? "-"}</td>
                       <td className="px-3 py-3">{task.failure_stage ?? "-"}</td>
-                      <td className="px-3 py-3">{STATUS_LABEL[String(task.status)] ?? task.status ?? "-"}</td>
+                      <td className="px-3 py-3">{STATUS_LABEL[String(task.status)] ?? adminUnknownStatusLabel(task.status) ?? "-"}</td>
                       <td className="max-w-[260px] px-3 py-3" title={task.error_summary ?? task.error_code ?? ""}>
                         <div className="truncate">{task.error_code ?? "-"} {task.error_summary ?? ""}</div>
                         {task.resolution_note ? <div className="mt-1 truncate text-xs text-slate-500">处置：{task.resolution_note}</div> : null}

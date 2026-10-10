@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel } from '@/lib/admin/display-labels';
+
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -25,23 +27,23 @@ const toDraft = (sku: AdminProductSku): Draft => ({ sku_title: sku.sku_title ?? 
 const payload = (draft: Draft): ProductSkuPayload => ({ sku_title: draft.sku_title.trim(), sku_code: draft.sku_code.trim(), price: Number(draft.price), stock: Number(draft.stock), original_price: draft.original_price === "" ? null : Number(draft.original_price), image_url: draft.image_url.trim() || null, sort_order: Number(draft.sort_order), status: draft.status, delivery_type: draft.delivery_type || null });
 
 const fulfillmentSourceLabel: Record<SkuOperationalDiagnostic["fulfillment_source"], string> = {
-  local_inventory: "Local", supplier: "Supplier", hybrid: "Hybrid", none: "No Source",
-  manual: "Manual", shipping: "Shipping", unknown: "Unknown",
+  local_inventory: "本地库存", supplier: "供应商", hybrid: "本地与供应商", none: "没有供货来源",
+  manual: "人工交付", shipping: "实物配送", unknown: "暂未获取",
 };
 const supplierStockLabel: Record<SkuOperationalDiagnostic["supplier_stock"]["state"], string> = {
-  fresh: "Fresh", stale: "Stale", error: "Error", unknown: "Unknown", not_applicable: "N/A",
+  fresh: "有效", stale: "已过期，需核查", error: "读取失败", unknown: "暂未获取", not_applicable: "不适用",
 };
 const diagnosticNextActionLabels: Record<string, string> = {
   RETRY_DIAGNOSTICS: "刷新诊断；若仍失败，请检查数据与读取权限",
-  VERIFY_STOCK: "核验 SKU 独立库存，不使用父商品库存替代",
-  ADD_LOCAL_INVENTORY_OR_BIND_SUPPLIER: "补充 SKU 级本地库存或确认供应商履约来源",
-  COMPLETE_SUPPLIER_BINDING: "确认 exact supplier product / SKU 和成本上限",
+  VERIFY_STOCK: "核验商品规格独立库存，不使用父商品库存替代",
+  ADD_LOCAL_INVENTORY_OR_BIND_SUPPLIER: "补充商品规格级本地库存或确认供应商履约来源",
+  COMPLETE_SUPPLIER_BINDING: "确认 准确的供应商商品与商品规格和成本上限",
   REFRESH_SUPPLIER_STOCK_EVIDENCE: "通过另行授权的流程核验供应商库存快照",
   VERIFY_INVENTORY: "人工核验库存和履约证据",
 };
 
 function SkuOperationalDiagnostics({ diagnostic }: { diagnostic?: SkuOperationalDiagnostic }) {
-  if (!diagnostic) return <Badge variant="outline" className="mt-1 border-slate-200 text-slate-500">Diagnostics Unknown</Badge>;
+  if (!diagnostic) return <Badge variant="outline" className="mt-1 border-slate-200 text-slate-500">暂未获取库存诊断</Badge>;
   const healthClass = diagnostic.health === "ready"
     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
     : diagnostic.health === "blocked"
@@ -51,13 +53,13 @@ function SkuOperationalDiagnostics({ diagnostic }: { diagnostic?: SkuOperational
         : "border-slate-200 bg-slate-50 text-slate-600";
   return <div className="mt-1 space-y-1 text-[10px] leading-4 text-slate-600">
     <div className="flex flex-wrap gap-1">
-      <Badge variant="outline" className={`h-5 px-1.5 text-[10px] ${healthClass}`}>{diagnostic.health.toUpperCase()}</Badge>
-      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Fulfillment {fulfillmentSourceLabel[diagnostic.fulfillment_source]}</Badge>
-      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Local {diagnostic.local_inventory.state === "error" ? "读取失败" : diagnostic.local_inventory.available_count}</Badge>
-      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Supplier {diagnostic.supplier.bound ? "Bound" : "Unbound"}</Badge>
-      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Snapshot {supplierStockLabel[diagnostic.supplier_stock.state]}</Badge>
-      {diagnostic.verification.required ? <Badge variant="outline" title="Verification Required" className="h-5 border-orange-200 bg-orange-50 px-1.5 text-[10px] text-orange-700">库存待验证</Badge> : null}
-      <Badge variant="outline" className={`h-5 px-1.5 text-[10px] ${diagnostic.activation.ready ? "border-emerald-200 text-emerald-700" : "border-red-200 text-red-700"}`}>Activation {diagnostic.activation.ready ? "Ready" : "Blocked"}</Badge>
+      <Badge variant="outline" className={`h-5 px-1.5 text-[10px] ${healthClass}`}>{statusLabel(diagnostic.health)}</Badge>
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">交付来源 {fulfillmentSourceLabel[diagnostic.fulfillment_source]}</Badge>
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">本地库存 {diagnostic.local_inventory.state === "error" ? "读取失败" : diagnostic.local_inventory.available_count}</Badge>
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">供应商绑定 {diagnostic.supplier.bound ? "已绑定" : "未绑定"}</Badge>
+      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">库存信息 {supplierStockLabel[diagnostic.supplier_stock.state]}</Badge>
+      {diagnostic.verification.required ? <Badge variant="outline" title="需要核验库存" className="h-5 border-orange-200 bg-orange-50 px-1.5 text-[10px] text-orange-700">库存待验证</Badge> : null}
+      <Badge variant="outline" className={`h-5 px-1.5 text-[10px] ${diagnostic.activation.ready ? "border-emerald-200 text-emerald-700" : "border-red-200 text-red-700"}`}>上架条件 {diagnostic.activation.ready ? "符合要求" : "不符合要求"}</Badge>
     </div>
     {diagnostic.activation.reasons.length || diagnostic.diagnostic_issues.length ? <details>
       <summary className="cursor-pointer font-medium text-slate-600">诊断详情</summary>
@@ -108,7 +110,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
         });
         return [...persisted, ...current.filter((row) => !row.sku && row.key !== "legacy" && !isSkuDraftEmpty(row.draft)), emptyRow()];
       });
-    } catch (error) { setDiagnostics(null); setLoadError(error instanceof Error ? error.message : "SKU 读取失败"); }
+    } catch (error) { setDiagnostics(null); setLoadError(error instanceof Error ? error.message : "商品规格读取失败"); }
     finally { setLoading(false); }
   }, [productId]);
   useEffect(() => {
@@ -123,12 +125,12 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   useEffect(() => { if (refreshKey) void load(); }, [load, refreshKey]);
 
   function validate() {
-    if (loading || loadError || flight.current) { toast.warning("请等待 SKU 读取完成后再保存"); return false; }
+    if (loading || loadError || flight.current) { toast.warning("请等待商品规格读取完成后再保存"); return false; }
     const next = Object.fromEntries(rowsRef.current.filter((row) => row.sku || !isSkuDraftEmpty(row.draft)).map((row) => [row.key, validateSkuDraft(row.draft)]));
     setErrors(next);
-    if (Object.values(next).some((fields) => Object.keys(fields).length)) { toast.warning("请补全标红的 SKU 字段"); return false; }
+    if (Object.values(next).some((fields) => Object.keys(fields).length)) { toast.warning("请补全标红的商品规格字段"); return false; }
     const codes = rowsRef.current.filter((row) => row.sku || !isSkuDraftEmpty(row.draft)).map((row) => row.draft.sku_code.trim().toLowerCase());
-    if (new Set(codes).size !== codes.length) { toast.warning("SKU Code 不能重复"); return false; }
+    if (new Set(codes).size !== codes.length) { toast.warning("商品规格编码不能重复"); return false; }
     return true;
   }
 
@@ -157,7 +159,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     const candidates = activationCandidates();
     if (!candidates.length) { setActivationBlocked([]); return true; }
     const blocked = candidates.filter((candidate) => !candidate.readiness.ready).map((candidate) => ({
-      code: candidate.row.draft.sku_code || candidate.row.draft.sku_title || "新 SKU",
+      code: candidate.row.draft.sku_code || candidate.row.draft.sku_title || "新商品规格",
       stock: candidate.readiness.stock,
       supplierBound: candidate.readiness.supplier.binding_complete,
       localAvailable: candidate.readiness.local_available_count,
@@ -166,7 +168,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     }));
     if (blocked.length) {
       setActivationBlocked(blocked);
-      toast.error("SKU 激活条件未满足，请先处理下方 readiness 问题");
+      toast.error("商品规格激活条件未满足，请先处理下方 就绪检查 问题");
       return false;
     }
     setActivationBlocked([]);
@@ -190,7 +192,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     resolve?.(confirmed);
   }
   async function saveAll(savedProduct: AdminProduct) {
-    if (!validate()) throw new Error("SKU 尚未填写完整");
+    if (!validate()) throw new Error("商品规格尚未填写完整");
     flight.current = true; setBusy(true);
     try {
       const operations: ProductSkuWorkspaceOperation[] = buildSkuWorkspaceOperations({
@@ -208,11 +210,11 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       setActivationBlocked([]);
       setSelectedSkuIds((current) => new Set(Array.from(current).filter((id) => result.skus.some((sku) => sku.id === id))));
       onSummary({ price: result.product_summary.price, stock: result.product_summary.stock });
-      toast.success(`SKU 已保存：新增 ${result.created_count}，更新 ${result.updated_count}`);
+      toast.success(`商品规格已保存：新增 ${result.created_count}，更新 ${result.updated_count}`);
     } catch (error) {
       if (error instanceof ProductSkuWorkspaceError || error instanceof SkuWorkspaceInputError) {
         if (error.code === "SKU_WORKSPACE_STALE") {
-          toast.error("SKU 已被其他操作修改，请刷新后重新确认");
+          toast.error("商品规格已被其他操作修改，请刷新后重新确认");
         } else if (error instanceof ProductSkuWorkspaceError && error.code === "SKU_ACTIVATION_NOT_READY") {
           setActivationBlocked(error.blockedItems.map((item) => ({
             code: item.sku_code ?? item.sku_id ?? "SKU",
@@ -222,7 +224,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
             inventoryState: null,
             reasons: item.reasons,
           })));
-          toast.error("SKU 激活条件未满足，请先处理下方 readiness 问题");
+          toast.error("商品规格激活条件未满足，请先处理下方 就绪检查 问题");
         }
       }
       throw error;
@@ -243,8 +245,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       const next = ensureTrailingEmptySkuRow(rowsRef.current.filter((row) => row.key !== deleting.key), emptyRow);
       rowsRef.current = next; setRows(next);
       onSummary(deriveSkuProductSummary(next.filter((row) => !isSkuDraftEmpty(row.draft)).map((row) => row.draft)));
-      toast.success("SKU 已删除"); setDeleting(null);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "SKU 删除失败"); }
+      toast.success("商品规格已删除"); setDeleting(null);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "商品规格删除失败"); }
     finally { flight.current = false; setBusy(false); }
   }
 
@@ -259,7 +261,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   async function openBulkPreview(action: ProductSkuBulkAction) {
     if (!product || selectedSkuIds.size === 0 || bulkBusy || busy) return;
     if (rowsRef.current.some((row) => row.sku && selectedSkuIds.has(row.sku.id) && row.draft.touched)) {
-      toast.warning("选中的 SKU 有未保存修改，请先保存或刷新后再批量操作");
+      toast.warning("选中的商品规格有未保存修改，请先保存或刷新后再批量操作");
       return;
     }
     setBulkBusy(true);
@@ -287,7 +289,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       setBulkPreview(null);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? `${error.message}；SKU 状态或履约条件可能已变化，请重新预检` : "批量更新失败；请重新预检");
+      toast.error(error instanceof Error ? `${error.message}；商品规格状态或履约条件可能已变化，请重新预检` : "批量更新失败；请重新预检");
       try {
         const selected = bulkPreview.items.map((item) => item.sku_id);
         setBulkPreview(await previewProductSkuBulkAction(product.id, selected, bulkPreview.action));
@@ -307,46 +309,46 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   const operationalSummary = diagnostics?.operational_summary;
   const visibleSkuIds = rows.flatMap((row) => row.sku ? [row.sku.id] : []);
   const allVisibleSelected = visibleSkuIds.length > 0 && visibleSkuIds.every((id) => selectedSkuIds.has(id));
-  const bulkActionLabel: Record<ProductSkuBulkAction, string> = { set_draft: "批量设为 Draft", set_sold_out: "批量设为 Sold Out", activate: "批量 Activate" };
+  const bulkActionLabel: Record<ProductSkuBulkAction, string> = { set_draft: "批量设为 草稿", set_sold_out: "批量设为 售罄", activate: "批量 上架" };
 
   return <div className="min-w-0 space-y-2">
     <div className="flex justify-end"><Button type="button" size="sm" variant="ghost" disabled={loading || busy || bulkBusy} onClick={() => void load()}><RefreshCw className="mr-1 h-3.5 w-3.5" />刷新</Button></div>
     {loadError ? <p role="alert" className="text-sm text-red-600">{loadError}</p> : null}
     {(product?.has_skus || readinessSummary.total > 0) ? <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
-      <div className="font-semibold text-slate-900">Fulfillment / Inventory diagnostics</div>
+      <div className="font-semibold text-slate-900">交付与库存诊断</div>
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-        <span>{readinessSummary.total} 个 SKU</span><span>{readinessSummary.active} active</span><span>{readinessSummary.draft} draft</span>
+        <span>{readinessSummary.total} 个商品规格</span><span>{readinessSummary.active} 已上架</span><span>{readinessSummary.draft} 草稿</span>
         <span>{readinessSummary.zero_stock} 零库存</span><span>{readinessSummary.supplier_unbound} 未绑定供应商</span>
         <span>{readinessSummary.requires_verification} 待库存验证</span><span>{readinessSummary.local_inventory_available} 个具有本地库存</span>
-        {operationalSummary ? <><span>{operationalSummary.ready} Ready</span><span>{operationalSummary.attention} Attention</span><span>{operationalSummary.blocked} Blocked</span><span>{operationalSummary.unknown} Unknown</span><span>{operationalSummary.supplier_bound} Supplier Bound</span></> : null}
+        {operationalSummary ? <><span>{operationalSummary.ready} 可以销售</span><span>{operationalSummary.attention} 需要注意</span><span>{operationalSummary.blocked} 暂不可销售</span><span>{operationalSummary.unknown} 暂未获取</span><span>{operationalSummary.supplier_bound} 已绑定供应商</span></> : null}
       </div>
-      {readinessSummary.no_verified_source > 0 ? <div className="mt-1 font-medium text-amber-800">{readinessSummary.no_verified_source} 个 SKU 当前无可验证履约来源。未绑定供应商不一定是错误；SKU 级本地可用库存也可以构成履约来源。</div> : null}
-      <div className="mt-2 border-t border-slate-200 pt-2 text-[10px] text-slate-500">Ready：满足当前 activation readiness；Blocked：当前不能安全激活；Supplier Stale：供应商快照已被现有 freshness contract 标记陈旧；Verification Required：需人工确认；No Source：automatic SKU 无本地库存或可信 supplier 来源。</div>
+      {readinessSummary.no_verified_source > 0 ? <div className="mt-1 font-medium text-amber-800">{readinessSummary.no_verified_source} 个商品规格当前无可验证履约来源。未绑定供应商不一定是错误；商品规格级本地可用库存也可以构成履约来源。</div> : null}
+      <div className="mt-2 border-t border-slate-200 pt-2 text-[10px] text-slate-500">可以销售：满足当前 上架条件；暂不可销售：当前不能安全激活；供应商库存信息已过期：供应商快照已被现有 有效期规则 标记陈旧；需要人工核验：需人工确认；No Source：自动交付商品规格无本地库存或可信 供应商 来源。</div>
     </div> : null}
-    {activationBlocked.length ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><div className="font-semibold">SKU 激活已阻止</div>{activationBlocked.map((item) => <div key={item.code}><span className="font-mono">{item.code}</span>：库存 {item.stock}；SKU 供应商绑定 {item.supplierBound ? "完整" : "未完整"}；本地可用库存 {item.localAvailable}；库存验证 {item.inventoryState === "requires_verification" ? "待验证" : "无待验证标记"}；{formatSkuActivationReasons(item.reasons)}</div>)}</div> : null}
+    {activationBlocked.length ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><div className="font-semibold">商品规格激活已阻止</div>{activationBlocked.map((item) => <div key={item.code}><span className="font-mono">{item.code}</span>：库存 {item.stock}；商品规格供应商绑定 {item.supplierBound ? "完整" : "未完整"}；本地可用库存 {item.localAvailable}；库存验证 {item.inventoryState === "requires_verification" ? "待验证" : "无待验证标记"}；{formatSkuActivationReasons(item.reasons)}</div>)}</div> : null}
     {selectedSkuIds.size > 0 ? <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950">
-      <span className="font-semibold">已选择 {selectedSkuIds.size} 个 SKU</span>
-      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("set_draft")}>设为 Draft</Button>
-      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("set_sold_out")}>设为 Sold Out</Button>
-      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("activate")}>预检 Activate</Button>
+      <span className="font-semibold">已选择 {selectedSkuIds.size} 个商品规格</span>
+      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("set_draft")}>设为 草稿</Button>
+      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("set_sold_out")}>设为 售罄</Button>
+      <Button type="button" size="sm" variant="outline" disabled={busy || bulkBusy} onClick={() => void openBulkPreview("activate")}>预检 上架</Button>
       <Button type="button" size="sm" variant="ghost" disabled={busy || bulkBusy} onClick={() => setSelectedSkuIds(new Set())}>清除选择</Button>
     </div> : null}
     {diagnostics && (!diagnostics.schema_ready || diagnostics.legacy_expected_count > 0 || diagnostics.supplier_rows.some((row) => row.supplier_expected)) ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-      <div className="font-semibold">Catalog / SKU readiness</div>
-      {!diagnostics.schema_ready ? <div>SKU schema 未就绪；所有 SKU 写入会 fail closed，需先执行已审核 migration。</div> : null}
-      {diagnostics.legacy_db_sku_missing ? <div>Legacy SKU 尚未完整写入数据库：{diagnostics.legacy_missing_codes.join("、")}</div> : null}
-      {diagnostics.legacy_expected_count > 0 && !diagnostics.legacy_db_sku_missing ? <div>Legacy SKU 已完整迁移到数据库。</div> : null}
-      {diagnostics.supplier_unbound_count > 0 ? <div>{diagnostics.supplier_unbound_count} 个 SKU 尚未绑定 exact supplier SKU。</div> : null}
-      {diagnostics.supplier_problem_count > 0 ? <div>{diagnostics.supplier_problem_count} 个 SKU 的 supplier stock 为 stale / partial / error；网站保留 last-known-good stock。</div> : null}
+      <div className="font-semibold">Catalog / 商品规格就绪检查</div>
+      {!diagnostics.schema_ready ? <div>商品规格数据库结构 未就绪；所有商品规格写入会 为安全起见停止操作，需先执行已审核 数据库结构升级。</div> : null}
+      {diagnostics.legacy_db_sku_missing ? <div>旧版商品规格尚未完整写入数据库：{diagnostics.legacy_missing_codes.join("、")}</div> : null}
+      {diagnostics.legacy_expected_count > 0 && !diagnostics.legacy_db_sku_missing ? <div>旧版商品规格已完整迁移到数据库。</div> : null}
+      {diagnostics.supplier_unbound_count > 0 ? <div>{diagnostics.supplier_unbound_count} 个商品规格尚未绑定 准确的 供应商商品规格。</div> : null}
+      {diagnostics.supplier_problem_count > 0 ? <div>{diagnostics.supplier_problem_count} 个商品规格的 供应商 stock 为 stale / partial / error；网站保留 last-known-good stock。</div> : null}
     </div> : null}
-    {loading ? <div className="flex items-center gap-2 py-4 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />正在读取 SKU</div> : <div className="max-w-full overflow-x-auto rounded-lg border border-slate-200">
+    {loading ? <div className="flex items-center gap-2 py-4 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />正在读取商品规格</div> : <div className="max-w-full overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full min-w-[900px] table-fixed text-left text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-slate-600"><tr><th className="w-10 px-2 py-2"><Checkbox aria-label="选择当前列表全部 SKU" checked={allVisibleSelected} disabled={visibleSkuIds.length === 0 || busy || bulkBusy} onCheckedChange={(checked) => setSelectedSkuIds(checked === true ? new Set(visibleSkuIds) : new Set())} /></th>{["名称", "Code", "价格", "库存", "交付方式", "状态", "绑定供货商"].map((label) => <th key={label} className="px-2 py-2 text-left font-medium last:w-[190px]">{label}</th>)}</tr></thead>
+        <thead className="sticky top-0 bg-slate-50 text-slate-600"><tr><th className="w-10 px-2 py-2"><Checkbox aria-label="选择当前列表全部商品规格" checked={allVisibleSelected} disabled={visibleSkuIds.length === 0 || busy || bulkBusy} onCheckedChange={(checked) => setSelectedSkuIds(checked === true ? new Set(visibleSkuIds) : new Set())} /></th>{["名称", "编码", "价格", "库存", "交付方式", "状态", "绑定供货商"].map((label) => <th key={label} className="px-2 py-2 text-left font-medium last:w-[190px]">{label}</th>)}</tr></thead>
         <tbody>{rows.map((row) => <tr key={row.key} className="border-t border-slate-100 align-top hover:bg-slate-50/50">
-          <td className="p-2"><Checkbox aria-label={`选择 SKU ${row.draft.sku_code || row.draft.sku_title || "未保存"}`} checked={row.sku ? selectedSkuIds.has(row.sku.id) : false} disabled={!row.sku || busy || bulkBusy} onCheckedChange={(checked) => { if (row.sku) toggleSkuSelection(row.sku.id, checked === true); }} /></td>
-          {(["sku_title", "sku_code", "price", "stock"] as const).map((key) => <td key={key} className="p-2"><Input aria-label={key === "sku_title" ? "SKU 名称" : key === "sku_code" ? "SKU Code" : key === "price" ? "售价" : "库存"} aria-invalid={Boolean(errors[row.key]?.[key])} className="h-8 px-2 text-xs" type={key === "price" || key === "stock" ? "number" : "text"} min="0" step={key === "price" ? "0.01" : "1"} value={row.draft[key]} placeholder={key === "sku_title" ? "SKU 名称" : key === "sku_code" ? "SKU Code" : ""} disabled={busy} onChange={(e) => change(row, key, e.target.value)} />{errors[row.key]?.[key] ? <p className="mt-1 text-red-600">{errors[row.key][key]}</p> : null}</td>)}
-          <td className="p-2"><select aria-label="SKU 交付方式" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.delivery_type} disabled={busy} onChange={(e) => change(row, "delivery_type", e.target.value)}><option value="">继承商品</option><option value="manual">人工处理</option><option value="automatic">自动发货</option><option value="shipping">物流发货</option></select></td>
-          <td className="p-2"><select aria-label="SKU 状态" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.status} disabled={busy} onChange={(e) => change(row, "status", e.target.value)}><option value="active">启用</option><option value="inactive">停用</option><option value="sold_out">售罄</option><option value="draft">草稿</option></select></td>
+          <td className="p-2"><Checkbox aria-label={`选择商品规格 ${row.draft.sku_code || row.draft.sku_title || "未保存"}`} checked={row.sku ? selectedSkuIds.has(row.sku.id) : false} disabled={!row.sku || busy || bulkBusy} onCheckedChange={(checked) => { if (row.sku) toggleSkuSelection(row.sku.id, checked === true); }} /></td>
+          {(["sku_title", "sku_code", "price", "stock"] as const).map((key) => <td key={key} className="p-2"><Input aria-label={key === "sku_title" ? "商品规格名称" : key === "sku_code" ? "商品规格编码" : key === "price" ? "售价" : "库存"} aria-invalid={Boolean(errors[row.key]?.[key])} className="h-8 px-2 text-xs" type={key === "price" || key === "stock" ? "number" : "text"} min="0" step={key === "price" ? "0.01" : "1"} value={row.draft[key]} placeholder={key === "sku_title" ? "商品规格名称" : key === "sku_code" ? "商品规格编码" : ""} disabled={busy} onChange={(e) => change(row, key, e.target.value)} />{errors[row.key]?.[key] ? <p className="mt-1 text-red-600">{errors[row.key][key]}</p> : null}</td>)}
+          <td className="p-2"><select aria-label="商品规格交付方式" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.delivery_type} disabled={busy} onChange={(e) => change(row, "delivery_type", e.target.value)}><option value="">继承商品</option><option value="manual">人工处理</option><option value="automatic">自动发货</option><option value="shipping">物流发货</option></select></td>
+          <td className="p-2"><select aria-label="商品规格状态" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.status} disabled={busy} onChange={(e) => change(row, "status", e.target.value)}><option value="active">启用</option><option value="inactive">停用</option><option value="sold_out">售罄</option><option value="draft">草稿</option></select></td>
           <td className="p-2">{row.sku && product ? <Button type="button" variant="outline" className="h-8 w-full justify-start px-2 text-xs" disabled={busy} onClick={() => onSupplierBinding(product, row.sku!)}>{row.sku.metadata?.supplier === "daju" ? `大橘 #${String(row.sku.metadata.supplier_product_id)} · ${String(row.sku.metadata.supplier_sku ?? "无规格")}` : "未绑定 · 绑定"}</Button> : <span className="inline-flex h-8 items-center text-slate-400">保存后绑定</span>}
             {row.sku ? <SkuOperationalDiagnostics diagnostic={operationalBySku.get(row.sku.id)} /> : null}
             {!isSkuDraftEmpty(row.draft) ? <details className="mt-1" open={errors[row.key]?.original_price || errors[row.key]?.sort_order ? true : undefined}>
@@ -354,8 +356,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
               <div className="mt-2 space-y-2">
                 <Input aria-label="原价" aria-invalid={Boolean(errors[row.key]?.original_price)} disabled={busy} className="h-8 px-2 text-xs" placeholder="原价（可选）" value={row.draft.original_price} onChange={(e) => change(row, "original_price", e.target.value)} />
                 {errors[row.key]?.original_price ? <p className="text-red-600">{errors[row.key].original_price}</p> : null}
-                <Input aria-label="SKU 图片" disabled={busy} className="h-8 px-2 text-xs" placeholder="SKU 图片 URL（可选）" value={row.draft.image_url} onChange={(e) => change(row, "image_url", e.target.value)} />
-                <Input aria-label="SKU 排序" aria-invalid={Boolean(errors[row.key]?.sort_order)} disabled={busy} className="h-8 px-2 text-xs" type="number" min="0" value={row.draft.sort_order} onChange={(e) => change(row, "sort_order", e.target.value)} />
+                <Input aria-label="商品规格图片" disabled={busy} className="h-8 px-2 text-xs" placeholder="商品规格图片 URL（可选）" value={row.draft.image_url} onChange={(e) => change(row, "image_url", e.target.value)} />
+                <Input aria-label="商品规格排序" aria-invalid={Boolean(errors[row.key]?.sort_order)} disabled={busy} className="h-8 px-2 text-xs" type="number" min="0" value={row.draft.sort_order} onChange={(e) => change(row, "sort_order", e.target.value)} />
                 {errors[row.key]?.sort_order ? <p className="text-red-600">{errors[row.key].sort_order}</p> : null}
                 {product && row.sku ? <Button type="button" size="sm" variant="ghost" disabled={busy} className="text-red-600" onClick={() => setDeleting(row)}>删除</Button> : null}
               </div>
@@ -364,16 +366,16 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
         </tr>)}</tbody>
       </table>
     </div>}
-    <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open && !busy) setDeleting(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>删除 SKU</AlertDialogTitle><AlertDialogDescription>确认删除“{deleting?.draft.sku_title}”？若已有订单引用，服务端会阻止删除。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={busy}>取消</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={(event) => { event.preventDefault(); void removeRow(); }}>确认删除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-    <AlertDialog open={Boolean(activationConfirmation)} onOpenChange={(open) => { if (!open && activationConfirmationResolver.current) resolveActivationConfirmation(false); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认激活 SKU</AlertDialogTitle><AlertDialogDescription>激活后该 SKU 将可能在前台进入可售范围。请再次确认库存和履约来源。</AlertDialogDescription></AlertDialogHeader><div className="space-y-1 text-sm">{activationConfirmation?.map((item) => <div key={item.code}><span className="font-mono">{item.code}</span> · 库存 {item.stock} · 来源 {item.source === "supplier" ? "精确供应商绑定" : "SKU 级本地库存"} · 供应商绑定 {item.supplierBound ? "完整" : "未完整"} · 本地可用 {item.localAvailable} · 验证状态 {item.inventoryState === "requires_verification" ? "待验证" : "通过现有证据"}</div>)}</div><AlertDialogFooter><AlertDialogCancel disabled={busy} onClick={() => resolveActivationConfirmation(false)}>取消</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={(event) => { event.preventDefault(); resolveActivationConfirmation(true); }}>确认激活并保存</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-    <AlertDialog open={Boolean(bulkPreview)} onOpenChange={(open) => { if (!open && !bulkBusy) setBulkPreview(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{bulkPreview ? bulkActionLabel[bulkPreview.action] : "批量 SKU 操作"}</AlertDialogTitle><AlertDialogDescription>{bulkPreview?.action === "activate" ? "激活会使这些 SKU 进入可售状态；执行前服务端仍会重新读取并校验。" : "执行前服务端会重新读取全部 SKU，不会沿用预检作为授权。"}</AlertDialogDescription></AlertDialogHeader>
+    <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open && !busy) setDeleting(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>删除商品规格</AlertDialogTitle><AlertDialogDescription>确认删除“{deleting?.draft.sku_title}”？若已有订单引用，服务端会阻止删除。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={busy}>取消</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={(event) => { event.preventDefault(); void removeRow(); }}>确认删除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <AlertDialog open={Boolean(activationConfirmation)} onOpenChange={(open) => { if (!open && activationConfirmationResolver.current) resolveActivationConfirmation(false); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>确认激活商品规格</AlertDialogTitle><AlertDialogDescription>激活后该商品规格将可能在前台进入可售范围。请再次确认库存和履约来源。</AlertDialogDescription></AlertDialogHeader><div className="space-y-1 text-sm">{activationConfirmation?.map((item) => <div key={item.code}><span className="font-mono">{item.code}</span> · 库存 {item.stock} · 来源 {item.source === "supplier" ? "精确供应商绑定" : "商品规格级本地库存"} · 供应商绑定 {item.supplierBound ? "完整" : "未完整"} · 本地可用 {item.localAvailable} · 验证状态 {item.inventoryState === "requires_verification" ? "待验证" : "通过现有证据"}</div>)}</div><AlertDialogFooter><AlertDialogCancel disabled={busy} onClick={() => resolveActivationConfirmation(false)}>取消</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={(event) => { event.preventDefault(); resolveActivationConfirmation(true); }}>确认激活并保存</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <AlertDialog open={Boolean(bulkPreview)} onOpenChange={(open) => { if (!open && !bulkBusy) setBulkPreview(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{bulkPreview ? bulkActionLabel[bulkPreview.action] : "批量商品规格操作"}</AlertDialogTitle><AlertDialogDescription>{bulkPreview?.action === "activate" ? "激活会使这些商品规格进入可售状态；执行前服务端仍会重新读取并校验。" : "执行前服务端会重新读取全部商品规格，不会沿用预检作为授权。"}</AlertDialogDescription></AlertDialogHeader>
       {bulkPreview ? <div className="space-y-3 text-sm">
         <div className="grid grid-cols-2 gap-2 rounded-md bg-slate-50 p-3"><span>已选：{bulkPreview.selected_count}</span><span>将修改：{bulkPreview.will_change_count}</span><span>无需修改：{bulkPreview.no_change_count}</span><span>被阻止：{bulkPreview.blocked_count}</span></div>
-        {bulkPreview.action === "activate" ? <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-3">{bulkPreview.items.map((item) => <div key={item.sku_id} className={item.disposition === "blocked" ? "text-red-800" : "text-emerald-800"}><span className="font-mono">{item.sku_code ?? item.sku_id}</span>：{item.disposition === "blocked" ? `BLOCKED · ${formatSkuActivationReasons(item.reasons)}` : item.disposition === "no_change" ? "NO_CHANGE · 已是 active" : "READY"}</div>)}</div> : null}
+        {bulkPreview.action === "activate" ? <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-3">{bulkPreview.items.map((item) => <div key={item.sku_id} className={item.disposition === "blocked" ? "text-red-800" : "text-emerald-800"}><span className="font-mono">{item.sku_code ?? item.sku_id}</span>：{item.disposition === "blocked" ? `不可执行 · ${formatSkuActivationReasons(item.reasons)}` : item.disposition === "no_change" ? "无需更改 · 已上架" : "符合要求"}</div>)}</div> : null}
         {!bulkPreview.execution_supported ? <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">当前操作仅支持预检，事务型执行尚未开放。</div> : null}
-        {bulkPreview.execution_supported && bulkPreview.will_change_count === 0 ? <div role="status" className="rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">所选 SKU 已是目标状态，无需修改。</div> : null}
+        {bulkPreview.execution_supported && bulkPreview.will_change_count === 0 ? <div role="status" className="rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">所选商品规格已是目标状态，无需修改。</div> : null}
       </div> : null}
-      <AlertDialogFooter><AlertDialogCancel disabled={bulkBusy}>关闭</AlertDialogCancel>{bulkPreview?.execution_supported && bulkPreview.can_execute && bulkPreview.blocked_count === 0 && bulkPreview.will_change_count > 0 ? <AlertDialogAction disabled={bulkBusy} onClick={(event) => { event.preventDefault(); void executeBulkStatus(); }}>{bulkBusy ? "执行中…" : bulkPreview.action === "activate" ? `确认激活 ${bulkPreview.will_change_count} 个 SKU` : `确认${bulkActionLabel[bulkPreview.action]}`}</AlertDialogAction> : null}</AlertDialogFooter>
+      <AlertDialogFooter><AlertDialogCancel disabled={bulkBusy}>关闭</AlertDialogCancel>{bulkPreview?.execution_supported && bulkPreview.can_execute && bulkPreview.blocked_count === 0 && bulkPreview.will_change_count > 0 ? <AlertDialogAction disabled={bulkBusy} onClick={(event) => { event.preventDefault(); void executeBulkStatus(); }}>{bulkBusy ? "执行中…" : bulkPreview.action === "activate" ? `确认激活 ${bulkPreview.will_change_count} 个商品规格` : `确认${bulkActionLabel[bulkPreview.action]}`}</AlertDialogAction> : null}</AlertDialogFooter>
     </AlertDialogContent></AlertDialog>
   </div>;
 });

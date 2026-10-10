@@ -19,7 +19,7 @@ export default function AdminRequestTraceSearchPage() {
   function submit() {
     const value = requestId.trim();
     if (!REQUEST_ID_PATTERN.test(value)) {
-      setError("请输入有效的 Request ID。");
+      setError("请输入有效的 请求追踪编号。");
       return;
     }
     router.push(`/admin/system/request-traces/${encodeURIComponent(value)}`);
@@ -29,9 +29,9 @@ export default function AdminRequestTraceSearchPage() {
     <AdminPageShell
       variant="v2"
       title="请求追踪"
-      description="根据 Request ID 汇总系统异常、审计日志和业务事件，用于定位慢请求和线上故障。"
+      description="根据 请求追踪编号 汇总系统异常、审计日志和业务事件，用于定位慢请求和线上故障。"
     >
-      <AdminSection title="查询 Request ID" description="输入完整请求编号，进入跨模块只读链路详情。" className="max-w-3xl">
+      <AdminSection title="查询 请求追踪编号" description="输入完整请求编号，进入跨模块只读链路详情。" className="max-w-3xl">
         <div className="space-y-4 px-4 pb-4 sm:px-5 sm:pb-5">
           <div className="flex flex-col gap-3 sm:flex-row">
             <Input
@@ -44,7 +44,7 @@ export default function AdminRequestTraceSearchPage() {
                 if (event.key === "Enter") submit();
               }}
               placeholder="例如 req_xxxxxxxx"
-              aria-label="Request ID"
+              aria-label="请求追踪编号"
               className="h-11 rounded-[var(--admin-v2-control-radius)] border-[var(--admin-v2-border)] font-mono sm:h-9"
             />
             <Button type="button" onClick={submit} className="h-11 sm:h-9">
@@ -54,7 +54,7 @@ export default function AdminRequestTraceSearchPage() {
           </div>
           {error ? <div role="alert" className="text-sm text-[var(--admin-v2-danger-foreground)]">{error}</div> : null}
           <div className="rounded-[var(--admin-v2-control-radius)] bg-[var(--admin-v2-surface-muted)] px-4 py-3 text-sm text-[var(--admin-v2-text-secondary)]">
-            Request ID 只用于内部排查，不会展示密钥、卡密、Token 或完整支付回调原文。
+            请求追踪编号 只用于内部排查，不会展示密钥、卡密、Token 或完整支付回调原文。
           </div>
         </div>
       </AdminSection>

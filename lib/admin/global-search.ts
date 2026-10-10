@@ -1,3 +1,4 @@
+import { businessTypeLabel, directionLabel } from '@/lib/admin/display-labels';
 ﻿import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -40,7 +41,7 @@ const GROUP_LABELS: Record<GlobalSearchGroup, string> = {
   recharges: "充值",
   refunds: "退款",
   balance: "余额流水",
-  products: "商品与 SKU",
+  products: "商品与商品规格",
   users: "用户",
   inventory: "库存批次",
 };
@@ -150,7 +151,7 @@ export async function runAdminGlobalSearch(supabase: SupabaseClient, rawKeyword:
           group: "payments" as const,
           typeLabel: "支付会话",
           businessNo: no,
-          title: `${text(row.business_type) ?? "支付"} ${no}`,
+          title: `${businessTypeLabel(row.business_type)} ${no}`,
           subtitle: text(row.provider_transaction_id) ? `Provider: ${text(row.provider_transaction_id)}` : text(row.business_no),
           userLabel: text(row.user_id),
           amountLabel: money(row.payable_amount, row.currency),
@@ -216,7 +217,7 @@ export async function runAdminGlobalSearch(supabase: SupabaseClient, rawKeyword:
   );
   groups.push({ group: "balance", label: GROUP_LABELS.balance, error: balanceRows.error, results: sortResults(balanceRows.rows.map((row) => {
     const no = text(row.transaction_no) ?? String(row.id ?? "");
-    return { id: String(row.id), group: "balance" as const, typeLabel: "余额流水", businessNo: no, title: `${text(row.direction) ?? "流水"} ${no}`, subtitle: text(row.business_type) ?? text(row.business_id), userLabel: text(row.user_id), amountLabel: money(row.amount, row.currency), status: text(row.status), createdAt: text(row.created_at), href: `/admin/users?transaction=${encodeURIComponent(no)}`, exact: exactCandidate ? no.toLowerCase() === exactCandidate : false };
+    return { id: String(row.id), group: "balance" as const, typeLabel: "余额流水", businessNo: no, title: `${directionLabel(row.direction)} ${no}`, subtitle: businessTypeLabel(row.business_type), userLabel: text(row.user_id), amountLabel: money(row.amount, row.currency), status: text(row.status), createdAt: text(row.created_at), href: `/admin/users?transaction=${encodeURIComponent(no)}`, exact: exactCandidate ? no.toLowerCase() === exactCandidate : false };
   })) });
 
   const productRows = await safeQuery<Record<string, unknown>>(() =>
@@ -237,7 +238,7 @@ export async function runAdminGlobalSearch(supabase: SupabaseClient, rawKeyword:
   );
   groups.push({ group: "products", label: GROUP_LABELS.products, error: productRows.error || skuRows.error, results: sortResults([
     ...productRows.rows.map((row) => ({ id: String(row.id), group: "products" as const, typeLabel: "商品", businessNo: text(row.slug) ?? String(row.id), title: text(row.name) ?? "未命名商品", subtitle: text(row.slug), userLabel: null, amountLabel: money(row.price, row.currency), status: text(row.status), createdAt: text(row.created_at), href: `/admin/products?search=${encodeURIComponent(text(row.name) ?? text(row.slug) ?? String(row.id))}`, exact: false })),
-    ...skuRows.rows.map((row) => { const no = text(row.sku_code) ?? String(row.id); return { id: `sku-${String(row.id)}`, group: "products" as const, typeLabel: "SKU", businessNo: no, title: text(row.sku_title) ?? no, subtitle: `库存 ${Number(row.stock ?? 0)}`, userLabel: null, amountLabel: money(row.price), status: text(row.status), createdAt: text(row.created_at), href: `/admin/products?search=${encodeURIComponent(no)}`, exact: exactCandidate ? no.toLowerCase() === exactCandidate : false }; }),
+    ...skuRows.rows.map((row) => { const no = text(row.sku_code) ?? String(row.id); return { id: `sku-${String(row.id)}`, group: "products" as const, typeLabel: "商品规格", businessNo: no, title: text(row.sku_title) ?? no, subtitle: `库存 ${Number(row.stock ?? 0)}`, userLabel: null, amountLabel: money(row.price), status: text(row.status), createdAt: text(row.created_at), href: `/admin/products?search=${encodeURIComponent(no)}`, exact: exactCandidate ? no.toLowerCase() === exactCandidate : false }; }),
   ]).slice(0, 10) });
 
   const userQuery = isUuid(keyword)

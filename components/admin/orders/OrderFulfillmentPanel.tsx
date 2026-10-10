@@ -130,7 +130,7 @@ export default function OrderFulfillmentPanel({
                   <div>
                     <div className="font-medium text-slate-900">{item.product_name}</div>
                     {item.sku_title ? (
-                      <div className="mt-0.5 text-xs text-slate-500">SKU: {item.sku_title}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">商品规格: {item.sku_title}</div>
                     ) : null}
                   </div>
                   <Badge variant="outline" className={statusClass(summary?.deliveryStatus ?? "pending")}>{getOrderItemDeliveryStatusLabel(summary?.deliveryStatus, item.delivery_type)}</Badge>

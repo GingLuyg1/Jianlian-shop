@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCcw, Search, X } from "lucide-react";
@@ -357,7 +359,7 @@ function Th({ children }: { children: React.ReactNode }) { return <th className=
 function Td({ children, className = "", title }: { children: React.ReactNode; className?: string; title?: string }) { return <td className={`whitespace-nowrap px-4 py-3 ${className}`} title={title}>{children}</td>; }
 function Info({ label, value }: { label: string; value: React.ReactNode }) { return <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">{label}</div><div className="mt-1 font-medium text-slate-900">{value}</div></div>; }
 function DetailSection({ children, title }: { children: React.ReactNode; title: string }) { return <section className="rounded-xl border bg-white p-4"><h3 className="mb-3 font-semibold text-slate-950">{title}</h3>{children}</section>; }
-function StatusBadge({ status }: { status: string }) { return <Badge variant="outline" className={cn("whitespace-nowrap", statusClass(status))}>{REFUND_STATUS_LABELS[status as keyof typeof REFUND_STATUS_LABELS] ?? status}</Badge>; }
+function StatusBadge({ status }: { status: string }) { return <Badge variant="outline" className={cn("whitespace-nowrap", statusClass(status))}>{REFUND_STATUS_LABELS[status as keyof typeof REFUND_STATUS_LABELS] ?? adminUnknownStatusLabel(status)}</Badge>; }
 function statusClass(status: string) {
   if (status === "succeeded") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (["requested", "reviewing", "processing"].includes(status)) return "border-amber-200 bg-amber-50 text-amber-700";

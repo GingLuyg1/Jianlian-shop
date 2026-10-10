@@ -1,4 +1,6 @@
 "use client";
+import { detailLabel } from '@/lib/admin/display-labels';
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -373,8 +375,8 @@ export default function AdminAuditLogsPage() {
                     <td className="px-3 py-2 whitespace-nowrap">
                       {MODULE_LABELS[log.module] ?? log.module}
                     </td>
-                    <td className="truncate px-3 py-2" title={log.action}>
-                      {log.action}
+                    <td className="truncate px-3 py-2" title={detailLabel(log.action)}>
+                      {detailLabel(log.action)}
                     </td>
                     <td className="px-3 py-2">
                       <div className="truncate text-slate-800" title={safeText(log.target_label)}>
@@ -432,7 +434,7 @@ export default function AdminAuditLogsPage() {
             <div className="space-y-4 text-sm">
               <DetailRow label="管理员" value={formatAdminAuditActor(selectedLog)} />
               <DetailRow label="模块" value={MODULE_LABELS[selectedLog.module] ?? selectedLog.module} />
-              <DetailRow label="操作" value={selectedLog.action} />
+              <DetailRow label="操作" value={detailLabel(selectedLog.action)} />
               <DetailRow label="目标对象" value={`${safeText(selectedLog.target_label)} / ${safeText(selectedLog.target_id)}`} />
               <DetailRow label="执行结果" value={RESULT_LABELS[selectedLog.result] ?? selectedLog.result} />
               <div className="rounded-lg border border-slate-100 p-3">

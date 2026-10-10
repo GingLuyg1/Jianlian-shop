@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel } from '@/lib/admin/display-labels';
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
@@ -101,7 +103,7 @@ export default function DatabaseStatusClient() {
   return (
     <AdminPageShell
       title="数据库状态"
-      description="只读检查数据库连通、关键结构、RPC 和 migration 登记；不会执行 SQL 或修改数据。"
+      description="只读检查数据库连通、关键结构、数据库事务处理 和 数据库结构升级 登记；不会执行 SQL 或修改数据。"
       actions={
         <Button type="button" variant="outline" onClick={() => void loadStatus()} disabled={loading}>
           <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -121,23 +123,23 @@ export default function DatabaseStatusClient() {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatusCard label="数据库连通" value="已连接" tone="green" />
               <StatusCard label="结构检查" value={data.ok && issueCount === 0 ? "通过" : "需关注"} tone={data.ok && issueCount === 0 ? "green" : "amber"} />
-              <StatusCard label="RPC 可用性" value={data.source === "rpc" ? "可用" : "使用降级探测"} tone={data.source === "rpc" ? "green" : "amber"} />
+              <StatusCard label="数据库事务处理 可用性" value={data.source === "rpc" ? "可用" : "使用降级探测"} tone={data.source === "rpc" ? "green" : "amber"} />
               <StatusCard label="结构问题" value={`${issueCount}`} tone={issueCount > 0 ? "red" : "green"} />
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Migration 区域仅展示应用登记表中的记录；“未登记”不代表 migration 未执行，不能据此直接操作数据库。
+              数据库结构升级 区域仅展示应用登记表中的记录；“未登记”不代表 数据库结构升级 未执行，不能据此直接操作数据库。
             </div>
 
             <Panel title="发布信息">
               <DescriptionGrid
                 items={[
-                  ["Release", data.release?.release ?? "—"],
-                  ["Commit", shortCommit(data.release?.commit)],
-                  ["Build Time", data.release?.buildTime ?? "—"],
-                  ["Environment", data.release?.environment ?? "—"],
-                  ["Schema Version", data.release?.schemaVersion ?? "—"],
-                  ["Last Check", formatDate(data.checkedAt)],
+                  ["发布版本", data.release?.release ?? "—"],
+                  ["代码版本", shortCommit(data.release?.commit)],
+                  ["构建时间", data.release?.buildTime ?? "—"],
+                  ["运行环境", data.release?.environment ?? "—"],
+                  ["数据库结构版本", data.release?.schemaVersion ?? "—"],
+                  ["最近检查时间", formatDate(data.checkedAt)],
                 ]}
               />
             </Panel>
@@ -151,11 +153,11 @@ export default function DatabaseStatusClient() {
             <div className="grid gap-4 xl:grid-cols-2">
               <IssueList title="缺失表" items={data.schema?.missing_tables ?? []} />
               <IssueList title="缺失字段" items={data.schema?.missing_columns ?? []} />
-              <IssueList title="缺失函数 / RPC" items={data.schema?.missing_functions ?? []} />
+              <IssueList title="缺失函数 / 数据库事务处理" items={data.schema?.missing_functions ?? []} />
               <IssueList title="缺失约束" items={data.schema?.missing_constraints ?? []} />
             </div>
 
-            <Panel title={`Migration 登记（未登记 ${data.pendingMigrations?.length ?? 0} 项）`}>
+            <Panel title={`数据库结构升级 登记（未登记 ${data.pendingMigrations?.length ?? 0} 项）`}>
               {!data.migrationHistory?.ready ? (
                 <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
                   {data.migrationHistory?.error ?? "迁移登记表尚未初始化。"}
@@ -165,8 +167,8 @@ export default function DatabaseStatusClient() {
                 <table className="w-full min-w-[760px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
-                      <th className="px-3 py-2">Migration</th>
-                      <th className="px-3 py-2">Area</th>
+                      <th className="px-3 py-2">数据库结构升级</th>
+                      <th className="px-3 py-2">所属功能</th>
                       <th className="px-3 py-2">状态</th>
                       <th className="px-3 py-2">登记状态</th>
                     </tr>
@@ -178,7 +180,7 @@ export default function DatabaseStatusClient() {
                         <tr key={migration.name}>
                           <td className="px-3 py-2 font-mono text-xs text-slate-700">{migration.name}</td>
                           <td className="px-3 py-2 text-slate-600">{migration.area}</td>
-                          <td className="px-3 py-2 text-slate-600">{migration.status}</td>
+                          <td className="px-3 py-2 text-slate-600">{statusLabel(migration.status)}</td>
                           <td className="px-3 py-2">
                             <span className={row?.status === "success" ? "text-emerald-700" : "text-amber-700"}>
                               {row?.status === "success" ? "已登记" : "未登记"}
@@ -268,7 +270,7 @@ function DescriptionGrid({ items }: { items: Array<[string, string]> }) {
 }
 
 function shortCommit(value?: string) {
-  if (!value || value === "unknown") return "unknown";
+  if (!value || value === "unknown") return "暂未获取";
   return value.length > 12 ? value.slice(0, 12) : value;
 }
 

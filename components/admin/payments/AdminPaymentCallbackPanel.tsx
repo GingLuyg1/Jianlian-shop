@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel } from '@/lib/admin/display-labels';
+
 
 import { useCallback, useEffect, useState } from "react";
 import { Search } from "lucide-react";
@@ -68,7 +70,7 @@ export default function AdminPaymentCallbackPanel({ attention, onAttentionChange
       {error ? <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadRows} /></div>
         : loading ? <AdminTableSkeleton rows={8} />
           : rows.length === 0 ? <div className="min-h-0 flex-1 p-4"><AdminEmptyState title={attention === "failed" ? "暂无失败回调" : "暂无回调记录"} description="这里仅展示真实支付回调记录。" /></div>
-            : <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[980px] text-sm"><thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500"><tr><Th>回调 ID</Th><Th>渠道</Th><Th>支付单号</Th><Th>渠道交易号</Th><Th>验签</Th><Th>处理结果</Th><Th>HTTP</Th><Th>重复</Th><Th>接收时间</Th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-t hover:bg-slate-50"><Td mono>{row.id}</Td><Td>{getPaymentChannelLabel(row.channel)}</Td><Td mono>{row.payment_no ?? "—"}</Td><Td mono>{row.provider_trade_no ? maskWallet(row.provider_trade_no) : "—"}</Td><Td>{row.signature_result ?? "—"}</Td><Td>{row.process_result ?? "—"}</Td><Td>{row.http_status ?? "—"}</Td><Td>{row.is_duplicate ? "是" : "否"}</Td><Td>{row.received_at ? formatDateTime(row.received_at) : "—"}</Td></tr>)}</tbody></table></div>}
+            : <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[980px] text-sm"><thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500"><tr><Th>回调 ID</Th><Th>渠道</Th><Th>支付单号</Th><Th>渠道交易号</Th><Th>验签</Th><Th>处理结果</Th><Th>响应状态码</Th><Th>重复</Th><Th>接收时间</Th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-t hover:bg-slate-50"><Td mono>{row.id}</Td><Td>{getPaymentChannelLabel(row.channel)}</Td><Td mono>{row.payment_no ?? "—"}</Td><Td mono>{row.provider_trade_no ? maskWallet(row.provider_trade_no) : "—"}</Td><Td>{statusLabel(row.signature_result)}</Td><Td>{statusLabel(row.process_result)}</Td><Td>{row.http_status ?? "—"}</Td><Td>{row.is_duplicate ? "是" : "否"}</Td><Td>{row.received_at ? formatDateTime(row.received_at) : "—"}</Td></tr>)}</tbody></table></div>}
       <div className="flex h-12 shrink-0 items-center justify-between border-t px-4 text-sm text-slate-500"><span>共 {count} 条记录</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</Button><span>第 {page} / {totalPages} 页</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>下一页</Button></div></div>
     </>
   );

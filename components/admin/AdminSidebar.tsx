@@ -33,7 +33,7 @@ export default function AdminSidebar() {
             JL
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-[var(--admin-v2-text-primary)]">Jianlian Admin</div>
+            <div className="truncate text-sm font-semibold text-[var(--admin-v2-text-primary)]">Jianlian 运营后台</div>
             <div className="text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">管理后台</div>
           </div>
         </Link>

@@ -542,7 +542,7 @@ export default function PaymentSettingsPanel() {
                     }
                   >
                     <option value="provider">
-                      Provider 自动处理
+                      支付平台 自动处理
                     </option>
                     <option value="manual">
                       人工付款、人工审核
@@ -718,11 +718,11 @@ export default function PaymentSettingsPanel() {
               ) : (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-3 text-sm font-semibold text-slate-900">
-                    Provider 配置
+                    支付平台 配置
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <Field label="Provider">
+                    <Field label="支付平台">
                       <select
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                         value={channel.provider}
@@ -841,7 +841,7 @@ export default function PaymentSettingsPanel() {
 
                   {!channel.configured ? (
                     <div className="mt-3 text-xs leading-5 text-amber-700">
-                      Provider 服务端配置尚未就绪。
+                      支付平台 服务端配置尚未就绪。
                       当前页面不会写入真实密钥，也不能将此渠道标记为已配置。
                     </div>
                   ) : null}

@@ -1,4 +1,5 @@
 "use client";
+import { statusLabel as displayStatusLabel } from '@/lib/admin/display-labels';
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -108,7 +109,7 @@ export default function ProjectStatusClient() {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-slate-950">项目验收面板</h1>
           <p className="mt-1 text-sm text-slate-500">
-            只读汇总当前版本、Migration、功能矩阵、Provider 状态和上线阻塞项；检查会写入审计日志。
+            只读汇总当前版本、数据库结构升级、功能矩阵、支付平台 状态和上线阻塞项；检查会写入审计日志。
           </p>
         </div>
         <button
@@ -128,9 +129,9 @@ export default function ProjectStatusClient() {
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatusCard label="数据库结构状态" value={schemaIssueCount === 0 && data.schema?.ok ? "通过" : "需处理"} tone={schemaIssueCount === 0 && data.schema?.ok ? "green" : "red"} />
-              <StatusCard label="待确认 Migration" value={`${data.migrations?.pending.length ?? 0}`} tone={(data.migrations?.pending.length ?? 0) > 0 ? "amber" : "green"} />
+              <StatusCard label="待确认 数据库结构升级" value={`${data.migrations?.pending.length ?? 0}`} tone={(data.migrations?.pending.length ?? 0) > 0 ? "amber" : "green"} />
               <StatusCard label="当前 P0 阻塞" value={`${data.blockers?.p0.length ?? 0}`} tone={(data.blockers?.p0.length ?? 0) > 0 ? "red" : "green"} />
-              <StatusCard label="支付 Provider" value={data.providers?.status === "not_configured" ? "未配置" : "已配置"} tone={data.providers?.status === "not_configured" ? "red" : "green"} />
+              <StatusCard label="支付 支付平台" value={data.providers?.status === "not_configured" ? "未配置" : "已配置"} tone={data.providers?.status === "not_configured" ? "red" : "green"} />
             </div>
 
             <Panel title="版本信息">
@@ -164,7 +165,7 @@ export default function ProjectStatusClient() {
                   <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">可本地测试：仅限已完成与部分完成模块，未测项不得标记通过。</p>
                   <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">可部署测试环境：需要先人工执行并确认 migrations。</p>
                   <p className="rounded-lg bg-red-50 px-3 py-2 text-red-700">可部署生产环境：否，P0 阻塞仍存在。</p>
-                  <p className="rounded-lg bg-red-50 px-3 py-2 text-red-700">可真实收款：否，Provider 未配置。</p>
+                  <p className="rounded-lg bg-red-50 px-3 py-2 text-red-700">可真实收款：否，支付平台 未配置。</p>
                 </div>
               </Panel>
             </div>
@@ -200,17 +201,17 @@ export default function ProjectStatusClient() {
               </div>
             </Panel>
 
-            <Panel title="Migration 状态">
+            <Panel title="数据库结构升级 状态">
               {!data.migrations?.historyReady ? (
                 <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  {data.migrations?.historyError ?? "Migration history is not available; treat every migration as pending confirmation."}
+                  {data.migrations?.historyError ?? "暂未获取数据库升级记录，请逐项确认是否已执行。"}
                 </p>
               ) : null}
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[860px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
-                      <th className="px-3 py-2">Migration</th>
+                      <th className="px-3 py-2">数据库结构升级</th>
                       <th className="px-3 py-2">模块</th>
                       <th className="px-3 py-2">登记状态</th>
                       <th className="px-3 py-2">执行时间</th>
@@ -294,10 +295,10 @@ function BlockerTable({ rows }: { rows: Blocker[] }) {
       <table className="w-full min-w-[840px] text-left text-sm">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="px-3 py-2">ID</th>
+            <th className="px-3 py-2">编号</th>
             <th className="px-3 py-2">问题</th>
             <th className="px-3 py-2">影响</th>
-            <th className="px-3 py-2">Migration</th>
+            <th className="px-3 py-2">数据库结构升级</th>
             <th className="px-3 py-2">状态</th>
           </tr>
         </thead>
@@ -324,11 +325,11 @@ function StatusPill({ value }: { value: string }) {
       : value === "blocked" || value === "open" || value === "not_configured"
       ? "bg-red-50 text-red-700"
       : "bg-amber-50 text-amber-700";
-  return <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${tone}`}>{value}</span>;
+  return <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${tone}`}>{displayStatusLabel(value)}</span>;
 }
 
 function shortCommit(value?: string) {
-  if (!value || value === "unknown") return "unknown";
+  if (!value || value === "unknown") return "暂未获取";
   return value.length > 12 ? value.slice(0, 12) : value;
 }
 

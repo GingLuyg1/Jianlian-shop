@@ -1,3 +1,5 @@
+import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+import { businessTypeLabel } from '@/lib/admin/display-labels';
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertCircle, CheckCircle2, MailCheck } from "lucide-react";
@@ -63,7 +65,7 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
     <AdminPageShell
       variant="v2"
       title="邮件发送记录"
-      description="查询邮件任务、发送状态、失败原因和 Provider 状态；页面不展示完整邮箱或邮件正文。"
+      description="查询邮件任务、发送状态、失败原因和 支付平台 状态；页面不展示完整邮箱或邮件正文。"
       actions={<Button asChild variant="outline"><Link href="/admin/notifications/email-templates">邮件模板</Link></Button>}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
@@ -72,12 +74,12 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
             {provider.configured ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">邮件 Provider</span>
+                <span className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">邮件 支付平台</span>
                 <AdminStatusBadge tone="neutral">{provider.provider}</AdminStatusBadge>
                 <AdminStatusBadge tone={provider.configured ? "success" : "warning"}>{provider.configured ? "已配置" : "未配置"}</AdminStatusBadge>
               </div>
               <p className="text-xs text-[var(--admin-v2-text-secondary)]">
-                {provider.configured ? provider.message : `缺少配置：${provider.missing.join("、") || "Provider 配置"}`}
+                {provider.configured ? provider.message : `缺少配置：${provider.missing.join("、") || "支付平台 配置"}`}
               </p>
             </div>
           </div>
@@ -121,7 +123,7 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
                   <th className="px-4 py-3">收件人</th>
                   <th className="px-4 py-3 text-center">状态</th>
                   <th className="px-4 py-3 text-center">尝试</th>
-                  <th className="px-4 py-3 text-center">Provider</th>
+                  <th className="px-4 py-3 text-center">支付平台</th>
                   <th className="px-4 py-3">错误摘要</th>
                   <th className="px-4 py-3 text-center">操作</th>
                 </tr>
@@ -131,7 +133,7 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
                   <tr key={row.id} className={adminListRowClass}>
                     <td className="whitespace-nowrap px-4 py-3 text-center text-[var(--admin-v2-text-muted)]">{formatTime(row.created_at)}</td>
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-[var(--admin-v2-text-primary)]">{row.template_code} {row.template_version ? `v${row.template_version}` : ""}</td>
-                    <td className="px-4 py-3">{row.business_type || "—"}<div className="text-xs text-[var(--admin-v2-text-muted)]">{row.business_no || "—"}</div></td>
+                    <td className="px-4 py-3">{businessTypeLabel(row.business_type)}<div className="text-xs text-[var(--admin-v2-text-muted)]">{row.business_no || "—"}</div></td>
                     <td className="whitespace-nowrap px-4 py-3">{row.recipient_summary}</td>
                     <td className="px-4 py-3 text-center">{renderStatus(row.status)}</td>
                     <td className="px-4 py-3 text-center tabular-nums">{row.attempts}/{row.max_attempts}</td>
@@ -152,7 +154,7 @@ export default async function EmailDeliveriesPage({ searchParams }: { searchPara
 
 function AdminEmailPageState({ title, message }: { title: string; message: string }) {
   return (
-    <AdminPageShell title="邮件发送记录" description="查询邮件任务、发送状态和 Provider 状态。">
+    <AdminPageShell title="邮件发送记录" description="查询邮件任务、发送状态和 支付平台 状态。">
       <AdminErrorState title={title} description={message} />
     </AdminPageShell>
   );
@@ -161,7 +163,7 @@ function AdminEmailPageState({ title, message }: { title: string; message: strin
 function renderStatus(status: string) {
   const map: Record<string, string> = { pending: "待发送", processing: "发送中", sent: "已发送", retrying: "待重试", failed: "失败", cancelled: "已取消" };
   const tone: AdminStatusTone = status === "sent" ? "success" : status === "failed" ? "danger" : status === "cancelled" ? "neutral" : "warning";
-  return <AdminStatusBadge tone={tone}>{map[status] ?? status}</AdminStatusBadge>;
+  return <AdminStatusBadge tone={tone}>{map[status] ?? adminUnknownStatusLabel(status)}</AdminStatusBadge>;
 }
 
 function formatTime(value: string | null | undefined) {

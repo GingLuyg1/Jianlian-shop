@@ -1,4 +1,5 @@
 "use client";
+import { statusLabel } from '@/lib/admin/display-labels';
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -542,10 +543,10 @@ async function loadDashboardData(): Promise<DashboardData> {
 
   const systemStatuses: SystemStatus[] = [
     { label: "数据库连接", value: orders || products || users ? "正常" : "异常" },
-    { label: "支付 Provider", value: readiness?.status === "ready" ? "正常" : readiness?.status === "partial" ? "部分配置" : "未接入", href: "/admin/payments" },
+    { label: "支付 支付平台", value: readiness?.status === "ready" ? "正常" : readiness?.status === "partial" ? "部分配置" : "未接入", href: "/admin/payments" },
     { label: "支付回调接口", value: readiness?.checks?.callbackRoute?.ok ? "正常" : "部分配置", href: "/admin/payments" },
-    { label: "充值入账 RPC", value: readiness?.checks?.rechargeRpc?.ok ? "正常" : "异常", href: "/admin/recharges" },
-    { label: "订单支付 RPC", value: readiness?.checks?.orderPaymentService?.ok ? "正常" : "部分配置", href: "/admin/orders" },
+    { label: "充值入账 数据库事务处理", value: readiness?.checks?.rechargeRpc?.ok ? "正常" : "异常", href: "/admin/recharges" },
+    { label: "订单支付 数据库事务处理", value: readiness?.checks?.orderPaymentService?.ok ? "正常" : "部分配置", href: "/admin/orders" },
     { label: "自动发货服务", value: deliveries === null ? "部分配置" : "正常", href: "/admin/inventory" },
     { label: "支付对账服务", value: readiness?.checks?.reconciliationUsesCompletePayment?.ok ? "正常" : "部分配置", href: "/admin/payments" },
     { label: "审计日志", value: "正常", href: "/admin/audit-logs" },
@@ -601,7 +602,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         value: visitsMissing ? INITIALIZING : visitsFailed ? READ_FAILED : todayVisitorSet?.size ?? 0,
         description: `UV · ${BUSINESS_TIME_ZONE}`,
         tone: "slate",
-        change: visits ? `昨日 ${yesterdayVisitorSet?.size ?? 0}` : visitsMissing ? "待执行访问统计 migration" : "读取失败",
+        change: visits ? `昨日 ${yesterdayVisitorSet?.size ?? 0}` : visitsMissing ? "待执行访问统计 数据库结构升级" : "读取失败",
         failed: visitsFailed,
         trend: trend7.map((point) => point.visitors),
       },
@@ -610,7 +611,7 @@ async function loadDashboardData(): Promise<DashboardData> {
         value: visitsMissing ? INITIALIZING : visitsFailed ? READ_FAILED : todayVisits?.length ?? 0,
         description: `PV · ${BUSINESS_TIME_ZONE}`,
         tone: "slate",
-        change: visits ? `昨日 ${yesterdayVisits?.length ?? 0}` : visitsMissing ? "待执行访问统计 migration" : "读取失败",
+        change: visits ? `昨日 ${yesterdayVisits?.length ?? 0}` : visitsMissing ? "待执行访问统计 数据库结构升级" : "读取失败",
         failed: visitsFailed,
         trend: trend7.map((point) => point.views),
       },
@@ -1101,7 +1102,7 @@ function ProductListCard({ title, rows, type, loading }: { title: string; rows: 
               <Link key={row.id} href={`/admin/products?search=${encodeURIComponent(row.name)}`} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50">
                 <div className="min-w-0">
                   <div className="truncate font-medium text-slate-900">{index + 1}. {row.name}</div>
-                  <div className="text-xs text-slate-500">库存 {row.stock} · {row.status}</div>
+                  <div className="text-xs text-slate-500">库存 {row.stock} · {statusLabel(row.status)}</div>
                 </div>
                 <div className="shrink-0 text-right text-sm font-semibold text-slate-950">
                   {type === "sales" ? `${row.sales} 件` : formatMoney(row.amount)}

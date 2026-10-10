@@ -218,8 +218,8 @@ test("product list and workspace wire diagnostics without supplier network calls
   assert.match(workspaceRoute, /readSkuLocalInventoryDiagnostics/);
   assert.doesNotMatch(listRoute, /fetch\(|syncDaju|supplier.*request/i);
   assert.doesNotMatch(workspaceRoute, /fetch\(|syncDaju|supplier.*request/i);
-  assert.match(manager, /Fulfillment \/ Inventory diagnostics/);
-  assert.match(manager, /No Source/);
+  assert.match(manager, /交付与库存诊断/);
+  assert.match(manager, /没有供货来源/);
   assert.doesNotMatch(manager, /mapping=.*website=.*supplier=/);
   assert.match(manager, /catch \(error\) \{ setDiagnostics\(null\)/);
   assert.match(manager, /diagnostic\.next_actions\.map/);

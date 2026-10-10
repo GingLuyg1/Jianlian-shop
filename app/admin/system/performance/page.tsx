@@ -1,4 +1,6 @@
 "use client";
+import { statusLabel } from '@/lib/admin/display-labels';
+
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, RefreshCcw, Search } from "lucide-react";
@@ -187,7 +189,7 @@ export default function AdminPerformancePage() {
                     <td className="px-4 py-3 text-slate-600"><span className="block truncate" title={row.route ?? "—"}>{row.route ?? "—"}</span></td>
                     <td className="px-4 py-3 tabular-nums text-slate-900">{formatMs(row.durationMs)}</td>
                     <td className="px-4 py-3 tabular-nums text-slate-600">{row.occurrences}</td>
-                    <td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{row.status}</span></td>
+                    <td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{statusLabel(row.status)}</span></td>
                     <td className="px-4 py-3 text-slate-500">{formatDate(row.lastSeenAt)}</td>
                   </tr>
                 ))
