@@ -220,10 +220,10 @@ export function normalizeUnifiedPaymentStatus(value: unknown): UnifiedPaymentSta
 
 export function getUnifiedPaymentStatusLabel(value: unknown) {
   const labels: Record<UnifiedPaymentStatus, string> = {
-    pending: "待支付",
+    pending: "等待支付",
     processing: "处理中",
     paid: "已支付",
-    failed: "失败",
+    failed: "支付失败",
     expired: "已过期",
     closed: "已关闭",
     refunded: "已退款",
