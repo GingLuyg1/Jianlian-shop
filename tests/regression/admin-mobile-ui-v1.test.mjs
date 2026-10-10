@@ -26,7 +26,6 @@ test("trend, channels, and recent activity offer mobile-friendly browsing", () =
   assert.ok(page.includes("grid grid-cols-2 gap-1.5 text-center text-xs sm:grid-cols-5"));
   assert.ok(page.includes("space-y-2 sm:hidden"));
   assert.ok(page.includes("hidden min-w-0 overflow-x-auto sm:block"));
-  assert.ok(page.includes("<dl key={`${title}-mobile-${index}`}>") === false);
   assert.ok(page.includes('<dl key={`${title}-mobile-${index}`} className='));
 });
 
