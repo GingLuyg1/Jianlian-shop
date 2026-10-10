@@ -16,17 +16,18 @@ test("category changes select category order without resetting it on secondary f
   }
   assert.match(read("app/api/admin/catalog/products/route.ts"), /sortedQuery\s*\.order\("id", \{ ascending: true \}\)\s*\.range/);
 });
-test("table viewport hides its own horizontal scrollbar and keeps one synchronized rail", () => {
+test("table viewport accepts touch horizontal scrolling and keeps the synchronized rail", () => {
   const rail = read("components/admin/AdminSyncedHorizontalScroller.tsx");
   assert.match(rail, /new ResizeObserver/);
   assert.match(rail, /viewport\.scrollWidth/);
   assert.match(rail, /railRef\.current\.scrollLeft = viewportRef\.current\.scrollLeft/);
   assert.match(rail, /viewportRef\.current\.scrollLeft = railRef\.current\.scrollLeft/);
   assert.match(rail, /data-admin-table-viewport/);
-  assert.match(rail, /overflow-x-hidden overflow-y-auto/);
+  assert.match(rail, /overflow-x-auto overflow-y-auto overscroll-x-contain/);
   assert.doesNotMatch(rail, /className="min-h-0 flex-1 overflow-auto"/);
   assert.match(rail, /data-admin-horizontal-rail/);
   assert.match(rail, /sticky bottom-0.*shrink-0.*bg-white/);
+  assert.match(rail, /h-7 shrink-0.*sm:h-5/);
   const source = read("app/admin/products/page.tsx");
   assert.match(source, /<AdminSyncedHorizontalScroller>\s*<table/);
   assert.match(source, /sticky top-0 z-20 bg-slate-50/);

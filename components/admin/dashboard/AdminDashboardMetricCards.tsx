@@ -57,13 +57,13 @@ export function AdminMetricTrendCard({
     <MetricSurface href={href}>
       <div className="flex min-h-[112px] flex-col px-3 py-2.5 sm:px-3.5">
         <div className="truncate text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{label}</div>
-        <div className="mt-1 truncate text-[22px] font-semibold leading-7 tracking-tight text-[var(--admin-v2-text-primary)]">
+        <div title={value} className="mt-1 break-all text-xl font-semibold leading-7 tracking-tight tabular-nums text-[var(--admin-v2-text-primary)] sm:truncate sm:text-[22px]">
           {loading ? "..." : value}
         </div>
-        <div className="mt-auto grid min-w-0 grid-cols-[minmax(0,1fr)_72px] items-end gap-2 pt-2">
+        <div className="mt-auto flex min-w-0 flex-col gap-1 pt-2 sm:grid sm:grid-cols-[minmax(0,1fr)_72px] sm:items-end sm:gap-2">
           <div className="min-w-0 text-[11px] leading-4 text-[var(--admin-v2-text-muted)]">
-            <div className="truncate">{comparison || "暂无对比"}</div>
-            <div className="truncate">{description}</div>
+            <div className="break-words sm:truncate">{comparison || "暂无对比"}</div>
+            <div className="break-words sm:truncate">{description}</div>
           </div>
           <AdminMiniTrendChart values={trend} label={label} loading={loading} />
         </div>

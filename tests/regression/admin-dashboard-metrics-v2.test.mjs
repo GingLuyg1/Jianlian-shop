@@ -62,7 +62,7 @@ test("dashboard metric layout is dense on desktop and bounded on mobile", () => 
   const dashboard = file("app/admin/page.tsx");
   const cards = file("components/admin/dashboard/AdminDashboardMetricCards.tsx");
 
-  assert.match(dashboard, /grid-cols-1 gap-2 min-\[430px\]:grid-cols-2 md:grid-cols-4 xl:grid-cols-7/);
+  assert.match(dashboard, /grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7/);
   assert.match(dashboard, /grid-cols-2 gap-px bg-\[var\(--admin-v2-border\)\] md:grid-cols-3 xl:grid-cols-5/);
   assert.match(dashboard, /min-w-0[\s\S]*overflow-x-hidden overflow-y-auto/);
   assert.match(cards, /grid-cols-\[minmax\(0,1fr\)_72px\]/);
