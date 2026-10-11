@@ -7,7 +7,7 @@ function file(path) {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
-test("dashboard separates seven real trend metrics from numeric status metrics", () => {
+test("dashboard uses versioned date analytics for primary cards and keeps operational snapshots separate", () => {
   const dashboard = file("app/admin/page.tsx");
   const trendLabels = [
     "今日支付金额",
@@ -24,24 +24,23 @@ test("dashboard separates seven real trend metrics from numeric status metrics",
   assert.match(dashboard, /statusMetrics: \[/);
   for (const label of trendLabels) assert.match(dashboard, new RegExp(`label: "${label}"`));
   for (const label of statusLabels) assert.match(dashboard, new RegExp(`label: "${label}"`));
-  assert.match(dashboard, /data\?\.trendMetrics\.map/);
+  assert.match(dashboard, /datedMetrics\.map/);
+  assert.match(dashboard, /metricAnalytics\.data\?\.summary/);
+  assert.match(dashboard, /metricSummary\.uv/);
+  assert.doesNotMatch(dashboard, /data\?\.trendMetrics\.slice\(0, 4\)\.map/);
   assert.match(dashboard, /<AdminMetricTrendCard/);
-  assert.match(dashboard, /data\?\.statusMetrics\.map/);
-  assert.match(dashboard, /<AdminMetricValueCard/);
+  assert.match(dashboard, /statusByLabel\.get\(todo\.label\)/);
+  assert.match(dashboard, /data\?\.statusMetrics\.filter\(\(metric\) => metric\.label === "支付异常"\)/);
 });
 
-test("dashboard sparklines use existing seven-day business series without fabricated data", () => {
+test("dashboard sparklines use the selected API daily series without fabricated data", () => {
   const dashboard = file("app/admin/page.tsx");
   const cards = file("components/admin/dashboard/AdminDashboardMetricCards.tsx");
 
-  assert.match(dashboard, /const trend7 = makeTrend\(7, orders, recharges, visits, users\)/);
-  assert.match(dashboard, /trend: trend7\.map\(\(point\) => point\.payAmount\)/);
-  assert.match(dashboard, /trend: trend7\.map\(\(point\) => point\.rechargeAmount\)/);
-  assert.match(dashboard, /trend: trend7\.map\(\(point\) => point\.orderCount\)/);
-  assert.match(dashboard, /point\.paidCount \/ point\.orderCount/);
-  assert.match(dashboard, /trend: trend7\.map\(\(point\) => point\.visitors\)/);
-  assert.match(dashboard, /trend: trend7\.map\(\(point\) => point\.views\)/);
-  assert.match(dashboard, /trend: trend7\.map\(\(point\) => point\.newUsers\)/);
+  assert.match(dashboard, /metricAnalytics\.data\?\.daily/);
+  assert.match(dashboard, /chartNumber\(point\.revenueCny\)/);
+  assert.match(dashboard, /chartNumber\(point\.rechargeCny\)/);
+  assert.match(dashboard, /point\.ordersCreated/);
   assert.match(cards, /finiteValues\.length < 2/);
   assert.match(cards, /暂无趋势/);
   assert.doesNotMatch(dashboard + cards, /Math\.random|mock(?:Data|Metric|Trend)|固定增长率/i);
@@ -58,14 +57,22 @@ test("dashboard main trend uses restrained line rendering and independent scales
   assert.doesNotMatch(dashboard, /linearGradient|radialGradient|drop-shadow/);
 });
 
-test("dashboard metric layout is dense on desktop and bounded on mobile", () => {
+test("dashboard V2.2 keeps four primary cards and moves audience data into the horizontal metric strip", () => {
   const dashboard = file("app/admin/page.tsx");
   const cards = file("components/admin/dashboard/AdminDashboardMetricCards.tsx");
+  const styles = file("app/admin/dashboard-v21.css");
 
-  assert.match(dashboard, /grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7/);
-  assert.match(dashboard, /grid-cols-2 gap-px bg-\[var\(--admin-v2-border\)\] md:grid-cols-3 xl:grid-cols-5/);
-  assert.match(dashboard, /min-w-0[\s\S]*overflow-x-hidden overflow-y-auto/);
-  assert.match(cards, /grid-cols-\[minmax\(0,1fr\)_72px\]/);
+  assert.match(dashboard, /dashboard-primary-kpis[\s\S]*datedMetrics\.map/);
+  assert.match(dashboard, /dashboard-secondary-kpis[\s\S]*metricSummary\.uv/);
+  assert.match(dashboard, /dashboard-secondary-kpis[\s\S]*data\?\.userOverview\.filter\(\(row\) => row\.label !== "管理员数量"\)\.map/);
+  assert.match(dashboard, /dashboard-operations-grid/);
+  assert.match(styles, /dashboard-primary-kpis \{ display: grid; grid-template-columns: repeat\(4/);
+  assert.match(styles, /dashboard-primary-kpis \{ grid-template-columns: repeat\(2/);
+  assert.match(styles, /dashboard-secondary-kpis \{[\s\S]*display: flex/);
+  assert.match(styles, /dashboard-operations-grid \{ grid-template-columns: repeat\(5/);
+  assert.match(dashboard, /overflow-x-hidden overflow-y-auto/);
+  assert.match(cards, /dashboard-kpi-meta/);
+  assert.doesNotMatch(cards.split('export function AdminMetricTrendCard')[1].split('export function AdminMetricValueCard')[0], /<AdminMiniTrendChart/);
   assert.match(cards, /shadow-none/);
   assert.match(cards, /var\(--admin-v2-surface-radius\)/);
   assert.match(cards, /var\(--admin-v2-primary\)/);

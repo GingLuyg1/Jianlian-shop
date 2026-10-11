@@ -17,7 +17,8 @@ export type RateLimitPolicyName =
   | "media_upload"
   | "internal_task"
   | "snpay_reconciliation_execute"
-  | "snpay_reconciliation_readiness";
+  | "snpay_reconciliation_readiness"
+  | "admin_analytics_read";
 
 type RateLimitPolicy = {
   windowMs: number;
@@ -56,6 +57,7 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
   // worker budget. Do not weaken other internal jobs' 3-per-5-minute policy.
   snpay_reconciliation_execute: { windowMs: 60_000, max: 4, message: "支付核验触发过于频繁，请稍后再试。" },
   snpay_reconciliation_readiness: { windowMs: 60_000, max: 6, message: "支付就绪检查过于频繁，请稍后再试。" },
+  admin_analytics_read: { windowMs: 60_000, max: 6, message: "统计查询过于频繁，请稍后再试。" },
 };
 
 const buckets = new Map<string, RateLimitEntry>();

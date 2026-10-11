@@ -20,8 +20,8 @@ test("dashboard action cards route to real filtered admin workspaces", () => {
     "/admin/products?stockLevel=low",
   ];
   for (const href of expectedLinks) assert.match(dashboard, new RegExp(href.replace(/[?]/g, "\\?")));
-  assert.match(dashboard, /cursor-pointer[\s\S]*focus-visible:ring-2/);
-  assert.match(dashboard, /数字为近 30 天快照；点击查看当前完整队列/);
+  assert.match(dashboard, /dashboard-todo-main focus-visible:outline-none focus-visible:ring-2/);
+  assert.match(dashboard, /待办为现有近 30 天快照；入口指向当前完整队列/);
 });
 
 test("order attention filters are enforced by the authenticated read API", () => {

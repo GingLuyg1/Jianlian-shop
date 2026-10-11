@@ -1,0 +1,122 @@
+import { chromium } from 'playwright';
+import esbuild from 'esbuild';
+import { readFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { renderDashboard } from '../helpers/admin-dashboard-ui-harness.mjs';
+
+const root = resolve(import.meta.dirname, '../..');
+const output = resolve(root, 'artifacts/v25-browser');
+mkdirSync(output, { recursive: true });
+const bundlePath = resolve(output, 'synthetic-product.js');
+await esbuild.build({ entryPoints: [resolve(root, 'tests/browser/admin-v25-product-entry.tsx')], bundle: true, platform: 'browser', format: 'iife', jsx: 'automatic', outfile: bundlePath, alias: { '@': root, 'next/link': resolve(root, 'tests/browser/next-link-stub.tsx') }, loader: { '.mjs': 'js' }, logLevel: 'silent' });
+const css = readdirSync(resolve(root, '.next/static/css')).filter((name) => name.endsWith('.css')).map((name) => readFileSync(resolve(root, '.next/static/css', name), 'utf8')).join('\n');
+const chromePath = existsSync('D:/Google/Chrome/Application/chrome.exe') ? 'D:/Google/Chrome/Application/chrome.exe' : 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const browser = await chromium.launch({ executablePath: chromePath, headless: true });
+for (const width of [390, 768, 1440]) {
+  const page = await browser.newPage({ viewport: { width, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.setContent(`<!doctype html><html lang="zh-CN"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="background:#f4f6fb"><div id="root"></div></body></html>`);
+  await page.addScriptTag({ path: bundlePath });
+  await page.getByText('成交额待分摊核对').waitFor();
+  await page.getByText('合成商品数据').waitFor();
+  await page.locator('.dashboard-product-data-card tbody tr').first().waitFor();
+  const count = await page.locator('.dashboard-product-data-card tbody tr').count();
+  if (count !== 10) throw Error(`HOME_ROWS_${width}_${count}`);
+  const headers = await page.locator('.dashboard-product-data-card th').allTextContents();
+  if (headers.join('|') !== '商品名称|曝光量|点击量|点击率|下单率|付款率|成交订单|销量|成交金额|查看趋势') throw Error(`HEADERS_${width}_${headers.join('|')}`);
+  const disabledSorts = await page.locator('.dashboard-product-data-card th [aria-label*="排序不可用"]').count();
+  if (disabledSorts !== 6) throw Error(`DISABLED_SORTS_${width}_${disabledSorts}`);
+  const homeTable = page.locator('.dashboard-product-table-scroll');
+  if (width < 1240 && !await homeTable.evaluate((element) => element.scrollWidth > element.clientWidth)) throw Error(`TABLE_SCROLL_MISSING_${width}`);
+  await page.locator('.dashboard-product-data-card').screenshot({ path: resolve(output, `product-ten-rows-${width}.png`) });
+  await page.locator('.dashboard-product-data-card th').filter({ hasText: '成交订单' }).getByRole('button').click();
+  await page.locator('.dashboard-product-data-card th[aria-sort="ascending"]').waitFor();
+  await page.getByRole('button', { name: /查看全部/ }).first().click();
+  await page.getByRole('dialog').getByText('暂未接入').filter({ visible: true }).first().waitFor();
+  if (await page.getByRole('dialog').locator('tbody tr').count() !== 15) throw Error(`DIALOG_PAGE_SIZE_${width}`);
+  await page.waitForTimeout(350);
+  await page.screenshot({ path: resolve(output, `product-dialog-15-${width}.png`) });
+  await page.getByRole('dialog').getByRole('button', { name: /下一页/ }).click();
+  await page.getByRole('dialog').getByText('第 2 页').waitFor();
+  if (await page.getByRole('dialog').locator('tbody tr').count() !== 15) throw Error(`DIALOG_SECOND_PAGE_${width}`);
+  await page.getByRole('dialog').getByRole('button', { name: /下一页/ }).click();
+  await page.getByRole('dialog').getByText('第 3 页').waitFor();
+  if (await page.getByRole('dialog').locator('tbody tr').count() !== 2) throw Error(`DIALOG_LAST_PAGE_${width}`);
+  await page.getByRole('dialog').getByRole('button', { name: /销量，按从高到低排序/ }).click();
+  await page.getByRole('dialog').getByText('第 1 页').waitFor();
+  await page.getByRole('dialog').locator('th[aria-sort="descending"]').filter({ hasText: '销量' }).waitFor();
+  await page.getByRole('dialog').getByRole('button', { name: /成交订单，按从高到低排序/ }).click();
+  await page.getByRole('dialog').locator('th[aria-sort="descending"]').filter({ hasText: '成交订单' }).waitFor();
+  await page.getByRole('dialog').getByRole('button', { name: /成交订单，当前从高到低/ }).click();
+  await page.getByRole('dialog').locator('th[aria-sort="ascending"]').waitFor();
+  await page.screenshot({ path: resolve(output, `product-dialog-ascending-${width}.png`) });
+  await page.getByRole('dialog').getByRole('button', { name: /成交订单，当前从低到高/ }).click();
+  await page.getByRole('dialog').locator('th[aria-sort="descending"]').waitFor();
+  await page.screenshot({ path: resolve(output, `product-dialog-${width}.png`) });
+  await page.getByRole('dialog').getByRole('textbox', { name: '搜索商品名称' }).fill('云');
+  await page.getByRole('dialog').getByRole('button', { name: '搜索', exact: true }).click();
+  await page.getByRole('dialog').getByText('第 1 页').waitFor();
+  const searchedRows = await page.getByRole('dialog').locator('tbody tr').count();
+  if (searchedRows < 1 || searchedRows >= 15) throw Error(`SEARCH_PAGE_RESET_${width}_${searchedRows}`);
+  await page.getByRole('dialog').getByRole('textbox', { name: '搜索商品名称' }).fill('');
+  await page.getByRole('dialog').getByRole('button', { name: '搜索', exact: true }).click();
+  await page.getByRole('dialog').locator('tbody tr').first().waitFor();
+  await page.getByRole('dialog').getByRole('button', { name: /商品数据日期筛选/ }).click();
+  await page.getByRole('group', { name: '商品数据快捷时间' }).getByRole('button', { name: '最近 7 天' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /商品数据日期筛选，当前最近 7 天/ }).waitFor();
+  await page.getByRole('dialog').getByText('第 1 页').waitFor();
+  await page.getByRole('dialog').getByRole('button', { name: '查看趋势' }).first().click();
+  await page.getByRole('dialog').getByText('成交订单与销量可查看真实每日数据').waitFor();
+  for (const label of ['曝光量', '点击量', '点击率', '下单率', '付款率', '成交金额']) {
+    if (!await page.getByRole('dialog').locator('[aria-label="商品趋势指标"] [aria-disabled="true"]').filter({ hasText: label }).count()) throw Error(`UNAVAILABLE_TREND_OPTION_${width}_${label}`);
+  }
+  await page.getByRole('img', { name: '商品成交订单与件数每日趋势' }).focus();
+  await page.keyboard.press('ArrowLeft');
+  await page.getByRole('tooltip').waitFor();
+  if (!await page.getByRole('tooltip').getByText('成交订单数：').count() || !await page.getByRole('tooltip').getByText('成交件数：').count()) throw Error(`TREND_TOOLTIP_INCOMPLETE_${width}`);
+  await page.waitForTimeout(350);
+  await page.screenshot({ path: resolve(output, `product-trend-${width}.png`) });
+  const measure = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+  if (measure.scrollWidth > width) throw Error(`HORIZONTAL_OVERFLOW_${width}_${measure.scrollWidth}`);
+  if (errors.length) throw Error(`BROWSER_ERRORS_${width}_${errors.join('|')}`);
+  console.log(`V25_PRODUCT_BROWSER_PASS ${width}px rows=${count} overflow=no`);
+  await page.close();
+}
+for (const width of [390, 768, 1440]) {
+  const page = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
+  const document = `<!doctype html><html lang="zh-CN"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#f8f5f7"><p style="margin:0;padding:9px 20px;background:#fff5e8;color:#6f4614;font:13px system-ui">合成数据 · 真实 Chrome 首页布局预览；非已登录管理员截图</p><div data-admin-shell>${renderDashboard()}</div></body></html>`;
+  await page.setContent(document);
+  await page.locator('.dashboard-product-data-card').evaluate((element) => {
+    const mount = document.createElement('div');
+    mount.id = 'root';
+    mount.className = 'min-w-0';
+    element.replaceWith(mount);
+    window.__V25_FULL_DASHBOARD = true;
+  });
+  await page.addScriptTag({ path: bundlePath });
+  await page.locator('.dashboard-product-data-card tbody tr').first().waitFor();
+  const layout = await page.evaluate(() => {
+    const card = document.querySelector('.dashboard-product-data-card');
+    const grid = card?.closest('.dashboard-lower-grid');
+    const scroller = card?.querySelector('.dashboard-product-table-scroll');
+    return { pageWidth: innerWidth, scrollWidth: document.documentElement.scrollWidth, cardWidth: card?.getBoundingClientRect().width, gridWidth: grid?.getBoundingClientRect().width, tableScrolls: !!scroller && scroller.scrollWidth > scroller.clientWidth };
+  });
+  if (layout.scrollWidth > width || !layout.cardWidth || !layout.gridWidth || layout.cardWidth / layout.gridWidth < 0.95) throw Error(`FULL_DASHBOARD_LAYOUT_${width}_${JSON.stringify(layout)}`);
+  const catalogNames = await page.locator('.dashboard-product-card a[aria-label*="库存"]').count();
+  if (catalogNames !== 20) throw Error(`CATALOG_FIVE_EACH_${width}_${catalogNames}`);
+  const recentCards = page.locator('.dashboard-record-card');
+  if (await recentCards.count() !== 2) throw Error(`RECENT_CARD_COUNT_${width}`);
+  for (const card of await recentCards.all()) {
+    const recordCount = width < 768 ? await card.locator('dl').count() : await card.locator('tbody tr').count();
+    if (recordCount !== 5) throw Error(`RECENT_FIVE_${width}_${recordCount}`);
+  }
+  if (await page.locator('.dashboard-kicker').count()) throw Error(`ENGLISH_KICKERS_${width}`);
+  if (width < 1240 && !layout.tableScrolls) throw Error(`FULL_DASHBOARD_TABLE_SCROLL_${width}`);
+  await page.screenshot({ path: resolve(output, `dashboard-product-full-${width}.png`), fullPage: true });
+  await page.locator('.dashboard-product-card').screenshot({ path: resolve(output, `catalog-five-${width}.png`) });
+  await recentCards.first().screenshot({ path: resolve(output, `recent-orders-copy-${width}.png`) });
+  console.log(`V25_DASHBOARD_PRODUCT_FULL_PASS ${width}px card=${Math.round(layout.cardWidth)} grid=${Math.round(layout.gridWidth)}`);
+  await page.close();
+}
+await browser.close();

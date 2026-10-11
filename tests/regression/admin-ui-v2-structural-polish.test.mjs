@@ -22,14 +22,15 @@ test("Admin shell shares sidebar, main offset, and content padding tokens", () =
   assert.match(pageShell, /padding-inline:var\(--admin-content-padding-x\)/);
 });
 
-test("Dashboard uses compact status and task structures without fabricated data", () => {
+test("Dashboard merges status and task presentation without fabricated data", () => {
   const dashboard = file("app/admin/page.tsx");
   const metrics = file("components/admin/dashboard/AdminDashboardMetricCards.tsx");
 
   assert.match(dashboard, /variant="v2"/);
   assert.match(dashboard, /xl:grid-cols-\[minmax\(0,2fr\)_minmax\(0,1fr\)\]/);
-  assert.match(dashboard, /<AdminMetricValueCard[\s\S]*?compact/);
-  assert.match(dashboard, /gap-px bg-\[var\(--admin-v2-border\)\]/);
+  assert.match(dashboard, /dashboard-operations-grid/);
+  assert.match(dashboard, /statusByLabel\.get\(todo\.label\)/);
+  assert.match(dashboard, /dashboard-todo-grid/);
   assert.match(metrics, /compact \? "min-h-\[68px\]"/);
   assert.doesNotMatch(dashboard + metrics, /Math\.random|mock(?:Data|Metric|Trend)/i);
 });

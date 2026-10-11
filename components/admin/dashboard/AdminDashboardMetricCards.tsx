@@ -51,21 +51,17 @@ export function AdminMetricTrendCard({
   comparison,
   href,
   loading = false,
-  trend,
 }: AdminMetricTrendCardProps) {
   return (
     <MetricSurface href={href}>
-      <div className="flex min-h-[112px] flex-col px-3 py-2.5 sm:px-3.5">
-        <div className="truncate text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">{label}</div>
-        <div title={value} className="mt-1 break-all text-xl font-semibold leading-7 tracking-tight tabular-nums text-[var(--admin-v2-text-primary)] sm:truncate sm:text-[22px]">
+      <div className="dashboard-kpi-body flex min-h-[112px] flex-col px-3 py-2.5 sm:px-3.5">
+        <div className="dashboard-kpi-label">{label}</div>
+        <div title={value} className="dashboard-kpi-value mt-1 break-all text-xl font-semibold leading-7 tracking-tight tabular-nums text-[var(--admin-v2-text-primary)]">
           {loading ? "..." : value}
         </div>
-        <div className="mt-auto flex min-w-0 flex-col gap-1 pt-2 sm:grid sm:grid-cols-[minmax(0,1fr)_72px] sm:items-end sm:gap-2">
-          <div className="min-w-0 text-[11px] leading-4 text-[var(--admin-v2-text-muted)]">
-            <div className="break-words sm:truncate">{comparison || "暂无对比"}</div>
-            <div className="break-words sm:truncate">{description}</div>
-          </div>
-          <AdminMiniTrendChart values={trend} label={label} loading={loading} />
+        <div className="dashboard-kpi-meta mt-auto min-w-0 pt-2">
+          {comparison ? <div className="break-words">{comparison}</div> : null}
+          <div className="break-words">{description}</div>
         </div>
       </div>
     </MetricSurface>
@@ -161,7 +157,7 @@ export function AdminMiniTrendChart({
       viewBox={`0 0 ${width} ${height}`}
       className="h-10 w-[72px] overflow-visible"
       role="img"
-      aria-label={`${label}近 7 天趋势`}
+      aria-label={`${label}所选区间趋势`}
     >
       <path d={`M${padding} ${height - padding} H${width - padding}`} fill="none" stroke="#dbeafe" strokeWidth="1" />
       {paths.map((path, index) => (
