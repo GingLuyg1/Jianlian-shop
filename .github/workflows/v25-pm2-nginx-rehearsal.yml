@@ -42,6 +42,7 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
           bash ops/standalone-v25/package-linux.sh "$RUNNER_TEMP/v25-linux-package"
+          bash ops/standalone-v25/verify-linux-package.sh "$RUNNER_TEMP/v25-linux-package"
           sha256sum -c "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz.sha256"
           stat -c 'LINUX_PACKAGE_BYTES=%s' "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz" | tee -a "$GITHUB_STEP_SUMMARY"
           du -sB1 "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}" | awk '{print "LINUX_EXPANDED_BYTES=" $1}' | tee -a "$GITHUB_STEP_SUMMARY"
