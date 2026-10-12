@@ -10,3 +10,7 @@
 6. 回退应切回受保护的旧 release 与原 PM2 配置，验证服务和 Worker；不得使用数据库整体恢复来回退应用。新 release 清理必须在验收后另行批准。
 
 空间门禁：实际 Linux 压缩包 `A`、展开 release `B`、上传/展开/可能二次复制 `C`、日志及文件系统余量 `R` 必须实测。部署前可用空间至少 6 GiB，但还须满足 `free - (A + B + C + R)` 的审批余量。Windows 包体积不得代替 Linux 实测。
+
+## 双端口候选（2026-10-13）
+
+`ecosystem.blue-green.candidate.cjs` 使用独立 PM2 名称和 loopback 3002，计划与旧 3001 并行。`rehearse-pm2-nginx.sh` 仅供隔离 Linux CI 用两份相同演练包测试 PM2/Nginx 机械切流、故障注入和回退；不模拟真实旧版的静态资源兼容。`deploy-blue-green-candidate.sh` 目前只有只读的 `prepare`/`validate` 前置检查，`cutover`/`rollback` 故意拒绝执行，不能用于正式部署。实际 Nginx 站点路径、环境注入及旧版恢复步骤仍须审批和验证。详见根目录 `ADMIN_V2_5_PM2_NGINX_BLUE_GREEN_REHEARSAL_PREP_20261013.md`。

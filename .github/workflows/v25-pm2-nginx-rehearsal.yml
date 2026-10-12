@@ -1,0 +1,71 @@
+name: V2.5 isolated PM2 Nginx cutover rehearsal
+
+on:
+  push:
+    branches:
+      - validation/v25-linux-node20-20261012
+    paths:
+      - .github/workflows/v25-pm2-nginx-rehearsal.yml
+      - ops/standalone-v25/rehearse-pm2-nginx.sh
+      - ops/standalone-v25/ecosystem.blue-green.candidate.cjs
+      - ops/standalone-v25/deploy-blue-green-candidate.sh
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-rehearsal:
+    if: github.repository == 'GingLuyg1/Jianlian-shop' && github.ref == 'refs/heads/validation/v25-linux-node20-20261012'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      APP_ENV: test
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key-not-for-production
+      PAYMENT_PROVIDER_MODE: disabled
+      DISABLE_EXTERNAL_PROVIDERS: 'true'
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Exact Node version and CI tool installation
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+
+      - name: Install locked project dependencies and rebuild on this commit
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          bash ops/standalone-v25/package-linux.sh "$RUNNER_TEMP/v25-linux-package"
+          sha256sum -c "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz.sha256"
+          stat -c 'LINUX_PACKAGE_BYTES=%s' "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz" | tee -a "$GITHUB_STEP_SUMMARY"
+          du -sB1 "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}" | awk '{print "LINUX_EXPANDED_BYTES=" $1}' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Install isolated process and proxy tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends nginx
+          npm install --global --no-audit --no-fund pm2@7.0.1
+          node --version
+          pm2 --version
+          nginx -v
+
+      - name: PM2 plus Nginx blue-green and fault rollback rehearsal
+        run: |
+          bash ops/standalone-v25/rehearse-pm2-nginx.sh \
+            "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz" \
+            "$(cut -d ' ' -f 1 "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz.sha256")" | tee "$RUNNER_TEMP/rehearsal-status.txt"
+          cat "$RUNNER_TEMP/rehearsal-status.txt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record non-secret package checksum and commit
+        if: always()
+        run: |
+          printf 'COMMIT_SHA=%s\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          if test -f "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz.sha256"; then
+            sed 's|.*/| |' "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz.sha256" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - validation/v25-linux-node20-20261012
+    paths-ignore:
+      - .github/workflows/v25-linux-standalone-validation.yml
+      - .github/workflows/v25-pm2-nginx-rehearsal.yml
+      - ops/standalone-v25/rehearse-pm2-nginx.sh
+      - ops/standalone-v25/ecosystem.blue-green.candidate.cjs
+      - ops/standalone-v25/deploy-blue-green-candidate.sh
+      - ops/standalone-v25/README.md
+      - ADMIN_V2_5_PM2_NGINX_BLUE_GREEN_REHEARSAL_PREP_20261013.md
 
 permissions:
   contents: read
