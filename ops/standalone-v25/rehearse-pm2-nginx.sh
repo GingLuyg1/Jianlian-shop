@@ -134,11 +134,12 @@ nginx -p "$work/nginx/" -c "$work/nginx/nginx.conf" -s reload >/dev/null 2>&1
 wait "$probe_pid"
 wait_proxy old || die 'rollback proxy HTTP/static failed'
 ready 3001 || die 'old PM2 process unavailable after rollback'
+printf 'REHEARSAL_PHASES=OLD_READY,NEW_READY,NEW_PROXY_READY,OLD_ROLLBACK_READY\n'
 
 measure() {
   awk '($2 != "200") {failed++; if (!start) start=$1; next}
        {passed++; if (start) {gap=$1-start; if (gap > max) max=gap; start=0}}
-       END {if (start) {gap=$1-start; if (gap > max) max=gap}; printf "%d %d %d", passed+0, failed+0, max+0}' "$1"
+       END {if (start) {gap=$1-start; if (gap > max) max=gap}; printf "%d %d %d\n", passed+0, failed+0, max+0}' "$1"
 }
 read -r cut_pass cut_fail cut_gap < <(measure "$work/cutover.probes")
 read -r rollback_pass rollback_fail rollback_gap < <(measure "$work/rollback.probes")
