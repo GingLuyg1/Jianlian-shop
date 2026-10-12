@@ -45,6 +45,16 @@ module.exports = { apps: [
 ] };
 EOF
 pm2 start "$work/ecosystem.cjs" >/dev/null
+diagnose_slots() {
+  pm2 jlist | node -e 'let s=""; process.stdin.on("data",x=>s+=x).on("end",()=>{for(const p of JSON.parse(s)){console.error(`PM2_DIAG name=${p.name} status=${p.pm2_env?.status} restarts=${p.pm2_env?.restart_time} port=${p.pm2_env?.env?.PORT}`)}})' || true
+  for name in v25-rehearsal-old v25-rehearsal-new; do
+    log="$PM2_HOME/logs/$name-error.log"
+    if [[ -f "$log" ]]; then
+      printf 'PM2_ERROR_LOG=%s\n' "$name" >&2
+      tail -n 20 "$log" | sed -E 's/(key|token|password|secret)[=:][^[:space:]]+/\1=[REDACTED]/Ig' >&2
+    fi
+  done
+}
 ready() {
   local port="$1" attempt
   for attempt in $(seq 1 40); do
@@ -53,8 +63,8 @@ ready() {
   done
   return 1
 }
-ready 3001 || die 'old slot health failed'
-ready 3002 || die 'new slot health failed'
+ready 3001 || { diagnose_slots; die 'old slot health failed'; }
+ready 3002 || { diagnose_slots; die 'new slot health failed'; }
 curl -fsS --max-time 5 "http://127.0.0.1:3002$asset_path" >/dev/null || die 'new static asset failed'
 
 write_proxy() {
