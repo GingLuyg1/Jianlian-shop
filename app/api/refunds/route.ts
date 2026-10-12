@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { formatMoney, normalizeRefundError } from "@/lib/refunds/refund-utils";
 import { evaluateRefundRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   try {
     if (!hasSupabaseServerConfig()) return json({ error: "Supabase 环境变量未配置。" }, { status: 500 });
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return json({ error: "请先登录。" }, { status: 401 });
 
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   try {
     if (!hasSupabaseServerConfig()) return json({ error: "Supabase 环境变量未配置。" }, { status: 500 });
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return json({ error: "请先登录。" }, { status: 401 });
 
@@ -143,7 +143,7 @@ function normalizeUserRefund(row: Row) {
   };
 }
 
-async function loadRefundRiskContext(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string, orderNo: string) {
+async function loadRefundRiskContext(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, userId: string, orderNo: string) {
   const { data: order } = await supabase
     .from("orders")
     .select("id,order_no,total_amount,currency,delivery_type,payment_status")

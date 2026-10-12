@@ -17,7 +17,7 @@ export async function GET() {
     );
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const result = await readPublicSettings(supabase);
   const now = new Date().toISOString();
   const announcementsResult = await supabase

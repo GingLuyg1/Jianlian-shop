@@ -5,7 +5,7 @@ import { statusLabel as displayStatusLabel } from '@/lib/admin/display-labels';
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCcw, Search, ShieldAlert } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -48,6 +48,14 @@ function useDebouncedValue(value: string, delay = 300) {
 }
 
 export default function AdminRiskPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminRiskPageContent />
+    </Suspense>
+  );
+}
+
+function AdminRiskPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const initial = useSearchParams();

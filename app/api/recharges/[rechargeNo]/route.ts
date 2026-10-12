@@ -11,12 +11,13 @@ const rechargeDetailSelect =
   "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,expires_at,matched_at,match_method,status,created_at,paid_at";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     rechargeNo: string;
-  };
+  }>;
 };
 
-export async function GET(_request: Request, { params }: RouteContext) {
+export async function GET(_request: Request, props: RouteContext) {
+  const params = await props.params;
   if (!hasSupabaseServerConfig()) {
     return NextResponse.json(
       { error: "Recharge service is unavailable.", code: "RECHARGE_DETAIL_READ_FAILED" },
@@ -24,7 +25,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     );
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) {
     return NextResponse.json(

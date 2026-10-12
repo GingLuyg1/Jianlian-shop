@@ -38,7 +38,8 @@ function safeActivationRpcErrorCode(error: { message?: string; code?: string } |
     ?? (error?.code === "55P03" || error?.code === "57014" ? "BULK_ACTIVATION_LOCK_TIMEOUT" : "BULK_ACTIVATION_TRANSACTION_FAILED");
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;

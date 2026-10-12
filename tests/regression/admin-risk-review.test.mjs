@@ -32,7 +32,7 @@ test("risk APIs remain SuperAdmin-only, validate IDs, and summarize errors safel
 
   assert.match(helper, /requireApiSuperAdmin/);
   assert.match(helper, /isValidRiskEventId/);
-  assert.match(detail, /if \(!isValidRiskEventId\(context\.params\.id\)\)/);
+  assert.match(detail, /if \(!isValidRiskEventId\(\(await context\.params\)\.id\)\)/);
   assert.match(detail, /status: 400/);
   assert.match(helper, /return fallback/);
   assert.doesNotMatch(helper, /return message\.trim\(\) \|\| fallback/);

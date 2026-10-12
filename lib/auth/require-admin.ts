@@ -1,4 +1,4 @@
-﻿import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 type AdminProfile = {
@@ -41,7 +41,7 @@ export async function getServerAdminContext(): Promise<
     return { ok: false, status: 500, message: "Supabase 环境变量未配置" };
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const {
     data: { user },
     error: userError,
@@ -83,7 +83,7 @@ export async function getServerSuperAdminContext(): Promise<
   | { ok: false; status: 401 | 403 | 500; message: string }
 > {
   if (!hasSupabaseServerConfig()) return { ok: false, status: 500, message: "Supabase 环境变量未配置" };
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return { ok: false, status: 401, message: "请先登录" };
   const result = await loadAdminAuthorization(supabase, user.id);

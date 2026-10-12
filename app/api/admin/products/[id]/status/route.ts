@@ -15,7 +15,7 @@ import {
 } from "@/lib/supabase/service-role";
 
 type RouteContext = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 type ProductStatus = "draft" | "active" | "inactive" | "sold_out";
@@ -98,7 +98,8 @@ async function safeAuditStatusAction(input: Parameters<typeof auditCatalogAction
   }
 }
 
-export async function POST(request: Request, { params }: RouteContext) {
+export async function POST(request: Request, props: RouteContext) {
+  const params = await props.params;
   const requestId = getRequestId(request);
 
   try {

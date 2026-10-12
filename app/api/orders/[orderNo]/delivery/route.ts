@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
@@ -6,9 +6,9 @@ import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/user
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     orderNo: string;
-  };
+  }>;
 };
 
 type DeliveryRow = {
@@ -78,7 +78,8 @@ export async function GET(_request: Request, context: RouteContext) {
       return json({ error: "Supabase 环境变量未配置" }, { status: 500 });
     }
 
-    const supabase = getSupabaseServerClient();
+    const { orderNo } = await context.params;
+    const supabase = await getSupabaseServerClient();
     const {
       data: { user },
       error: userError,
@@ -98,7 +99,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     const { data, error } = await supabase.rpc("get_order_delivery_for_user", {
-      p_order_no: context.params.orderNo,
+      p_order_no: orderNo,
     });
 
     if (error) {
@@ -115,7 +116,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return json({
       status: rows.some((row) => row.delivery_status === "delivered") ? "delivered" : "pending",
       deliveries: rows.map((row, index) => ({
-        id: row.delivery_id ?? `${context.params.orderNo}:${index}`,
+        id: row.delivery_id ?? `${orderNo}:${index}`,
         product_name: row.product_name ?? "—",
         delivery_status: row.delivery_status ?? "pending",
         delivery_type: row.delivery_type ?? "—",

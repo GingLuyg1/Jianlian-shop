@@ -450,7 +450,7 @@ export async function POST(request: Request) {
 }
 
 async function findExistingRecharge(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
+  supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>,
   userId: string,
   clientRequestId: string
 ) {
@@ -585,7 +585,7 @@ async function requireUser() {
   if (!hasSupabaseServerConfig()) {
     return { ok: false as const, response: NextResponse.json({ error: "Recharge service is unavailable.", code: "RECHARGE_LIST_READ_FAILED" }, { status: 503 }) };
   }
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     return { ok: false as const, response: NextResponse.json({ error: "Please sign in before continuing.", code: "RECHARGE_AUTH_REQUIRED" }, { status: 401 }) };

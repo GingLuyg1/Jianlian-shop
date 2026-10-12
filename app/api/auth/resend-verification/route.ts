@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { checkRateLimit, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "认证服务暂未配置。" }, { status: 503 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const {
     data: { user },
     error: userError,

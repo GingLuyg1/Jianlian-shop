@@ -13,7 +13,7 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { userId: string } };
+type RouteContext = { params: Promise<{ userId: string }> };
 type Row = Record<string, unknown>;
 
 function json(body: unknown, init?: ResponseInit) {
@@ -31,7 +31,7 @@ export async function GET(request: Request, context: RouteContext) {
   if (!admin.ok) return admin.response;
   const serviceClient = getSupabaseServiceRoleClient();
   const supabase = serviceClient ?? admin.supabase;
-  const userId = context.params.userId;
+  const userId = (await context.params).userId;
   if (!isUuid(userId)) return json({ error: "用户编号格式无效。" }, { status: 400 });
 
   try {

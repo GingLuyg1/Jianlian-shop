@@ -206,7 +206,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Supabase server configuration is missing." }, { status: 500 });
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const {
       data: { user },
       error: userError,
@@ -270,7 +270,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Supabase server configuration is missing." }, { status: 500 });
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const {
       data: { user },
       error: userError,

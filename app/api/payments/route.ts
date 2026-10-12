@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { getPaymentErrorMessage, getManualPaymentMethod } from "@/lib/payments/payment-status";
 import { normalizePaymentRecord, normalizePaymentRows, paymentSelect } from "@/lib/payments/payment-queries";
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 500 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const {
     data: { user },
     error: userError,
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 500 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const {
     data: { user },
     error: userError,

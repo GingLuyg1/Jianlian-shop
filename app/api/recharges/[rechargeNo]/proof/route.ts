@@ -16,12 +16,13 @@ function safeFileName(name: string) {
 
 async function getUserContext() {
   if (!hasSupabaseServerConfig()) return null;
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data } = await supabase.auth.getUser();
   return data.user ? { supabase, user: data.user } : null;
 }
 
-export async function GET(_request: Request, { params }: { params: { rechargeNo: string } }) {
+export async function GET(_request: Request, props: { params: Promise<{ rechargeNo: string }> }) {
+  const params = await props.params;
   const context = await getUserContext();
   if (!context) return NextResponse.json({ error: "请先登录后再查看充值凭证。" }, { status: 401 });
   const { data, error } = await context.supabase.from("account_recharges").select("id,recharge_no,proof_paths,status,submitted_at,transaction_reference,payment_time,payer_account_summary").eq("recharge_no", params.rechargeNo).eq("user_id", context.user.id).maybeSingle();
@@ -36,7 +37,8 @@ export async function GET(_request: Request, { params }: { params: { rechargeNo:
   return NextResponse.json({ rechargeNo: data.recharge_no, status: data.status, submittedAt: data.submitted_at, transactionReference: data.transaction_reference, paymentTime: data.payment_time, payerAccountSummary: data.payer_account_summary, proofs: signedUrls.filter(Boolean) });
 }
 
-export async function POST(request: Request, { params }: { params: { rechargeNo: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ rechargeNo: string }> }) {
+  const params = await props.params;
   const context = await getUserContext();
   if (!context) return NextResponse.json({ error: "请先登录后再提交充值凭证。" }, { status: 401 });
   const rateLimit = checkRateLimit("media_upload", getUserRateLimitKey(context.user.id, `recharge_proof:${params.rechargeNo}`));

@@ -14,7 +14,11 @@ const DELIVERY_TYPES = new Set(["manual", "automatic", "shipping"]);
 function json(body: unknown, status = 200) { return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } }); }
 function normalizedText(value: unknown, max: number) { const result = typeof value === "string" ? value.trim() : ""; return result && result.length <= max ? result : null; }
 
-export async function PATCH(request: Request, { params }: { params: { id: string; skuId: string } }) {
+export async function PATCH(
+  request: Request,
+  props: { params: Promise<{ id: string; skuId: string }> }
+) {
+  const params = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
@@ -61,7 +65,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   return json({ sku: data, requestId });
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string; skuId: string } }) {
+export async function DELETE(
+  request: Request,
+  props: { params: Promise<{ id: string; skuId: string }> }
+) {
+  const params = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;

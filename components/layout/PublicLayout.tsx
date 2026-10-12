@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Headphones, Mail, MessageCircle, Copy, ExternalLink } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
@@ -77,7 +77,9 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:195px] lg:[--storefront-sidebar-width:195px]",
       !mobileNavigationUntilLg && "md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px]",
     )}>
-      <RouteLoadingIndicator />
+      <Suspense fallback={null}>
+        <RouteLoadingIndicator />
+      </Suspense>
       <PublicSidebar onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
 
       <div className={cn(

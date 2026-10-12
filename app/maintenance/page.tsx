@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 async function loadSettings() {
   if (!hasSupabaseServerConfig()) return DEFAULT_PUBLIC_SETTINGS;
-  const result = await readPublicSettings(getSupabaseServerClient());
+  const result = await readPublicSettings(await getSupabaseServerClient());
   return result.settings;
 }
 

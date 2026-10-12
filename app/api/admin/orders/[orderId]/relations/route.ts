@@ -8,7 +8,7 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: { orderId: string };
+  params: Promise<{ orderId: string }>;
 };
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -17,7 +17,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: admin.message }, { status: admin.status });
   }
 
-  const orderId = context.params.orderId;
+  const orderId = (await context.params).orderId;
   const serviceClient = getSupabaseServiceRoleClient();
   if (!serviceClient) {
     return NextResponse.json({ error: "服务端数据库权限未配置，无法读取订单关联业务。" }, { status: 503 });

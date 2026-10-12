@@ -5,10 +5,11 @@ import { auditEmailAdminAction, summarizeEmailError } from "@/lib/email/jobs";
 import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
-export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ jobId: string }> }) {
+  const params = await props.params;
   const admin = await getServerSuperAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
-    const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_delivery_cancel"));
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_delivery_cancel"));
   if (!limit.allowed) return limit.response!;
   const service = getSupabaseServiceRoleClient();
   if (!service) return NextResponse.json({ error: "后台服务未配置。" }, { status: 503 });

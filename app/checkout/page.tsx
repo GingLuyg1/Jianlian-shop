@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
   useCallback,
@@ -192,6 +193,14 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
 }
 
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={null}>
+      <CheckoutPageContent />
+    </Suspense>
+  );
+}
+
+function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { settings } = usePublicSettings();

@@ -45,7 +45,8 @@ type DeliveryRow = {
   sent_at: string | null;
 };
 
-export default async function EmailDeliveriesPage({ searchParams }: { searchParams?: { status?: string } }) {
+export default async function EmailDeliveriesPage(props: { searchParams?: Promise<{ status?: string }> }) {
+  const searchParams = await props.searchParams;
   const admin = await getServerSuperAdminContext();
   if (!admin.ok) redirect("/login");
   const service = getSupabaseServiceRoleClient();

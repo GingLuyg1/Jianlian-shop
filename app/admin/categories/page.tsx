@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Edit, GripVertical, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -225,6 +225,14 @@ function isValidImagePath(value: string) {
 }
 
 export default function AdminCategoriesPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminCategoriesPageContent />
+    </Suspense>
+  );
+}
+
+function AdminCategoriesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [categories, setCategories] = useState<AdminCategory[]>([]);

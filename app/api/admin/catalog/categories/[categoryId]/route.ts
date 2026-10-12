@@ -12,10 +12,11 @@ import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 import { revalidateCategoryCache } from "@/lib/cache/cache-tags";
 
 type RouteContext = {
-  params: { categoryId: string };
+  params: Promise<{ categoryId: string }>;
 };
 
-export async function PATCH(request: Request, { params }: RouteContext) {
+export async function PATCH(request: Request, props: RouteContext) {
+  const params = await props.params;
   const admin = await requireCatalogAdmin();
   if (!admin.ok) return admin.response;
 
@@ -84,7 +85,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   return jsonResponse({ category: data });
 }
 
-export async function DELETE(request: Request, { params }: RouteContext) {
+export async function DELETE(request: Request, props: RouteContext) {
+  const params = await props.params;
   const admin = await requireCatalogAdmin();
   if (!admin.ok) return admin.response;
 

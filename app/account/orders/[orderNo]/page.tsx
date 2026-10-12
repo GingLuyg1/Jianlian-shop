@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Clipboard, RefreshCcw } from "lucide-react";
@@ -57,7 +57,8 @@ function getSafeOrderActionMessage(payload: OrderActionResponse | null | undefin
   return fallback;
 }
 
-export default function AccountOrderDetailPage({ params }: { params: { orderNo: string } }) {
+export default function AccountOrderDetailPage(props: { params: Promise<{ orderNo: string }> }) {
+  const params = use(props.params);
   const router = useRouter();
   const orderNo = decodeURIComponent(params.orderNo);
   const [order, setOrder] = useState<OrderRecord | null>(null);

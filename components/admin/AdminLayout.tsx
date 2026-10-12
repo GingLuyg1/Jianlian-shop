@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, Suspense } from "react";
 import AdminGuard from "@/components/auth/AdminGuard";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopBar from "./AdminTopBar";
@@ -16,10 +16,14 @@ function AdminShell({ children }: AdminLayoutProps) {
   return (
     <div data-admin-shell className={cn(v2Styles.scope, "fixed inset-0 flex h-[100dvh] max-h-[100dvh] min-h-0 w-full overflow-hidden bg-[var(--admin-v2-background)] text-[var(--admin-v2-text-primary)] [--admin-content-padding-x:16px] [--admin-header-height:62px] [--admin-main-offset:204px] [--admin-sidebar-width:204px]")}>
       <div className="hidden h-full w-[var(--admin-main-offset)] shrink-0 lg:flex">
-        <AdminSidebar />
+        <Suspense fallback={null}>
+          <AdminSidebar />
+        </Suspense>
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AdminTopBar />
+        <Suspense fallback={null}>
+          <AdminTopBar />
+        </Suspense>
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
       </div>
     </div>

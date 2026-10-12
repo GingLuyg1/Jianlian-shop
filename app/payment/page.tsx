@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { copyWithFeedback } from "@/lib/ui/copy-feedback";
@@ -439,6 +439,14 @@ function LocalAddressQr({ value }: { value: string }) {
 }
 
 export default function PaymentPage() {
+  return (
+    <Suspense fallback={null}>
+      <PaymentPageContent />
+    </Suspense>
+  );
+}
+
+function PaymentPageContent() {
   const searchParams = useSearchParams();
   const rechargeNo = searchParams.get("recharge")?.trim() ?? "";
   const orderNo = searchParams.get("order") || searchParams.get("order_no") || "";

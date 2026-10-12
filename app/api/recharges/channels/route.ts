@@ -33,7 +33,7 @@ export async function GET() {
     return NextResponse.json(publicError, { status: 503 });
   }
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const { data, error } = await supabase
       .from("payment_channels")
       .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")

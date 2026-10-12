@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { buildPersonalDataExport, createPrivacyRequest, getCurrentUserPrivacySummary, getDeletionBlockers, privacyInitError } from "@/lib/privacy/privacy-service";
@@ -22,7 +22,7 @@ function json(body: unknown, init?: ResponseInit) {
 
 async function requireUser() {
   if (!hasSupabaseServerConfig()) return { ok: false as const, response: json({ error: "Supabase 环境变量未配置。" }, { status: 500 }) };
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return { ok: false as const, response: json({ error: "请先登录。" }, { status: 401 }) };
   return { ok: true as const, supabase, user };

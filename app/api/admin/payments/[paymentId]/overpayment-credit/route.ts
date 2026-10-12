@@ -8,9 +8,9 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     paymentId: string;
-  };
+  }>;
 };
 
 function safeError(error: unknown) {
@@ -42,7 +42,8 @@ function safeError(error: unknown) {
   return { status: 500, code: "BEP20_OVERPAYMENT_CREDIT_FAILED", message: "超额金额转入余额失败，请稍后重试。" };
 }
 
-export async function POST(request: Request, { params }: RouteContext) {
+export async function POST(request: Request, props: RouteContext) {
+  const params = await props.params;
   const requestId = getAuditRequestId(request, randomUUID());
   const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;

@@ -83,7 +83,8 @@ function validOperationEnvelope(value: unknown) {
   return false;
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;

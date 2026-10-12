@@ -26,7 +26,7 @@ function scopedTag(prefix: string, value: string) {
 
 function safeRevalidateTag(tag: string) {
   try {
-    revalidateTag(tag);
+    revalidateTag(tag, { expire: 0 });
     return true;
   } catch {
     console.warn("[Cache] revalidateTag failed", { tag });

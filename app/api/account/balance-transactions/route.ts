@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 503 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) {
     return NextResponse.json({ error: "请先登录后再查看余额流水" }, { status: 401 });

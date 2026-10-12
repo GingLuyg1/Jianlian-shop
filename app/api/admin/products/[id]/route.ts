@@ -5,11 +5,13 @@ import {
 } from "../../catalog/products/[productId]/route";
 
 type RouteContext = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 function toCatalogContext(context: RouteContext) {
-  return { params: { productId: context.params.id } };
+  return {
+    params: context.params.then(({ id }) => ({ productId: id })),
+  };
 }
 
 export function GET(request: Request, context: RouteContext) {

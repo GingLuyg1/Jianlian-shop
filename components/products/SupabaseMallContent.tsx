@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { checkoutHref } from "@/lib/products/checkout-navigation";
 import {
@@ -85,6 +85,16 @@ type FilterState = {
 const CATALOG_PAGE_SIZE = 20;
 
 export default function SupabaseMallContent({
+  ...props
+}: SupabaseMallContentProps) {
+  return (
+    <Suspense fallback={null}>
+      <SupabaseMallContentInner {...props} />
+    </Suspense>
+  );
+}
+
+function SupabaseMallContentInner({
   fallbackCategories,
   fallbackTitle,
   primaryNames,

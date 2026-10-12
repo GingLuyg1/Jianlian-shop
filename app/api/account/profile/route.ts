@@ -60,7 +60,7 @@ async function getCurrentUser() {
     return { ok: false as const, response: json({ error: "Supabase server configuration is missing." }, { status: 500 }) };
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const {
     data: { user },
     error,
@@ -73,7 +73,7 @@ async function getCurrentUser() {
   return { ok: true as const, supabase, user };
 }
 
-async function readProfile(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string) {
+async function readProfile(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, userId: string) {
   const extended = await supabase
     .from("profiles")
     .select(PROFILE_EXTENDED_SELECT)
@@ -92,7 +92,7 @@ async function readProfile(supabase: ReturnType<typeof getSupabaseServerClient>,
   return { profile: base.data, schemaReady: false, error: base.error };
 }
 
-async function createProfileOnce(supabase: ReturnType<typeof getSupabaseServerClient>, user: { id: string; email?: string | null; phone?: string | null }) {
+async function createProfileOnce(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, user: { id: string; email?: string | null; phone?: string | null }) {
   // This user is from auth.getUser(), never from request JSON. Missing-profile
   // repair must not require broad authenticated INSERT on financial columns.
   const service = getSupabaseServiceRoleClient();

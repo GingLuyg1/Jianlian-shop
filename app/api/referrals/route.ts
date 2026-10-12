@@ -87,7 +87,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 500 });
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const {
       data: { user },
       error: userError,

@@ -8,14 +8,14 @@ export function hasSupabaseServerConfig() {
   );
 }
 
-export function getSupabaseServerClient() {
+export async function getSupabaseServerClient() {
   if (!hasSupabaseServerConfig()) {
     throw new Error(
       "缺少 Supabase 环境变量：NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY"
     );
   }
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

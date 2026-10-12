@@ -4,7 +4,7 @@ import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labe
 
 import Link from "next/link";
 import { toast } from "sonner";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Eye, RefreshCw } from "lucide-react";
 
@@ -29,6 +29,14 @@ const statuses: Record<string, string> = { open: "待处理", investigating: "�
 const categories: Record<string, string> = { products: "商品", sku: "SKU", orders: "订单", inventory: "库存", payments: "支付", recharges: "充值", balance: "余额", refund: "退款", delivery: "交付", reconciliation: "对账", notifications: "通知", email: "邮件", auth: "认证", database: "数据库", security: "安全", deployment: "部署", system: "系统", performance: "性能" };
 
 export default function AdminSystemErrorsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminSystemErrorsPageContent />
+    </Suspense>
+  );
+}
+
+function AdminSystemErrorsPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const initial = useSearchParams();

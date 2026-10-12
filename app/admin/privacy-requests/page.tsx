@@ -4,7 +4,7 @@ import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labe
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Eye, RefreshCw, Search } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -65,6 +65,14 @@ function useDebouncedValue(value: string, delay = 300) {
 }
 
 export default function AdminPrivacyRequestsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminPrivacyRequestsPageContent />
+    </Suspense>
+  );
+}
+
+function AdminPrivacyRequestsPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();

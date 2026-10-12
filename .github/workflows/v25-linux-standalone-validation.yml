@@ -1,0 +1,87 @@
+name: V2.5 Linux standalone validation (no deployment)
+
+on:
+  push:
+    branches:
+      - validation/v25-linux-node20-20261012
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v25-linux-standalone-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-standalone:
+    if: github.repository == 'GingLuyg1/Jianlian-shop' && github.ref == 'refs/heads/validation/v25-linux-node20-20261012'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      APP_ENV: test
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key-not-for-production
+      PAYMENT_PROVIDER_MODE: disabled
+      DISABLE_EXTERNAL_PROVIDERS: 'true'
+    steps:
+      - name: Checkout without persisted token
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up exact Node 20 runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: npm
+
+      - name: Record runner ABI and version
+        run: |
+          uname -sm
+          ldd --version | head -n 1
+          node --version
+          npm --version
+          sed -n '1,6p' /etc/os-release
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Full regression suite (record all failures)
+        id: regression
+        continue-on-error: true
+        run: npm test
+
+      - name: Production build with dummy test configuration
+        run: npm run build
+
+      - name: Package Linux standalone and measure disk
+        id: package
+        run: |
+          bash ops/standalone-v25/package-linux.sh "$RUNNER_TEMP/v25-linux-package"
+          bash ops/standalone-v25/verify-linux-package.sh "$RUNNER_TEMP/v25-linux-package"
+
+      - name: Upload isolated rehearsal artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v25-linux-standalone-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/v25-linux-package/*.tar.gz
+            ${{ runner.temp }}/v25-linux-package/*.sha256
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Final regression gate
+        if: always()
+        env:
+          REGRESSION_OUTCOME: ${{ steps.regression.outcome }}
+        run: |
+          printf 'REGRESSION_OUTCOME=%s\n' "$REGRESSION_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          test "$REGRESSION_OUTCOME" = success

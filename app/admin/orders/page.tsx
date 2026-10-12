@@ -4,7 +4,7 @@ import { statusLabel } from '@/lib/admin/display-labels';
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, Eye, Loader2, RefreshCcw, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -118,6 +118,14 @@ function getOrderNo(order: OrderRecord | null | undefined) {
 }
 
 export default function AdminOrdersPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminOrdersPageContent />
+    </Suspense>
+  );
+}
+
+function AdminOrdersPageContent() {
   const searchParams = useSearchParams();
   const initialAttention = ORDER_ATTENTION_VALUES.includes(searchParams.get("attention") as (typeof ORDER_ATTENTION_VALUES)[number])
     ? searchParams.get("attention") as (typeof ORDER_ATTENTION_VALUES)[number]

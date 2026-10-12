@@ -7,7 +7,7 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { refundId: string } };
+type RouteContext = { params: Promise<{ refundId: string }> };
 type Row = Record<string, unknown>;
 
 function json(body: unknown, init?: ResponseInit) {
@@ -29,7 +29,7 @@ export async function GET(request: Request, context: RouteContext) {
     const { data, error } = await supabase
       .from("refund_requests")
       .select("*,orders(*,order_items(*)),profiles(email,display_name),refund_status_logs(*)")
-      .eq("id", context.params.refundId)
+      .eq("id", (await context.params).refundId)
       .maybeSingle();
     if (error) return json({ error: normalizeRefundError(error.message) }, { status: 503 });
     if (!data) return json({ error: "退款申请不存在。" }, { status: 404 });
@@ -57,7 +57,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const before = await supabase
       .from("refund_requests")
       .select("id,refund_no,status,requested_amount,approved_amount,refund_method,order_id,user_id,orders(payment_method)")
-      .eq("id", context.params.refundId)
+      .eq("id", (await context.params).refundId)
       .maybeSingle();
     if (before.error) return json({ error: normalizeRefundError(before.error.message) }, { status: 503 });
     if (!before.data) return json({ error: "退款申请不存在。" }, { status: 404 });
@@ -73,7 +73,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "refund_approve_balance",
         module: "orders",
         targetType: "refund",
-        targetId: context.params.refundId,
+        targetId: (await context.params).refundId,
         targetLabel: String(beforeRow.refund_no ?? ""),
         result: "denied",
         errorMessage: "外部支付订单不能通过余额退款自动完成",
@@ -89,7 +89,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const { data, error } = await supabase.rpc("super_admin_process_refund_request", {
-      p_refund_id: context.params.refundId,
+      p_refund_id: (await context.params).refundId,
       p_action: action,
       p_approved_amount: body?.approvedAmount ?? null,
       p_review_note: reviewNote,
@@ -106,7 +106,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: `refund_${action}`,
         module: "orders",
         targetType: "refund",
-        targetId: context.params.refundId,
+        targetId: (await context.params).refundId,
         result: "failed",
         errorCode: typeof error.code === "string" ? error.code : null,
         errorMessage: message,
@@ -121,7 +121,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: `refund_${action}`,
       module: "orders",
       targetType: "refund",
-      targetId: context.params.refundId,
+      targetId: (await context.params).refundId,
       targetLabel: beforeRow.refund_no ? String(beforeRow.refund_no) : null,
       result: "success",
       beforeSummary: beforeRow,
@@ -138,7 +138,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: `refund_${action ?? "unknown"}`,
       module: "orders",
       targetType: "refund",
-      targetId: context.params.refundId,
+      targetId: (await context.params).refundId,
       result: "failed",
       errorMessage: error,
     });

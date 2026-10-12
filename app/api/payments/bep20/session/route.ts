@@ -45,7 +45,7 @@ async function requireUser() {
   if (!hasSupabaseServerConfig()) {
     return { ok: false as const, response: NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 503 }) };
   }
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     return { ok: false as const, response: NextResponse.json({ error: "请先登录后再操作" }, { status: 401 }) };

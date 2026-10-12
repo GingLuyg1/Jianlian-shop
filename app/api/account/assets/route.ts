@@ -21,7 +21,7 @@ export async function GET() {
     return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 503 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) {
     return NextResponse.json({ error: "请先登录后再查看账户资产" }, { status: 401 });
@@ -110,7 +110,7 @@ export async function GET() {
 }
 
 async function loadProfile(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
+  supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>,
   userId: string,
   fallbackEmail: string | null,
   fallbackCreatedAt: string | null
@@ -150,7 +150,7 @@ async function loadProfile(
   return { profile: normalizeAccountAssetsProfile(data as Record<string, unknown> | null, fallback), error: null };
 }
 
-async function loadOrders(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string) {
+async function loadOrders(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, userId: string) {
   const { data, error } = await supabase
     .from("orders")
     .select("id,order_no,status,payment_status,total_amount,created_at")
@@ -173,7 +173,7 @@ async function loadOrders(supabase: ReturnType<typeof getSupabaseServerClient>, 
   };
 }
 
-async function loadRecharges(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string) {
+async function loadRecharges(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, userId: string) {
   const { data, error } = await supabase
     .from("account_recharges")
     .select("recharge_no,channel_name,channel_code,currency,requested_amount,amount,credited_amount,status,created_at,paid_at")
@@ -198,7 +198,7 @@ async function loadRecharges(supabase: ReturnType<typeof getSupabaseServerClient
   };
 }
 
-async function loadBalanceTransactions(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string) {
+async function loadBalanceTransactions(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, userId: string) {
   const { data, error } = await supabase
     .from("balance_transactions")
     .select("transaction_no,business_type,business_id,direction,amount,balance_before,balance_after,currency,status,remark,created_at")

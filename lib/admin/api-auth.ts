@@ -1,4 +1,4 @@
-﻿import "server-only";
+import "server-only";
 
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
@@ -29,7 +29,7 @@ function isMissingAdminUsersSchema(error: { code?: string; message?: string } | 
   return Boolean(error && /42P01|PGRST205|admin_users|schema cache/i.test(`${error.code ?? ""} ${error.message ?? ""}`));
 }
 
-async function loadAdminAuthorization(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string) {
+async function loadAdminAuthorization(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, userId: string) {
   const { data, error } = await supabase
     .from("admin_users")
     .select("user_id,admin_level,status,permissions")
@@ -48,7 +48,7 @@ export async function requireApiUser() {
     return { ok: false as const, response: permissionError("Supabase 环境变量未配置", 503) };
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const {
     data: { user },
     error,

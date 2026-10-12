@@ -1,10 +1,10 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { orderNo: string } };
+type RouteContext = { params: Promise<{ orderNo: string }> };
 
 type FulfillmentRow = {
   order_item_id: string;
@@ -41,12 +41,12 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     if (!hasSupabaseServerConfig()) return json({ error: "Supabase 环境变量未配置" }, { status: 500 });
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return json({ error: "请先登录" }, { status: 401 });
 
     const { data, error } = await supabase.rpc("get_order_fulfillment_for_user", {
-      p_order_no: context.params.orderNo,
+      p_order_no: (await context.params).orderNo,
     });
     if (error) {
       const message = sanitizeFulfillmentError(error);

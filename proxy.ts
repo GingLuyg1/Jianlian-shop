@@ -51,7 +51,7 @@ async function isMaintenanceEnabled(supabase: ReturnType<typeof createServerClie
   return enabled === true || enabled === "true" || enabled === "1" || status === "maintenance";
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   if (isStaticAssetPath(pathname)) return NextResponse.next();
 

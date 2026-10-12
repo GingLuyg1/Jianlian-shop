@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { normalizePublicProduct, normalizePublicSku } from "@/lib/supabase/public-catalog";
@@ -83,17 +83,17 @@ async function findVisibleProductSlugByCatalogApi(request: Request, identifier: 
 }
 export async function GET(
   request: Request,
-  context: { params: { identifier?: string } }
+  context: { params: Promise<{ identifier?: string }> }
 ) {
   const requestId = randomUUID();
-  const identifier = decodeURIComponent(String(context.params.identifier ?? "")).trim();
+  const identifier = decodeURIComponent(String((await context.params).identifier ?? "")).trim();
 
   if (!identifier || identifier.length > 160) {
     return jsonError(400, "INVALID_PRODUCT_IDENTIFIER", "Invalid product identifier", requestId);
   }
 
   try {
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const isUuid = UUID_RE.test(identifier);
     const queryProduct = (field: "id" | "slug", value = identifier) =>
       supabase

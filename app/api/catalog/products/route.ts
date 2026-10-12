@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       return productError("CATEGORY_ID_INVALID", "二级分类参数不正确", requestId, 400);
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const { data: categoryRows, error: categoryError } = await supabase
       .from("categories")
       .select("id,parent_id,level,name,slug,sort_order,is_active")
@@ -154,7 +154,7 @@ export async function GET(request: Request) {
   }
 }
 
-function buildProductQuery(supabase: ReturnType<typeof getSupabaseServerClient>, categoryIds: string[]) {
+function buildProductQuery(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, categoryIds: string[]) {
   let query = supabase
     .from("products")
     .select("id,category_id,name,slug,short_description,price,original_price,stock,has_skus,status,delivery_type,image_url,sort_order,updated_at")
@@ -166,7 +166,7 @@ function buildProductQuery(supabase: ReturnType<typeof getSupabaseServerClient>,
   return query;
 }
 
-async function loadSkus(supabase: ReturnType<typeof getSupabaseServerClient>, productIds: string[]) {
+async function loadSkus(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, productIds: string[]) {
   if (productIds.length === 0) return [];
 
   try {

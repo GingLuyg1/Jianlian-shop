@@ -10,10 +10,10 @@ import { checkRateLimit, getBusinessRateLimitKey } from "@/lib/security/rate-lim
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, context: { params: { sessionNo: string } }) {
+export async function GET(_request: Request, context: { params: Promise<{ sessionNo: string }> }) {
   const userContext = await requireApiUser();
   if (!userContext.ok) return userContext.response;
-  const sessionNo = context.params.sessionNo?.trim();
+  const sessionNo = (await context.params).sessionNo?.trim();
   if (!sessionNo) {
     return NextResponse.json({ code: "SESSION_NO_REQUIRED", error: "缺少支付会话编号" }, { status: 400 });
   }

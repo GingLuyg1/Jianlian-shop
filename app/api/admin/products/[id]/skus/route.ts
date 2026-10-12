@@ -17,7 +17,8 @@ function text(value: unknown, max = 200) { return typeof value === "string" && v
 function money(value: unknown, optional = false) { if (optional && (value === null || value === "" || value === undefined)) return null; const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : undefined; }
 function integer(value: unknown) { const n = Number(value); return Number.isSafeInteger(n) && n >= 0 ? n : undefined; }
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(_request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
@@ -47,7 +48,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   });
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;

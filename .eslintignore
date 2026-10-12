@@ -1,2 +1,0 @@
-# Type-only declarations for adjacent .mjs modules are checked by TypeScript.
-**/*.d.mts

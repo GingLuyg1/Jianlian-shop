@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -241,6 +241,14 @@ function CategoryTreeSkeleton() {
 }
 
 export default function AdminProductsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminProductsPageContent />
+    </Suspense>
+  );
+}
+
+function AdminProductsPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

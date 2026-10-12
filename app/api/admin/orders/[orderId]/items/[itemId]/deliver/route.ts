@@ -8,10 +8,10 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     orderId: string;
     itemId: string;
-  };
+  }>;
 };
 
 type AuditAdmin = { id: string; email?: string | null };
@@ -47,7 +47,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "deliver_order_item",
         module: "delivery",
         targetType: "order_item",
-        targetId: context.params.itemId,
+        targetId: (await context.params).itemId,
         result: "denied",
         errorMessage: admin.message,
       });
@@ -65,11 +65,11 @@ export async function POST(request: Request, context: RouteContext) {
         action: "deliver_order_item",
         module: "delivery",
         targetType: "order_item",
-        targetId: context.params.itemId,
+        targetId: (await context.params).itemId,
         result: "failed",
         errorCode: "empty_delivery_content",
         errorMessage: "交付内容不能为空",
-        metadata: { order_id: context.params.orderId },
+        metadata: { order_id: (await context.params).orderId },
       });
       return json({ error: "交付内容不能为空" }, { status: 400 });
     }
@@ -82,18 +82,18 @@ export async function POST(request: Request, context: RouteContext) {
         action: "deliver_order_item",
         module: "delivery",
         targetType: "order_item",
-        targetId: context.params.itemId,
+        targetId: (await context.params).itemId,
         result: "failed",
         errorCode: "service_role_unavailable",
         errorMessage: "服务端交付权限未配置",
-        metadata: { order_id: context.params.orderId },
+        metadata: { order_id: (await context.params).orderId },
       });
       return json({ error: "服务端交付权限未配置" }, { status: 503 });
     }
 
     const { data, error } = await serviceClient.rpc("admin_deliver_order_item_manual", {
-      p_order_id: context.params.orderId,
-      p_order_item_id: context.params.itemId,
+      p_order_id: (await context.params).orderId,
+      p_order_item_id: (await context.params).itemId,
       p_delivery_content: deliveryContent,
       p_delivery_note: deliveryNote,
     });
@@ -106,11 +106,11 @@ export async function POST(request: Request, context: RouteContext) {
         action: "deliver_order_item",
         module: "delivery",
         targetType: "order_item",
-        targetId: context.params.itemId,
+        targetId: (await context.params).itemId,
         result: "failed",
         errorCode: typeof error.code === "string" ? error.code : null,
         errorMessage: message,
-        metadata: { order_id: context.params.orderId, has_delivery_content: true },
+        metadata: { order_id: (await context.params).orderId, has_delivery_content: true },
       });
       return json({ error: message }, { status: 400 });
     }
@@ -121,10 +121,10 @@ export async function POST(request: Request, context: RouteContext) {
       action: "deliver_order_item",
       module: "delivery",
       targetType: "order_item",
-      targetId: context.params.itemId,
+      targetId: (await context.params).itemId,
       result: "success",
       metadata: {
-        order_id: context.params.orderId,
+        order_id: (await context.params).orderId,
         has_delivery_content: true,
         has_delivery_note: Boolean(deliveryNote),
       },
@@ -139,7 +139,7 @@ export async function POST(request: Request, context: RouteContext) {
       action: "deliver_order_item",
       module: "delivery",
       targetType: "order_item",
-      targetId: context.params.itemId,
+      targetId: (await context.params).itemId,
       result: "failed",
       errorMessage: message,
     });

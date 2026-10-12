@@ -106,7 +106,7 @@ export async function GET() {
   }
 
   try {
-    const documents = await listPublishedLegalDocuments(getSupabaseServerClient());
+    const documents = await listPublishedLegalDocuments(await getSupabaseServerClient());
     const availableTypes = new Set(documents.map((document) => document.document_type));
     const missingTypes = REQUIRED_DOCUMENT_TYPES.filter((type) => !availableTypes.has(type));
 

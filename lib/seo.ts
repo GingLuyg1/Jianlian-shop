@@ -81,7 +81,7 @@ export function buildPageMetadata(input: {
 
 export async function getSeoProduct(identifier: string): Promise<SeoProduct | null> {
   if (!hasSupabaseServerConfig()) return null;
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       identifier
@@ -99,7 +99,7 @@ export async function getSeoProduct(identifier: string): Promise<SeoProduct | nu
 
 export async function listSeoProducts() {
   if (!hasSupabaseServerConfig()) return [];
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase
     .from("products")
     .select("id,name,slug,short_description,description,image_url,price,original_price,stock,status,updated_at,category_id")
@@ -111,7 +111,7 @@ export async function listSeoProducts() {
 
 export async function listSeoCategories() {
   if (!hasSupabaseServerConfig()) return [];
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase
     .from("categories")
     .select("id,parent_id,level,name,slug,description,is_active,updated_at")

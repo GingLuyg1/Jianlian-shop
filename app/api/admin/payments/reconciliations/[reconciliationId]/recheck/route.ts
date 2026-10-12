@@ -8,7 +8,7 @@ import { runPaymentReconciliation } from "@/lib/payments/reconciliation-service"
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { reconciliationId: string } };
+type RouteContext = { params: Promise<{ reconciliationId: string }> };
 
 const RECHECKABLE_RESULTS = new Set(["mismatched", "query_failed", "manual_review"]);
 
@@ -29,7 +29,8 @@ function safeRecheckResult(result: Awaited<ReturnType<typeof runPaymentReconcili
   };
 }
 
-export async function POST(request: Request, { params }: RouteContext) {
+export async function POST(request: Request, props: RouteContext) {
+  const params = await props.params;
   const admin = await getServerAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({ request, action: "recheck_payment_reconciliation", module: "payments", targetType: "payment_reconciliation", targetId: params.reconciliationId, result: "denied", errorMessage: admin.message });

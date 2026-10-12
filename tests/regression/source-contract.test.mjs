@@ -1661,7 +1661,7 @@ test("digital delivery writes elevate only after cookie administrator authorizat
   assert.ok(adminItem.indexOf("const admin = await getServerAdminContext()") < adminItem.indexOf("const serviceClient = getSupabaseServiceRoleClient()"));
   assert.match(adminOrder, /if \(!admin\.ok\)[\s\S]{0,500}return/);
   assert.match(adminItem, /if \(!admin\.ok\)[\s\S]{0,500}return/);
-  assert.match(adminOrder, /deliverDigitalOrder\(serviceClient, context\.params\.orderId, "admin_retry"\)/);
+  assert.match(adminOrder, /deliverDigitalOrder\(serviceClient, \(await context\.params\)\.orderId, "admin_retry"\)/);
   assert.match(adminOrder, /serviceClient\.rpc\("admin_deliver_order_item_manual"/);
   assert.match(adminItem, /serviceClient\.rpc\("admin_deliver_order_item_manual"/);
   assert.doesNotMatch(adminOrder, /admin\.supabase\.rpc\("admin_deliver_order_item_manual"/);
@@ -1675,7 +1675,7 @@ test("digital delivery writes elevate only after cookie administrator authorizat
 test("admin delivery routes use hardened RPCs and reject the unsafe legacy inventory action", () => {
   const route = file("app/api/admin/orders/[orderId]/route.ts");
 
-  assert.match(route, /deliverDigitalOrder\(serviceClient, context\.params\.orderId, "admin_retry"\)/);
+  assert.match(route, /deliverDigitalOrder\(serviceClient, \(await context\.params\)\.orderId, "admin_retry"\)/);
   assert.match(route, /rpc\("admin_deliver_order_item_manual"/);
   assert.match(route, /legacy_inventory_delivery_disabled/);
   assert.match(route, /status: 410/);
@@ -1720,8 +1720,8 @@ test("digital delivery service-role claim compatibility preserves least privileg
   assert.match(deliveryBaseline, /update public\.digital_inventory[\s\S]{0,500}status = 'delivered'/);
   assert.match(completion, /catch \(deliveryError\)[\s\S]{0,500}update\(\{ last_error: deliveryMessage \}\)/);
 
-  assert.match(adminOrder, /deliverDigitalOrder\(serviceClient, context\.params\.orderId, "admin_retry"\)/);
-  assert.match(adminOrder, /from\("payment_sessions"\)[\s\S]{0,300}update\(\{ last_error: null \}\)[\s\S]{0,300}eq\("business_id", context\.params\.orderId\)[\s\S]{0,120}eq\("status", "paid"\)/);
+  assert.match(adminOrder, /deliverDigitalOrder\(serviceClient, \(await context\.params\)\.orderId, "admin_retry"\)/);
+  assert.match(adminOrder, /from\("payment_sessions"\)[\s\S]{0,300}update\(\{ last_error: null \}\)[\s\S]{0,300}eq\("business_id", \(await context\.params\)\.orderId\)[\s\S]{0,120}eq\("status", "paid"\)/);
   assert.doesNotMatch(`${adminPayment}\n${adminOrder}`, /SUPABASE_(?:SERVICE_ROLE|SECRET|SERVICE_KEY)/);
 });
 
@@ -1912,8 +1912,9 @@ test("paid order details hide payment proof and load delivered content through t
   assert.match(queries, /fulfillment_status,paid_at/);
   assert.match(queries, /fulfillment_status: row\.fulfillment_status/);
   assert.match(deliveryRoute, /rpc\("get_order_delivery_for_user"/);
-  assert.match(deliveryRoute, /p_order_no: context\.params\.orderNo/);
-  assert.match(deliveryRoute, /id: row\.delivery_id \?\? `\$\{context\.params\.orderNo\}:\$\{index\}`/);
+  assert.match(deliveryRoute, /const \{ orderNo \} = await context\.params/);
+  assert.match(deliveryRoute, /p_order_no: orderNo/);
+  assert.match(deliveryRoute, /id: row\.delivery_id \?\? `\$\{orderNo\}:\$\{index\}`/);
   assert.doesNotMatch(deliveryRoute, /from\("(?:order_deliveries|digital_delivery_secrets)"\)/);
 
   assert.match(secureDelivery, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(orderNo\)\}\/delivery`, \{ cache: "no-store" \}\)/);

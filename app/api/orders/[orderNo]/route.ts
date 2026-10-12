@@ -10,9 +10,9 @@ import { getUserBep20UnderpaymentWalletCredit } from "@/lib/payments/bep20-under
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     orderNo: string;
-  };
+  }>;
 };
 
 function jsonError(message: string, status: number, code?: string) {
@@ -108,7 +108,7 @@ export async function GET(_request: Request, context: RouteContext) {
       return jsonError("Supabase server configuration is missing.", 500);
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const {
       data: { user },
       error: userError,
@@ -118,7 +118,7 @@ export async function GET(_request: Request, context: RouteContext) {
       return jsonError("Please sign in first.", 401);
     }
 
-    const order = await getUserOrderByNo(supabase, user.id, context.params.orderNo);
+    const order = await getUserOrderByNo(supabase, user.id, (await context.params).orderNo);
     if (!order) {
       return jsonError("Order does not exist or you do not have permission to view it.", 404);
     }
@@ -142,7 +142,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       return jsonError("Supabase server configuration is missing.", 500);
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const {
       data: { user },
       error: userError,
@@ -152,7 +152,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       return jsonError("Please sign in first.", 401);
     }
 
-    const order = await getUserOrderByNo(supabase, user.id, context.params.orderNo);
+    const order = await getUserOrderByNo(supabase, user.id, (await context.params).orderNo);
     if (!order) {
       return jsonError("Order does not exist or you do not have permission to view it.", 404);
     }

@@ -119,7 +119,7 @@ export async function POST(request: Request) {
 
   let userId: string | null = null;
   if (hasSupabaseServerConfig()) {
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const { data } = await supabase.auth.getUser();
     userId = data.user?.id ?? null;
   }

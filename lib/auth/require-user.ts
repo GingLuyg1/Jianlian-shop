@@ -6,7 +6,7 @@ export async function requireUser(redirectTo = "/login") {
     redirect(redirectTo);
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const {
     data: { user },
     error,

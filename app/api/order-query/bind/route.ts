@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { hashOrderQueryToken, verifyOrderQueryToken } from "@/lib/orders/order-query-service";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const sizeError = checkRequestSize(request, 8 * 1024);
   if (sizeError) return sizeError;
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
     return NextResponse.json({ error: "请先登录" }, { status: 401 });

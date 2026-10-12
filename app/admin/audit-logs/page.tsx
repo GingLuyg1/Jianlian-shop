@@ -2,7 +2,7 @@
 import { detailLabel } from '@/lib/admin/display-labels';
 
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Copy, Eye, RotateCcw, Search } from "lucide-react";
 
@@ -112,6 +112,14 @@ function useDebouncedValue<T>(value: T, delay = 300) {
 }
 
 export default function AdminAuditLogsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminAuditLogsPageContent />
+    </Suspense>
+  );
+}
+
+function AdminAuditLogsPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

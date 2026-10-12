@@ -12,10 +12,11 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request, { params }: { params: { rechargeNo: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ rechargeNo: string }> }) {
+  const params = await props.params;
   const requestId = randomUUID();
   if (!hasSupabaseServerConfig()) return safeFailure("充值核验服务不可用", "RECHARGE_VERIFY_UNAVAILABLE", requestId, 503);
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) return safeFailure("请先登录", "RECHARGE_AUTH_REQUIRED", requestId, 401);
   const sizeError = checkRequestSize(request, 4096);

@@ -5,7 +5,8 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { inspectCatalogSkuSchema } from "@/lib/products/catalog-readiness.mjs";
 import { bulkJson, readSkuBulkOperation } from "../_shared";
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
