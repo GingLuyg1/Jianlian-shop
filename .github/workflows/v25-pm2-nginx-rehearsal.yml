@@ -52,11 +52,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends nginx
           npm install --global --no-audit --no-fund pm2@7.0.1
           node --version
-          pm2 --version
+          npm list --global pm2 --depth=0
           nginx -v
 
       - name: PM2 plus Nginx blue-green and fault rollback rehearsal
         run: |
+          set -euo pipefail
           bash ops/standalone-v25/rehearse-pm2-nginx.sh \
             "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz" \
             "$(cut -d ' ' -f 1 "$RUNNER_TEMP/v25-linux-package/jianlian-shop-${GITHUB_SHA}.tar.gz.sha256")" | tee "$RUNNER_TEMP/rehearsal-status.txt"

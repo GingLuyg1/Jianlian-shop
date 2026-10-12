@@ -44,8 +44,7 @@ module.exports = { apps: [
    instances: 1, exec_mode: 'fork', env: { NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: '3002' } }
 ] };
 EOF
-pm2 start "$work/ecosystem.cjs" --only v25-rehearsal-old >/dev/null
-pm2 start "$work/ecosystem.cjs" --only v25-rehearsal-new >/dev/null
+pm2 start "$work/ecosystem.cjs" >/dev/null
 ready() {
   local port="$1" attempt
   for attempt in $(seq 1 40); do
