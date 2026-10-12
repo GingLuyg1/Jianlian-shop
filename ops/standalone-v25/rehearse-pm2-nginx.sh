@@ -36,7 +36,7 @@ asset_path="/_next/static/${asset#"$new/.next/static/"}"
 
 # These are intentionally the same rehearsal build. This validates PM2/Nginx
 # mechanics, not the real Production old-release binary or cross-build assets.
-cat > "$work/ecosystem.cjs" <<EOF
+cat > "$work/ecosystem.config.js" <<EOF
 module.exports = { apps: [
  { name: 'v25-rehearsal-old', script: 'server.js', cwd: '$old', interpreter: process.execPath,
    instances: 1, exec_mode: 'fork', env: { NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: '3001' } },
@@ -44,7 +44,7 @@ module.exports = { apps: [
    instances: 1, exec_mode: 'fork', env: { NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: '3002' } }
 ] };
 EOF
-pm2 start "$work/ecosystem.cjs" >/dev/null
+pm2 start "$work/ecosystem.config.js" >/dev/null
 diagnose_slots() {
   pm2 jlist | node -e 'let s=""; process.stdin.on("data",x=>s+=x).on("end",()=>{for(const p of JSON.parse(s)){console.error(`PM2_DIAG name=${p.name} status=${p.pm2_env?.status} restarts=${p.pm2_env?.restart_time} port=${p.pm2_env?.env?.PORT}`)}})' || true
   for name in v25-rehearsal-old v25-rehearsal-new; do

@@ -7,7 +7,7 @@ on:
     paths:
       - .github/workflows/v25-pm2-nginx-rehearsal.yml
       - ops/standalone-v25/rehearse-pm2-nginx.sh
-      - ops/standalone-v25/ecosystem.blue-green.candidate.cjs
+      - ops/standalone-v25/ecosystem.blue-green.config.js
       - ops/standalone-v25/deploy-blue-green-candidate.sh
 
 permissions:
