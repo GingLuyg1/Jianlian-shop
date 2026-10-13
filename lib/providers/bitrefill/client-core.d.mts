@@ -10,6 +10,7 @@ export class BitrefillClientError extends Error {
 }
 
 export const BITREFILL_API_BASE_URL: string;
+export const BITREFILL_READ_ONLY_MODE: true;
 export function buildBitrefillAuthorization(input: BitrefillAuth): string;
 export function createBitrefillClient(input: BitrefillAuth & {
   baseUrl?: string;
@@ -19,8 +20,9 @@ export function createBitrefillClient(input: BitrefillAuth & {
   timeoutMs?: number;
 }): {
   ping(): Promise<Record<string, unknown>>;
-  listProducts(options?: { country?: string; start?: number; limit?: number }): Promise<Record<string, unknown>>;
-  searchProducts(query: string, options?: { start?: number; limit?: number }): Promise<Record<string, unknown>>;
+  listProducts(options?: { country?: string; start?: number; limit?: number; signal?: AbortSignal }): Promise<Record<string, unknown>>;
+  listProductsBounded(options?: { country?: string; start?: number; pageSize?: number; maxPages?: number; maxProducts?: number; signal?: AbortSignal }): Promise<Record<string, unknown>>;
+  searchProducts(query: string, options?: { start?: number; limit?: number; signal?: AbortSignal }): Promise<Record<string, unknown>>;
   getProduct(productId: string): Promise<Record<string, unknown>>;
 };
 
@@ -33,7 +35,8 @@ export class BitrefillClient {
     timeoutMs?: number;
   });
   ping(): Promise<Record<string, unknown>>;
-  listProducts(options?: { country?: string; start?: number; limit?: number }): Promise<Record<string, unknown>>;
-  searchProducts(query: string, options?: { start?: number; limit?: number }): Promise<Record<string, unknown>>;
+  listProducts(options?: { country?: string; start?: number; limit?: number; signal?: AbortSignal }): Promise<Record<string, unknown>>;
+  listProductsBounded(options?: { country?: string; start?: number; pageSize?: number; maxPages?: number; maxProducts?: number; signal?: AbortSignal }): Promise<Record<string, unknown>>;
+  searchProducts(query: string, options?: { start?: number; limit?: number; signal?: AbortSignal }): Promise<Record<string, unknown>>;
   getProduct(productId: string): Promise<Record<string, unknown>>;
 }

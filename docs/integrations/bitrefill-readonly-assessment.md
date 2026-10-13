@@ -128,6 +128,22 @@ Remove-Item Env:BITREFILL_API_KEY
 
 There is no blocker to Bitrefill becoming a second supplier for read-only catalog integration and fixed-package mapping. Production purchase is intentionally blocked until Business API access and the schema/reconciliation/availability gaps above are implemented and separately authorized. No production environment or database change is required for this phase.
 
+## V1.1 offline provider addendum (2026-10-14)
+
+V1.1 implements the safe portion of the assessment without enabling a purchase path:
+
+- `BitrefillHttpTransport` enforces read-only mode before network I/O. Every non-GET method is rejected with `READ_ONLY_MODE_METHOD_BLOCKED`.
+- `BitrefillFakeTransport` is the only transport allowed to simulate invoice creation. `BitrefillProvider.createOrder` rejects every non-fake transport with `PURCHASE_DISABLED`.
+- Provider discovery exposes catalog and availability while declaring purchase false. The active fulfillment handler registry remains Daju-only, so discovering Bitrefill cannot claim an order or trigger a purchase.
+- Bounded catalog pagination uses the official maximum page size of 50, explicit page and product ceilings, and the existing per-request timeout/abort behavior. The upstream `_next` URL is never followed directly.
+- Fixed packages map `product.id` to `supplier_product_id` and `package_id` to `supplier_sku`. Range parsing remains available for assessment, but variable-amount purchase remains unsupported.
+- Boolean availability becomes `available` plus `supplier_quantity=null`; the adapter reuses the existing `supplier_stock_*` freshness metadata names. The current catalog `stock`/activation contract still cannot safely consume unknown quantity, so production snapshot activation remains blocked without a provider-neutral boolean gate.
+- Invoice request construction, cost checks, split planning, invoice/order normalization, reconciliation, redemption mapping and delivery deduplication are pure offline logic. They perform no HTTP or database writes.
+
+The current official invoice request documentation lists product/package/value/quantity, payment, webhook and contact fields, but no merchant reference, external ID, or idempotency-key field. No official idempotency header was found in the reviewed API overview, integration flow, core concepts, webhook or invoice reference. V1.1 therefore sets `BITREFILL_NATIVE_IDEMPOTENCY=none_documented` and does not invent one. A post-submit timeout is always `UNCERTAIN`, with no automatic second purchase.
+
+No live probe ran because `BITREFILL_API_KEY` was absent. Candidate mappings for Apple US, Amazon US and Steam US remain fixture-only and `LIVE_VALIDATION_PENDING`; none were written to product metadata or bindings.
+
 ## Validation result
 
 - Bitrefill unit/safety tests: 20/20 pass.
