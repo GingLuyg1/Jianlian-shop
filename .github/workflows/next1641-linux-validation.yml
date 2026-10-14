@@ -1,0 +1,201 @@
+name: Next 16.4.1 isolated Linux and cross-version rollback
+
+on:
+  push:
+    branches: [validation/next1641-linux-20261015]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: next1641-isolated-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+# Deliberately fake, loopback-only configuration. No secrets contexts, real
+# Supabase, payments, deployments, SSH, database migrations or live sessions.
+env:
+  CI: 'true'
+  APP_ENV: test
+  NEXT_TELEMETRY_DISABLED: '1'
+  NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-isolated-not-a-real-anon-key
+  SUPABASE_SERVICE_ROLE_KEY: ci-isolated-not-a-real-service-key
+  PAYMENT_PROVIDER_MODE: disabled
+  DISABLE_EXTERNAL_PROVIDERS: 'true'
+  EMAIL_PROVIDER: none
+  SNPAY_RECONCILIATION_EXECUTE_ENABLED: 'false'
+  LIUHAOYI_ALIPAY_WATCHER_EXECUTE_ENABLED: 'false'
+
+jobs:
+  rc-linux:
+    if: github.repository == 'GingLuyg1/Jianlian-shop' && github.ref == 'refs/heads/validation/next1641-linux-20261015'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+      - name: Record actual Linux runtime and assert exact dependency contract
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/rc-evidence"
+          { uname -sm; head -n 6 /etc/os-release; node -v; npm -v; command -v pwsh; git rev-parse HEAD; } | tee "$RUNNER_TEMP/rc-evidence/runtime.log"
+          node -e 'const p=require("./package.json"),l=require("./package-lock.json");for(const [n,v] of Object.entries({next:"16.4.1",react:"18.2.0","react-dom":"18.2.0","eslint-config-next":"16.4.1"})){if(l.packages["node_modules/"+n].version!==v)throw Error(n+" lock mismatch"); console.log(n+"="+v)}'
+      - name: npm ci
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund 2>&1 | tee "$RUNNER_TEMP/rc-evidence/npm-ci.log"
+          npm ls next react react-dom eslint-config-next --depth=0 | tee "$RUNNER_TEMP/rc-evidence/dependencies.log"
+      - name: TypeScript
+        run: |
+          set -euo pipefail
+          npm run typecheck 2>&1 | tee "$RUNNER_TEMP/rc-evidence/typecheck.log"
+      - name: Lint
+        run: |
+          set -euo pipefail
+          npm run lint 2>&1 | tee "$RUNNER_TEMP/rc-evidence/lint.log"
+      - name: Full tests without exclusions or skipped failures
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/rc-evidence/full-tests.log"
+      - name: Independent Webpack build and standalone package
+        run: |
+          set -euo pipefail
+          npm run build -- --webpack 2>&1 | tee "$RUNNER_TEMP/rc-evidence/webpack.log"
+          node ops/security-rc-ci/package.cjs "$PWD" "$RUNNER_TEMP/rc-packages" rc-webpack 16.4.1 "$GITHUB_SHA" "$(command -v node)"
+          mv .next "$RUNNER_TEMP/rc-webpack-build"
+      - name: Independent default Turbopack build and standalone package
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee "$RUNNER_TEMP/rc-evidence/turbopack.log"
+          node ops/security-rc-ci/package.cjs "$PWD" "$RUNNER_TEMP/rc-packages" rc-turbopack 16.4.1 "$GITHUB_SHA" "$(command -v node)"
+      - name: Upload immutable RC Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: next1641-linux-packages
+          path: |
+            ${{ runner.temp }}/rc-packages/*.tar.gz
+            ${{ runner.temp }}/rc-packages/*.sha256
+            ${{ runner.temp }}/rc-packages/*.manifest.json
+          retention-days: 2
+          if-no-files-found: error
+      - name: Upload real command evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next1641-linux-logs
+          path: ${{ runner.temp }}/rc-evidence/*
+          retention-days: 3
+          if-no-files-found: error
+
+  legacy-linux:
+    if: github.repository == 'GingLuyg1/Jianlian-shop' && github.ref == 'refs/heads/validation/next1641-linux-20261015'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Read CI tooling from validation branch
+        uses: actions/checkout@v4
+        with:
+          path: validation
+          persist-credentials: false
+      - name: Checkout immutable actual Next 13.5.1 main baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 4575d802d653e4dca726427bce826aa68c93d9e2
+          path: legacy
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+      - name: Install and build the actual old source independently
+        working-directory: legacy
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/legacy-evidence"
+          { node -v; npm -v; git rev-parse HEAD; } | tee "$RUNNER_TEMP/legacy-evidence/runtime.log"
+          test "$(node -p 'require("./package-lock.json").packages["node_modules/next"].version')" = 13.5.1
+          npm ci --no-audit --no-fund 2>&1 | tee "$RUNNER_TEMP/legacy-evidence/npm-ci.log"
+          # Main 13.5.1 used next start, not standalone. Only enable packaging
+          # in this throwaway checkout; no application/dependency modifications.
+          node -e 'require("fs").appendFileSync("next.config.js", "\n// Isolated CI packaging only.\nmodule.exports.output = \"standalone\";\n")'
+          git diff -- next.config.js > "$RUNNER_TEMP/legacy-evidence/packaging-only.diff"
+          npm run build 2>&1 | tee "$RUNNER_TEMP/legacy-evidence/build.log"
+          node ../validation/ops/security-rc-ci/package.cjs "$PWD" "$RUNNER_TEMP/legacy-packages" legacy 13.5.1 4575d802d653e4dca726427bce826aa68c93d9e2 "$(command -v node)"
+          test "$(git diff --name-only)" = next.config.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: next1351-linux-package
+          path: |
+            ${{ runner.temp }}/legacy-packages/*.tar.gz
+            ${{ runner.temp }}/legacy-packages/*.sha256
+            ${{ runner.temp }}/legacy-packages/*.manifest.json
+          retention-days: 2
+          if-no-files-found: error
+      - name: Upload actual legacy build evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next1351-linux-logs
+          path: ${{ runner.temp }}/legacy-evidence/*
+          retention-days: 3
+          if-no-files-found: error
+
+  cross-version:
+    needs: [rc-linux, legacy-linux]
+    if: github.repository == 'GingLuyg1/Jianlian-shop' && github.ref == 'refs/heads/validation/next1641-linux-20261015'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+      - name: Retain absolute old interpreter
+        id: old
+        run: echo "node=$(command -v node)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+      - name: Retain absolute new interpreter
+        id: new
+        run: echo "node=$(command -v node)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: next1641-linux-packages
+          path: ${{ runner.temp }}/packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: next1351-linux-package
+          path: ${{ runner.temp }}/packages
+      - name: Install runner-only PM2 and Nginx
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends nginx
+          npm install --global --no-audit --no-fund pm2@7.0.1
+          node -v; pm2 --version; nginx -v
+      - name: Actual 13.5.1 to 16.4.1 to 13.5.1 rehearsal
+        run: |
+          set -euo pipefail
+          bash ops/security-rc-ci/rehearse.sh "$RUNNER_TEMP/packages" '${{ steps.old.outputs.node }}' '${{ steps.new.outputs.node }}' "$RUNNER_TEMP/rehearsal-evidence" | tee "$RUNNER_TEMP/cross-version.log"
+          cat "$RUNNER_TEMP/cross-version.log" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload process, proxy, health, fault and rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next1641-cross-version-evidence
+          path: |
+            ${{ runner.temp }}/rehearsal-evidence/**
+            ${{ runner.temp }}/cross-version.log
+          retention-days: 3
+          if-no-files-found: error
