@@ -19,6 +19,7 @@ const SUPPLIER_REGISTRY: Readonly<Record<string, SupplierFulfillmentHandler>> = 
 };
 
 export { collectFrozenSupplierCodes } from "./supplier-router-core.mjs";
+export { canSupplierAutoPurchase, discoverSupplierProvider } from "./supplier-router-core.mjs";
 
 export async function fulfillSupplierOrderWithSupabase(
   service: SupabaseClient,
