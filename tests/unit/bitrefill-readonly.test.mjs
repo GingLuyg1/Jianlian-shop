@@ -7,6 +7,7 @@ import {
   buildBitrefillAuthorization,
   createBitrefillClient,
 } from "../../lib/providers/bitrefill/client-core.mjs";
+import { buildBitrefillInvoiceRequest, normalizeBitrefillProduct } from "../../lib/providers/bitrefill/provider-core.mjs";
 import {
   createBitrefillWebhookIdempotencyKey,
   evaluateBitrefillInvoiceOutcome,
@@ -91,6 +92,64 @@ test("product parser normalizes fixed packages, country and range products", () 
   assert.deepEqual(ranged.packages, []);
   assert.equal(parseBitrefillProduct({ ...rangeProduct, country: "USA" }), null);
   assert.equal(parseBitrefillProduct({ ...rangeProduct, range: { min: 200, max: 10, step: 0 } }), null);
+});
+
+test("live-observed Canadian non-monetary package parses but cannot become a purchase face value", () => {
+  const canada = {
+    id: "kigso-canada", name: "Kigso Canada", country_code: "CA", currency: "CAD",
+    in_stock: true, packages: [{ id: "kigso-canada<&>50 Game Credits", value: "50 Game Credits", price: 12896 }],
+  };
+  const parsed = parseBitrefillProduct(canada);
+  assert.equal(parsed.packages[0].value, null);
+  assert.equal(parsed.packages[0].valueLabel, "50 Game Credits");
+  const normalized = normalizeBitrefillProduct(parsed);
+  assert.equal(normalized.fixed_packages[0].face_value, null);
+  assert.throws(() => buildBitrefillInvoiceRequest({ items: [{
+    binding: { supplier: "bitrefill", productId: "kigso-canada", sku: "kigso-canada<&>50 Game Credits", currency: "CAD", faceValue: "50" },
+    product: normalized, quantity: 1, expectedCost: "1", frozenQuotedCost: "1", frozenMaxSupplierCost: "1",
+  }] }), /BITREFILL_FACE_VALUE_INVALID/);
+  assert.equal(parseBitrefillProductsResponse({ data: [fixedProduct, canada], meta: { start: 0, limit: 2 } }).products.length, 2);
+  for (const malformed of ["50 <script>", "50 ", "50 Game Credits\n<script>"]) {
+    assert.equal(parseBitrefillProduct({ ...canada, packages: [{ ...canada.packages[0], value: malformed }] }), null);
+  }
+});
+
+test("live-observed Chinese eSIM labels parse without inventing monetary denominations", () => {
+  const esim = {
+    id: "bitrefill-esim-china", name: "China eSIM", country_code: "CN", currency: "USD",
+    in_stock: true, packages: [
+      { id: "bitrefill-esim-china<&>1GB, 7 Days", value: "1GB, 7 Days", price: 200 },
+      { id: "bitrefill-esim-china<&>Unlimited, 1 Day", value: "Unlimited, 1 Day", price: 300 },
+    ],
+  };
+  const parsed = parseBitrefillProduct(esim);
+  assert.deepEqual(parsed.packages.map((entry) => entry.value), [null, null]);
+  assert.deepEqual(parsed.packages.map((entry) => entry.valueLabel), ["1GB, 7 Days", "Unlimited, 1 Day"]);
+  assert.equal(parseBitrefillProduct({ ...esim, packages: [{ ...esim.packages[0], value: "1GB <img>" }] }), null);
+});
+
+test("live-observed large US top-up package arrays remain bounded", () => {
+  const topUp = { ...fixedProduct, id: "boost-mobile-usa", packages: Array.from({ length: 149 }, (_, index) => ({ id: `boost-mobile-usa<&>${index + 1}`, value: String(index + 1), price: index + 1 })) };
+  assert.equal(parseBitrefillProduct(topUp).packages.length, 149);
+  assert.equal(parseBitrefillProduct({ ...topUp, packages: Array.from({ length: 201 }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 })) }), null);
+});
+
+test("live-observed US named products remain non-monetary", () => {
+  const named = { ...fixedProduct, packages: [{ id: "onekey-usd<&>OneKey Pro", value: "OneKey Pro", price: 100 }] };
+  assert.equal(parseBitrefillProduct(named).packages[0].value, null);
+  const addon = { ...fixedProduct, packages: [{ id: "mobile-x-bundle-usa<&>addon $1", value: "addon $1", price: 100 }] };
+  assert.equal(parseBitrefillProduct(addon).packages[0].valueLabel, "addon $1");
+  const dataPlan = { ...fixedProduct, packages: [{ id: "h2o-usa-data<&>5 GB 30 Days", value: "5 GB 30 Days ", price: 100 }] };
+  assert.equal(parseBitrefillProduct(dataPlan).packages[0].valueLabel, "5 GB 30 Days");
+  const bundle = { ...fixedProduct, packages: [{ id: "simple-mobile-usa-bundle<&>Unlimited Talk & Text (30d)", value: "Unlimited Talk & Text (30d)", price: 100 }] };
+  assert.equal(parseBitrefillProduct(bundle).packages[0].value, null);
+});
+
+test("live catalog pagination accepts the observed meta.total field", () => {
+  const result = parseBitrefillProductsResponse({ data: [fixedProduct], meta: { start: 0, limit: 50, total: 589, _next: "https://api-bitrefill.com/v2/products?start=50" } });
+  assert.equal(result.meta.totalResults, 589);
+  assert.equal(result.meta.start, 0);
+  assert.equal(result.meta.limit, 50);
 });
 
 test("in_stock maps to availability evidence and never invents supplier quantity", () => {
