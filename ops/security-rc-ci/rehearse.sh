@@ -32,7 +32,7 @@ for label in legacy rc-webpack rc-turbopack; do
   cp "$packages/$label.manifest.json" "$evidence/"
 done
 export CI_REHEARSAL_ROOT="$work/releases"
-"$new_node" - "$old_node" "$new_node" "$work/ecosystem.cjs" <<'NODE'
+"$new_node" - "$old_node" "$new_node" "$work/ecosystem.config.cjs" <<'NODE'
 const fs=require('node:fs');const path=require('node:path');const cp=require('node:child_process');
 const [oldNode,newNode,output]=process.argv.slice(2);
 const definitions=[['legacy','13.5.1',oldNode,3301],['rc-webpack','16.4.1',newNode,3302],['rc-turbopack','16.4.1',newNode,3303]];
@@ -49,7 +49,13 @@ const apps=definitions.map(([label,version,interpreter,port])=>{
 if(new Set(apps.map(a=>fs.realpathSync(path.join(a.cwd,'node_modules')))).size!==3)throw Error('Shared dependencies forbidden');
 fs.writeFileSync(output,'module.exports = '+JSON.stringify({apps},null,2)+';\n');
 NODE
-pm2 start "$work/ecosystem.cjs" >/dev/null
+"$new_node" - "$(npm root -g)/pm2/lib/Common.js" "$work/ecosystem.config.cjs" <<'NODE'
+const assert=require('node:assert/strict');
+assert.equal(require(process.argv[2]).isConfigFile(process.argv[3]),'js','PM2 must recognize this as an ecosystem configuration, not an executable');
+assert.equal(require(process.argv[3]).apps.length,3);
+NODE
+pm2 start "$work/ecosystem.config.cjs" >/dev/null
+pm2 jlist | "$new_node" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const names=JSON.parse(s).map(p=>p.name);for(const n of ["ci-legacy","ci-rc-webpack","ci-rc-turbopack"])if(!names.includes(n))throw Error("Missing PM2 application "+n);console.log("PM2_ECOSYSTEM_APPS=THREE_PINNED_VERSIONS")})'
 ready() {
   local port="$1"
   for attempt in $(seq 1 60); do
