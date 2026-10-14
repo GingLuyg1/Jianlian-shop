@@ -7,7 +7,9 @@ const root = path.resolve(import.meta.dirname, "..", "..");
 const file = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
 const createOrderFunction = () => {
-  const migration = file("supabase/migrations/20260710_create_order_with_item_compatibility.sql");
+  // Git's Windows checkout may use CRLF. Keep mutations deterministic while
+  // the explicit CRLF variant below still exercises the patch parser itself.
+  const migration = file("supabase/migrations/20260710_create_order_with_item_compatibility.sql").replace(/\r\n/g, "\n");
   const start = migration.indexOf("create or replace function public.create_order_with_item(");
   assert.ok(start >= 0, "authoritative create_order_with_item definition must exist");
   const end = migration.indexOf("\n$$;", start);
@@ -195,6 +197,7 @@ test("Daju order snapshot patch recognizes the authoritative inventory blocks wi
   assert.doesNotThrow(() => patchAuthoritativeCreateOrder(authoritative.replace(/\n/g, "\r\n")));
 
   const assignment = "v_auto_delivery := lower(coalesce(v_delivery_type, '')) in\n    ('automatic','auto','card','account','auto_delivery');";
+  assert.equal(authoritative.split(assignment).length - 1, 1, "assignment fixture mutation must match exactly once");
   const reindentedAssignment = "v_auto_delivery  :=\n    lower ( coalesce ( v_delivery_type , '' ) )\n      in ( 'automatic' , 'auto' , 'card' , 'account' , 'auto_delivery' );";
   assert.doesNotThrow(() => patchAuthoritativeCreateOrder(authoritative.replace(assignment, reindentedAssignment)));
 

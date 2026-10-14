@@ -1,6 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { Suspense } from "react";
 
 import PageViewTracker from "@/components/analytics/PageViewTracker";
@@ -13,7 +13,12 @@ import {
   websiteJsonLd,
 } from "@/lib/seo";
 
-const inter = Inter({ subsets: ["latin"], display: "swap" });
+const inter = localFont({
+  src: "./fonts/InterVariable.ttf",
+  weight: "100 900",
+  style: "normal",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   ...buildPageMetadata({

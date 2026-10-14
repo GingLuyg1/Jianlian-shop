@@ -11,7 +11,18 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const script = path.join(repoRoot, "scripts", "db", "run-migration.ps1");
 const testRef = "czuoivbfxzachiobdohw";
 const productionRef = "qvbovrvybirscaurwuov";
-const powerShell = process.platform === "win32" ? "powershell.exe" : "pwsh";
+// Match the PowerShell 7 Linux rehearsal when available. Windows PowerShell
+// started from pwsh/Node can inherit a module path that cannot load Get-FileHash.
+// Probe prerequisites instead of silently treating that host failure as a
+// migration assertion failure. No test is skipped and no environment is edited.
+const powerShell = ["pwsh", ...(process.platform === "win32" ? ["powershell.exe"] : [])]
+  .find((command) => {
+    const probe = spawnSync(command, ["-NoProfile", "-Command", "Get-Command Get-FileHash -ErrorAction Stop | Out-Null"], {
+      encoding: "utf8", windowsHide: true,
+    });
+    return probe.status === 0;
+  });
+assert.ok(powerShell, "migration tests require PowerShell with Get-FileHash available");
 
 function sha256(content) {
   return createHash("sha256").update(content).digest("hex").toUpperCase();
