@@ -1,6 +1,6 @@
 # Bitrefill production purchase schema plan
 
-Status: design only; no migration SQL
+Status: design only; no migration SQL. V1.3 offline audit and partial implementation are recorded in [bitrefill-purchase-persistence-v1-3.md](bitrefill-purchase-persistence-v1-3.md). Real PostgreSQL validation remains required.
 
 Date: 2026-10-14
 
