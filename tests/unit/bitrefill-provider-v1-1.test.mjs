@@ -38,10 +38,11 @@ const rawProduct = {
 
 const product = normalizeBitrefillProduct(rawProduct);
 const frozenItem = {
-  binding: { supplier: "bitrefill", productId: "fixture-gift-us", sku: "fixture-gift-us<&>10" },
+  binding: { supplier: "bitrefill", productId: "fixture-gift-us", sku: "fixture-gift-us<&>10", currency: "USD", faceValue: "10" },
   product,
   quantity: 1,
   expectedCost: "9.50",
+  frozenQuotedCost: "9.50",
   frozenMaxSupplierCost: "10.00",
 };
 
@@ -90,7 +91,7 @@ test("offline request uses frozen binding, fixed package and cost guard only", (
   assert.deepEqual(request, { products: [{ product_id: "fixture-gift-us", package_id: "fixture-gift-us<&>10", quantity: 1 }] });
   assert.equal("auto_pay" in request, false);
   assert.throws(() => buildBitrefillInvoiceRequest({ items: [{ ...frozenItem, binding: { ...frozenItem.binding, productId: "current-binding" } }] }), /FROZEN_BINDING_MISMATCH/);
-  assert.throws(() => buildBitrefillInvoiceRequest({ items: [{ ...frozenItem, expectedCost: "10.01" }] }), /PURCHASE_COST_LIMIT/);
+  assert.throws(() => buildBitrefillInvoiceRequest({ items: [{ ...frozenItem, expectedCost: "10.01", frozenQuotedCost: "10.01" }] }), /PURCHASE_COST_LIMIT/);
   assert.equal(assertBitrefillCostWithinLimit("10.00000000", "10"), true);
 });
 

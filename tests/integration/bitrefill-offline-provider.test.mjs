@@ -19,8 +19,8 @@ function setup(overrides = {}) {
   };
   const product = normalizeBitrefillProduct(rawProduct);
   const item = {
-    binding: { supplier: "bitrefill", productId: "fixture-steam-us", sku: "fixture-steam-us<&>20" },
-    product, quantity: 1, expectedCost: "19", frozenMaxSupplierCost: "20",
+    binding: { supplier: "bitrefill", productId: "fixture-steam-us", sku: "fixture-steam-us<&>20", currency: "USD", faceValue: "20" },
+    product, quantity: 1, expectedCost: "19", frozenQuotedCost: "19", frozenMaxSupplierCost: "20",
     ...overrides.item,
   };
   return { rawProduct, product, item };
@@ -46,7 +46,7 @@ test("offline E2E out-of-stock blocks before fake invoice", () => {
 });
 
 test("offline E2E cost limit blocks before fake invoice", () => {
-  const { item } = setup({ item: { expectedCost: "20.01", frozenMaxSupplierCost: "20" } });
+  const { item } = setup({ item: { expectedCost: "20.01", frozenQuotedCost: "20.01", frozenMaxSupplierCost: "20" } });
   const transport = new BitrefillFakeTransport();
   assert.throws(() => buildBitrefillInvoiceRequest({ items: [item] }), /PURCHASE_COST_LIMIT/);
   assert.equal(transport.invoiceSubmissions, 0);
