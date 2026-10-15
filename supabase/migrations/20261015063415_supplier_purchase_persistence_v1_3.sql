@@ -640,6 +640,72 @@ grant execute on function public.internal_supplier_purchase_claim(text,text,text
   public.internal_supplier_purchase_record_webhook(text,text,text,text)
   to service_role;
 
+-- Atomic bridge to the existing private supplier-delivery transaction. Without
+-- this bridge, service_role cannot bind supplier_external_orders.delivery_id,
+-- and a crash can leave the exact child-to-delivery relation unrecorded.
+create function public.internal_supplier_purchase_deliver_child(
+  p_external_order_row_id uuid, p_request_id text,
+  p_attempt_token uuid, p_delivery_content text
+) returns jsonb
+language plpgsql security definer set search_path = pg_catalog
+as $function$
+declare
+  v_order_id uuid;
+  v_order_item_id uuid;
+  v_external_order_id text;
+  v_root_request_id text;
+  v_root_attempt_token uuid;
+  v_root_status text;
+  v_existing_delivery_id uuid;
+  v_delivery_id uuid;
+  v_outcome jsonb;
+begin
+  if p_external_order_row_id is null or p_request_id is null
+     or p_attempt_token is null or nullif(btrim(coalesce(p_delivery_content,'')),'') is null
+     or length(p_delivery_content) > 65536 then
+    raise exception 'SUPPLIER_PURCHASE_PRIVATE_DELIVERY_INPUT_INVALID';
+  end if;
+  select r.order_id,i.order_item_id,e.external_order_id,r.request_id,
+         r.attempt_token,r.status,e.delivery_id
+    into v_order_id,v_order_item_id,v_external_order_id,v_root_request_id,
+         v_root_attempt_token,v_root_status,v_existing_delivery_id
+  from public.supplier_external_orders e
+  join public.supplier_purchase_attempt_items i on i.id=e.attempt_item_id
+  join public.supplier_fulfillment_requests r on r.id=i.fulfillment_request_id
+  where e.id=p_external_order_row_id and e.supplier='bitrefill'
+    and e.normalized_status='DELIVERED'
+    and r.order_item_id=i.order_item_id;
+  if v_order_id is null or v_root_request_id is distinct from p_request_id
+     or v_root_attempt_token is distinct from p_attempt_token
+     or v_root_status not in ('PURCHASING','FULFILLED') then
+    raise exception 'SUPPLIER_PURCHASE_PRIVATE_DELIVERY_IDENTITY_MISMATCH';
+  end if;
+  v_outcome := public.record_supplier_fulfillment_outcome(
+    v_order_id,v_order_item_id,'bitrefill',p_request_id,p_attempt_token,
+    'FULFILLED',false,null,v_external_order_id,p_delivery_content,
+    null,null,'bitrefill_reconciliation');
+  if coalesce((v_outcome->>'ok')::boolean,false) is not true then
+    raise exception 'SUPPLIER_PURCHASE_PRIVATE_DELIVERY_OUTCOME_FAILED';
+  end if;
+  select id into v_delivery_id from public.order_deliveries
+  where order_item_id=v_order_item_id and delivery_type='supplier_delivery'
+    and delivery_status='delivered' for share;
+  if v_delivery_id is null or (v_existing_delivery_id is not null
+     and v_existing_delivery_id is distinct from v_delivery_id) then
+    raise exception 'SUPPLIER_PURCHASE_PRIVATE_DELIVERY_LINK_MISMATCH';
+  end if;
+  update public.supplier_external_orders set delivery_id=v_delivery_id
+  where id=p_external_order_row_id and delivery_id is distinct from v_delivery_id;
+  return jsonb_build_object('ok',true,'idempotent',
+    coalesce((v_outcome->>'idempotent')::boolean,false),
+    'child_id',p_external_order_row_id,'delivery_id',v_delivery_id);
+end
+$function$;
+revoke all on function public.internal_supplier_purchase_deliver_child(uuid,text,uuid,text)
+  from public,anon,authenticated;
+grant execute on function public.internal_supplier_purchase_deliver_child(uuid,text,uuid,text)
+  to service_role;
+
 -- Forward-only P2.3 evaluator replacement. Daju's quantity path is retained;
 -- the boolean path is opt-in and requires an explicit fresh, internally
 -- consistent metadata contract. This does not activate or bind any SKU.

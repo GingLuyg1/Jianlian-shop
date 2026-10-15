@@ -45,13 +45,15 @@ test("V1.3 candidate denies browser writes and grants only narrow server RPCs", 
   for (const name of [
     "internal_supplier_purchase_claim", "internal_supplier_purchase_transition",
     "internal_supplier_purchase_record_child", "internal_supplier_purchase_record_evidence",
-    "internal_supplier_purchase_record_webhook",
+    "internal_supplier_purchase_record_webhook", "internal_supplier_purchase_deliver_child",
   ]) assert.match(migration, new RegExp(`create function public\\.${name}\\(`));
   assert.match(migration, /security definer set search_path = pg_catalog/i);
   assert.match(migration, /grant execute on function public\.internal_supplier_purchase_claim[\s\S]*to service_role;/i);
   assert.match(migration, /SUPPLIER_PURCHASE_ORDER_NOT_PURCHASABLE/);
   assert.match(migration, /SUPPLIER_PURCHASE_SEMANTIC_CONFLICT/);
   assert.match(migration, /SUPPLIER_PURCHASE_PREFLIGHT_DUPLICATE_EXTERNAL_INVOICE/);
+  assert.match(migration, /record_supplier_fulfillment_outcome\(/);
+  assert.match(migration, /update public\.supplier_external_orders set delivery_id=v_delivery_id/);
   assert.match(migration, /create or replace function public\.admin_evaluate_product_sku_activation/i);
   assert.match(migration.replace(/^--.*$/gm, "").trim(), /^begin;[\s\S]*commit;$/i);
 });
