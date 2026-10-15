@@ -1,6 +1,8 @@
 -- LOCAL TEST SUPPORT ONLY. Not authoritative Production schema or migration.
--- Adds the minimal helper boundary required by the repository's existing
--- record_supplier_fulfillment_outcome RPC. No real order or secret rows.
+-- TEST_ONLY_STUB bodies for the transitive private-delivery helper boundary.
+-- Their Production definitions/security/search_path are pending DB8 review.
+-- The outcome RPC itself is extracted exactly from a repository migration.
+-- No real order or secret rows.
 \set ON_ERROR_STOP on
 
 do $guard$
@@ -15,11 +17,10 @@ begin
 end
 $guard$;
 
-alter table public.order_items add column sku_id uuid;
-alter table public.order_items add column delivery_failure_reason text;
-alter table public.order_items add column delivery_started_at timestamptz;
+-- These transitive private-delivery columns now live in the DB7 baseline.
 
 create schema if not exists auth;
+-- TEST_ONLY_STUB: synthetic local JWT role, not Supabase Auth implementation.
 create function auth.role() returns text language sql stable
 set search_path = pg_catalog
 as $function$
@@ -29,6 +30,7 @@ revoke all on function auth.role() from public, anon, authenticated;
 grant usage on schema auth to service_role;
 grant execute on function auth.role() to service_role;
 
+-- TEST_ONLY_STUB: test log shape only, not authoritative current Production.
 create function public.log_order_item_delivery_status(
   p_order_id uuid, p_order_item_id uuid, p_previous text,
   p_current text, p_source text, p_message text
@@ -42,6 +44,7 @@ begin
 end
 $function$;
 
+-- TEST_ONLY_STUB: test log shape only, not authoritative current Production.
 create function public.write_delivery_log(
   p_order_id uuid, p_order_item_id uuid, p_delivery_id uuid,
   p_source text, p_event text, p_message text, p_detail jsonb
@@ -56,6 +59,7 @@ begin
 end
 $function$;
 
+-- TEST_ONLY_STUB: test fulfillment summary, not authoritative current Production.
 create function public.refresh_order_fulfillment_status(p_order_id uuid)
 returns void language plpgsql security invoker set search_path = pg_catalog
 as $function$
@@ -70,5 +74,14 @@ begin
 end
 $function$;
 
--- The exact record_supplier_fulfillment_outcome function from
--- 20260826190000_supplier_fulfillment_core_v1.sql is installed by the runner.
+-- Fixture-only least privilege: the repo outcome RPC runs as the fixture
+-- owner, while application roles must not call these test helpers directly.
+revoke all on function public.log_order_item_delivery_status(uuid,uuid,text,text,text,text),
+  public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb),
+  public.refresh_order_fulfillment_status(uuid)
+  from public,anon,authenticated;
+grant execute on function public.log_order_item_delivery_status(uuid,uuid,text,text,text,text),
+  public.write_delivery_log(uuid,uuid,uuid,text,text,text,jsonb),
+  public.refresh_order_fulfillment_status(uuid) to service_role;
+
+-- The shared local fixture loader installs the exact repository outcome RPC.

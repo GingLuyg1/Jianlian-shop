@@ -7,6 +7,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { installV13LocalFixture } from "./supplier-v13-local-fixture.mjs";
 import { createBitrefillPurchaseRpcAdapter, deliverBitrefillOfflineChild,
   handleBitrefillOfflineWebhook, reconcileBitrefillOfflineAttempt,
   recoverBitrefillOfflineAttempt, runBitrefillOfflinePurchase,
@@ -28,10 +29,6 @@ assert.equal(basename(psqlDir).toLowerCase(), "bin");
 const tool = (name) => resolve(psqlDir, `${name}.exe`);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const dbName = `jianlian_bitrefill_v13_db5_${randomBytes(4).toString("hex")}`;
-const fixture = resolve(root, "tests/fixtures/current-schema/supplier-v13-current-baseline.sql");
-const deliverySupport = resolve(root, "tests/fixtures/current-schema/supplier-v13-db5-delivery-support.sql");
-const migration = resolve(root, "supabase/migrations/20261015063415_supplier_purchase_persistence_v1_3.sql");
-const coreMigration = resolve(root, "supabase/migrations/20260826190000_supplier_fulfillment_core_v1.sql");
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const connection = (database) => ["-h", host, "-p", port, "-U", user, "-d", database];
 function command(file, args, { input } = {}) {
@@ -192,19 +189,7 @@ async function attemptItems(attemptId) {
 async function count(statement) { return Number(await sql(statement)); }
 
 try {
-  await applyFile(fixture);
-  await applyFile(deliverySupport);
-  await applyFile(migration);
-  const core = readFileSync(coreMigration, "utf8");
-  const outcome = core.match(/create or replace function public\.record_supplier_fulfillment_outcome\([\s\S]*?\$function\$;/i)?.[0];
-  assert.ok(outcome, "DB5_EXISTING_PRIVATE_OUTCOME_RPC_MISSING");
-  await sql(outcome);
-  await sql(`revoke all on function public.record_supplier_fulfillment_outcome
-    (uuid,uuid,text,text,uuid,text,boolean,text,text,text,numeric,numeric,text)
-    from public,anon,authenticated;
-    grant execute on function public.record_supplier_fulfillment_outcome
-    (uuid,uuid,text,text,uuid,text,boolean,text,text,text,numeric,numeric,text)
-    to service_role`);
+  await installV13LocalFixture({ databaseName: dbName, applyFile, executeSql: sql });
   console.log("DB5_LOCAL_BASELINE_FORWARD_AND_EXISTING_PRIVATE_RPC_PASS");
 
   const dbA = createBitrefillPurchaseRpcAdapter(localClient());

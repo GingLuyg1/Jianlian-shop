@@ -1,6 +1,6 @@
--- CURRENT-SCHEMA TEST FIXTURE. LOCAL DISPOSABLE POSTGRES ONLY.
--- NOT A PRODUCTION MIGRATION. NOT HISTORICAL MIGRATION RECONSTRUCTION.
--- NO PRODUCTION DATA. This is a scoped contract snapshot, not a full clone.
+-- TEST FIXTURE ONLY. LOCAL DISPOSABLE POSTGRES ONLY. NO PRODUCTION DATA.
+-- NOT A MIGRATION. NOT HISTORICAL RECONSTRUCTION.
+-- This is a scoped contract snapshot, not a full clone.
 -- Caller must set v13.expected_data_directory in the same psql session.
 \set ON_ERROR_STOP on
 
@@ -15,6 +15,13 @@ begin
   end if;
 end
 $guard$;
+
+-- Empty migration-history shape for the SELECT-only DB8 parity query.
+create schema supabase_migrations;
+create table supabase_migrations.schema_migrations (
+  version text primary key,
+  name text
+);
 
 do $roles$
 begin
@@ -42,6 +49,9 @@ create table public.orders (
   status text not null default 'pending_payment',
   payment_status text not null default 'unpaid',
   fulfillment_status text not null default 'pending',
+  constraint orders_fulfillment_status_check check (
+    fulfillment_status in ('pending','partially_delivered','processing','delivered','delivery_failed')
+  ),
   constraint orders_status_check check (status = any (array[
     'pending_payment'::text,'paid'::text,'processing'::text,'delivered'::text,
     'completed'::text,'cancelled'::text,'expired'::text,'refunded'::text,'failed'::text
@@ -54,6 +64,7 @@ create table public.order_items (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
   product_id uuid,
+  sku_id uuid references public.product_skus(id),
   product_name text not null,
   unit_price numeric not null,
   line_total numeric not null,
@@ -61,7 +72,13 @@ create table public.order_items (
   delivery_type text,
   product_snapshot jsonb,
   delivery_status text,
+  constraint order_items_delivery_status_check check (
+    delivery_status is null or delivery_status in
+      ('pending','processing','delivered','failed','not_required','cancelled')
+  ),
   delivered_quantity integer not null default 0,
+  delivery_failure_reason text,
+  delivery_started_at timestamptz,
   delivery_completed_at timestamptz,
   delivery_status_updated_at timestamptz not null default now()
 );
@@ -71,7 +88,7 @@ create table public.order_deliveries (
   order_item_id uuid references public.order_items(id) on delete cascade,
   user_id uuid,
   product_id uuid,
-  sku_id uuid,
+  sku_id uuid references public.product_skus(id),
   delivery_type text,
   delivery_content text,
   encrypted_content text,
@@ -113,7 +130,21 @@ create table public.supplier_fulfillment_requests (
   constraint supplier_fulfillment_requests_status_check check (status = any (array[
     'PENDING'::text,'PURCHASING'::text,'FULFILLED'::text,'FAILED'::text,
     'UNCERTAIN'::text,'RECONCILIATION'::text,'NEEDS_INPUT'::text,'FAILED_VALIDATION'::text
-  ]))
+  ])),
+  constraint supplier_fulfillment_requests_attempt_count_check check (attempt_count >= 0),
+  constraint supplier_fulfillment_requests_request_not_blank check (btrim(request_id) <> ''),
+  constraint supplier_fulfillment_requests_price_check check (
+    (supplier_unit_price is null or supplier_unit_price >= 0)
+    and (supplier_total_price is null or supplier_total_price >= 0)
+  ),
+  constraint supplier_fulfillment_requests_supplier_check check (
+    btrim(supplier) <> '' and supplier = btrim(supplier) and char_length(supplier) <= 80
+  ),
+  constraint supplier_fulfillment_requests_product_id_check check (
+    supplier_product_id is null or (btrim(supplier_product_id) <> ''
+      and supplier_product_id = btrim(supplier_product_id)
+      and char_length(supplier_product_id) <= 200)
+  )
 );
 
 create table public.digital_inventory (
@@ -152,6 +183,74 @@ grant select,insert on public.products,public.product_skus,public.orders,
   public.order_items,public.order_deliveries,public.supplier_fulfillment_requests,
   public.digital_inventory,public.digital_delivery_secrets,public.delivery_logs
   to service_role;
+-- Repository-derived write grants used by the private delivery path.
+grant update on public.supplier_fulfillment_requests to service_role;
+grant update,delete on public.order_deliveries to service_role;
+
+-- Test-only authorization identities. These bodies are deliberately stubs,
+-- not authoritative definitions of Production's admin or Auth functions.
+create schema if not exists auth;
+create function auth.uid() returns uuid language sql stable
+  set search_path = pg_catalog
+  as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+grant usage on schema auth to anon,authenticated,service_role;
+grant execute on function auth.uid() to anon,authenticated,service_role;
+
+create function public.is_admin(user_id uuid) returns boolean
+language sql stable security definer set search_path = public
+as $$ select false $$;
+create function public.is_admin() returns boolean
+language sql stable security definer set search_path = public
+as $$ select public.is_admin(auth.uid()) $$;
+revoke all on function public.is_admin(uuid),public.is_admin()
+  from public,anon,authenticated;
+grant execute on function public.is_admin(uuid),public.is_admin()
+  to authenticated,service_role;
+
+-- These two updated_at triggers are sourced from orders-schema.sql and the
+-- Daju supplier migration; they have no customer/business row data here.
+create function public.set_updated_at() returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+create trigger order_deliveries_set_updated_at before update on public.order_deliveries
+  for each row execute function public.set_updated_at();
+create trigger supplier_fulfillment_requests_set_updated_at
+  before update on public.supplier_fulfillment_requests
+  for each row execute function public.set_updated_at();
+
+-- Only uniquely supported, V1.3-transitive policies are modeled. Other
+-- storefront policies are unresolved/out of scope for this fixture.
+create policy "users can read own orders" on public.orders for select to authenticated
+  using (user_id = auth.uid());
+create policy "users can read own order items" on public.order_items for select
+  to authenticated using (exists (select 1 from public.orders o
+    where o.id = order_items.order_id and o.user_id = auth.uid()));
+create policy "admins can manage order items" on public.order_items for all
+  using (public.is_admin()) with check (public.is_admin());
+create policy "admins can manage deliveries" on public.order_deliveries for all
+  using (public.is_admin()) with check (public.is_admin());
+create policy "users can read own deliveries" on public.order_deliveries
+  for select to authenticated using (
+    order_deliveries.delivery_status = 'delivered'
+    and exists (select 1 from public.orders o where o.id = order_deliveries.order_id
+      and o.user_id = auth.uid() and o.payment_status = 'paid'
+      and o.status not in ('cancelled','expired','failed'))
+  );
+create policy "deny direct delivery secret reads" on public.digital_delivery_secrets
+  for select to authenticated using (false);
+create policy "deny direct delivery secret writes" on public.digital_delivery_secrets
+  for all to authenticated using (false) with check (false);
+create policy "deny direct inventory reads" on public.digital_inventory
+  for select using (false);
+create policy "deny direct inventory inserts" on public.digital_inventory
+  for insert with check (false);
+create policy "deny direct inventory updates" on public.digital_inventory
+  for update using (false) with check (false);
+create policy "deny direct inventory deletes" on public.digital_inventory
+  for delete using (false);
 
 -- The exact read-only-captured current activation function is appended below.
 create or replace function public.admin_evaluate_product_sku_activation(
