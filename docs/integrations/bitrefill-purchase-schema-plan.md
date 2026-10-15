@@ -1,6 +1,6 @@
 # Bitrefill production purchase schema plan
 
-Status: design only; no migration SQL. V1.3 offline audit and partial implementation are recorded in [bitrefill-purchase-persistence-v1-3.md](bitrefill-purchase-persistence-v1-3.md). Real PostgreSQL validation remains required.
+Status: original design proposal. A partial, read-only-by-service-role [V1.3 candidate migration](../../supabase/migrations/20261015063415_supplier_purchase_persistence_v1_3.sql) now exists and has passed narrow isolated PostgreSQL DDL tests; it is **not** a complete purchase persistence rollout. Current evidence and remaining gates are recorded in [bitrefill-purchase-persistence-v1-3.md](bitrefill-purchase-persistence-v1-3.md).
 
 Date: 2026-10-14
 
@@ -88,4 +88,15 @@ RPCs must re-check paid/non-terminal order state, frozen binding, cost ceiling, 
 
 ## Rollout prerequisites
 
-Before producing migration SQL: review cardinality and batching policy, define retention and redaction, define authoritative response fingerprints, add migration pre/postchecks, test RLS and grants, test rollback without deleting purchased orders, and obtain separate database authorization. Production migration, binding, sync and canary remain out of scope for V1.1.
+DB2 local update (2026-10-15): the candidate V1.3 migration now contains five
+provider-neutral service-role-only transactional RPCs, a forward-only P2.3
+boolean-availability evaluator replacement, and a fail-closed root preflight.
+The clean narrow PostgreSQL fixture passes claim/20+1/external-ID/UNCERTAIN,
+safe-evidence/webhook and ACL/RLS checks. This is not a completed rollout gate:
+the complete migration replay is blocked by the unchanged historical
+`20260622_digital_delivery_hardening.sql` parse error, and application recovery,
+two-worker delivery, private-secret atomicity and full-schema tests remain open.
+The design below remains the intended complete contract, not a claim that all
+steps are implemented.
+
+Before any Production migration: complete and review cardinality and batching policy, retention and redaction, authoritative response fingerprints, full-schema migration pre/postchecks, write RPC and concurrency tests, RLS and grants, and rollback without deleting purchased orders. Production migration, binding, sync and canary remain out of scope here.
