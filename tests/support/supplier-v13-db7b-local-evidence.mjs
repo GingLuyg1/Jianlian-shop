@@ -21,6 +21,7 @@ assert.equal(basename(dirname(psql)).toLowerCase(), "bin");
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const fingerprint = resolve(root, "tests/support/supplier-v13-schema-fingerprint.mjs");
 const contractTest = resolve(root, "tests/support/supplier-v13-schema-contract-local.mjs");
+const parityQuery = resolve(root, "docs/integrations/sql/bitrefill-v1-3-authoritative-parity.sql");
 const tool = (name) => resolve(dirname(psql), `${name}.exe`);
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const databases = Array.from({ length: 2 }, () =>
@@ -147,6 +148,16 @@ try {
          'supplier_external_order_guard') and not tgisinternal)::text||'|'||
       (select count(*) from pg_proc where proname='record_supplier_fulfillment_outcome')::text`);
     assert.equal(row, "2|3|1", "DB7B_TRIGGER_OR_OUTCOME_DUPLICATE");
+    const parityRows = command(psql, ["-w", "-X", "-A", "-t", "-F", "\t",
+      "-v", "ON_ERROR_STOP=1", "-h", host, "-p", port, "-U", user,
+      "-d", database, "-f", parityQuery]).split(/\r?\n/).map((line) => line.split("\t"));
+    const conflicts = (kind) => parityRows.filter((parts) =>
+      parts[1] === "target_conflict" && parts[2] === kind);
+    assert.equal(conflicts("trigger").length, 3);
+    assert.ok(conflicts("trigger").every((parts) => parts[5]?.startsWith("CREATE TRIGGER")));
+    assert.equal(conflicts("function").length, 9);
+    assert.ok(conflicts("function").every((parts) =>
+      JSON.parse(parts[5]).definition_md5 && JSON.parse(parts[5]).owner));
     const localContract = JSON.parse(command(process.execPath, [contractTest],
       { ...process.env, V13_DB_NAME: database }));
     assert.equal(localContract.local_policy_pass, true);

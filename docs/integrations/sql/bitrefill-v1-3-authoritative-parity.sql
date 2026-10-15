@@ -182,24 +182,32 @@ contract as (
     cross join lateral aclexplode(p.proacl) x
     left join pg_roles grantor on grantor.oid=x.grantor
     left join pg_roles grantee on grantee.oid=x.grantee
-  union all select 'target_conflict','object','public',c.relname,'present'
+  union all select 'target_conflict','object','public',c.relname,
+    jsonb_build_object('kind',c.relkind,'owner',r.rolname)::text
     from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    left join pg_roles r on r.oid=c.relowner
     where n.nspname='public' and (c.relname like 'supplier_purchase_%'
       or c.relname like 'supplier_external_orders%'
       or c.relname like 'supplier_webhook_receipts%'
       or c.relname like 'supplier_reconciliation_evidence%')
-  union all select 'target_conflict','function','public',p.proname,'present'
+  union all select 'target_conflict','function','public',p.oid::regprocedure::text,
+    jsonb_build_object('return',p.prorettype::regtype::text,
+      'security_definer',p.prosecdef,'search_path',p.proconfig,
+      'owner',r.rolname,'definition_md5',md5(pg_get_functiondef(p.oid)))::text
     from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    left join pg_roles r on r.oid=p.proowner
     where n.nspname='public' and (p.proname like 'internal_supplier_purchase_%'
       or p.proname like 'supplier_purchase_guard_%'
       or p.proname='supplier_external_order_guard')
-  union all select 'target_conflict','constraint','public',con.conname,'present'
+  union all select 'target_conflict','constraint','public',con.conname,
+    jsonb_build_object('type',con.contype,'definition',pg_get_constraintdef(con.oid))::text
     from pg_constraint con join pg_namespace n on n.oid=con.connamespace
     where n.nspname='public' and (con.conname like 'supplier_purchase_%'
       or con.conname like 'supplier_external_orders%'
       or con.conname like 'supplier_webhook_receipts%'
       or con.conname like 'supplier_reconciliation_evidence%')
-  union all select 'target_conflict','trigger','public',t.tgname,'present'
+  union all select 'target_conflict','trigger','public',t.tgname,
+    pg_get_triggerdef(t.oid)
     from pg_trigger t join pg_class c on c.oid=t.tgrelid
     join pg_namespace n on n.oid=c.relnamespace
     where n.nspname='public' and not t.tgisinternal

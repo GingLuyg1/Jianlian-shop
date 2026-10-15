@@ -113,7 +113,8 @@ The manifest also has a separate comparable-only hash. The old DB4 hash is
 `bitrefill-v1-3-authoritative-parity.sql` is one SELECT/WITH statement and
 does not call business RPCs. It returns column/constraint/index/RLS/policy/
 function/trigger records, effective and explicit table/column/function ACLs,
-function owner/security/search_path/hash, migration history, target conflicts,
+function owner/security/search_path/hash, migration history, target conflicts
+(including conflicting function and trigger definitions),
 session `transaction_read_only` and `default_transaction_read_only`, and five
 approved COUNT-only dirty sections. It returns no order/card/secret rows.
 `transaction_read_only=off` is **not** evidence of a write, but it cannot prove

@@ -39,6 +39,8 @@ test("DB8 parity SQL is one SELECT-only statement with five count-only checks", 
     "authoritative_dependency_function", "authoritative_owner", "pg_get_triggerdef",
     "pg_get_constraintdef", "pg_get_functiondef", "has_column_privilege",
     "aclexplode", "'auth','uid'", "'auth','role'"]) assert.ok(parity.includes(required));
+  assert.match(parity, /'target_conflict','trigger'[^;]*pg_get_triggerdef\(t\.oid\)/s);
+  assert.match(parity, /'target_conflict','function'[^;]*definition_md5/s);
 });
 
 test("shared fixture loader keeps one repo outcome definition and marked local stubs", () => {
