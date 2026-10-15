@@ -68,10 +68,10 @@ assert.equal(await q(`select count(*) from pg_policies where tablename in (
   'supplier_webhook_receipts','supplier_reconciliation_evidence')`), "0");
 assert.equal(await q(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.proname like 'internal_supplier_purchase_%'
-    and p.prosecdef and p.proconfig @> array['search_path=pg_catalog']::text[]`), "5");
+    and p.prosecdef and p.proconfig @> array['search_path=pg_catalog']::text[]`), "6");
 assert.equal(await q(`select count(*) from information_schema.routine_privileges
   where routine_schema='public' and routine_name like 'internal_supplier_purchase_%'
-    and grantee='service_role' and privilege_type='EXECUTE'`), "5");
+    and grantee='service_role' and privilege_type='EXECUTE'`), "6");
 assert.equal(await q(`select count(*) from information_schema.routine_privileges
   where routine_schema='public' and routine_name like 'internal_supplier_purchase_%'
     and grantee in ('PUBLIC','anon','authenticated')`), "0");

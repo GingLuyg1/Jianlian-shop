@@ -1,14 +1,16 @@
 -- CURRENT-SCHEMA TEST FIXTURE. LOCAL DISPOSABLE POSTGRES ONLY.
 -- NOT A PRODUCTION MIGRATION. NOT HISTORICAL MIGRATION RECONSTRUCTION.
 -- NO PRODUCTION DATA. This is a scoped contract snapshot, not a full clone.
+-- Caller must set v13.expected_data_directory in the same psql session.
 \set ON_ERROR_STOP on
 
 do $guard$
 begin
-  if current_database() !~ '^jianlian_bitrefill_v13_current_schema(_(logical|invoice|child|orphan|state|binding))?$'
+  if current_database() !~ '^jianlian_bitrefill_v13_(current_schema(_(logical|invoice|child|orphan|state|binding))?|db5_[0-9a-f]{8})$'
      or inet_server_addr() is distinct from '127.0.0.1'::inet
+     or nullif(current_setting('v13.expected_data_directory', true), '') is null
      or replace(current_setting('data_directory'), '\', '/') <>
-       'D:/Jianlian/_bitrefill_v13_local_pg/data' then
+       replace(current_setting('v13.expected_data_directory', true), '\', '/') then
     raise exception 'V13_CURRENT_SCHEMA_DISPOSABLE_GUARD_FAILED';
   end if;
 end

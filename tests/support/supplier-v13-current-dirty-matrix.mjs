@@ -17,6 +17,7 @@ const executable = (name) => resolve(bin, "bin", `${name}.exe`);
 const root = resolve(import.meta.dirname, "../..");
 const fixture = resolve(root, "tests/fixtures/current-schema/supplier-v13-current-baseline.sql");
 const migration = resolve(root, "supabase/migrations/20261015063415_supplier_purchase_persistence_v1_3.sql");
+const sqlString = (value) => `'${String(value).replaceAll("'", "''")}'`;
 function run(file, args, expectedCode = 0) {
   const result = spawnSync(file, args, { encoding: "utf8", windowsHide: true,
     env: process.env, maxBuffer: 2 * 1024 * 1024 });
@@ -73,7 +74,9 @@ for (const [name, mutation, expected] of cases) {
     `REFUSE_EXISTING_DATABASE_${name}`);
   run(executable("createdb"), ["-h", host, "-p", port, "-U", user, db]);
   try {
-    run(psql, ["-X", "-v", "ON_ERROR_STOP=1", ...connection(db), "-f", fixture]);
+    run(psql, ["-X", "-v", "ON_ERROR_STOP=1", ...connection(db),
+      "-c", `select set_config('v13.expected_data_directory',${sqlString(expectedData)},false)`,
+      "-f", fixture]);
     query(db, seed);
     query(db, mutation);
     const result = run(psql, ["-X", "-v", "ON_ERROR_STOP=1", ...connection(db), "-f", migration], 3);
