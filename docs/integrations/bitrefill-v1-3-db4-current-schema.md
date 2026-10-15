@@ -1,5 +1,12 @@
 # Bitrefill V1.3-DB4 current-schema forward baseline (local only)
 
+DB5 supersession note (2026-10-15): the candidate V1.3 migration was amended
+locally to atomically link an external child to the existing private delivery
+transaction. Its DB5 SHA-256 is now
+`2b31673100d15b6c55968aa71eb092a5f278032f8ec808e3a3f5b949fa38d108`.
+The checksum below is the historical DB4 candidate, not the current file.
+See [DB5 local E2E evidence](bitrefill-v1-3-db5-local-e2e.md).
+
 Captured 2026-10-15 from the identified Jianlian-shop Production project's PostgreSQL
 catalog through SELECT-only Supabase access. No business rows, delivery contents,
 credentials, or payment data were read. The later request for policy metadata was
