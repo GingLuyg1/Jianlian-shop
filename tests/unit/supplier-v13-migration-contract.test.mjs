@@ -56,11 +56,15 @@ test("V1.3 candidate denies browser writes and grants only narrow server RPCs", 
   assert.match(migration.replace(/^--.*$/gm, "").trim(), /^begin;[\s\S]*commit;$/i);
 });
 
-test("production precheck draft is read-only and diagnoses the existing root", () => {
+test("current-schema production precheck is read-only and diagnoses scoped drift", () => {
   assert.match(precheck, /begin transaction read only;/i);
-  assert.match(precheck, /supabase_migrations\.schema_migrations/);
+  assert.match(precheck, /d1e335c5e80c09f7f48d022a40092e8b71d18cc1d383c639677f9d82a8b48fbb/);
+  assert.match(precheck, /pg_get_constraintdef/);
+  assert.match(precheck, /pg_get_functiondef/);
+  assert.match(precheck, /relrowsecurity/);
   assert.match(precheck, /provider_order_code/);
-  assert.match(precheck, /orphan_root_id/);
-  assert.match(precheck, /delivered_supplier_rows/);
+  assert.match(precheck, /'orphan_root', count\(\*\)/);
+  assert.match(precheck, /'duplicate_delivered_item', count\(\*\)/);
+  assert.doesNotMatch(precheck, /orphan_root_id|missing_binding_root_id|select\s+\*\s+from\s+public\.digital_delivery_secrets/i);
   assert.doesNotMatch(precheck.replace(/^--.*$/gm, ""), /\b(?:insert|update|delete|alter|create|drop|truncate)\s+(?:table\s+|from\s+)?public\./i);
 });
