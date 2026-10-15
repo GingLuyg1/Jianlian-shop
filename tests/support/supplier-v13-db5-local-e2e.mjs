@@ -10,9 +10,12 @@ import { fileURLToPath } from "node:url";
 import { installV13LocalFixture } from "./supplier-v13-local-fixture.mjs";
 import { createBitrefillPurchaseRpcAdapter, deliverBitrefillOfflineChild,
   handleBitrefillOfflineWebhook, reconcileBitrefillOfflineAttempt,
-  recoverBitrefillOfflineAttempt, runBitrefillOfflinePurchase,
+  recoverBitrefillOfflineAttempt, runBitrefillOfflinePurchase, runBitrefillSingleItemPurchase,
 } from "../../lib/providers/bitrefill/purchase-persistence.mjs";
 import { BitrefillFakeTransport } from "../../lib/providers/bitrefill/transport.mjs";
+import { deliverBitrefillSingleItem, loadBitrefillSingleItemCandidate,
+  reconcileBitrefillSingleItem,
+} from "../../lib/providers/bitrefill/single-item-purchase.mjs";
 
 const host = process.env.V13_PGHOST;
 const port = process.env.V13_PGPORT;
@@ -96,7 +99,7 @@ function localClient() {
       } catch (error) { return { data: null, error }; }
     },
     from(table) {
-      assert.match(table, /^(supplier_purchase_attempts|supplier_purchase_attempt_items|supplier_external_orders|supplier_fulfillment_requests)$/);
+      assert.match(table, /^(orders|order_items|supplier_purchase_attempts|supplier_purchase_attempt_items|supplier_external_orders|supplier_fulfillment_requests)$/);
       return {
         select(columns) {
           assert.match(columns, /^[a-z_,]+$/);
@@ -446,6 +449,100 @@ try {
     where d.order_item_id='${ackItems[0].orderItemId}'`), 1);
   console.log("DB5_PRIVATE_CRASH_BEFORE_ROLLBACK_AFTER_ACK_RECOVERY_PASS");
 
+  // P1's candidate is loaded through the server-side store, not from a client
+  // payment assertion. The disposable fixture adds only the real order currency
+  // field omitted by DB5's deliberately narrow baseline.
+  await sql("alter table public.orders add column currency text");
+  const p1Items = await seedItems(1);
+  const p1Item = p1Items[0];
+  const p1OrderId = await sql(`select order_id from public.order_items where id='${p1Item.orderItemId}'`);
+  await sql(`update public.orders set currency='USD' where id='${p1OrderId}'`);
+  const p1Binding = { fulfillment_source: "supplier", supplier: "bitrefill",
+    supplier_product_id: "synthetic-apple-us", supplier_sku: "synthetic-apple-5",
+    supplier_currency: "USD", supplier_face_value: "5.00",
+    supplier_max_unit_cost: "5.00", supplier_min_unit_profit: "1.00" };
+  await sql(`update public.order_items set unit_price=6,
+    product_snapshot=${quote(JSON.stringify({ supplier_binding: p1Binding }))}::jsonb
+    where id='${p1Item.orderItemId}'`);
+  const candidate = await loadBitrefillSingleItemCandidate(localClient(), p1OrderId, p1Item.orderItemId);
+  assert.equal(candidate.order.payment_status, "paid");
+  const p1InvoiceId = `synthetic-p1-${randomUUID()}`;
+  const p1ChildId = `synthetic-p1-child-${randomUUID()}`;
+  const p1Fake = new BitrefillFakeTransport({ invoice: { id: p1InvoiceId, status: "complete",
+    orders: [{ id: p1ChildId, status: "delivered" }] }, orders: {
+    [p1ChildId]: { id: p1ChildId, status: "delivered",
+      product: { id: "synthetic-apple-us", value: 5, package_id: "synthetic-apple-5" },
+      redemption_info: { code: "TEST_V13_CARD_CODE_ALPHA", pin: "TEST_V13_PIN_123456" } },
+  } });
+  const p1Args = { candidate, product, productCheckedAt: new Date().toISOString(),
+    quote: { source: "authenticated_supplier_cost", productId: "synthetic-apple-us",
+      packageId: "synthetic-apple-5", currency: "USD", amount: "4.80",
+      checkedAt: new Date().toISOString() }, nowMs: Date.now() };
+  const p1Attempt = await runBitrefillSingleItemPurchase({ db: dbA, transport: p1Fake, ...p1Args });
+  assert.equal(p1Attempt.status, "EXTERNAL_CREATED");
+  assert.equal(p1Attempt.invoiceId, p1InvoiceId);
+  assert.equal(p1Fake.invoiceSubmissions, 1);
+  const p1Replay = new BitrefillFakeTransport();
+  assert.equal((await runBitrefillSingleItemPurchase({ db: dbB,
+    transport: p1Replay, ...p1Args })).submitted, false);
+  assert.equal(p1Replay.invoiceSubmissions, 0);
+  const p1Reconciled = await reconcileBitrefillSingleItem({ db: dbA,
+    transport: p1Fake, attemptId: p1Attempt.attemptId });
+  assert.equal(p1Reconciled.deliveryCandidates.length, 1);
+  const p1ChildRowId = p1Reconciled.deliveryCandidates[0].childRowId;
+  const [p1DeliveryA, p1DeliveryB] = await Promise.all([
+    deliverBitrefillSingleItem({ db: dbA, transport: p1Fake, childRowId: p1ChildRowId }),
+    deliverBitrefillSingleItem({ db: dbB, transport: p1Fake, childRowId: p1ChildRowId }),
+  ]);
+  assert.equal(p1DeliveryA.delivered && p1DeliveryB.delivered, true);
+  assert.equal(await count(`select count(*) from public.order_deliveries
+    where order_item_id='${p1Item.orderItemId}' and delivery_status='delivered'`), 1);
+  assert.equal(await count(`select count(*) from public.digital_delivery_secrets s
+    join public.order_deliveries d on d.id=s.delivery_id
+    where d.order_item_id='${p1Item.orderItemId}'`), 1);
+  console.log("P1_PAID_ORDER_SINGLE_INVOICE_IDEMPOTENCY_GET_CHILD_PRIVATE_DELIVERY_PASS");
+
+  const unknownItems = await seedItems(1);
+  const unknownOrderId = await sql(`select order_id from public.order_items where id='${unknownItems[0].orderItemId}'`);
+  await sql(`update public.orders set currency='USD' where id='${unknownOrderId}'`);
+  await sql(`update public.order_items set unit_price=6,
+    product_snapshot=${quote(JSON.stringify({ supplier_binding: p1Binding }))}::jsonb
+    where id='${unknownItems[0].orderItemId}'`);
+  const unknownCandidate = await loadBitrefillSingleItemCandidate(localClient(), unknownOrderId,
+    unknownItems[0].orderItemId);
+  const unknownChildId = `synthetic-wrong-child-${randomUUID()}`;
+  const unknownFake = new BitrefillFakeTransport({ invoice: { id: `synthetic-wrong-invoice-${randomUUID()}`,
+    status: "complete", orders: [{ id: unknownChildId, status: "delivered" }] },
+    orders: { [unknownChildId]: { id: unknownChildId, status: "delivered",
+      product: { id: "wrong-product", value: 5 },
+      redemption_info: { code: "TEST_V13_CARD_CODE_ALPHA" } } } });
+  const unknownAttempt = await runBitrefillSingleItemPurchase({ db: dbA,
+    transport: unknownFake, ...p1Args, candidate: unknownCandidate });
+  await assert.rejects(reconcileBitrefillSingleItem({ db: dbA,
+    transport: unknownFake, attemptId: unknownAttempt.attemptId }),
+  /BITREFILL_UNKNOWN_CHILD_MANUAL_REVIEW/);
+  assert.equal(await count(`select count(*) from public.supplier_external_orders
+    where attempt_id='${unknownAttempt.attemptId}'`), 0);
+  assert.equal(await count(`select count(*) from public.order_deliveries
+    where order_item_id='${unknownItems[0].orderItemId}'`), 0);
+  console.log("P1_UNKNOWN_CHILD_NO_PERSISTENCE_OR_DELIVERY_PASS");
+
+  const unpaidItems = await seedItems(1);
+  const unpaidOrderId = await sql(`select order_id from public.order_items where id='${unpaidItems[0].orderItemId}'`);
+  await sql(`update public.orders set payment_status='unpaid',currency='USD' where id='${unpaidOrderId}'`);
+  await sql(`update public.order_items set unit_price=6,
+    product_snapshot=${quote(JSON.stringify({ supplier_binding: p1Binding }))}::jsonb
+    where id='${unpaidItems[0].orderItemId}'`);
+  const unpaidCandidate = await loadBitrefillSingleItemCandidate(localClient(), unpaidOrderId,
+    unpaidItems[0].orderItemId);
+  const unpaidFake = new BitrefillFakeTransport();
+  await assert.rejects(runBitrefillSingleItemPurchase({ db: dbA, transport: unpaidFake,
+    ...p1Args, candidate: unpaidCandidate }), /BITREFILL_ORDER_NOT_PAID_OR_ELIGIBLE/);
+  assert.equal(unpaidFake.invoiceSubmissions, 0);
+  assert.equal(await count(`select count(*) from public.supplier_purchase_attempt_items
+    where order_item_id='${unpaidItems[0].orderItemId}'`), 0);
+  console.log("P1_UNPAID_ORDER_BLOCKED_BEFORE_CLAIM_PASS");
+
   const markers = ["TEST_V13_CARD_CODE_ALPHA", "TEST_V13_PIN_123456"];
   const scannedColumns = JSON.parse(await sql(`select coalesce(json_agg(s),'[]'::json)::text from (
     select table_name,column_name from information_schema.columns
@@ -466,9 +563,10 @@ try {
   assert.ok(await count(`select count(*) from public.digital_delivery_secrets
     where position(${quote(markers[0])} in content)>0 and
       position(${quote(markers[1])} in content)>0`) >= 4);
-  const applicationCode = readFileSync(resolve(root,
-    "lib/providers/bitrefill/purchase-persistence.mjs"), "utf8");
-  assert.doesNotMatch(applicationCode, /console\.(?:log|error|warn|info)/);
+  for (const file of ["purchase-persistence.mjs", "purchase-http-transport.mjs", "single-item-purchase.mjs"]) {
+    const applicationCode = readFileSync(resolve(root, "lib/providers/bitrefill", file), "utf8");
+    assert.doesNotMatch(applicationCode, /console\.(?:log|error|warn|info)/);
+  }
   console.log(`DB5_SECRET_AUDIT_NON_PRIVATE_TABLES=${nonPrivateCounts.size}; MATCHES=0; LOG_MATCHES=0`);
 
   const newTables = ["supplier_purchase_attempts", "supplier_purchase_attempt_items",
