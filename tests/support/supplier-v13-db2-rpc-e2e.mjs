@@ -13,7 +13,7 @@ const psql = process.env.V13_PSQL_PATH;
 const dataDirectory = process.env.V13_EXPECTED_DATA_DIRECTORY;
 assert.equal(host, "127.0.0.1", "LOCAL_LOOPBACK_ONLY");
 assert.equal(port, "55433", "LOCAL_DISPOSABLE_PORT_ONLY");
-assert.equal(db, "jianlian_bitrefill_v13_db2", "LOCAL_DB2_ONLY");
+assert.ok(["jianlian_bitrefill_v13_db2", "jianlian_bitrefill_v13_current_schema"].includes(db), "LOCAL_DISPOSABLE_DB_ONLY");
 assert.ok(user && psql && dataDirectory && process.env.PGPASSWORD,
   "LOCAL_CONNECTION_CONFIGURATION_REQUIRED");
 assert.match(resolve(dataDirectory).toLowerCase(), /[\\/]_bitrefill_v13_local_pg[\\/]data$/);
@@ -39,7 +39,7 @@ async function fails(sql, code) {
 
 assert.equal(await q("select current_setting('data_directory')"), dataDirectory.replaceAll("\\", "/"));
 assert.equal(await q("select current_database() || '|' || host(inet_server_addr())"),
-  "jianlian_bitrefill_v13_db2|127.0.0.1");
+  `${db}|127.0.0.1`);
 for (const role of ["anon", "authenticated"]) {
   assert.equal(await q(`select has_function_privilege('${role}',
     'public.internal_supplier_purchase_claim(text,text,text,jsonb)','EXECUTE')`), "f");
@@ -134,11 +134,14 @@ assert.equal((await activation({ inventory_state: "requires_verification" })).re
 
 const roots = Array.from({ length: 21 }, () => ({ root: randomUUID(), item: randomUUID() }));
 const orderId = randomUUID();
-await q(`insert into public.orders(id,payment_status,status)
-  values('${orderId}','paid','paid')`);
+await q(db === "jianlian_bitrefill_v13_current_schema"
+  ? `insert into public.orders(id,order_no,user_id,payment_status,status)
+     values('${orderId}','synthetic-v13-${orderId}','${randomUUID()}','paid','paid')`
+  : `insert into public.orders(id,payment_status,status)
+     values('${orderId}','paid','paid')`);
 for (const { root, item } of roots) {
-  await q(`insert into public.order_items(id,order_id,quantity,delivery_type,product_snapshot)
-    values('${item}','${orderId}',1,'auto_delivery',
+  await q(`insert into public.order_items(id,order_id,${db === "jianlian_bitrefill_v13_current_schema" ? "product_name,unit_price,line_total," : ""}quantity,delivery_type,product_snapshot)
+    values('${item}','${orderId}',${db === "jianlian_bitrefill_v13_current_schema" ? "'SYNTHETIC_V13_PRODUCT',5,5," : ""}1,'auto_delivery',
       '{"supplier_binding":{"fulfillment_source":"supplier","supplier":"bitrefill",
       "supplier_product_id":"apple-us","supplier_sku":"apple-5"}}'::jsonb);
     insert into public.supplier_fulfillment_requests
@@ -235,8 +238,8 @@ const deliveryItemId = await q(`select i.order_item_id
   join public.supplier_purchase_attempt_items i on i.id=e.attempt_item_id
   where e.id='${pendingChildRowId}'`);
 const deliveryInsert = () => q(`insert into public.order_deliveries
-  (id,order_item_id,delivery_type,delivery_status)
-  values('${randomUUID()}','${deliveryItemId}','supplier_delivery','delivered')`);
+  (id,${db === "jianlian_bitrefill_v13_current_schema" ? "order_id," : ""}order_item_id,delivery_type,delivery_status)
+  values('${randomUUID()}',${db === "jianlian_bitrefill_v13_current_schema" ? `'${orderId}',` : ""}'${deliveryItemId}','supplier_delivery','delivered')`);
 const deliveryRace = await Promise.allSettled([deliveryInsert(), deliveryInsert()]);
 assert.equal(deliveryRace.filter((result) => result.status === "fulfilled").length, 1);
 assert.equal(deliveryRace.filter((result) => result.status === "rejected").length, 1);
@@ -283,8 +286,8 @@ await fails(claim(`invalid-${randomUUID()}`, [{ ...items[0] }]),
 await q(`update public.orders set payment_status='paid' where id='${orderId}'`);
 const dajuRoot = randomUUID();
 const dajuItem = randomUUID();
-await q(`insert into public.order_items(id,order_id,quantity,delivery_type,product_snapshot)
-  values('${dajuItem}','${orderId}',1,'auto_delivery',
+await q(`insert into public.order_items(id,order_id,${db === "jianlian_bitrefill_v13_current_schema" ? "product_name,unit_price,line_total," : ""}quantity,delivery_type,product_snapshot)
+  values('${dajuItem}','${orderId}',${db === "jianlian_bitrefill_v13_current_schema" ? "'SYNTHETIC_V13_DAJU',5,5," : ""}1,'auto_delivery',
     '{"supplier_binding":{"fulfillment_source":"supplier","supplier":"daju",
     "supplier_product_id":123}}'::jsonb);
   insert into public.supplier_fulfillment_requests
