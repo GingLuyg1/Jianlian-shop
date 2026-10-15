@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { installV13LocalFixture } from "./supplier-v13-local-fixture.mjs";
+import { runP2LocalCases } from "./bitrefill-p2-local-cases.mjs";
 import { createBitrefillPurchaseRpcAdapter, deliverBitrefillOfflineChild,
   handleBitrefillOfflineWebhook, reconcileBitrefillOfflineAttempt,
   recoverBitrefillOfflineAttempt, runBitrefillOfflinePurchase, runBitrefillSingleItemPurchase,
@@ -49,8 +50,10 @@ function command(file, args, { input } = {}) {
 }
 async function sql(statement, database = dbName, role = null) {
   const prefix = role ? `set role ${role}; select set_config('request.jwt.claim.role',${quote(role)},false); ` : "";
-  const result = await command(psql, ["-X", "-v", "ON_ERROR_STOP=1", "-At",
-    ...connection(database), "-c", prefix + statement]);
+  // UTF-8 stdin preserves Chinese text in exact repository function bodies on
+  // Windows, where psql's narrow command-line decoding can use an ANSI page.
+  const result = await command(psql, ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-At",
+    ...connection(database), "-f", "-"], { input: prefix + statement });
   if (result.code !== 0) throw new Error(`LOCAL_PSQL_FAILED: ${result.stderr}`);
   return result.stdout.split(/\r?\n/).filter((line) => line !== "SET" && line !== role).join("\n").trim();
 }
@@ -74,6 +77,8 @@ assert.equal(created.code, 0, created.stderr);
 let createdByThisRunner = true;
 
 const signatures = Object.freeze({
+  claim_supplier_fulfillment: ["p_order_id", "p_order_item_id", "p_supplier", "p_request_id",
+    "p_supplier_product_id", "p_supplier_sku", "p_trigger_source"],
   internal_supplier_purchase_claim: ["p_supplier", "p_logical_key", "p_semantic_hash", "p_items"],
   internal_supplier_purchase_transition: ["p_attempt_id", "p_expected_status", "p_next_status", "p_external_invoice_id"],
   internal_supplier_purchase_record_child: ["p_attempt_item_id", "p_external_order_id"],
@@ -543,6 +548,8 @@ try {
     where order_item_id='${unpaidItems[0].orderItemId}'`), 0);
   console.log("P1_UNPAID_ORDER_BLOCKED_BEFORE_CLAIM_PASS");
 
+  await runP2LocalCases({ sql, dbName, service: localClient(), createClient: localClient, root, seedItems, product, quote });
+
   const markers = ["TEST_V13_CARD_CODE_ALPHA", "TEST_V13_PIN_123456"];
   const scannedColumns = JSON.parse(await sql(`select coalesce(json_agg(s),'[]'::json)::text from (
     select table_name,column_name from information_schema.columns
@@ -563,7 +570,7 @@ try {
   assert.ok(await count(`select count(*) from public.digital_delivery_secrets
     where position(${quote(markers[0])} in content)>0 and
       position(${quote(markers[1])} in content)>0`) >= 4);
-  for (const file of ["purchase-persistence.mjs", "purchase-http-transport.mjs", "single-item-purchase.mjs"]) {
+  for (const file of ["purchase-persistence.mjs", "purchase-http-transport.mjs", "single-item-purchase.mjs", "paid-order-local.mjs"]) {
     const applicationCode = readFileSync(resolve(root, "lib/providers/bitrefill", file), "utf8");
     assert.doesNotMatch(applicationCode, /console\.(?:log|error|warn|info)/);
   }
@@ -608,6 +615,9 @@ try {
       and p.proconfig @> array['search_path=pg_catalog']::text[]`), 6);
   console.log("DB5_LOCAL_ACL_RLS_FUNCTION_OWNER_SEARCH_PATH_PASS");
 
+  // P2B deliberately created one synthetic checkout SKU earlier. Activation
+  // evaluation must leave that fixture unchanged, rather than require emptiness.
+  const skuCountBeforeActivationChecks = await count("select count(*) from public.product_skus");
   const p23Source = readFileSync(resolve(root,
     "supabase/migrations/20261004180000_admin_catalog_transactional_bulk_activation_p2_3.sql"), "utf8");
   const p23Original = p23Source.match(/create or replace function public\.admin_evaluate_product_sku_activation\([\s\S]*?\$\$;/i)?.[0];
@@ -653,7 +663,7 @@ try {
     assert.equal(await ready({ inventory_state: "requires_verification",
       supplier: "bitrefill", supplier_sku: `synthetic-apple-${amount}` }), "f");
   }
-  assert.equal(await count("select count(*) from public.product_skus"), 0);
+  assert.equal(await count("select count(*) from public.product_skus"), skuCountBeforeActivationChecks);
   console.log("DB5_P23_DAJU_27_BOOLEAN_UNKNOWN_STALE_ERROR_APPLE_ISOLATION_PASS");
 
   const perfRows = `select g from generate_series(1,1000) g`;

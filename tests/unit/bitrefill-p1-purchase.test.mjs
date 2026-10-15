@@ -29,6 +29,24 @@ const quote = { source: "authenticated_supplier_cost", productId: "fixture-apple
   checkedAt: new Date(now).toISOString() };
 const inputs = { candidate, product, productCheckedAt: new Date(now).toISOString(), quote, nowMs: now };
 
+test("P2 frozen payment fee and internal SKU identity alter the durable semantic hash", async () => {
+  const hashes = [];
+  for (const semanticContext of [{ orderId: "order-1", skuId: "sku-1", paymentFee: "0.10" },
+    { orderId: "order-1", skuId: "sku-1", paymentFee: "0.20" },
+    { orderId: "order-1", skuId: "sku-2", paymentFee: "0.10" }]) {
+    let hash;
+    const db = { claim: async (_supplier, _key, semanticHash) => {
+      hash = semanticHash;
+      hashes.push(hash);
+      return { result: "CLAIMED", attempt_id: "attempt-1" };
+    }, getAttempt: async () => ({ status: "CLAIMED", semantic_request_hash: hash }),
+    transition: async () => ({ result: "TRANSITIONED" }) };
+    await runBitrefillSingleItemPurchase({ db, transport: new BitrefillFakeTransport(),
+      ...inputs, semanticContext });
+  }
+  assert.equal(new Set(hashes).size, 3);
+});
+
 function response(status, body) { return new Response(JSON.stringify(body), { status,
   headers: { "content-type": "application/json" } }); }
 
