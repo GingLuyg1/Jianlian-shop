@@ -3,7 +3,7 @@
   "source": "local disposable current-schema fixture; no Production data",
   "expected_fixture_fingerprint_v1": "e036759cd8baa297a4de29c3bf3dc1460bd7959fdc00ebb26a6b7807849193fb",
   "authoritative_comparable_fingerprint_v1": "cfcd3862580020bfbf1affcfd7418efaaab8bb91526c5a471fec0f4e4808b15b",
-  "migration_sha256": "2b31673100d15b6c55968aa71eb092a5f278032f8ec808e3a3f5b949fa38d108",
+  "migration_sha256": "90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0",
   "hash_algorithm": "SHA-256 over UTF-8 canonical contract TSV rows, sorted by parity SQL, LF terminated",
   "requires_authoritative_capture": [
     {

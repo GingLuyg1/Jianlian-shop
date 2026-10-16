@@ -13,7 +13,7 @@ export const fixturePaths = Object.freeze({
   core: resolve(root, "supabase/migrations/20260826190000_supplier_fulfillment_core_v1.sql"),
   migration: resolve(root, "supabase/migrations/20261015063415_supplier_purchase_persistence_v1_3.sql"),
 });
-export const expectedMigrationSha256 = "2b31673100d15b6c55968aa71eb092a5f278032f8ec808e3a3f5b949fa38d108";
+export const expectedMigrationSha256 = "90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0";
 const outcomeSignature = "(uuid,uuid,text,text,uuid,text,boolean,text,text,text,numeric,numeric,text)";
 
 export function migrationSha256() {

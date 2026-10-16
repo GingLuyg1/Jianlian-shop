@@ -20,6 +20,48 @@ begin
 end
 $dependencies$;
 
+-- Reuse the existing trusted migration owner; do not CREATE ROLE/ALTER OWNER.
+-- DEFINER is needed because application roles intentionally have no table writes.
+-- Fail rather than deploying under an application/untrusted/inherited owner.
+do $owner_security$
+declare
+  v_owner oid := current_user::regrole;
+  v_role text;
+begin
+  if current_user in ('anon','authenticated','service_role')
+     or not exists (select 1 from pg_catalog.pg_roles
+       where oid=v_owner and (rolsuper or rolbypassrls)) then
+    raise exception 'SUPPLIER_PURCHASE_TRUSTED_OWNER_REQUIRED';
+  end if;
+  foreach v_role in array array['anon','authenticated','service_role'] loop
+    if pg_catalog.pg_has_role(v_role,v_owner,'USAGE')
+       or pg_catalog.pg_has_role(v_role,v_owner,'SET')
+       or pg_catalog.has_schema_privilege(v_role,'public','CREATE') then
+      raise exception 'SUPPLIER_PURCHASE_UNSAFE_ROLE_PATH';
+    end if;
+  end loop;
+  if exists (select 1 from pg_catalog.pg_roles
+      where rolname in ('anon','authenticated') and (rolsuper or rolbypassrls))
+     or not exists (select 1 from pg_catalog.pg_roles
+      where rolname='service_role' and not rolsuper and rolbypassrls) then
+    raise exception 'SUPPLIER_PURCHASE_APPLICATION_ROLE_MODEL_INVALID';
+  end if;
+  if exists (select 1 from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='public' and c.relname in
+        ('orders','order_items','order_deliveries','supplier_fulfillment_requests',
+         'digital_delivery_secrets','delivery_logs') and c.relowner<>v_owner)
+     or not exists (select 1 from pg_catalog.pg_proc p
+      where p.oid=to_regprocedure('public.admin_evaluate_product_sku_activation(text,text,integer,jsonb,bigint)')
+        and p.proowner=v_owner)
+     or not exists (select 1 from pg_catalog.pg_proc p
+      where p.oid=to_regprocedure('public.record_supplier_fulfillment_outcome(uuid,uuid,text,text,uuid,text,boolean,text,text,text,numeric,numeric,text)')
+        and p.proowner=v_owner and p.prosecdef) then
+    raise exception 'SUPPLIER_PURCHASE_DEPENDENCY_OWNER_MISMATCH';
+  end if;
+end
+$owner_security$;
+
 -- Existing root data is never silently repaired by this migration. Some of
 -- these conflicts are already prevented by the historical constraints; this
 -- explicit check also catches drifted installations before new DDL begins.
@@ -315,10 +357,10 @@ revoke all on public.supplier_purchase_attempts,
   public.supplier_purchase_attempt_items,
   public.supplier_external_orders,
   public.supplier_webhook_receipts,
-  public.supplier_reconciliation_evidence from public, anon, authenticated;
+  public.supplier_reconciliation_evidence from public, anon, authenticated, service_role;
 
--- Writes are deliberately withheld until transactional RPCs and their real-DB
--- concurrency acceptance are complete. Service role may inspect safe evidence.
+-- Normalize inherited creation defaults before granting only safe worker reads.
+-- GRANT SELECT alone would NOT remove Supabase's default service_role writes.
 grant select on public.supplier_purchase_attempts,
   public.supplier_purchase_attempt_items,
   public.supplier_external_orders,
@@ -327,7 +369,7 @@ grant select on public.supplier_purchase_attempts,
 
 revoke all on function public.supplier_purchase_guard_attempt_item(),
   public.supplier_purchase_guard_attempt_update(),
-  public.supplier_purchase_guard_external_order() from public, anon, authenticated;
+  public.supplier_purchase_guard_external_order() from public, anon, authenticated, service_role;
 
 -- The tables intentionally remain read-only for service_role. A narrowly
 -- granted DEFINER entry point is needed for atomic writes. It performs no HTTP.
@@ -857,5 +899,83 @@ revoke all on function public.admin_evaluate_product_sku_activation(text,text,in
   from public, anon, authenticated;
 grant execute on function public.admin_evaluate_product_sku_activation(text,text,integer,jsonb,bigint)
   to service_role;
+
+-- Effective permission assertions include PUBLIC, inherited grants and roles
+-- reachable through SET ROLE (including NOINHERIT memberships). Unexpected
+-- default grants must roll back this entire migration, not leave a weak install.
+do $effective_security$
+declare
+  v_owner oid := current_user::regrole;
+  v_table text;
+  v_role text;
+  v_privilege text;
+  v_route record;
+  v_function record;
+  v_column record;
+begin
+  foreach v_table in array array['supplier_purchase_attempts',
+    'supplier_purchase_attempt_items','supplier_external_orders',
+    'supplier_webhook_receipts','supplier_reconciliation_evidence'] loop
+    if not exists (select 1 from pg_catalog.pg_class
+        where oid=to_regclass('public.'||v_table) and relowner=v_owner and relrowsecurity)
+       or exists (select 1 from pg_catalog.pg_policy
+        where polrelid=to_regclass('public.'||v_table)) then
+      raise exception 'SUPPLIER_PURCHASE_TABLE_SECURITY_INVALID';
+    end if;
+    foreach v_role in array array['anon','authenticated','service_role'] loop
+      if pg_catalog.has_table_privilege(v_role,'public.'||v_table,'SELECT')
+          is distinct from (v_role='service_role') then
+        raise exception 'SUPPLIER_PURCHASE_READ_ACL_INVALID';
+      end if;
+      for v_route in select oid from pg_catalog.pg_roles
+        where pg_catalog.pg_has_role(v_role,oid,'USAGE')
+           or pg_catalog.pg_has_role(v_role,oid,'SET') loop
+        foreach v_privilege in array array['INSERT','UPDATE','DELETE','TRUNCATE',
+          'REFERENCES','TRIGGER','MAINTAIN'] loop
+          if pg_catalog.has_table_privilege(v_route.oid,'public.'||v_table,v_privilege) then
+            raise exception 'SUPPLIER_PURCHASE_EFFECTIVE_WRITE_ACL_UNSAFE';
+          end if;
+        end loop;
+        for v_column in select attnum from pg_catalog.pg_attribute
+          where attrelid=to_regclass('public.'||v_table) and attnum>0 and not attisdropped loop
+          foreach v_privilege in array array['INSERT','UPDATE','REFERENCES'] loop
+            if pg_catalog.has_column_privilege(v_route.oid,to_regclass('public.'||v_table),
+                v_column.attnum,v_privilege) then
+              raise exception 'SUPPLIER_PURCHASE_EFFECTIVE_COLUMN_ACL_UNSAFE';
+            end if;
+          end loop;
+        end loop;
+      end loop;
+    end loop;
+  end loop;
+  for v_function in select p.* from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public' and p.proname in (
+      'internal_supplier_purchase_claim','internal_supplier_purchase_transition',
+      'internal_supplier_purchase_record_child','internal_supplier_purchase_record_evidence',
+      'internal_supplier_purchase_record_webhook','internal_supplier_purchase_deliver_child',
+      'supplier_purchase_guard_attempt_item','supplier_purchase_guard_attempt_update',
+      'supplier_purchase_guard_external_order') loop
+    if v_function.proowner<>v_owner
+       or v_function.proconfig is distinct from array['search_path=pg_catalog']::text[]
+       or v_function.prosecdef is distinct from
+          (v_function.proname like 'internal_supplier_purchase_%')
+       or pg_catalog.has_function_privilege('service_role',v_function.oid,'EXECUTE')
+          is distinct from (v_function.proname like 'internal_supplier_purchase_%')
+       or exists (select 1 from pg_catalog.aclexplode(v_function.proacl) where grantee=0) then
+      raise exception 'SUPPLIER_PURCHASE_FUNCTION_SECURITY_INVALID';
+    end if;
+    foreach v_role in array array['anon','authenticated'] loop
+      for v_route in select oid from pg_catalog.pg_roles
+        where pg_catalog.pg_has_role(v_role,oid,'USAGE')
+           or pg_catalog.pg_has_role(v_role,oid,'SET') loop
+        if pg_catalog.has_function_privilege(v_route.oid,v_function.oid,'EXECUTE') then
+          raise exception 'SUPPLIER_PURCHASE_EFFECTIVE_EXECUTE_ACL_UNSAFE';
+        end if;
+      end loop;
+    end loop;
+  end loop;
+end
+$effective_security$;
 
 commit;
