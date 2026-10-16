@@ -75,14 +75,17 @@ export async function runP2LocalCases({ sql, dbName, service, createClient, root
         priceReads += 1;
         const now = new Date().toISOString();
         return { product: change.unavailable ? { ...product, availability: "unavailable" } : product,
-          productCheckedAt: now, quote: change.missingCost ? null : { source: "authenticated_supplier_cost", synthetic: true,
+          productCheckedAt: now, quote: change.missingCost ? null : { source: "synthetic_fixture", synthetic: true,
+            supplier: "bitrefill", quantity: 1, maxAllowedSpend: "5.00", expiresAt: new Date(Date.parse(now) + 240_000).toISOString(),
             productId: product.external_product_id, packageId: "synthetic-apple-5", currency: "USD",
             amount: change.cost ?? "4.80", checkedAt: now,
             ...(change.currency ? { currency: change.currency } : {}) } };
       },
       loadFinancialEvidence: async ({ order, orderItem }) => ({ source: "synthetic_paid_ledger",
         orderId: order.id, orderItemId: orderItem.id, currency: "USD", paidItemAmount: "6.00",
-        paymentFee: change.fee ?? "0.10", fxSource: "same_currency_no_conversion", maxUnitProfit: "2.00" }),
+        paymentFee: change.fee ?? "0.10", fxSource: "same_currency_no_conversion", maxUnitProfit: "2.00",
+        otherFees: "0", paymentState: "paid", refundState: "none", disputeState: "none" }),
+      loadSupplierBalance: async () => ({ source: "synthetic_balance", state: "sufficient", currency: "USD", availableAmount: "100.00" }),
     });
     const dispatch = (orderId) => dispatchLocalPaidSuppliers({ service: workerService, orderId, bitrefill });
     const deliveryClient = { from: workerService.from.bind(workerService),
@@ -304,4 +307,5 @@ export async function runP2LocalCases({ sql, dbName, service, createClient, root
   await assert.rejects(wakeRun.dispatch(wake.orderId), /BITREFILL_P2_ORDER_NOT_ELIGIBLE/);
   assert.equal(wakeFake.invoiceSubmissions, 1);
   console.log("P2_WEBHOOK_POLL_GET_RECOVERY_AND_POST_DELIVERY_REFUND_PASS");
+  return { seed, Fake, setup, binding, extract, deliverDigitalOrder };
 }

@@ -11,6 +11,7 @@ const candidate = { order: { id: "order-1", currency: "USD" }, orderItem: {
 const evidence = { source: "synthetic_paid_ledger", orderId: "order-1", orderItemId: "item-1",
   currency: "USD", paidItemAmount: "6.00", paymentFee: "0.10", maxUnitProfit: "2.00",
   fxSource: "same_currency_no_conversion" };
+Object.assign(evidence, { otherFees: "0", paymentState: "paid", refundState: "none", disputeState: "none" });
 const quote = { synthetic: true, currency: "USD", amount: "4.80" };
 test("P2 net profit includes actual item payment and fee, blocks FX, face-value source and missing cost", () => {
   assert.equal(validateLocalFinancialEvidence(candidate, evidence, quote).paymentFee, "0.10");
@@ -27,9 +28,9 @@ test("P2 factory rejects real HTTP before any network; requires explicit FakeTra
   const http = new BitrefillHttpTransport({ authMode: "personal", apiKey: "synthetic-key",
     fetchImpl: async () => { throw new Error("NETWORK_FORBIDDEN"); } });
   assert.throws(() => createLocalBitrefillFulfillment({ transport: http,
-    loadPricing: async () => {}, loadFinancialEvidence: async () => {} }), /BITREFILL_P2_FAKE_ONLY/);
+    loadPricing: async () => {}, loadFinancialEvidence: async () => {}, loadSupplierBalance: async () => {} }), /BITREFILL_P2_FAKE_ONLY/);
   assert.equal(typeof createLocalBitrefillFulfillment({ transport: new BitrefillFakeTransport(),
-    loadPricing: async () => {}, loadFinancialEvidence: async () => {} }), "function");
+    loadPricing: async () => {}, loadFinancialEvidence: async () => {}, loadSupplierBalance: async () => {} }), "function");
 });
 
 function service(items, paymentStatus = "paid") {

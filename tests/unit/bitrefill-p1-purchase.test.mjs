@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { normalizeBitrefillProduct } from "../../lib/providers/bitrefill/provider-core.mjs";
-import { BitrefillPurchaseHttpTransport } from "../../lib/providers/bitrefill/purchase-http-transport.mjs";
+import { BitrefillPurchaseHttpTransport, buildBitrefillBalanceInvoiceBody } from "../../lib/providers/bitrefill/purchase-http-transport.mjs";
+import { buildBitrefillAuthorization } from "../../lib/providers/bitrefill/client-core.mjs";
 import { loadFreshBitrefillProduct, prepareBitrefillSingleItem, reconcileBitrefillSingleItem,
   deliverBitrefillSingleItem } from "../../lib/providers/bitrefill/single-item-purchase.mjs";
 import { runBitrefillSingleItemPurchase } from "../../lib/providers/bitrefill/purchase-persistence.mjs";
@@ -66,7 +67,7 @@ test("independent purchase transport defaults closed; GET-only transport still r
   assert.equal(called, 0);
 });
 
-test("personal and business adapters construct one balance auto-pay invoice with blocked-network fetch", async () => {
+test("personal and business contracts construct balance auto-pay data while HTTP POST stays release-blocked", async () => {
   for (const credentials of [{ authMode: "personal", apiKey: "fixture-personal" },
     { authMode: "business", apiId: "fixture-id", apiSecret: "fixture-business" }]) {
     const calls = [];
@@ -75,34 +76,30 @@ test("personal and business adapters construct one balance auto-pay invoice with
         calls.push({ url, options });
         return response(200, { data: { id: "invoice-1", status: "pending", orders: [] } });
       } });
-    const invoice = await transport.createInvoice({ products: [{ product_id: "fixture-apple-us",
+    const body = buildBitrefillBalanceInvoiceBody({ products: [{ product_id: "fixture-apple-us",
       package_id: "fixture-apple-5", quantity: 1 }], payment_method: "bitcoin", auto_pay: false });
-    assert.equal(invoice.id, "invoice-1");
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "https://api.bitrefill.com/v2/invoices");
-    assert.equal(calls[0].options.method, "POST");
-    assert.deepEqual(JSON.parse(calls[0].options.body), { products: [{ product_id: "fixture-apple-us",
+    assert.deepEqual(body, { products: [{ product_id: "fixture-apple-us",
       package_id: "fixture-apple-5", quantity: 1 }], payment_method: "balance", auto_pay: true });
+    await assert.rejects(transport.createInvoice(body), /BITREFILL_REAL_PURCHASE_DISABLED/);
+    assert.equal(calls.length, 0);
+    const invoice = await new BitrefillFakeTransport({ invoice: { id: "invoice-1" } }).createInvoice(body);
+    assert.equal(invoice.id, "invoice-1");
+    await transport.readInvoice("invoice-1");
+    assert.equal(calls[0].options.method, "GET");
     assert.equal(calls[0].options.headers.Authorization.startsWith(
       credentials.authMode === "personal" ? "Bearer " : "Basic "), true);
+    assert.equal(calls[0].options.headers.Authorization, buildBitrefillAuthorization(credentials));
     assert.equal(JSON.stringify(invoice).includes(credentials.apiKey ?? credentials.apiSecret), false);
   }
 });
 
-test("POST timeout is never retried; insufficient funds and malformed responses expose no raw secrets", async () => {
-  let count = 0;
-  const timeout = new BitrefillPurchaseHttpTransport({ authMode: "personal", apiKey: "fixture-secret",
-    purchaseEnabled: true, fetchImpl: async () => { count += 1; throw new Error("fixture-secret RAW_BODY"); } });
+test("FakeTransport models uncertain submit timeout; pure request builder enforces quantity one", async () => {
+  const timeout = new BitrefillFakeTransport({ submitTimeoutAfterAccept: true });
   const request = { products: [{ product_id: "fixture-apple-us", package_id: "fixture-apple-5", quantity: 1 }] };
-  await assert.rejects(timeout.createInvoice(request), (error) => error.code === "BITREFILL_POST_OUTCOME_UNCERTAIN"
+  await assert.rejects(timeout.createInvoice(request), (error) => error.code === "POST_SUBMIT_TIMEOUT"
     && error.submitted === true && !error.message.includes("fixture-secret"));
-  assert.equal(count, 1);
-  const funds = new BitrefillPurchaseHttpTransport({ authMode: "personal", apiKey: "fixture-secret",
-    purchaseEnabled: true, fetchImpl: async () => response(403,
-      { error_code: "balance_too_low", secret: "fixture-secret" }) });
-  await assert.rejects(funds.createInvoice(request), (error) => error.code === "BITREFILL_BALANCE_TOO_LOW"
-    && error.submitted === true && !error.message.includes("fixture-secret"));
-  await assert.rejects(funds.createInvoice({ products: [{ ...request.products[0], quantity: 2 }] }),
+  assert.equal(timeout.invoiceSubmissions, 1);
+  assert.throws(() => buildBitrefillBalanceInvoiceBody({ products: [{ ...request.products[0], quantity: 2 }] }),
     (error) => error.code === "BITREFILL_SINGLE_ITEM_REQUEST_REQUIRED" && error.submitted === false);
 });
 
