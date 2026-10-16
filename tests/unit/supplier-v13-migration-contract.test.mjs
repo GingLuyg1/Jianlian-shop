@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { expectedMigrationSha256 } from "../support/supplier-v13-local-fixture.mjs";
 
 const migration = readFileSync(
   new URL("../../supabase/migrations/20261015063415_supplier_purchase_persistence_v1_3.sql", import.meta.url),
@@ -60,7 +61,8 @@ test("V1.3 candidate denies browser writes and grants only narrow server RPCs", 
 
 test("current-schema production precheck is read-only and diagnoses scoped drift", () => {
   assert.match(precheck, /begin transaction read only;/i);
-  assert.match(precheck, /d1e335c5e80c09f7f48d022a40092e8b71d18cc1d383c639677f9d82a8b48fbb/);
+  assert.ok(precheck.includes(expectedMigrationSha256));
+  assert.match(precheck, /e036759cd8baa297a4de29c3bf3dc1460bd7959fdc00ebb26a6b7807849193fb/);
   assert.match(precheck, /pg_get_constraintdef/);
   assert.match(precheck, /pg_get_functiondef/);
   assert.match(precheck, /relrowsecurity/);

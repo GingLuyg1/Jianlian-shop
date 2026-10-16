@@ -45,7 +45,7 @@ test("DB8 parity SQL is one SELECT-only statement with five count-only checks", 
 
 test("shared fixture loader keeps one repo outcome definition and marked local stubs", () => {
   assert.equal(migrationSha256(), expectedMigrationSha256);
-  assert.match(db5, /installV13LocalFixture\(\{ databaseName: dbName, applyFile, executeSql: sql \}\)/);
+  assert.match(db5, /installV13LocalFixture\(\{ databaseName: dbName, applyFile, executeSql: sql,/);
   assert.match(repoOutcomeDefinition(), /create or replace function public\.record_supplier_fulfillment_outcome/i);
   assert.match(support, /TEST_ONLY_STUB/);
   assert.equal((support.match(/create function public\.record_supplier_fulfillment_outcome/g) ?? []).length, 0);

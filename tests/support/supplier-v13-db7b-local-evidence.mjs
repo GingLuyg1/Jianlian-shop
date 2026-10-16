@@ -12,6 +12,8 @@ const port = process.env.V13_PGPORT;
 const user = process.env.V13_PGUSER;
 const psql = process.env.V13_PSQL_PATH;
 const expectedData = process.env.V13_EXPECTED_DATA_DIRECTORY?.replaceAll("\\", "/");
+const db9Owner = process.argv.includes("--db9-owner");
+const fixtureOwner = db9Owner ? "postgres" : user;
 assert.equal(host, "127.0.0.1");
 assert.equal(port, "55433");
 assert.ok(user && psql && expectedData && process.env.PGPASSWORD);
@@ -35,8 +37,9 @@ function command(executable, args, env = process.env) {
   return result.stdout.trim();
 }
 function sql(database, statement) {
-  return command(psql, ["-w", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-    "-h", host, "-p", port, "-U", user, "-d", database, "-c", statement]);
+  return command(psql, ["-w", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
+    "-h", host, "-p", port, "-U", user, "-d", database,
+    ...(db9Owner ? ["-c", `set role ${fixtureOwner}`] : []), "-c", statement]);
 }
 function verifyRootConstraints(database) {
   const names = ["supplier_fulfillment_requests_supplier_check",
@@ -121,11 +124,13 @@ const created = [];
 const hashes = [];
 try {
   for (const database of databases) {
-    command(tool("createdb"), ["-h", host, "-p", port, "-U", user, database]);
+    command(tool("createdb"), ["-h", host, "-p", port, "-U", user,
+      ...(db9Owner ? ["-O", fixtureOwner] : []), database]);
     created.push(database);
     const applyFile = async (file) => {
       command(psql, ["-w", "-X", "-v", "ON_ERROR_STOP=1", "-h", host, "-p", port,
-        "-U", user, "-d", database, "-c",
+        "-U", user, "-d", database,
+        ...(db9Owner ? ["-c", `set role ${fixtureOwner}`] : []), "-c",
         `select set_config('v13.expected_data_directory',${quote(expectedData)},false)`,
         "-f", file]);
     };
@@ -158,7 +163,8 @@ try {
     assert.equal(conflicts("function").length, 9);
     assert.ok(conflicts("function").every((parts) =>
       JSON.parse(parts[5]).definition_md5 && JSON.parse(parts[5]).owner));
-    const localContract = JSON.parse(command(process.execPath, [contractTest],
+    const localContract = JSON.parse(command(process.execPath, [contractTest,
+      ...(db9Owner ? ["--db9-owner"] : [])],
       { ...process.env, V13_DB_NAME: database }));
     assert.equal(localContract.local_policy_pass, true);
     console.log(JSON.stringify({ database, local_fixture_apply_pass: true,

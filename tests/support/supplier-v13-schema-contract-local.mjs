@@ -13,9 +13,10 @@ assert.ok(psql && data && process.env.V13_PGUSER && process.env.PGPASSWORD);
 assert.equal(basename(dirname(data)).toLowerCase(), "_bitrefill_v13_local_pg");
 assert.equal(basename(data).toLowerCase(), "data");
 function sql(query, expectSuccess = true) {
-  const result = spawnSync(psql, ["-w", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1",
+  const result = spawnSync(psql, ["-w", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
     "-h", "127.0.0.1", "-p", "55433", "-U", process.env.V13_PGUSER,
-    "-d", db, "-c", query], { encoding: "utf8", windowsHide: true,
+    "-d", db, ...(process.argv.includes("--db9-owner") ? ["-c", "set role postgres"] : []),
+    "-c", query], { encoding: "utf8", windowsHide: true,
     env: process.env, maxBuffer: 1024 * 1024 });
   assert.equal(result.status === 0, expectSuccess, result.stderr);
   return { out: result.stdout.trim(), error: result.stderr.trim() };

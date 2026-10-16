@@ -19,6 +19,8 @@ const port = process.env.V13_PGPORT;
 const user = process.env.V13_PGUSER;
 const psql = process.env.V13_PSQL_PATH;
 const expectedData = process.env.V13_EXPECTED_DATA_DIRECTORY;
+const db9Defaults = process.argv.includes("--db9-production-default-acl");
+const fixtureOwner = db9Defaults ? "postgres" : user;
 assert.equal(host, "127.0.0.1", "DB5_LOOPBACK_ONLY");
 assert.equal(port, "55433", "DB5_ISOLATED_PORT_ONLY");
 assert.ok(user && psql && expectedData && process.env.PGPASSWORD, "DB5_LOCAL_ENV_REQUIRED");
@@ -45,7 +47,8 @@ function command(file, args, { input } = {}) {
   });
 }
 async function sql(statement, database = dbName, role = null) {
-  const prefix = role ? `set role ${role}; select set_config('request.jwt.claim.role',${quote(role)},false); ` : "";
+  const prefix = role ? `set role ${role}; select set_config('request.jwt.claim.role',${quote(role)},false); `
+    : db9Defaults ? `set role ${fixtureOwner}; ` : "";
   const result = await command(psql, ["-X", "-v", "ON_ERROR_STOP=1", "-At",
     ...connection(database), "-c", prefix + statement]);
   if (result.code !== 0) throw new Error(`LOCAL_PSQL_FAILED: ${result.stderr}`);
@@ -56,6 +59,7 @@ async function sqlFails(statement, role, expected) {
 }
 async function applyFile(path) {
   const result = await command(psql, ["-X", "-v", "ON_ERROR_STOP=1", ...connection(dbName),
+    ...(db9Defaults ? ["-c", `set role ${fixtureOwner}`] : []),
     "-c", `select set_config('v13.expected_data_directory',${quote(expectedData)},false)`,
     "-f", path]);
   assert.equal(result.code, 0, result.stderr);
@@ -63,10 +67,11 @@ async function applyFile(path) {
 const pgIdentity = await sql(`select current_user || '|' || current_setting('data_directory') ||
   '|' || host(inet_server_addr()) || '|' || current_setting('server_version') ||
   '|' || (to_regclass('public.orders') is null)::text`, "postgres");
-assert.equal(pgIdentity, `${user}|${expectedData.replaceAll("\\", "/")}|127.0.0.1|17.11|true`,
+assert.equal(pgIdentity, `${fixtureOwner}|${expectedData.replaceAll("\\", "/")}|127.0.0.1|17.11|true`,
   "DB5_LOCAL_CLUSTER_IDENTITY_FAILED");
 assert.equal(await sql(`select count(*) from pg_database where datname=${quote(dbName)}`, "postgres"), "0");
-const created = await command(tool("createdb"), ["-h", host, "-p", port, "-U", user, dbName]);
+const created = await command(tool("createdb"), ["-h", host, "-p", port, "-U", user,
+  ...(db9Defaults ? ["-O", fixtureOwner] : []), dbName]);
 assert.equal(created.code, 0, created.stderr);
 let createdByThisRunner = true;
 
@@ -189,7 +194,9 @@ async function attemptItems(attemptId) {
 async function count(statement) { return Number(await sql(statement)); }
 
 try {
-  await installV13LocalFixture({ databaseName: dbName, applyFile, executeSql: sql });
+  await installV13LocalFixture({ databaseName: dbName, applyFile, executeSql: sql,
+    beforeMigration: db9Defaults ? () => applyFile(resolve(root,
+      "tests/fixtures/current-schema/supplier-v13-db9-default-acl.sql")) : undefined });
   console.log("DB5_LOCAL_BASELINE_FORWARD_AND_EXISTING_PRIVATE_RPC_PASS");
 
   const dbA = createBitrefillPurchaseRpcAdapter(localClient());

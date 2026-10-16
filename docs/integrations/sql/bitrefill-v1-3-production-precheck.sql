@@ -1,9 +1,14 @@
 -- READ-ONLY PRECHECK TEMPLATE. Separate Production read authorization required.
 -- Current-schema forward migration only; historical clean replay is unsupported.
 -- No row identifiers, customer data, secrets, credentials, or mutation.
--- Expected narrow dependency fingerprint captured 2026-10-15:
--- d1e335c5e80c09f7f48d022a40092e8b71d18cc1d383c639677f9d82a8b48fbb
--- Compare the scoped report with the capture manifest; STOP on drift or dirty counts.
+-- DB9 candidate SHA256: 90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0
+-- Frozen canonical V1 fixture fingerprint (not a Production assertion):
+-- e036759cd8baa297a4de29c3bf3dc1460bd7959fdc00ebb26a6b7807849193fb
+-- Legacy DB4 fingerprint is not reproducible and must NOT be a gate.
+-- This older broad template is NOT the DB10 approved query set: it contains
+-- additional dirty categories. Use the frozen authoritative parity SQL (five
+-- COUNT-only checks) plus bitrefill-v1-3-db10-acl-precheck.sql only after separate
+-- authorization. Compare per object, not just aggregate hashes. STOP on drift.
 begin transaction read only;
 
 select current_database() as database_name,
