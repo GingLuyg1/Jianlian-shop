@@ -9,6 +9,7 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { installV13LocalFixture } from "./supplier-v13-local-fixture.mjs";
 import { runP2LocalCases } from "./bitrefill-p2-local-cases.mjs";
+import { runP3LocalPrelaunch } from "./bitrefill-p3-prelaunch-local.mjs";
 import { createBitrefillPurchaseRpcAdapter, deliverBitrefillOfflineChild,
   handleBitrefillOfflineWebhook, reconcileBitrefillOfflineAttempt,
   recoverBitrefillOfflineAttempt, runBitrefillOfflinePurchase, runBitrefillSingleItemPurchase,
@@ -41,10 +42,11 @@ function command(file, args, { input } = {}) {
       env: process.env, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    const timer = setTimeout(() => { child.kill(); rejectCommand(new Error("LOCAL_PG_COMMAND_TIMEOUT")); }, 30_000);
     child.stdout.setEncoding("utf8").on("data", (part) => { stdout += part; });
     child.stderr.setEncoding("utf8").on("data", (part) => { stderr += part; });
-    child.on("error", rejectCommand);
-    child.on("close", (code) => resolveCommand({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
+    child.on("error", (error) => { clearTimeout(timer); rejectCommand(error); });
+    child.on("close", (code) => { clearTimeout(timer); resolveCommand({ code, stdout: stdout.trim(), stderr: stderr.trim() }); });
     child.stdin.end(input);
   });
 }
@@ -53,7 +55,7 @@ async function sql(statement, database = dbName, role = null) {
   // UTF-8 stdin preserves Chinese text in exact repository function bodies on
   // Windows, where psql's narrow command-line decoding can use an ANSI page.
   const result = await command(psql, ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-At",
-    ...connection(database), "-f", "-"], { input: prefix + statement });
+    ...connection(database), "-f", "-"], { input: "set statement_timeout='15s'; set lock_timeout='5s'; " + prefix + statement });
   if (result.code !== 0) throw new Error(`LOCAL_PSQL_FAILED: ${result.stderr}`);
   return result.stdout.split(/\r?\n/).filter((line) => line !== "SET" && line !== role).join("\n").trim();
 }
@@ -548,7 +550,8 @@ try {
     where order_item_id='${unpaidItems[0].orderItemId}'`), 0);
   console.log("P1_UNPAID_ORDER_BLOCKED_BEFORE_CLAIM_PASS");
 
-  await runP2LocalCases({ sql, dbName, service: localClient(), createClient: localClient, root, seedItems, product, quote });
+  const p2 = await runP2LocalCases({ sql, dbName, service: localClient(), createClient: localClient, root, seedItems, product, quote });
+  await runP3LocalPrelaunch({ sql, dbName, createClient: localClient, root, product, quote, p2 });
 
   const markers = ["TEST_V13_CARD_CODE_ALPHA", "TEST_V13_PIN_123456"];
   const scannedColumns = JSON.parse(await sql(`select coalesce(json_agg(s),'[]'::json)::text from (
