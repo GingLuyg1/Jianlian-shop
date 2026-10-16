@@ -92,7 +92,8 @@ export async function deliverDigitalOrder(
   supabase: SupabaseClient,
   orderId: string,
   triggerSource = "server",
-  onStage?: (event: DeliveryInternalEvent) => void
+  onStage?: (event: DeliveryInternalEvent) => void,
+  localBitrefill?: Parameters<typeof fulfillSupplierOrderWithSupabase>[3]
 ): Promise<DeliveryServiceResult> {
   const priority = await runLocalStockPriorityDelivery({
     reserveLocal: async () => {
@@ -139,7 +140,7 @@ export async function deliverDigitalOrder(
     deliverSupplier: async () => {
       notifyStage(onStage, "DAJU_FALLBACK_STARTED");
       try {
-        const result = await fulfillSupplierOrderWithSupabase(supabase, orderId, triggerSource);
+        const result = await fulfillSupplierOrderWithSupabase(supabase, orderId, triggerSource, localBitrefill);
         notifyStage(onStage, "DAJU_FALLBACK_COMPLETED");
         return result;
       } catch {

@@ -13,6 +13,7 @@ const user = process.env.V13_PGUSER;
 const psql = process.env.V13_PSQL_PATH;
 const expectedData = process.env.V13_EXPECTED_DATA_DIRECTORY?.replaceAll("\\", "/");
 const db9Owner = process.argv.includes("--db9-owner");
+const preserveRc1 = process.argv.includes("--rc1-preserve-manifest");
 const fixtureOwner = db9Owner ? "postgres" : user;
 assert.equal(host, "127.0.0.1");
 assert.equal(port, "55433");
@@ -138,9 +139,10 @@ try {
       executeSql: (statement) => sql(database, statement),
       beforeMigration: async () => {
         const output = JSON.parse(command(process.execPath, [fingerprint,
-          ...(hashes.length === 0 ? ["--write-manifest"] : [])],
+          ...(preserveRc1 ? ["--verify-frozen-rc1"] : hashes.length === 0 ? ["--write-manifest"] : [])],
         { ...process.env, V13_DB_NAME: database }));
         assert.equal(output.deterministic, true);
+        if (preserveRc1) console.log(JSON.stringify({ rc1_frozen_evidence: output.rc1_evidence }));
         hashes.push(output.fingerprint_run_1);
         verifyRootConstraints(database);
       } });
@@ -174,7 +176,8 @@ try {
   assert.equal(hashes[0], hashes[1], "DB7B_FRESH_DB_HASH_MISMATCH");
   console.log(JSON.stringify({ fingerprint_schema_version: "v1",
     fingerprint_deterministic: true, fresh_db_fingerprint_match: true,
-    expected_fixture_fingerprint_v1: hashes[0], migration_sha256: expectedMigrationSha256 }));
+    ...(preserveRc1 ? { observed_raw_fingerprint_v1: hashes[0], frozen_manifest_unchanged: true }
+      : { expected_fixture_fingerprint_v1: hashes[0] }), migration_sha256: expectedMigrationSha256 }));
 } finally {
   for (const database of created.reverse()) {
     assert.equal(sql("postgres", "select current_setting('data_directory')||'|'||host(inet_server_addr())"),
