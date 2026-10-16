@@ -1,5 +1,11 @@
 # Bitrefill V1.3-DB5: local application + PostgreSQL E2E
 
+DB9 current candidate SHA256:
+`90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0`.
+DB5 evidence/checksums below are historical. The same smoke runner now supports
+`--db9-production-default-acl` for the explicit non-superuser owner plus DB8
+default-ACL model. See [DB9 acceptance](bitrefill-v1-3-db9-acl-hardening.md).
+
 Local-only acceptance on 2026-10-15. No Production or business Test database
 read/write, no Bitrefill HTTP POST, no real invoice, payment, or purchase.
 `V13_LOCAL_E2E_GATE_COMPLETE=yes` is separate from

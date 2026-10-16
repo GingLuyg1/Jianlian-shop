@@ -1,5 +1,13 @@
 # Bitrefill V1.3 purchase persistence — local design and gate status
 
+DB9 current candidate SHA256:
+`90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0`.
+The design/evidence below records earlier milestones; its older hashes and
+unimplemented-local-work statements are historical. DB9 locally validates
+explicit service-role default-ACL revocation and existing-owner DEFINER RPCs.
+See [current DB9 tests, compatibility and DB10 requirements](bitrefill-v1-3-db9-acl-hardening.md).
+Production parity, deployment and real purchase remain closed.
+
 Status: **PARTIAL / LOCAL DB CANDIDATE — NOT READY FOR PURCHASE OR PRODUCTION MIGRATION**. The migration was applied only to disposable local PostgreSQL 17.11 databases, not Production or the existing business Test database. The real Bitrefill HTTP transport remains GET-only. The tables grant `service_role` read access only; narrowly granted security-definer RPCs now provide local transactional writes, but the application does not call them. This is not evidence of production recovery.
 
 ## Existing model and reuse

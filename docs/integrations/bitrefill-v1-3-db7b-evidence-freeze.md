@@ -1,5 +1,15 @@
 # V1.3-DB7B local schema evidence freeze
 
+DB9 follow-up: the original DB7B record below is historical, not the current
+migration checksum. The undeployed candidate is now SHA256
+`90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0`;
+the existing-schema canonical V1 algorithm and fingerprint remain unchanged.
+DB8 resolved the scoped existing-object questions but found a default-ACL blocker
+outside that fingerprint. DB9 addresses it locally; Production parity is still
+closed pending separately authorized DB10. See
+[DB9 findings, tests and cross-branch handoff](bitrefill-v1-3-db9-acl-hardening.md).
+Do not interpret the older policy candidates/test stubs below as Production truth.
+
 LOCAL ONLY. No Production connection was made. This file records a reviewed
 repository-derived expectation, **not** a Production schema assertion. The
 only loader is `tests/support/supplier-v13-local-fixture.mjs`: guarded baseline

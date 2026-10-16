@@ -1,5 +1,10 @@
 # Bitrefill V1.3-DB4 current-schema forward baseline (local only)
 
+DB9 supersession: current undeployed candidate SHA256 is
+`90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0`.
+The older SHA/fingerprint notes below are historical, not rollout gates.
+Use [DB9 evidence and pending DB10 plan](bitrefill-v1-3-db9-acl-hardening.md).
+
 DB5 supersession note (2026-10-15): the candidate V1.3 migration was amended
 locally to atomically link an external child to the existing private delivery
 transaction. Its DB5 SHA-256 is now

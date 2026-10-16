@@ -1,5 +1,12 @@
 # Bitrefill V1.3-DB7 scoped current-schema contract (local only)
 
+Current DB9 candidate SHA256:
+`90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0`.
+The DB7 SHA and status below are historical. DB9 changes only the undeployed
+candidate's ACL normalization/owner-security assertions, not this baseline's
+canonical algorithm or test-stub classification. See
+[DB9 local hardening](bitrefill-v1-3-db9-acl-hardening.md); DB10/Production parity remains pending.
+
 This is a **test fixture**, not a Production clone or migration. DB7 never
 connects to Production. The historical DB4 hash
 `d1e335c5e80c09f7f48d022a40092e8b71d18cc1d383c639677f9d82a8b48fbb`

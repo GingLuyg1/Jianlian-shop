@@ -2,6 +2,40 @@
 
 This documents disposable local PostgreSQL fixtures for the V1.3 candidate. It is **not** a Production migration instruction or permission to enable Bitrefill purchases.
 
+## DB9 current candidate (supersedes historical execution notes below)
+
+Current candidate SHA256: `90f165aedd242206a68352a00e71eebec68b27cf05e21ab0213a66e033719ce0`.
+The former DB7B SHA `2b31673100d15b6c55968aa71eb092a5f278032f8ec808e3a3f5b949fa38d108`
+identifies the old, undeployed candidate only. See [DB9 evidence and DB10 plan](bitrefill-v1-3-db9-acl-hardening.md).
+
+On the pinned disposable cluster, run from this worktree:
+
+```powershell
+node tests/support/supplier-v13-db9-acl-local.mjs --local-pinned
+```
+
+This opt-in runner uses only `127.0.0.1:55433`, the exact local data directory
+and PostgreSQL 17.11, reading the existing disposable password privately. It
+creates/drops random synthetic databases, reproduces the old default-ACL bug,
+tests the candidate and atomic failures, imports frozen P1/P2/P3 adapters read-only,
+then runs DB5 with Production-style defaults and the two-fresh-DB fingerprint gate.
+It does not load a Supabase URL, supplier credential or environment file.
+It creates an existing-owner analogue named postgres in the local cluster only;
+the migration itself does not create roles or change owners. The local owner is
+NOSUPERUSER/NOCREATEROLE/BYPASSRLS. Local pg_read_all_settings membership is solely
+for fixture data-directory guards, not a proposed Production permission change.
+
+The standalone DB7B runner supports `--db9-owner` to pin this explicit owner
+model and preserve fingerprint `e036759cd8baa297a4de29c3bf3dc1460bd7959fdc00ebb26a6b7807849193fb`.
+Without it, introducing a real postgres role changes the old fallback-to-current-user
+ACL comparison; do not bless that harness-role artifact as Production drift.
+The frozen canonical algorithm and baseline schema remain unchanged.
+The old minimal fixture commands below are historical, not the DB9 acceptance path:
+the hardened migration requires the real existing private-outcome dependency.
+
+No Production connection, advisory call or migration is authorized by this runbook.
+DB10 metadata queries are prepared but require separate future read authorization.
+
 ## Instance used on 2026-10-15
 
 | Property | Verified value |
