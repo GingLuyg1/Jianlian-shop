@@ -17,13 +17,37 @@ function sha256(content) {
   return createHash("sha256").update(content).digest("hex").toUpperCase();
 }
 
+function runnerEnvironment(inherited, platform = process.platform) {
+  const child = { ...inherited };
+  // This harness selects Windows PowerShell 5.1, not its parent PowerShell 7.
+  // Let that child initialize its own standard module paths (Get-FileHash).
+  // Never change the parent environment or the deployed migration runner.
+  if (platform === "win32") {
+    for (const name of Object.keys(child)) {
+      if (name.toLowerCase() === "psmodulepath") delete child[name];
+    }
+  }
+  return child;
+}
+
 function invoke(args, env = {}) {
   return spawnSync(
     powerShell,
     ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, ...args],
-    { cwd: repoRoot, encoding: "utf8", env: { ...process.env, ...env } },
+    { cwd: repoRoot, encoding: "utf8", env: runnerEnvironment({ ...process.env, ...env }) },
   );
 }
+
+test("migration runner harness isolates Windows module paths without changing parent or other settings", () => {
+  const inherited = Object.freeze({ PSModulePath: "synthetic-parent-modules", psmodulepath: "synthetic-alias",
+    RUNNER_DB_URL: "synthetic-url", PGHOSTADDR: "127.0.0.1", PATH: "synthetic-tools" });
+  assert.deepEqual(runnerEnvironment(inherited, "win32"), {
+    RUNNER_DB_URL: "synthetic-url", PGHOSTADDR: "127.0.0.1", PATH: "synthetic-tools",
+  });
+  assert.deepEqual(runnerEnvironment(inherited, "linux"), inherited);
+  assert.equal(inherited.PSModulePath, "synthetic-parent-modules");
+  assert.equal(inherited.psmodulepath, "synthetic-alias");
+});
 
 function baseArgs(file, sha, environment = "test", projectRef = testRef) {
   return [
@@ -61,6 +85,13 @@ test("migration runner validates immutable inputs and exact environment refs", (
 
     const valid = invoke([...baseArgs(file, sha), "-ValidateOnly", "-PsqlCommand", "missing"]);
     assert.equal(valid.status, 0, valid.stderr);
+
+    if (process.platform === "win32") {
+      const foreignModules = invoke([...baseArgs(file, sha), "-ValidateOnly", "-PsqlCommand", "missing"], {
+        PSModulePath: path.join(directory, "unavailable-parent-pwsh-modules"),
+      });
+      assert.equal(foreignModules.status, 0, foreignModules.stderr);
+    }
 
     for (const [environment, projectRef] of [
       ["test", productionRef],
