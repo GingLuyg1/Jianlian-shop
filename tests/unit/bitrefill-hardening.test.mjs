@@ -82,7 +82,7 @@ test("catalog and webhook reject oversized or malformed fields without substitut
   assert.equal(parseBitrefillProductsResponse({ data: Array(51).fill(wire) }), null);
   assert.equal(parseBitrefillProduct({ ...wire, currency: "usd" }), null);
   assert.equal(parseBitrefillProduct({ ...wire, name: "<script>" }), null);
-  assert.equal(parseBitrefillProduct({ ...wire, packages: Array(51).fill(wire.packages[0]) }), null);
+  assert.equal(parseBitrefillProduct({ ...wire, packages: Array(201).fill(wire.packages[0]) }), null);
   assert.equal(parseBitrefillProduct({ ...wire, packages: [{ ...wire.packages[0], price: "NaN" }] }), null);
   assert.equal(parseBitrefillProduct({ ...wire, packages: [{ ...wire.packages[0], value: "10<script>" }] }), null);
   assert.equal(normalizeBitrefillRedemption({ link: "http://localhost/admin" }), null);

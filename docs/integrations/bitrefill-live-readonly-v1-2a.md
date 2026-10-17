@@ -1,0 +1,25 @@
+# Bitrefill V1.2A live read-only validation
+
+Observed on 2026-10-15 using a locally supplied Personal API key. This report contains only sanitized schema evidence and public product identifiers. The probe used GET `/v2/ping`, `/v2/products`, `/v2/products/search`, and `/v2/products/{id}` only. No balance, account history, invoice, purchase, payment, database, binding, or Production operation was performed. No credential, Authorization value, or full upstream payload was saved.
+
+## Catalog and root cause
+
+`GET /v2/ping` returned HTTP 200 with the expected `pong` message. Catalog pages were bounded to 50 records. US returned 589 records across 12 pages (last page 39); all pages were parsed after the schema fix. CA's first page returned HTTP 200 with 50 records; its `meta.total` reported 195. GB's first page returned HTTP 200 with 50 parsed records; a later attempt to recheck its total failed at the local network transport, so no full-catalog GB count is asserted. CN returned HTTP 200 with 26 parsed records.
+
+The US and CA top-level shapes were both `{meta, data}`. The first catalog records exposed `id`, `name`, `base_name`, `country_code`, `country_name`, `currency`, `categories`, `redemption_methods`, `created_time`, `recipient_type`, `image`, `logo_background`, `in_stock`, and `packages`. `data` was an array, `country_code` and `currency` were strings, `in_stock` was boolean, and `packages` was an array. `range` was optional. `meta` used numeric `start`, `limit`, `total`, plus optional string `_next`. No country-specific shape change was needed.
+
+The initial CA `INVALID_RESPONSE` was caused by `lib/providers/bitrefill/protocol.mjs` `parsePackage`: the legitimate `kigso-canada` package value `50 Game Credits` was a string label, while the parser accepted only numeric face values. The same legal non-monetary pattern appeared in CN eSIM values such as `1GB, 7 Days` and several US data/bundle products. Two US products exposed 140 and 149 packages, above the former 50-package per-product cap. Live pagination used `meta.total`, not just the fixture's `meta.total_results`.
+
+The parser now accepts bounded, sanitized non-monetary display labels while recording `value: null`; the provider carries this as `face_value: null` and retains the label separately. Offline invoice planning still rejects a null face value. The package cap is 200, above the largest observed 149 but still finite. The parser also accepts `meta.total`. Malformed labels, controls/markup, oversized package arrays, invalid currencies, and invalid price values remain rejected. This is a schema alignment, not an upstream anomaly or a purchase enablement.
+
+## Candidate mapping
+
+The bounded US catalog scan and brand searches did not expose an Apple US or Amazon US product. Direct guessed IDs `apple-usa` and `amazon-usa` returned HTTP 403 with upstream `error_code=not_available`; this may be a credential/catalog entitlement restriction, not proof of global absence. No Apple US package, package price, trusted supplier cost, or binding can be verified. The ten existing Apple USD face values (2, 3, 4, 5, 10, 15, 20, 25, 50, 100) all remain **unmatched / pending Business API validation**. Do not infer packages from other countries or create a supplier binding.
+
+US candidates observed: `steam-usa` (one fixed package, boolean in-stock), `google-play-usa` (fixed packages and variable range), `sony-playstation-usa` (fixed packages and variable range), and `netflix-usa` (fixed packages). Apple and Amazon search results existed for other countries, but no usable US candidate was verified. A package `price` field was present, but its commercial-cost semantics and Business purchase quote were not validated; profitability remains unavailable. Variable ranges were parsed live, but variable-amount purchase remains disabled.
+
+Every observed `in_stock` was boolean; no quantity was provided or inferred. The live `rateLimit` object had null values for the documented rate-limit and product-quota headers; header parsing has fixture coverage, but live header presence was not confirmed. Do not deliberately exhaust the quota to provoke 429. A deliberately nonexistent product returned HTTP 404 with `error_code=not_found`; the client maps that contract to `PRODUCT_NOT_FOUND` without exposing the upstream body. Product search pagination appeared inconsistent for Amazon (a later offset repeated results), so search result counts should not be treated as exhaustive evidence. Country catalog pagination was independently validated.
+
+## Release decision
+
+Read-only catalog/provider fit is supported with the schema fix. Apple US live mapping remains `LIVE_MAPPING_PENDING`; supplier cost remains `COST_DATA_UNAVAILABLE`. Real purchase stays disabled, and the V1.1 invoice/order persistence gap still blocks production auto-recovery. Business API access and a separate authorized purchase canary are required before commercial rollout. No production readiness gate is marked passed by this Personal API probe.
