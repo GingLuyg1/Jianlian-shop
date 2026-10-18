@@ -367,6 +367,10 @@ try {
       }
     }
     console.log("DB9_FIVE_TABLES_REAL_ROLE_DIRECT_MUTATIONS_DENIED_PASS");
+    if (process.argv.includes("--rc1-postmigration-plan")) {
+      const { verifyRc1PostmigrationPlan } = await import("./bitrefill-rc1-postmigration-local.mjs");
+      await verifyRc1PostmigrationPlan({ sql: async (source) => sql(b, source), root, db9Defaults: true });
+    }
     await verifyControlledRpcs(b);
     await verifyFailureMatrix();
     for (const script of (process.argv.includes("--acl-only") ? [] : [

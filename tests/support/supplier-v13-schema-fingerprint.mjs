@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expectedMigrationSha256, migrationSha256 } from "./supplier-v13-local-fixture.mjs";
+import { compareRc1FrozenContract } from "./bitrefill-rc1-frozen-evidence.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const queryFile = resolve(root, "docs/integrations/sql/bitrefill-v1-3-authoritative-parity.sql");
@@ -115,6 +116,17 @@ function canonicalLine(row) {
 function sha256(value) { return createHash("sha256").update(value, "utf8").digest("hex"); }
 const migrationHash = migrationSha256();
 assert.equal(migrationHash, expectedMigrationSha256, "V13_MIGRATION_SHA_CHANGED");
+let rc1Evidence;
+if (process.argv.includes("--verify-frozen-rc1")) {
+  assert.ok(!process.argv.includes("--write-manifest"), "RC1_FROZEN_MANIFEST_WRITE_FORBIDDEN");
+  const frozen = JSON.parse(readFileSync(manifestFile, "utf8"));
+  const definition = run(["-c", "select encode(convert_to(pg_get_functiondef('public.record_supplier_fulfillment_outcome(uuid,uuid,text,text,uuid,text,boolean,text,text,text,numeric,numeric,text)'::regprocedure),'UTF8'),'hex')"]);
+  const differences = compareRc1FrozenContract({ current: runs[0].contract, frozen: frozen.contract,
+    outcomeDefinition: Buffer.from(definition, "hex").toString("utf8") });
+  rc1Evidence = { frozen_manifest_unchanged: true,
+    frozen_fingerprint: frozen.expected_fixture_fingerprint_v1,
+    observed_raw_fingerprint: runs[0].hash, differences };
+}
 if (process.argv.includes("--write-manifest")) {
   const contract = runs[0].contract.map((row) => {
     const implementation = functionClass(row);
@@ -145,4 +157,4 @@ console.log(JSON.stringify({ fingerprint_schema_version: "v1", database,
   fingerprint_run_3: runs[2].hash, deterministic: true,
   contract_rows: runs[0].contract.length,
   migration_sha256: migrationHash,
-  manifest_written: process.argv.includes("--write-manifest") }));
+  manifest_written: process.argv.includes("--write-manifest"), ...(rc1Evidence ? { rc1_evidence: rc1Evidence } : {}) }));

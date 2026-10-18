@@ -17,7 +17,10 @@ export const expectedMigrationSha256 = "90f165aedd242206a68352a00e71eebec68b27cf
 const outcomeSignature = "(uuid,uuid,text,text,uuid,text,boolean,text,text,text,numeric,numeric,text)";
 
 export function migrationSha256() {
-  return createHash("sha256").update(readFileSync(fixturePaths.migration)).digest("hex");
+  // Git may check out SQL as CRLF on Windows. The frozen candidate hash is
+  // defined over repository LF bytes; normalize only line endings, never SQL.
+  const source = readFileSync(fixturePaths.migration, "utf8").replaceAll("\r\n", "\n");
+  return createHash("sha256").update(source, "utf8").digest("hex");
 }
 
 export function repoOutcomeDefinition() {
