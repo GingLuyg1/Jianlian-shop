@@ -18,3 +18,5 @@ Date: 2026-10-14. All actual gates below are **NOT_STARTED**. A passing offline 
 | Gradual rollout | NOT_STARTED | Country/SKU allowlist, low concurrency, stop criteria, refund/support flow and monitoring window. |
 
 Release blocker: `MIGRATION_REQUIRED_FOR_PURCHASE=yes`. Existing SQL atomically inserts a delivery plus private secret and enforces one delivered supplier row per Jianlian order item, but it cannot persist a shared Bitrefill invoice and each external order/unit. The offline post-submit-without-ID crash remains `UNCERTAIN` and requires manual reconciliation. Do not claim production automatic recovery. No deployment, migration, environment update, binding, sync, probe, canary or purchase occurred in this task.
+
+V1.3 update: the provider-neutral in-memory availability and semantic identity helpers have offline tests, but activation SQL parity, migration, real PostgreSQL atomicity, RLS and ACL are **NOT_STARTED/BLOCKED**. No gate above is promoted to PASS. See [V1.3 gate status](bitrefill-purchase-persistence-v1-3.md).

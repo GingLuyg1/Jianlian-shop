@@ -131,6 +131,7 @@ test("live-observed Chinese eSIM labels parse without inventing monetary denomin
 test("live-observed large US top-up package arrays remain bounded", () => {
   const topUp = { ...fixedProduct, id: "boost-mobile-usa", packages: Array.from({ length: 149 }, (_, index) => ({ id: `boost-mobile-usa<&>${index + 1}`, value: String(index + 1), price: index + 1 })) };
   assert.equal(parseBitrefillProduct(topUp).packages.length, 149);
+  assert.equal(parseBitrefillProduct({ ...topUp, packages: Array.from({ length: 200 }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 })) }).packages.length, 200);
   assert.equal(parseBitrefillProduct({ ...topUp, packages: Array.from({ length: 201 }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 })) }), null);
 });
 
@@ -251,6 +252,13 @@ test("malformed upstream payload and HTTP errors fail closed without raw details
     });
     await assert.rejects(() => client.getProduct("amazon-us"), (error) => error.code === expected && !error.message.includes("fixture-key"));
   }
+  const contextUnavailable = createBitrefillClient({
+    authMode: "personal", apiKey: "fixture-key", maxRetries: 0,
+    fetchImpl: async () => jsonResponse({ error_code: "not_available", message: "fixture-key must not escape" }, 403),
+  });
+  await assert.rejects(() => contextUnavailable.getProduct("apple-usa"), (error) =>
+    error.kind === "business" && error.code === "PRODUCT_NOT_AVAILABLE_IN_CURRENT_CONTEXT"
+      && !error.message.includes("fixture-key"));
 });
 
 test("webhook parser keeps only invoice/order identity and status, never redemption secrets", () => {
