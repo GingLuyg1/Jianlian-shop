@@ -22,7 +22,7 @@ export default function AdminSyncedHorizontalScroller({ children }: { children: 
       <div
         ref={viewportRef}
         data-admin-table-viewport
-        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        className="min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-x-contain"
         onScroll={() => {
           if (railRef.current && viewportRef.current && railRef.current.scrollLeft !== viewportRef.current.scrollLeft)
             railRef.current.scrollLeft = viewportRef.current.scrollLeft;
@@ -30,7 +30,7 @@ export default function AdminSyncedHorizontalScroller({ children }: { children: 
         {children}
       </div>
       <div ref={railRef} tabIndex={0} role="region" aria-label="商品表格横向滚动" data-admin-horizontal-rail
-        className="sticky bottom-0 z-30 h-5 shrink-0 overflow-x-auto overflow-y-hidden border-t bg-white"
+        className="sticky bottom-0 z-30 h-7 shrink-0 overflow-x-auto overflow-y-hidden border-t bg-white sm:h-5"
         onScroll={() => {
           if (viewportRef.current && railRef.current && viewportRef.current.scrollLeft !== railRef.current.scrollLeft)
             viewportRef.current.scrollLeft = railRef.current.scrollLeft;

@@ -80,7 +80,7 @@ export function AdminFilterBar({
 }
 
 export function AdminTableViewport({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("min-h-0 flex-1 overflow-x-auto overflow-y-auto", className)}>{children}</div>;
+  return <div role="region" tabIndex={0} aria-label="数据列表，可左右滚动" className={cn("min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-x-contain", className)}>{children}</div>;
 }
 
 export function AdminListPagination({
@@ -114,6 +114,6 @@ export function AdminListPagination({
 }
 
 export const adminListControlClass = "h-11 min-w-0 rounded-[var(--admin-v2-control-radius)] border-[var(--admin-v2-border)] bg-white text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] sm:h-9";
-export const adminListTableClass = "w-full table-fixed text-sm";
+export const adminListTableClass = "w-full min-w-[760px] table-fixed text-sm md:min-w-0";
 export const adminListTableHeadClass = "sticky top-0 z-10 bg-[var(--admin-v2-surface-muted)] text-left text-xs font-medium text-[var(--admin-v2-text-muted)]";
 export const adminListRowClass = "h-12 border-b border-[var(--admin-v2-border)] bg-white hover:bg-slate-50/70";

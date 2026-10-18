@@ -765,7 +765,7 @@ export default function AdminDashboardPage() {
             <div className="mb-2">
               <h2 id="dashboard-core-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">核心经营指标</h2>
             </div>
-            <div className="grid grid-cols-1 gap-2 min-[430px]:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
               {loading && !data
                 ? Array.from({ length: 7 }).map((_, index) => (
                   <div key={index} className="h-[112px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
@@ -790,13 +790,14 @@ export default function AdminDashboardPage() {
               <h2 id="dashboard-status-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">运营状态</h2>
               <p className="hidden text-xs text-[var(--admin-v2-text-muted)] sm:block">待处理、异常与库存状态</p>
             </div>
-            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-5">
               {loading && !data
                 ? Array.from({ length: 5 }).map((_, index) => (
-                  <div key={index} className="h-[68px] animate-pulse bg-[var(--admin-v2-surface-muted)]" />
+                  <div key={index} className={cn("h-[68px] animate-pulse bg-[var(--admin-v2-surface-muted)]", index === 4 && "col-span-2 md:col-span-1")} />
                 ))
-                : data?.statusMetrics.map((metric) => (
-                  <AdminMetricValueCard
+                : data?.statusMetrics.map((metric, index) => (
+                  <div key={metric.label} className={cn("min-w-0 bg-[var(--admin-v2-surface)]", index === (data?.statusMetrics.length ?? 0) - 1 && (data?.statusMetrics.length ?? 0) % 2 === 1 && "col-span-2 md:col-span-1")}>
+                    <AdminMetricValueCard
                     key={metric.label}
                     label={metric.label}
                     value={formatNumber(metric.value)}
@@ -806,19 +807,20 @@ export default function AdminDashboardPage() {
                     loading={loading}
                     tone={metric.tone === "red" ? "danger" : metric.tone === "orange" ? "warning" : "neutral"}
                     compact
-                  />
+                    />
+                  </div>
                 ))}
             </div>
           </section>
 
           <div className="grid min-h-[320px] grid-cols-1 gap-3 xl:grid-cols-[2fr_1fr]">
             <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
-              <CardHeader className="flex shrink-0 flex-row items-center justify-between px-4 py-3">
-                <div>
+              <CardHeader className="flex shrink-0 flex-col items-start justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center">
+                <div className="min-w-0">
                   <CardTitle className="text-base">经营趋势</CardTitle>
                   <p className="text-xs text-slate-500">支付、充值、订单和访问的综合走势（各指标独立量程）</p>
                 </div>
-                <Tabs value={trendRange} onValueChange={(value) => setTrendRange(value as "7" | "30")}>
+                <Tabs className="shrink-0" value={trendRange} onValueChange={(value) => setTrendRange(value as "7" | "30")}>
                   <TabsList className="h-8">
                     <TabsTrigger value="7" className="h-7 px-3 text-xs">近 7 天</TabsTrigger>
                     <TabsTrigger value="30" className="h-7 px-3 text-xs">近 30 天</TabsTrigger>
@@ -950,10 +952,11 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
           );
         })}
       </div>
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1">
+      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1" role="region" tabIndex={0} aria-label="经营趋势图，可横向滚动">
+        <div className="relative h-full min-h-[200px] min-w-[640px] sm:min-w-0">
         <svg
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          className="h-full min-h-[200px] w-full touch-pan-y"
+          className="h-full min-h-[200px] w-full touch-auto"
           role="img"
           aria-label="支付、充值、订单与访问综合趋势折线图"
           onPointerMove={(event) => {
@@ -1003,7 +1006,9 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
             </div>
           </div>
         ) : null}
+        </div>
       </div>
+      <p className="mt-1 text-[11px] text-[var(--admin-v2-text-muted)] sm:hidden">左右滑动图表查看完整趋势</p>
     </div>
   );
 }
@@ -1055,7 +1060,7 @@ function ChannelRow({ channel, loading }: { channel: ChannelStat; loading: boole
         </div>
         <Badge variant={channel.enabled ? "default" : "secondary"}>{statusText}</Badge>
       </div>
-      <div className="mt-3 grid grid-cols-5 gap-2 text-center text-xs">
+      <div className="mt-3 grid grid-cols-2 gap-1.5 text-center text-xs sm:grid-cols-5 sm:gap-2">
         <MiniStat label="发起" value={channel.initiated} />
         <MiniStat label="成功" value={channel.successful} />
         <MiniStat label="成功率" value={successRate} />
@@ -1068,9 +1073,9 @@ function ChannelRow({ channel, loading }: { channel: ChannelStat; loading: boole
 
 function MiniStat({ label, value, danger }: { label: string; value: MetricValue; danger?: boolean }) {
   return (
-    <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-1.5">
+    <div className="min-w-0 rounded-[var(--admin-v2-control-radius)] bg-[var(--admin-v2-surface-muted)] px-2 py-2 last:col-span-2 sm:py-1.5 sm:last:col-span-1">
       <div className="truncate text-[10px] text-slate-500">{label}</div>
-      <div className={`truncate text-xs font-semibold ${danger && Number(value) > 0 ? "text-red-600" : "text-slate-900"}`}>
+      <div className={`break-all text-xs font-semibold sm:truncate ${danger && Number(value) > 0 ? "text-red-600" : "text-slate-900"}`}>
         {formatNumber(value)}
       </div>
     </div>
@@ -1101,7 +1106,7 @@ function ProductListCard({ title, rows, type, loading }: { title: string; rows: 
             {rows.map((row, index) => (
               <Link key={row.id} href={`/admin/products?search=${encodeURIComponent(row.name)}`} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50">
                 <div className="min-w-0">
-                  <div className="truncate font-medium text-slate-900">{index + 1}. {row.name}</div>
+                  <div className="line-clamp-2 font-medium text-slate-900">{index + 1}. {row.name}</div>
                   <div className="text-xs text-slate-500">库存 {row.stock} · {statusLabel(row.status)}</div>
                 </div>
                 <div className="shrink-0 text-right text-sm font-semibold text-slate-950">
@@ -1232,26 +1237,42 @@ function CompactTableCard({
         {loading ? <ListSkeleton /> : rows.length === 0 ? (
           <AdminEmptyState title={emptyTitle} description="有真实数据后会显示在这里。" className="min-h-[180px]" />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {headers.map((header) => (
-                  <TableHead key={header} className="h-8 whitespace-nowrap text-xs">{header}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            <div className="space-y-2 sm:hidden">
               {rows.slice(0, 8).map((row, index) => (
-                <TableRow key={`${title}-${index}`}>
+                <dl key={`${title}-mobile-${index}`} className="min-w-0 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] p-3 text-xs">
                   {row.map((cell, cellIndex) => (
-                    <TableCell key={`${title}-${index}-${cellIndex}`} className="max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
-                      {cell}
-                    </TableCell>
+                    <div key={`${title}-mobile-${index}-${cellIndex}`} className="flex min-w-0 items-start justify-between gap-3 py-1 first:pt-0 last:pb-0">
+                      <dt className="shrink-0 text-[var(--admin-v2-text-muted)]">{headers[cellIndex]}</dt>
+                      <dd className={cn("min-w-0 break-all text-right text-[var(--admin-v2-text-primary)]", cellIndex === 0 && "font-semibold")}>{cell}</dd>
+                    </div>
                   ))}
-                </TableRow>
+                </dl>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+            <div className="hidden min-w-0 overflow-x-auto sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {headers.map((header) => (
+                      <TableHead key={header} className="h-8 whitespace-nowrap text-xs">{header}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.slice(0, 8).map((row, index) => (
+                    <TableRow key={`${title}-${index}`}>
+                      {row.map((cell, cellIndex) => (
+                        <TableCell key={`${title}-${index}-${cellIndex}`} className="max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
+                          {cell}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
