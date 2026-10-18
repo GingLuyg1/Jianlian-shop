@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "codex/bitrefill-v12a-pr": false,
+      "codex/bitrefill-v13-db9-pr": false,
+      "codex/bitrefill-rc1-purchase-pr": false
+    }
+  }
+}
