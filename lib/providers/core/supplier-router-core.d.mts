@@ -1,5 +1,11 @@
 import type { SupplierFulfillmentSummary } from "./types";
 
+export function discoverSupplierProvider(supplierCode: string): {
+  supplier: string;
+  capabilities: Readonly<Record<string, boolean | string>>;
+};
+export function canSupplierAutoPurchase(supplierCode: string): boolean;
+
 export function collectFrozenSupplierCodes(items: unknown): string[];
 
 export function resolveSupplierHandlers<THandler extends (...args: any[]) => any>(
