@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile, mkdir } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { readFile, rm } from "node:fs/promises";
 import { createMemoryMockBackend } from "../../scripts/support/bitrefill-mock-store.mjs";
 import { catalogFixture, syntheticAftercareState } from "../support/bitrefill-catalog-fixture.mjs";
 import { runMappingV4Cases, runAftercareHttpCases } from "../support/bitrefill-mapping-v4-cases.mjs";
@@ -11,7 +10,7 @@ import { projectBitrefillAftercare, readBitrefillAftercare } from "../../lib/adm
 import { createLocalBitrefillMappingService } from "../../lib/providers/bitrefill/local-mapping.mjs";
 import { mockAdminReadClient } from "../../scripts/support/bitrefill-mock-view.mjs";
 import ts from "typescript";
-import { createWorkspaceBackend } from "../../scripts/support/bitrefill-workspace-backend.mjs";
+import { createWorkspaceBackend, createSyntheticWorkspaceFixture } from "../../scripts/support/bitrefill-workspace-backend.mjs";
 
 test("V4 mapping, review, costs, range, CAS, HTTP and no-financial-action integration", async () => {
   const result = await runMappingV4Cases(createMemoryMockBackend()); assert.ok(result.checks >= 35);
@@ -120,17 +119,17 @@ test("V4 catalog rejects undeclared oversized chunked bodies before unbounded te
   }), { headers: { "content-type": "application/json" } }));
   await assert.rejects(() => client.getProduct("mock-apple-us")); assert.equal(cancelled, true);
 });
-test("V4 local metadata persists across restart, refuses duplicate writer and rolls back failed writes", async () => {
-  const directory = `D:/Jianlian/_bitrefill_catalog_mapping_v4_20261025/persistence-${randomUUID()}`;
-  await mkdir("D:/Jianlian/_bitrefill_catalog_mapping_v4_20261025", { recursive: true });
-  const backend = await createWorkspaceBackend(directory);
+test("V4 local metadata persists across restart, refuses duplicate writer and rolls back failed writes", async (t) => {
+  const fixture = await createSyntheticWorkspaceFixture();
+  t.after(() => rm(fixture.directory, { recursive: true, force: true }));
+  const backend = await fixture.open();
   try {
     await backend.transact((s) => { s.syntheticMarker = "MOCK_METADATA_ONLY"; });
-    await assert.rejects(() => createWorkspaceBackend(directory), { code: "EEXIST" });
+    await assert.rejects(() => fixture.open(), { code: "EEXIST" });
     await assert.rejects(() => backend.transact((s) => { s.syntheticMarker = "NOT_COMMITTED"; throw Error("MOCK_ROLLBACK"); }), /MOCK_ROLLBACK/);
     assert.equal((await backend.read()).syntheticMarker, "MOCK_METADATA_ONLY");
   } finally { await backend.close(); }
-  const restarted = await createWorkspaceBackend(directory);
+  const restarted = await fixture.open();
   try { assert.equal((await restarted.read()).syntheticMarker, "MOCK_METADATA_ONLY"); }
   finally { await restarted.close(); }
   await assert.rejects(() => createWorkspaceBackend("D:/Jianlian/Jianlian-shop-bitrefill-final-connect-v1"), /PATH_NOT_ALLOWED/);
