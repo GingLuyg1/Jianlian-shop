@@ -108,13 +108,28 @@ export type PublicCatalogConfig = {
 };
 
 const productSelect =
-  "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,has_skus,delivery_type,status,sort_order,metadata,created_at,updated_at";
+  "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,has_skus,delivery_type,status,sort_order,created_at,updated_at";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 
 function normalizeNumber(value: unknown, fallback = 0) {
   const next = Number(value);
   return Number.isFinite(next) ? next : fallback;
+}
+
+// This DTO is also used by the unauthenticated detail Route Handler. Never
+// forward arbitrary metadata: supplier candidates, costs and audit are private.
+// Browser-side queries above omit the raw JSON column entirely. Data API grants
+// still require a separate database-level release gate (RLS is row-level only).
+export function publicProductMetadata(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+  for (const field of ["category", "category_slug", "subcategory_slug", "category_path"]) {
+    const item = source[field];
+    if (typeof item === "string" && item.length <= 512) result[field] = item;
+  }
+  return Object.keys(result).length ? result : null;
 }
 
 function normalizeCategory(row: Record<string, unknown>): PublicCategory {
@@ -154,7 +169,7 @@ export function normalizePublicProduct(row: Record<string, unknown>): PublicProd
     delivery_type: row.delivery_type ? String(row.delivery_type) : "manual",
     status: row.status ? String(row.status) : "draft",
     sort_order: normalizeNumber(row.sort_order),
-    metadata: row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : null,
+    metadata: publicProductMetadata(row.metadata),
     created_at: row.created_at ? String(row.created_at) : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
   };
@@ -176,7 +191,7 @@ export function normalizePublicSku(row: Record<string, unknown>): PublicProductS
     delivery_type: row.delivery_type ? String(row.delivery_type) : null,
     image_url: row.image_url ? String(row.image_url) : null,
     sort_order: normalizeNumber(row.sort_order),
-    metadata: row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : null,
+    metadata: null,
   };
 }
 
@@ -407,7 +422,7 @@ export function mapPublicProductToProduct(
     originalPrice: row.original_price,
     stock: effectiveStock,
     sortOrder: row.sort_order,
-    metadata: { ...(row.metadata ?? {}), slug: row.slug, hasSkus, minPrice, maxPrice },
+    metadata: { ...publicProductMetadata(row.metadata), slug: row.slug, hasSkus, minPrice, maxPrice },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     price: minPrice,

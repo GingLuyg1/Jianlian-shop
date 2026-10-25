@@ -7,6 +7,8 @@ import { createServer } from "node:net";
 import assert from "node:assert/strict";
 import { emptyMockState } from "./support/bitrefill-mock-store.mjs";
 import { runMockHttpCases } from "../tests/support/bitrefill-mock-http-cases.mjs";
+import { runMappingV4Cases, runAftercareHttpCases } from "../tests/support/bitrefill-mapping-v4-cases.mjs";
+import { runUnifiedBindingCases } from "../tests/support/bitrefill-binding-v5-fixture.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const binaryRoot = resolve(process.argv[2] ?? "D:/Jianlian/_bitrefill_v13_local_pg/portable/pgsql/bin");
@@ -70,6 +72,11 @@ try {
   assert.equal(await sql("select count(*) from pg_namespace where nspname='supabase_migrations'"), "0");
   result = { ...result, independentPostgresSessions: sessions.length, migrationExecuted: false,
     balancesSynthetic: true, realCredentialsUsed: false, runDir };
+  if (process.argv.includes("--with-mapping-v4")) {
+    result.mappingV4 = await runMappingV4Cases(backend);
+    result.aftercareV4 = await runAftercareHttpCases(backend);
+  }
+  if (process.argv.includes("--with-binding-v5")) result.unifiedBindingV5 = await runUnifiedBindingCases(backend);
 } finally {
   if (started || await readFile(join(dataDir, "postmaster.pid"), "utf8").catch(() => null)) {
     await exec("pg_ctl", ["-D", dataDir, "-w", "stop", "-m", "fast"], null, true);

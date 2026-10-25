@@ -41,7 +41,7 @@ export function mockAdminReadClient(state) {
           return 0;
         });
         return Promise.resolve({ data: sorted.slice(rangeStart, rangeEnd + 1).slice(0, rowLimit)
-          .map((r) => Object.fromEntries(columns.map((c) => [c, r[c]]))), error: null }).then(ok, fail);
+          .map((r) => Object.fromEntries(columns.map((c) => [c, r[c]]))), count: rows.length, error: null }).then(ok, fail);
       } };
     return query;
   } };
