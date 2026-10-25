@@ -58,6 +58,8 @@ test("independent purchase transport defaults closed; GET-only transport still r
   await assert.rejects(transport.createInvoice({ products: [{ product_id: "fixture-apple-us",
     package_id: "fixture-apple-5", quantity: 1 }] }), /BITREFILL_REAL_PURCHASE_DISABLED/);
   assert.equal(called, 0);
+  await assert.rejects(transport.payInvoice("mock-invoice"), /BITREFILL_REAL_PURCHASE_DISABLED/);
+  assert.equal(called, 0);
   assert.equal(transport.request, undefined);
   assert.throws(() => { transport.purchaseEnabled = true; }, TypeError);
   assert.equal(transport.purchaseEnabled, false);

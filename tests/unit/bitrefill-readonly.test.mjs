@@ -12,6 +12,7 @@ import {
   createBitrefillWebhookIdempotencyKey,
   evaluateBitrefillInvoiceOutcome,
   mapBitrefillAvailability,
+  MAX_BITREFILL_PACKAGES,
   parseBitrefillProduct,
   parseBitrefillProductsResponse,
   parseBitrefillWebhookEnvelope,
@@ -132,7 +133,14 @@ test("live-observed large US top-up package arrays remain bounded", () => {
   const topUp = { ...fixedProduct, id: "boost-mobile-usa", packages: Array.from({ length: 149 }, (_, index) => ({ id: `boost-mobile-usa<&>${index + 1}`, value: String(index + 1), price: index + 1 })) };
   assert.equal(parseBitrefillProduct(topUp).packages.length, 149);
   assert.equal(parseBitrefillProduct({ ...topUp, packages: Array.from({ length: 200 }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 })) }).packages.length, 200);
-  assert.equal(parseBitrefillProduct({ ...topUp, packages: Array.from({ length: 201 }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 })) }), null);
+  // New live evidence, not a malformed upstream response. Never truncate a
+  // package list to make it appear complete or remove the upper-bound guard.
+  assert.equal(parseBitrefillProduct({ ...topUp, packages: Array.from({ length: 296 }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 })) }).packages.length, 296);
+  assert.equal(parseBitrefillProduct({ ...topUp, packages: Array.from({ length: MAX_BITREFILL_PACKAGES }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 })) }).packages.length, MAX_BITREFILL_PACKAGES);
+  assert.equal(parseBitrefillProduct({ ...topUp, packages: Array.from({ length: MAX_BITREFILL_PACKAGES + 1 }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 })) }), null);
+  const malformed = Array.from({ length: 296 }, (_, index) => ({ id: `id-${index}`, value: "1", price: 1 }));
+  malformed[295] = { ...malformed[295], price: "not-a-price" };
+  assert.equal(parseBitrefillProduct({ ...topUp, packages: malformed }), null);
 });
 
 test("live-observed US named products remain non-monetary", () => {

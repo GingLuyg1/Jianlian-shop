@@ -3,7 +3,7 @@ export type BitrefillWebhookEnvelope = {
   status: "complete" | "denied" | "payment_error";
   orders: Array<{ id: string; status: string }>;
 };
-export const MAX_BITREFILL_PACKAGES: 200;
+export const MAX_BITREFILL_PACKAGES: 512;
 
 export function isPlainRecord(value: unknown): value is Record<string, unknown>;
 export function parseBitrefillProduct(value: unknown): Record<string, unknown> | null;
