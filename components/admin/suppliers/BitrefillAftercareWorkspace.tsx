@@ -16,7 +16,7 @@ export default function BitrefillAftercareWorkspace({ localMode = false }: { loc
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [page, reload]);
-  return <main className="min-w-0 space-y-4 p-4 md:p-6">
+  return <section className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
     <h1 className="text-xl font-semibold">Bitrefill 异常待处理</h1>
     <p className="rounded-xl border bg-orange-50 p-3 text-sm">采购失败、供应商退款、部分失败统一由管理员人工处理。供应商退款不等于客户退款；本页不会自动退余额、退支付款或重发货。客户问题请联系人工客服。</p>
     <nav className="flex flex-wrap gap-4 text-orange-700"><a href={localMode ? "/" : "/admin/suppliers/bitrefill/catalog"}>商品目录</a>{!localMode ? <><a href="/admin/orders">订单人工处理</a><a href="/admin/refunds">原有退款审核</a></> : null}
@@ -45,5 +45,5 @@ export default function BitrefillAftercareWorkspace({ localMode = false }: { loc
       <nav aria-label="异常订单分页" className="flex items-center gap-3"><button type="button" disabled={page === 1} className="min-h-[44px] rounded border px-3 disabled:opacity-50" onClick={() => setPage((n) => n - 1)}>上一页</button><span>订单扫描第 {page} 页</span><button type="button" disabled={!hasMore} className="min-h-[44px] rounded border px-3 disabled:opacity-50" onClick={() => setPage((n) => n + 1)}>下一页</button></nav>
     </>}
     {message ? <p role="status">{message}</p> : null}
-  </main>;
+  </section>;
 }

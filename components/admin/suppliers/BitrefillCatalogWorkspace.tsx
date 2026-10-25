@@ -32,7 +32,7 @@ export default function BitrefillCatalogWorkspace({ localMode = false }: { local
     }).catch((e: unknown) => { if (!controller.signal.aborted) setDetailError(e instanceof Error ? e.message : "详情读取失败"); });
     return () => controller.abort();
   }, [selection, reload]);
-  return <main className="min-w-0 space-y-4 p-4 md:p-6">
+  return <section className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
     <h1 className="text-xl font-semibold">Bitrefill 商品目录与人工映射</h1>
     <p className="rounded-xl border bg-orange-50 p-3 text-sm">Personal API 仅查询商品，不代表商业转售许可。人工映射不启用采购；没有真实报价时成本和利润始终未验证。</p>
     <nav className="flex flex-wrap gap-4 text-sm text-orange-700">{!localMode ? <a href="/admin/suppliers/bitrefill">采购记录</a> : null}<a href="/admin/suppliers/bitrefill/aftercare">异常待处理</a></nav>
@@ -64,5 +64,5 @@ export default function BitrefillCatalogWorkspace({ localMode = false }: { local
           : <p className="rounded border p-3 text-sm">请到<a href="/admin/products" className="text-orange-700 underline">商品管理 → 编辑商品 → 商品规格 → 供应商绑定</a>，选择 Bitrefill 并逐个 SKU 核对保存。这里仅浏览目录，不创建第二套绑定。</p>}
       </>}
     </section> : null}
-  </main>;
+  </section>;
 }

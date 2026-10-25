@@ -23,7 +23,7 @@ export default function BitrefillFulfillmentWorkspace() {
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [page, reload]);
-  return <section className="min-w-0 space-y-4 p-4 md:p-6">
+  return <section className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-xl font-semibold">Bitrefill 采购与履约</h1>
       <button type="button" onClick={refresh} disabled={loading} className="min-h-[44px] rounded-lg border px-4 disabled:opacity-50">刷新记录</button></div>
     <nav className="flex flex-wrap gap-4 text-orange-700"><a href="/admin/suppliers/bitrefill/catalog">商品目录与人工映射</a><a href="/admin/suppliers/bitrefill/aftercare">异常待处理</a></nav>
