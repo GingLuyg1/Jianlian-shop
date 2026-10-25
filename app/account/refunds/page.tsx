@@ -58,7 +58,7 @@ export default function AccountRefundsPage() {
               <ArrowLeft className="h-4 w-4" /> 返回我的订单
             </Link>
             <h1 className="mt-3 text-2xl font-bold text-slate-950">退款 / 售后记录</h1>
-            <p className="mt-1 text-sm text-slate-500">仅展示当前账号提交的退款和售后申请。</p>
+            <p className="mt-1 text-sm text-slate-500">仅展示当前账号的历史退款和售后记录；如需处理，请联系人工客服。</p>
           </div>
           <button onClick={loadRefunds} className="inline-flex items-center gap-2 rounded-lg border border-orange-100 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-orange-50">
             <RefreshCcw className="h-4 w-4" /> 刷新
@@ -73,7 +73,7 @@ export default function AccountRefundsPage() {
           ) : refunds.length === 0 ? (
             <div className="flex h-64 flex-col items-center justify-center text-center">
               <div className="text-lg font-semibold text-slate-900">暂无退款记录</div>
-              <p className="mt-2 text-sm text-slate-500">符合条件的订单可以在订单详情中提交退款申请。</p>
+              <p className="mt-2 text-sm text-slate-500">如有退款或售后问题，请通过网站现有客服渠道联系人工处理。</p>
             </div>
           ) : (
             <div className="overflow-auto">
