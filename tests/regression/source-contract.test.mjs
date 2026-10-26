@@ -1916,7 +1916,8 @@ test("paid order details hide payment proof and load delivered content through t
   assert.match(deliveryRoute, /id: row\.delivery_id \?\? `\$\{context\.params\.orderNo\}:\$\{index\}`/);
   assert.doesNotMatch(deliveryRoute, /from\("(?:order_deliveries|digital_delivery_secrets)"\)/);
 
-  assert.match(secureDelivery, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(orderNo\)\}\/delivery`, \{ cache: "no-store" \}\)/);
+  assert.match(secureDelivery, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(orderNo\)\}\/delivery`, \{ cache: "no-store", signal: request\.controller\.signal \}\)/);
+  assert.match(secureDelivery, /activeRequestRef\.current !== request \|\| request\.controller\.signal\.aborted/);
   assert.match(secureDelivery, /fulfillmentStatus === "delivered"/);
   assert.match(secureDelivery, /delivery\.delivery_status === "delivered"/);
   assert.match(secureDelivery, /交付信息加载失败，请刷新后重试/);
