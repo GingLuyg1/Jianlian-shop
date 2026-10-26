@@ -158,7 +158,9 @@ export default function ProductDetailPage() {
     () => skus.find((sku) => sku.id === selectedSkuId) ?? null,
     [skus, selectedSkuId]
   );
-  const hasSkus = skus.length > 0;
+  // A failed/empty SKU response must not turn a multi-SKU product into a
+  // purchasable base product with the product-level price and stock.
+  const hasSkus = product?.has_skus === true || skus.length > 0;
   const categoryPath = useMemo(
     () => getCategoryPath(categories, product?.category_id ?? null),
     [categories, product?.category_id]
@@ -748,7 +750,7 @@ export default function ProductDetailPage() {
       <Dialog open={liuhaoyiLimitDialogOpen} onOpenChange={setLiuhaoyiLimitDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>支付宝/微信支付金额超限</DialogTitle></DialogHeader>
-          <p className="text-sm leading-6 text-muted-foreground">支付宝/微信单笔支付最高支持 ¥2000。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。</p>
+          <p className="text-sm leading-6 text-muted-foreground">支付金额大于2000联系人工客服处理。支付宝/微信单笔支付最高支持 ¥2000。金额较大时建议分次充值后使用余额支付，如需协助请联系客服。</p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={() => setLiuhaoyiLimitDialogOpen(false)}>取消</Button>
             <Button variant="outline" onClick={() => { setLiuhaoyiLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>

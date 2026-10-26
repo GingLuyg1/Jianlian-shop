@@ -53,13 +53,13 @@ export function SecureOrderDelivery({
   onDelivered?: () => void | Promise<void>;
   className?: string;
 }) {
-  const [deliveries, setDeliveries] = useState<SecureDelivery[]>([]);
+  const [deliveryResult, setDeliveryResult] = useState<{ orderNo: string; rows: SecureDelivery[] }>({ orderNo, rows: [] });
   const [loading, setLoading] = useState(false);
   const [requested, setRequested] = useState(false);
   const [error, setError] = useState(false);
   const [pollOutcome, setPollOutcome] = useState<"idle" | "polling" | "timeout" | "error" | "delivered">("idle");
   const [visibleIds, setVisibleIds] = useState<Record<string, boolean>>({});
-  const loadingRef = useRef(false);
+  const activeRequestRef = useRef<{ orderNo: string; controller: AbortController } | null>(null);
   const deliveredNotifiedRef = useRef(false);
 
   const normalizedPaymentStatus = normalizePaymentStatus(paymentStatus);
@@ -69,40 +69,56 @@ export function SecureOrderDelivery({
   const deliveredHint = fulfillmentStatus === "delivered"
     || normalizedOrderStatus === "delivered"
     || deliveryStatus === "delivered";
+  // Never render the previous order's private content, even during the render
+  // before the context-reset effect has run.
+  const deliveries = deliveryResult.orderNo === orderNo ? deliveryResult.rows : [];
   const deliveredRows = deliveries.filter((delivery) => delivery.delivery_status === "delivered");
   const delivered = deliveredRows.length > 0;
 
   const loadDelivery = useCallback(async () => {
-    if (!orderNo || normalizedPaymentStatus !== "paid" || loadingRef.current) return "pending" as const;
-    loadingRef.current = true;
+    if (!orderNo || normalizedPaymentStatus !== "paid") return "pending" as const;
+    const active = activeRequestRef.current;
+    if (active?.orderNo === orderNo && !active.controller.signal.aborted) return "pending" as const;
+    active?.controller.abort();
+    const request = { orderNo, controller: new AbortController() };
+    activeRequestRef.current = request;
     setLoading(true);
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}/delivery`, { cache: "no-store" });
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}/delivery`, { cache: "no-store", signal: request.controller.signal });
       const result = (await response.json().catch(() => null)) as DeliveryResponse | null;
+      if (activeRequestRef.current !== request || request.controller.signal.aborted) return "pending" as const;
       if (!response.ok) throw new Error("DELIVERY_LOAD_FAILED");
-      setDeliveries(result?.deliveries ?? []);
+      setDeliveryResult({ orderNo, rows: result?.deliveries ?? [] });
       setError(false);
       return (result?.deliveries ?? []).some((delivery) => delivery.delivery_status === "delivered")
         ? "delivered" as const
         : "pending" as const;
     } catch {
+      if (activeRequestRef.current !== request || request.controller.signal.aborted) return "pending" as const;
       setError(true);
       return "error" as const;
     } finally {
-      setRequested(true);
-      loadingRef.current = false;
-      setLoading(false);
+      if (activeRequestRef.current === request && !request.controller.signal.aborted) {
+        setRequested(true);
+        activeRequestRef.current = null;
+        setLoading(false);
+      }
     }
   }, [normalizedPaymentStatus, orderNo]);
 
   useEffect(() => {
-    setDeliveries([]);
+    setDeliveryResult({ orderNo, rows: [] });
+    setLoading(false);
     setError(false);
     setRequested(false);
     setVisibleIds({});
     setPollOutcome("idle");
     deliveredNotifiedRef.current = false;
     if (normalizedPaymentStatus === "paid" && !pollUntilDelivered) void loadDelivery();
+    return () => {
+      activeRequestRef.current?.controller.abort();
+      activeRequestRef.current = null;
+    };
   }, [loadDelivery, normalizedPaymentStatus, orderNo, pollUntilDelivered]);
 
   useEffect(() => {
