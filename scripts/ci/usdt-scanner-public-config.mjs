@@ -23,6 +23,15 @@ export function publicScriptURLs(html, origin=pins.publicOrigin) {
   const urls=[...new Set(found.filter(u=>u.origin===origin&&/^\/_next\/static\/[A-Za-z0-9_./()%+-]+\.js$/.test(u.pathname)&&!decodeURIComponent(u.pathname).split('/').includes('..')&&!u.username&&!u.password&&!u.search&&!u.hash).map(u=>u.href))];
   if(!urls.length||urls.length>40)fail('PUBLIC_SCRIPT_SET_REJECTED');return urls;
 }
+export function diagnoseScriptDiscovery(html, origin=pins.publicOrigin) {
+  const accepted=new Set(publicScriptURLs(html,origin));
+  return [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/g)].map(m=>{
+    try{const u=new URL(m[1],origin);return {sameOrigin:u.origin===origin,
+      staticPath:u.origin===origin&&u.pathname.startsWith('/_next/static/')?u.pathname:null,
+      queryNames:[...u.searchParams.keys()],hasCredentials:!!(u.username||u.password),
+      hasFragment:!!u.hash,accepted:accepted.has(u.href)};}catch{return {invalidURL:true};}
+  });
+}
 export function extractConfig(texts, expected=pins) {
   const values=new Set(texts.flatMap(t=>[...t.matchAll(/sb_publishable_[A-Za-z0-9_-]{15,200}/g)].map(m=>m[0])));
   const key=[...values].filter(v=>sha(v)===expected.sha256.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -80,7 +89,7 @@ async function main(){
  if(mode==='--fetch'){
   const html=await boundedText(pins.publicOrigin+'/login',1024*1024),urls=publicScriptURLs(html),texts=[],assets=[{asset:'/login',text:html}];let bytes=0;
   for(const url of urls){const t=await boundedText(url,8*1024*1024);bytes+=Buffer.byteLength(t);if(bytes>48*1024*1024)fail('PUBLIC_FETCH_TOTAL_LIMIT');texts.push(t);assets.push({asset:new URL(url).pathname,text:t});}
-  writeNew(path.join(root,'out','public-config-diagnostic.json'),{origin:pins.publicOrigin,assets:diagnosePublicAssets(assets),rawValuesRecorded:false});
+  writeNew(path.join(root,'out','public-config-diagnostic.json'),{origin:pins.publicOrigin,scriptDiscovery:diagnoseScriptDiscovery(html),assets:diagnosePublicAssets(assets),rawValuesRecorded:false});
   const c=extractConfig(texts);writeNew(path.join(root,'public-config.json'),c);
   writeNew(path.join(root,'out','public-config-provenance.json'),{method:'UNAUTHENTICATED_PUBLIC_SITE_JS_MATCHED_TO_SSH_DIGESTS',origin:pins.publicOrigin,assetCount:urls.length,bytes,pinnedDigests:pins.sha256,keyType:pins.keyType,productionSecretsRead:false,productionDatabaseAccess:false});
  }else if(mode==='--build'){

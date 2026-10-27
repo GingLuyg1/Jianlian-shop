@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sha,validateConfig,extractConfig,publicScriptURLs,diagnosePublicAssets} from './usdt-scanner-public-config.mjs';
+import {sha,validateConfig,extractConfig,publicScriptURLs,diagnosePublicAssets,diagnoseScriptDiscovery} from './usdt-scanner-public-config.mjs';
 const c={NEXT_PUBLIC_SUPABASE_URL:'https://testref.supabase.co',NEXT_PUBLIC_SUPABASE_ANON_KEY:'sb_publishable_synthetic_public_value_only'};
 const pins={projectRef:'testref',sha256:Object.fromEntries(Object.entries(c).map(([n,v])=>[n,sha(v)]))};
 test('only exact public URL and publishable key digest accepted',()=>assert.deepEqual(validateConfig(c,pins),c));
@@ -32,4 +32,12 @@ test('public diagnostics count legacy roles without recording JWTs or secret val
   assert.deepEqual(data[0].legacyJWTRoleCounts,{anon:1,service_role:1,other:0});
   assert.equal(data[0].secretKeyMarkerPresent,true);
   for(const value of t.split(' '))assert.equal(JSON.stringify(data).includes(value),false);
+});
+test('discovery evidence identifies excluded script paths but never query values or credentials',()=>{
+  const html='<script src="/_next/static/a.js"></script><script src="/_next/static/app.js?dpl=do-not-record"></script><script src="https://a:b@other.invalid/x.js"></script>';
+  const d=diagnoseScriptDiscovery(html,'https://safe.invalid');
+  assert.equal(d[0].accepted,true);assert.equal(d[1].accepted,false);
+  assert.deepEqual(d[1].queryNames,['dpl']);assert.equal(d[2].hasCredentials,true);
+  assert.equal(JSON.stringify(d).includes('do-not-record'),false);
+  assert.equal(JSON.stringify(d).includes('a:b'),false);
 });
