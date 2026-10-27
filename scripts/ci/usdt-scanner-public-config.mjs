@@ -19,7 +19,22 @@ export function validateConfig(c, expected=pins) {
   return c;
 }
 export function publicScriptURLs(html, origin=pins.publicOrigin) {
-  const found=[...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/g)].map(m=>new URL(m[1],origin));
+  const references=[...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/g)].map(m=>m[1]);
+  // Next App Router can reference client chunks in the public Flight payload
+  // rather than direct script tags. Parse JSON data only; never execute HTML/JS
+  // or follow arbitrary links, webpack code, source maps or authenticated APIs.
+  for(const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)){
+    const push=script[1].match(/\bself\.__next_f\.push\((\[[\s\S]*\])\)\s*;?\s*$/);
+    if(!push)continue;
+    let data;try{data=JSON.parse(push[1]);}catch{continue;}
+    if(!Array.isArray(data)||data[0]!==1||typeof data[1]!=='string')continue;
+    for(const m of data[1].matchAll(/"((?:\/_next\/)?static\/chunks\/[A-Za-z0-9_./()%+-]+\.js)"/g)){
+      const ref=m[1].startsWith('/')?m[1]:'/_next/'+m[1];
+      if(ref.split('/').some(s=>decodeURIComponent(s)==='..'))fail('PUBLIC_FLIGHT_PATH_REJECTED');
+      references.push(ref);
+    }
+  }
+  const found=references.map(ref=>new URL(ref,origin));
   const urls=[...new Set(found.filter(u=>u.origin===origin&&/^\/_next\/static\/[A-Za-z0-9_./()%+-]+\.js$/.test(u.pathname)&&!decodeURIComponent(u.pathname).split('/').includes('..')&&!u.username&&!u.password&&!u.search&&!u.hash).map(u=>u.href))];
   if(!urls.length||urls.length>40)fail('PUBLIC_SCRIPT_SET_REJECTED');return urls;
 }

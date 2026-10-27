@@ -41,3 +41,26 @@ test('discovery evidence identifies excluded script paths but never query values
   assert.equal(JSON.stringify(d).includes('do-not-record'),false);
   assert.equal(JSON.stringify(d).includes('a:b'),false);
 });
+test('App Router Flight chunk references are parsed as inert JSON and keep the same-origin scope',()=>{
+  const flight='1:I[42,["100","static/chunks/app/login/page-approved.js"],"default"]\n';
+  const html='<script src="/_next/static/chunks/main.js"></script><script>self.__next_f.push('+JSON.stringify([1,flight])+')</script>';
+  assert.deepEqual(publicScriptURLs(html,'https://safe.invalid'),[
+    'https://safe.invalid/_next/static/chunks/main.js',
+    'https://safe.invalid/_next/static/chunks/app/login/page-approved.js']);
+});
+test('Flight extraction does not evaluate code or accept remote or query-bearing chunk references',()=>{
+  const data='["https://evil.invalid/static/chunks/remote.js","static/chunks/a.js?token=not-allowed"]';
+  const html='<script src="/_next/static/main.js"></script><script>self.__next_f.push('+JSON.stringify([1,data])+')</script><script>self.__next_f.push((globalThis.executed=true,[]))</script>';
+  assert.deepEqual(publicScriptURLs(html,'https://safe.invalid'),['https://safe.invalid/_next/static/main.js']);
+  assert.equal(globalThis.executed,undefined);
+});
+test('Flight paths cannot normalize raw or encoded traversal into an allowed resource',()=>{
+  for(const ref of ['static/chunks/../a.js','static/chunks/%2e%2e/a.js']){
+    const html='<script src="/_next/static/main.js"></script><script>self.__next_f.push('+JSON.stringify([1,JSON.stringify([ref])])+')</script>';
+    assert.throws(()=>publicScriptURLs(html,'https://safe.invalid'),/FLIGHT_PATH_REJECTED/);
+  }
+});
+test('Flight chunk discovery retains the total 40-resource hard limit',()=>{
+  const data=JSON.stringify(Array.from({length:41},(_,i)=>'static/chunks/'+i+'.js'));
+  assert.throws(()=>publicScriptURLs('<script>self.__next_f.push('+JSON.stringify([1,data])+')</script>','https://safe.invalid'),/SCRIPT_SET_REJECTED/);
+});
