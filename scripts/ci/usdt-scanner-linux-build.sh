@@ -23,6 +23,10 @@ else
   [[ -z $unexpected ]]
 fi
 printf '%s\n' "$source_sha" >"$work/out/source-sha.txt"
+echo BUILD_STAGE=PINNED_PUBLIC_CONFIGURATION_ONLY
+node --test scripts/ci/usdt-scanner-public-config.test.mjs >"$work/out/public-config-tests.log" 2>&1
+# Public login/static GETs only. No Supabase, SSH, CI secrets or privileged key.
+node scripts/ci/usdt-scanner-public-config.mjs --fetch "$work" >"$work/out/public-config-fetch.log" 2>&1
 image="jianlian-scanner-build:$head"
 echo BUILD_STAGE=PINNED_ROCKY_IMAGE
 docker build --pull=false -f scripts/ci/usdt-scanner-builder.Dockerfile -t "$image" scripts/ci >"$work/out/image-build.log" 2>&1
