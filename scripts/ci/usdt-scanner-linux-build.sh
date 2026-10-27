@@ -24,17 +24,20 @@ else
 fi
 printf '%s\n' "$source_sha" >"$work/out/source-sha.txt"
 image="jianlian-scanner-build:$head"
+echo BUILD_STAGE=PINNED_ROCKY_IMAGE
 docker build --pull=false -f scripts/ci/usdt-scanner-builder.Dockerfile -t "$image" scripts/ci >"$work/out/image-build.log" 2>&1
 docker image inspect "$image" --format '{{.Id}}' >"$work/out/builder-image-id.txt"
 common=(--rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=512 --cpus=2 --memory=8g --user "$(id -u):$(id -g)" --tmpfs /tmp:rw,nosuid,size=512m -v "$work:/work" -v "$PWD/scripts/ci:/checks:ro" -e HOME=/work/home -e LANG=C.UTF-8)
-docker run "${common[@]}" "$image" env -i PATH=/opt/node/bin:/usr/bin:/bin HOME=/work/home LANG=C.UTF-8 npm_config_registry=https://registry.npmjs.org npm_config_cache=/work/home/npm-cache npm_config_userconfig=/dev/null npm_config_globalconfig=/dev/null npm ci --ignore-scripts --no-audit --no-fund >"$work/out/install.log" 2>&1
+echo BUILD_STAGE=LOCKED_PUBLIC_DEPENDENCIES
+docker run "${common[@]}" "$image" env -i PATH=/opt/node/bin:/usr/bin:/bin HOME=/work/home LANG=C.UTF-8 npm_config_registry=https://registry.npmjs.org npm_config_cache=/work/home/npm-cache npm_config_userconfig=/work/home/user.npmrc npm_config_globalconfig=/work/home/global.npmrc npm ci --ignore-scripts --no-audit --no-fund >"$work/out/install.log" 2>&1
 # No default route, host network, published ports, credentials or external APIs.
+echo BUILD_STAGE=OFFLINE_BUILD_AND_RUNTIME_SMOKE
 docker run "${common[@]}" --network none --add-host build-only.invalid:127.0.0.1 \
   -e ARTIFACT_KIND="$kind" -e SOURCE_SHA="$source_sha" -e CONTROL_SHA="$head" \
   -e ACTIONS_RUN_ID="$GITHUB_RUN_ID" -e ACTIONS_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
   "$image" bash /checks/usdt-scanner-container-build.sh >"$work/out/offline-build-smoke.log" 2>&1
 archive="$work/out/usdt-scanner-$kind-$source_sha-linux-x64.tar.gz"
-tar -czf "$archive" -C "$work/source" --exclude='./.git' --exclude='./.github' --exclude='./.env*' --exclude='./.next/cache' --exclude='./scripts/ci' --exclude='./tests' .
+tar -czf "$archive" -C "$work/source" --exclude='./.git' --exclude='./.github' --exclude='.env' --exclude='.env.*' --exclude='.npmrc' --exclude='./.next/cache' --exclude='./scripts/ci' --exclude='./tests' .
 [[ $(stat -c %s "$archive") -lt 536870912 ]]
 sha256sum "$archive" >"$work/out/SHA256SUMS"
 printf 'ARTIFACT=%s\nSOURCE_SHA=%s\nPRODUCTION_BASE=%s\nPRODUCTION_CHANGED=no\nDEPLOYED=no\n' "$(basename "$archive")" "$source_sha" "$base" >"$work/out/receipt.ini"

@@ -12,7 +12,7 @@ sha256sum package.json package-lock.json >/work/out/dependency-manifest-before.s
 node /checks/usdt-scanner-linux-smoke.mjs "$ARTIFACT_KIND" >/work/out/scanner-smoke.json
 npm run build >/work/out/next-build.log 2>&1
 test -s .next/BUILD_ID; test -s .next/routes-manifest.json; test -s .next/required-server-files.json
-npm_config_cache=/work/home/npm-cache npm_config_userconfig=/dev/null npm_config_globalconfig=/dev/null npm prune --omit=dev --ignore-scripts --offline --no-audit --no-fund >/work/out/prune.log 2>&1
+npm_config_cache=/work/home/npm-cache npm_config_userconfig=/work/home/user.npmrc npm_config_globalconfig=/work/home/global.npmrc npm prune --omit=dev --ignore-scripts --offline --no-audit --no-fund >/work/out/prune.log 2>&1
 node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3207 >/work/out/startup.log 2>&1 &
 server_pid=$!
 trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
