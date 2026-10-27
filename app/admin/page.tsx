@@ -760,12 +760,13 @@ export default function AdminDashboardPage() {
       {error ? (
         <AdminErrorState description={error} onRetry={loadDashboard} />
       ) : (
-        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-1">
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pb-4 lg:gap-3" aria-busy={loading}>
+          {loading ? <p role="status" className="shrink-0 text-xs text-[var(--admin-v2-text-muted)]">正在读取经营数据，请稍候…</p> : null}
           <section className="shrink-0" aria-labelledby="dashboard-core-metrics">
             <div className="mb-2">
               <h2 id="dashboard-core-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">核心经营指标</h2>
             </div>
-            <div className="grid grid-cols-1 gap-2 min-[430px]:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1">
               {loading && !data
                 ? Array.from({ length: 7 }).map((_, index) => (
                   <div key={index} className="h-[112px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
@@ -790,7 +791,7 @@ export default function AdminDashboardPage() {
               <h2 id="dashboard-status-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">运营状态</h2>
               <p className="hidden text-xs text-[var(--admin-v2-text-muted)] sm:block">待处理、异常与库存状态</p>
             </div>
-            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5 [&>*:last-child]:col-span-2 xl:[&>*:last-child]:col-span-1">
               {loading && !data
                 ? Array.from({ length: 5 }).map((_, index) => (
                   <div key={index} className="h-[68px] animate-pulse bg-[var(--admin-v2-surface-muted)]" />
@@ -811,17 +812,17 @@ export default function AdminDashboardPage() {
             </div>
           </section>
 
-          <div className="grid min-h-[320px] grid-cols-1 gap-3 xl:grid-cols-[2fr_1fr]">
+          <div className="grid shrink-0 min-h-[320px] min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-3">
             <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
-              <CardHeader className="flex shrink-0 flex-row items-center justify-between px-4 py-3">
+              <CardHeader className="flex shrink-0 flex-col items-start justify-between gap-3 px-4 py-3 sm:flex-row sm:items-center">
                 <div>
                   <CardTitle className="text-base">经营趋势</CardTitle>
                   <p className="text-xs text-slate-500">支付、充值、订单和访问的综合走势（各指标独立量程）</p>
                 </div>
                 <Tabs value={trendRange} onValueChange={(value) => setTrendRange(value as "7" | "30")}>
-                  <TabsList className="h-8">
-                    <TabsTrigger value="7" className="h-7 px-3 text-xs">近 7 天</TabsTrigger>
-                    <TabsTrigger value="30" className="h-7 px-3 text-xs">近 30 天</TabsTrigger>
+                  <TabsList className="h-11 sm:h-8">
+                    <TabsTrigger value="7" className="h-10 px-3 text-xs sm:h-7">近 7 天</TabsTrigger>
+                    <TabsTrigger value="30" className="h-10 px-3 text-xs sm:h-7">近 30 天</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </CardHeader>
@@ -858,7 +859,7 @@ export default function AdminDashboardPage() {
             </div>
           </section>
 
-          <div className="grid min-h-[300px] grid-cols-1 gap-3 xl:grid-cols-3">
+          <div className="grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 gap-4 xl:grid-cols-3 lg:gap-3">
             <ProductListCard title="销量排行" rows={data?.salesRank ?? []} type="sales" loading={loading} />
             <ProductListCard title="销售额排行" rows={data?.amountRank ?? []} type="amount" loading={loading} />
             <InventoryFocusCard
@@ -870,7 +871,7 @@ export default function AdminDashboardPage() {
             />
           </div>
 
-          <div className="grid min-h-[300px] grid-cols-1 gap-3 xl:grid-cols-3">
+          <div className="grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 gap-4 xl:grid-cols-3 lg:gap-3">
             <RecentOrdersCard rows={data?.recentOrders ?? []} loading={loading} />
             <RecentRechargesCard rows={data?.recentRecharges ?? []} loading={loading} />
             <UserOverviewCard rows={data?.userOverview ?? []} visitorRows={data?.visitorStats ?? []} loading={loading} />
@@ -913,9 +914,10 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
   }));
   const selectedSeries = chartSeries.filter((item) => selectedMetricKeys.includes(item.key));
   const labelStep = Math.max(1, Math.ceil(points.length / 6));
-  const activePoint = activeIndex !== null && activeIndex < points.length ? points[activeIndex] : null;
+  const inspectionIndex = Math.min(points.length - 1, Math.max(0, activeIndex ?? points.length - 1));
+  const activePoint = activeIndex !== null ? points[inspectionIndex] : null;
   const activeX = activeIndex !== null
-    ? padding.left + (activeIndex / Math.max(points.length - 1, 1)) * (chartWidth - padding.left - padding.right)
+    ? padding.left + (inspectionIndex / Math.max(points.length - 1, 1)) * (chartWidth - padding.left - padding.right)
     : null;
 
   const toggleMetric = (key: TrendMetricKey) => {
@@ -927,7 +929,7 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
   };
 
   return (
-    <div className="flex h-full min-h-[220px] min-w-0 flex-col">
+    <div className="flex min-h-[220px] min-w-0 flex-col">
       <div className="mb-2 flex flex-wrap gap-1.5" aria-label="经营趋势指标">
         {series.map((item) => {
           const selected = selectedMetricKeys.includes(item.key);
@@ -938,7 +940,7 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
               aria-pressed={selected}
               onClick={() => toggleMetric(item.key)}
               className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)]",
+                "inline-flex h-11 items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] sm:h-8",
                 selected
                   ? "border-[var(--admin-v2-border)] bg-white text-[var(--admin-v2-text-secondary)]"
                   : "border-transparent bg-[var(--admin-v2-surface-muted)] text-[var(--admin-v2-text-muted)] opacity-60",
@@ -950,10 +952,11 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
           );
         })}
       </div>
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1">
+      <div className="relative shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1">
         <svg
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          className="h-full min-h-[200px] w-full touch-pan-y"
+          className="h-[200px] w-full touch-pan-y sm:h-[240px]"
+          preserveAspectRatio="none"
           role="img"
           aria-label="支付、充值、订单与访问综合趋势折线图"
           onPointerMove={(event) => {
@@ -980,13 +983,13 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
           {points.map((point, index) => {
             if (index !== 0 && index !== points.length - 1 && index % labelStep !== 0) return null;
             const x = padding.left + (index / Math.max(points.length - 1, 1)) * (chartWidth - padding.left - padding.right);
-            return <text key={point.date} x={x} y={chartHeight - 7} textAnchor={index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"} fill="#94a3b8" fontSize="10">{point.date.slice(5)}</text>;
+            return <text key={point.date} x={x} y={chartHeight - 7} textAnchor={index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"} fill="#64748b" fontSize="10" className="hidden sm:block">{point.date.slice(5)}</text>;
           })}
         </svg>
         {activePoint && activeX !== null ? (
           <div
             className={cn(
-              "pointer-events-none absolute top-3 z-10 min-w-[180px] rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white p-2.5 text-xs shadow-lg",
+              "pointer-events-none absolute top-3 z-10 hidden min-w-[180px] rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white p-2.5 text-xs shadow-lg sm:block",
               activeIndex !== null && activeIndex >= points.length / 2 ? "-translate-x-[calc(100%+8px)]" : "translate-x-2",
             )}
             style={{ left: `${(activeX / chartWidth) * 100}%` }}
@@ -997,12 +1000,23 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
               {selectedSeries.map((item) => (
                 <div key={item.key} className="flex items-center justify-between gap-4">
                   <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</span>
-                  <span className="font-medium tabular-nums text-[var(--admin-v2-text-primary)]">{item.format(item.values[activeIndex ?? 0])}</span>
+                  <span className="font-medium tabular-nums text-[var(--admin-v2-text-primary)]">{item.format(item.values[inspectionIndex])}</span>
                 </div>
               ))}
             </div>
           </div>
         ) : null}
+      </div>
+      <div className="mt-1 flex justify-between text-xs text-[var(--admin-v2-text-muted)] sm:hidden" aria-hidden="true">
+        <span>{points[0].date.slice(5)}</span><span>{points[Math.floor((points.length - 1) / 2)].date.slice(5)}</span><span>{points[points.length - 1].date.slice(5)}</span>
+      </div>
+      <label className="mt-3 text-xs text-[var(--admin-v2-text-muted)]">
+        查看每日数据（拖动或使用方向键）
+        <input type="range" min={0} max={points.length - 1} value={inspectionIndex} onChange={(event) => setActiveIndex(Number(event.target.value))} aria-label="查看趋势日期" aria-valuetext={points[inspectionIndex].date} className="block h-11 w-full accent-blue-600" />
+      </label>
+      <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--admin-v2-surface-muted)] p-3 text-xs" aria-live="polite">
+        <div className="col-span-2 font-medium">{points[inspectionIndex].date}</div>
+        {selectedSeries.map((item) => <div key={item.key} className="min-w-0"><span className="text-[var(--admin-v2-text-muted)]">{item.label}</span><div className="break-words font-semibold tabular-nums">{item.format(item.values[inspectionIndex])}</div></div>)}
       </div>
     </div>
   );
@@ -1055,7 +1069,7 @@ function ChannelRow({ channel, loading }: { channel: ChannelStat; loading: boole
         </div>
         <Badge variant={channel.enabled ? "default" : "secondary"}>{statusText}</Badge>
       </div>
-      <div className="mt-3 grid grid-cols-5 gap-2 text-center text-xs">
+      <div className="mt-3 grid grid-cols-2 gap-2 text-left text-xs sm:grid-cols-3">
         <MiniStat label="发起" value={channel.initiated} />
         <MiniStat label="成功" value={channel.successful} />
         <MiniStat label="成功率" value={successRate} />
@@ -1068,9 +1082,9 @@ function ChannelRow({ channel, loading }: { channel: ChannelStat; loading: boole
 
 function MiniStat({ label, value, danger }: { label: string; value: MetricValue; danger?: boolean }) {
   return (
-    <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-1.5">
-      <div className="truncate text-[10px] text-slate-500">{label}</div>
-      <div className={`truncate text-xs font-semibold ${danger && Number(value) > 0 ? "text-red-600" : "text-slate-900"}`}>
+    <div className="min-w-0 rounded-lg bg-[var(--admin-v2-surface-muted)] px-2 py-2">
+      <div className="text-xs text-[var(--admin-v2-text-muted)]">{label}</div>
+      <div className={`break-words text-sm font-semibold tabular-nums ${danger && Number(value) > 0 ? "text-red-600" : "text-slate-900"}`}>
         {formatNumber(value)}
       </div>
     </div>
@@ -1080,7 +1094,7 @@ function MiniStat({ label, value, danger }: { label: string; value: MetricValue;
 function TodoLink({ item }: { item: TodoItem }) {
   const urgent = Number(item.value ?? 0) > 0;
   return (
-    <Link href={item.href} className={`min-h-14 cursor-pointer bg-white px-3 py-2 transition-colors hover:bg-[var(--admin-v2-selected)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--admin-v2-primary)] ${urgent ? "text-[var(--admin-v2-danger-foreground)]" : "text-[var(--admin-v2-text-muted)]"}`}>
+    <Link href={item.href} className={`min-h-[64px] cursor-pointer bg-white px-3 py-2 transition-colors hover:bg-[var(--admin-v2-selected)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--admin-v2-primary)] ${urgent ? "text-[var(--admin-v2-danger-foreground)]" : "text-[var(--admin-v2-text-muted)]"}`}>
       <div className="truncate text-xs">{item.label}</div>
       <div className={`mt-0.5 text-lg font-semibold leading-6 ${urgent ? "text-[var(--admin-v2-danger-foreground)]" : "text-[var(--admin-v2-text-secondary)]"}`}>{item.value ?? NOT_CONNECTED}</div>
     </Link>
@@ -1101,7 +1115,7 @@ function ProductListCard({ title, rows, type, loading }: { title: string; rows: 
             {rows.map((row, index) => (
               <Link key={row.id} href={`/admin/products?search=${encodeURIComponent(row.name)}`} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50">
                 <div className="min-w-0">
-                  <div className="truncate font-medium text-slate-900">{index + 1}. {row.name}</div>
+                  <div className="break-words font-medium text-slate-900 sm:truncate" title={row.name}>{index + 1}. {row.name}</div>
                   <div className="text-xs text-slate-500">库存 {row.stock} · {statusLabel(row.status)}</div>
                 </div>
                 <div className="shrink-0 text-right text-sm font-semibold text-slate-950">
@@ -1197,7 +1211,7 @@ function RecentRechargesCard({ rows, loading }: { rows: DashboardRecharge[]; loa
         row.user_email ?? "—",
         formatMoney(row.amount),
         row.channel_name ?? row.channel_code ?? "—",
-        row.status,
+        statusLabel(row.status),
         formatDateTime(row.created_at),
       ])}
       href="/admin/recharges"
@@ -1232,6 +1246,16 @@ function CompactTableCard({
         {loading ? <ListSkeleton /> : rows.length === 0 ? (
           <AdminEmptyState title={emptyTitle} description="有真实数据后会显示在这里。" className="min-h-[180px]" />
         ) : (
+          <>
+          <div className="space-y-3 md:hidden">
+            {rows.slice(0, 8).map((row, index) => <dl key={`${title}-mobile-${index}`} className="rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3">
+              {row.map((cell, cellIndex) => <div key={headers[cellIndex]} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 py-1 text-sm">
+                <dt className="text-[var(--admin-v2-text-muted)]">{headers[cellIndex]}</dt>
+                <dd className="min-w-0 break-all text-[var(--admin-v2-text-primary)]">{cell}</dd>
+              </div>)}
+            </dl>)}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -1244,7 +1268,7 @@ function CompactTableCard({
               {rows.slice(0, 8).map((row, index) => (
                 <TableRow key={`${title}-${index}`}>
                   {row.map((cell, cellIndex) => (
-                    <TableCell key={`${title}-${index}-${cellIndex}`} className="max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
+                    <TableCell key={`${title}-${index}-${cellIndex}`} title={cell} className="max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
                       {cell}
                     </TableCell>
                   ))}
@@ -1252,6 +1276,8 @@ function CompactTableCard({
               ))}
             </TableBody>
           </Table>
+          </div>
+          </>
         )}
       </CardContent>
     </Card>

@@ -80,7 +80,10 @@ export function AdminFilterBar({
 }
 
 export function AdminTableViewport({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("min-h-0 flex-1 overflow-x-auto overflow-y-auto", className)}>{children}</div>;
+  return <>
+    <p className="shrink-0 border-b border-[var(--admin-v2-border)] px-3 py-2 text-xs text-[var(--admin-v2-text-muted)] md:hidden">宽表可左右滑动查看完整信息</p>
+    <div role="region" aria-label="数据表，可左右滑动" tabIndex={0} className={cn("min-h-0 flex-1 overflow-x-auto overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--admin-v2-primary)]", className)}>{children}</div>
+  </>;
 }
 
 export function AdminListPagination({

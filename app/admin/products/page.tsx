@@ -985,7 +985,7 @@ export default function AdminProductsPage() {
                 <span className="text-sm text-slate-500">当前结果 {productCount} 条</span>
               </div>
             </CardHeader>
-            <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pb-0 pt-0">
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pb-0 pt-0 md:overflow-hidden">
               <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -1448,6 +1448,7 @@ function ProductTable({
   hasFilters: boolean;
 }) {
   return (
+    <div className="flex min-h-[240px] min-w-0 flex-1 flex-col md:min-h-0">
     <AdminSyncedHorizontalScroller>
       <table className="w-full min-w-[1560px] table-fixed caption-bottom text-sm">
         <colgroup>
@@ -1643,6 +1644,7 @@ function ProductTable({
         </TableBody>
       </table>
     </AdminSyncedHorizontalScroller>
+    </div>
   );
 }
 
