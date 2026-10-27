@@ -10,7 +10,10 @@ unset BSC_RPC_URL BSC_RECEIPT_RPC_URL RECHARGE_BEP20_RPC_URL RECHARGE_BEP20_BLOC
 node /checks/usdt-scanner-verify-source.mjs "$ARTIFACT_KIND" >/work/out/source-verification.json
 sha256sum package.json package-lock.json >/work/out/dependency-manifest-before.sha256
 node /checks/usdt-scanner-linux-smoke.mjs "$ARTIFACT_KIND" >/work/out/scanner-smoke.json
-npm run build >/work/out/next-build.log 2>&1
+node /checks/usdt-scanner-font-cache.mjs --verify
+# Upstream hook reads the already-verified real CSS and absolute WOFF2 files.
+# It is not used for API, Auth, payment, scanner or business responses.
+NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/work/font-cache/responses.cjs npm run build >/work/out/next-build.log 2>&1
 test -s .next/BUILD_ID; test -s .next/routes-manifest.json; test -s .next/required-server-files.json
 npm_config_cache=/work/home/npm-cache npm_config_userconfig=/work/home/user.npmrc npm_config_globalconfig=/work/home/global.npmrc npm prune --omit=dev --ignore-scripts --offline --no-audit --no-fund >/work/out/prune.log 2>&1
 node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3207 >/work/out/startup.log 2>&1 &

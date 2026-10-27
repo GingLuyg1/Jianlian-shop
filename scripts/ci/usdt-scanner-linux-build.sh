@@ -30,6 +30,8 @@ docker image inspect "$image" --format '{{.Id}}' >"$work/out/builder-image-id.tx
 common=(--rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=512 --cpus=2 --memory=8g --user "$(id -u):$(id -g)" --tmpfs /tmp:rw,nosuid,size=512m -v "$work:/work" -v "$PWD/scripts/ci:/checks:ro" -e HOME=/work/home -e LANG=C.UTF-8)
 echo BUILD_STAGE=LOCKED_PUBLIC_DEPENDENCIES
 docker run "${common[@]}" "$image" env -i PATH=/opt/node/bin:/usr/bin:/bin HOME=/work/home LANG=C.UTF-8 npm_config_registry=https://registry.npmjs.org npm_config_cache=/work/home/npm-cache npm_config_userconfig=/work/home/user.npmrc npm_config_globalconfig=/work/home/global.npmrc npm ci --ignore-scripts --no-audit --no-fund >"$work/out/install.log" 2>&1
+echo BUILD_STAGE=REAL_PUBLIC_INTER_FONT_CACHE
+docker run "${common[@]}" "$image" node /checks/usdt-scanner-font-cache.mjs >"$work/out/font-cache.log" 2>&1
 # No default route, host network, published ports, credentials or external APIs.
 echo BUILD_STAGE=OFFLINE_BUILD_AND_RUNTIME_SMOKE
 docker run "${common[@]}" --network none --add-host build-only.invalid:127.0.0.1 \
