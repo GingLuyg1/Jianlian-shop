@@ -1,8 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 
-import { formatMoney, normalizeRefundError } from "@/lib/refunds/refund-utils";
-import { evaluateRefundRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
-import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
+import { normalizeRefundError } from "@/lib/refunds/refund-utils";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -54,73 +52,13 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
-  try {
-    if (!hasSupabaseServerConfig()) return json({ error: "Supabase 环境变量未配置。" }, { status: 500 });
-
-    const supabase = getSupabaseServerClient();
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) return json({ error: "请先登录。" }, { status: 401 });
-
-    const sizeError = checkRequestSize(request, 12 * 1024);
-    if (sizeError) return sizeError;
-    const rateLimit = checkRateLimit("refund_create", getUserRateLimitKey(user.id, "refund_create"));
-    if (!rateLimit.allowed) return rateLimit.response!;
-
-    const body = (await request.json().catch(() => null)) as
-      | { orderNo?: string; reasonCode?: string; reasonDetail?: string; requestedAmount?: number; contactInfo?: string; clientRequestId?: string }
-      | null;
-
-    const orderNo = body?.orderNo?.trim();
-    const reasonCode = body?.reasonCode?.trim() || "other";
-    const requestedAmount = Number(body?.requestedAmount ?? 0);
-    if (!orderNo) return json({ error: "缺少订单编号。" }, { status: 400 });
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) return json({ error: "退款金额必须大于 0。" }, { status: 400 });
-
-    const refundRiskContext = await loadRefundRiskContext(supabase, user.id, orderNo);
-    const risk = await evaluateRefundRisk({
-      supabase,
-      request,
-      userId: user.id,
-      businessId: orderNo,
-      requestId: body?.clientRequestId ?? orderNo,
-      orderAmount: requestedAmount,
-      currency: refundRiskContext.currency,
-      riskContext: refundRiskContext,
-    });
-
-    if (shouldBlockRisk(risk)) {
-      return json(
-        {
-          error: riskResponseMessage(risk),
-          code: "REFUND_RISK_BLOCKED",
-          risk: {
-            level: risk.risk_level,
-            score: risk.risk_score,
-            action: risk.recommended_action,
-            requestId: risk.request_id,
-          },
-        },
-        { status: 403 }
-      );
-    }
-
-    const { data, error } = await supabase.rpc("create_refund_request", {
-      p_order_no: orderNo,
-      p_reason_code: reasonCode,
-      p_reason_detail: body?.reasonDetail ?? null,
-      p_requested_amount: requestedAmount,
-      p_contact_info: body?.contactInfo ?? null,
-      p_client_request_id: body?.clientRequestId ?? crypto.randomUUID(),
-    });
-
-    if (error) return json({ error: normalizeRefundError(error.message) }, { status: 400 });
-
-    return json({ refund: normalizeUserRefund(data as Row), message: `退款申请已提交，金额 ${formatMoney(requestedAmount)}。` });
-  } catch (error) {
-    console.error("[Refunds] create failed", error);
-    return json({ error: "退款申请提交失败，请稍后重试。" }, { status: 500 });
-  }
+export async function POST() {
+  // Closed for every customer, including old clients. Do not parse a body,
+  // acquire a database client or invoke financial/risk workflows here.
+  return json(
+    { code: "CUSTOMER_REFUND_REQUEST_DISABLED", error: "退款及售后请联系人工客服，由管理员审核处理。" },
+    { status: 410, headers: { Allow: "GET", "Cache-Control": "no-store" } }
+  );
 }
 
 function normalizeUserRefund(row: Row) {
@@ -140,34 +78,6 @@ function normalizeUserRefund(row: Row) {
     createdAt: text(row.created_at),
     reviewedAt: text(row.reviewed_at),
     completedAt: text(row.completed_at),
-  };
-}
-
-async function loadRefundRiskContext(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string, orderNo: string) {
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id,order_no,total_amount,currency,delivery_type,payment_status")
-    .eq("user_id", userId)
-    .eq("order_no", orderNo)
-    .maybeSingle();
-  const orderId = typeof order?.id === "string" ? order.id : null;
-  let deliveryDelivered = false;
-  if (orderId) {
-    const { count } = await supabase
-      .from("order_deliveries")
-      .select("id", { count: "exact", head: true })
-      .eq("order_id", orderId)
-      .eq("delivery_status", "delivered")
-      .limit(10);
-    deliveryDelivered = (count ?? 0) > 0;
-  }
-  return {
-    order_id: orderId,
-    order_amount: money(order?.total_amount),
-    currency: text(order?.currency) ?? "CNY",
-    payment_status: text(order?.payment_status),
-    delivery_type: text(order?.delivery_type),
-    deliveryDelivered,
   };
 }
 

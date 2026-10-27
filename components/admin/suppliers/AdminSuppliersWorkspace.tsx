@@ -172,6 +172,8 @@ export default function AdminSuppliersWorkspace() {
           ))}
         </div>
         <nav className="flex shrink-0 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm" aria-label="供应商工作区">
+          <Button asChild variant="ghost" size="sm"><Link href="/admin/suppliers/bitrefill">Bitrefill 采购记录（只读）</Link></Button>
+          <Button asChild variant="ghost" size="sm"><Link href="/admin/suppliers/bitrefill/catalog">Bitrefill 商品目录</Link></Button>
           <Button variant={activeArea === "overview" ? "default" : "ghost"} size="sm" onClick={() => setActiveArea("overview")}>供应商概览</Button>
           <Button variant={activeArea === "products" ? "default" : "ghost"} size="sm" onClick={() => setActiveArea("products")}>商品目录</Button>
         </nav>

@@ -1275,7 +1275,6 @@ test("high-risk APIs use shared rate limit and request size guards", () => {
     "app/api/orders/route.ts",
     "app/api/payments/create/route.ts",
     "app/api/recharges/route.ts",
-    "app/api/refunds/route.ts",
     "app/api/order-query/route.ts",
     "app/api/admin/inventory/route.ts",
     "app/api/admin/media/route.ts",
@@ -1288,6 +1287,16 @@ test("high-risk APIs use shared rate limit and request size guards", () => {
     assert.match(source, /checkRateLimit/, `${route} must call checkRateLimit`);
     assert.match(source, /checkRequestSize/, `${route} must call checkRequestSize`);
   }
+
+  // V6 deliberately removes the customer write operation altogether. Require
+  // unconditional closure, rather than keeping dead rate-limit imports solely
+  // to satisfy the former writable-endpoint contract. Other guards stay intact.
+  const closedRefund = file("app/api/refunds/route.ts")
+    .match(/export async function POST\(\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
+  assert.match(closedRefund, /CUSTOMER_REFUND_REQUEST_DISABLED/);
+  assert.match(closedRefund, /status: 410/);
+  assert.match(closedRefund, /Allow: "GET"/);
+  assert.doesNotMatch(closedRefund, /\.rpc\(|\.from\(|getSupabaseServerClient\(|request\.(json|text|arrayBuffer)\(/);
 });
 
 test("production readiness checks are read-only and cleanup scripts are safe by default", () => {

@@ -8,7 +8,7 @@ import {
   reconcileBitrefillInvoiceGroups,
 } from "../../lib/providers/bitrefill/provider-core.mjs";
 import {
-  createBitrefillWebhookIdempotencyKey, parseBitrefillProduct,
+  createBitrefillWebhookIdempotencyKey, parseBitrefillProduct, MAX_BITREFILL_PACKAGES,
   parseBitrefillProductsResponse, parseBitrefillWebhookEnvelope, redactBitrefillLogValue,
 } from "../../lib/providers/bitrefill/protocol.mjs";
 import { readBitrefillWebhookBody } from "../../lib/providers/bitrefill/webhook-body.mjs";
@@ -82,7 +82,7 @@ test("catalog and webhook reject oversized or malformed fields without substitut
   assert.equal(parseBitrefillProductsResponse({ data: Array(51).fill(wire) }), null);
   assert.equal(parseBitrefillProduct({ ...wire, currency: "usd" }), null);
   assert.equal(parseBitrefillProduct({ ...wire, name: "<script>" }), null);
-  assert.equal(parseBitrefillProduct({ ...wire, packages: Array(201).fill(wire.packages[0]) }), null);
+  assert.equal(parseBitrefillProduct({ ...wire, packages: Array(MAX_BITREFILL_PACKAGES + 1).fill(wire.packages[0]) }), null);
   assert.equal(parseBitrefillProduct({ ...wire, packages: [{ ...wire.packages[0], price: "NaN" }] }), null);
   assert.equal(parseBitrefillProduct({ ...wire, packages: [{ ...wire.packages[0], value: "10<script>" }] }), null);
   assert.equal(normalizeBitrefillRedemption({ link: "http://localhost/admin" }), null);

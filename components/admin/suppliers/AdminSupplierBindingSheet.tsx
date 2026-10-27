@@ -17,6 +17,7 @@ import type { AdminProduct } from "@/lib/supabase/admin-catalog";
 import type { AdminProductSku } from "@/lib/supabase/admin-catalog";
 import type { DajuProduct, DajuProductDetail } from "@/lib/providers/daju/types";
 import { listDajuSkuStockOptions } from "@/lib/providers/daju/stock.mjs";
+import BitrefillSkuBindingFields from "./BitrefillSkuBindingFields";
 
 type SupplierError = { message: string; code: string | null; requestId: string | null };
 type BindingSavedProduct = { metadata?: Record<string, unknown> | null; delivery_type?: AdminProduct["delivery_type"]; stock?: number; sku?: AdminProductSku | null };
@@ -62,6 +63,7 @@ function getSupplierError(payload: unknown, fallback: string): SupplierError {
 }
 
 export default function AdminSupplierBindingSheet({ open, product, sku = null, onOpenChange, onSaved }: Props) {
+  const [provider, setProvider] = useState("daju");
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<DajuProduct[]>([]);
   const [searching, setSearching] = useState(false);
@@ -80,6 +82,7 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
     const sourceMetadata = sku?.metadata ?? product.metadata;
     const metadata = sourceMetadata && typeof sourceMetadata === "object" && !Array.isArray(sourceMetadata) ? sourceMetadata : {};
     const existingProductId = Number(metadata.supplier_product_id);
+    setProvider(metadata.supplier === "bitrefill" || metadata.supplier_binding_candidate ? "bitrefill" : "daju");
     setQuery("");
     setProducts([]);
     setSearchLoaded(false);
@@ -176,6 +179,7 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
           supplier_inputs_mapping: supplierInputsMapping,
           supplier_max_unit_cost: maxUnitCost.trim(),
           website_sku_id: sku?.id ?? null,
+          ...(sku ? { expected_updated_at: sku.updated_at } : {}),
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -203,11 +207,13 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
-        <SheetHeader><SheetTitle>供应商绑定</SheetTitle><SheetDescription>将网站商品关联到已接入的供应商商品；当前版本仅支持 Daju。</SheetDescription></SheetHeader>
+        <SheetHeader><SheetTitle>供应商绑定</SheetTitle><SheetDescription>复用当前商品规格供应商配置；Daju 维持原流程，Bitrefill 仅保存待审核候选。</SheetDescription></SheetHeader>
         {product ? (
           <div className="mt-5 space-y-5">
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold text-slate-950">{product.name}</div><div className="mt-1 font-mono text-xs text-slate-500">{sku ? `${sku.sku_title ?? sku.sku_code} · ${sku.id}` : product.id}</div></div><Badge variant={currentSupplier === "daju" ? "secondary" : "outline"}>{currentSupplier === "daju" ? "已绑定：大橘AI" : currentSupplier ? `已绑定：${currentSupplier}` : "未绑定"}</Badge></div><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><div>当前售价：¥{(sku?.price ?? product.price).toFixed(2)}</div><div>绑定层级：{sku ? "网站商品规格" : "商品"}</div><div>供应商：大橘AI / daju</div><div>当前 供应商商品ID：{currentSupplierProductId || "—"}</div></div></section>
 
+            <label className="block text-sm font-semibold">选择供应商<select aria-label="选择供应商" value={provider} disabled={saving} onChange={(event) => setProvider(event.target.value)} className="ml-3 min-h-[44px] rounded border px-3"><option value="daju">Daju</option><option value="bitrefill">Bitrefill（候选，不启用）</option></select></label>
+            {provider === "bitrefill" ? sku ? <BitrefillSkuBindingFields key={`${product.id}:${sku.id}`} product={product} sku={sku} onSaved={(saved) => { onSaved({ sku: saved.sku }); toast.success("Bitrefill 候选已保存，原采购来源未改变"); onOpenChange(false); }} /> : <p role="alert">Bitrefill 仅允许逐个商品规格绑定，请从商品规格行打开。</p> : <>
             <section><div className="mb-2 text-sm font-semibold text-slate-950">1. 搜索并选择供应商商品</div><div className="flex gap-2"><div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void searchProducts(); }} placeholder="输入 Daju 商品名称" /></div><Button onClick={searchProducts} disabled={searching}>{searching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}搜索</Button></div>
               {searchError ? <SupplierErrorCard error={searchError} /> : searching ? <AdminTableSkeleton rows={4} className="mt-2" /> : searchLoaded && products.length === 0 ? <AdminEmptyState className="mt-2 min-h-[150px]" title="没有匹配的供应商商品" /> : products.length ? <div className="mt-2 max-h-56 overflow-auto rounded-xl border"><div className="divide-y">{products.map((item) => <button key={item.id} type="button" onClick={() => loadDetail(item.id)} className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-slate-50"><div className="min-w-0"><div className="truncate text-sm font-medium text-slate-950">{item.title}</div><div className="mt-1 text-xs text-slate-500">#{item.id} · 库存 {item.stock} · 销量 {item.sales}</div></div><div className="shrink-0 text-sm font-medium">¥{item.price}</div></button>)}</div></div> : null}
             </section>
@@ -222,10 +228,11 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
             </div> : <AdminEmptyState className="min-h-[160px]" title="尚未选择供应商商品" description="先搜索并选择一个真实供应商商品。" />}</section>
 
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">当前版本仅支持绑定或更新绑定；解绑需要独立、受审计的后端操作。</div>
+            </>}
           </div>
         ) : <AdminErrorState title="未选择网站商品" description="请关闭后从商品列表重新打开。" />}
 
-        <SheetFooter className="mt-6 gap-2 sm:space-x-0"><Button asChild variant="outline"><Link href="/admin/suppliers">打开供应商中心<ExternalLink className="ml-2 h-4 w-4" /></Link></Button><Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button><Button onClick={saveBinding} disabled={saving || !detail || !detail.isAuto || (detail.isSku && !supplierSku.trim()) || missingRequiredInputs.length > 0}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}保存供应商绑定</Button></SheetFooter>
+        <SheetFooter className="mt-6 gap-2 sm:space-x-0"><Button asChild variant="outline"><Link href="/admin/suppliers">打开供应商中心<ExternalLink className="ml-2 h-4 w-4" /></Link></Button><Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>{provider === "daju" ? <Button onClick={saveBinding} disabled={saving || !detail || !detail.isAuto || (detail.isSku && !supplierSku.trim()) || missingRequiredInputs.length > 0}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}保存供应商绑定</Button> : null}</SheetFooter>
       </SheetContent>
     </Sheet>
   );

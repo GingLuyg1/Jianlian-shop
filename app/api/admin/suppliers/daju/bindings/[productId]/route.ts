@@ -9,6 +9,7 @@ import { compareDajuDecimal, parseDajuProductBinding, validateDajuBindingAgainst
 import { resolveDajuEffectiveStock } from "@/lib/providers/daju/stock.mjs";
 import type { DajuProductDetail } from "@/lib/providers/daju/types";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { prepareDajuBindingMetadata } from "@/lib/providers/core/admin-sku-binding.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -93,14 +94,25 @@ export async function POST(request: Request, context: Context) {
   let saveError: { code?: string } | null = null;
   let savedSku: Record<string, unknown> | null = null;
   if (websiteSkuId) {
-    const { data: sku, error: skuReadError } = await service.from("product_skus").select("id,product_id,metadata").eq("id", websiteSkuId).eq("product_id", context.params.productId).maybeSingle();
+    const { data: sku, error: skuReadError } = await service.from("product_skus").select("id,product_id,metadata,updated_at").eq("id", websiteSkuId).eq("product_id", context.params.productId).maybeSingle();
     if (skuReadError || !sku) return json({ error: "网站 SKU 不存在或不属于当前商品", code: "WEBSITE_SKU_NOT_FOUND", requestId }, 404);
     const skuMetadata = sku.metadata && typeof sku.metadata === "object" && !Array.isArray(sku.metadata) ? sku.metadata as Record<string, unknown> : {};
-    const skuUpdate = await service.from("product_skus").update({
-      metadata: { ...skuMetadata, ...metadata, ...stockMetadata },
+    if ((input.expected_updated_at !== undefined && input.expected_updated_at !== sku.updated_at) ||
+      ((skuMetadata.supplier === "bitrefill" || skuMetadata.supplier_binding_candidate) && input.expected_updated_at !== sku.updated_at)) {
+      return json({ error: "商品规格绑定已变化，请重新打开并确认", code: "SUPPLIER_BINDING_STALE", requestId }, 409);
+    }
+    let nextSkuMetadata;
+    try { nextSkuMetadata = prepareDajuBindingMetadata(skuMetadata, metadata, stockMetadata, admin.user.id, syncedAt); }
+    catch { return json({ error: "绑定审计或版本异常，未保存", code: "SUPPLIER_BINDING_AUDIT_INVALID", requestId }, 409); }
+    let updateQuery = service.from("product_skus").update({
+      metadata: nextSkuMetadata,
       delivery_type: "automatic",
       stock: stockResolution.stock,
-    }).eq("id", websiteSkuId).eq("product_id", context.params.productId).select("id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata").single();
+    }).eq("id", websiteSkuId).eq("product_id", context.params.productId);
+    updateQuery = sku.updated_at ? updateQuery.eq("updated_at", sku.updated_at) : updateQuery.is("updated_at", null);
+    updateQuery = skuMetadata.supplier_binding_version == null ? updateQuery.is("metadata->>supplier_binding_version", null)
+      : updateQuery.eq("metadata->>supplier_binding_version", String(skuMetadata.supplier_binding_version));
+    const skuUpdate = await updateQuery.select("id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,updated_at").single();
     savedSku = skuUpdate.data as Record<string, unknown> | null;
     saveError = skuUpdate.error;
     if (!saveError && savedSku) {
