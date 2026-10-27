@@ -1,0 +1,2 @@
+# Preserve the already-verified SQL bytes; never execute it during CI/build.
+ops/recharge-order-scan-v1.sql -text

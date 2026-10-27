@@ -2,6 +2,8 @@ import "server-only";
 
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { queueRechargeSuccessEmailBestEffort } from "@/lib/email/recharge-success";
+import { requestScannerRpc, scannerRpcOptions, ScannerRpcError } from "@/lib/recharges/bep20-scanner-rpc";
+import { planOrderScanRanges, type OrderScanWindow } from "@/lib/recharges/bep20-order-scan-planner";
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const RESULT_KINDS = new Set([
@@ -44,6 +46,9 @@ type RpcBlock = {
 };
 
 export type RechargeBep20ScanResult = {
+  mode?: "order_driven";
+  idleReason?: string;
+  blockedHistory?: number;
   dryRun: boolean;
   headBlock: string;
   finalizedBlock: string;
@@ -91,10 +96,16 @@ export function assertRechargeBep20ScannerAuthorized(request: Request) {
 }
 
 export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } = {}): Promise<RechargeBep20ScanResult> {
-  assertRollbackScannerContained();
   const service = getSupabaseServiceRoleClient();
   if (!service) {
     throw new RechargeBep20ScannerError("RECHARGE_SCANNER_SERVICE_UNAVAILABLE", "充值链上扫描数据库服务未配置");
+  }
+
+  if (process.env.RECHARGE_BEP20_SCANNER_MODE === "order_driven") {
+    return scanOrderDrivenTransfers(service, Boolean(options.dryRun));
+  }
+  if (process.env.RECHARGE_BEP20_SCANNER_MODE && process.env.RECHARGE_BEP20_SCANNER_MODE !== "legacy") {
+    throw new RechargeBep20ScannerError("RECHARGE_SCANNER_MODE_INVALID", "扫描模式无效");
   }
 
   const config = await loadConfig(service);
@@ -252,13 +263,6 @@ export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } =
     scannedBlocks: Number(runTo - initialFrom + BigInt(1)),
     ...counters,
   };
-}
-
-// Artifact-only rollback: preserve the baseline application without allowing
-// the old global scanner to query blocks, mutate progress, or credit funds.
-// This deliberately does NOT restore automatic recharge processing.
-function assertRollbackScannerContained(): void {
-  throw new RechargeBep20ScannerError("RECHARGE_SCANNER_ROLLBACK_CONTAINED", "安全回退版本禁止自动充值扫描，需人工复核后另行恢复");
 }
 
 async function loadConfig(service: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>): Promise<ScannerConfig> {
@@ -446,29 +450,131 @@ function parseMatchResult(value: unknown) {
 }
 
 async function rpc<T>(config: ScannerConfig, method: string, params: unknown[]): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetch(config.rpcUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      throw new RechargeBep20ScannerError("BSC_RPC_HTTP_FAILED", "BSC RPC 请求失败");
-    }
-    const payload = await response.json().catch(() => null) as { result?: T; error?: unknown } | null;
-    if (!payload || payload.error || payload.result === undefined) {
-      throw new RechargeBep20ScannerError("BSC_RPC_RESPONSE_INVALID", "BSC RPC 返回无效");
-    }
-    return payload.result;
+    return await requestScannerRpc<T>(scannerRpcOptions(config.rpcUrl), method, params);
   } catch (error) {
-    if (error instanceof RechargeBep20ScannerError) throw error;
-    throw new RechargeBep20ScannerError("BSC_RPC_UNCERTAIN", "BSC RPC 请求结果不确定");
+    throw new RechargeBep20ScannerError(error instanceof ScannerRpcError ? error.code : "BSC_RPC_UNCERTAIN", "BSC RPC 请求未完成，已停止本轮扫描");
+  }
+}
+
+async function scanOrderDrivenTransfers(
+  service: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>, dryRun: boolean,
+): Promise<RechargeBep20ScanResult> {
+  const config = await loadConfig(service);
+  const lease = await service.rpc("lease_recharge_order_scan_v1", {
+    p_address: config.receiveAddress, p_contract: config.tokenContract, p_dry_run: dryRun,
+  });
+  if (lease.error || !lease.data || !Array.isArray(lease.data.windows)) {
+    throw new RechargeBep20ScannerError("ORDER_SCAN_DATABASE_NOT_READY", "按订单扫描结构或租约不可用");
+  }
+  const { windows, token, blockedHistory = 0 } = lease.data as { windows: OrderScanWindow[]; token: string | null; blockedHistory: number };
+  const output = { ...emptyResult(dryRun, BigInt(0), BigInt(0)), mode: "order_driven" as const, blockedHistory };
+  if (windows.length === 0) return { ...output, idleReason: blockedHistory ? "HISTORY_REVIEW_REQUIRED" : "NO_OPEN_WINDOWS" };
+  if (!dryRun && !token) throw new RechargeBep20ScannerError("ORDER_SCAN_BUSY", "扫描租约被占用");
+  const deadline = Date.now() + 180_000;
+  let requests = 0;
+  const boundedRpc = async <T>(method: string, params: unknown[]) => {
+    if (++requests > 128 || Date.now() >= deadline) {
+      throw new RechargeBep20ScannerError("ORDER_SCAN_RESOURCE_BUDGET", "本轮读取预算已达上限，保留进度等待下一轮");
+    }
+    return rpc<T>(config, method, params);
+  };
+  try {
+    await assertRpcChainAndToken(config);
+    const head = parseHexQuantity(await boundedRpc<string>("eth_blockNumber", []), "BSC_HEAD_INVALID");
+    const finalized = head - BigInt(config.requiredConfirmations) + BigInt(1);
+    if (finalized < BigInt(0)) return { ...output, idleReason: "WAIT_CONFIRMATIONS" };
+    const blocks = new Map<string, RpcBlock>();
+    const readBlock = async (number: bigint) => {
+      let block = blocks.get(number.toString());
+      if (!block) {
+        block = await boundedRpc<RpcBlock>("eth_getBlockByNumber", [toHexQuantity(number), false]);
+        if (!block || parseHexQuantity(block.number, "BSC_BLOCK_NUMBER_INVALID") !== number) {
+          throw new RechargeBep20ScannerError("BSC_BLOCK_EVIDENCE_MISMATCH", "区块边界证据不一致");
+        }
+        normalizeBytes32(block.hash, "BSC_BLOCK_HASH_INVALID");
+        blocks.set(number.toString(), block);
+      }
+      return { timestamp: Number(parseHexQuantity(block.timestamp, "BSC_BLOCK_TIMESTAMP_INVALID")), hash: String(block.hash) };
+    };
+    const ranges = await planOrderScanRanges(windows, finalized, readBlock);
+    let remaining = config.maxBlocksPerRun;
+    let first: bigint | null = null, last = BigInt(0);
+    const result = { ...output, headBlock: head.toString(), finalizedBlock: finalized.toString() };
+    const retired = new Set<string>();
+    for (const range of ranges) {
+      let from = range.from;
+      while (from <= range.to && remaining > 0) {
+        const live = range.windows.filter((w) => !retired.has(w.id) && w.to >= from);
+        if (!live.length) break;
+        const needed = live.reduce((lowest, w) => minBigInt(lowest, maxBigInt(from, w.from)), range.to);
+        from = maxBigInt(from, needed);
+        const to = minBigInt(range.to, from + BigInt(Math.min(config.chunkSize, remaining)) - BigInt(1));
+        const boundary = await readBlock(to);
+        const logs = await boundedRpc<unknown>("eth_getLogs", [{ fromBlock: toHexQuantity(from), toBlock: toHexQuantity(to), address: config.tokenContract, topics: [TRANSFER_TOPIC, null, `0x${config.receiveAddress.slice(2).padStart(64, "0")}`] }]);
+        if (!Array.isArray(logs)) throw new RechargeBep20ScannerError("BSC_LOGS_INVALID", "BSC 日志格式无效");
+        const evidence = [];
+        for (const log of logs) {
+          if (log.removed) continue;
+          await readBlock(parseHexQuantity(log.blockNumber, "BSC_BLOCK_NUMBER_INVALID"));
+          const entry = await parseTransferEvidence(config, log, head, blocks);
+          if (BigInt(entry.blockNumber) < from || BigInt(entry.blockNumber) > to) {
+            throw new RechargeBep20ScannerError("BSC_LOG_RANGE_MISMATCH", "日志超出请求范围");
+          }
+          evidence.push(entry);
+        }
+        // Anchor the chunk after reading logs: abort on a boundary reorg.
+        const anchor = await boundedRpc<RpcBlock>("eth_getBlockByNumber", [toHexQuantity(to), false]);
+        if (!anchor || parseHexQuantity(anchor.number, "BSC_BLOCK_NUMBER_INVALID") !== to
+          || Number(parseHexQuantity(anchor.timestamp, "BSC_BLOCK_TIMESTAMP_INVALID")) !== boundary.timestamp
+          || anchor.hash?.toLowerCase() !== boundary.hash.toLowerCase()) {
+          throw new RechargeBep20ScannerError("BSC_BLOCK_EVIDENCE_MISMATCH", "扫描期间区块证据变化");
+        }
+        const progress = range.windows.filter((w) => !retired.has(w.id) && w.from <= to && w.to >= from).map((w) => ({
+          id: w.id, from: maxBigInt(from, w.from).toString(), to: minBigInt(to, w.to).toString(),
+          complete: w.complete && to >= w.to,
+        }));
+        if (!dryRun) {
+          const applied = await service.rpc("apply_recharge_order_scan_chunk_v1", {
+            p_token: token, p_progress: progress, p_evidence: evidence, p_chain_id: config.chainId,
+            p_contract: config.tokenContract, p_address: config.receiveAddress,
+            p_boundary_timestamp: new Date(boundary.timestamp * 1000).toISOString(),
+          });
+          if (applied.error || !Array.isArray(applied.data?.results) || !Array.isArray(applied.data?.completed)) {
+            throw new RechargeBep20ScannerError("ORDER_SCAN_CHUNK_UNCERTAIN", "扫描块事务结果不确定，停止并保留进度");
+          }
+          for (const id of applied.data.completed) {
+            if (typeof id !== "string" || !progress.some((p) => p.id === id)) throw new RechargeBep20ScannerError("ORDER_SCAN_CHUNK_UNCERTAIN", "扫描返回窗口无效");
+            retired.add(id);
+          }
+          for (const value of applied.data.results) {
+            const match = parseMatchResult(value);
+            if (match.credited) result.credited++;
+            if (match.alreadyCredited) result.alreadyCredited++;
+            if (match.result === "matched") result.matched++;
+            else if (match.result === "already_matched") result.alreadyMatched++;
+            else if (match.result === "ambiguous_order_payment") result.ambiguous++;
+            else if (match.result === "tx_conflict") result.conflicts++;
+            else if (match.result === "terminal_recharge") result.terminal++;
+            else result.unmatched++;
+            if ((match.credited || match.alreadyCredited) && match.rechargeId) {
+              await queueRechargeSuccessEmailBestEffort(match.rechargeId, "bep20_scanner").catch(() => undefined);
+            }
+          }
+        }
+        result.scannedTransfers += evidence.length;
+        const count = Number(to - from + BigInt(1));
+        result.scannedBlocks += count; remaining -= count;
+        first ??= from; last = to; from = to + BigInt(1);
+      }
+      if (!remaining) break;
+    }
+    return { ...result, fromBlock: (first ?? BigInt(0)).toString(), toBlock: last.toString(), ...(first === null ? { idleReason: "WAIT_CONFIRMATIONS" } : {}) };
   } finally {
-    clearTimeout(timeout);
+    if (token && !dryRun) {
+      // A failed release leaves a bounded lease, never clears somebody else's token.
+      try { await service.rpc("release_recharge_order_scan_v1", { p_token: token }); } catch { /* Bounded lease remains authoritative. */ }
+    }
   }
 }
 
