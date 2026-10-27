@@ -91,6 +91,7 @@ export function assertRechargeBep20ScannerAuthorized(request: Request) {
 }
 
 export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } = {}): Promise<RechargeBep20ScanResult> {
+  assertRollbackScannerContained();
   const service = getSupabaseServiceRoleClient();
   if (!service) {
     throw new RechargeBep20ScannerError("RECHARGE_SCANNER_SERVICE_UNAVAILABLE", "充值链上扫描数据库服务未配置");
@@ -251,6 +252,13 @@ export async function scanRechargeBep20Transfers(options: { dryRun?: boolean } =
     scannedBlocks: Number(runTo - initialFrom + BigInt(1)),
     ...counters,
   };
+}
+
+// Artifact-only rollback: preserve the baseline application without allowing
+// the old global scanner to query blocks, mutate progress, or credit funds.
+// This deliberately does NOT restore automatic recharge processing.
+function assertRollbackScannerContained(): void {
+  throw new RechargeBep20ScannerError("RECHARGE_SCANNER_ROLLBACK_CONTAINED", "安全回退版本禁止自动充值扫描，需人工复核后另行恢复");
 }
 
 async function loadConfig(service: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>): Promise<ScannerConfig> {
