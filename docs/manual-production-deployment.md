@@ -84,7 +84,35 @@ Fresh activation 最多用 60 秒、每 2 秒检查一次 PM2 process、online �
 
 成功 switch/rollback 输出 `PM2_SAVE=PASS`；成功自动恢复输出 `RECOVERY_PM2_SAVE=PASS` 和 `PREVIOUS_RELEASE_RESTORED=PASS`，随后原发布仍返回失败。恢复 save 失败不能报告恢复成功；最终 save 失败表示运行目标已切换但持久化未确认，需要人工复查，而不是声称没有运行 save。发布脚本内置验证不等于支付业务验收，继续完成 [只读外部验收清单](operations/production-release-post-switch-verification.md)。
 
-## Release 保留策略
+## 已校验预构建制品导入（候选工具，未经单独部署授权不得在生产运行）
+
+当已有 Linux x64 制品的源码精确等于最终发布 SHA 时，可以使用新增的
+`import-prebuilt`，代替 `prepare` 的依赖安装与构建；不得手工制作 marker。
+
+```bash
+bash scripts/production-release.sh import-prebuilt <FULL_SHA> <ROLLBACK_RELEASE> <ARCHIVE> <FROZEN_ARCHIVE_SHA256> <CI_BUILD_IDENTITY_JSON> <FROZEN_IDENTITY_SHA256> <REQUIRED_MAIN_FULL_SHA>
+```
+
+两个 SHA256 必须来自已批准且独立核验的 CI 制品清单，而不是在导入现场对未知文件自算自信任。
+`REQUIRED_MAIN_FULL_SHA` 必须等于持久仓库已拉取的 `origin/main`，且为目标源码的祖先；发现基线变化即停止。
+构建身份必须绑定相同源码、Linux x64、精确 Node 版本、兼容 glibc、安全审计与实际 smoke。
+
+导入器在创建 release 前校验归档/构建身份摘要、全部被打包源码 Git blob 与执行位、完整源码覆盖、
+路径/重复项/特殊文件/链接边界、展开容量、秘密标记及运行文件；旧源码制品不能仅改身份文件冒充新 main。
+只向目标 worktree 写入 `.next`、`node_modules`，不覆盖 Git 源码、环境或持久仓库。
+实际提取前重复校验，失败保留不完整 release 供审查，不自动删除工作树、不切 PM2。
+
+成功提取后仍使用原有完整环境副本及摘要、full-SHA/Git 清洁检查、prepare/build marker 和真实
+`127.0.0.1:3002` 的 `/api/health`、`/`、`/login` smoke。只有这些都通过才生成 ready marker。
+另保存权限 600 的导入运行文件摘要 seal；之后 build/smoke/switch 会复核该 seal，防止仅保留
+BUILD_ID 却篡改实际运行文件。原 PM2 cwd、单进程切换、回退校验和失败停止规则全部保留。
+
+PR85 的旧 scanner-only 制品基于 Production4575，未包含 main 后续已合并 UI/Bitrefill 成果。
+当发布要求包含当前 main 时，这些旧制品必须被拒绝；应先冻结合并后的精确最终 SHA，再只构建必要的新制品。
+不得将旧制品改名为新 SHA、跳过 required-main，或在生产补复制新源码与旧 `.next` 混用。
+导入工具的合成单元测试不等于目标应用的实际 Linux/3002 smoke。没有最终源码制品时，本门禁仍为 PARTIAL。
+
+## Release 保留策略（原规则继续适用）
 
 默认保留：
 
