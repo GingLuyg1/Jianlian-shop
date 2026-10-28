@@ -17,7 +17,9 @@ class ArtifactTests(unittest.TestCase):
         self.identity=self.root/'identity.json'
         self.identity.write_text(json.dumps(dict(sourceSHA=self.sha,platform='linux',arch='x64',
             node='v20.20.2',glibc='2.34',smoke='PASS',secretsProvided=False,productionDatabaseAccess=False,
-            databaseOperations=False,productionPublicConfig=True,publicConfigInlineAudit='PASS')))
+            databaseOperations=False,productionPublicConfig=True,publicConfigInlineAudit='PASS',
+            publicConfigDigests={k:hashlib.sha256(v.encode()).hexdigest() for k,v in
+                {'NEXT_PUBLIC_SUPABASE_URL':'https://fixture.invalid','NEXT_PUBLIC_SUPABASE_ANON_KEY':'fixture-public-value'}.items()})))
         self.archive=self.root/'archive.tar.gz'
         self.files={'app.js':b'// synthetic application source\n','.next/BUILD_ID':b'synthetic-id',
                     '.next/routes-manifest.json':b'{}','.next/required-server-files.json':b'{}',
@@ -123,6 +125,9 @@ class ArtifactTests(unittest.TestCase):
     def target_args(self):
         target=self.root/'target'
         self.g('worktree','add','--detach',str(target),self.sha)
+        env_file=target/'.env.production.local'
+        env_file.write_text('NEXT_PUBLIC_SUPABASE_URL=https://fixture.invalid\nNEXT_PUBLIC_SUPABASE_ANON_KEY=fixture-public-value\n')
+        os.chmod(env_file,0o600)
         a=self.pack(self.member('node_modules/.bin/next',kind=tarfile.SYMTYPE,link='../next/dist/bin/next'))
         a.target=str(target)
         return a,target
@@ -143,6 +148,15 @@ class ArtifactTests(unittest.TestCase):
         self.identity.write_text(json.dumps(v));a.identity_sha256=M.digest(self.identity)
         with self.assertRaisesRegex(M.Blocked,'NODE_VERSION_MISMATCH'):M.verify(a,True)
         self.assertFalse((target/'.next').exists())
+    @unittest.skipUnless(os.name=='posix','Linux extraction')
+    def test_extract_public_config_mismatch(self):
+        a,target=self.target_args();(target/'.env.production.local').write_text('NEXT_PUBLIC_SUPABASE_URL=https://other.invalid\nNEXT_PUBLIC_SUPABASE_ANON_KEY=fixture-public-value\n')
+        with self.assertRaisesRegex(M.Blocked,'BUILD_RUNTIME_PUBLIC_CONFIG_MISMATCH'):M.verify(a,True)
+    @unittest.skipUnless(os.name=='posix','Linux extraction')
+    def test_extract_public_env_duplicate(self):
+        a,target=self.target_args()
+        with (target/'.env.production.local').open('a') as f:f.write('NEXT_PUBLIC_SUPABASE_URL=https://fixture.invalid\n')
+        with self.assertRaisesRegex(M.Blocked,'PUBLIC_ENV_MISSING_OR_DUPLICATE'):M.verify(a,True)
     @unittest.skipUnless(os.name=='posix','Linux extraction')
     def test_extract_rejects_dirty_source(self):
         a,target=self.target_args();(target/'app.js').write_bytes(b'changed')

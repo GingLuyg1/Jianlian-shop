@@ -112,6 +112,13 @@ PR85 的旧 scanner-only 制品基于 Production4575，未包含 main 后续已�
 不得将旧制品改名为新 SHA、跳过 required-main，或在生产补复制新源码与旧 `.next` 混用。
 导入工具的合成单元测试不等于目标应用的实际 Linux/3002 smoke。没有最终源码制品时，本门禁仍为 PARTIAL。
 
+构建控制与应用源码分别冻结：构建控制提交可以只更新 CI、导入工具及其测试；编译输入仍必须是清单中精确的
+candidateSourceSHA/rollbackSourceSHA。不得把控制分支 HEAD 当成实际应用 SHA。
+生产执行窗口如需升级持久仓库中的发布工具，必须另记录工具提交/文件摘要，并保持 env source 不变；
+目标 release 的 Git HEAD、BUILD_ID、CI 身份与公开配置摘要必须对应其应用源码 SHA。
+导入时还会核对构建身份中的公开配置摘要与运行 env，阻止“env 副本一致、编译指向另一数据源”的混用。
+私有服务端密钥不得进入 CI 构建；断网 CI smoke 只使用明确的合成运行期凭据，不冒充真实业务验收。
+
 ## Release 保留策略（原规则继续适用）
 
 默认保留：

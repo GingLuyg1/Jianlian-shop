@@ -49,7 +49,7 @@
     {
       "file": "lib/recharges/bep20-recharge-scanner.ts",
       "canonicalLf": true,
-      "sha256": "2b4040797d7cbcd88fa283e1c024fedc5b2bc487285b26e249ff64bb2a07541f"
+      "sha256": "7ae5bfc1ec1af373c51a1842831a52011a10194bb856ce5141af6176467d5a1a"
     }
   ],
   "protected": [
@@ -93,5 +93,8 @@
       "canonicalLf": true,
       "sha256": "45fa34042a96048c47f4b171d4699d11e28594d11cfd83fd4e316443493f941a"
     }
-  ]
+  ],
+  "approvedMainSHA": "636b4d3ff244c2b721814f43f89e97bec7c4a0f4",
+  "candidateSourceSHA": "a8b6afbec7fe9ff815f4bf3783e204b3116c3942",
+  "rollbackSourceSHA": "a2d2612867dafe801ece97c106c3605fd6118cdc"
 }

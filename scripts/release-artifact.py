@@ -51,6 +51,9 @@ def verify(args, extract=False):
          identity.get('productionDatabaseAccess') is False and identity.get('databaseOperations') is False and
          identity.get('productionPublicConfig') is True and identity.get('publicConfigInlineAudit')=='PASS',
          'BUILD_SECURITY_ATTESTATION_MISSING')
+    public=identity.get('publicConfigDigests',{})
+    need(set(public)=={'NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_ANON_KEY'} and
+         all(re.fullmatch('[0-9a-f]{64}',v or '') for v in public.values()),'BUILD_PUBLIC_CONFIG_DIGESTS_REQUIRED')
     if extract:
         need(sys.platform=='linux' and platform.machine() in ('x86_64','amd64'),'LINUX_X64_REQUIRED')
         need(subprocess.check_output(['node','--version']).decode().strip()==identity.get('node'),'NODE_VERSION_MISMATCH')
@@ -60,6 +63,15 @@ def verify(args, extract=False):
         need(git(args.target,'rev-parse','HEAD').decode().strip()==args.sha,'TARGET_SHA_MISMATCH')
         need(not git(args.target,'status','--porcelain','--untracked-files=no').strip(),'TARGET_TRACKED_DIRTY')
         need(not any((Path(args.target)/x).exists() for x in ('.next','node_modules')),'RUNTIME_TARGET_EXISTS')
+        env_file=Path(args.target)/'.env.production.local'
+        need(env_file.is_file() and not env_file.is_symlink() and stat.S_IMODE(env_file.stat().st_mode)==0o600,'RUNTIME_ENV_INVALID')
+        lines=env_file.read_text(encoding='utf-8').splitlines()
+        for key,expected_digest in public.items():
+            values=[m.group(1).strip() for line in lines if (m:=re.fullmatch(r'\s*'+key+r'\s*=(.*)',line))]
+            need(len(values)==1,'PUBLIC_ENV_MISSING_OR_DUPLICATE')
+            value=values[0]
+            if len(value)>=2 and value[0]==value[-1] and value[0] in ('"',"'"):value=value[1:-1]
+            need(hashlib.sha256(value.encode()).hexdigest()==expected_digest,'BUILD_RUNTIME_PUBLIC_CONFIG_MISMATCH')
     expected=tree(args.repo,args.sha); seen=set(); source=set(); members=[]; total=0
     need(not Path(args.archive).is_symlink() and os.path.getsize(args.archive)<=512*1024**2,'ARCHIVE_LIMIT')
     with open(args.archive,'rb') as stream:

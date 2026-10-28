@@ -5,6 +5,10 @@ on:
     paths:
       - '.github/workflows/usdt-scanner-linux-artifacts.yml'
       - 'scripts/ci/usdt-scanner-*'
+      - 'scripts/ci/release-*'
+      - 'scripts/release-artifact.py'
+      - 'scripts/production-release.sh'
+      - 'tests/regression/release-artifact-import.test.py'
       - 'lib/recharges/bep20-*'
       - 'ops/recharge-order-scan-v1.sql'
       - '.gitattributes'
@@ -17,29 +21,53 @@ jobs:
   release-build:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/usdt-scanner-linux-artifacts-v1'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        kind: [candidate, rollback]
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Build and smoke in isolated Rocky Linux 9
+      - name: Build exact final candidate
         shell: bash
         env:
-          ARTIFACT_KIND: ${{ matrix.kind }}
+          ARTIFACT_KIND: candidate
           APPROVED_HEAD: ${{ github.event.pull_request.head.sha }}
         run: bash scripts/ci/usdt-scanner-linux-build.sh
+      - name: Build exact final safe-stop source
+        shell: bash
+        env:
+          ARTIFACT_KIND: rollback
+          APPROVED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/ci/usdt-scanner-linux-build.sh
+      - name: Verify real PM2 full-SHA import and port 3002 offline
+        shell: bash
+        env:
+          APPROVED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/ci/release-import-acceptance.sh
       - name: Save immutable build, checksums and evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: usdt-scanner-${{ matrix.kind }}-${{ github.event.pull_request.head.sha }}
-          path: ${{ runner.temp }}/usdt-scanner-${{ matrix.kind }}/out/
+          name: usdt-final-candidate-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/usdt-scanner-candidate/out/
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
+      - name: Preserve safe-stop artifact and identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: usdt-final-rollback-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/usdt-scanner-rollback/out/
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 0
+      - name: Preserve import acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: usdt-final-import-evidence-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/usdt-release-import-evidence/
+          if-no-files-found: warn
+          retention-days: 7
