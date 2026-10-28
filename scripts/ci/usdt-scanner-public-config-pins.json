@@ -1,0 +1,11 @@
+{
+  "productionBaseSHA": "4575d802d653e4dca726427bce826aa68c93d9e2",
+  "projectRef": "qvbovrvybirscaurwuov",
+  "publicOrigin": "https://jianlian.shop",
+  "keyType": "publishable",
+  "sha256": {
+    "NEXT_PUBLIC_SUPABASE_URL": "a89531b231508b457966cc5dff1c0bc29c924e9df6742b111ffef83e6d9f1787",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "8040b99031fed5ad886d0cc34d52802fdb4641f1cebce3e6330a3abb851482bf"
+  },
+  "derivedBuildFields": ["NEXT_PUBLIC_APP_VERSION", "NEXT_PUBLIC_BUILD_TIME", "NEXT_PUBLIC_COMMIT_SHA", "NEXT_PUBLIC_GIT_BRANCH"]
+}

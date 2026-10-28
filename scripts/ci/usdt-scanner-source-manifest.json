@@ -1,0 +1,97 @@
+{
+  "productionBase": "4575d802d653e4dca726427bce826aa68c93d9e2",
+  "rollbackCommit": "d9a44fadaecc07bcb4e67e1f1b8e4271caac8bd7",
+  "candidate": [
+    {
+      "file": "lib/recharges/bep20-recharge-scanner.ts",
+      "canonicalLf": true,
+      "sha256": "5e56c731382750dcad9b56ed0ba62243f5ffb80848b3aaa1bf7ec071ba3badc1",
+      "frozenRawSHA256": "d0578f712edf0beca939b6de2734b0f5d4db5f2dbae113477e9a34a56950e15e"
+    },
+    {
+      "file": "lib/recharges/bep20-order-scan-planner.ts",
+      "canonicalLf": true,
+      "sha256": "e0289ba7c0040a191faf4f6b2cef6a3b91dffac3d01b4cd8c2be657a6d72d407",
+      "frozenRawSHA256": "e0289ba7c0040a191faf4f6b2cef6a3b91dffac3d01b4cd8c2be657a6d72d407"
+    },
+    {
+      "file": "lib/recharges/bep20-scanner-rpc.ts",
+      "canonicalLf": true,
+      "sha256": "3d2e356cf8f8d4dc6bba7764e8b422f8dff63ad18dbfd3264b52b5137a821dc0",
+      "frozenRawSHA256": "3d2e356cf8f8d4dc6bba7764e8b422f8dff63ad18dbfd3264b52b5137a821dc0"
+    },
+    {
+      "file": "ops/recharge-order-scan-v1.sql",
+      "canonicalLf": false,
+      "sha256": "b882dfb615b24dd20cf46db93e070c2c472284e3b3151e5575f428ac67d5be9e",
+      "frozenRawSHA256": "b882dfb615b24dd20cf46db93e070c2c472284e3b3151e5575f428ac67d5be9e"
+    },
+    {
+      "file": "tests/integration/recharge-order-driven-pg17.mjs",
+      "canonicalLf": true,
+      "sha256": "b299a1b2301ea3d3ce61baf8efc3f9b6e61772b744d5c93010b368ac4f738209",
+      "frozenRawSHA256": "b299a1b2301ea3d3ce61baf8efc3f9b6e61772b744d5c93010b368ac4f738209"
+    },
+    {
+      "file": "tests/unit/bep20-scanner-blockmachine-auth.test.mjs",
+      "canonicalLf": true,
+      "sha256": "64b95eb8b712a19b9d308386d4d6a8e8cba67073b0561e0e13c550e64da4ee76",
+      "frozenRawSHA256": "64b95eb8b712a19b9d308386d4d6a8e8cba67073b0561e0e13c550e64da4ee76"
+    },
+    {
+      "file": "tests/unit/bep20-order-scan-planner.test.mjs",
+      "canonicalLf": true,
+      "sha256": "8ec34bfdd7ccdb8775db8e39d891510209efad0bdf19e84095af56015a41b5a8",
+      "frozenRawSHA256": "8ec34bfdd7ccdb8775db8e39d891510209efad0bdf19e84095af56015a41b5a8"
+    }
+  ],
+  "rollback": [
+    {
+      "file": "lib/recharges/bep20-recharge-scanner.ts",
+      "canonicalLf": true,
+      "sha256": "2b4040797d7cbcd88fa283e1c024fedc5b2bc487285b26e249ff64bb2a07541f"
+    }
+  ],
+  "protected": [
+    {
+      "file": "package.json",
+      "canonicalLf": true,
+      "sha256": "092b854e2d3cfc117fa00f74f7a0bfd5e4fea27382dc443e3abb2f1784f59afc"
+    },
+    {
+      "file": "package-lock.json",
+      "canonicalLf": true,
+      "sha256": "eb2b3ccb1141468376124bb8721981a8f5393f4f99afbb94cc8b168004891455"
+    },
+    {
+      "file": "app/api/recharges/route.ts",
+      "canonicalLf": true,
+      "sha256": "e2cc0955fdd2781bf556373ddd2c196a4c6652a062cc5becf3788fe3a5d564bc"
+    },
+    {
+      "file": "app/api/internal/recharges/bep20/scan/route.ts",
+      "canonicalLf": true,
+      "sha256": "a7f94dd6445c3e88812008f32fda2fa9903d519df3b95a0ef6e1486cc109de11"
+    },
+    {
+      "file": "lib/payments/bep20-chain-service.ts",
+      "canonicalLf": true,
+      "sha256": "2d36f5a6ec7aacb93fa7db67f553277a03f5443f4d2eeab3b6b8aae6584618dd"
+    },
+    {
+      "file": "lib/payments/payment-expiry.mjs",
+      "canonicalLf": true,
+      "sha256": "14dffab0209c4925ba105fceafddace2fcb143da10c3469c7a92e3ab472c8170"
+    },
+    {
+      "file": "supabase/migrations/20260814183000_account_recharge_bep20_auto_match_v2.sql",
+      "canonicalLf": true,
+      "sha256": "e53d6b1c134219568bad46a1814cb7a57493ac7a43374921f48f0f3dd163a86a"
+    },
+    {
+      "file": "supabase/migrations/20260815120000_account_recharge_bep20_auto_credit_v3.sql",
+      "canonicalLf": true,
+      "sha256": "45fa34042a96048c47f4b171d4699d11e28594d11cfd83fd4e316443493f941a"
+    }
+  ]
+}

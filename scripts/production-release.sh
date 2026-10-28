@@ -41,6 +41,7 @@ usage() {
 Usage:
   production-release.sh preflight <full_sha> <rollback_release_path>
   production-release.sh prepare   <full_sha> <rollback_release_path>
+  production-release.sh import-prebuilt <full_sha> <rollback_release_path> <archive> <archive_sha256> <build_identity> <identity_sha256> <required_main_sha>
   production-release.sh retry-build <full_sha>
   production-release.sh smoke     <full_sha>
   production-release.sh switch    <full_sha>
@@ -326,6 +327,38 @@ verify_build_marker() {
   expected_build="$(sha256sum "$target/.next/BUILD_ID" | awk '{print $1}')"
   grep -Fxq "SHA=$sha" "$marker" || die "build marker SHA mismatch"
   grep -Fxq "BUILD_ID_SHA256=$expected_build" "$marker" || die "build output changed after controlled build"
+  if grep -Fxq 'ORIGIN=PREBUILT_IMPORT' "$marker"; then
+    python3 "$REPO/scripts/release-artifact.py" check-seal --sha "$sha" --target "$target" \
+      --seal "$RELEASE_ROOT/.jianlian-shop-$sha.imported.json" || die "imported runtime integrity changed"
+  fi
+}
+
+import_prebuilt() {
+  local sha="$1" rollback="$2" archive="$3" archive_hash="$4" identity="$5" identity_hash="$6" required_main="$7" target
+  command -v python3 >/dev/null 2>&1 || die "python3 is required for verified prebuilt import"
+  [[ "$archive_hash" =~ ^[0-9a-fA-F]{64}$ && "$identity_hash" =~ ^[0-9a-fA-F]{64}$ ]] || die "frozen artifact and identity hashes are required"
+  required_main="$(full_sha "$required_main")"
+  [[ "$(git -C "$REPO" rev-parse refs/remotes/origin/main)" == "$required_main" ]] || die "required main differs from the fetched remote main baseline"
+  preflight "$sha" "$rollback"
+  python3 "$REPO/scripts/release-artifact.py" verify --repo "$REPO" --sha "$sha" --required-main "$required_main" \
+    --archive "$archive" --archive-sha256 "$archive_hash" --identity "$identity" --identity-sha256 "$identity_hash" || die "prebuilt verification failed before creating release"
+  ensure_env_source
+  target="$(release_path_for_sha "$sha")"
+  git -C "$REPO" worktree add --detach "$target" "$sha"
+  install -m 600 -- "$ENV_SOURCE" "$target/.env.production.local"
+  python3 "$REPO/scripts/release-artifact.py" extract --repo "$REPO" --sha "$sha" --required-main "$required_main" \
+    --archive "$archive" --archive-sha256 "$archive_hash" --identity "$identity" --identity-sha256 "$identity_hash" \
+    --target "$target" || die "prebuilt import failed; incomplete release retained, PM2 unchanged"
+  verify_runtime_release "$target"
+  assert_release_env_matches_source "$target/.env.production.local"
+  python3 "$REPO/scripts/release-artifact.py" seal --sha "$sha" --target "$target" \
+    --seal "$RELEASE_ROOT/.jianlian-shop-$sha.imported.json" || die "cannot seal imported runtime"
+  write_prepare_marker "$sha" "$target"
+  write_build_marker "$sha" "$target"
+  printf 'ORIGIN=PREBUILT_IMPORT\n' >>"$(build_marker_path "$sha")"
+  run_smoke "$sha"
+  verify_build_marker "$sha" "$target"
+  status PREBUILT_IMPORT PASS
 }
 
 write_ready_marker() {
@@ -393,7 +426,7 @@ run_smoke() {
   trap cleanup_smoke EXIT
   trap 'cleanup_smoke; exit 130' INT
   trap 'cleanup_smoke; exit 143' TERM
-  (cd "$target" && exec ./node_modules/.bin/next start -p "$SMOKE_PORT" >"$RELEASE_ROOT/.jianlian-smoke-$sha.log" 2>&1) &
+  (cd "$target" && exec ./node_modules/.bin/next start -H 127.0.0.1 -p "$SMOKE_PORT" >"$RELEASE_ROOT/.jianlian-smoke-$sha.log" 2>&1) &
   pid=$!
   for _ in $(seq 1 30); do
     kill -0 "$pid" 2>/dev/null || die "smoke process exited before health checks"
@@ -561,6 +594,9 @@ command="${1:-}"; shift || true
 case "$command" in
   preflight) sha="$(full_sha "${1:-}")"; preflight "$sha" "${2:-}" ;;
   prepare) sha="$(full_sha "${1:-}")"; prepare "$sha" "${2:-}" ;;
+  import-prebuilt)
+    [[ $# == 7 ]] || die "import-prebuilt requires seven explicit arguments"
+    sha="$(full_sha "$1")"; import_prebuilt "$sha" "$2" "$3" "$4" "$5" "$6" "$7" ;;
   retry-build) sha="$(full_sha "${1:-}")"; retry_build "$sha" ;;
   smoke) sha="$(full_sha "${1:-}")"; run_smoke "$sha" ;;
   switch) sha="$(full_sha "${1:-}")"; switch_release "$sha" ;;
