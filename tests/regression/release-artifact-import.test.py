@@ -68,6 +68,13 @@ class ArtifactTests(unittest.TestCase):
     def test_safe_dependency_symlink(self):
         a=self.pack(self.member('node_modules/.bin/next',kind=tarfile.SYMTYPE,link='../next/dist/bin/next'))
         self.assertGreater(M.verify(a)['members'],5)
+    def test_composed_symlink_escape(self):
+        def add(t):
+            self.member('node_modules/foo/dir/link',kind=tarfile.SYMTYPE,link='../../q')(t)
+            self.member('node_modules/a',kind=tarfile.SYMTYPE,link='foo/dir/link/../../outside')(t)
+        self.reject('ESCAPING_LINK',add)
+    def test_transient_escape_cannot_return_inside(self):
+        self.reject('ESCAPING_LINK',self.member('node_modules/link',kind=tarfile.SYMTYPE,link='../outside/../node_modules/next'))
     def test_environment_file(self): self.reject('FORBIDDEN_MEMBER',self.member('.env.production.local'))
     def test_npm_credentials(self): self.reject('FORBIDDEN_MEMBER',self.member('node_modules/.npmrc'))
     def test_privileged_jwt(self):

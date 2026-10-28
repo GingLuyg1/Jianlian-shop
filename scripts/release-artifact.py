@@ -98,6 +98,22 @@ def verify(args, extract=False):
             links={p for m,p,_ in members if m.issym()}
             need(not any('/'.join(p.split('/')[:i]) in links for p in seen
                          for i in range(1,len(p.split('/')))),'LINK_PARENT')
+            targets={p:m.linkname for m,p,_ in members if m.issym()}
+            for link,target in targets.items():
+                # Resolve intermediate symlinks BEFORE '..', as the kernel does.
+                # Lexical normalization alone can miss a composed escape.
+                todo=(posixpath.dirname(link)+'/'+target).split('/')
+                resolved=[]; followed=0
+                while todo:
+                    part=todo.pop(0)
+                    if part in ('','.'):continue
+                    if part=='..':
+                        need(len(resolved)>1 and resolved[0]=='node_modules','ESCAPING_LINK');resolved.pop();continue
+                    resolved.append(part); current='/'.join(resolved)
+                    if current in targets:
+                        followed+=1;need(followed<=40,'CYCLIC_LINK')
+                        resolved.pop();todo=targets[current].split('/')+todo
+                need('/'.join(resolved).startswith('node_modules/'),'ESCAPING_LINK')
             need(os.fstat(stream.fileno()).st_mtime_ns==before.st_mtime_ns,'ARCHIVE_CHANGED')
             if extract:
                 root=Path(args.target)
