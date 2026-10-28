@@ -14,6 +14,7 @@ on:
       - '.gitattributes'
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: scanner-artifacts-${{ github.event.pull_request.number }}
   cancel-in-progress: false
@@ -28,18 +29,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Build exact final candidate
+      - name: Recover exact final app artifacts without rebuilding
         shell: bash
         env:
-          ARTIFACT_KIND: candidate
-          APPROVED_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: bash scripts/ci/usdt-scanner-linux-build.sh
-      - name: Build exact final safe-stop source
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/release-reuse-artifacts.py
+      - name: Prepare isolated import tools only
         shell: bash
         env:
-          ARTIFACT_KIND: rollback
           APPROVED_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: bash scripts/ci/usdt-scanner-linux-build.sh
+        run: docker build --pull=false -f scripts/ci/usdt-scanner-builder.Dockerfile -t "jianlian-scanner-build:$APPROVED_HEAD" scripts/ci
       - name: Verify real PM2 full-SHA import and port 3002 offline
         shell: bash
         env:

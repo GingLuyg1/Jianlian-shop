@@ -11,7 +11,7 @@ rollback=/www/releases/jianlian-shop-$b
 [[ $(node --version) == v20.20.2 ]]
 [[ $(awk 'NR>1 && $2=="00000000" {n++} END {print n+0}' /proc/net/route) == 0 ]]
 mkdir /www/releases
-git -c safe.directory=/control clone --quiet --no-hardlinks --no-checkout /control "$repo"
+git -c safe.directory=/control -c safe.directory=/control/.git clone --quiet --no-hardlinks --no-checkout /control "$repo"
 git -C "$repo" checkout --quiet --detach "$CONTROL_SHA"
 git -C "$repo" update-ref refs/remotes/origin/main "$main"
 git -C "$repo" merge-base --is-ancestor "$main" "$a"

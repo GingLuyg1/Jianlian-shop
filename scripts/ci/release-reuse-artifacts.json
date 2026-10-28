@@ -1,0 +1,24 @@
+{
+  "runId": 40727260320,
+  "controlSHA": "996ecba74f097780bcb1f26441fa895f444b7069",
+  "candidate": {
+    "artifactId": 12834561251,
+    "sourceSHA": "a8b6afbec7fe9ff815f4bf3783e204b3116c3942",
+    "zipBytes": 153667911,
+    "zipSHA256": "aaf856a272d97b22117358eb1124495fd5774dfee7ba406736343f2333b8b6f9",
+    "files": {
+      "usdt-scanner-candidate-a8b6afbec7fe9ff815f4bf3783e204b3116c3942-linux-x64.tar.gz": "517003748df929c4d27a5cd1227f648ee0f53ae50b31341fb1926bce93923546",
+      "build-identity.json": "2d9ab5c32d8d4f2c1f5f026698694856a032cf17a3b3ef6bc952f3c4f36ad021"
+    }
+  },
+  "rollback": {
+    "artifactId": 12834256169,
+    "sourceSHA": "a2d2612867dafe801ece97c106c3605fd6118cdc",
+    "zipBytes": 153619568,
+    "zipSHA256": "fb31af4dc248ec0e09d62dcb4e9017dedada08f04a2764ce8de38c95a877c598",
+    "files": {
+      "usdt-scanner-rollback-a2d2612867dafe801ece97c106c3605fd6118cdc-linux-x64.tar.gz": "c315941b0aa25f6438b12c89759cd1eb006f2e3fe59343b14dccf3fe02f38b01",
+      "build-identity.json": "5d3019540d18d12a7df32c989f2377de37986544964ffc4f15ef8a629b864df1"
+    }
+  }
+}
