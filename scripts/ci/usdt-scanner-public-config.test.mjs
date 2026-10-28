@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sha,validateConfig,extractConfig,publicScriptURLs,diagnosePublicAssets,diagnoseScriptDiscovery} from './usdt-scanner-public-config.mjs';
+import {sha,validateConfig,extractConfig,publicScriptURLs,diagnosePublicAssets,diagnoseScriptDiscovery,validatePublicAssets,fetchVerifiedPublicConfig} from './usdt-scanner-public-config.mjs';
 const c={NEXT_PUBLIC_SUPABASE_URL:'https://testref.supabase.co',NEXT_PUBLIC_SUPABASE_ANON_KEY:'sb_publishable_synthetic_public_value_only'};
 const pins={projectRef:'testref',sha256:Object.fromEntries(Object.entries(c).map(([n,v])=>[n,sha(v)]))};
 test('only exact public URL and publishable key digest accepted',()=>assert.deepEqual(validateConfig(c,pins),c));
@@ -63,4 +63,46 @@ test('Flight paths cannot normalize raw or encoded traversal into an allowed res
 test('Flight chunk discovery retains the total 40-resource hard limit',()=>{
   const data=JSON.stringify(Array.from({length:41},(_,i)=>'static/chunks/'+i+'.js'));
   assert.throws(()=>publicScriptURLs('<script>self.__next_f.push('+JSON.stringify([1,data])+')</script>','https://safe.invalid'),/SCRIPT_SET_REJECTED/);
+});
+
+// Unit fixtures only. Real build --fetch always uses the committed real asset
+// digest and the unchanged Production public-config pins, not these test values.
+const assetBytes=Buffer.from(JSON.stringify(c));
+const assetPins={...pins,productionBaseSHA:'1'.repeat(40),publicOrigin:'https://safe.invalid'};
+const manifest={productionBaseSHA:assetPins.productionBaseSHA,assets:[{path:'/_next/static/chunks/approved.js',sha256:sha(assetBytes)}]};
+test('exact file and original config pins authorize fetch without any login-page request',async()=>{
+  const requests=[];
+  const r=await fetchVerifiedPublicConfig(manifest,assetPins,async(u,max)=>{requests.push(u);assert.equal(max,8*1024*1024);return assetBytes;});
+  assert.deepEqual(r.config,c);assert.deepEqual(requests,['https://safe.invalid/_next/static/chunks/approved.js']);
+  assert.equal(r.provenance.assets[0].fileDigestMatch,true);assert.equal(r.provenance.loginPageRequired,false);
+  assert.equal(JSON.stringify(r.provenance).includes(c.NEXT_PUBLIC_SUPABASE_ANON_KEY),false);
+});
+test('changed file bytes fail before configuration extraction even if they contain approved values',async()=>{
+  await assert.rejects(fetchVerifiedPublicConfig(manifest,assetPins,async()=>Buffer.concat([assetBytes,Buffer.from(' ')])),/ASSET_DIGEST_MISMATCH/);
+});
+test('file hash cannot override a different project or public-key fingerprint',async()=>{
+  const bad=Buffer.from(JSON.stringify({...c,NEXT_PUBLIC_SUPABASE_ANON_KEY:c.NEXT_PUBLIC_SUPABASE_ANON_KEY+'x'}));
+  await assert.rejects(fetchVerifiedPublicConfig({...manifest,assets:[{...manifest.assets[0],sha256:sha(bad)}]},assetPins,async()=>bad),/PINNED_PUBLIC_KEY_NOT_FOUND/);
+  const wrong=Buffer.from(JSON.stringify({...c,NEXT_PUBLIC_SUPABASE_URL:'https://wrong.supabase.co'}));
+  await assert.rejects(fetchVerifiedPublicConfig({...manifest,assets:[{...manifest.assets[0],sha256:sha(wrong)}]},assetPins,async()=>wrong),/PINNED_PUBLIC_URL_NOT_FOUND/);
+});
+test('manifest rejects other releases, secret fields, invalid digests and duplicate paths',()=>{
+  for(const m of [{...manifest,productionBaseSHA:'2'.repeat(40)},{...manifest,secret:'forbidden'},
+    {...manifest,assets:[{...manifest.assets[0],sha256:'abc'}]},
+    {...manifest,assets:[manifest.assets[0],manifest.assets[0]]}])assert.throws(()=>validatePublicAssets(m,assetPins),/MANIFEST_REJECTED/);
+});
+test('manifest permits only canonical same-origin static JS paths without normalization',()=>{
+  for(const p of ['https://evil.invalid/_next/static/chunks/a.js','//evil.invalid/a.js','/api/private.js',
+    '/_next/static/chunks/a.js?token=x','/_next/static/chunks/a.js#x','/_next/static/chunks/../a.js',
+    '/_next/static/chunks/%2e%2e/a.js','/_next/static/chunks//a.js'])
+    assert.throws(()=>validatePublicAssets({...manifest,assets:[{...manifest.assets[0],path:p}]},assetPins),/MANIFEST_REJECTED/);
+});
+test('invalid manifest performs no request and read failures have no fallback or retry',async()=>{
+  let calls=0;const read=async()=>{calls++;throw Error('PUBLIC_ASSET_TIMEOUT');};
+  await assert.rejects(fetchVerifiedPublicConfig({...manifest,assets:[]},assetPins,read),/MANIFEST_REJECTED/);assert.equal(calls,0);
+  await assert.rejects(fetchVerifiedPublicConfig(manifest,assetPins,read),/PUBLIC_ASSET_TIMEOUT/);assert.equal(calls,1);
+});
+test('manifest and returned-byte size retain hard resource limits',async()=>{
+  assert.throws(()=>validatePublicAssets({...manifest,assets:Array.from({length:10},(_,i)=>({...manifest.assets[0],path:'/_next/static/chunks/'+i+'.js'}))},assetPins),/MANIFEST_REJECTED/);
+  await assert.rejects(fetchVerifiedPublicConfig(manifest,assetPins,async()=>Buffer.alloc(8*1024*1024+1)),/ASSET_SIZE_LIMIT/);
 });

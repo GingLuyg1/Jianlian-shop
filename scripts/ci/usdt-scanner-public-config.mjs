@@ -9,6 +9,7 @@ import { setDefaultResultOrder } from 'node:dns';
 setDefaultResultOrder('ipv4first');
 export const sha = v => crypto.createHash('sha256').update(v).digest('hex');
 const pins = JSON.parse(fs.readFileSync(new URL('./usdt-scanner-public-config-pins.json',import.meta.url)));
+const publicAssets = JSON.parse(fs.readFileSync(new URL('./usdt-scanner-public-assets.json',import.meta.url)));
 const publicNames = [...Object.keys(pins.sha256),...pins.derivedBuildFields].sort();
 const fail = code => { throw Error(code); };
 export function validateConfig(c, expected=pins) {
@@ -72,13 +73,44 @@ export function diagnosePublicAssets(assets, expected=pins) {
       legacyJWTRoleCounts:roles,secretKeyMarkerPresent:/sb_secret_[A-Za-z0-9_-]+/.test(text)};
   });
 }
-async function boundedText(url, maximum) {
-  let r;try{r=await fetch(url,{redirect:'error',credentials:'omit',headers:{'user-agent':'Jianlian-Public-Build-Config/1'},signal:AbortSignal.timeout(10000)});}catch(e){fail(e.name==='TimeoutError'||e.cause?.code==='UND_ERR_CONNECT_TIMEOUT'?'PUBLIC_ASSET_TIMEOUT':'PUBLIC_ASSET_NETWORK_FAILURE');}
+export function validatePublicAssets(manifest,expected=pins) {
+  if(!manifest||Object.keys(manifest).sort().join('|')!=='assets|productionBaseSHA'
+    ||manifest.productionBaseSHA!==expected.productionBaseSHA||!Array.isArray(manifest.assets)
+    ||manifest.assets.length<1||manifest.assets.length>9)fail('PUBLIC_ASSET_MANIFEST_REJECTED');
+  const seen=new Set();
+  for(const entry of manifest.assets){
+    if(!entry||Object.keys(entry).sort().join('|')!=='path|sha256'
+      ||typeof entry.path!=='string'||!/^\/_next\/static\/chunks\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.js$/.test(entry.path)
+      ||typeof entry.sha256!=='string'||!/^[a-f0-9]{64}$/.test(entry.sha256)||seen.has(entry.path))fail('PUBLIC_ASSET_MANIFEST_REJECTED');
+    seen.add(entry.path);
+  }
+  return manifest.assets;
+}
+export async function fetchVerifiedPublicConfig(manifest=publicAssets,expected=pins,read=boundedBytes) {
+  const entries=validatePublicAssets(manifest,expected),texts=[],assets=[];let bytes=0;
+  for(const entry of entries){
+    const u=new URL(entry.path,expected.publicOrigin);
+    if(u.origin!==expected.publicOrigin||u.username||u.password||u.search||u.hash)fail('PUBLIC_ASSET_ORIGIN_REJECTED');
+    const b=await read(u.href,8*1024*1024);
+    if(!Buffer.isBuffer(b)||b.length>8*1024*1024)fail('PUBLIC_ASSET_SIZE_LIMIT');
+    bytes+=b.length;if(bytes>48*1024*1024)fail('PUBLIC_FETCH_TOTAL_LIMIT');
+    if(sha(b)!==entry.sha256)fail('PUBLIC_ASSET_DIGEST_MISMATCH');
+    texts.push(b.toString('utf8'));assets.push({path:entry.path,sha256:sha(b),bytes:b.length,fileDigestMatch:true});
+  }
+  // Whole-file identity alone is insufficient: original project/type/value pins
+  // still independently authorize the public configuration used for compilation.
+  const config=extractConfig(texts,expected);
+  return {config,provenance:{method:'EXACT_VNC_PUBLIC_STATIC_FILE_AND_CONFIG_DIGESTS',origin:expected.publicOrigin,
+    productionBaseSHA:expected.productionBaseSHA,assets,bytes,pinnedDigests:expected.sha256,keyType:'publishable',
+    productionSecretsRead:false,productionDatabaseAccess:false,loginPageRequired:false}};
+}
+async function boundedBytes(url, maximum) {
+  let r;try{r=await fetch(url,{redirect:'error',credentials:'omit',headers:{'user-agent':'Jianlian-Public-Build-Config/1','accept-encoding':'identity'},signal:AbortSignal.timeout(10000)});}catch(e){fail(e.name==='TimeoutError'||e.cause?.code==='UND_ERR_CONNECT_TIMEOUT'?'PUBLIC_ASSET_TIMEOUT':'PUBLIC_ASSET_NETWORK_FAILURE');}
   if(!r.ok||Number(r.headers.get('content-length')||0)>maximum)fail('PUBLIC_ASSET_READ_FAILED');
   if(!r.body)fail('PUBLIC_ASSET_BODY_MISSING');
   const reader=r.body.getReader();let count=0;const parts=[];
   for(;;){const {done,value}=await reader.read();if(done)break;count+=value.length;if(count>maximum){await reader.cancel();fail('PUBLIC_ASSET_SIZE_LIMIT');}parts.push(Buffer.from(value));}
-  return Buffer.concat(parts).toString('utf8');
+  return Buffer.concat(parts);
 }
 export function auditPublicReferences(root) {
   const found=new Set();
@@ -102,11 +134,9 @@ function auditBuild(root,c){
 async function main(){
  const [mode,root]=process.argv.slice(2);if(!root||!fs.statSync(root).isDirectory()||fs.lstatSync(root).isSymbolicLink())fail('WORK_ROOT_REJECTED');
  if(mode==='--fetch'){
-  const html=await boundedText(pins.publicOrigin+'/login',1024*1024),urls=publicScriptURLs(html),texts=[],assets=[{asset:'/login',text:html}];let bytes=0;
-  for(const url of urls){const t=await boundedText(url,8*1024*1024);bytes+=Buffer.byteLength(t);if(bytes>48*1024*1024)fail('PUBLIC_FETCH_TOTAL_LIMIT');texts.push(t);assets.push({asset:new URL(url).pathname,text:t});}
-  writeNew(path.join(root,'out','public-config-diagnostic.json'),{origin:pins.publicOrigin,scriptDiscovery:diagnoseScriptDiscovery(html),assets:diagnosePublicAssets(assets),rawValuesRecorded:false});
-  const c=extractConfig(texts);writeNew(path.join(root,'public-config.json'),c);
-  writeNew(path.join(root,'out','public-config-provenance.json'),{method:'UNAUTHENTICATED_PUBLIC_SITE_JS_MATCHED_TO_SSH_DIGESTS',origin:pins.publicOrigin,assetCount:urls.length,bytes,pinnedDigests:pins.sha256,keyType:pins.keyType,productionSecretsRead:false,productionDatabaseAccess:false});
+  const {config,provenance}=await fetchVerifiedPublicConfig();
+  writeNew(path.join(root,'public-config.json'),config);
+  writeNew(path.join(root,'out','public-config-provenance.json'),provenance);
  }else if(mode==='--build'){
   const c=configAt(root);auditPublicReferences(path.join(root,'source'));
   for(const n of Object.keys(process.env))if(n.startsWith('NEXT_PUBLIC_')||/^(SUPABASE.*(?:KEY|SECRET)|.*(?:API_KEY|SECRET|PASSWORD|TOKEN))$/.test(n))fail('UNEXPECTED_BUILD_ENVIRONMENT');
