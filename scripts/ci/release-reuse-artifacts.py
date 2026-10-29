@@ -53,6 +53,13 @@ def main():
         os.chmod(work / 'public-config.json', 0o600)
         (out / 'reuse-proof.json').write_text(json.dumps(dict(kind=kind, runId=pins['runId'],
             sourceSHA=pin['sourceSHA'], zipSHA256=pin['zipSHA256'], appRebuilt=False, pinVerified=True), indent=2))
+        # cap-drop=ALL means container root cannot read runner-owned 0600 files.
+        # These exact verified artifacts and two public values contain NO server
+        # secrets. Do not grant a DAC capability or relax runtime env-file 0600.
+        for path in (work, out): os.chmod(path, 0o755)
+        for filename in (*pin['files'], 'SHA256SUMS', 'IDENTITY_SHA256SUMS'):
+            os.chmod(out / filename, 0o644)
+        os.chmod(work / 'public-config.json', 0o644)
     print('EXACT_EXISTING_APP_ARTIFACTS_RECOVERED')
 if __name__ == '__main__':
     try: main()
