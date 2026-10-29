@@ -20,5 +20,6 @@
       "usdt-scanner-rollback-a2d2612867dafe801ece97c106c3605fd6118cdc-linux-x64.tar.gz": "c315941b0aa25f6438b12c89759cd1eb006f2e3fe59343b14dccf3fe02f38b01",
       "build-identity.json": "5d3019540d18d12a7df32c989f2377de37986544964ffc4f15ef8a629b864df1"
     }
-  }
+  },
+  "generatedTypeSHA256": "9269d492817e359123ac64c8205e5d05dab63d71a3a7a229e68b5d9a0e8150bf"
 }

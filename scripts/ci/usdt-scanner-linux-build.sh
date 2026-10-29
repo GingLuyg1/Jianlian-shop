@@ -58,7 +58,7 @@ if [[ $kind == candidate ]]; then
     ArtifactTests.test_extract_public_env_duplicate >"$work/out/posix-release-import-tests.log" 2>&1
 fi
 archive="$work/out/usdt-scanner-$kind-$source_sha-linux-x64.tar.gz"
-tar -czf "$archive" -C "$work/source" --exclude='./.git' --exclude='./.github' --exclude='.env' --exclude='.env.*' --exclude='.npmrc' --exclude='./.next/cache' --exclude='./scripts/ci' --exclude='./tests' .
+tar -czf "$archive" -C "$work/source" --exclude='./.git' --exclude='./.github' --exclude='.env' --exclude='.env.*' --exclude='.npmrc' --exclude='./.next/cache' --exclude='./next-env.d.ts' --exclude='./scripts/ci' --exclude='./tests' .
 [[ $(stat -c %s "$archive") -lt 536870912 ]]
 sha256sum "$archive" >"$work/out/SHA256SUMS"
 sha256sum "$work/out/build-identity.json" >"$work/out/IDENTITY_SHA256SUMS"
