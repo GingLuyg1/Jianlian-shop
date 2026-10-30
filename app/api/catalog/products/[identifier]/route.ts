@@ -94,6 +94,12 @@ export async function GET(
 
   try {
     const supabase = getSupabaseServerClient();
+    // This read is independent of UUID/slug resolution. Keep its error local
+    // until a product exists, preserving 404/fallback behavior and never
+    // reading SKUs or publishing a product before visibility is verified.
+    const categoryRead = Promise.resolve().then(() => supabase
+      .from("categories").select("id,parent_id,level,is_active"))
+      .catch((error: unknown) => ({ data: null, error }));
     const isUuid = UUID_RE.test(identifier);
     const queryProduct = (field: "id" | "slug", value = identifier) =>
       supabase
@@ -151,9 +157,7 @@ export async function GET(
       return jsonError(404, "PRODUCT_NOT_FOUND", "商品不存在", requestId);
     }
 
-    const { data: categoryRows, error: categoryError } = await supabase
-      .from("categories")
-      .select("id,parent_id,level,is_active");
+    const { data: categoryRows, error: categoryError } = await categoryRead;
     if (categoryError) {
       return jsonError(500, "PRODUCT_CATEGORY_QUERY_FAILED", "Product detail query failed", requestId);
     }

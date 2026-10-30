@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileLock2, RefreshCcw, ShieldAlert, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import glass from "@/components/account/AccountGlass.module.css";
+import styles from "@/components/account/AccountCenter.module.css";
+
 import { Button } from "@/components/ui/button";
 
 type PrivacySummary = {
@@ -159,11 +162,11 @@ export default function AccountPrivacyPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-      <div className="border-b px-7 py-5">
+    <div data-account-page="/account/privacy" data-account-ready={!loading && !error} aria-busy={loading} className={`${glass.surface} ${styles.panel} ${styles.page} ${styles.privacy} flex h-full min-h-0 flex-col overflow-hidden`}>
+      <div className={`${glass.hero} ${styles.pageHeader}`}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-950">隐私设置</h1>
+            <h1 className="text-xl font-semibold text-slate-950">隐私设置</h1>
             <p className="mt-1 text-sm text-slate-500">管理个人数据导出、账号注销和数据保留说明。</p>
           </div>
           <Button variant="outline" size="sm" onClick={loadSummary} disabled={loading}>
@@ -173,7 +176,7 @@ export default function AccountPrivacyPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-7 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-6">
         {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {loading ? (
           <div className="h-64 animate-pulse rounded-xl bg-orange-50" />
@@ -186,7 +189,7 @@ export default function AccountPrivacyPage() {
                 ["余额流水", counts.balanceTransactions],
                 ["交付记录", counts.deliveries],
               ].map(([label, value]) => (
-                <div key={String(label)} className="rounded-xl border bg-orange-50/40 p-4">
+                <div key={String(label)} className={`${glass.inset} rounded-xl p-4`}>
                   <p className="text-sm text-slate-500">{label}</p>
                   <p className="mt-2 text-2xl font-semibold text-slate-950">{value ?? "—"}</p>
                 </div>
@@ -225,7 +228,7 @@ export default function AccountPrivacyPage() {
                       </ul>
                     </div>
                   ) : null}
-                  <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px_auto]">
+                  <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,180px)_auto]">
                     <input className="rounded-lg border px-3 py-2 text-sm" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="注销原因或补充说明" />
                     <input className="rounded-lg border px-3 py-2 text-sm" value={confirmText} onChange={(event) => setConfirmText(event.target.value)} placeholder="输入：确认注销" />
                     <Button variant="destructive" onClick={requestDeletion} disabled={requesting}>
@@ -244,7 +247,7 @@ export default function AccountPrivacyPage() {
               </div>
               <div className="rounded-xl border p-5">
                 <h2 className="text-lg font-semibold">登录设备与通知</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">当前版本不展示完整设备指纹，也不会导出 Session、Token 或密钥。通知偏好后续接入统一通知系统后在这里配置。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">登录设备管理与通知偏好暂未开放。现有账户登录与安全保护保持有效。</p>
               </div>
             </section>
 
@@ -252,7 +255,7 @@ export default function AccountPrivacyPage() {
               <h2 className="text-lg font-semibold">最近隐私请求</h2>
               <div className="mt-3 space-y-2">
                 {(summary?.recentRequests ?? summary?.requests)?.length ? (summary?.recentRequests ?? summary?.requests ?? []).map((item) => (
-                  <div key={item.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                  <div key={item.id} className={`${styles.requestRow} rounded-lg bg-white/70 px-3 py-3 text-sm`}>
                     <span>{item.requestNo}</span>
                     <span>{item.requestType === "data_export" ? "数据导出" : "账号注销"}</span>
                     <span>{STATUS_LABELS[item.status] ?? item.status}</span>

@@ -151,19 +151,17 @@ export async function GET(request: Request) {
       });
     }
 
-    const visits = await safeCount(() =>
+    const [visits, registrations] = await Promise.all([safeCount(() =>
       supabase
         .from("promotion_visits")
         .select("id", { count: "exact", head: true })
         .eq("inviter_id", user.id)
-    );
-
-    const registrations = await safeCount(() =>
+    ), safeCount(() =>
       supabase
         .from("referrals")
         .select("id", { count: "exact", head: true })
         .eq("referrer_id", user.id)
-    );
+    )]);
 
     let commissionQuery = supabase
       .from("referral_commissions")
@@ -178,13 +176,15 @@ export async function GET(request: Request) {
       commissionQuery = commissionQuery.eq("status", safeStatus);
     }
 
-    const { data: commissionRows, count: commissionCount, error: commissionError } =
-      await commissionQuery.range(from, to);
-
-    const { data: allCommissions, error: statsError } = await supabase
+    // Two independent reads per wave; no extra queries or promotion writes.
+    const [commissionResult, statsResult] = await Promise.all([
+      commissionQuery.range(from, to), supabase
       .from("referral_commissions")
       .select("commission_amount,status")
-      .eq("referrer_id", user.id);
+      .eq("referrer_id", user.id),
+    ]);
+    const { data: commissionRows, count: commissionCount, error: commissionError } = commissionResult;
+    const { data: allCommissions, error: statsError } = statsResult;
 
     const commissionStats = statsError
       ? { total: null, available: null, error: getReferralErrorMessage(statsError, "读取失败") }

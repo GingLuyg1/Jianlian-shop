@@ -5,6 +5,9 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import glass from "@/components/account/AccountGlass.module.css";
+import styles from "@/components/account/AccountCenter.module.css";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -108,13 +111,13 @@ export default function AccountSecurityPage() {
   }
 
   return (
-    <Card className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <CardHeader className="pb-3">
+    <Card data-account-page="/account/security" data-account-ready={true} aria-busy={false} className={`${glass.surface} ${styles.panel} ${styles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden`}>
+      <CardHeader className={`${glass.hero} ${styles.pageHeader}`}>
         <CardTitle className="text-xl">账号安全</CardTitle>
         <p className="text-sm text-muted-foreground">修改密码前需要重新验证当前密码。</p>
       </CardHeader>
       <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <form onSubmit={handleSubmit} className="flex min-h-full max-w-xl flex-col gap-5">
+        <form onSubmit={handleSubmit} className={`${styles.formGroup} flex w-full max-w-xl flex-col gap-5`}>
 
           <PasswordField
             id="currentPassword"
@@ -147,7 +150,7 @@ export default function AccountSecurityPage() {
             onChange={(value) => updateField("confirmPassword", value)}
           />
 
-          <div className="mt-auto pt-2">
+          <div className="pt-2">
             <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {saving ? "修改中..." : "修改密码"}
@@ -179,7 +182,7 @@ function PasswordField({
   visible: boolean;
 }) {
   return (
-    <div>
+    <div className={styles.field}>
       <Label htmlFor={id}>{label}</Label>
       <div className="relative mt-2">
         <Input

@@ -9,7 +9,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
   }, [error]);
 
   return (
-    <div className="flex min-h-[320px] items-center justify-center p-6">
+    <div role="alert" data-page-error="true" className="flex min-h-[320px] items-center justify-center p-6">
       <div className="w-full max-w-md rounded-xl border border-red-100 bg-white p-6 text-center shadow-sm">
         <AlertTriangle className="mx-auto h-8 w-8 text-red-500" />
         <h2 className="mt-3 text-lg font-semibold text-slate-950">当前模块加载失败</h2>

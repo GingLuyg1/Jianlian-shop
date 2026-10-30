@@ -15,7 +15,7 @@ test("checkout keeps a compact purchase column and aligns product detail surface
   assert.match(publicSidebar, /py-2\.5 text-left text-sm font-medium/);
   assert.match(checkout, /<label className="mb-1\.5 block text-sm font-medium">\s*<span className="text-red-500">\*<\/span>联系邮箱/);
   assert.match(checkout, /<label className="mb-1\.5 block text-sm font-medium">\s*提交信息或备注/);
-  assert.match(checkout, /data-testid="checkout-product-detail-content" className="mx-auto w-full max-w-\[1040px\]"/);
+  assert.match(checkout, /data-testid="checkout-product-detail-content" className=\{cn\("mx-auto w-full max-w-\[1040px\]", loading && "flex min-h-0 flex-1 flex-col"\)/);
   assert.match(checkout, /lg:\[scrollbar-gutter:stable_both-edges\]/);
   assert.doesNotMatch(checkout, /mt-3 max-w-2xl text-sm leading-relaxed/);
   assert.doesNotMatch(checkout, /mt-8 grid max-w-2xl/);

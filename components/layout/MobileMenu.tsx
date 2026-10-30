@@ -4,9 +4,9 @@
  * MobileMenu - Drawer navigation for mobile devices
  */
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Menu,
   Home,
@@ -24,6 +24,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
+import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
+import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-query-cache";
+import { getCatalogRoutePending, getServerCatalogRoutePending, startCatalogRouteExit, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -56,13 +59,17 @@ type MobileMenuProps = {
 
 export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = false }: MobileMenuProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const visibleCategoryHrefs = useVisibleStorefrontCategoryHrefs();
+  const pendingRoute = useSyncExternalStore(subscribeCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending);
+  const pendingCategoryHref = pendingRoute?.source === pathname ? pendingRoute.target : "";
+  const { visibleHrefs, confirmed, status, rows } = useVisibleStorefrontCategoryHrefs();
   const visibleMenuItems = menuItems.filter(
-    (item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href)
+    (item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href)
   );
 
   const isActive = (href: string) => {
+    if (pendingCategoryHref) return pendingCategoryHref === href;
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
   };
@@ -107,11 +114,23 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
             {visibleMenuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
+              if (isCatalogCategoryHref(item.href) && !confirmed) {
+                return <li key={item.href} className="flex h-[39px] items-center rounded-md px-2" aria-hidden={status !== "error"}>
+                  {status === "error" && item.href === "/products/sim-cards" ? (
+                    <button type="button" onClick={() => void refreshPublicCategories().catch(() => undefined)} className="text-left text-xs text-muted-foreground underline">分类读取失败，重试</button>
+                  ) : <span className="h-3 w-3/4 rounded bg-slate-100" />}
+                </li>;
+              }
               return (
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    onClick={() => setOpen(false)}
+                    onFocus={() => { if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows, true); }}
+                    onClick={(event) => {
+                      if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows);
+                      startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
+                      setOpen(false);
+                    }}
                     className={cn(
                       "flex items-center gap-2 whitespace-nowrap rounded-md px-2 py-2 text-[13px] transition-colors duration-150",
                       active

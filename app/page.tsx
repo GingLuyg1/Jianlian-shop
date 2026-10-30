@@ -237,7 +237,7 @@ function HeroVisual({ type }: { type: string }) {
 }
 
 export default function HomePage() {
-  const visibleCategoryHrefs = useVisibleStorefrontCategoryHrefs();
+  const { visibleHrefs: visibleCategoryHrefs } = useVisibleStorefrontCategoryHrefs();
   const visibleCategoryCards = categoryCards.filter(
     (item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href)
   );

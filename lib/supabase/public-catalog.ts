@@ -110,7 +110,7 @@ export type PublicCatalogConfig = {
 const productSelect =
   "id,category_id,name,slug,short_description,description,image_url,price,original_price,stock,has_skus,delivery_type,status,sort_order,created_at,updated_at";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function normalizeNumber(value: unknown, fallback = 0) {
   const next = Number(value);
@@ -323,7 +323,21 @@ async function findPublicCatalogProductById(identifier: string) {
   ) ?? null;
 }
 
-export async function getPublicProductDetail(identifier: string): Promise<PublicProductDetail | null> {
+const productDetailRequests = new Map<string, Promise<PublicProductDetail | null>>();
+
+/** Only reuse simultaneous public reads, never a settled price/stock result. */
+export function getPublicProductDetail(identifier: string): Promise<PublicProductDetail | null> {
+  const key = identifier.trim();
+  const pending = productDetailRequests.get(key);
+  if (pending) return pending;
+  const request = readPublicProductDetail(key).finally(() => {
+    if (productDetailRequests.get(key) === request) productDetailRequests.delete(key);
+  });
+  productDetailRequests.set(key, request);
+  return request;
+}
+
+async function readPublicProductDetail(identifier: string): Promise<PublicProductDetail | null> {
   const normalizedIdentifier = identifier.trim();
   const encoded = encodeURIComponent(normalizedIdentifier);
   const response = await fetch(`/api/catalog/products/${encoded}`, { cache: "no-store" });
@@ -335,6 +349,7 @@ export async function getPublicProductDetail(identifier: string): Promise<Public
   if (response.status === 404) {
     const fallbackProduct = await findPublicCatalogProductById(normalizedIdentifier);
     if (!fallbackProduct) return null;
+    if (fallbackProduct.slug === normalizedIdentifier) throw new Error("商品详情暂时无法读取，请稍后重试");
     if (fallbackProduct.slug) return getPublicProductDetail(fallbackProduct.slug);
     return { product: normalizePublicProduct(fallbackProduct as Record<string, unknown>), skus: [] };
   }

@@ -153,9 +153,9 @@ export function SecureOrderDelivery({
   }
 
   return (
-    <section className={cn("rounded-xl border border-orange-100 bg-white p-4 text-sm", className)}>
+    <section data-testid="card-secret-panel" className={cn("rounded-xl border border-orange-100 bg-white p-4 text-sm", className)}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="font-semibold text-slate-950">数字交付</div>
+        <div className="font-semibold text-slate-950">卡密信息</div>
         {normalizedPaymentStatus === "paid" ? (
           <Button type="button" size="sm" variant="outline" onClick={() => void loadDelivery()} disabled={loading}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -177,13 +177,13 @@ export function SecureOrderDelivery({
       ) : loading && !requested ? (
         <div className="rounded-lg bg-slate-50 p-3 text-muted-foreground">正在读取交付信息...</div>
       ) : delivered ? (
-        <div className="space-y-3">
+        <div data-testid="card-secret-content" className="divide-y divide-slate-200/70 overflow-hidden rounded-lg bg-slate-50 px-3">
           {deliveredRows.map((delivery) => {
             const visible = Boolean(visibleIds[delivery.id]);
             return (
-              <div key={delivery.id} className="rounded-lg bg-slate-50 p-3">
+              <div key={delivery.id} data-testid="card-secret-row" className="min-w-0 py-3">
                 {delivery.product_name ? <div className="mb-2 font-medium text-slate-900">{delivery.product_name}</div> : null}
-                <div className="whitespace-pre-wrap break-words font-mono text-slate-900">
+                <div data-testid="card-secret-value" className="whitespace-pre-wrap break-words font-mono text-slate-900">
                   {visible ? delivery.content || delivery.masked_content || "—" : delivery.masked_content || "••••••••"}
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">交付时间：{formatDate(delivery.delivered_at)}</div>

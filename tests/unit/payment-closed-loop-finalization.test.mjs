@@ -138,16 +138,20 @@ test("actual checkout submit handler opens the limit dialog with zero create cal
   }).outputText;
   let creates = 0; const events = [];
   const blocked = () => {creates++; throw Error("CREATE_FORBIDDEN");};
-  const submit = new Function("fetch", "setAmountLimitDialogOpen", `
+  const makeSubmit = (productLoading) => new Function("fetch", "setAmountLimitDialogOpen", "productLoading", `
     const productRow = {}, submitLoading=false, submissionGuardRef={current:{isActive:()=>false}},
       hasSku=false, selectedSku=null, isPurchasable=true, legalLoading=false,
       legalError=null, agreementsReady=true, confirmed=true, selectedPaymentUnavailable=false,
       paymentOverLimit=true;
     ${body}
     return submit;
-  `)(blocked, value=>events.push(value));
+  `)(blocked, value=>events.push(value), productLoading);
+  const submit = makeSubmit(false);
   await submit();
   assert.deepEqual(events, [true]); assert.equal(creates, 0);
+  events.length = 0;
+  await makeSubmit(true)();
+  assert.deepEqual(events, []); assert.equal(creates, 0);
 });
 test("no accounting/migration change is needed for external cashier fee", () => {
   const rpc = source("supabase/migrations/20261008103916_paid_before_expiry_expired_state_completion.sql");

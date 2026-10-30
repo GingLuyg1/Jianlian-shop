@@ -92,6 +92,15 @@ export async function GET(request: Request) {
     }
 
     const supabase = getSupabaseServerClient();
+    // A valid secondary UUID already determines the product filter. Start its
+    // RLS-protected, public-status read alongside category validation; never
+    // use these rows or read SKUs before the visibility/parent checks below.
+    // Capture speculative failures so invalid categories keep their 404 and
+    // early returns cannot leave an unhandled rejected request.
+    const secondaryProductRead = secondaryCategoryId
+      ? Promise.resolve().then(() => buildProductQuery(supabase, [secondaryCategoryId]))
+        .catch((error: unknown) => ({ data: null, error }))
+      : null;
     const { data: categoryRows, error: categoryError } = await supabase
       .from("categories")
       .select("id,parent_id,level,name,slug,sort_order,is_active")
@@ -114,7 +123,7 @@ export async function GET(request: Request) {
       return productSuccess([], 0, page, pageSize, requestId);
     }
 
-    const { data: productRows, error: productErrorResult } = await buildProductQuery(supabase, categoryIds);
+    const { data: productRows, error: productErrorResult } = await (secondaryProductRead ?? buildProductQuery(supabase, categoryIds));
     if (productErrorResult) throw productErrorResult;
 
     const products = ((productRows ?? []) as ProductRow[]).filter((product) => {

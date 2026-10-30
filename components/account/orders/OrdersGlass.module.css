@@ -1,0 +1,103 @@
+.page { color: #302b26; }
+.page h3 { letter-spacing: -.025em; }
+.page button, .queryDialog button, .detailDialog button { border-radius: 10px; }
+.page button:focus-visible, .queryDialog button:focus-visible, .detailDialog button:focus-visible {
+  outline: 2px solid #dc884e;
+  outline-offset: 3px;
+}
+.list { scrollbar-width: thin; scrollbar-color: #dec7b1 transparent; }
+.list table { min-width: 880px; }
+.list th { height: 48px; border-color: #eee0d2; font-weight: 500; }
+.list tbody > tr { transition: background-color 160ms ease-out; }
+.list td { height: 64px; border-color: #f1e6db; }
+.list td:last-child button { color: #b45c27; background: #fff6ed; padding-inline: 12px; }
+.list td:last-child button:hover { background: #fcebd9; }
+.list td > span { border-radius: 999px; padding: 4px 9px; }
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(57 43 30 / 27%);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.detailDialog, .queryDialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  z-index: 81;
+  width: calc(100% - 48px);
+  height: min(820px, calc(100dvh - 64px));
+  max-width: 760px;
+  max-height: calc(100dvh - 64px);
+  transform: none;
+  outline: none;
+  background: linear-gradient(155deg, #fffaf3, #fffefd 45%, #fdfaf6);
+  border: 1px solid rgb(255 255 255 / 92%);
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 #fff, 0 28px 90px -30px rgb(56 36 17 / 36%), 0 0 0 1px rgb(218 187 158 / 40%);
+}
+.queryDialog { max-width: 1080px; }
+.dialogHeader {
+  background: linear-gradient(115deg, #fff0df, #fffbf5 65%, #fffdfa);
+  border-color: #eee1d4;
+}
+.dialogHeader > button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid #ecdfd1;
+  background: rgb(255 255 255 / 78%);
+  color: #8b7766;
+}
+.dialogHeader > button:hover { background: #fff3e5; color: #b45c27; }
+.detailBody { scrollbar-width: thin; scrollbar-color: #d9c3ad transparent; }
+.section { border-color: #eee1d3; background: rgb(255 255 255 / 80%); box-shadow: inset 0 1px 0 #fff; }
+.section > div:first-child { border-color: #f0e5da; }
+.section > div:first-child:not(:last-child) { background: linear-gradient(110deg, #fff9f1, #fffdfb); }
+.overlay[data-state="open"] { animation: veilIn 180ms ease-out; }
+.overlay[data-state="closed"] { animation: veilOut 160ms ease-in forwards; }
+.detailDialog[data-state="open"], .queryDialog[data-state="open"] { animation: modalIn 220ms cubic-bezier(.22,1,.36,1); }
+.detailDialog[data-state="closed"], .queryDialog[data-state="closed"] { animation: modalOut 160ms ease-in forwards; pointer-events: none; }
+@keyframes veilIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes veilOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modalIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes modalOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(6px) scale(.98); } }
+@media (max-width: 767px) {
+  .list { border: 0; background: transparent; box-shadow: none; }
+  .list table { display: block; min-width: 0; width: 100%; }
+  .list thead { display: none; }
+  .list tbody { display: grid; gap: 12px; }
+  .list tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px 8px;
+    padding: 16px;
+    border: 1px solid #eddfd0;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #fff, #fffaf3);
+    box-shadow: inset 0 1px 0 #fff, 0 5px 15px -13px #98714c;
+  }
+  .list td { display: block; height: auto; min-width: 0; padding: 0; text-align: left; }
+  .list td::before { content: attr(data-label); display: block; margin-bottom: 5px; color: #9b8775; font-size: 11px; line-height: 1.4; }
+  .list td:nth-child(1), .list td:nth-child(2), .list td:nth-child(6), .list td:nth-child(7) { grid-column: 1 / -1; }
+  .list td:nth-child(5) { grid-column: 1 / -1; }
+  .list td:nth-child(2) > div { max-width: 100%; margin: 0; }
+  .list td:nth-child(1) button { padding-left: 0; justify-content: flex-start; }
+  .list td:last-child::before { content: none; }
+  .list td:last-child > div { justify-content: flex-end; }
+  .list td:last-child button { float: right; }
+  .detailDialog, .queryDialog {
+    width: calc(100% - 24px);
+    height: calc(100dvh - 32px);
+    max-height: calc(100dvh - 32px);
+    border-radius: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay[data-state], .detailDialog[data-state], .queryDialog[data-state] { animation: none; }
+  .list tbody > tr { transition: none; }
+}
+@supports not (backdrop-filter: blur(1px)) { .overlay { background: rgb(57 43 30 / 36%); } }

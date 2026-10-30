@@ -65,12 +65,20 @@ test("user order drawer owns viewport scrolling without changing payment behavio
   const ordersPage = file("app/account/orders/page.tsx");
   const paymentSummary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
 
-  assert.match(ordersPage, /data-testid="order-detail-drawer"[\s\S]*absolute inset-y-0 right-0[\s\S]*h-dvh max-h-dvh[\s\S]*min-w-0[\s\S]*overflow-hidden/);
+  const dialogStyles = file("components/account/orders/OrdersGlass.module.css");
+  assert.match(ordersPage, /DialogPrimitive\.Portal/);
+  assert.match(ordersPage, /DialogPrimitive\.Content asChild/);
+  assert.doesNotMatch(ordersPage, /cn\(glass\.surface, styles\.(detailDialog|queryDialog)/);
+  assert.match(ordersPage, /data-testid="order-detail-drawer"[\s\S]*styles\.detailDialog[\s\S]*min-w-0[\s\S]*overflow-hidden/);
+  assert.match(dialogStyles, /position: fixed;[\s\S]*inset: 0;[\s\S]*margin: auto;/);
+  assert.match(dialogStyles, /max-height: calc\(100dvh - 64px\)/);
   assert.match(ordersPage, /data-testid="order-detail-drawer-scroll"[\s\S]*min-h-0 min-w-0 flex-1[\s\S]*overflow-x-hidden overflow-y-auto overscroll-contain/);
   assert.match(ordersPage, /\[&>\*\]:min-w-0 \[&>\*\]:max-w-full/);
   assert.match(paymentSummary, /min-w-0 max-w-full overflow-hidden/);
-  assert.match(ordersPage, /document\.body\.style\.overflow = "hidden"/);
-  assert.match(ordersPage, /document\.documentElement\.style\.overflow = "hidden"/);
+  assert.match(ordersPage, /DialogPrimitive\.Root open=\{Boolean\(requestedOrder\)\}/);
+  assert.match(ordersPage, /requestedOrder \?\? closingOrder/);
+  assert.match(dialogStyles, /data-state="closed"[\s\S]*animation: modalOut 160ms/);
+  assert.doesNotMatch(ordersPage, /modal=\{false\}/);
   assert.match(ordersPage, /<Bep20OrderPaymentSummary[\s\S]{0,180}order=\{order\}[\s\S]{0,180}compact/);
 });
 
@@ -80,8 +88,11 @@ test("account overview omits internal identity and unfinished-order summary card
   for (const removedLabel of ["显示名称", "账户角色", "余额来源", "未完成订单"]) {
     assert.doesNotMatch(accountOverview, new RegExp(`label=["']${removedLabel}["']`));
   }
-  assert.match(accountOverview, /label="登录邮箱"/);
-  assert.match(accountOverview, /label="当前余额"/);
+  const accountInformation = file("components/account/AccountInformation.tsx");
+  assert.match(accountInformation, /登录邮箱/);
+  assert.match(accountOverview, /<AccountInformation email=\{data\?\.profile\.email \?\? null\}/);
+  assert.match(accountOverview, /aria-label="账户余额"/);
+  assert.match(accountOverview, /当前余额/);
   assert.match(accountOverview, /href="\/account\/orders"/);
 });
 
@@ -2047,15 +2058,17 @@ test("account order details use a single user-facing status card and compact ite
 
   for (const source of [orderList, orderDetail]) {
     assert.match(source, /getUserOrderDisplayStatus\(order\)/);
-    assert.match(source, /label="状态"/);
     assert.match(source, /md:grid-cols-2/);
-    assert.match(source, /md:grid-cols-\[minmax\(0,1fr\)_120px_80px\]/);
     assert.match(source, /title=\{item\.product_name\}/);
     assert.match(source, /formatMoney\(item\.unit_price/);
     assert.match(source, /× \{item\.quantity\}|x \{item\.quantity\}/);
   }
 
-  assert.doesNotMatch(orderList, /StatusBlock label="订单状态"/);
+  assert.equal((orderList.match(/StatusBlock label="订单状态"/g) ?? []).length, 1);
+  assert.match(orderList, /InfoBlock label="订单金额"[\s\S]*InfoBlock label="发货方式"[\s\S]*StatusBlock label="订单状态"/);
+  assert.match(orderList, /md:grid-cols-\[minmax\(0,1fr\)_100px_56px\]/);
+  assert.match(orderDetail, /label="状态"/);
+  assert.match(orderDetail, /md:grid-cols-\[minmax\(0,1fr\)_120px_80px\]/);
   assert.doesNotMatch(orderList, /StatusBlock label="支付状态"/);
   assert.doesNotMatch(orderDetail, /getOrderStatusLabel\(orderStatus\)/);
   assert.doesNotMatch(orderDetail, /getPaymentStatusLabel\(paymentStatus\)/);
@@ -2436,7 +2449,8 @@ test("checkout and user order views keep payment and fulfillment presentation sc
   assert.doesNotMatch(checkout, /customer_phone:\s*customerPhone,\s*shipping_address/);
   assert.match(checkout, /agreement_version_ids:\s*agreementPayload/);
   assert.match(checkout, /agreements:\s*agreementPayload/);
-  assert.match(checkout, /max-h-\[178px\] overflow-y-auto/);
+  assert.match(checkout, /max-h-\[232px\] overflow-y-auto/);
+  assert.match(checkout, /CHECKOUT_PAYMENT_OPTIONS\.map/);
   assert.match(checkout, /event\.key === "ArrowDown" \|\| event\.key === "ArrowUp"/);
   assert.match(checkout, /event\.key === "Enter" && open/);
   assert.match(checkout, /event\.key === "Escape"/);
