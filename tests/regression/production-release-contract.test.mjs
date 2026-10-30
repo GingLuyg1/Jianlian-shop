@@ -38,7 +38,7 @@ test("production release script enforces immutable release and recovery gates", 
   assert.match(script, /RETRY_ALLOWED/);
   assert.match(script, /RETRY_CONSUMED/);
   assert.doesNotMatch(script, /^\s*npm\s+audit\s+fix(?:\s|$)/m);
-  assert.match(script, /exec \.\/node_modules\/\.bin\/next start -p "\$SMOKE_PORT"/);
+  assert.match(script, /exec \.\/node_modules\/\.bin\/next start -H 127\.0\.0\.1 -p "\$SMOKE_PORT"/);
   assert.match(script, /for path in \/api\/health \/ \/login/);
   assert.match(script, /restore_previous_release/);
   assert.match(script, /previous release restored and its PM2 state saved/);

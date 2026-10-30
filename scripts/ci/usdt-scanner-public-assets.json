@@ -1,0 +1,9 @@
+{
+  "productionBaseSHA": "4575d802d653e4dca726427bce826aa68c93d9e2",
+  "assets": [
+    {
+      "path": "/_next/static/chunks/8330-98cc1c702d3a5df4.js",
+      "sha256": "6051a5d6605739f87c1ad8f9116da279172239ea4b367c06097d682fab38dfa1"
+    }
+  ]
+}
