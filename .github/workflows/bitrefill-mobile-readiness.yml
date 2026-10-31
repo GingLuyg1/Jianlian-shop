@@ -6,6 +6,13 @@ on:
       - lib/providers/bitrefill/mobile-*.mjs
       - lib/providers/bitrefill/protocol.mjs
       - lib/providers/bitrefill/direct-sales-policy.mjs
+      - lib/providers/bitrefill/pin-*.mjs
+      - lib/providers/bitrefill/paid-order-local.mjs
+      - lib/providers/bitrefill/purchase-persistence.mjs
+      - lib/providers/bitrefill/single-item-purchase.mjs
+      - scripts/verify-bitrefill-pin-pg.mjs
+      - tests/support/bitrefill-pin-*.mjs
+      - tests/unit/bitrefill-pin-fulfillment.test.mjs
       - tests/unit/bitrefill-mobile-catalog.test.mjs
       - tests/unit/bitrefill-direct-sales-policy.test.mjs
       - .github/workflows/bitrefill-mobile-readiness.yml
@@ -22,5 +29,39 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Exact 15-percent pricing and fail-closed sale decisions
-        run: node --test tests/unit/bitrefill-direct-sales-policy.test.mjs
+      - name: PIN policy and affected purchase regression
+        run: node --test tests/unit/bitrefill-pin-fulfillment.test.mjs tests/unit/bitrefill-p1-purchase.test.mjs tests/unit/bitrefill-p2-local.test.mjs
+  pin-isolated-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: pin-synthetic-ci-only
+          PGPASSWORD: pin-synthetic-ci-only
+          POSTGRES_DB: pin_isolated_anchor
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Exact DB9 RPC and PIN delivery integration
+        env:
+          PIN_TEST_CONTAINER: ${{ job.services.postgres.id }}
+          PIN_TEST_EVIDENCE: ${{ runner.temp }}/pin-isolated-evidence
+        run: node scripts/verify-bitrefill-pin-pg.mjs --isolated-ci-container
+      - name: Preserve synthetic PIN acceptance receipts only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pin-isolated-pg17-receipts
+          path: ${{ runner.temp }}/pin-isolated-evidence/pin-pg-*/receipt.json
+          retention-days: 14
