@@ -44,8 +44,10 @@ reserver. No production implementation of those trusted loaders is fabricated.
   before one create-invoice operation. Any failure here is recorded as not sent
   but remains an uncertain stop requiring review; no automatic resubmission.
 - Invoice complete alone never delivers. Sole Child, Product/Package/value and
-  delivered status must match authoritative GET results. Code, PIN or existing
-  validated redemption link is required; instructions alone are insufficient.
+  delivered status must match authoritative GET results. Code or an existing
+  validated redemption link is required for generic gift cards. PIN-only is
+  accepted only after an additional exact frozen PIN-binding read; an auxiliary
+  PIN on an untyped gift card remains rejected. Instructions alone never deliver.
 - The existing private delivery transaction and owner-only order-card read are
   reused. A private-write rollback is retried through GET and the same child,
   never by buying again. Supplier failure is manual aftercare, not an invented

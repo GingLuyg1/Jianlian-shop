@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 20
       - name: PIN policy and affected purchase regression
-        run: node --test tests/unit/bitrefill-pin-fulfillment.test.mjs tests/unit/bitrefill-p1-purchase.test.mjs tests/unit/bitrefill-p2-local.test.mjs
+        run: node --test tests/unit/bitrefill-pin-fulfillment.test.mjs tests/unit/bitrefill-p1-purchase.test.mjs tests/unit/bitrefill-p2-local.test.mjs tests/unit/bitrefill-p3-hardening.test.mjs
   pin-isolated-pg17:
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -162,6 +162,14 @@ try {
   }
   const reserveFail=await seed(),rf=new PinFakeTransport(reserveFail);await worker(reserveFail,rf,{reserveBudget:async()=>({reserved:false})}).dispatch();
   assert.equal(rf.invoiceSubmissions,0);assert.equal((await attempt(reserveFail))[0].status,"UNCERTAIN");pass("BUDGET_RESERVATION_FAILS_BEFORE_SEND");
+  const drift=await seed(),dt=new PinFakeTransport(drift);let priceReads=0;
+  await worker(drift,dt,{loadPricing:async()=>{const p=structuredClone(drift.pricing);if(++priceReads>1)p.quote.allInUsd="13.41";return p;}}).dispatch();
+  assert.equal(dt.invoiceSubmissions,0);assert.equal((await attempt(drift))[0].status,"UNCERTAIN");pass("FRESH_PRE_SUBMIT_PRICE_DRIFT_STOPS_BEFORE_SEND");
+  const notPin=await seed(),nt=new PinFakeTransport(notPin,"processing");await worker(notPin,nt).dispatch();nt.complete();
+  await sql(`update public.order_items set product_snapshot=jsonb_set(product_snapshot,'{supplier_binding,supplier_delivery_kind}','"gift_card"'::jsonb) where id=${literal(notPin.candidate.orderItem.id)}`);
+  await worker(notPin,nt).dispatch();assert.equal(nt.invoiceSubmissions,1);assert.equal(await countDeliveries(notPin),"0");pass("AUXILIARY_PIN_WITHOUT_FROZEN_PIN_KIND_REJECTED");
+  const refund=await seed(),ft=new PinFakeTransport(refund,"processing");await worker(refund,ft).dispatch();ft.complete();refund.financial.refundState="pending";
+  await worker(refund,ft).dispatch();assert.equal(ft.invoiceSubmissions,1);assert.equal(await countDeliveries(refund),"0");pass("REFUND_RISK_AFTER_SUPPLIER_SUBMIT_BLOCKS_PRIVATE_DELIVERY");
   const rollback=await seed(),rt=new PinFakeTransport(rollback);
   await sql("create function public.pin_test_abort_secret() returns trigger language plpgsql as $$begin raise exception 'SYNTHETIC_PRIVATE_WRITE_ABORT';end;$$;create trigger pin_test_abort_secret before insert on public.digital_delivery_secrets for each row execute function public.pin_test_abort_secret();");
   await worker(rollback,rt).dispatch();assert.equal(await countDeliveries(rollback),"0");
