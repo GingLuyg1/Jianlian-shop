@@ -112,7 +112,7 @@ test('switching a selected day from 30 days to 7 days clamps the display index s
 });
 
 test('legacy Production business baseline stays frozen and current aggregation preserves its pure rules', () => {
-  const baseline = source('tests/fixtures/admin-dashboard-business-baseline-4575.txt');
+  const baseline = source('tests/fixtures/admin-dashboard-business-baseline-4575.txt').replaceAll('\r\n', '\n');
   assert.equal(createHash('sha256').update(baseline).digest('hex'), '47e5de1ca8f0d848603f172dc40c516e0985bd8aa1ce3f5a00b31ad4a7700766');
   const functions = text => {
     const file = ts.createSourceFile('dashboard.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
