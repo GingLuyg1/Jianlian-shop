@@ -34,6 +34,10 @@ test("complete synthetic evidence cannot enable the existing release gate", () =
   assert.deepEqual(r.reasons, ["PRODUCTION_PURCHASE_RELEASE_DISABLED"]);
   assert.equal(r.canAcceptPayment, false);assert.equal(r.actualMargin.percentageFloor8, "30.00000000");
 });
+test("DB numeric strings with omitted trailing zeros retain their exact cents; fractional cents reject", () => {
+  for (const salePriceCny of ["100", "100.0", "100.00"]) assert.equal(sale({ ...fixture, salePriceCny }, now).actualMargin.percentageFloor8, "30.00000000");
+  assert.ok(sale({ ...fixture, salePriceCny: "100.001" }, now).reasons.includes("FINANCIAL_DATA_INVALID_OR_INCOMPLETE"));
+});
 for (const [reason, change] of [
   ["COMMERCIAL_SCOPE_OR_CREDENTIALS", { resaleScopeApproved: false }],
   ["COMMERCIAL_SCOPE_OR_CREDENTIALS", { businessCredentialsVerified: false }],
