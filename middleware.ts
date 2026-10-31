@@ -78,7 +78,9 @@ export async function middleware(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const requiresAuth = pathname === "/account" || pathname.startsWith("/account/") || pathname === "/admin" || pathname.startsWith("/admin/");
+    // Only the orders page shell is public so it can render its sign-in cover.
+    // All order data APIs and every other protected account/admin route retain authentication.
+    const requiresAuth = pathname === "/account" || (pathname.startsWith("/account/") && pathname !== "/account/orders") || pathname === "/admin" || pathname.startsWith("/admin/");
     if (requiresAuth && !user) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = "/login";

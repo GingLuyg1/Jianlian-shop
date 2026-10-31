@@ -69,12 +69,14 @@ test("checkout action failures toast while load errors and retained order state 
   assert.match(feedback, /pendingBalanceOrder/);
   assert.doesNotMatch(feedback, /\{error \?/);
 });
-test("customer support uses Radix dialog and unchanged settings contacts without fixed invented data", () => {
+test("customer support preserves the approved contact card and accessible Radix dialog", () => {
   const layout = file("components/layout/PublicLayout.tsx");
-  assert.match(layout, /settings\.support_contact\.trim\(\) \|\| settings\.support_email\.trim\(\)/);
-  assert.match(layout, /supportContact\.split/);
+  assert.match(layout, /const SUPPORT_TELEGRAM_URL = "https:\/\/t\.me\/Ezeasl"/);
+  assert.match(layout, /const SUPPORT_EMAIL = "Yac0000189@gmail\.com"/);
+  assert.match(layout, /href=\{SUPPORT_TELEGRAM_URL\}/);
+  assert.match(layout, /writeText\(SUPPORT_EMAIL\)/);
   assert.match(layout, /<Dialog open=\{supportOpen\} onOpenChange=\{setSupportOpen\}/);
-  assert.match(layout, /<DialogTitle>在线客服/);
+  assert.match(layout, /<DialogTitle>客服联系方式/);
   assert.match(layout, /max-w-\[460px\]/);
   assert.match(layout, /shadow-none/);
   assert.match(layout, /onCloseAutoFocus/);

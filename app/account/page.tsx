@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
   Clock,
-  Mail,
   ReceiptText,
   RefreshCw,
   TrendingDown,
@@ -14,11 +13,11 @@ import {
   WalletCards,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getOrderStatusLabel } from "@/lib/orders/order-status";
-import { rechargeStatusLabel } from "@/lib/payments/recharge-utils";
+import AccountInformation from "@/components/account/AccountInformation";
+import glass from "@/components/account/AccountGlass.module.css";
+import styles from "@/components/account/AccountCenter.module.css";
 
 type ProfileView = {
   email: string | null;
@@ -109,25 +108,6 @@ function formatMoney(value: number, currency = "CNY") {
   return currency === "USDT" ? `${amount} USDT` : `¥${amount}`;
 }
 
-function balanceTypeLabel(type: string) {
-  return (
-    {
-      account_recharge: "充值入账",
-      order_payment: "订单消费",
-      admin_adjustment: "管理员调整",
-      refund: "订单退款",
-      promotion: "推广收益",
-      system: "系统处理",
-    }[type] ?? type
-  );
-}
-
-function balanceTransactionLabel(item: BalanceTransactionView) {
-  return item.subtype === "bep20_underpayment_wallet_credit"
-    ? "BEP20 欠额转余额"
-    : balanceTypeLabel(item.businessType);
-}
-
 export default function AccountOverviewPage() {
   const [data, setData] = useState<AccountAssetsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -152,18 +132,20 @@ export default function AccountOverviewPage() {
     void loadOverview();
   }, [loadOverview]);
 
-  const recentOrders = useMemo(() => data?.orders.slice(0, 5) ?? [], [data?.orders]);
   const diagnostics = data?.diagnostics;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
-      <Card className="shrink-0">
-        <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
-          <div>
+    <div data-account-page="/account" data-account-ready={!loading && !error && Boolean(data)} aria-busy={loading} className={`${styles.page} flex min-h-0 flex-col gap-4`}>
+      <Card className={`${glass.surface} ${styles.panel} shrink-0 overflow-hidden`}>
+        <CardHeader className={`${glass.hero} ${styles.pageHeader} flex flex-row items-start justify-between gap-3`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={`${glass.icon} ${styles.sectionIcon}`}><WalletCards className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" /></span>
+            <div>
             <CardTitle className="text-xl">账户中心</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              查看账户资料、余额、充值、订单和最近资金变动。
+              查看账户资产、登录信息与安全资料。
             </p>
+            </div>
           </div>
           <Button variant="outline" size="sm" onClick={() => void loadOverview()} disabled={loading}>
             <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
@@ -182,141 +164,30 @@ export default function AccountOverviewPage() {
               余额流水暂不可用：{diagnostics.balanceTransactionError}
             </div>
           ) : null}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <InfoCard icon={WalletCards} label="当前余额" value={formatMoney(data?.profile.balance ?? 0)} loading={loading} />
-            <InfoCard icon={WalletCards} label="可用余额" value={formatMoney(data?.summary.availableBalance ?? 0)} loading={loading} />
-            <InfoCard
-              icon={WalletCards}
-              label="冻结余额"
-              value={data?.summary.frozenBalance == null ? "未接入" : formatMoney(data.summary.frozenBalance)}
-              loading={loading}
-            />
-            <InfoCard icon={TrendingUp} label="累计充值" value={formatMoney(data?.summary.totalRecharge ?? 0)} loading={loading} />
-            <InfoCard icon={TrendingDown} label="累计消费" value={formatMoney(data?.summary.totalSpend ?? 0)} loading={loading} />
-            <InfoCard icon={ReceiptText} label="订单数量" value={String(data?.summary.orderCount ?? 0)} loading={loading} />
-            <InfoCard icon={Mail} label="登录邮箱" value={data?.profile.email || "—"} loading={loading} />
-            <InfoCard icon={Clock} label="注册时间" value={formatDate(data?.profile.createdAt)} loading={loading} />
+          <div className={styles.overviewStats}>
+            <section className={styles.balanceHero} aria-label="账户余额">
+              <div className="relative z-10">
+                <div className="mb-4 flex items-center gap-2 text-sm text-[#967352]"><WalletCards className="h-4 w-4" aria-hidden="true" />当前余额</div>
+                {loading ? <div className="h-12 w-40 animate-pulse rounded-lg bg-white/70 motion-reduce:animate-none" /> : <p className={styles.balanceValue}>{data ? formatMoney(data.profile.balance) : "/"}</p>}
+              </div>
+              <dl className={styles.balanceDetails}>
+                <div className="min-w-0"><dt className="text-xs text-slate-500">可用余额</dt><dd className="mt-2 break-words text-base font-semibold text-slate-800">{loading || !data ? "/" : formatMoney(data.summary.availableBalance)}</dd></div>
+                <div className="min-w-0"><dt className="text-xs text-slate-500">冻结余额</dt><dd className="mt-2 break-words text-sm font-medium text-slate-600">{loading ? "/" : data?.summary.frozenBalance == null ? "暂未开放" : formatMoney(data.summary.frozenBalance)}</dd></div>
+              </dl>
+            </section>
+            <div className={styles.metricGrid}>
+              <InfoCard icon={TrendingUp} label="累计充值" value={data ? formatMoney(data.summary.totalRecharge) : "/"} loading={loading} />
+              <InfoCard icon={TrendingDown} label="累计消费" value={data ? formatMoney(data.summary.totalSpend) : "/"} loading={loading} />
+              <Link href="/account/orders" className="rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="查看我的订单">
+                <InfoCard icon={ReceiptText} label="订单数量" value={data ? String(data.summary.orderCount) : "/"} loading={loading} />
+              </Link>
+              <InfoCard icon={Clock} label="注册时间" value={formatDate(data?.profile.createdAt)} loading={loading} />
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1fr)_420px]">
-        <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-            <div>
-              <CardTitle className="text-base">最近订单</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">仅展示当前账号最近订单。</p>
-            </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/account/orders">查看全部</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-auto">
-            {loading ? (
-              <SkeletonList />
-            ) : diagnostics?.orderError ? (
-              <ErrorBlock text={diagnostics.orderError} />
-            ) : recentOrders.length === 0 ? (
-              <EmptyBlock title="暂无订单" description="下单后可在这里查看最近订单。" actionHref="/" actionText="去商城看看" />
-            ) : (
-              <div className="divide-y rounded-xl border">
-                {recentOrders.map((order) => (
-                  <Link
-                    key={order.id}
-                    href={`/account/orders/${order.id}`}
-                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-orange-50/60"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-mono text-xs text-slate-500">{order.orderNo}</div>
-                      <div className="mt-1 text-slate-500">{formatDate(order.createdAt)}</div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-3">
-                      <Badge variant="outline">{getOrderStatusLabel(order.status)}</Badge>
-                      <span className="font-semibold text-primary">{formatMoney(order.totalAmount)}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="grid min-h-0 grid-rows-2 gap-4 overflow-hidden">
-          <Card className="flex min-h-0 flex-col overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-              <CardTitle className="text-base">最近充值</CardTitle>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/products/account-recharge">充值</Link>
-              </Button>
-            </CardHeader>
-            <CardContent className="min-h-0 flex-1 overflow-auto">
-              {loading ? (
-                <SkeletonList compact />
-              ) : diagnostics?.rechargeError ? (
-                <ErrorBlock text={diagnostics.rechargeError} />
-              ) : (data?.recentRecharges.length ?? 0) === 0 ? (
-                <EmptyBlock title="暂无充值记录" description="创建充值后会显示在这里。" />
-              ) : (
-                <div className="space-y-2">
-                  {data?.recentRecharges.map((record) => (
-                    <div key={record.rechargeNo} className="rounded-xl border bg-slate-50 px-3 py-2 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="truncate font-mono text-xs text-slate-500">{record.rechargeNo}</span>
-                        <Badge variant="outline">{rechargeStatusLabel(record.status)}</Badge>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <span className="truncate text-slate-500">{record.channelName}</span>
-                        <span className="font-semibold text-primary">{formatMoney(record.requestedAmount, record.currency)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="flex min-h-0 flex-col overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">最近余额变动</CardTitle>
-            </CardHeader>
-            <CardContent className="min-h-0 flex-1 overflow-auto">
-              {loading ? (
-                <SkeletonList compact />
-              ) : diagnostics?.balanceTransactionError ? (
-                <ErrorBlock text={diagnostics.balanceTransactionError} />
-              ) : (data?.recentBalanceTransactions.length ?? 0) === 0 ? (
-                <EmptyBlock title="暂无余额流水" description="充值入账或余额消费后会显示在这里。" />
-              ) : (
-                <div className="space-y-2">
-                  {data?.recentBalanceTransactions.map((item) => (
-                    <div key={item.transactionNo} className="rounded-xl border bg-slate-50 px-3 py-2 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="truncate">{balanceTransactionLabel(item)}</span>
-                        <span className={item.direction === "credit" ? "font-semibold text-emerald-600" : "font-semibold text-red-600"}>
-                          {item.direction === "credit" ? "+" : "-"}
-                          {formatMoney(item.amount, item.currency)}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-3 text-xs text-slate-500">
-                        <span className="truncate">{item.remark || item.transactionNo}</span>
-                        <span>{formatDate(item.createdAt)}</span>
-                      </div>
-                      {item.subtype === "bep20_underpayment_wallet_credit" ? (
-                        <div className="mt-2 grid gap-1 border-t pt-2 text-xs text-slate-600">
-                          <span>对应订单：{item.orderNo ?? "—"}</span>
-                          <span>实收 / 应付 / 欠额：{item.receivedUsdt ?? "—"} / {item.expectedUsdt ?? "—"} / {item.shortfallUsdt ?? "—"} USDT</span>
-                          <span>冻结汇率：{item.exchangeRate ?? "—"} · 链上交易：{item.txHashSummary ?? "—"}</span>
-                          <span>余额：{item.balanceBefore == null ? "—" : formatMoney(item.balanceBefore)} → {item.balanceAfter == null ? "—" : formatMoney(item.balanceAfter)}</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <AccountInformation email={data?.profile.email ?? null} loading={loading} />
     </div>
   );
 }
@@ -333,7 +204,7 @@ function InfoCard({
   value: string;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-4">
+    <div className={`${glass.inset} ${styles.stat}`}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="h-4 w-4 text-primary" />
         {label}
@@ -341,46 +212,8 @@ function InfoCard({
       {loading ? (
         <div className="mt-3 h-5 w-24 animate-pulse rounded bg-slate-100" />
       ) : (
-        <div className="mt-2 truncate text-base font-semibold text-slate-950">{value || "—"}</div>
+        <div className="mt-2 truncate text-base font-semibold text-slate-950" title={value}>{value || "—"}</div>
       )}
-    </div>
-  );
-}
-
-function SkeletonList({ compact }: { compact?: boolean }) {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: compact ? 3 : 5 }).map((_, index) => (
-        <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />
-      ))}
-    </div>
-  );
-}
-
-function ErrorBlock({ text }: { text: string }) {
-  return <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{text}</div>;
-}
-
-function EmptyBlock({
-  actionHref,
-  actionText,
-  description,
-  title,
-}: {
-  actionHref?: string;
-  actionText?: string;
-  description: string;
-  title: string;
-}) {
-  return (
-    <div className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-orange-200 bg-orange-50/50 p-6 text-center">
-      <div className="font-semibold text-slate-950">{title}</div>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-      {actionHref && actionText ? (
-        <Button className="mt-4" asChild>
-          <Link href={actionHref}>{actionText}</Link>
-        </Button>
-      ) : null}
     </div>
   );
 }

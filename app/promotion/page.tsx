@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { accountRecordPreload } from "@/lib/account/record-preload";
+import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
 import {
   BarChart3,
   ChevronLeft,
@@ -19,6 +21,7 @@ import { toast } from "sonner";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { cn } from "@/lib/utils";
+import glass from "@/components/account/AccountGlass.module.css";
 
 const PAGE_SIZE = 10;
 
@@ -119,19 +122,19 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex h-14 flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className={cn(glass.inset, "flex min-h-[66px] flex-col justify-center rounded-xl px-3 py-2.5")}>
       <div className="flex items-center gap-1.5 text-xs text-slate-500">
         <Icon className="h-3.5 w-3.5 text-orange-500" />
         <span>{label}</span>
       </div>
-      <div className={cn("mt-0.5 text-[17px] font-bold leading-none text-slate-950", highlight && "text-blue-600")}>{value}</div>
+      <div className={cn("mt-1 truncate text-[17px] font-bold leading-none text-slate-950", highlight && "text-primary")} title={String(value)}>{value}</div>
     </div>
   );
 }
 
 function InfoTile({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex h-[58px] flex-col justify-center rounded-xl bg-orange-50 px-3 py-2">
+    <div className={cn(glass.inset, "flex h-[58px] flex-col justify-center rounded-xl px-3 py-2")}>
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-0.5 text-[17px] font-bold leading-none text-slate-950">{value}</div>
     </div>
@@ -152,7 +155,7 @@ function ReferralPagination({
   const resolvedTotalPages = Math.max(1, totalPages);
 
   return (
-    <div className="flex h-9 shrink-0 items-center justify-between gap-3 text-sm text-slate-500">
+    <div className="flex min-h-[36px] shrink-0 flex-wrap items-center justify-between gap-3 text-xs text-slate-500 md:text-sm">
       <div className="whitespace-nowrap">共 {total} 条记录，每页 10 条</div>
       <div className="flex items-center gap-2">
         <button
@@ -183,24 +186,37 @@ function ReferralPagination({
 }
 
 export default function PromotionPage() {
-  const [data, setData] = useState<ReferralResponse | null>(null);
+  const identity = useAccountRecordIdentity();
+  const [storedData, setData] = useState<ReferralResponse | null>(null);
+  const [loadedEpoch, setLoadedEpoch] = useState(identity.epoch);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [requestLoading, setLoading] = useState(true);
+  const data = loadedEpoch === identity.epoch ? storedData : null;
+  const loading = requestLoading || loadedEpoch !== identity.epoch;
+  const activeRequest = useRef<{ page: number; epoch: number; controller: AbortController; promise?: Promise<void> } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shortLinkLoading, setShortLinkLoading] = useState(false);
 
-  const loadReferralData = useCallback(async () => {
+  const loadReferralData = useCallback(() => {
+    const prior = activeRequest.current;
+    if (prior?.page === page && prior.epoch === identity.epoch && !prior.controller.signal.aborted) return prior.promise;
+    prior?.controller.abort();
+    const request = { page, epoch: identity.epoch, controller: new AbortController(), promise: undefined as Promise<void> | undefined };
+    activeRequest.current = request;
+    const isCurrent = () => activeRequest.current === request && !request.controller.signal.aborted && accountRecordPreload.getSnapshot().epoch === request.epoch;
     setLoading(true);
     setError(null);
 
-    try {
+    request.promise = (async () => { try {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(PAGE_SIZE),
         status: "all",
       });
-      const response = await fetch(`/api/referrals?${params.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/referrals?${params.toString()}`, { cache: "no-store", signal: request.controller.signal });
       const result = (await response.json().catch(() => null)) as ReferralResponse | null;
+      if (!isCurrent()) return;
+      setLoadedEpoch(request.epoch);
 
       if (response.status === 401) {
         setError("请先登录后查看推广数据。");
@@ -214,15 +230,20 @@ export default function PromotionPage() {
 
       setData(result);
     } catch (fetchError) {
+      if (!isCurrent()) return;
+      setLoadedEpoch(request.epoch);
       setError(getErrorMessage(fetchError));
       setData(null);
     } finally {
-      setLoading(false);
+      if (isCurrent()) { setLoading(false); activeRequest.current = null; }
     }
-  }, [page]);
+    })();
+    return request.promise;
+  }, [page, identity.epoch]);
 
   useEffect(() => {
     void loadReferralData();
+    return () => { activeRequest.current?.controller.abort(); activeRequest.current = null; };
   }, [loadReferralData]);
 
   const promotionLink = useMemo(() => {
@@ -265,8 +286,9 @@ export default function PromotionPage() {
 
   if (error === "请先登录后查看推广数据。") {
     return (
-      <PublicLayout contentClassName="mx-auto mt-3 max-w-none px-4 py-3 md:px-5">
-        <div className="rounded-2xl border border-orange-100 bg-white p-8 text-center shadow-sm">
+      <PublicLayout contentClassName="mx-auto max-w-none px-4 py-3 md:px-5">
+        <div data-testid="promotion-glass-login" className={cn(glass.surface, glass.login, "mx-auto w-full max-w-[1540px] text-center")}>
+          <span aria-hidden="true" className={cn(glass.icon, "mb-5 h-16 w-16")}><Users className="h-7 w-7" strokeWidth={1.6} /></span>
           <h1 className="text-2xl font-bold text-slate-950">推广赚钱</h1>
           <p className="mt-3 text-slate-500">登录后可查看推广链接、佣金统计和推广记录。</p>
           <Link
@@ -282,7 +304,7 @@ export default function PromotionPage() {
 
   return (
     <PublicLayout contentClassName="mx-auto max-w-none px-4 py-3 md:px-5">
-      <div className={`flex w-full flex-col gap-2.5 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
+      <div data-testid="promotion-glass-page" className={`mx-auto flex w-full min-w-0 max-w-[1540px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
         {error && (
           <div className="flex h-10 shrink-0 items-center rounded-xl border border-red-100 bg-red-50 px-4 text-sm text-red-700">
             <span className="min-w-0 flex-1 truncate">{error}</span>
@@ -298,19 +320,19 @@ export default function PromotionPage() {
           </div>
         )}
 
-        <div className="grid shrink-0 gap-2.5 xl:grid-cols-[1.08fr_1fr]">
-          <section className="flex h-[206px] flex-col rounded-2xl border border-orange-100 bg-white p-3.5 shadow-sm">
+        <div className="grid min-w-0 shrink-0 gap-3.5 xl:grid-cols-[1.08fr_1fr]">
+          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]")}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-[22px] font-bold leading-tight text-slate-950">推广链接</h1>
                 <p className="mt-1 text-sm text-slate-500">复制链接发送给好友，注册后自动绑定推广关系。</p>
               </div>
-              <div className="rounded-xl bg-orange-50 p-3 text-orange-500">
+              <div className={cn(glass.icon, "h-11 w-11")}>
                 <Link2 className="h-5 w-5" />
               </div>
             </div>
 
-            <div className="mt-2.5 flex h-11 items-center gap-3 rounded-xl bg-slate-50 p-2">
+            <div className={cn(glass.inset, "mt-4 flex h-12 items-center gap-3 rounded-xl p-2")}>
               <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "暂无短链接"}>
                 {loading && !promotionLink ? "正在加载短链接..." : promotionLink || "暂无短链接"}
               </div>
@@ -325,13 +347,13 @@ export default function PromotionPage() {
               </button>
             </div>
 
-            <div className="mt-2.5 grid gap-2.5 md:grid-cols-[1fr_1fr_1.15fr]">
+            <div className="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-[1fr_1fr_1.15fr]">
               <InfoTile label="充值提佣倍率" value="暂未开放" />
               <InfoTile label="最低提现额" value={formatMoney(data?.minWithdrawAmount ?? 10)} />
               <button
                 type="button"
                 onClick={copyPromotionLink}
-                className="inline-flex h-[58px] items-center justify-center rounded-xl bg-orange-500 px-5 text-base font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="col-span-2 inline-flex h-[58px] items-center justify-center rounded-xl bg-primary px-5 text-base font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-1"
                 disabled={loading || shortLinkLoading || !promotionLink}
               >
                 {shortLinkLoading ? "复制中..." : "生成短链接"}
@@ -339,7 +361,7 @@ export default function PromotionPage() {
             </div>
           </section>
 
-          <section className="flex h-[206px] flex-col rounded-2xl border border-orange-100 bg-white p-3.5 shadow-sm">
+          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]")}>
             <div className="mb-2 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广数据</h2>
@@ -355,7 +377,7 @@ export default function PromotionPage() {
               </button>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-2 grid min-w-0 grid-cols-2 gap-2.5 xl:grid-cols-3">
               {stats.map((item) => (
                 <StatCard key={item.label} {...item} />
               ))}
@@ -363,7 +385,7 @@ export default function PromotionPage() {
           </section>
         </div>
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-orange-100 bg-white p-3.5 shadow-sm">
+        <section className={cn(glass.surface, "flex min-h-[360px] min-w-0 flex-1 flex-col overflow-hidden p-5 md:min-h-0")}>
           <div className="mb-2.5 shrink-0">
             <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广记录</h2>
             <p className="mt-1 text-sm text-slate-500">推广用户后，用户每一次充值提成记录都会在这里展示。</p>
@@ -375,7 +397,7 @@ export default function PromotionPage() {
             </div>
           )}
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-orange-100">
+          <div data-empty={!data?.records.length ? "true" : undefined} className={cn(glass.table, "min-h-0 flex-1 overflow-hidden rounded-2xl")}>
             <div className="h-full overflow-auto">
               <table className="w-full min-w-[920px] border-collapse text-sm">
                 <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
@@ -408,7 +430,7 @@ export default function PromotionPage() {
                     <tr>
                       <td colSpan={5} className="px-4 py-10 text-center">
                         <div className="mx-auto flex min-h-[260px] max-w-sm flex-col items-center justify-center">
-                          <div className="rounded-full bg-orange-50 p-3 text-orange-400">
+                          <div className={cn(glass.icon, "h-14 w-14")}>
                             <Users className="h-6 w-6" />
                           </div>
                           <div className="mt-3 text-base font-semibold text-slate-900">暂无真实推广记录</div>

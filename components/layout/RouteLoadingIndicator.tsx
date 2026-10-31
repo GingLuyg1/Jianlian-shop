@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { clearCatalogRoutePending, isCatalogCategoryPath } from "@/lib/motion/catalog-route-exit";
+import { isAccountDataPage, waitForAccountPageSettled } from "@/lib/motion/account-page-ready";
 
-const MIN_VISIBLE_MS = 520;
+const MIN_VISIBLE_MS = 180;
 const SHOW_DELAY_MS = 140;
-const MAX_VISIBLE_MS = 6500;
+const MAX_VISIBLE_MS = 3000;
 const NAVIGATION_STALL_MS = 2600;
-const DOM_SETTLE_MS = 160;
-const IMAGE_WAIT_TIMEOUT_MS = 4200;
 
 function isModifiedClick(event: MouseEvent) {
   return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
@@ -30,68 +30,9 @@ function waitForFrame() {
   });
 }
 
-function waitForDomToSettle(container: ParentNode) {
-  return new Promise<void>((resolve) => {
-    let settledTimer: number | null = null;
-
-    const finish = () => {
-      if (settledTimer) window.clearTimeout(settledTimer);
-      observer.disconnect();
-      resolve();
-    };
-
-    const armTimer = () => {
-      if (settledTimer) window.clearTimeout(settledTimer);
-      settledTimer = window.setTimeout(finish, DOM_SETTLE_MS);
-    };
-
-    const observer = new MutationObserver(armTimer);
-    observer.observe(container, {
-      attributes: true,
-      childList: true,
-      subtree: true,
-    });
-
-    armTimer();
-  });
-}
-
-function waitForImage(image: HTMLImageElement) {
-  if (image.complete && image.naturalWidth > 0) {
-    return image.decode?.().catch(() => undefined) ?? Promise.resolve();
-  }
-
-  return new Promise<void>((resolve) => {
-    const cleanup = () => {
-      image.removeEventListener("load", onDone);
-      image.removeEventListener("error", onDone);
-      resolve();
-    };
-    const onDone = () => cleanup();
-
-    image.addEventListener("load", onDone, { once: true });
-    image.addEventListener("error", onDone, { once: true });
-  }).then(() => image.decode?.().catch(() => undefined));
-}
-
-async function waitForImages(container: ParentNode) {
-  const images = Array.from(container.querySelectorAll("img"));
-  if (!images.length) return;
-
-  await Promise.race([
-    Promise.all(images.map(waitForImage)),
-    new Promise<void>((resolve) =>
-      window.setTimeout(resolve, IMAGE_WAIT_TIMEOUT_MS)
-    ),
-  ]);
-}
-
 async function waitForPageReady() {
-  const container = document.querySelector("main") ?? document.body;
-
-  await waitForFrame();
-  await waitForDomToSettle(container);
-  await waitForImages(container);
+  // Route commit is the critical signal. Product imagery and secondary content
+  // have their own local loading states and must not hold the global indicator.
   await waitForFrame();
 }
 
@@ -111,8 +52,12 @@ export default function RouteLoadingIndicator() {
   const loadIdRef = useRef(0);
   const visibleRef = useRef(false);
   const routeKeyRef = useRef(routeKey);
+  const accountTargetRef = useRef<string | null>(null);
+  const readyAbortRef = useRef<AbortController | null>(null);
 
   const clearTimers = () => {
+    readyAbortRef.current?.abort();
+    readyAbortRef.current = null;
     if (showTimerRef.current) {
       window.clearTimeout(showTimerRef.current);
       showTimerRef.current = null;
@@ -133,6 +78,17 @@ export default function RouteLoadingIndicator() {
 
   const hideWhenReady = async (loadId: number) => {
     try {
+      const target = accountTargetRef.current;
+      if (target) {
+        readyAbortRef.current?.abort();
+        const controller = new AbortController();
+        readyAbortRef.current = controller;
+        if (!await waitForAccountPageSettled(target, controller.signal)) return;
+        if (loadId !== loadIdRef.current) return;
+        // Do not cancel the delayed show on route commit: a fast route may
+        // still have a slow account GET. Cancel it only once that GET settles.
+        if (showTimerRef.current) { window.clearTimeout(showTimerRef.current); showTimerRef.current = null; }
+      }
       await waitForPageReady();
     } catch (error) {
       console.error("[RouteLoadingIndicator] Failed to wait for page ready", error);
@@ -141,7 +97,7 @@ export default function RouteLoadingIndicator() {
     if (loadId !== loadIdRef.current || !visibleRef.current) return;
 
     const elapsed = Date.now() - startedAtRef.current;
-    const delay = Math.max(120, MIN_VISIBLE_MS - elapsed);
+    const delay = Math.max(0, MIN_VISIBLE_MS - elapsed);
 
     if (hideTimerRef.current) {
       window.clearTimeout(hideTimerRef.current);
@@ -150,6 +106,7 @@ export default function RouteLoadingIndicator() {
     hideTimerRef.current = window.setTimeout(() => {
       if (loadId === loadIdRef.current) {
         visibleRef.current = false;
+        accountTargetRef.current = null;
         setVisible(false);
       }
       hideTimerRef.current = null;
@@ -158,6 +115,7 @@ export default function RouteLoadingIndicator() {
 
   const finishLoading = (loadId: number) => {
     if (loadId !== loadIdRef.current) return;
+    if (accountTargetRef.current) { void hideWhenReady(loadId); return; }
 
     if (showTimerRef.current) {
       window.clearTimeout(showTimerRef.current);
@@ -172,8 +130,17 @@ export default function RouteLoadingIndicator() {
     void hideWhenReady(loadId);
   };
 
-  const startLoading = (waitForCurrentPage = false) => {
+  const cancelLoading = () => {
     clearTimers();
+    loadIdRef.current += 1;
+    accountTargetRef.current = null;
+    visibleRef.current = false;
+    setVisible(false);
+  };
+
+  const startLoading = (waitForCurrentPage = false, targetPath = window.location.pathname) => {
+    clearTimers();
+    accountTargetRef.current = isAccountDataPage(targetPath) ? targetPath : null;
     startedAtRef.current = Date.now();
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
@@ -185,7 +152,8 @@ export default function RouteLoadingIndicator() {
       showTimerRef.current = null;
     }, SHOW_DELAY_MS);
 
-    maxTimerRef.current = window.setTimeout(() => {
+    if (!accountTargetRef.current) {
+      maxTimerRef.current = window.setTimeout(() => {
       if (loadId === loadIdRef.current) {
         visibleRef.current = false;
         setVisible(false);
@@ -197,6 +165,7 @@ export default function RouteLoadingIndicator() {
       finishLoading(loadId);
       stallTimerRef.current = null;
     }, NAVIGATION_STALL_MS);
+    }
 
     if (waitForCurrentPage) {
       window.setTimeout(() => {
@@ -227,7 +196,12 @@ export default function RouteLoadingIndicator() {
           !isSamePageUrl(url);
 
         if (isInternalRoute) {
-          startLoading(false);
+          if (isCatalogCategoryPath(url.pathname) || url.pathname === "/checkout") {
+            cancelLoading();
+            return;
+          }
+          clearCatalogRoutePending();
+          startLoading(false, url.pathname);
         }
         return;
       }
@@ -245,7 +219,14 @@ export default function RouteLoadingIndicator() {
       }
     };
 
-    const handlePopState = () => startLoading(false);
+    const handlePopState = () => {
+      if (isCatalogCategoryPath(window.location.pathname) || window.location.pathname === "/checkout") {
+        cancelLoading();
+        return;
+      }
+      clearCatalogRoutePending();
+      startLoading(false);
+    };
 
     document.addEventListener("click", handleClick, true);
     window.addEventListener("popstate", handlePopState);
@@ -253,6 +234,7 @@ export default function RouteLoadingIndicator() {
     return () => {
       document.removeEventListener("click", handleClick, true);
       window.removeEventListener("popstate", handlePopState);
+      loadIdRef.current += 1;
       clearTimers();
     };
   }, []);
@@ -261,6 +243,13 @@ export default function RouteLoadingIndicator() {
     if (routeKeyRef.current === routeKey) return;
 
     routeKeyRef.current = routeKey;
+
+    if (isCatalogCategoryPath(pathname) || pathname === "/checkout") {
+      cancelLoading();
+      return;
+    }
+
+    clearCatalogRoutePending();
 
     if (!visibleRef.current && !showTimerRef.current) {
       startLoading(true);

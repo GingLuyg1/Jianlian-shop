@@ -1,8 +1,8 @@
 "use client";
 
-import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Headphones, Mail, MessageCircle, Copy, ExternalLink } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Clock3, Copy, ExternalLink, Headphones, Mail, Send } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,12 @@ import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
 import RouteLoadingIndicator from "./RouteLoadingIndicator";
 import { OPEN_PUBLIC_SUPPORT_EVENT } from "@/lib/support/open-public-support";
+import { clearCatalogRoutePending, getCatalogRoutePending, rebaseCatalogRoutePending, startCatalogPopstate } from "@/lib/motion/catalog-route-exit";
 import { cn } from "@/lib/utils";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { clearPublicProductPages } from "@/lib/catalog/public-product-query-cache";
+import { invalidatePublicRechargeChannels, schedulePublicRechargeChannelsPrefetch } from "@/lib/catalog/public-recharge-channels";
+import { ensureAccountRecordPreload } from "@/lib/account/record-auth";
 
 interface PublicLayoutProps {
   children: ReactNode;
@@ -43,13 +48,11 @@ export default function PublicLayout({
   );
 }
 
-function getSupportHref(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return `mailto:${trimmed}`;
-  return "";
-}
+// This dialog has an explicitly approved storefront contact card. Keep the
+// admin-managed support settings intact for their other consumers.
+const SUPPORT_TELEGRAM_URL = "https://t.me/Ezeasl";
+const SUPPORT_EMAIL = "Yac0000189@gmail.com";
+const SUPPORT_HOURS = "12:00 AM - 24:00 PM GMT+8";
 
 function PublicLayoutContent({ children, contentClassName, viewportLocked = false, mobileNavigationUntilLg = false }: PublicLayoutProps) {
   const [supportOpen, setSupportOpen] = useState(false);
@@ -59,16 +62,44 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
     setSupportOpen(true);
   }, []);
   useEffect(() => {
+    // Public listings contain no account data; still discard them across
+    // account changes so one browser session cannot reuse another's snapshot.
+    const { data } = getSupabaseBrowserClient().auth.onAuthStateChange((event) => {
+      if (["SIGNED_IN", "SIGNED_OUT", "USER_UPDATED"].includes(event)) {
+        clearPublicProductPages();
+        invalidatePublicRechargeChannels();
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+  useEffect(() => schedulePublicRechargeChannelsPrefetch(), []);
+  useEffect(() => { ensureAccountRecordPreload(); }, []);
+  useEffect(() => {
     window.addEventListener(OPEN_PUBLIC_SUPPORT_EVENT, openSupport);
     return () => window.removeEventListener(OPEN_PUBLIC_SUPPORT_EVENT, openSupport);
   }, [openSupport]);
   const pathname = usePathname();
+  const router = useRouter();
+  useEffect(() => {
+    const pending = getCatalogRoutePending();
+    if (!pending || pending.target === pathname) {
+      clearCatalogRoutePending();
+    } else if (rebaseCatalogRoutePending(pathname)) {
+      router.replace(pending.target, { scroll: false });
+    } else {
+      clearCatalogRoutePending();
+    }
+  }, [pathname, router]);
+  useEffect(() => {
+    const onPopstate = () => startCatalogPopstate(pathname, window.location.pathname);
+    window.addEventListener("popstate", onPopstate);
+    return () => window.removeEventListener("popstate", onPopstate);
+  }, [pathname]);
   const { settings } = usePublicSettings();
   const pagePlacement = pathname === "/" ? "home" : pathname.startsWith("/checkout") ? "checkout" : pathname.startsWith("/account") ? "account" : null;
   const pageAnnouncement = pagePlacement ? settings.announcements?.find((item) => item.placement === pagePlacement) : undefined;
   const globalAnnouncement = settings.announcements?.find((item) => item.placement === "global_top");
   const announcement = pageAnnouncement?.content.trim() || globalAnnouncement?.content.trim() || settings.top_announcement.trim();
-  const supportContact = settings.support_contact.trim() || settings.support_email.trim() || "客服暂未开放";
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
 
   return (
@@ -77,7 +108,9 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:195px] lg:[--storefront-sidebar-width:195px]",
       !mobileNavigationUntilLg && "md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px]",
     )}>
-      <RouteLoadingIndicator />
+      <Suspense fallback={null}>
+        <RouteLoadingIndicator />
+      </Suspense>
       <PublicSidebar onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
 
       <div className={cn(
@@ -119,25 +152,42 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
           const trigger = supportTrigger.current?.isConnected ? supportTrigger.current : document.querySelector<HTMLElement>("[data-storefront-menu-trigger]");
           trigger?.focus();
         }} className="max-h-[85dvh] w-[calc(100%-32px)] max-w-[460px] overflow-y-auto rounded-2xl border-slate-200 bg-white p-5 shadow-none sm:rounded-2xl">
-          <DialogHeader className="text-left">
-            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-primary"><Headphones className="h-5 w-5" /></div>
-            <DialogTitle>在线客服</DialogTitle>
-            <DialogDescription>请选择联系方式，我们会尽快协助处理。</DialogDescription>
+          <DialogHeader className="flex-row items-center gap-3 space-y-0 pr-6 text-left">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-primary"><Headphones className="h-5 w-5" /></div>
+            <div className="min-w-0 space-y-1">
+              <DialogTitle>客服联系方式</DialogTitle>
+              <DialogDescription>请选择以下方式联系我们</DialogDescription>
+            </div>
           </DialogHeader>
-          <div className="space-y-2">{supportContact.split(/\r?\n/).filter((line) => line.trim()).map((line, index) => {
-            const href = getSupportHref(line);
-            const email = href.startsWith("mailto:");
-            const telegram = /^https?:\/\/(?:t\.me|telegram\.me)\//i.test(href);
-            const Icon = email ? Mail : MessageCircle;
-            return <div key={`${line}-${index}`} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-              <Icon className="h-5 w-5 shrink-0 text-primary" />
-              <div className="min-w-0 flex-1"><div className="text-sm font-medium">{email ? "邮箱" : telegram ? "Telegram" : "客服信息"}</div><p className="mt-1 break-all text-xs text-muted-foreground">{line}</p></div>
-              {href && !email ? <Button asChild size="sm" variant="outline" className="h-8 shrink-0"><a href={href} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />打开</a></Button> : email ? <Button type="button" size="sm" variant="outline" className="h-8 shrink-0" onClick={async () => {
-                try { await navigator.clipboard.writeText(line.trim()); toast.success("邮箱已复制"); }
+          <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-slate-50/50 px-3">
+            <div className="flex min-w-0 items-center gap-3 py-3">
+              <Send className="h-5 w-5 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">Telegram</div>
+                <a href={SUPPORT_TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block max-w-full break-all text-xs text-muted-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">{SUPPORT_TELEGRAM_URL}</a>
+              </div>
+              <Button asChild size="sm" variant="outline" className="h-8 shrink-0"><a href={SUPPORT_TELEGRAM_URL} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />打开</a></Button>
+            </div>
+            <div className="flex min-w-0 items-center gap-3 py-3">
+              <Mail className="h-5 w-5 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">Email</div>
+                <p className="mt-1 break-all text-xs text-muted-foreground">{SUPPORT_EMAIL}</p>
+              </div>
+              <Button type="button" size="sm" variant="outline" className="h-8 shrink-0" onClick={async () => {
+                try { await navigator.clipboard.writeText(SUPPORT_EMAIL); toast.success("邮箱已复制"); }
                 catch { toast.error("复制失败，请手动复制邮箱"); }
-              }}><Copy className="mr-1 h-3.5 w-3.5" />复制</Button> : null}
-            </div>;
-          })}</div>
+              }}><Copy className="mr-1 h-3.5 w-3.5" />复制</Button>
+            </div>
+            <div className="flex min-w-0 items-start gap-3 py-3">
+              <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <div className="text-sm font-medium">上班时间</div>
+                <p className="mt-1 text-xs text-muted-foreground">{SUPPORT_HOURS}</p>
+              </div>
+            </div>
+          </div>
+          <p className="text-center text-xs text-muted-foreground">有问题均可留言，客服会在24小时内处理并留言。</p>
         </DialogContent>
       </Dialog>
     </div>

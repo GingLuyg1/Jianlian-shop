@@ -185,3 +185,61 @@
     transparent 100%
   );
 }
+
+/* Catalog motion only: wrappers keep the approved cards and layout unchanged. */
+@media (min-width: 1024px) {
+  .catalog-wheel-item {
+    transform: translate3d(0, 0, 0) scale(var(--wheel-scale, 1));
+    opacity: var(--wheel-opacity, 1);
+    transform-origin: center center;
+    will-change: transform, opacity;
+  }
+}
+
+@keyframes catalog-item-enter {
+  from { opacity: 0; transform: translate3d(0, 9px, 0) scale(0.98); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes catalog-content-exit {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, -7px, 0) scale(0.985); }
+}
+
+@keyframes catalog-placeholder-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.8; }
+}
+
+.catalog-enter-item {
+  animation: catalog-item-enter 360ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.catalog-title-enter {
+  animation: catalog-item-enter 340ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.catalog-exiting {
+  animation: catalog-content-exit 160ms ease-in both;
+  pointer-events: none;
+}
+
+[data-route-exiting="true"] [data-wheel-container="products"] [data-wheel-item] {
+  animation: catalog-content-exit 160ms ease-in both;
+  pointer-events: none;
+}
+
+.catalog-placeholder {
+  animation: catalog-placeholder-breathe 1.35s ease-in-out infinite;
+}
+
+.catalog-placeholder-leaving {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-wheel-item { transform: none !important; opacity: 1 !important; will-change: auto; }
+  .catalog-enter-item, .catalog-title-enter, .catalog-exiting, .catalog-placeholder { animation: none !important; }
+  .catalog-placeholder-leaving { transition: none !important; }
+}

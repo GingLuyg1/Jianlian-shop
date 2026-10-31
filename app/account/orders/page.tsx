@@ -1,10 +1,11 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Clipboard, ClipboardList, Search, X } from "lucide-react";
 import { toast } from "sonner";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
@@ -21,6 +22,10 @@ import {
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
 import { cn } from "@/lib/utils";
+import glass from "@/components/account/AccountGlass.module.css";
+import styles from "@/components/account/orders/OrdersGlass.module.css";
+import { accountRecordPreload } from "@/lib/account/record-preload";
+import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
 
 const PAGE_SIZE = 10;
 
@@ -43,31 +48,47 @@ function getDeliveryLabel(deliveryType: string | null | undefined) {
 
 export default function MyOrdersPage() {
   const router = useRouter();
+  const identity = useAccountRecordIdentity();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [count, setCount] = useState(0);
+  const [storedCount, setCount] = useState(0);
+  const [loadedEpoch, setLoadedEpoch] = useState(identity.epoch);
   const [page, setPage] = useState(1);
   const [queryOpen, setQueryOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [requestLoading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
+  const listRequest = useRef<{ page: number; epoch: number; controller: AbortController; promise?: Promise<void> } | null>(null);
+  const ownerMatches = loadedEpoch === identity.epoch;
+  const count = ownerMatches ? storedCount : 0;
+  const loading = requestLoading || !ownerMatches;
+  useEffect(() => { setSelectedOrder(null); setQueryOpen(false); setPage(1); }, [identity.epoch]);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback((force = false) => {
+    const prior = listRequest.current;
+    if (!force && prior?.page === page && prior.epoch === identity.epoch && !prior.controller.signal.aborted) return prior.promise;
+    prior?.controller.abort();
+    const request = { page, epoch: identity.epoch, controller: new AbortController(), promise: undefined as Promise<void> | undefined };
+    const epoch = request.epoch;
+    listRequest.current = request;
+    const isCurrent = () => listRequest.current === request && !request.controller.signal.aborted && accountRecordPreload.getSnapshot().epoch === epoch;
     setLoading(true);
     setError("");
 
+    request.promise = (async () => {
     try {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(PAGE_SIZE),
       });
-      const response = await fetch(`/api/orders?${params.toString()}`);
+      const response = await fetch(`/api/orders?${params.toString()}`, { cache: "no-store", signal: request.controller.signal });
       const result = (await response.json().catch(() => null)) as {
         orders?: OrderRecord[];
         count?: number;
         error?: string;
       } | null;
+      if (!isCurrent()) return;
 
       if (response.status === 401) {
         toast.error("登录状态已失效，请重新登录。");
@@ -81,28 +102,36 @@ export default function MyOrdersPage() {
 
       setOrders(result?.orders ?? []);
       setCount(Number(result?.count ?? 0));
+      setLoadedEpoch(epoch);
+      accountRecordPreload.rememberOrderProductNames(result?.orders ?? []);
     } catch (loadError) {
-      setError(getOrderErrorMessage(loadError, "订单读取失败"));
+      if (isCurrent()) { setOrders([]); setCount(0); setLoadedEpoch(epoch); setError(getOrderErrorMessage(loadError, "订单读取失败")); }
     } finally {
-      setLoading(false);
+      if (isCurrent()) { setLoading(false); listRequest.current = null; }
     }
-  }, [page, router]);
+    })();
+    return request.promise;
+  }, [page, router, identity.epoch]);
 
   useEffect(() => {
-    loadOrders();
+    void loadOrders();
+    return () => { listRequest.current?.controller.abort(); listRequest.current = null; };
   }, [loadOrders]);
 
   const refreshSelectedOrder = useCallback(async (orderNo: string) => {
+    const epoch = identity.epoch;
+    const refreshDetail = async () => {
     const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`, { cache: "no-store" });
     const result = (await response.json().catch(() => null)) as { order?: OrderRecord; error?: string } | null;
     if (!response.ok || !result?.order) {
       throw new Error(result?.error ?? "订单状态刷新失败");
     }
-    setSelectedOrder(result.order);
-    await loadOrders();
-  }, [loadOrders]);
+    if (accountRecordPreload.getSnapshot().epoch === epoch) setSelectedOrder((current) => current?.order_no === orderNo ? result.order! : current);
+    };
+    await Promise.all([refreshDetail(), loadOrders(true)]);
+  }, [loadOrders, identity.epoch]);
 
-  const rows = useMemo(() => orders, [orders]);
+  const rows = useMemo(() => ownerMatches ? orders : [], [orders, ownerMatches]);
 
   async function copyOrderNo(orderNo: string) {
     try { await navigator.clipboard.writeText(orderNo); toast.success("订单编号已复制"); }
@@ -110,57 +139,61 @@ export default function MyOrdersPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <CardHeader className="shrink-0 px-5 py-4">
+    <div data-testid="orders-glass-page" data-account-orders-ready={!loading} className={cn(styles.page, "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden")}>
+      <Card className={cn(glass.surface, "flex min-h-[480px] min-w-0 flex-1 flex-col overflow-hidden md:min-h-0")}>
+          <CardHeader className={cn(glass.hero, "shrink-0 px-5 py-5 md:px-6 md:py-6")}>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div className="flex min-w-0 items-start gap-3">
+                <span aria-hidden="true" className={cn(glass.icon, "h-12 w-12")}><ClipboardList className="h-6 w-6" strokeWidth={1.6} /></span>
+                <div className="min-w-0">
                 <CardTitle className="text-xl">我的订单</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   查询当前账号的订单记录、支付状态和交付信息。
                 </p>
+                </div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setQueryOpen(true)}>
+              <Button variant="outline" size="sm" className={cn(glass.button, "rounded-xl")} onClick={() => setQueryOpen(true)}>
                 <Search className="mr-2 h-4 w-4" />
                 订单查询
               </Button>
             </div>
           </CardHeader>
 
-          <CardContent className="flex min-h-0 flex-1 overflow-hidden px-5 pb-0">
+          <CardContent className="flex min-h-0 min-w-0 flex-1 overflow-hidden px-4 pb-0 md:px-6">
             {loading ? (
-              <div className="w-full space-y-2.5">
+              <div className="relative w-full space-y-2.5">
                 {Array.from({ length: PAGE_SIZE }).map((_, index) => (
-                  <div key={index} className="h-12 rounded-xl bg-slate-100" />
+                  <div key={index} className={cn(glass.inset, "h-12 animate-pulse rounded-xl motion-reduce:animate-none")} />
                 ))}
+                <div role="status" className="absolute inset-0 flex items-center justify-center bg-white/45 backdrop-blur-[2px]"><div className={cn(glass.inset, "flex items-center gap-3 rounded-full px-5 py-3 text-sm text-primary shadow-sm")}><span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-primary/20 border-t-primary motion-reduce:animate-none" />正在加载订单</div></div>
               </div>
             ) : error ? (
               <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
                 <div className="text-center">
                   <div>{error}</div>
-                  <Button variant="outline" size="sm" className="mt-4" onClick={loadOrders}>
+                  <Button variant="outline" size="sm" className="mt-4" onClick={() => void loadOrders(true)}>
                     重试
                   </Button>
                 </div>
               </div>
             ) : rows.length === 0 ? (
               <div className="flex min-h-0 flex-1 items-center justify-center">
-                <div className="w-full max-w-[340px] rounded-2xl border border-dashed border-orange-200 bg-orange-50/60 px-7 py-7 text-center">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-primary shadow-sm">
+                <div className={cn(glass.empty, "w-full max-w-[340px] rounded-2xl border px-7 py-8 text-center")}>
+                  <div className={cn(glass.icon, "mx-auto h-14 w-14")}>
                     <ClipboardList className="h-6 w-6" />
                   </div>
                   <h2 className="mt-4 text-xl font-semibold">暂无订单</h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
                     当前筛选条件下没有订单记录。
                   </p>
-                  <Button asChild className="mt-4">
+                  <Button asChild className="mt-4 rounded-xl">
                     <Link href="/">返回商城</Link>
                   </Button>
                 </div>
               </div>
             ) : (
-              <div className="h-full w-full overflow-auto rounded-lg border">
-                <table className="w-full table-fixed text-sm">
+              <div data-testid="orders-glass-table" className={cn(glass.table, styles.list, "h-full w-full overflow-auto rounded-2xl")}>
+                <table className="w-full min-w-[940px] table-fixed text-sm">
                   <colgroup>
                     <col className="w-[16%]" />
                     <col className="w-[27%]" />
@@ -194,34 +227,35 @@ export default function MyOrdersPage() {
 
                       return (
                         <tr key={order.id} className="border-b hover:bg-slate-50">
-                          <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
+                          <td data-label="订单编号" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
                             <button
                               type="button"
                               onClick={() => copyOrderNo(order.order_no)}
-                              className="inline-flex items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
+                              title={order.order_no}
+                              className="inline-flex max-w-full items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
                             >
-                              {order.order_no}
-                              <Clipboard className="h-3 w-3" />
+                              <span className="min-w-0 truncate">{order.order_no}</span>
+                              <Clipboard className="h-3 w-3 shrink-0" />
                             </button>
                           </td>
-                          <td className="px-3 py-2.5 text-center align-middle font-medium">
+                          <td data-label="商品名称" className="px-3 py-2.5 text-center align-middle font-medium">
                             <div className="mx-auto max-w-[260px] truncate whitespace-nowrap" title={productName}>
                               {productName}
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
+                          <td data-label="数量" className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
+                          <td data-label="金额" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
                             {formatMoney(order.total_amount)}
                           </td>
-                          <td className="px-3 py-2.5 text-center align-middle">
+                          <td data-label="状态" className="px-3 py-2.5 text-center align-middle">
                             <Badge variant="outline" className={cn("whitespace-nowrap text-xs", displayStatus.className)}>
                               {displayStatus.label}
                             </Badge>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
+                          <td data-label="下单时间" className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
                             {formatDate(order.created_at)}
                           </td>
-                          <td className="px-3 py-2.5 text-center align-middle">
+                          <td data-label="操作" className="px-3 py-2.5 text-center align-middle">
                             <div className="flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap">
                               {paymentAction && paymentAction.kind !== "renew" ? (
                                 <Button asChild size="sm">
@@ -242,7 +276,7 @@ export default function MyOrdersPage() {
             )}
           </CardContent>
 
-          <div className="flex h-12 shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 text-sm text-muted-foreground">
+          <div className={cn(glass.footer, "mt-4 flex min-h-[48px] shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-3 text-sm text-muted-foreground")}>
             <span>共 {count} 条订单</span>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
@@ -259,6 +293,7 @@ export default function MyOrdersPage() {
       </Card>
 
       <OrderEmailQueryDialog
+        key={`query-${identity.epoch}`}
         open={queryOpen}
         onClose={() => setQueryOpen(false)}
         onCopyOrderNo={copyOrderNo}
@@ -266,7 +301,8 @@ export default function MyOrdersPage() {
       />
 
       <UserOrderDrawer
-        order={selectedOrder}
+        key={`detail-${identity.epoch}`}
+        order={ownerMatches ? selectedOrder : null}
         onClose={() => setSelectedOrder(null)}
         onCopyOrderNo={copyOrderNo}
         onOrderUpdated={refreshSelectedOrder}
@@ -294,12 +330,18 @@ function OrderEmailQueryDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const queryRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => { queryRequest.current?.abort(); queryRequest.current = null; }, []);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const normalizedEmail = email.trim().toLowerCase();
 
   const queryOrders = useCallback(
     async (targetPage = page, emailToQuery = queryEmail) => {
+      queryRequest.current?.abort();
+      const controller = new AbortController();
+      queryRequest.current = controller;
+      const isCurrent = () => queryRequest.current === controller && !controller.signal.aborted;
       if (!emailToQuery) {
         setError("请输入下单邮箱");
         setOrders([]);
@@ -316,12 +358,13 @@ function OrderEmailQueryDialog({
           pageSize: String(PAGE_SIZE),
           email: emailToQuery,
         });
-        const response = await fetch(`/api/orders?${params.toString()}`);
+        const response = await fetch(`/api/orders?${params.toString()}`, { cache: "no-store", signal: controller.signal });
         const result = (await response.json().catch(() => null)) as {
           orders?: OrderRecord[];
           count?: number;
           error?: string;
         } | null;
+        if (!isCurrent()) return;
 
         if (response.status === 401) {
           throw new Error("登录状态已失效，请重新登录。");
@@ -334,24 +377,16 @@ function OrderEmailQueryDialog({
         setOrders(result?.orders ?? []);
         setCount(Number(result?.count ?? 0));
       } catch (queryError) {
+        if (!isCurrent()) return;
         setError(getOrderErrorMessage(queryError, "订单查询失败，请稍后重试"));
         setOrders([]);
         setCount(0);
       } finally {
-        setLoading(false);
+        if (isCurrent()) { setLoading(false); queryRequest.current = null; }
       }
     },
     [page, queryEmail]
   );
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, open]);
 
   useEffect(() => {
     if (!open || !queryEmail) return;
@@ -360,6 +395,8 @@ function OrderEmailQueryDialog({
 
   useEffect(() => {
     if (open) return;
+    queryRequest.current?.abort(); queryRequest.current = null;
+    setLoading(false);
     setEmail("");
     setOrders([]);
     setCount(0);
@@ -390,15 +427,16 @@ function OrderEmailQueryDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/30 px-4 py-6" onClick={onClose}>
-      <div
-        className="mx-auto flex h-full max-h-[760px] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+    <DialogPrimitive.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className={styles.overlay} />
+      <DialogPrimitive.Content
+        className={cn(styles.queryDialog, "flex min-w-0 flex-col overflow-hidden")}
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4">
+        <div className={cn(styles.dialogHeader, "flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4")}>
           <div>
-            <div className="text-lg font-bold text-slate-950">订单查询</div>
-            <p className="mt-1 text-sm text-muted-foreground">输入下单邮箱，查询当前账号下匹配的订单。</p>
+            <DialogPrimitive.Title className="text-lg font-semibold text-slate-950">订单查询</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">输入下单邮箱，查询当前账号下匹配的订单。</DialogPrimitive.Description>
           </div>
           <button
             type="button"
@@ -451,8 +489,8 @@ function OrderEmailQueryDialog({
               当前邮箱下没有可显示的订单。
             </div>
           ) : (
-            <div className="h-full overflow-auto rounded-lg border">
-                <table className="w-full table-fixed text-sm">
+            <div className={cn(glass.table, styles.list, "h-full overflow-auto rounded-2xl border")}>
+              <table className="w-full min-w-[940px] table-fixed text-sm">
                   <colgroup>
                     <col className="w-[16%]" />
                     <col className="w-[27%]" />
@@ -485,34 +523,35 @@ function OrderEmailQueryDialog({
 
                     return (
                       <tr key={order.id} className="border-b hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
+                        <td data-label="订单编号" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
                           <button
                             type="button"
                             onClick={() => onCopyOrderNo(order.order_no)}
-                            className="inline-flex items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
+                              title={order.order_no}
+                              className="inline-flex max-w-full items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
                           >
-                            {order.order_no}
-                            <Clipboard className="h-3 w-3" />
+                              <span className="min-w-0 truncate">{order.order_no}</span>
+                              <Clipboard className="h-3 w-3 shrink-0" />
                           </button>
                         </td>
-                        <td className="px-3 py-2.5 text-center align-middle font-medium">
+                        <td data-label="商品名称" className="px-3 py-2.5 text-center align-middle font-medium">
                           <div className="mx-auto max-w-[260px] truncate whitespace-nowrap" title={productName}>
                             {productName}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
+                        <td data-label="数量" className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
+                        <td data-label="金额" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
                           {formatMoney(order.total_amount)}
                         </td>
-                        <td className="px-3 py-2.5 text-center align-middle">
+                        <td data-label="状态" className="px-3 py-2.5 text-center align-middle">
                           <Badge variant="outline" className={cn("whitespace-nowrap text-xs", displayStatus.className)}>
                             {displayStatus.label}
                           </Badge>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
+                        <td data-label="下单时间" className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
                           {formatDate(order.created_at)}
                         </td>
-                        <td className="px-3 py-2.5 text-center align-middle">
+                        <td data-label="操作" className="px-3 py-2.5 text-center align-middle">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -557,13 +596,14 @@ function OrderEmailQueryDialog({
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
 function UserOrderDrawer({
-  order,
+  order: requestedOrder,
   onClose,
   onCopyOrderNo,
   onOrderUpdated,
@@ -573,23 +613,12 @@ function UserOrderDrawer({
   onCopyOrderNo: (orderNo: string) => void;
   onOrderUpdated: (orderNo: string) => Promise<void>;
 }) {
+  const [closingOrder, setClosingOrder] = useState<OrderRecord | null>(null);
   useEffect(() => {
-    if (!order) return;
-    const bodyOverflow = document.body.style.overflow;
-    const htmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = bodyOverflow;
-      document.documentElement.style.overflow = htmlOverflow;
-    };
-  }, [onClose, order]);
-
+    if (requestedOrder) setClosingOrder(requestedOrder);
+    else if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setClosingOrder(null);
+  }, [requestedOrder]);
+  const order = requestedOrder ?? closingOrder;
   if (!order) return null;
 
   const paymentAction = getBep20PaymentAction(order);
@@ -601,15 +630,22 @@ function UserOrderDrawer({
   const delivery = order.order_deliveries?.find((item) => item.delivery_status === "delivered") ?? order.order_deliveries?.[0];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/30" onClick={onClose}>
+    <DialogPrimitive.Root open={Boolean(requestedOrder)} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className={styles.overlay} />
+      <DialogPrimitive.Content asChild onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget && event.currentTarget.dataset.state === "closed") setClosingOrder(null);
+      }}>
       <aside
         data-testid="order-detail-drawer"
-        className="absolute inset-y-0 right-0 flex h-dvh max-h-dvh min-w-0 w-full max-w-[760px] flex-col overflow-hidden bg-white shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+        className={cn(styles.detailDialog, "flex min-w-0 flex-col overflow-hidden")}
       >
-        <div className="flex min-w-0 max-w-full shrink-0 items-center justify-between gap-4 overflow-hidden border-b px-6 py-4">
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <div className="text-lg font-bold text-slate-950">订单详情</div>
+        <div className={cn(styles.dialogHeader, "flex min-w-0 max-w-full shrink-0 items-center justify-between gap-4 overflow-hidden border-b px-5 py-5 md:px-7")}>
+          <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+            <span aria-hidden="true" className={cn(glass.icon, "h-11 w-11")}><ClipboardList className="h-5 w-5" strokeWidth={1.6} /></span>
+            <div className="min-w-0">
+            <DialogPrimitive.Title className="text-lg font-semibold text-slate-950">订单详情</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">查看订单商品、金额、交付与支付信息。</DialogPrimitive.Description>
             <button
               type="button"
               onClick={() => onCopyOrderNo(order.order_no)}
@@ -618,6 +654,7 @@ function UserOrderDrawer({
               <span className="min-w-0 truncate">{order.order_no}</span>
               <Clipboard className="h-3 w-3 shrink-0" />
             </button>
+            </div>
           </div>
           <button
             type="button"
@@ -631,7 +668,7 @@ function UserOrderDrawer({
 
         <div
           data-testid="order-detail-drawer-scroll"
-          className="min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-6 py-5 [&>*]:min-w-0 [&>*]:max-w-full"
+          className={cn(styles.detailBody, "flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-5 md:px-7 md:py-6 [&>*]:min-w-0 [&>*]:max-w-full [&>*]:shrink-0")}
         >
           {paymentAction && !isBep20Order ? (
             <Button asChild className="w-full">
@@ -643,17 +680,18 @@ function UserOrderDrawer({
               {paymentNotice}
             </div>
           ) : null}
-          <section className="grid min-w-0 max-w-full gap-3 md:grid-cols-2">
+          <section className="grid min-w-0 max-w-full grid-cols-3 gap-2 sm:gap-3">
             <InfoBlock label="订单金额" value={formatMoney(order.total_amount)} primary />
-            <StatusBlock label="状态" value={displayStatus.label} className={displayStatus.className} />
+            <InfoBlock label="发货方式" value={getDeliveryLabel(order.delivery_type ?? firstItem?.delivery_type)} />
+            <StatusBlock label="订单状态" value={displayStatus.label} className={displayStatus.className} />
           </section>
 
-          <section className="min-w-0 max-w-full overflow-hidden rounded-xl border">
+          <section className={cn(styles.section, "min-w-0 max-w-full overflow-hidden rounded-2xl border")}>
             <div className="border-b px-4 py-3 font-semibold">订单商品</div>
             <div className="divide-y">
               {(order.order_items ?? []).map((item) => (
-                <div key={item.id} className="grid min-w-0 max-w-full items-center gap-3 px-4 py-4 text-sm md:grid-cols-[minmax(0,1fr)_120px_80px]">
-                  <div className="min-w-0">
+                <div key={item.id} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 text-sm md:grid-cols-[minmax(0,1fr)_100px_56px]">
+                  <div className="col-span-2 min-w-0 md:col-span-1">
                     <div className="truncate font-semibold" title={item.product_name}>{item.product_name}</div>
                     {item.sku_title ? (
                       <div className="mt-1 truncate text-xs text-muted-foreground">SKU: {item.sku_title}</div>
@@ -669,12 +707,11 @@ function UserOrderDrawer({
             </div>
           </section>
 
-          <section className="rounded-xl border p-4 text-sm">
+          <section className={cn(styles.section, "rounded-2xl border p-4 text-sm")}>
             <div className="mb-3 font-semibold">订单信息</div>
             <div className="grid gap-3 md:grid-cols-2">
               <InfoLine label="下单时间" value={formatDate(order.created_at)} />
               <InfoLine label="更新时间" value={formatDate(order.updated_at)} />
-              <InfoLine label="交付方式" value={getDeliveryLabel(order.delivery_type ?? firstItem?.delivery_type)} />
               {isShippingOrder ? (
                 <InfoLine label="收货信息" value={formatShippingAddress(order)} />
               ) : null}
@@ -691,6 +728,7 @@ function UserOrderDrawer({
           />
 
           <SecureOrderDelivery
+            className="flex flex-1 flex-col [&>[data-testid=card-secret-content]]:flex-1"
             orderNo={order.order_no}
             paymentStatus={order.payment_status}
             orderStatus={order.status}
@@ -700,22 +738,24 @@ function UserOrderDrawer({
           />
         </div>
       </aside>
-    </div>
+      </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
 function InfoBlock({ label, value, primary }: { label: string; value: string; primary?: boolean }) {
   return (
-    <div className="flex min-h-[88px] flex-col items-center justify-center rounded-xl border bg-slate-50 p-4 text-center">
+    <div className={cn(glass.inset, "flex min-h-[88px] min-w-0 flex-col items-center justify-center rounded-xl p-3 text-center sm:p-4")}>
       <div className="text-xs text-slate-500">{label}</div>
-      <div className={cn("mt-2 font-semibold", primary && "text-primary")}>{value}</div>
+      <div className={cn("mt-2 font-semibold tabular-nums", primary && "text-lg tracking-tight text-primary sm:text-2xl")}>{value}</div>
     </div>
   );
 }
 
 function StatusBlock({ label, value, className }: { label: string; value: string; className: string }) {
   return (
-    <div className="flex min-h-[88px] flex-col items-center justify-center rounded-xl border bg-slate-50 p-4 text-center">
+    <div className={cn(glass.inset, "flex min-h-[88px] flex-col items-center justify-center rounded-xl p-4 text-center")}>
       <div className="text-xs text-slate-500">{label}</div>
       <Badge variant="outline" className={cn("mt-2 whitespace-nowrap text-xs", className)}>
         {value}

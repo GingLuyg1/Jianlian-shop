@@ -4,6 +4,9 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } fro
 import { Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import glass from "@/components/account/AccountGlass.module.css";
+import styles from "@/components/account/AccountCenter.module.css";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -255,14 +258,14 @@ export default function AccountProfilePage() {
   }
 
   return (
-    <Card className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <CardHeader className="pb-3">
+    <Card data-account-page="/account/profile" data-account-ready={!loading && !formError} aria-busy={loading} className={`${glass.surface} ${styles.panel} ${styles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden`}>
+      <CardHeader className={`${glass.hero} ${styles.pageHeader}`}>
         <CardTitle className="text-xl">个人资料</CardTitle>
         <p className="text-sm text-muted-foreground">维护你的联系信息、常用收件信息和头像。</p>
       </CardHeader>
       <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {loading ? (
-          <div className="grid min-h-0 min-w-0 flex-1 gap-4 md:grid-cols-2">
+          <div className={`${styles.formGroup} grid min-w-0 content-start gap-5 md:grid-cols-2` }>
             {Array.from({ length: 8 }).map((_, index) => (
               <div key={index} className="h-12 animate-pulse rounded-xl bg-slate-100" />
             ))}
@@ -275,7 +278,7 @@ export default function AccountProfilePage() {
               </div>
             ) : null}
 
-            <div className="flex shrink-0 flex-col gap-4 sm:flex-row sm:items-center">
+            <div className={`${styles.formGroup} flex shrink-0 flex-col gap-4 sm:flex-row sm:items-center`}>
               <div className="relative h-24 w-24 overflow-hidden rounded-full border bg-orange-50">
                 {avatarPreview || form.avatar_url ? (
                   <img src={avatarPreview || form.avatar_url} alt="" className="h-full w-full object-cover" />
@@ -290,13 +293,13 @@ export default function AccountProfilePage() {
                   <Camera className="h-4 w-4" />
                   选择头像
                 </Label>
-                <Input id="avatar" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={handleAvatarChange} />
+                <Input id="avatar" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only !h-px !w-px" onChange={handleAvatarChange} />
                 <p className="mt-2 text-xs text-muted-foreground">支持 jpg、jpeg、png、webp，最大 2MB，保存时按 1:1 上传。</p>
                 {errors.avatar ? <p className="mt-1 text-xs text-red-600">{errors.avatar}</p> : null}
               </div>
             </div>
 
-            <div className="grid min-h-0 min-w-0 flex-1 gap-4 md:grid-cols-2">
+            <div className={`${styles.formGroup} grid min-w-0 content-start gap-5 md:grid-cols-2`}>
               <Field label="登录邮箱" htmlFor="email">
                 <Input id="email" value={form.email} readOnly className="bg-slate-50" />
               </Field>
@@ -344,7 +347,7 @@ function Field({
   label: string;
 }) {
   return (
-    <div className={className}>
+    <div className={`${styles.field} ${className ?? ""}`}>
       <Label htmlFor={htmlFor}>{label}</Label>
       <div className="mt-2">{children}</div>
       {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}

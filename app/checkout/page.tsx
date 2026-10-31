@@ -48,7 +48,6 @@ import { Input } from "@/components/ui/input";
 import {
   getErrorText,
   getPublicProductDetail,
-  listPublicCategories,
   type PublicProductRow,
   type PublicProductSkuRow,
 } from "@/lib/supabase/public-catalog";
@@ -65,6 +64,9 @@ import ExternalCashierFeeSummary from "@/components/payments/ExternalCashierFeeS
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
+import { peekPublicProductPreview } from "@/lib/catalog/public-product-preview";
+import { loadPublicRechargeChannels, peekPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
+import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
 import {
   classifyCheckoutOrderResponse,
   classifyRetainedCheckoutOrder,
@@ -118,6 +120,8 @@ function createCheckoutClientRequestId() {
 
 const REQUIRED_AGREEMENT_TYPES = ["terms_of_service", "refund_policy", "digital_delivery_policy", "purchase_notice"];
 const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20", "alipay", "wechat_pay"]);
+const CHECKOUT_PAYMENT_OPTIONS = PAYMENT_METHOD_OPTIONS.filter((option) => option.code !== "binance_pay")
+  .sort((a, b) => Number(a.code === "usdt_trc20") - Number(b.code === "usdt_trc20"));
 const AGREEMENT_LABELS: Record<string, string> = {
   terms_of_service: "用户协议",
   refund_policy: "退款政策",
@@ -206,15 +210,16 @@ export default function CheckoutPage() {
   const [customerNote, setCustomerNote] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(DEFAULT_PAYMENT_METHOD);
-  const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
+  const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>(() => peekPublicRechargeChannels() ?? []);
   const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmed, setConfirmed] = useState(true);
+  const [couponCode, setCouponCode] = useState("");
   const [termsOpen, setTermsOpen] = useState(false);
   const [legalDocuments, setLegalDocuments] = useState<LegalDocument[]>([]);
   const [legalLoading, setLegalLoading] = useState(true);
   const [legalError, setLegalError] = useState("");
   const [selectedSkuId, setSelectedSkuId] = useState("");
-  const [productRow, setProductRow] = useState<PublicProductRow | null>(null);
+  const [productRow, setProductRow] = useState<PublicProductRow | null>(() => peekPublicProductPreview(productId));
   const [productSkus, setProductSkus] = useState<PublicProductSkuRow[]>([]);
   const [productLoading, setProductLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -360,6 +365,8 @@ export default function CheckoutPage() {
     async function loadProduct() {
       setProductLoading(true);
       setError("");
+      setProductRow(peekPublicProductPreview(productId));
+      setProductSkus([]);
 
       try {
         if (!productId.trim()) {
@@ -369,9 +376,15 @@ export default function CheckoutPage() {
           return;
         }
 
+        const categoriesRead = refreshPublicCategories().catch(() => []);
         const detail = await getPublicProductDetail(productId);
-        if (detail?.product.category_id) {
-          const categories = await listPublicCategories().catch(() => []);
+        if (!active) return;
+        setProductRow(detail?.product ?? null);
+        setProductSkus(detail?.skus ?? []);
+        setSelectedSkuId((current) => requestedSkuId || current);
+        // Breadcrumb enrichment cannot hold the validated product/form hostage.
+        void categoriesRead.then((categories) => {
+          if (!active || !detail?.product.category_id) return;
           const path: string[] = [];
           const visited = new Set<string>();
           let category = categories.find((item) => item.id === detail.product.category_id);
@@ -380,12 +393,9 @@ export default function CheckoutPage() {
             path.unshift(category.slug);
             category = categories.find((item) => item.id === category?.parent_id);
           }
-          if (path.length) detail.product = { ...detail.product, metadata: { ...detail.product.metadata, category_slug: path[0], category_path: path.join("/") } };
-        }
-        if (!active) return;
-        setProductRow(detail?.product ?? null);
-        setProductSkus(detail?.skus ?? []);
-        setSelectedSkuId((current) => requestedSkuId || current);
+          if (path.length) setProductRow((current) => current?.id === detail.product.id
+            ? { ...current, metadata: { ...current.metadata, category_slug: path[0], category_path: path.join("/") } } : current);
+        });
       } catch (loadError) {
         if (!active) return;
         setError(getErrorText(loadError, "商品读取失败，请返回商品列表重试"));
@@ -430,18 +440,23 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/recharges/channels", { cache: "no-store" })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => null) as { channels?: PaymentChannel[] } | null;
-        if (active && response.ok) setPaymentChannels(payload?.channels ?? []);
-      })
-      .catch(() => { /* Server-side payment checks remain authoritative. */ });
-    return () => { active = false; };
+    const load = () => void loadPublicRechargeChannels()
+      .then((channels) => { if (active) setPaymentChannels(channels); })
+      .catch(() => { if (active) setPaymentChannels([]); });
+    const revalidate = () => { if (document.visibilityState === "visible") load(); };
+    load();
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", revalidate);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", revalidate);
+      document.removeEventListener("visibilitychange", revalidate);
+    };
   }, []);
 
   const product = useMemo(
-    () => (productRow ? mapCheckoutProduct(productRow) : null),
-    [productRow]
+    () => (productRow && (productRow.id === productId || productRow.slug === productId) ? mapCheckoutProduct(productRow) : null),
+    [productRow, productId]
   );
 
   const databaseSkuOptions: SkuOption[] = productSkus.map((sku) => ({
@@ -475,10 +490,11 @@ export default function CheckoutPage() {
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
   const isShippingProduct = ["shipping", "physical"].includes(String(productRow?.delivery_type ?? ""));
-  const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod);
   const selectedPaymentChannel = paymentChannels.find((channel) =>
     getPaymentMethodOption(paymentMethod)?.channelCodes.includes(channel.code)) ?? null;
-  const isPurchasable = productRow?.status === "active" && (!hasSku || Boolean(selectedSku)) && (!selectedSku?.status || selectedSku.status === "active") && effectiveStock > 0;
+  const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod)
+    || (paymentMethod !== "balance" && selectedPaymentChannel?.enabled !== true);
+  const isPurchasable = !productLoading && Boolean(product) && productRow?.status === "active" && (!hasSku || Boolean(selectedSku)) && (!selectedSku?.status || selectedSku.status === "active") && effectiveStock > 0;
   const unavailableMessage =
     productRow?.status === "sold_out" || effectiveStock <= 0
       ? "该商品已售罄"
@@ -501,7 +517,7 @@ export default function CheckoutPage() {
     balanceStatus,
     balanceSummary,
   });
-  const orderConfigurationLocked = submitLoading || Boolean(pendingBalanceOrder);
+  const orderConfigurationLocked = productLoading || submitLoading || Boolean(pendingBalanceOrder);
   const submitButtonLabel = submitLoading
     ? "正在提交订单..."
     : pendingBalanceOrder
@@ -526,16 +542,8 @@ export default function CheckoutPage() {
     return `/products/account-recharge?returnTo=${encodeURIComponent(`/checkout?${params.toString()}`)}`;
   }, [productId, searchParams, selectedSku?.id]);
 
-  if (productLoading) {
-    return (
-      <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 max-w-none px-4 py-5 sm:px-5 lg:mt-0 lg:px-6">
-        <Card>
-          <CardContent className="py-20 text-center text-sm text-muted-foreground">
-            正在加载商品...
-          </CardContent>
-        </Card>
-      </PublicLayout>
-    );
+  if (productLoading && !product) {
+    return <CheckoutLoadingShell />;
   }
 
   if (!product || !productRow) {
@@ -554,6 +562,7 @@ export default function CheckoutPage() {
   }
 
   const handleSubmit = async () => {
+    if (productLoading) return;
     if (!productRow || submitLoading || submissionGuardRef.current.isActive()) return;
 
     if (hasSku && !selectedSku) {
@@ -755,6 +764,7 @@ export default function CheckoutPage() {
       <div data-testid="checkout-layout" className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
         <ProductDetailCard
           product={product}
+          loading={productLoading}
           priceLabel={priceLabel}
           closeHref={safeProductReturnTo(searchParams.get("returnTo")) ?? getProductListHref(product)}
         />
@@ -762,7 +772,7 @@ export default function CheckoutPage() {
         <Card data-testid="checkout-purchase-panel" className="h-auto min-h-0 overflow-hidden lg:h-full">
           <CardContent className="flex h-full min-h-0 flex-col p-0">
             <div className="min-h-0 flex-1 bg-white p-4 lg:overflow-y-auto">
-              <div className="space-y-4">
+              <div className="flex min-h-full flex-col gap-4">
               {hasSku ? (
                 <SkuSelector
                   options={skuOptions}
@@ -783,6 +793,11 @@ export default function CheckoutPage() {
                     className="h-10 bg-slate-50 text-sm"
                     disabled={orderConfigurationLocked}
                   />
+                </div>
+
+                <div>
+                  <label htmlFor="checkout-coupon" className="mb-1.5 block text-sm font-medium">优惠券</label>
+                  <Input id="checkout-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} maxLength={40} autoComplete="off" placeholder="请输入优惠券" className="h-10 bg-slate-50 text-sm" />
                 </div>
 
                 <div>
@@ -848,7 +863,7 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
 
-              <div className="border-t border-border pt-4">
+              <div className="mt-auto border-t border-border pt-4">
                 <div className="mb-1.5 text-xs font-medium text-muted-foreground">
                   支付方式
                 </div>
@@ -891,22 +906,22 @@ export default function CheckoutPage() {
               </div>
 
               <div className="border-t border-border pt-4">
-                <div className="flex items-center justify-between gap-4">
+                <div data-testid="checkout-submit-controls" className="grid grid-cols-[100px_minmax(0,1fr)] items-center gap-2">
                   <div className="flex h-10 items-center rounded-lg border border-border bg-white">
                     <button
                       type="button"
-                      className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="flex h-10 w-8 items-center justify-center text-muted-foreground hover:text-foreground"
                       onClick={() => setQuantity((value) => Math.max(1, value - 1))}
                       disabled={orderConfigurationLocked}
                     >
                       <Minus className="h-4 w-4" />
                     </button>
-                    <div className="w-10 text-center text-sm font-semibold">
+                    <div className="w-8 text-center text-sm font-semibold">
                       {quantity}
                     </div>
                     <button
                       type="button"
-                      className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="flex h-10 w-8 items-center justify-center text-muted-foreground hover:text-foreground"
                       onClick={() =>
                         setQuantity((value) =>
                           Math.min(Math.max(effectiveStock, 1), value + 1)
@@ -920,36 +935,36 @@ export default function CheckoutPage() {
 
                   <Button
                     type="button"
-                    className="h-11 rounded-full px-7 text-sm"
+                    className="h-11 min-w-0 rounded-full px-3 text-sm font-semibold"
                     onClick={handleSubmit}
-                    disabled={submitLoading || (Boolean(balanceSubmissionBlockReason) && balanceSubmissionBlockReason !== "BALANCE_INSUFFICIENT")}
+                    disabled={productLoading || submitLoading || (Boolean(balanceSubmissionBlockReason) && balanceSubmissionBlockReason !== "BALANCE_INSUFFICIENT")}
                     aria-describedby="checkout-submit-feedback"
                   >
-                    {submitButtonLabel}
-                    <span className="mx-3 h-4 w-px bg-white/50" />
-                    {amountLabel}
+                    <span className="min-w-0 truncate">{submitButtonLabel}</span>
+                    <span className="mx-2 h-4 w-px shrink-0 bg-white/50" />
+                    <span className="shrink-0 text-base font-semibold tabular-nums">{amountLabel}</span>
                   </Button>
                 </div>
               </div>
 
-              <div className="flex min-w-0 items-center gap-2 border-t border-border pt-4 text-xs leading-5">
+              <div className="flex min-w-0 items-start gap-2 border-t border-border pt-4 text-[11px] leading-5">
                 <input
                   id="checkout-agreement-confirmation"
                   type="checkbox"
                   checked={confirmed}
                   onChange={(event) => setConfirmed(event.target.checked)}
                   aria-label="确认已阅读并同意当前订单协议"
-                  className="h-4 w-4 shrink-0 accent-primary"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                 />
                 <div className="min-w-0">
-                  我确认已阅读并同意当前版本的用户协议、退款政策、数字商品交付规则和购买须知，且订单信息填写无误
-                  {" "}
+                  <span className="block">我已阅读并同意用户协议、退款政策、</span>
+                  <span>交付规则与购买须知，确认订单无误。</span>{" "}
                   <button
                     type="button"
                     className="inline whitespace-nowrap font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
                     onClick={() => setTermsOpen(true)}
                   >
-                    查看协议版本
+                    查看协议
                   </button>
                 </div>
               </div>
@@ -1027,14 +1042,19 @@ function PaymentMethodSelect({
   channels: PaymentChannel[];
   disabled?: boolean;
 }) {
-  const selectedOption = getPaymentMethodOption(selected) ?? PAYMENT_METHOD_OPTIONS[0];
+  const selectedOption = getPaymentMethodOption(selected) ?? CHECKOUT_PAYMENT_OPTIONS[0];
+  const available = (index: number) => {
+    const option = CHECKOUT_PAYMENT_OPTIONS[index];
+    return Boolean(option && ORDER_ENABLED_PAYMENT_METHODS.has(option.code)
+      && (option.code === "balance" || channels.some((channel) => option.channelCodes.includes(channel.code) && channel.enabled)));
+  };
   const descriptionFor = (option: typeof selectedOption) => {
     const channel = channels.find((item) => option.channelCodes.includes(item.code));
     return channel?.maximumAmount && channel.currency === "CNY"
       ? `${option.label}，单笔最高 ¥${channel.maximumAmount}`
       : option.description;
   };
-  const selectedIndex = Math.max(0, PAYMENT_METHOD_OPTIONS.findIndex((option) => option.code === selected));
+  const selectedIndex = Math.max(0, CHECKOUT_PAYMENT_OPTIONS.findIndex((option) => option.code === selected));
   const [activeIndex, setActiveIndex] = useState(selectedIndex);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -1048,8 +1068,12 @@ function PaymentMethodSelect({
 
   function moveActive(step: number) {
     setActiveIndex((current) => {
-      const count = PAYMENT_METHOD_OPTIONS.length;
-      return (current + step + count) % count;
+      const count = CHECKOUT_PAYMENT_OPTIONS.length;
+      for (let offset = 1; offset <= count; offset++) {
+        const next = (current + step * offset + count * 2) % count;
+        if (available(next)) return next;
+      }
+      return current;
     });
   }
 
@@ -1067,7 +1091,7 @@ function PaymentMethodSelect({
       event.preventDefault();
       if (!open) {
         const step = event.key === "ArrowDown" ? 1 : -1;
-        setActiveIndex((selectedIndex + step + PAYMENT_METHOD_OPTIONS.length) % PAYMENT_METHOD_OPTIONS.length);
+        moveActive(step);
         onOpenChange(true);
       } else {
         moveActive(event.key === "ArrowDown" ? 1 : -1);
@@ -1077,8 +1101,8 @@ function PaymentMethodSelect({
 
     if (event.key === "Enter" && open) {
       event.preventDefault();
-      const option = PAYMENT_METHOD_OPTIONS[activeIndex];
-      if (option) onSelect(option.code);
+      const option = CHECKOUT_PAYMENT_OPTIONS[activeIndex];
+      if (option && available(activeIndex)) onSelect(option.code);
       onOpenChange(false);
     }
   }
@@ -1087,11 +1111,12 @@ function PaymentMethodSelect({
     <div ref={rootRef} className="relative z-30" onKeyDown={handleKeyDown}>
       <button
         type="button"
+        role="combobox"
         className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-[#ead9cc] bg-[#fffaf6] px-3 py-2 text-left text-sm transition hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls="checkout-payment-method-options"
-        aria-activedescendant={open ? `checkout-payment-method-${PAYMENT_METHOD_OPTIONS[activeIndex]?.code ?? selected}` : undefined}
+        aria-activedescendant={open ? `checkout-payment-method-${CHECKOUT_PAYMENT_OPTIONS[activeIndex]?.code ?? selected}` : undefined}
         onClick={() => onOpenChange(!open)}
         disabled={disabled}
       >
@@ -1108,13 +1133,13 @@ function PaymentMethodSelect({
       {open ? (
         <div
           id="checkout-payment-method-options"
-          className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 max-h-[178px] overflow-y-auto rounded-xl border border-[#ead9cc] bg-white p-1 shadow-xl"
+          className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 max-h-[232px] overflow-y-auto rounded-xl border border-[#ead9cc] bg-white p-1 shadow-xl"
           role="listbox"
         >
-          {PAYMENT_METHOD_OPTIONS.map((option, index) => {
+          {CHECKOUT_PAYMENT_OPTIONS.map((option, index) => {
             const active = option.code === selected;
             const keyboardActive = index === activeIndex;
-            const unavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(option.code);
+            const unavailable = !available(index);
             return (
               <button
                 key={option.code}
@@ -1123,15 +1148,18 @@ function PaymentMethodSelect({
                 type="button"
                 role="option"
                 aria-selected={active}
+                aria-disabled={unavailable}
+                disabled={unavailable}
                 tabIndex={-1}
                 className={cn(
                   "flex h-14 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition",
                   active ? "bg-primary/10 text-primary" : "text-slate-800 hover:bg-slate-50",
                   keyboardActive && !active ? "bg-slate-50 ring-1 ring-primary/20" : "",
-                  unavailable ? "opacity-80" : ""
+                  unavailable ? "cursor-not-allowed opacity-50" : ""
                 )}
-                onMouseEnter={() => setActiveIndex(index)}
+                onMouseEnter={() => { if (!unavailable) setActiveIndex(index); }}
                 onClick={() => {
+                  if (unavailable) return;
                   onSelect(option.code);
                   onOpenChange(false);
                 }}
@@ -1214,12 +1242,30 @@ function TermsDialog({
     </Dialog>
   );
 }
+function ProductDetailSkeleton() {
+  return <div data-testid="checkout-detail-skeleton" role="status" aria-label="商品详情加载中" className="mt-8 flex min-h-[240px] flex-1 flex-col justify-evenly gap-5 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/60 to-white p-6">
+    <div className="h-6 w-36 animate-pulse rounded-lg bg-orange-100/65 motion-reduce:animate-none" />
+    {["w-full", "w-5/6", "w-full", "w-2/3"].map((width, index) => <div key={index} className={cn(width, "h-4 animate-pulse rounded-md bg-slate-100 motion-reduce:animate-none")} />)}
+  </div>;
+}
+
+function CheckoutLoadingShell() {
+  return <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 max-w-none py-4 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
+    <div data-testid="checkout-progressive-loading" className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
+      <Card className="min-h-0 overflow-auto"><CardContent className="p-6"><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
+      <Card className="min-h-0"><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
+    </div>
+  </PublicLayout>;
+}
+
 function ProductDetailCard({
   product,
+  loading = false,
   priceLabel,
   closeHref,
 }: {
   product: Product;
+  loading?: boolean;
   priceLabel: string;
   closeHref: string;
 }) {
@@ -1237,13 +1283,13 @@ function ProductDetailCard({
       >
         <X className="h-4 w-4" />
       </button>
-      <CardContent className="h-auto p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]">
-        <div data-testid="checkout-product-detail-content" className="mx-auto w-full max-w-[1040px]">
-        <div className="mb-5 text-sm font-medium text-muted-foreground">
+      <CardContent className={cn("h-auto p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]", loading && "flex flex-col")}>
+        <div data-testid="checkout-product-detail-content" className={cn("mx-auto w-full max-w-[1040px]", loading && "flex min-h-0 flex-1 flex-col")}>
+        <div className="mb-5 shrink-0 text-sm font-medium text-muted-foreground">
           {product.categoryLabel}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <div className="grid shrink-0 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <div className="flex min-h-[210px] items-center justify-center rounded-xl bg-slate-50">
             <ProductArtwork product={product} />
           </div>
@@ -1268,7 +1314,7 @@ function ProductDetailCard({
           </div>
         </div>
 
-        {family === "chatgpt" ? (
+        {loading ? <ProductDetailSkeleton /> : family === "chatgpt" ? (
           <GptRechargeDetails product={product} />
         ) : family === "grok" ? (
           <GrokRechargeDetails product={product} />
