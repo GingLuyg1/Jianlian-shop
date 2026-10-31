@@ -55,3 +55,24 @@ the zero-debit contract is established for the available account/transport.
 
 No Daju, USDT, payment core, UI, production schema or live release change is
 included. Existing Giffgaff and 19 gift-card drafts remain protected.
+
+## Direct sales target: 15% gross margin
+
+`direct-sales-policy.mjs` implements exact fixed-point cost arithmetic using
+the existing money parser. Fee-inclusive USD cost times the approved USD/CNY
+settlement rate, plus additional CNY costs, retains 16 decimal places. Only
+the final `allInCny / 0.85` retail price rounds upward to CNY cents. Rounding
+can produce a margin slightly above 15%; it never uses a 15% cost markup.
+
+The Bitrefill-only decision rejects missing resale scope, unverified Business
+credentials, stale/future quote or FX, missing full fees or supplier-enforced
+cap, a different Product/Package, unavailability, insufficient margin, missing
+typed delivery/reconciliation evidence, unauthorized/unreserved budgets, and
+insufficient balance or limits. Unknown/display costs return no actual margin.
+Other suppliers return `UNCHANGED`.
+
+This is a server-side decision function, **not a deployed checkout hook or a
+background SKU updater**. It does not create an order, update stock/status,
+change a price, reserve a budget, call a supplier, or override the false release
+gate. Trusted input loaders, the authenticated quote/FX and budget contract,
+and a separately verified runtime integration are still required before sales.
