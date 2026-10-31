@@ -68,4 +68,3 @@ TASK=JIANLIAN_ADMIN_DASHBOARD_V2_5_CONTINUE
 仅准备独立本地提交、指定后台分支推送与Draft PR供用户视觉确认；不Merge，不部署Production，不执行SQL。
 下一步仅用户确认V2.5最终效果/审阅Draft；Production数据库兼容、规模性能、移动真机、正式发布与回退是后续单独门禁，Test只读通过不自动批准上线。
 前台397dcc2/PR87、原110项未提交修改、V2.5基准da560ad、安全RC675b9a1和其他工作树保持隔离。USDT扫描器与真实资金E2E PENDING不动。
-

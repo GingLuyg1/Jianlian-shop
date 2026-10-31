@@ -64,4 +64,3 @@ test('only read-only RPC transport is used after normal administrator authorizat
     }
   }
 });
-
