@@ -226,7 +226,7 @@ export async function POST(request: Request) {
   }
   const service = serviceRole;
 
-  const categoryError = await assertProductCategory(service, payload.category_id as string);
+  const categoryError = await assertProductCategory(service, payload.category_id as string, payload.status);
   if (categoryError) return productFailureResponse("PRODUCT_INVALID_CATEGORY", categoryError, requestId, 400);
 
   const { data, error } = await service.from("products").insert(payload).select(PRODUCT_FIELDS).single();

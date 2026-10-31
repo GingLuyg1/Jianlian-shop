@@ -1,3 +1,4 @@
+import { readSkuCategoryError } from "@/lib/products/draft-category-guard.mjs";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
@@ -70,6 +71,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const payload = { product_id: params.id, sku_title: title, sku_code: code, combination_key: code.toLowerCase(), price, original_price: originalPrice, stock, status, sort_order: sortOrder, delivery_type: deliveryType, image_url: text(body?.image_url, 2000), metadata: {} };
   const { data: product, error: productError } = await service.from("products").select("id,delivery_type").eq("id", params.id).maybeSingle();
   if (productError || !product) return json({ error: "商品不存在", code: "PRODUCT_NOT_FOUND", requestId }, 404);
+  const categoryError = await readSkuCategoryError(service, params.id, [status]);
+  if (categoryError) return json({ error: categoryError, code: "SKU_CATEGORY_NOT_PUBLISHABLE", requestId }, 409);
   if (isAutomaticSkuActivation(null, status, product, payload)) {
     const readiness = await readSkuActivationReadiness(service, product, payload);
     if (!readiness.ready) return json({ error: `SKU 激活条件未满足：${formatSkuActivationReasons(readiness.reasons)}`, code: "SKU_ACTIVATION_NOT_READY", reasons: readiness.reasons, readiness, requestId }, readiness.reasons.includes("READINESS_CHECK_FAILED") ? 503 : 409);

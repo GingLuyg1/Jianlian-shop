@@ -191,8 +191,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return productFailureResponse("PRODUCT_NO_CHANGES", "没有需要保存的商品变更", requestId, 400);
   }
 
-  if (payload.category_id) {
-    const categoryError = await assertProductCategory(service, payload.category_id);
+  if (payload.category_id || payload.status === "active" || payload.status === "sold_out") {
+    const categoryError = await assertProductCategory(service, String(payload.category_id ?? before.category_id ?? ""), String(payload.status ?? before.status));
     if (categoryError) {
       return productFailureResponse("PRODUCT_INVALID_CATEGORY", categoryError, requestId, 400);
     }
