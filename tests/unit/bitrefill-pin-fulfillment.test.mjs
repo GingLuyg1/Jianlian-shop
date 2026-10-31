@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import { pinFixture, PinFakeTransport } from "../support/bitrefill-pin-fixture.mjs";
-import { prepareBitrefillPinPurchase, assertPreparedPinPurchase } from "../../lib/providers/bitrefill/pin-policy.mjs";
+import { prepareBitrefillPinPurchase, assertPreparedPinPurchase, buildBitrefillPinMcpPlan } from "../../lib/providers/bitrefill/pin-policy.mjs";
+import { BitrefillMcpPurchaseTransport } from "../../lib/providers/bitrefill/mcp-purchase-transport.mjs";
 import { createBitrefillPinFulfillment, evaluateBitrefillPinStock } from "../../lib/providers/bitrefill/pin-fulfillment.mjs";
 import { BitrefillPurchaseHttpTransport } from "../../lib/providers/bitrefill/purchase-http-transport.mjs";
 for (const face of ["10", "15", "20"]) test(`GBP${face} PIN freezes GBP face, USD debit and CNY paid evidence separately`, () => {
@@ -45,4 +47,19 @@ test("supplier stock remains boolean/null; local inventory wins without fake qua
   assert.equal(result.quantity, null);assert.equal(result.quantityKnown, false);assert.equal(result.available, true);assert.equal(result.purchasable, false);
   assert.equal(evaluateBitrefillPinStock({ localStock: 0, supplierSnapshot, nowMs, maxAgeMs: 60000, saleDecision: { canAcceptPayment: false } }).purchasable, false);
   assert.equal(evaluateBitrefillPinStock({ localStock: 0, supplierSnapshot, nowMs: nowMs + 60001, maxAgeMs: 60000, saleDecision: { canAcceptPayment: true } }).purchasable, false);
+});
+test("Personal MCP reuses the USD wallet contract without confusing GBP Package ID and package_value", () => {
+  const f=pinFixture(),apiKey="SYNTHETIC_MCP_ONLY",accountFingerprint=createHash("sha256").update("bitrefill-personal-key-v1:").update(apiKey).digest("hex");
+  const schema = { required: ["cart_items", "payment_method"], properties: {
+    payment_method: { enum: ["balance"] }, balance_currency: { enum: ["USD"] },
+    cart_items: { items: { properties: { package_value: { type: "string" } } } },
+  } };
+  const contract = { source: "authenticated_mcp_tools_list", checkedAt: new Date().toISOString(), accountFingerprint,
+    tools: [{ name: "buy-products", annotations: { destructiveHint: true }, inputSchema: schema }] };
+  const args={binding:f.candidate.orderItem.product_snapshot.supplier_binding,packageValue:"10",contract};
+  const {plan,frozenRequest}=buildBitrefillPinMcpPlan(args);
+  assert.equal(plan.request.params.arguments.cart_items[0].package_value,"10");assert.equal(plan.request.params.arguments.balance_currency,"USD");
+  assert.throws(()=>buildBitrefillPinMcpPlan({...args,packageValue:args.binding.supplier_sku}));
+  let calls=0;const transport=new BitrefillMcpPurchaseTransport({credentials:{authMode:"personal",apiKey},fetchImpl:()=>{calls++;throw Error("NO_NETWORK");},preparedPlan:plan,frozenRequest,purchaseEnabled:true});
+  assert.throws(()=>createBitrefillPinFulfillment({transport}),/REAL_PURCHASE_DISABLED/);assert.equal(calls,0);
 });

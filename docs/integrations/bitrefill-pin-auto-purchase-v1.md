@@ -26,6 +26,12 @@ activate purchases. A live release still needs verified account permissions,
 fee-inclusive debit/FX contracts, an enforceable USD cap, and a real atomic budget
 reserver. No production implementation of those trusted loaders is fabricated.
 
+The existing Personal MCP transport is also reused. `buildBitrefillPinMcpPlan`
+reuses its authenticated USD schema assertion and frozen request binder; the
+actual GBP denomination is `package_value`, not the full REST Package ID or the
+USD cost. USD wallet, same-account quote and one-submit/no-second-payment rules
+remain mandatory. Constructing a plan cannot grant purchase authorization.
+
 ## Frozen and pre-submit contracts
 
 - Read paid order, item and frozen root using the existing authenticated service

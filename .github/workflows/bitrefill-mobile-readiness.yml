@@ -10,6 +10,7 @@ on:
       - lib/providers/bitrefill/paid-order-local.mjs
       - lib/providers/bitrefill/purchase-persistence.mjs
       - lib/providers/bitrefill/single-item-purchase.mjs
+      - lib/providers/bitrefill/mcp-usd-adapter.mjs
       - scripts/verify-bitrefill-pin-pg.mjs
       - tests/support/bitrefill-pin-*.mjs
       - tests/unit/bitrefill-pin-fulfillment.test.mjs
@@ -30,7 +31,7 @@ jobs:
         with:
           node-version: 20
       - name: PIN policy and affected purchase regression
-        run: node --test tests/unit/bitrefill-pin-fulfillment.test.mjs tests/unit/bitrefill-p1-purchase.test.mjs tests/unit/bitrefill-p2-local.test.mjs tests/unit/bitrefill-p3-hardening.test.mjs
+        run: node --test tests/unit/bitrefill-pin-fulfillment.test.mjs tests/unit/bitrefill-p1-purchase.test.mjs tests/unit/bitrefill-p2-local.test.mjs tests/unit/bitrefill-p3-hardening.test.mjs tests/unit/bitrefill-mcp-usd-adapter.test.mjs
   pin-isolated-pg17:
     runs-on: ubuntu-latest
     timeout-minutes: 10
