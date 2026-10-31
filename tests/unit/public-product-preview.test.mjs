@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rememberPublicProductPreview, peekPublicProductPreview, clearPublicProductPreviews } from "../../lib/catalog/public-product-preview.ts";
+import { loadPureTypeScript } from "../helpers/load-pure-typescript.mjs";
+const { rememberPublicProductPreview, peekPublicProductPreview, clearPublicProductPreviews } = loadPureTypeScript(new URL("../../lib/catalog/public-product-preview.ts", import.meta.url));
 
 test("listing previews are short lived and match the exact product identity", () => {
   clearPublicProductPreviews();

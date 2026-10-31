@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readRecordCountHint, rememberRecordCount } from "../../lib/ui/record-loading-count.ts";
+import { loadPureTypeScript } from "../helpers/load-pure-typescript.mjs";
+const { readRecordCountHint, rememberRecordCount } = loadPureTypeScript(new URL("../../lib/ui/record-loading-count.ts", import.meta.url));
 
 test("record hints are page-specific and remember exact current-page 0/2/3/4 counts", () => {
   const hints = new Map();

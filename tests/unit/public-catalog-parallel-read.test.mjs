@@ -22,7 +22,7 @@ const products = [product(1, { has_skus: true }), product(2, { status: "sold_out
 const skus = [{ id: id(201), product_id: id(101), sku_code: "SKU-SEARCH", sku_title: "Searchable option", price: 7, original_price: 12, stock: 4, status: "active", delivery_type: "automatic" },
   { id: id(202), product_id: id(101), price: 15, stock: 99, status: "sold_out" }, { id: id(203), product_id: id(101), price: 1, stock: 99, status: "inactive" }];
 const routePath = new URL("../../app/api/catalog/products/route.ts", import.meta.url);
-function load({ defer = false, categoryError = false, productReject = false, rows = categories, source = fs.readFileSync(routePath, "utf8") } = {}) {
+function load({ defer = false, categoryError = false, productReject = false, rows = categories, productRows = products, skuRows = skus, source = fs.readFileSync(routePath, "utf8") } = {}) {
   const calls = [], gates = {}; const module = { exports: {} };
   const supabase = { from(table) {
     const filters = [], orders = []; let limit = Infinity;
@@ -31,7 +31,7 @@ function load({ defer = false, categoryError = false, productReject = false, row
       limit(value) { limit = value; return builder; }, then(resolve, reject) {
         calls.push(table);
         if (table === "products" && productReject) return Promise.reject(new Error("synthetic read failure")).then(resolve, reject);
-        let data = table === "categories" ? rows : table === "products" ? products : skus;
+        let data = table === "categories" ? rows : table === "products" ? productRows : skuRows;
         for (const filter of filters) data = data.filter(row => filter.values.includes(row[filter.column]));
         for (const { column, ascending } of [...orders].reverse()) data = [...data].sort((a, b) => String(a[column] ?? "").localeCompare(String(b[column] ?? ""), undefined, { numeric: true }) * (ascending ? 1 : -1));
         const result = { data: data.slice(0, limit), error: table === "categories" && categoryError ? new Error("category unavailable") : null };
@@ -54,6 +54,35 @@ function load({ defer = false, categoryError = false, productReject = false, row
 }
 const request = (params = {}) => new Request("http://local/api/catalog/products?" + new URLSearchParams({ primaryCategoryId: primary, secondaryCategoryId: secondary, page: "1", pageSize: "20", ...params }));
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test("three enabled gift-card categories do not publish their nineteen one-SKU drafts", async () => {
+  // Reproduce the approved V5 category structure and fixed denominations without
+  // loading Production records or provider credentials. select() above rejects
+  // metadata so this exercises the V6 public-column boundary as well.
+  const denominations = [["steam-gift-card", [5, 20, 30, 50, 100]],
+    ["google-play-gift-card", [5, 10, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200]],
+    ["netflix-gift-card", [30, 60]]];
+  const parent = { id: primary, level: 1, parent_id: null, is_active: true, name: "礼品卡 / 充值卡", slug: "gift-cards" };
+  const leaves = denominations.map(([slug], index) => ({ id: id(10 + index), parent_id: primary, level: 2, is_active: true, name: slug, slug }));
+  let index = 0;
+  const drafts = denominations.flatMap(([, values], brand) => values.map(value => product(++index, {
+    category_id: leaves[brand].id, slug: `draft-${brand}-${value}`, status: "draft", stock: 0, has_skus: true,
+  })));
+  const draftSkus = drafts.map((row, i) => ({ id: id(300 + i), product_id: row.id, status: "draft", stock: 0 }));
+  assert.equal(drafts.length, 19);
+  assert.equal(visibility.filterEffectivelyVisibleCategories([parent, ...leaves]).length, 4);
+  const visible = visibility.buildEffectiveCategoryVisibility([parent, ...leaves]);
+  assert.ok(drafts.every(row => !visibility.isProductEffectivelyVisible(row, visible)));
+  for (const leaf of leaves) {
+    const { api, calls } = load({ rows: [parent, ...leaves], productRows: drafts, skuRows: draftSkus });
+    const response = await api.GET(request({ secondaryCategoryId: leaf.id }));
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.data.total, 0);
+    assert.deepEqual(body.data.products, []);
+    assert.ok(!calls.includes("product_skus"));
+  }
+});
 
 test("secondary category validation and product read overlap, with no SKU read or response before validation", async () => {
   const { api, calls, gates } = load({ defer: true }); let responded = false;

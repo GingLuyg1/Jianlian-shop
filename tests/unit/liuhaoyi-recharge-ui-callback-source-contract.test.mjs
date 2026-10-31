@@ -34,7 +34,9 @@ test("Alipay and WeChat recharge requests preserve the normalized decimal string
 });
 
 test("recharge history exposes order number, countdown, continue payment and customer service", () => {
-  assert.match(rechargeUi, /资金充值记录/);
+  assert.match(rechargeUi, /<RechargeRecordTabs/);
+  const tabs = readFileSync(new URL("../../components/account/RechargeRecordTabs.tsx", import.meta.url), "utf8");
+  assert.match(tabs, /value: "recharges", label: "充值记录"/);
   assert.doesNotMatch(rechargeUi, /资金变动记录/);
   assert.match(rechargeUi, /待支付剩余时间/);
   assert.match(rechargeUi, /继续支付/);

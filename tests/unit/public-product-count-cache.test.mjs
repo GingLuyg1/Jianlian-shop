@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { clearPublicProductCounts, forgetPublicProductCount, getPublicProductCount, getPublicProductCountForRoute, rememberPublicProductCount, retainVisiblePublicProductCounts } from "../../lib/catalog/public-product-count-cache.ts";
+import { loadPureTypeScript } from "../helpers/load-pure-typescript.mjs";
+const { clearPublicProductCounts, forgetPublicProductCount, getPublicProductCount, getPublicProductCountForRoute, rememberPublicProductCount, retainVisiblePublicProductCounts } = loadPureTypeScript(new URL("../../lib/catalog/public-product-count-cache.ts", import.meta.url));
 
 test("public placeholder count belongs only to the exact query and route", () => {
   clearPublicProductCounts();

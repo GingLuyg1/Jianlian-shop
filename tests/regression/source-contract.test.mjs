@@ -1834,10 +1834,10 @@ test("account order tables use one centered user-facing status column", () => {
   assert.doesNotMatch(orderList, /重新加载|重新查询/);
   assert.doesNotMatch(orderList, /min-w-\[1230px\]/);
   assert.doesNotMatch(orderList, /rounded-xl border bg-slate-50\/60 px-3 py-2\.5/);
-  assert.match(orderList, /<CardHeader className="shrink-0 px-5 py-4">/);
+  assert.match(orderList, /<CardHeader className=\{cn\(glass\.hero, "shrink-0 px-5 py-5 md:px-6 md:py-6"\)\}>/);
   assert.match(orderList, /<Search className="mr-2 h-4 w-4" \/>[\s\S]{0,80}订单查询/);
   assert.match(orderList, /getUserOrderDisplayStatus\(order\)/);
-  assert.match(orderList, /<table className="w-full table-fixed text-sm">/);
+  assert.match(orderList, /<table className="w-full min-w-\[940px\] table-fixed text-sm">/);
   for (const width of ["16%", "27%", "6%", "8%", "10%", "15%", "18%"]) {
     assert.match(orderList, new RegExp(`w-\\[${width.replace("%", "%")}\\]`));
   }
@@ -1845,7 +1845,7 @@ test("account order tables use one centered user-facing status column", () => {
   assert.doesNotMatch(orderList, /<th[^>]*>订单状态<\/th>/);
   assert.doesNotMatch(orderList, /<th[^>]*>支付状态<\/th>/);
   assert.match(orderList, /text-center align-middle font-mono/);
-  assert.match(orderList, /inline-flex items-center justify-center gap-1/);
+  assert.match(orderList, /inline-flex max-w-full items-center justify-center gap-1/);
   assert.match(orderList, /max-w-\[260px\] truncate whitespace-nowrap/);
   assert.match(orderList, /title=\{productName\}/);
   assert.match(orderList, /flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap/);
@@ -3933,7 +3933,7 @@ test("BEP20 underpayment preview selects only deployed disposition columns", () 
 test("BEP20 underpayment wallet-credit disposition has explicit user and admin presentation", () => {
   const orderNotice = file("components/account/orders/Bep20UnderpaymentWalletCreditNotice.tsx");
   const paymentSummary = file("components/account/orders/Bep20OrderPaymentSummary.tsx");
-  const accountPage = file("app/account/page.tsx");
+  const accountPage = file("components/account/BalanceTransactionRecords.tsx");
   const accountAssets = file("app/api/account/assets/route.ts");
   const balanceRoute = file("app/api/account/balance-transactions/route.ts");
   const rechargePage = file("components/account/AccountRechargeContent.tsx");
@@ -3973,8 +3973,9 @@ test("BEP20 underpayment wallet-credit disposition has explicit user and admin p
   assert.match(accountPage, /BEP20 欠额转余额/);
   assert.match(accountPage, /balanceBefore/);
   assert.match(accountPage, /balanceAfter/);
-  assert.match(rechargePage, /资金充值记录/);
-  assert.doesNotMatch(rechargePage, /资金变动记录|BEP20 欠额转余额/);
+  assert.match(rechargePage, /<RechargeRecordTabs/);
+  assert.match(rechargePage, /<BalanceTransactionRecords/);
+  assert.doesNotMatch(rechargePage, /bep20_underpayment_wallet_credit/);
 
   assert.match(settlementMigration, /set status = 'cancelled', payment_status = 'failed'/i);
   assert.match(settlementMigration, /update public\.payment_sessions[\s\S]*?set status = 'closed'/i);
@@ -4445,8 +4446,8 @@ test("account recharge list exposes only stable safe diagnostics", () => {
   assert.match(page, /诊断编号：\{error\.requestId\}/);
   assert.match(page, /disabled=\{loading\}/);
   assert.match(page, /\{loading \? "正在重新加载…" : "重新加载"\}/);
-  assert.match(page, /result\?\.code \?\? "RECHARGE_DB_QUERY_FAILED"/);
-  assert.match(page, /result\?\.requestId \?\? "未生成"/);
+  assert.match(page, /code: error\?\.code \|\| "RECHARGE_DB_QUERY_FAILED"/);
+  assert.match(page, /requestId: error\?\.requestId \?\? "未生成"/);
 });
 
 test("account recharge forward-fix revokes every direct client INSERT ACL only", () => {
