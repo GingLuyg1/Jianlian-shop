@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 
 import {
+  assertProductCategory,
   auditCatalogAction,
   jsonResponse,
   parseBody,
@@ -29,7 +30,7 @@ type SupabaseErrorLike = {
 const SAFE_PRODUCT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 const ALLOWED_STATUSES = ["draft", "active", "inactive", "sold_out"] as const;
 const PRODUCT_STATUSES = new Set<string>(ALLOWED_STATUSES);
-const STATUS_PRODUCT_FIELDS = "id,status,slug";
+const STATUS_PRODUCT_FIELDS = "id,status,slug,category_id";
 
 function getRequestId(request: Request) {
   return request.headers.get("x-request-id") || request.headers.get("x-correlation-id") || randomUUID();
@@ -184,6 +185,11 @@ export async function POST(request: Request, { params }: RouteContext) {
       productId,
       currentStatus: String((before as { status?: unknown }).status ?? ""),
     });
+
+    if (status === "active" || status === "sold_out") {
+      const categoryError = await assertProductCategory(service, String(before.category_id ?? ""), status);
+      if (categoryError) return productFailureResponse("PRODUCT_INVALID_CATEGORY", categoryError, requestId, 409);
+    }
 
     const existingId = String((before as { id?: unknown }).id ?? productId);
     logStatusStage(requestId, "STATUS_PRODUCT_UPDATE_START", { productId, status });

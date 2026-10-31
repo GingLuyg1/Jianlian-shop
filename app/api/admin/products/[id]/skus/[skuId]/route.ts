@@ -1,3 +1,4 @@
+import { readSkuCategoryError } from "@/lib/products/draft-category-guard.mjs";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
@@ -47,6 +48,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (!before) return json({ error: "SKU 不存在", requestId }, 404);
   if (productError || !product) return json({ error: "商品不存在", code: "PRODUCT_NOT_FOUND", requestId }, 404);
   const nextSku = { ...before, ...payload };
+  const categoryError = await readSkuCategoryError(service, params.id, [nextSku.status]);
+  if (categoryError) return json({ error: categoryError, code: "SKU_CATEGORY_NOT_PUBLISHABLE", requestId }, 409);
   const activeAutomaticEdit = nextSku.status === "active"
     && (nextSku.delivery_type || product.delivery_type || "manual") === "automatic";
   if (isAutomaticSkuActivation(before.status, nextSku.status, product, nextSku) || activeAutomaticEdit) {

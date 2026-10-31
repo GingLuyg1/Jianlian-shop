@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 
 import {
   PRODUCT_FIELDS,
+  assertProductCategory,
   auditCatalogAction,
   jsonResponse,
   normalizeProductUpdatePayload,
@@ -103,6 +104,11 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { payload, errors } = normalizeProductUpdatePayload({ status });
   if (Object.keys(errors).length > 0 || payload.status !== status) {
     return productFailureResponse("PRODUCT_INVALID_STATUS", "请选择有效的商品状态", requestId, 400);
+  }
+
+  if (status === "active" || status === "sold_out") {
+    const categoryError = await assertProductCategory(service, String(before.category_id ?? ""), status);
+    if (categoryError) return productFailureResponse("PRODUCT_INVALID_CATEGORY", categoryError, requestId, 409);
   }
 
   const { data, error } = await service
