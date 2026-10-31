@@ -1,0 +1,24 @@
+name: Bitrefill mobile catalog readiness
+on:
+  push:
+    branches: [codex/mobile-topup-catalog-gates-20261101]
+    paths:
+      - lib/providers/bitrefill/mobile-*.mjs
+      - lib/providers/bitrefill/protocol.mjs
+      - tests/unit/bitrefill-mobile-catalog.test.mjs
+      - .github/workflows/bitrefill-mobile-readiness.yml
+permissions:
+  contents: read
+jobs:
+  targeted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Offline catalog, financial gates and affected redaction tests
+        run: node --test tests/unit/bitrefill-mobile-catalog.test.mjs tests/unit/bitrefill-readonly.test.mjs
