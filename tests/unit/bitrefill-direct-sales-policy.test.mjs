@@ -7,6 +7,7 @@ const fixture = {
   resaleScopeApproved: true, businessCredentialsVerified: true, upstreamAvailable: true,
   typedFulfillmentVerified: true, authoritativeReconciliationVerified: true,
   atomicBudgetReservationReady: true, boundedSpendAuthorized: true,
+  additionalCnyCost: "0", additionalCnyCostsVerified: true,
   balanceUsd: "100", reservedUsd: "1", spentUsd: "1", singleCapUsd: "20", cumulativeCapUsd: "50",
   quote: { source: "authenticated_supplier_cost", feesIncluded: true, currency: "USD", supplierEnforcedDebitCap: true,
     productId: "fixture-pin", packageId: "fixture-pin<&>10", allInUsd: "10", checkedAt, expiresAt },
@@ -63,4 +64,10 @@ test("display quote, fees unknown, wrong package or unapproved FX cannot claim a
     { ...fixture, quote: { ...fixture.quote, feesIncluded: false } },
     { ...fixture, quote: { ...fixture.quote, packageId: "wrong" } },
     { ...fixture, fx: { ...fixture.fx, approvedSettlementSource: false } }]) assert.equal(sale(input, now).actualMargin, null);
+});
+test("missing CNY-side fees are unknown, never silently verified as zero", () => {
+  for (const change of [{ additionalCnyCostsVerified: false }, { additionalCnyCost: undefined }]) {
+    const result = sale({ ...fixture, ...change }, now);
+    assert.ok(result.reasons.includes("CNY_FEES_UNVERIFIED"));assert.equal(result.actualMargin, null);
+  }
 });
