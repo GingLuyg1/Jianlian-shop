@@ -1,3 +1,4 @@
+import { readProductCategoryError } from "@/lib/products/draft-category-guard.mjs";
 import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
@@ -244,27 +245,8 @@ export function normalizeCategoryPayload(body: Record<string, unknown>, partial 
   return { payload, errors };
 }
 
-export async function assertProductCategory(supabase: SupabaseClient, categoryId: string) {
-  const { data: category, error } = await supabase
-    .from("categories")
-    .select("id,level,is_active")
-    .eq("id", categoryId)
-    .maybeSingle();
-
-  if (error || !category) return "请选择有效商品分类";
-  const enabled =
-    typeof (category as { is_active?: unknown }).is_active === "boolean"
-      ? Boolean((category as { is_active?: unknown }).is_active)
-      : (category as { status?: string | null }).status !== "inactive";
-  if (!enabled) return "不能绑定已停用分类";
-
-  const { count, error: childError } = await supabase
-    .from("categories")
-    .select("id", { count: "exact", head: true })
-    .eq("parent_id", categoryId);
-  if (childError) return "分类校验失败，请稍后重试";
-  if ((count ?? 0) > 0) return "商品只能绑定末级分类";
-  return null;
+export async function assertProductCategory(supabase: SupabaseClient, categoryId: string, nextStatus = "active") {
+  return readProductCategoryError(supabase, categoryId, nextStatus);
 }
 
 export async function assertCategoryParent(

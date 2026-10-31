@@ -1,3 +1,4 @@
+import { readSkuCategoryError } from "@/lib/products/draft-category-guard.mjs";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
@@ -104,6 +105,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return json({ error: `一次最多保存 ${MAX_MUTATIONS} 个 SKU`, code: "SKU_BATCH_LIMIT_EXCEEDED", requestId }, 400);
   }
 
+  const categoryError = await readSkuCategoryError(service, params.id, body.operations.map((operation: unknown) => isRecord(operation) && isRecord(operation.payload) ? operation.payload.status : null));
+  if (categoryError) return json({ error: categoryError, code: "SKU_CATEGORY_NOT_PUBLISHABLE", requestId }, 409);
   const { data, error } = await service.rpc("admin_save_product_sku_workspace", {
     p_product_id: params.id,
     p_operations: body.operations,

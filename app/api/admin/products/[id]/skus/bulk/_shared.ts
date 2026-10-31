@@ -1,3 +1,4 @@
+import { readSkuCategoryError } from "@/lib/products/draft-category-guard.mjs";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -39,6 +40,9 @@ export async function readSkuBulkOperation(
   if (productError) return { ok: false, status: 500, code: "PRODUCT_READ_FAILED", message: "商品读取失败" };
   if (!product) return { ok: false, status: 404, code: "PRODUCT_NOT_FOUND", message: "商品不存在" };
   if (skuError) return { ok: false, status: 500, code: "SKU_READ_FAILED", message: "SKU 读取失败" };
+
+  const categoryError = await readSkuCategoryError(service, productId, parsed.action === "activate" ? ["active"] : parsed.action === "set_sold_out" ? ["sold_out"] : ["draft"]);
+  if (categoryError) return { ok: false, status: 409, code: "SKU_CATEGORY_NOT_PUBLISHABLE", message: categoryError };
 
   const rowsById = new Map((skuRows ?? []).map((sku) => [String(sku.id), sku]));
   if (rowsById.size !== parsed.skuIds.length || parsed.skuIds.some((id) => !rowsById.has(id))) {
