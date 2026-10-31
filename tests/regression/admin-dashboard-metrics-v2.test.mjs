@@ -1,4 +1,5 @@
 import test from "node:test";
+import { renderDashboard } from "../helpers/admin-dashboard-ui-harness.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -24,10 +25,10 @@ test("dashboard separates seven real trend metrics from numeric status metrics",
   assert.match(dashboard, /statusMetrics: \[/);
   for (const label of trendLabels) assert.match(dashboard, new RegExp(`label: "${label}"`));
   for (const label of statusLabels) assert.match(dashboard, new RegExp(`label: "${label}"`));
-  assert.match(dashboard, /data\?\.trendMetrics\.map/);
-  assert.match(dashboard, /<AdminMetricTrendCard/);
-  assert.match(dashboard, /data\?\.statusMetrics\.map/);
-  assert.match(dashboard, /<AdminMetricValueCard/);
+  const html = renderDashboard();
+  for (const marker of ['dashboard-primary-kpis', 'dashboard-secondary-kpis', 'dashboard-operations-grid']) assert.match(html, new RegExp(marker));
+  for (const label of ['商城成交额', '余额充值到账', '区间访客', '总用户', '待处理订单', '低库存商品']) assert.ok(html.includes(label), label);
+
 });
 
 test("dashboard sparklines use existing seven-day business series without fabricated data", () => {
@@ -62,8 +63,13 @@ test("dashboard metric layout is dense on desktop and bounded on mobile", () => 
   const dashboard = file("app/admin/page.tsx");
   const cards = file("components/admin/dashboard/AdminDashboardMetricCards.tsx");
 
-  assert.match(dashboard, /grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7/);
-  assert.match(dashboard, /grid-cols-2 gap-px bg-\[var\(--admin-v2-border\)\] md:grid-cols-3 xl:grid-cols-5/);
+  const html = renderDashboard();
+  assert.match(html, /dashboard-primary-kpis/);
+  const css = file('app/admin/dashboard-v21.css');
+  assert.match(css, /dashboard-primary-kpis \{[^}]*grid-template-columns: repeat\(4/);
+  assert.match(css, /dashboard-primary-kpis \{ grid-template-columns: repeat\(2/);
+  assert.match(html, /dashboard-operations-grid/);
+  assert.match(css, /dashboard-operations-grid \{ grid-template-columns: repeat\(2/);
   assert.match(dashboard, /min-w-0[\s\S]*overflow-x-hidden overflow-y-auto/);
   assert.match(cards, /grid-cols-\[minmax\(0,1fr\)_72px\]/);
   assert.match(cards, /shadow-none/);
