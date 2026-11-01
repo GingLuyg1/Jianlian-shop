@@ -1,0 +1,105 @@
+name: PR91 Supabase PG17 restore runner - synthetic only
+
+on:
+  push:
+    branches:
+      - codex/pr91-supabase-restore-runner-20261101
+    paths:
+      - .github/workflows/pr91-supabase-restore-runner.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-supabase-pg17:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CONTAINER: pr91-supabase-synthetic
+      IMAGE: supabase/postgres:17.6.1.136
+    steps:
+      - name: Confirm isolated runner and Docker daemon
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version --format '{{.Server.Version}}'
+          echo "PUBLIC_CI_ONLY=yes"
+          echo "PRODUCTION_CONNECTIONS=none"
+
+      - name: Pull fixed-version official Supabase PostgreSQL image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --quiet "$IMAGE"
+          docker image inspect "$IMAGE" --format 'RESOLVED_IMAGE={{index .RepoDigests 0}}'
+
+      - name: Start container with no outbound network or public ports
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name "$CONTAINER" --network none \
+            -e POSTGRES_PASSWORD=synthetic-ci-only \
+            -e POSTGRES_DB=postgres \
+            "$IMAGE" >/dev/null
+          ready=0
+          for i in $(seq 1 60); do
+            if docker exec "$CONTAINER" pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs "$CONTAINER" --tail 50
+            exit 1
+          fi
+          echo "POSTGRES_RUNNING_IN_ISOLATED_CONTAINER=yes"
+
+      - name: Verify PostgreSQL version and required extension binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -c "SELECT current_setting('server_version') AS pg_version;"
+          missing="$(docker exec "$CONTAINER" psql -XAt -v ON_ERROR_STOP=1 -U postgres -d postgres -c "
+            WITH required(extname) AS (VALUES
+              ('pg_cron'),('pg_net'),('pg_stat_statements'),('pgcrypto'),
+              ('plpgsql'),('supabase_vault'),('uuid-ossp'))
+            SELECT COALESCE(string_agg(r.extname, ',' ORDER BY r.extname),'')
+            FROM required r LEFT JOIN pg_available_extensions a ON a.name=r.extname
+            WHERE a.name IS NULL;")"
+          if [ -n "$missing" ]; then
+            echo "MISSING_EXTENSION_BINARIES=$missing"
+            exit 1
+          fi
+          echo "ALL_SEVEN_EXTENSION_BINARIES_AVAILABLE=yes"
+          docker exec "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -c "SELECT name,default_version FROM pg_available_extensions WHERE name IN
+            ('pg_cron','pg_net','pg_stat_statements','pgcrypto','plpgsql','supabase_vault','uuid-ossp') ORDER BY name;"
+
+      - name: Restore synthetic pg_dump in isolated database
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -c "CREATE TABLE public.pr91_restore_synthetic (id integer PRIMARY KEY, marker text NOT NULL);
+                INSERT INTO public.pr91_restore_synthetic VALUES (1,'synthetic_only');"
+          docker exec "$CONTAINER" pg_dump -U postgres -d postgres --format=custom \
+            --table=public.pr91_restore_synthetic --file=/tmp/pr91_synthetic.dump
+          docker exec "$CONTAINER" createdb -U postgres pr91_synthetic_restored
+          docker exec "$CONTAINER" pg_restore -U postgres -d pr91_synthetic_restored \
+            --no-owner --no-acl /tmp/pr91_synthetic.dump
+          restored="$(docker exec "$CONTAINER" psql -XAt -v ON_ERROR_STOP=1 \
+            -U postgres -d pr91_synthetic_restored -c "SELECT marker FROM public.pr91_restore_synthetic WHERE id=1;")"
+          test "$restored" = "synthetic_only"
+          echo "SYNTHETIC_PG_DUMP_RESTORE=PASS"
+          echo "LIVE_DATA_PROCESSED=no"
+          echo "PR91_MIGRATION_APPLIED=no"
+          echo "PRODUCTION_MODIFIED=no"
+
+      - name: Destroy disposable database container
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
