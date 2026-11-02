@@ -116,9 +116,7 @@ export default function AccountRechargeContent() {
     : Boolean(summary && summary.amount > 0 && reachesMin);
   const maximumAmount = selectedChannel?.maximumAmount;
   const channelOverLimit = Boolean(summary && typeof maximumAmount === "number"
-    && Number.isFinite(maximumAmount) && summary.payableAmount > maximumAmount)
-    || (isUsdtCnyRecharge && requestedCnyAmount !== null
-      && compareRechargeDecimals(requestedCnyAmount, "2000") === 1);
+    && Number.isFinite(maximumAmount) && summary.payableAmount > maximumAmount);
   // Allow the primary button to explain the limit; createRecharge returns
   // before fetch when over-limit. Never silently leave an unusable button.
   const canSubmit = Boolean(selectedChannel?.enabled && hasValidAmount && !isSubmitting);
@@ -312,7 +310,7 @@ export default function AccountRechargeContent() {
                 <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
                   <Notice icon={FileText} title="可用渠道">{channelsLoading ? "正在读取…" : channelsError ? "读取失败，请稍后重试" : visibleChannels.filter((channel) => channel.enabled && channel.status === "active").map((channel) => ({ alipay: "支付宝", wechat: "微信", usdt_bep20: "USDT" })[channel.code as "alipay" | "wechat" | "usdt_bep20"]).join("/") || "当前暂无可用渠道"}</Notice>
                   <Notice icon={WalletCards} title="到账与异常"><span className="block">付款后以充值订单状态和实际核验结果为准；</span><span className="block">异常订单请凭订单号联系客服。</span></Notice>
-                  <Notice icon={Coins} title="单笔限制"><span className="block">按所选渠道的最低及最高金额校验；</span><span className="block">超过 1000 元请联系客服处理。</span></Notice>
+                  <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔最高 1000 元；</span><span className="block">USDT BEP20 不设最高金额。</span></Notice>
                   <Notice icon={Clock3} title="费用说明">手续费：支付宝和微信 3%<br />USDT BEP20 无手续费</Notice>
                 </div>
               </CardContent>
@@ -478,7 +476,7 @@ export default function AccountRechargeContent() {
                     className="mt-2 text-left text-xs text-red-600 underline-offset-2 hover:underline"
                     onClick={() => setAmountLimitDialogOpen(true)}
                   >
-                    当前方式单笔最高支持 {isUsdtCnyRecharge ? "¥2000 充值本金" : selectedChannel && typeof maximumAmount === "number" ? formatPaymentAmount(Math.min(maximumAmount, 2000), selectedChannel.currency) : "—"}，点击联系客服处理。
+                    当前方式单笔最高支持 {selectedChannel && typeof maximumAmount === "number" ? formatPaymentAmount(maximumAmount, selectedChannel.currency) : "—"}，点击联系客服处理。
                   </button>
                 ) : null}
 
@@ -553,7 +551,7 @@ export default function AccountRechargeContent() {
             <DialogTitle>单笔支付金额超限</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-6 text-muted-foreground">
-            支付金额大于2000联系人工客服处理。
+            支付宝/微信单笔支付金额大于1000元，请联系人工客服处理。
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>
