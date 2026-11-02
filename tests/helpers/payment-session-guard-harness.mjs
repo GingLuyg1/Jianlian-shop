@@ -40,7 +40,7 @@ export function fixture(provider = "snpay", channel = "alipay") {
     payment_sessions: [], orders: [],
     payment_channels: [{ channel, code: channel, provider, provider_name: provider, currency: "CNY",
       enabled: true, configured: true, minimum_amount: 1, min_amount: 1, fee_rate: 0,
-      public_config: { review_mode: "provider", maximum_amount: 2000 }, sort_order: 1 }],
+      public_config: { review_mode: "provider", maximum_amount: 1000 }, sort_order: 1 }],
     profiles: [{ id: uid, balance: 29 }], balance_transactions: [], payment_reconciliations: [] };
 }
 export function failedRow(data, overrides = {}) {
