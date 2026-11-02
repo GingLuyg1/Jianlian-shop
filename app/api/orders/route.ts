@@ -426,7 +426,7 @@ export async function POST(request: Request) {
       if (!payableAmount) {
         return NextResponse.json({ error: "商品金额格式无效", code: "ORDER_AMOUNT_INVALID" }, { status: 400 });
       }
-      if (isOnlineCnyOverLimit(payableAmount)) {
+      if (paymentMethod !== "usdt_bep20" && isOnlineCnyOverLimit(payableAmount)) {
         return NextResponse.json({ error: ONLINE_PAYMENT_LIMIT_MESSAGE, code: "ONLINE_PAYMENT_LIMIT_EXCEEDED" }, { status: 400 });
       }
       if (channel.provider === "snpay" && channel.feeRate !== 0) {
@@ -437,7 +437,7 @@ export async function POST(request: Request) {
           assertLiuhaoyiPaymentAmount(payableAmount);
         } catch (amountError) {
           return NextResponse.json(
-            { error: getOrderErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥2000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
+            { error: getOrderErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥1000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
             { status: 400 }
           );
         }

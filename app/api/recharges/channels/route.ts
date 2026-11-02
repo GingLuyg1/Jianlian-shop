@@ -62,7 +62,9 @@ export async function GET() {
       return {
         ...channel,
         minimumAmount: Math.max(channel.minimumAmount, capability.minimumAmount ?? 0),
-        maximumAmount: Math.min(channel.maximumAmount ?? Infinity, capability.maximumAmount ?? Infinity),
+        maximumAmount: channel.code === "usdt_bep20"
+          ? undefined
+          : Math.min(channel.maximumAmount ?? Infinity, capability.maximumAmount ?? Infinity),
         providerExternalFeeDisclosure: capability.providerExternalFeeDisclosure ?? undefined,
       };
     });
