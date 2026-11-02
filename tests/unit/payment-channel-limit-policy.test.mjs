@@ -9,13 +9,13 @@ import {
 
 const source = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
-test("Alipay and WeChat use the 1000 CNY online ceiling", () => {
-  assert.equal(ONLINE_CNY_MAXIMUM, 1000);
-  assert.equal(isOnlineCnyOverLimit("1000.00"), false);
-  assert.equal(isOnlineCnyOverLimit("1000.01"), true);
+test("Alipay and WeChat use the 2000 CNY online ceiling", () => {
+  assert.equal(ONLINE_CNY_MAXIMUM, 2000);
+  assert.equal(isOnlineCnyOverLimit("2000.00"), false);
+  assert.equal(isOnlineCnyOverLimit("2000.01"), true);
 
   const providers = source("lib/payments/providers.ts");
-  assert.equal((providers.match(/maximumAmount: 1000,/g) ?? []).length >= 2, true);
+  assert.equal((providers.match(/maximumAmount: 2000,/g) ?? []).length >= 2, true);
 });
 
 test("USDT account recharge has no maximum ceiling", () => {
@@ -30,7 +30,7 @@ test("USDT account recharge has no maximum ceiling", () => {
   assert.doesNotMatch(ui, /compareRechargeDecimals\(requestedCnyAmount, "2000"\)/);
   assert.doesNotMatch(ui, /isUsdtCnyRecharge \? 2000/);
   assert.doesNotMatch(ui, /Math\.min\(maximumAmount, 2000\)/);
-  assert.match(ui, /USDT BEP20 不设最高金额/);
+  assert.match(ui, /USDT无限制/);
 });
 
 test("USDT checkout and BEP20 service bypass the fiat ceiling", () => {

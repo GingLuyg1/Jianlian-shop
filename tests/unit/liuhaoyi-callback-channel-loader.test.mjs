@@ -31,7 +31,7 @@ test("callback resolves the persisted session before provider verification", () 
   assert.doesNotMatch(callbackService, /loadChannel\(|channel\.provider/);
 });
 
-test("Liuhaoyi Alipay and WeChat normalize with maximum_amount 1000", () => {
+test("Liuhaoyi Alipay and WeChat normalize with maximum_amount 2000", () => {
   for (const channel of ["alipay", "wechat"]) {
     assert.equal(
       getPaymentChannelValidationError({
@@ -40,7 +40,7 @@ test("Liuhaoyi Alipay and WeChat normalize with maximum_amount 1000", () => {
         currency: "CNY",
         feeRate: 0,
         minimumAmount: 1,
-        maximumAmount: 1000,
+        maximumAmount: 2000,
         network: null,
       }),
       null,

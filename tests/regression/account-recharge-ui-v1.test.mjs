@@ -32,7 +32,7 @@ test("recharge request, limit dialog and existing record actions stay wired", ()
     'method: "POST"',
     'client_request_id: clientRequestIdRef.current',
     'setAmountLimitDialogOpen(true)',
-    'USDT BEP20 不设最高金额。',
+    'USDT无限制',
     '继续支付',
     '提交 TxHash 并核验',
     '提交支付凭证',
