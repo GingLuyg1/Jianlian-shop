@@ -1,0 +1,75 @@
+name: Bitrefill mobile catalog readiness
+on:
+  push:
+    branches: [codex/mobile-topup-catalog-gates-20261101]
+    paths:
+      - lib/providers/bitrefill/mobile-*.mjs
+      - lib/providers/bitrefill/protocol.mjs
+      - lib/providers/bitrefill/direct-sales-policy.mjs
+      - lib/providers/bitrefill/pin-*.mjs
+      - lib/providers/bitrefill/paid-order-local.mjs
+      - lib/providers/bitrefill/purchase-persistence.mjs
+      - lib/providers/bitrefill/single-item-purchase.mjs
+      - lib/providers/bitrefill/mcp-usd-adapter.mjs
+      - scripts/verify-bitrefill-pin-pg.mjs
+      - scripts/verify-bitrefill-pin-order-entry-pg.mjs
+      - supabase/migrations/20261101064049_bitrefill_pin_order_entry_v2.sql
+      - app/api/orders/route.ts
+      - lib/providers/core/supplier-router.ts
+      - tests/fixtures/current-schema/bitrefill-pin-order-entry-*.sql
+      - tests/unit/bitrefill-pin-order-entry.test.mjs
+      - tests/support/bitrefill-pin-*.mjs
+      - tests/unit/bitrefill-pin-fulfillment.test.mjs
+      - tests/unit/bitrefill-mobile-catalog.test.mjs
+      - tests/unit/bitrefill-direct-sales-policy.test.mjs
+      - .github/workflows/bitrefill-mobile-readiness.yml
+permissions:
+  contents: read
+jobs:
+  targeted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci --ignore-scripts
+      - name: V2 storefront order entry only (V1 65 cases reused)
+        run: node --test tests/unit/bitrefill-pin-order-entry.test.mjs
+  pin-isolated-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: pin-synthetic-ci-only
+          PGPASSWORD: pin-synthetic-ci-only
+          POSTGRES_DB: pin_isolated_anchor
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: V2 actual order RPC to existing DB9 private PIN delivery
+        env:
+          PIN_TEST_CONTAINER: ${{ job.services.postgres.id }}
+          PIN_TEST_EVIDENCE: ${{ runner.temp }}/pin-isolated-evidence
+        run: node scripts/verify-bitrefill-pin-order-entry-pg.mjs --isolated-ci-container
+      - name: Preserve synthetic PIN acceptance receipts only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pin-order-entry-isolated-pg17-receipts
+          path: ${{ runner.temp }}/pin-isolated-evidence/pin-entry-pg-*/receipt.json
+          retention-days: 14
