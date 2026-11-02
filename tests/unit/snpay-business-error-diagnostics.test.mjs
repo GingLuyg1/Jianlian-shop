@@ -176,7 +176,7 @@ async function serviceHarness(providerCode = "snpay", payload = signed({ code: 1
         id: "test-recharge-id", recharge_no: "RC_TEST_DIAGNOSTIC", user_id: "test-user", status: "pending", requested_amount: 1, fee_amount: 0, payable_amount: 1, currency: "CNY", channel_code: "alipay", expires_at: new Date(NOW + 3600000).toISOString(),
       } : table === "payment_channels" ? {
         channel: "alipay", code: "alipay", provider: providerCode, provider_name: providerCode,
-        currency: "CNY", enabled: true, configured: true, network: null, min_amount: 1, minimum_amount: 1, fee_rate: 0, public_config: { review_mode: "provider", maximum_amount: 2000 },
+        currency: "CNY", enabled: true, configured: true, network: null, min_amount: 1, minimum_amount: 1, fee_rate: 0, public_config: { review_mode: "provider", maximum_amount: 1000 },
       } : null, error: null });
       q.then = (resolve, reject) => { if (patch) writes.push(patch); return Promise.resolve({ error: null }).then(resolve, reject); };
       return q;
@@ -189,7 +189,7 @@ async function serviceHarness(providerCode = "snpay", payload = signed({ code: 1
     "@/lib/payments/providers/liuhaoyi-submit.mjs": submit, "@/lib/payments/providers/snpay-core.mjs": core,
     "@/lib/payments/payment-session-reuse.mjs": reuse, "@/lib/supabase/service-role": { getSupabaseServiceRoleClient: () => db },
     "@/lib/payments/providers": {
-      getPaymentProviderCapabilities: () => ({ supportsCreate: true, supportedChannels: ["alipay"], supportedCurrencies: ["CNY"], minimumAmount: 1, maximumAmount: 2000 }),
+      getPaymentProviderCapabilities: () => ({ supportsCreate: true, supportedChannels: ["alipay"], supportedCurrencies: ["CNY"], minimumAmount: 1, maximumAmount: 1000 }),
       resolveProviderForNewPayment: () => providerCode === "snpay" ? provider.snpayProvider : { createPayment: async () => { throw Object.assign(new Error("legacy generic error"), { code: "LIUHAOYI_TEST_ERROR" }); } },
     },
   };
