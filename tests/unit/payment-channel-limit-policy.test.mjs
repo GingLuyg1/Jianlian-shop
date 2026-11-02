@@ -20,9 +20,11 @@ test("Alipay and WeChat use the 1000 CNY online ceiling", () => {
 
 test("USDT account recharge has no maximum ceiling", () => {
   const route = source("app/api/recharges/route.ts");
+  const channelsRoute = source("app/api/recharges/channels/route.ts");
   const ui = source("components/account/AccountRechargeContent.tsx");
 
   assert.match(route, /!isUsdtCnyRecharge && currency === "CNY" && isOnlineCnyOverLimit\(body\.amount\)/);
+  assert.match(channelsRoute, /channel\.code === "usdt_bep20"[\s\S]*\? undefined/);
   assert.match(route, /classifyExactRange\(theoreticalUsdtAmount, channel\.minimumAmount, 0\)/);
   assert.match(route, /p_maximum_usdt: 0/);
   assert.doesNotMatch(ui, /compareRechargeDecimals\(requestedCnyAmount, "2000"\)/);
