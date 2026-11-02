@@ -1,4 +1,4 @@
-export const ONLINE_CNY_MAXIMUM: 2000;
+export const ONLINE_CNY_MAXIMUM: 1000;
 export const ONLINE_PAYMENT_LIMIT_MESSAGE: string;
 export function isOnlineCnyOverLimit(value: unknown): boolean;
 export function isStrictPositiveCny(value: unknown): boolean;
