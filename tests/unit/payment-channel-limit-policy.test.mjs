@@ -28,6 +28,8 @@ test("USDT account recharge has no maximum ceiling", () => {
   assert.match(route, /classifyExactRange\(theoreticalUsdtAmount, channel\.minimumAmount, 0\)/);
   assert.match(route, /p_maximum_usdt: 0/);
   assert.doesNotMatch(ui, /compareRechargeDecimals\(requestedCnyAmount, "2000"\)/);
+  assert.doesNotMatch(ui, /isUsdtCnyRecharge \? 2000/);
+  assert.doesNotMatch(ui, /Math\.min\(maximumAmount, 2000\)/);
   assert.match(ui, /USDT BEP20 不设最高金额/);
 });
 
