@@ -257,7 +257,7 @@ export async function POST(request: Request) {
         assertLiuhaoyiPaymentAmount(summary.payableAmount);
       } catch (amountError) {
         return NextResponse.json(
-          { error: getPaymentErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥1000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
+          { error: getPaymentErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥2000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
           { status: 400 }
         );
       }
