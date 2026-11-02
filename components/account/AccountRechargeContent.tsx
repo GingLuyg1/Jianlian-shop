@@ -310,7 +310,7 @@ export default function AccountRechargeContent() {
                 <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
                   <Notice icon={FileText} title="可用渠道">{channelsLoading ? "正在读取…" : channelsError ? "读取失败，请稍后重试" : visibleChannels.filter((channel) => channel.enabled && channel.status === "active").map((channel) => ({ alipay: "支付宝", wechat: "微信", usdt_bep20: "USDT" })[channel.code as "alipay" | "wechat" | "usdt_bep20"]).join("/") || "当前暂无可用渠道"}</Notice>
                   <Notice icon={WalletCards} title="到账与异常"><span className="block">付款后以充值订单状态和实际核验结果为准；</span><span className="block">异常订单请凭订单号联系客服。</span></Notice>
-                  <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔限额 2000 元；</span><span className="block">超过 2000 元请联系客服处理。USDT 无限制。</span></Notice>
+                  <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔限额2000；</span><span className="block">超过 2000 元请联系客服处理。USDT无限制</span></Notice>
                   <Notice icon={Clock3} title="费用说明">手续费：支付宝和微信 3%<br />USDT BEP20 无手续费</Notice>
                 </div>
               </CardContent>
