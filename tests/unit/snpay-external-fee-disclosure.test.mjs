@@ -50,7 +50,7 @@ function row(code = "alipay", provider = "snpay") {
     channel: code, code, provider, provider_name: provider,
     currency: "CNY", enabled: true, configured: true,
     min_amount: 1, minimum_amount: 1, fee_rate: 0,
-    public_config: { review_mode: "provider", maximum_amount: 2000 },
+    public_config: { review_mode: "provider", maximum_amount: 1000 },
     sort_order: 10,
   };
 }
@@ -152,7 +152,7 @@ function renderRecharge(channel, options = {}) {
 test("actual recharge handler opens the limit dialog before any create request", async () => {
   const [channel] = await publicChannels([row()]);
   const events = [], buttons = [];
-  renderRecharge(channel, { amount: "2000.01", events, buttons });
+  renderRecharge(channel, { amount: "1000.01", events, buttons });
   const create = buttons.find(button => String(JSON.stringify(button.children)).includes("创建充值单"));
   assert.equal(create.disabled, false);
   await create.onClick(); // Primary action explains the limit, without dispatch.
