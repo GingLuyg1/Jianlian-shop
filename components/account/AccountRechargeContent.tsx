@@ -556,7 +556,7 @@ export default function AccountRechargeContent() {
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>
             <Button variant="outline" onClick={() => { setAmountLimitDialogOpen(false); openPublicSupport(); }}>联系客服</Button>
-            <Button onClick={() => { if (typeof maximumAmount === "number") setAmountText(String(isUsdtCnyRecharge ? 2000 : Math.min(maximumAmount, 2000))); clientRequestIdRef.current = null; setAmountLimitDialogOpen(false); }}>改为上限金额</Button>
+            <Button onClick={() => { if (typeof maximumAmount === "number") setAmountText(String(maximumAmount)); clientRequestIdRef.current = null; setAmountLimitDialogOpen(false); }}>改为上限金额</Button>
           </div>
         </DialogContent>
       </Dialog>
