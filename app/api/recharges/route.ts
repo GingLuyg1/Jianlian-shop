@@ -144,9 +144,6 @@ export async function POST(request: Request) {
   if (currency === "CNY" && !isStrictPositiveCny(body.amount)) {
     return NextResponse.json({ error: "充值金额必须为正数且最多两位小数", code: "RECHARGE_AMOUNT_INVALID" }, { status: 400 });
   }
-  if (currency === "CNY" && isOnlineCnyOverLimit(body.amount)) {
-    return NextResponse.json({ error: ONLINE_PAYMENT_LIMIT_MESSAGE, code: "ONLINE_PAYMENT_LIMIT_EXCEEDED" }, { status: 400 });
-  }
   const clientRequestId = normalizeRequestId(body.client_request_id ?? body.clientRequestId);
   if (!isKnownPaymentChannelCode(channelCode)) {
     return NextResponse.json(
@@ -201,6 +198,9 @@ export async function POST(request: Request) {
       );
     }
     const isUsdtCnyRecharge = channel.code === "usdt_bep20";
+    if (!isUsdtCnyRecharge && currency === "CNY" && isOnlineCnyOverLimit(body.amount)) {
+      return NextResponse.json({ error: ONLINE_PAYMENT_LIMIT_MESSAGE, code: "ONLINE_PAYMENT_LIMIT_EXCEEDED" }, { status: 400 });
+    }
     if (isUsdtCnyRecharge && channel.reviewMode !== "manual") {
       return NextResponse.json(
         { error: "USDT-BEP20 账号充值仅支持人工审核模式", code: "RECHARGE_REVIEW_MODE_INVALID" },
@@ -257,7 +257,7 @@ export async function POST(request: Request) {
         assertLiuhaoyiPaymentAmount(summary.payableAmount);
       } catch (amountError) {
         return NextResponse.json(
-          { error: getPaymentErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥2000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
+          { error: getPaymentErrorMessage(amountError, "支付宝/微信单笔支付最高支持 ¥1000"), code: "LIUHAOYI_AMOUNT_LIMIT_EXCEEDED" },
           { status: 400 }
         );
       }
@@ -267,7 +267,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "支付渠道不支持该金额或币种", code: "PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED" }, { status: 400 });
     }
     const amountRange = isUsdtCnyRecharge && theoreticalUsdtAmount
-      ? classifyExactRange(theoreticalUsdtAmount, channel.minimumAmount, channel.maximumAmount ?? 0)
+      ? classifyExactRange(theoreticalUsdtAmount, channel.minimumAmount, 0)
       : summary
         ? classifyPublicRechargeAmountRange(summary.amount, channel.minimumAmount, channel.maximumAmount)
         : "invalid";
@@ -341,7 +341,7 @@ export async function POST(request: Request) {
           p_payment_address: paymentAddress,
           p_theoretical_usdt: theoreticalUsdtAmount,
           p_minimum_usdt: channel.minimumAmount,
-          p_maximum_usdt: channel.maximumAmount ?? 0,
+          p_maximum_usdt: 0,
           p_expires_at: expiresAt,
         },
       );
