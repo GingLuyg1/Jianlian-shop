@@ -32,7 +32,7 @@ test("recharge request, limit dialog and existing record actions stay wired", ()
     'method: "POST"',
     'client_request_id: clientRequestIdRef.current',
     'setAmountLimitDialogOpen(true)',
-    'compareRechargeDecimals(requestedCnyAmount, "2000")',
+    'USDT BEP20 不设最高金额。',
     '继续支付',
     '提交 TxHash 并核验',
     '提交支付凭证',
@@ -41,6 +41,8 @@ test("recharge request, limit dialog and existing record actions stay wired", ()
   ]) {
     assert.ok(recharge.includes(marker), `${marker} must remain available`);
   }
+  assert.doesNotMatch(recharge, /compareRechargeDecimals\(requestedCnyAmount, "2000"\)/);
+  assert.doesNotMatch(recharge, /¥2000 充值本金/);
 });
 
 test("selected refinements keep V3.5 spacing and restore only the sliding record tab", () => {
