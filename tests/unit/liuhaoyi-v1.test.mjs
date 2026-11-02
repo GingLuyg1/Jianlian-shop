@@ -130,11 +130,11 @@ test("¥100 的网站本金、零手续费、应付金额和 API money 均精确
   assert.match(getPaymentChannelValidationError({ channel: "alipay", provider: "liuhaoyi", currency: "CNY", feeRate: 0.03, minimumAmount: 1, maximumAmount: 2000, network: null }), /must not add a local Liuhaoyi fee/);
 });
 
-test("¥1000 可以创建，超过 ¥1000 在后端公共校验中拒绝", () => {
-  assert.equal(assertLiuhaoyiPaymentAmount("1000"), "1000.00");
-  assert.equal(assertLiuhaoyiPaymentAmount(1000), "1000.00");
-  assert.equal(isLiuhaoyiAmountOverLimit("1000.01"), true);
-  assert.throws(() => assertLiuhaoyiPaymentAmount("1000.01"), /最高支持/);
+test("¥2000 可以创建，超过 ¥2000 在后端公共校验中拒绝", () => {
+  assert.equal(assertLiuhaoyiPaymentAmount("2000"), "2000.00");
+  assert.equal(assertLiuhaoyiPaymentAmount(2000), "2000.00");
+  assert.equal(isLiuhaoyiAmountOverLimit("2000.01"), true);
+  assert.throws(() => assertLiuhaoyiPaymentAmount("2000.01"), /最高支持/);
 });
 
 test("金额不一致进入 reconciliation，验签失败和 Provider 失败不会标记 paid", () => {
