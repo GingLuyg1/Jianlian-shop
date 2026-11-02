@@ -1001,7 +1001,7 @@ export default function CheckoutPage() {
             <DialogTitle>支付宝/微信支付金额超限</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-6 text-muted-foreground">
-            支付宝/微信单笔支付金额大于1000元，请联系人工客服处理。
+            支付宝/微信单笔支付金额大于2000元，请联系人工客服处理。
           </p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>
