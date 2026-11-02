@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorizeBitrefillPinOrder } from "@/lib/providers/bitrefill/pin-runtime.mjs";
+import { ensureBitrefillProductionRuntime } from "@/lib/providers/bitrefill/production-server";
 
 import { checkOrderProductAvailability } from "@/lib/catalog/order-product-visibility.mjs";
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
@@ -498,6 +499,7 @@ export async function POST(request: Request) {
 
     // Narrow PIN-only preflight. Existing Daju/payment branches are unchanged.
     try {
+      ensureBitrefillProductionRuntime(skuId);
       await authorizeBitrefillPinOrder({ userId:user.id, productId, skuId, quantity, clientRequestId });
     } catch {
       return NextResponse.json({ error:"This PIN product is not currently available for purchase.", code:"BITREFILL_PIN_ORDER_UNAVAILABLE" }, { status:503 });

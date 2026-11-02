@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fulfillDajuOrderWithSupabase } from "../daju/fulfillment";
 import { getBitrefillPinHandler } from "../bitrefill/pin-runtime.mjs";
+import { ensureBitrefillProductionRuntime } from "../bitrefill/production-server";
 import {
   collectFrozenSupplierCodes,
   executeSupplierHandlers,
@@ -35,6 +36,7 @@ export async function fulfillSupplierOrderWithSupabase(
   if (error) throw new Error("SUPPLIER_ROUTER_ITEMS_READ_FAILED");
 
   const supplierCodes = collectFrozenSupplierCodes(data ?? []);
+  if (!localBitrefill && supplierCodes.includes('bitrefill')) ensureBitrefillProductionRuntime();
   const pinHandler = localBitrefill ?? getBitrefillPinHandler();
   const handlers = resolveSupplierHandlers(supplierCodes, pinHandler
     ? { ...SUPPLIER_REGISTRY, bitrefill: pinHandler } : SUPPLIER_REGISTRY);
