@@ -22,7 +22,7 @@ let port, started = false, testedSQLSha256;
 const checks = [], errors = [], q = (x) => "'" + String(x).replaceAll("'", "''") + "'";
 function tool(name, args, input, fail = false) {
   const r = cp.spawnSync(path.join(bin, name + (process.platform === "win32" ? ".exe" : "")), args, { env, input, encoding: "utf8", windowsHide: true, timeout: 45000, maxBuffer: 8 * 1024 ** 2 });
-  if (r.status && !fail) throw Object.assign(Error(name + "_FAILED"), { detail: r.stderr });
+  if (r.status !== 0 && !fail) throw Object.assign(Error(name + "_FAILED"), { detail: r.stderr || r.error?.code });
   return r;
 }
 function sql(text, { role = null, fail = false } = {}) {
@@ -120,9 +120,13 @@ try {
   const listener = createServer(); await new Promise((r) => listener.listen(0, "127.0.0.1", r)); port = listener.address().port; await new Promise((r) => listener.close(r));
   fs.mkdirSync(path.dirname(data), { recursive: true });
   tool("initdb", ["-D", data, "-U", "scanner_test_owner", "--auth=trust", "--encoding=UTF8", "--locale=C"]);
-  fs.appendFileSync(path.join(data, "postgresql.auto.conf"), `listen_addresses='127.0.0.1'\nport=${port}\nmax_connections=8\nshared_buffers='16MB'\nwork_mem='1MB'\nmaintenance_work_mem='8MB'\ntemp_file_limit='16MB'\nmax_worker_processes=0\nmax_parallel_workers=0\nautovacuum=off\nlog_statement='none'\nlogging_collector=off\njit=off\n`);
+  fs.appendFileSync(path.join(data, "postgresql.auto.conf"), `listen_addresses='127.0.0.1'\nunix_socket_directories=''\nport=${port}\nmax_connections=8\nshared_buffers='16MB'\nwork_mem='1MB'\nmaintenance_work_mem='8MB'\ntemp_file_limit='16MB'\nmax_worker_processes=0\nmax_parallel_workers=0\nautovacuum=off\nlog_statement='none'\nlogging_collector=off\njit=off\n`);
   const start = cp.spawnSync(path.join(bin, process.platform === "win32" ? "pg_ctl.exe" : "pg_ctl"), ["-D", data, "-l", path.join(out, "postgres-" + runId + ".log"), "-w", "start"], { env, windowsHide: true, stdio: "ignore", timeout: 30000 });
-  assert.equal(start.status, 0); started = true;
+  if (start.status !== 0) {
+    const logPath = path.join(out, "postgres-" + runId + ".log");
+    throw Object.assign(Error("OWNED_CLUSTER_START_FAILED"), { detail: fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8").slice(-4000) : start.error?.code });
+  }
+  started = true;
   pass("CLUSTER_IDENTITY", value("select replace(current_setting('data_directory'),'\\','/')||'|'||host(inet_server_addr())") === data + "|127.0.0.1");
   sql("create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.role() returns text language sql as $$select current_setting('request.jwt.claim.role',true)$$;grant usage on schema auth to service_role,anon,authenticated;create table public.orders(id uuid primary key);create table public.order_payments(id uuid primary key);create table public.payment_sessions(id uuid primary key);");
   for (const name of [...new Set(schema.tables.map((t) => t.name))]) {
