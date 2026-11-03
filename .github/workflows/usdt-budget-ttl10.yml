@@ -14,10 +14,13 @@ permissions:
   contents: read
 jobs:
   order-driven-pg17:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -26,6 +29,12 @@ jobs:
       - name: Reuse or install local PostgreSQL 17 tools
         run: |
           if [ ! -x /usr/lib/postgresql/17/bin/initdb ]; then
+            sudo apt-get update
+            sudo apt-get install -y curl ca-certificates gpg
+            sudo install -d /usr/share/postgresql-common/pgdg
+            sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            test "$(gpg --batch --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc | awk -F: '$1=="fpr" {print $10; exit}')" = B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+            echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
             sudo apt-get update
             sudo apt-get install -y postgresql-17
           fi
