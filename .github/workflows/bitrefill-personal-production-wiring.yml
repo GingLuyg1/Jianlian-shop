@@ -1,0 +1,46 @@
+name: Bitrefill Personal production wiring
+on:
+  pull_request:
+  push:
+    branches: [codex/bitrefill-personal-production-wiring-20261102]
+jobs:
+  personal-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node --test tests/unit/bitrefill-*.test.mjs tests/unit/daju-*.test.mjs
+  personal-budget-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: synthetic-ci-only
+          PGPASSWORD: synthetic-ci-only
+          POSTGRES_DB: pin_isolated_anchor
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Existing V2 paid order / DB9 / private PIN plus atomic budget
+        env:
+          CI: "true"
+          PIN_TEST_CONTAINER: ${{ job.services.postgres.id }}
+          PIN_TEST_EVIDENCE: ${{ runner.temp }}/pin-personal-evidence
+        run: node scripts/verify-bitrefill-pin-order-entry-pg.mjs --isolated-ci-container --personal-budget
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bitrefill-personal-budget-receipt
+          path: ${{ runner.temp }}/pin-personal-evidence/pin-entry-pg-*/receipt.json

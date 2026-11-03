@@ -15,6 +15,7 @@ export async function loadActualLocalDeliveryEntry(root) {
     'const fulfillDajuOrderWithSupabase = async () => ({ handled: 0, fulfilled: 0, failed: 0, uncertain: 0, needsInput: 0 });');
   router = router.replaceAll('"./supplier-router-core.mjs"', JSON.stringify(moduleUrl("lib/providers/core/supplier-router-core.mjs")));
   router = router.replaceAll('"../bitrefill/pin-runtime.mjs"', JSON.stringify(moduleUrl("lib/providers/bitrefill/pin-runtime.mjs")));
+  router = router.replace('import { ensureBitrefillProductionRuntime } from "../bitrefill/production-server";', 'const ensureBitrefillProductionRuntime = () => {}; // closed production composition; synthetic handler injected below');
   const routerUrl = compile(router);
   let delivery = readFileSync(resolve(root, "lib/delivery/delivery-service.ts"), "utf8");
   delivery = delivery.replace('"@/lib/providers/core/supplier-router"', JSON.stringify(routerUrl))
