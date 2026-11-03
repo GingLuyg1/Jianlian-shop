@@ -1,0 +1,40 @@
+name: USDT budget and account recharge TTL
+on:
+  pull_request:
+    paths:
+      - 'lib/recharges/**'
+      - 'lib/payments/**'
+      - 'app/api/recharges/**'
+      - 'supabase/migrations/*account_recharge_ttl10*'
+      - 'tests/integration/recharge-order-driven-pg17.mjs'
+      - 'tests/fixtures/recharge-order-driven/**'
+      - '.github/workflows/usdt-budget-ttl10.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  order-driven-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Reuse or install local PostgreSQL 17 tools
+        run: |
+          if [ ! -x /usr/lib/postgresql/17/bin/initdb ]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-17
+          fi
+          /usr/lib/postgresql/17/bin/postgres --version
+          echo 'JIANLIAN_TEST_PG_BIN=/usr/lib/postgresql/17/bin' >> "$GITHUB_ENV"
+      - name: Actual isolated SQL, scanner, budget and dual TTL scenarios
+        run: node tests/integration/recharge-order-driven-pg17.mjs "$RUNNER_TEMP/usdt-budget-ttl10"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: usdt-budget-ttl10-synthetic-evidence
+          path: ${{ runner.temp }}/usdt-budget-ttl10/database-test-*.json

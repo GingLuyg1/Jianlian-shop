@@ -16,8 +16,8 @@ const createOrderMigration = file("supabase/migrations/20260710_create_order_wit
 const expirationListMigration = file("supabase/migrations/20260717_order_expiration_list_rpc_compatibility.sql");
 const expirationExecutionMigration = file("supabase/migrations/20260724_order_expiration_chain_session_consistency.sql");
 
-test("all new recharge types use the shared 15-minute window", () => {
-  assert.match(rechargeRoute, /createPaymentExpiryWindow\(\)/);
+test("all new account recharge types use their dedicated 10-minute window", () => {
+  assert.match(rechargeRoute, /createAccountRechargeExpiryWindow\(\)/);
   assert.match(rechargeRoute, /const expiresAt = paymentWindow\.expiresAt/);
   assert.match(rechargeRoute, /const createdAt = paymentWindow\.createdAt/);
   assert.doesNotMatch(rechargeRoute, /20\s*\*\s*60\s*\*\s*1000/);
