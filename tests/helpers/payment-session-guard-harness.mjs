@@ -5,6 +5,7 @@ import ts from "typescript";
 import * as contracts from "../../lib/payments/provider-contracts.mjs";
 import * as onlinePolicy from "../../lib/payments/online-payment-policy.mjs";
 import * as expiry from "../../lib/payments/payment-expiry.mjs";
+import * as accountExpiry from "../../lib/payments/account-recharge-expiry.mjs";
 import * as limits from "../../lib/payments/liuhaoyi-limits.mjs";
 import * as reuse from "../../lib/payments/payment-session-reuse.mjs";
 import * as readiness from "../../lib/payments/manual-channel-readiness.mjs";
@@ -163,7 +164,7 @@ export function harness({ data = fixture(), backend, beforeReserve = async () =>
     "@/lib/payments/provider-contracts.mjs":contracts,"@/lib/payments/request-client-ip":{getPaymentClientIp:()=>"127.0.0.1"},
     "@/lib/payments/request-client-device.mjs":{derivePaymentClientDevice:()=>"pc"},
     "@/lib/payments/recharge-rate.mjs":rate,"@/lib/payments/recharge-rate-service":{loadCurrentRechargeDailyRate:forbidden},
-    "@/lib/payments/payment-expiry.mjs":expiry,"@/lib/payments/recharge-expiry-service":{expireOverdueLiuhaoyiRecharges:forbidden},
+    "@/lib/payments/account-recharge-expiry.mjs":accountExpiry,"@/lib/payments/recharge-expiry-service":{expireOverdueLiuhaoyiRecharges:forbidden},
     "@/lib/payments/manual-channel-readiness.mjs":readiness,"@/lib/payments/recharge-utils":utils,
     "@/lib/risk/risk-service":risk,"@/lib/security/rate-limit":security,
     "@/lib/supabase/server":{hasSupabaseServerConfig:()=>true,getSupabaseServerClient:()=>client},

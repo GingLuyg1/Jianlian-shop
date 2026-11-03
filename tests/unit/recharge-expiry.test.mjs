@@ -9,12 +9,12 @@ import {
   shouldExpireLiuhaoyiRecharge,
 } from "../../lib/payments/recharge-expiry.mjs";
 
-test("Liuhaoyi recharge window is exactly 15 minutes", () => {
+test("Liuhaoyi recharge window is exactly 10 minutes", () => {
   const now = new Date("2026-09-14T10:00:00.000Z");
   const window = createLiuhaoyiRechargeWindow(now);
-  assert.equal(LIUHAOYI_RECHARGE_TTL_MINUTES, 15);
+  assert.equal(LIUHAOYI_RECHARGE_TTL_MINUTES, 10);
   assert.equal(window.createdAt, "2026-09-14T10:00:00.000Z");
-  assert.equal(window.expiresAt, "2026-09-14T10:15:00.000Z");
+  assert.equal(window.expiresAt, "2026-09-14T10:10:00.000Z");
 });
 
 test("active Liuhaoyi recharge can continue only before expiry", () => {

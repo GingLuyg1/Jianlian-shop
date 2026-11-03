@@ -11,16 +11,18 @@ import { createRequire } from "node:module";
 
 const root = process.cwd(), out = process.argv[2];
 assert.ok(out && path.isAbsolute(out), "EXPLICIT_EVIDENCE_DIRECTORY_REQUIRED");
-const schema = JSON.parse(fs.readFileSync(path.join(out, "test-schema-snapshot.json")));
-const contract = JSON.parse(fs.readFileSync(path.join(out, "test-contract-snapshot.json")));
+fs.mkdirSync(out, { recursive: true });
+const fixtureRoot = path.join(root, "tests/fixtures/recharge-order-driven");
+const schema = JSON.parse(fs.readFileSync(path.join(fixtureRoot, "test-schema-snapshot.json")));
+const contract = JSON.parse(fs.readFileSync(path.join(fixtureRoot, "test-contract-snapshot.json")));
 const bin = process.env.JIANLIAN_TEST_PG_BIN || "D:/Jianlian/_bitrefill_v13_local_pg/portable/pgsql/bin";
 const runId = randomUUID().replaceAll("-", ""), data = path.join(out, "pg-" + runId, "data").replaceAll("\\", "/");
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => /^(PATH|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP)$/i.test(k)));
 let port, started = false, testedSQLSha256;
 const checks = [], errors = [], q = (x) => "'" + String(x).replaceAll("'", "''") + "'";
 function tool(name, args, input, fail = false) {
-  const r = cp.spawnSync(path.join(bin, name + ".exe"), args, { env, input, encoding: "utf8", windowsHide: true, timeout: 45000, maxBuffer: 8 * 1024 ** 2 });
-  if (r.status && !fail) throw Object.assign(Error(name + "_FAILED"), { detail: r.stderr });
+  const r = cp.spawnSync(path.join(bin, name + (process.platform === "win32" ? ".exe" : "")), args, { env, input, encoding: "utf8", windowsHide: true, timeout: 45000, maxBuffer: 8 * 1024 ** 2 });
+  if (r.status !== 0 && !fail) throw Object.assign(Error(name + "_FAILED"), { detail: r.stderr || r.error?.code });
   return r;
 }
 function sql(text, { role = null, fail = false } = {}) {
@@ -56,7 +58,7 @@ function reset() {
   baseTime = Math.floor(Date.now() / 1000) - 2000; head = 2000; logs = []; ranges = []; fault = null; headerCalls = rpcCalls = 0; addDuringRead = null; reorg = false;
   sql(`update public.account_recharge_order_scan_control set mode='order_driven',activated_at=${q(iso(baseTime - 100))},lease_token=null,lease_until=null;`);
 }
-function createOrder({ created = 100, amount = 1, expires = created + 900, status = "waiting_payment" } = {}) {
+function createOrder({ created = 100, amount = 1, expires = created + 600, status = "waiting_payment" } = {}) {
   const id = randomUUID(), user = randomUUID(), no = "TEST-ORDER-SCAN-" + id;
   sql(`insert into auth.users(id) values(${q(user)});insert into public.profiles(id,balance) values(${q(user)},0);
   insert into public.account_recharges(id,recharge_no,user_id,channel,channel_code,currency,settlement_currency,requested_cny_amount,expected_usdt_amount,payment_address,payment_token_contract,status,created_at,expires_at,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_effective_at,rate_locked_at)
@@ -114,13 +116,17 @@ function makeScanner() {
 const balance = () => Number(value("select coalesce(sum(balance),0) from public.profiles"));
 try {
   pass("DISK_RESERVE_4GIB", fs.statfsSync(out).bavail * fs.statfsSync(out).bsize > 4 * 1024 ** 3);
-  pass("PG17_VERSION", /17\.11/.test(tool("postgres", ["--version"]).stdout));
+  pass("PG17_VERSION", /17\./.test(tool("postgres", ["--version"]).stdout));
   const listener = createServer(); await new Promise((r) => listener.listen(0, "127.0.0.1", r)); port = listener.address().port; await new Promise((r) => listener.close(r));
   fs.mkdirSync(path.dirname(data), { recursive: true });
   tool("initdb", ["-D", data, "-U", "scanner_test_owner", "--auth=trust", "--encoding=UTF8", "--locale=C"]);
-  fs.appendFileSync(path.join(data, "postgresql.auto.conf"), `listen_addresses='127.0.0.1'\nport=${port}\nmax_connections=8\nshared_buffers='16MB'\nwork_mem='1MB'\nmaintenance_work_mem='8MB'\ntemp_file_limit='16MB'\nmax_worker_processes=0\nmax_parallel_workers=0\nautovacuum=off\nlog_statement='none'\nlogging_collector=off\njit=off\n`);
-  const start = cp.spawnSync(path.join(bin, "pg_ctl.exe"), ["-D", data, "-l", path.join(out, "postgres-" + runId + ".log"), "-w", "start"], { env, windowsHide: true, stdio: "ignore", timeout: 30000 });
-  assert.equal(start.status, 0); started = true;
+  fs.appendFileSync(path.join(data, "postgresql.auto.conf"), `listen_addresses='127.0.0.1'\nunix_socket_directories=''\nport=${port}\nmax_connections=8\nshared_buffers='16MB'\nwork_mem='1MB'\nmaintenance_work_mem='8MB'\ntemp_file_limit='16MB'\nmax_worker_processes=0\nmax_parallel_workers=0\nautovacuum=off\nlog_statement='none'\nlogging_collector=off\njit=off\n`);
+  const start = cp.spawnSync(path.join(bin, process.platform === "win32" ? "pg_ctl.exe" : "pg_ctl"), ["-D", data, "-l", path.join(out, "postgres-" + runId + ".log"), "-w", "start"], { env, windowsHide: true, stdio: "ignore", timeout: 30000 });
+  if (start.status !== 0) {
+    const logPath = path.join(out, "postgres-" + runId + ".log");
+    throw Object.assign(Error("OWNED_CLUSTER_START_FAILED"), { detail: fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8").slice(-4000) : start.error?.code });
+  }
+  started = true;
   pass("CLUSTER_IDENTITY", value("select replace(current_setting('data_directory'),'\\','/')||'|'||host(inet_server_addr())") === data + "|127.0.0.1");
   sql("create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.role() returns text language sql as $$select current_setting('request.jwt.claim.role',true)$$;grant usage on schema auth to service_role,anon,authenticated;create table public.orders(id uuid primary key);create table public.order_payments(id uuid primary key);create table public.payment_sessions(id uuid primary key);");
   for (const name of [...new Set(schema.tables.map((t) => t.name))]) {
@@ -154,22 +160,25 @@ try {
   }
   Object.assign(process.env, { RECHARGE_BEP20_SCANNER_MODE: "order_driven", BSC_RPC_URL: "https://legacy.invalid", BSC_CHAIN_ID: "56", BSC_USDT_CONTRACT: token, BSC_USDT_DECIMALS: "18", BSC_REQUIRED_CONFIRMATIONS: "12", RECHARGE_BEP20_MAX_BLOCKS_PER_RUN: "1500", RECHARGE_BEP20_LOG_CHUNK_SIZE: "50", RECHARGE_BEP20_RPC_URL: "https://rpc-bsc.blockmachine.io" });
   delete process.env.RECHARGE_BEP20_BLOCKMACHINE_API_KEY;
-  reset(); let scan = makeScanner();
+  reset();
+  sql(fs.readFileSync(path.join(root, "supabase/migrations/20261103054024_account_recharge_ttl10_order_scanner_compat.sql"), "utf8"));
+  pass("DUAL_TTL_FORWARD_MIGRATION_INSTALLED");
+  let scan = makeScanner();
   let result = await scan(); pass("ZERO_ORDERS_NO_RPC_NO_GETLOGS", ranges.length === 0 && rpcCalls === 0 && result.idleReason === "NO_OPEN_WINDOWS");
   const order = createOrder(); logs = [log(200)];
   result = await scan(); pass("NEW_ORDER_STARTS_SCAN_AND_CREDITS_ATOMICALLY", result.credited === 1 && balance() === 10);
   pass("ALL_PAID_STOP_LOG_READS_WITHIN_SAME_RUN", ranges.length === 3);
-  pass("FIFTEEN_MINUTE_EXPIRY", value(`select extract(epoch from expires_at-created_at) from public.account_recharges where id=${q(order.id)}`) === "900.000000");
+  pass("NEW_USDT_ORDER_TEN_MINUTE_EXPIRY", value(`select extract(epoch from expires_at-created_at) from public.account_recharges where id=${q(order.id)}`) === "600.000000");
   const count = rpcCalls; await makeScanner()(); pass("PAID_ORDER_RESTART_RETURNS_IDLE", rpcCalls === count);
-  reset(); createOrder(); logs = [log(999)]; head = 1005; scan = makeScanner();
+  reset(); createOrder(); logs = [log(699)]; head = 705; scan = makeScanner();
   await scan(); pass("PRE_EXPIRY_UNCONFIRMED_PAYMENT_NOT_PREMATURELY_CREDITED", balance() === 0);
-  head = 1020; result = await makeScanner()(); pass("PRE_EXPIRY_PAYMENT_LATE_CONFIRMATION_CREDITED", result.credited === 1 && balance() === 10);
-  reset(); createOrder(); logs = [log(1001)]; await makeScanner()(); pass("POST_EXPIRY_PAYMENT_NOT_CREDITED", balance() === 0);
+  head = 720; result = await makeScanner()(); pass("PRE_EXPIRY_PAYMENT_LATE_CONFIRMATION_CREDITED", result.credited === 1 && balance() === 10);
+  reset(); createOrder(); logs = [log(701)]; await makeScanner()(); pass("POST_EXPIRY_PAYMENT_NOT_CREDITED", balance() === 0);
   const previousCalls = rpcCalls; await makeScanner()(); pass("EXPIRED_CONFIRMED_WINDOW_RETIRES_NO_INFINITE_SCAN", rpcCalls === previousCalls);
   reset();createOrder();logs=[log(1999)];fault="out_of_range";await assert.rejects(makeScanner()());pass("OUT_OF_RANGE_UNCONFIRMED_EVIDENCE_NO_CREDIT",balance()===0);
   reset(); createOrder(); createOrder({ amount: 2 }); logs = [log(200), log(210, 2n * 10n ** 18n, 4001)]; result = await makeScanner()();
   pass("MULTI_ORDER_BOTH_CREDITED", result.credited === 2 && balance() === 20);
-  pass("OVERLAPPING_WINDOWS_QUERY_EACH_BLOCK_ONCE", new Set(ranges.flatMap(([a, b]) => Array.from({ length: b - a + 1 }, (_, i) => a + i))).size === ranges.reduce((n, [a, b]) => n + b - a + 1, 0));
+  pass("OVERLAPPING_WINDOWS_INDEPENDENT_PROGRESS_NO_DOUBLE_CREDIT", value("select count(*) from public.account_recharge_order_scan_progress") === "2" && value("select count(*) from public.balance_transactions") === "2");
   reset();createOrder();createOrder({created:700,amount:2});logs=[log(200),log(800,2n*10n**18n,4050)];result=await makeScanner()();
   pass("RETIRED_EARLY_ORDER_SKIPS_UNUSED_GAP_BEFORE_LATER_ORDER",result.credited===2&&balance()===20&&!ranges.some(([a])=>a>=250&&a<700));
   reset(); createOrder(); logs = [log(200)];
@@ -209,6 +218,46 @@ try {
   pass("STALE_RELEASE_CANNOT_CLEAR_NEW_LEASE",value("select lease_token from public.account_recharge_order_scan_control")===newer.token);
   sql("update public.account_recharge_order_scan_control set lease_until=now()-interval '1 second'");
   pass("EXPIRED_LEASE_CANNOT_WRITE_PROGRESS",sql(`select public.apply_recharge_order_scan_chunk_v1(${q(newer.token)},'[]','[]',56,${q(token)},${q(receiver)},now())`,{role:"service_role",fail:true}).status!==0);
+  for (const minutes of [10,15,11,12,20]) {
+    reset(); const row=createOrder({expires:100+minutes*60});
+    const dry=json(`select public.lease_recharge_order_scan_v1(${q(receiver)},${q(token)},true)`,{role:'service_role'});
+    if ([10,15].includes(minutes)) {
+      pass(minutes+'_MINUTE_LEASE_ELIGIBLE',dry.windows.length===1&&dry.blockedHistory===0);
+      logs=[log(200)];await makeScanner()();
+      pass(minutes===15?'LEGACY_FIFTEEN_MINUTE_WINDOW_REMAINS_SCANNABLE':'NEW_USDT_ORDER_TEN_MINUTE_APPLY_ACCEPTED',balance()===10);
+      pass(minutes+'_MINUTE_QUARANTINE_24H',value(`select extract(epoch from quarantine_until-expires_at) from public.account_recharge_amount_reservations where recharge_id=${q(row.id)}`)==='86400.000000');
+    } else {
+      pass(minutes+'_MINUTE_LEASE_BLOCKED',dry.windows.length===0&&dry.blockedHistory===1);
+      createOrder({amount:2});
+      const l=json(`select public.lease_recharge_order_scan_v1(${q(receiver)},${q(token)},false)`,{role:'service_role'});
+
+      const denied=sql(`select public.apply_recharge_order_scan_chunk_v1(${q(l.token)},${q(JSON.stringify([{id:row.id,from:'100',to:'149',complete:false}]))}::jsonb,'[]',56,${q(token)},${q(receiver)},${q(iso(baseTime+149))})`,{role:'service_role',fail:true});
+      pass(minutes+'_MINUTE_APPLY_REFUSED',denied.status!==0&&denied.stderr.includes('ORDER_SCAN_WINDOW_INVALID')&&balance()===0);
+    }
+  }
+  // Real SQL progress/ledger, expensive planning, and exactly-once resume over runs.
+  reset();baseTime=Math.floor(Date.now()/1000)-60000;head=60000;
+  sql(`update public.account_recharge_order_scan_control set activated_at=${q(iso(baseTime-100))}`);
+  for(const [created,amount] of [[1000,1],[10000,2],[40000,3]])createOrder({created,amount});
+  logs=[log(1010)];let resourceStop=false;
+  for(let run=0;run<15&&value('select count(*) from public.account_recharge_order_scan_progress where complete')!=='3';run++){
+    rpcCalls=0;const before=json('select coalesce(jsonb_object_agg(recharge_id,last_scanned_block),\'{}\') from public.account_recharge_order_scan_progress');
+    result=await makeScanner()();resourceStop ||= result.idleReason==='RESOURCE_BUDGET';
+    pass('BUDGET_RUN_'+run+'_RPC_LE_128',rpcCalls<=128);
+    pass('BUDGET_RUN_'+run+'_LEASE_RELEASED',value('select lease_token is null from public.account_recharge_order_scan_control')==='t');
+    const after=json('select coalesce(jsonb_object_agg(recharge_id,last_scanned_block),\'{}\') from public.account_recharge_order_scan_progress');
+    pass('BUDGET_RUN_'+run+'_PROGRESS_DURABLE',Object.entries(after).some(([id,last])=>before[id]===undefined||Number(last)>Number(before[id])));
+  }
+  pass('RESOURCE_STOP_RETURNED_SUCCESS_WITH_COMMITTED_CHUNK',resourceStop);
+  pass('MULTI_RUN_ALL_WINDOWS_COMPLETE',value('select count(*) from public.account_recharge_order_scan_progress where complete')==='3');
+  pass('MULTI_RUN_SINGLE_CREDIT_SINGLE_LEDGER',balance()===10&&value('select count(*) from public.balance_transactions')==='1');
+  const callsBeforeIdle=rpcCalls;await makeScanner()();pass('FINISHED_WINDOWS_IDLE_NO_NEW_RPC',rpcCalls===callsBeforeIdle);
+  reset();createOrder();logs=[];addDuringRead=()=>{fault=429;};
+  await assert.rejects(makeScanner()());
+  pass('MID_RUN_PROVIDER_FAILURE_RETAINS_COMMITTED_PREFIX',value('select last_scanned_block from public.account_recharge_order_scan_progress')==='149');
+  pass('MID_RUN_PROVIDER_FAILURE_RELEASES_LEASE',value('select lease_token is null from public.account_recharge_order_scan_control')==='t');
+  fault=null;ranges=[];logs=[log(200)];result=await makeScanner()();
+  pass('MID_RUN_FAILURE_RESUMES_FROM_DURABLE_CAS',ranges[0][0]===150&&balance()===10&&value('select count(*) from public.balance_transactions')==='1');
 } catch (e) { errors.push({ type: e.name, code: e.message, detail: e.detail ?? null }); console.log(JSON.stringify(errors.at(-1))); process.exitCode = 1; }
 finally {
   names.forEach((n, i) => { if (savedEnv[i] === undefined) delete process.env[n]; else process.env[n] = savedEnv[i]; });

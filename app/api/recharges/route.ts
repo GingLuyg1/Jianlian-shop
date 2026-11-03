@@ -20,7 +20,7 @@ import {
   parseRequestedCnyAmount,
 } from "@/lib/payments/recharge-rate.mjs";
 import { loadCurrentRechargeDailyRate } from "@/lib/payments/recharge-rate-service";
-import { createPaymentExpiryWindow } from "@/lib/payments/payment-expiry.mjs";
+import { createAccountRechargeExpiryWindow } from "@/lib/payments/account-recharge-expiry.mjs";
 import { expireOverdueLiuhaoyiRecharges } from "@/lib/payments/recharge-expiry-service";
 import {
   classifyPublicRechargeAmountRange,
@@ -318,7 +318,7 @@ export async function POST(request: Request) {
 
     failureOperation = "create";
 
-    const paymentWindow = createPaymentExpiryWindow();
+    const paymentWindow = createAccountRechargeExpiryWindow();
     let rechargeId: string | null = null;
     const expiresAt = paymentWindow.expiresAt;
     const createdAt = paymentWindow.createdAt;

@@ -58,7 +58,7 @@ test("late paid callback preserves evidence and routes to manual reconciliation 
 });
 
 test("USDT V3 uses the shared 15 minute payment window", () => {
-  assert.match(rechargeRoute, /createPaymentExpiryWindow\(\)/);
+  assert.match(rechargeRoute, /createAccountRechargeExpiryWindow\(\)/);
   assert.doesNotMatch(rechargeRoute, /20 \* 60 \* 1000/);
 });
 

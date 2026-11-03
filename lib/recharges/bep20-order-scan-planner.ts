@@ -33,7 +33,7 @@ export async function planOrderScanRanges(windows: OrderScanWindow[], finalized:
   const planned: PlannedWindow[] = [];
   for (const window of windows) {
     const start = Date.parse(window.created_at), expiry = Date.parse(window.expires_at);
-    if (!Number.isFinite(start) || !Number.isFinite(expiry) || expiry - start !== 900_000) throw Error("ORDER_SCAN_WINDOW_INVALID");
+    if (!Number.isFinite(start) || !Number.isFinite(expiry) || ![600_000, 900_000].includes(expiry - start)) throw Error("ORDER_SCAN_WINDOW_INVALID");
     const from = window.last_scanned_block === null ? await lowerBound(Math.floor(start / 1000)) : BigInt(window.last_scanned_block) + BigInt(1);
     const complete = end.timestamp > expiry / 1000;
     // Include one confirmed boundary strictly after expiry, then retire the

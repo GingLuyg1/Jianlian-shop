@@ -1,0 +1,1484 @@
+{
+  "types": [
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_state",
+      "column": "scanner_key"
+    },
+    {
+      "type": "integer",
+      "table": "account_recharge_bep20_scan_state",
+      "column": "chain_id"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_state",
+      "column": "token_contract"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_state",
+      "column": "receive_address"
+    },
+    {
+      "type": "numeric(30,0)",
+      "table": "account_recharge_bep20_scan_state",
+      "column": "last_scanned_block"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_bep20_scan_state",
+      "column": "last_scanned_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_bep20_scan_state",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_bep20_scan_state",
+      "column": "updated_at"
+    },
+    {
+      "type": "uuid",
+      "table": "balance_transactions",
+      "column": "id"
+    },
+    {
+      "type": "uuid",
+      "table": "balance_transactions",
+      "column": "user_id"
+    },
+    {
+      "type": "text",
+      "table": "balance_transactions",
+      "column": "transaction_no"
+    },
+    {
+      "type": "text",
+      "table": "balance_transactions",
+      "column": "business_type"
+    },
+    {
+      "type": "text",
+      "table": "balance_transactions",
+      "column": "business_id"
+    },
+    {
+      "type": "text",
+      "table": "balance_transactions",
+      "column": "direction"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "balance_transactions",
+      "column": "amount"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "balance_transactions",
+      "column": "balance_before"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "balance_transactions",
+      "column": "balance_after"
+    },
+    {
+      "type": "text",
+      "table": "balance_transactions",
+      "column": "currency"
+    },
+    {
+      "type": "text",
+      "table": "balance_transactions",
+      "column": "status"
+    },
+    {
+      "type": "text",
+      "table": "balance_transactions",
+      "column": "remark"
+    },
+    {
+      "type": "jsonb",
+      "table": "balance_transactions",
+      "column": "metadata"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "balance_transactions",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "balance_transactions",
+      "column": "updated_at"
+    },
+    {
+      "type": "uuid",
+      "table": "recharge_review_events",
+      "column": "id"
+    },
+    {
+      "type": "uuid",
+      "table": "recharge_review_events",
+      "column": "recharge_id"
+    },
+    {
+      "type": "text",
+      "table": "recharge_review_events",
+      "column": "recharge_no"
+    },
+    {
+      "type": "uuid",
+      "table": "recharge_review_events",
+      "column": "actor_user_id"
+    },
+    {
+      "type": "text",
+      "table": "recharge_review_events",
+      "column": "actor_type"
+    },
+    {
+      "type": "text",
+      "table": "recharge_review_events",
+      "column": "action"
+    },
+    {
+      "type": "text",
+      "table": "recharge_review_events",
+      "column": "from_status"
+    },
+    {
+      "type": "text",
+      "table": "recharge_review_events",
+      "column": "to_status"
+    },
+    {
+      "type": "text",
+      "table": "recharge_review_events",
+      "column": "reason"
+    },
+    {
+      "type": "text",
+      "table": "recharge_review_events",
+      "column": "request_id"
+    },
+    {
+      "type": "jsonb",
+      "table": "recharge_review_events",
+      "column": "metadata"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "recharge_review_events",
+      "column": "created_at"
+    },
+    {
+      "type": "uuid",
+      "table": "chain_payment_sessions",
+      "column": "id"
+    },
+    {
+      "type": "uuid",
+      "table": "chain_payment_sessions",
+      "column": "order_id"
+    },
+    {
+      "type": "uuid",
+      "table": "chain_payment_sessions",
+      "column": "payment_id"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "payment_method"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "network"
+    },
+    {
+      "type": "integer",
+      "table": "chain_payment_sessions",
+      "column": "chain_id"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "asset"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "token_contract"
+    },
+    {
+      "type": "integer",
+      "table": "chain_payment_sessions",
+      "column": "token_decimals"
+    },
+    {
+      "type": "numeric(36,18)",
+      "table": "chain_payment_sessions",
+      "column": "expected_amount"
+    },
+    {
+      "type": "numeric(78,0)",
+      "table": "chain_payment_sessions",
+      "column": "expected_raw_amount"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "receive_address"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "status"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "expires_at"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "submitted_tx_hash"
+    },
+    {
+      "type": "numeric(36,18)",
+      "table": "chain_payment_sessions",
+      "column": "confirmed_amount"
+    },
+    {
+      "type": "numeric(78,0)",
+      "table": "chain_payment_sessions",
+      "column": "confirmed_raw_amount"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "confirmed_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "last_checked_at"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "failure_reason"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "manual_review_reason"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "request_id"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "updated_at"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "order_currency"
+    },
+    {
+      "type": "numeric(36,18)",
+      "table": "chain_payment_sessions",
+      "column": "order_amount"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "payment_currency"
+    },
+    {
+      "type": "numeric(36,18)",
+      "table": "chain_payment_sessions",
+      "column": "exchange_rate"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "exchange_rate_source"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "exchange_rate_fetched_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "exchange_rate_expires_at"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "pricing_status"
+    },
+    {
+      "type": "uuid",
+      "table": "chain_payment_sessions",
+      "column": "completion_attempt_id"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "completion_started_at"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "completion_error"
+    },
+    {
+      "type": "uuid",
+      "table": "chain_payment_sessions",
+      "column": "last_rechecked_by"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "last_rechecked_at"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "last_recheck_reason"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "manual_review_decision"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "chain_payment_sessions",
+      "column": "manual_review_decided_at"
+    },
+    {
+      "type": "uuid",
+      "table": "chain_payment_sessions",
+      "column": "manual_review_decided_by"
+    },
+    {
+      "type": "text",
+      "table": "chain_payment_sessions",
+      "column": "manual_review_decision_reason"
+    },
+    {
+      "type": "uuid",
+      "table": "chain_payment_sessions",
+      "column": "payment_session_id"
+    },
+    {
+      "type": "uuid",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "id"
+    },
+    {
+      "type": "integer",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "chain_id"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "tx_hash"
+    },
+    {
+      "type": "integer",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "log_index"
+    },
+    {
+      "type": "numeric(30,0)",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "block_number"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "block_timestamp"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "token_contract"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "to_address"
+    },
+    {
+      "type": "numeric(36,18)",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "actual_received_usdt"
+    },
+    {
+      "type": "uuid",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "recharge_id"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "recharge_no"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "outcome"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "error_code"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_bep20_scan_events",
+      "column": "updated_at"
+    },
+    {
+      "type": "uuid",
+      "table": "account_recharges",
+      "column": "id"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "recharge_no"
+    },
+    {
+      "type": "uuid",
+      "table": "account_recharges",
+      "column": "user_id"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "user_email"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "channel"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "network"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "account_recharges",
+      "column": "amount"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "account_recharges",
+      "column": "fee_amount"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "account_recharges",
+      "column": "payable_amount"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "account_recharges",
+      "column": "received_amount"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "status"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "provider_trade_no"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "paid_at"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "callback_status"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "exception_type"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "error_summary"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "user_note"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "admin_note"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "updated_at"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "channel_code"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "channel_name"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "provider"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "currency"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "account_recharges",
+      "column": "requested_amount"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "account_recharges",
+      "column": "credited_amount"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "payment_url"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "qr_code_url"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "payment_address"
+    },
+    {
+      "type": "jsonb",
+      "table": "account_recharges",
+      "column": "raw_response"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "client_request_id"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "completed_at"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "customer_note"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "payment_method"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "review_mode"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "review_reason"
+    },
+    {
+      "type": "numeric(18,2)",
+      "table": "account_recharges",
+      "column": "requested_cny_amount"
+    },
+    {
+      "type": "numeric(36,18)",
+      "table": "account_recharges",
+      "column": "expected_usdt_amount"
+    },
+    {
+      "type": "numeric(36,18)",
+      "table": "account_recharges",
+      "column": "actual_received_usdt"
+    },
+    {
+      "type": "numeric(18,2)",
+      "table": "account_recharges",
+      "column": "credited_cny_amount"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "settlement_currency"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "payment_token_contract"
+    },
+    {
+      "type": "numeric(18,6)",
+      "table": "account_recharges",
+      "column": "locked_market_rate"
+    },
+    {
+      "type": "numeric(18,1)",
+      "table": "account_recharges",
+      "column": "locked_settlement_rate"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "rate_source"
+    },
+    {
+      "type": "date",
+      "table": "account_recharges",
+      "column": "rate_effective_date"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "rate_effective_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "rate_locked_at"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "transaction_reference"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "submitted_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "expires_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharges",
+      "column": "matched_at"
+    },
+    {
+      "type": "text",
+      "table": "account_recharges",
+      "column": "match_method"
+    },
+    {
+      "type": "integer",
+      "table": "bep20_transaction_usage_registry",
+      "column": "chain_id"
+    },
+    {
+      "type": "text",
+      "table": "bep20_transaction_usage_registry",
+      "column": "tx_hash"
+    },
+    {
+      "type": "text",
+      "table": "bep20_transaction_usage_registry",
+      "column": "usage_type"
+    },
+    {
+      "type": "uuid",
+      "table": "bep20_transaction_usage_registry",
+      "column": "business_id"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "bep20_transaction_usage_registry",
+      "column": "created_at"
+    },
+    {
+      "type": "uuid",
+      "table": "profiles",
+      "column": "id"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "email"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "phone"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "role"
+    },
+    {
+      "type": "numeric(12,2)",
+      "table": "profiles",
+      "column": "balance"
+    },
+    {
+      "type": "numeric(12,2)",
+      "table": "profiles",
+      "column": "promotion_balance"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "invite_code"
+    },
+    {
+      "type": "uuid",
+      "table": "profiles",
+      "column": "referred_by"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "created_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "updated_at"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "account_status"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "risk_status"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "status_reason"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "risk_reason"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "status_updated_at"
+    },
+    {
+      "type": "uuid",
+      "table": "profiles",
+      "column": "status_updated_by"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "risk_updated_at"
+    },
+    {
+      "type": "uuid",
+      "table": "profiles",
+      "column": "risk_updated_by"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "last_login_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "deleted_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "anonymized_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "deletion_requested_at"
+    },
+    {
+      "type": "uuid",
+      "table": "account_recharge_chain_claims",
+      "column": "recharge_id"
+    },
+    {
+      "type": "integer",
+      "table": "account_recharge_chain_claims",
+      "column": "chain_id"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_chain_claims",
+      "column": "tx_hash"
+    },
+    {
+      "type": "integer",
+      "table": "account_recharge_chain_claims",
+      "column": "log_index"
+    },
+    {
+      "type": "numeric(30,0)",
+      "table": "account_recharge_chain_claims",
+      "column": "block_number"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_chain_claims",
+      "column": "block_hash"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_chain_claims",
+      "column": "block_timestamp"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_chain_claims",
+      "column": "token_contract"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_chain_claims",
+      "column": "from_address"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_chain_claims",
+      "column": "to_address"
+    },
+    {
+      "type": "numeric(78,0)",
+      "table": "account_recharge_chain_claims",
+      "column": "raw_amount"
+    },
+    {
+      "type": "numeric(36,18)",
+      "table": "account_recharge_chain_claims",
+      "column": "actual_received_usdt"
+    },
+    {
+      "type": "integer",
+      "table": "account_recharge_chain_claims",
+      "column": "confirmation_count"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_chain_claims",
+      "column": "verified_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_chain_claims",
+      "column": "created_at"
+    },
+    {
+      "type": "text",
+      "table": "account_recharge_amount_reservations",
+      "column": "payment_address"
+    },
+    {
+      "type": "numeric(36,4)",
+      "table": "account_recharge_amount_reservations",
+      "column": "expected_usdt_amount"
+    },
+    {
+      "type": "uuid",
+      "table": "account_recharge_amount_reservations",
+      "column": "recharge_id"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_amount_reservations",
+      "column": "reserved_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_amount_reservations",
+      "column": "expires_at"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "account_recharge_amount_reservations",
+      "column": "quarantine_until"
+    }
+  ],
+  "indexes": [
+    "CREATE UNIQUE INDEX account_recharges_pkey ON public.account_recharges USING btree (id)",
+    "CREATE UNIQUE INDEX account_recharges_recharge_no_key ON public.account_recharges USING btree (recharge_no)",
+    "CREATE INDEX account_recharges_user_id_idx ON public.account_recharges USING btree (user_id)",
+    "CREATE INDEX account_recharges_user_email_idx ON public.account_recharges USING btree (user_email)",
+    "CREATE INDEX account_recharges_channel_idx ON public.account_recharges USING btree (channel)",
+    "CREATE INDEX account_recharges_status_idx ON public.account_recharges USING btree (status)",
+    "CREATE INDEX account_recharges_created_at_idx ON public.account_recharges USING btree (created_at DESC)",
+    "CREATE INDEX account_recharges_paid_at_idx ON public.account_recharges USING btree (paid_at DESC)",
+    "CREATE INDEX account_recharges_exception_type_idx ON public.account_recharges USING btree (exception_type) WHERE (exception_type IS NOT NULL)",
+    "CREATE UNIQUE INDEX account_recharges_provider_trade_no_unique ON public.account_recharges USING btree (provider_trade_no) WHERE ((provider_trade_no IS NOT NULL) AND (provider_trade_no <> ''::text))",
+    "CREATE UNIQUE INDEX account_recharges_user_client_request_unique ON public.account_recharges USING btree (user_id, client_request_id) WHERE ((client_request_id IS NOT NULL) AND (btrim(client_request_id) <> ''::text))",
+    "CREATE UNIQUE INDEX chain_payment_sessions_pkey ON public.chain_payment_sessions USING btree (id)",
+    "CREATE INDEX chain_payment_sessions_order_idx ON public.chain_payment_sessions USING btree (order_id, created_at DESC)",
+    "CREATE INDEX chain_payment_sessions_payment_idx ON public.chain_payment_sessions USING btree (payment_id) WHERE (payment_id IS NOT NULL)",
+    "CREATE INDEX chain_payment_sessions_status_idx ON public.chain_payment_sessions USING btree (status, expires_at)",
+    "CREATE INDEX chain_payment_sessions_pricing_idx ON public.chain_payment_sessions USING btree (payment_currency, pricing_status, exchange_rate_expires_at)",
+    "CREATE UNIQUE INDEX chain_payment_sessions_active_order_unique ON public.chain_payment_sessions USING btree (order_id, payment_method) WHERE (status = ANY (ARRAY['waiting_payment'::text, 'submitted'::text, 'confirming'::text, 'verified'::text, 'completing'::text, 'payment_failed'::text, 'underpaid'::text, 'manual_review'::text]))",
+    "CREATE UNIQUE INDEX chain_payment_sessions_payment_session_unique ON public.chain_payment_sessions USING btree (payment_session_id) WHERE (payment_session_id IS NOT NULL)",
+    "CREATE UNIQUE INDEX chain_payment_sessions_order_payment_unique ON public.chain_payment_sessions USING btree (payment_id) WHERE (payment_id IS NOT NULL)",
+    "CREATE UNIQUE INDEX bep20_transaction_usage_registry_pkey ON public.bep20_transaction_usage_registry USING btree (chain_id, tx_hash)",
+    "CREATE UNIQUE INDEX account_recharge_bep20_scan_events_pkey ON public.account_recharge_bep20_scan_events USING btree (id)",
+    "CREATE UNIQUE INDEX account_recharge_bep20_scan_even_chain_id_tx_hash_log_index_key ON public.account_recharge_bep20_scan_events USING btree (chain_id, tx_hash, log_index)",
+    "CREATE INDEX account_recharge_bep20_scan_events_created_idx ON public.account_recharge_bep20_scan_events USING btree (created_at DESC)",
+    "CREATE INDEX account_recharge_bep20_scan_events_recharge_idx ON public.account_recharge_bep20_scan_events USING btree (recharge_id, created_at DESC)",
+    "CREATE INDEX profiles_account_status_idx ON public.profiles USING btree (account_status)",
+    "CREATE INDEX profiles_risk_status_idx ON public.profiles USING btree (risk_status)",
+    "CREATE INDEX profiles_created_at_idx ON public.profiles USING btree (created_at DESC)",
+    "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)",
+    "CREATE UNIQUE INDEX profiles_invite_code_key ON public.profiles USING btree (invite_code)",
+    "CREATE INDEX profiles_role_idx ON public.profiles USING btree (role)",
+    "CREATE INDEX profiles_email_idx ON public.profiles USING btree (email)",
+    "CREATE UNIQUE INDEX profiles_invite_code_unique_idx ON public.profiles USING btree (invite_code) WHERE (invite_code IS NOT NULL)",
+    "CREATE INDEX profiles_invite_code_idx ON public.profiles USING btree (invite_code)",
+    "CREATE INDEX profiles_referred_by_idx ON public.profiles USING btree (referred_by)",
+    "CREATE UNIQUE INDEX recharge_review_events_pkey ON public.recharge_review_events USING btree (id)",
+    "CREATE INDEX recharge_review_events_recharge_created_idx ON public.recharge_review_events USING btree (recharge_id, created_at DESC)",
+    "CREATE UNIQUE INDEX balance_transactions_pkey ON public.balance_transactions USING btree (id)",
+    "CREATE UNIQUE INDEX balance_transactions_transaction_no_key ON public.balance_transactions USING btree (transaction_no)",
+    "CREATE UNIQUE INDEX balance_transactions_business_unique ON public.balance_transactions USING btree (business_type, business_id) WHERE (status = 'completed'::text)",
+    "CREATE INDEX balance_transactions_user_created_idx ON public.balance_transactions USING btree (user_id, created_at DESC)",
+    "CREATE INDEX balance_transactions_business_idx ON public.balance_transactions USING btree (business_type, business_id)",
+    "CREATE UNIQUE INDEX account_recharge_amount_reservations_pkey ON public.account_recharge_amount_reservations USING btree (payment_address, expected_usdt_amount)",
+    "CREATE UNIQUE INDEX account_recharge_amount_reservations_recharge_id_key ON public.account_recharge_amount_reservations USING btree (recharge_id)",
+    "CREATE INDEX account_recharge_amount_reservations_recharge_idx ON public.account_recharge_amount_reservations USING btree (recharge_id)",
+    "CREATE INDEX account_recharge_amount_reservations_quarantine_idx ON public.account_recharge_amount_reservations USING btree (quarantine_until)",
+    "CREATE UNIQUE INDEX account_recharge_chain_claims_pkey ON public.account_recharge_chain_claims USING btree (recharge_id)",
+    "CREATE UNIQUE INDEX account_recharge_chain_claims_chain_id_tx_hash_key ON public.account_recharge_chain_claims USING btree (chain_id, tx_hash)",
+    "CREATE UNIQUE INDEX account_recharge_bep20_scan_state_pkey ON public.account_recharge_bep20_scan_state USING btree (scanner_key)"
+  ],
+  "triggers": [
+    {
+      "table": "balance_transactions",
+      "trigger": "CREATE TRIGGER trg_balance_transactions_updated_at BEFORE UPDATE ON public.balance_transactions FOR EACH ROW EXECUTE FUNCTION set_balance_transactions_updated_at()",
+      "function": "CREATE OR REPLACE FUNCTION public.set_balance_transactions_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nbegin\r\n  new.updated_at = now();\r\n  return new;\r\nend;\r\n$function$\n"
+    },
+    {
+      "table": "chain_payment_sessions",
+      "trigger": "CREATE TRIGGER trg_chain_payment_sessions_updated_at BEFORE UPDATE ON public.chain_payment_sessions FOR EACH ROW EXECUTE FUNCTION set_chain_payment_updated_at()",
+      "function": "CREATE OR REPLACE FUNCTION public.set_chain_payment_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nbegin\r\n  new.updated_at = now();\r\n  return new;\r\nend;\r\n$function$\n"
+    },
+    {
+      "table": "chain_payment_sessions",
+      "trigger": "CREATE TRIGGER trg_sync_bep20_chain_order_payment AFTER INSERT OR UPDATE OF payment_id, status, expected_amount, confirmed_amount, submitted_tx_hash, failure_reason, manual_review_reason ON public.chain_payment_sessions FOR EACH ROW EXECUTE FUNCTION sync_bep20_chain_order_payment()",
+      "function": "CREATE OR REPLACE FUNCTION public.sync_bep20_chain_order_payment()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\nbegin\r\n  if new.payment_id is null then\r\n    return new;\r\n  end if;\r\n\r\n  update public.order_payments op\r\n  set status = case\r\n        when op.status = 'paid' then 'paid'\r\n        when new.status = 'paid' then 'paid'\r\n        when new.status in ('manual_review', 'underpaid') then 'under_review'\r\n        when new.status in ('submitted', 'confirming', 'verified', 'completing', 'payment_failed') then 'processing'\r\n        when new.status in ('expired', 'failed') then new.status\r\n        else 'pending'\r\n      end,\r\n      payment_method = 'usdt_bep20',\r\n      channel = 'usdt_bep20',\r\n      network = 'BEP20',\r\n      payable_amount = new.expected_amount,\r\n      payable_currency = new.payment_currency,\r\n      received_amount = coalesce(new.confirmed_amount, op.received_amount),\r\n      received_currency = case\r\n        when new.confirmed_amount is not null then new.payment_currency\r\n        else op.received_currency\r\n      end,\r\n      transaction_reference = coalesce(new.submitted_tx_hash, op.transaction_reference),\r\n      callback_status = case\r\n        when new.status = 'paid' then 'success'\r\n        when new.status = 'manual_review' then 'manual_review'\r\n        else op.callback_status\r\n      end,\r\n      exception_type = case\r\n        when new.status in ('manual_review', 'underpaid') then 'amount_mismatch'\r\n        when new.status = 'paid' then null\r\n        else op.exception_type\r\n      end,\r\n      error_summary = case\r\n        when new.status = 'manual_review' then coalesce(new.manual_review_reason, 'BEP20 payment requires manual review')\r\n        when new.status = 'underpaid' then coalesce(new.failure_reason, 'BEP20 payment is underpaid')\r\n        when new.status = 'paid' then null\r\n        else coalesce(new.failure_reason, op.error_summary)\r\n      end,\r\n      updated_at = now()\r\n  where op.id = new.payment_id\r\n    and op.order_id = new.order_id;\r\n\r\n  if not found then\r\n    raise exception 'BEP20 chain session order payment linkage is missing or belongs to another order';\r\n  end if;\r\n\r\n  return new;\r\nend;\r\n$function$\n"
+    },
+    {
+      "table": "account_recharges",
+      "trigger": "CREATE TRIGGER protect_account_recharge_rate_snapshot BEFORE UPDATE ON public.account_recharges FOR EACH ROW EXECUTE FUNCTION protect_account_recharge_rate_snapshot()",
+      "function": "CREATE OR REPLACE FUNCTION public.protect_account_recharge_rate_snapshot()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if old.requested_cny_amount is not null and (\n    new.requested_cny_amount is distinct from old.requested_cny_amount\n    or new.expected_usdt_amount is distinct from old.expected_usdt_amount\n    or new.settlement_currency is distinct from old.settlement_currency\n    or new.payment_address is distinct from old.payment_address\n    or new.payment_token_contract is distinct from old.payment_token_contract\n    or new.locked_market_rate is distinct from old.locked_market_rate\n    or new.locked_settlement_rate is distinct from old.locked_settlement_rate\n    or new.rate_source is distinct from old.rate_source\n    or new.rate_effective_date is distinct from old.rate_effective_date\n    or new.rate_effective_at is distinct from old.rate_effective_at\n    or new.rate_locked_at is distinct from old.rate_locked_at\n    or new.expires_at is distinct from old.expires_at\n  ) then\n    raise exception 'account recharge rate/payment snapshot is immutable';\n  end if;\n  return new;\nend;\n$function$\n"
+    },
+    {
+      "table": "account_recharges",
+      "trigger": "CREATE TRIGGER trg_account_recharges_updated_at BEFORE UPDATE ON public.account_recharges FOR EACH ROW EXECUTE FUNCTION set_payment_admin_updated_at()",
+      "function": "CREATE OR REPLACE FUNCTION public.set_payment_admin_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nbegin\r\n  new.updated_at = now();\r\n  return new;\r\nend;\r\n$function$\n"
+    },
+    {
+      "table": "profiles",
+      "trigger": "CREATE TRIGGER profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION handle_updated_at()",
+      "function": "CREATE OR REPLACE FUNCTION public.handle_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nbegin\r\n  new.updated_at = now();\r\n  return new;\r\nend;\r\n$function$\n"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "account_recharge_bep20_scan_state_address_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_state",
+      "definition": "CHECK (((receive_address = lower(receive_address)) AND (receive_address ~ '^0x[0-9a-f]{40}$'::text)))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state_block_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_state",
+      "definition": "CHECK ((last_scanned_block >= (0)::numeric))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state_chain_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_state",
+      "definition": "CHECK ((chain_id = 56))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state_pkey",
+      "type": "p",
+      "table": "account_recharge_bep20_scan_state",
+      "definition": "PRIMARY KEY (scanner_key)"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state_token_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_state",
+      "definition": "CHECK (((token_contract = lower(token_contract)) AND (token_contract ~ '^0x[0-9a-f]{40}$'::text)))"
+    },
+    {
+      "name": "balance_transactions_amount_positive_check",
+      "type": "c",
+      "table": "balance_transactions",
+      "definition": "CHECK ((amount > (0)::numeric))"
+    },
+    {
+      "name": "balance_transactions_business_type_check",
+      "type": "c",
+      "table": "balance_transactions",
+      "definition": "CHECK ((business_type = ANY (ARRAY['account_recharge'::text, 'order_payment'::text, 'admin_adjustment'::text, 'refund'::text, 'promotion'::text, 'system'::text])))"
+    },
+    {
+      "name": "balance_transactions_direction_check",
+      "type": "c",
+      "table": "balance_transactions",
+      "definition": "CHECK ((direction = ANY (ARRAY['credit'::text, 'debit'::text])))"
+    },
+    {
+      "name": "balance_transactions_pkey",
+      "type": "p",
+      "table": "balance_transactions",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "balance_transactions_status_check",
+      "type": "c",
+      "table": "balance_transactions",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'cancelled'::text])))"
+    },
+    {
+      "name": "balance_transactions_transaction_no_key",
+      "type": "u",
+      "table": "balance_transactions",
+      "definition": "UNIQUE (transaction_no)"
+    },
+    {
+      "name": "balance_transactions_user_id_fkey",
+      "type": "f",
+      "table": "balance_transactions",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "recharge_review_events_actor_type_check",
+      "type": "c",
+      "table": "recharge_review_events",
+      "definition": "CHECK ((actor_type = ANY (ARRAY['user'::text, 'admin'::text, 'provider'::text, 'system'::text])))"
+    },
+    {
+      "name": "recharge_review_events_actor_user_id_fkey",
+      "type": "f",
+      "table": "recharge_review_events",
+      "definition": "FOREIGN KEY (actor_user_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "recharge_review_events_pkey",
+      "type": "p",
+      "table": "recharge_review_events",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "recharge_review_events_recharge_id_fkey",
+      "type": "f",
+      "table": "recharge_review_events",
+      "definition": "FOREIGN KEY (recharge_id) REFERENCES account_recharges(id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "chain_payment_sessions_address_format_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK (((receive_address ~* '^0x[0-9a-f]{40}$'::text) AND (token_contract ~* '^0x[0-9a-f]{40}$'::text)))"
+    },
+    {
+      "name": "chain_payment_sessions_amount_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK (((expected_amount > (0)::numeric) AND (expected_raw_amount > (0)::numeric)))"
+    },
+    {
+      "name": "chain_payment_sessions_chain_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK ((chain_id = 56))"
+    },
+    {
+      "name": "chain_payment_sessions_exchange_rate_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK (((exchange_rate IS NULL) OR (exchange_rate > (0)::numeric)))"
+    },
+    {
+      "name": "chain_payment_sessions_last_rechecked_by_fkey",
+      "type": "f",
+      "table": "chain_payment_sessions",
+      "definition": "FOREIGN KEY (last_rechecked_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "chain_payment_sessions_manual_review_decided_by_fkey",
+      "type": "f",
+      "table": "chain_payment_sessions",
+      "definition": "FOREIGN KEY (manual_review_decided_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "chain_payment_sessions_manual_review_decision_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK (((manual_review_decision IS NULL) OR (manual_review_decision = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text]))))"
+    },
+    {
+      "name": "chain_payment_sessions_method_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK ((payment_method = 'usdt_bep20'::text))"
+    },
+    {
+      "name": "chain_payment_sessions_order_id_fkey",
+      "type": "f",
+      "table": "chain_payment_sessions",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "chain_payment_sessions_payment_currency_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK ((payment_currency = 'USDT'::text))"
+    },
+    {
+      "name": "chain_payment_sessions_payment_id_fkey",
+      "type": "f",
+      "table": "chain_payment_sessions",
+      "definition": "FOREIGN KEY (payment_id) REFERENCES order_payments(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "chain_payment_sessions_payment_session_id_fkey",
+      "type": "f",
+      "table": "chain_payment_sessions",
+      "definition": "FOREIGN KEY (payment_session_id) REFERENCES payment_sessions(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "chain_payment_sessions_pkey",
+      "type": "p",
+      "table": "chain_payment_sessions",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "chain_payment_sessions_pricing_status_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK ((pricing_status = ANY (ARRAY['frozen'::text, 'invalid'::text, 'manual_review'::text])))"
+    },
+    {
+      "name": "chain_payment_sessions_status_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK ((status = ANY (ARRAY['waiting_payment'::text, 'submitted'::text, 'confirming'::text, 'verified'::text, 'completing'::text, 'payment_failed'::text, 'paid'::text, 'underpaid'::text, 'overpaid'::text, 'expired'::text, 'manual_review'::text, 'failed'::text])))"
+    },
+    {
+      "name": "chain_payment_sessions_tx_hash_format_check",
+      "type": "c",
+      "table": "chain_payment_sessions",
+      "definition": "CHECK (((submitted_tx_hash IS NULL) OR (submitted_tx_hash ~* '^0x[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_even_chain_id_tx_hash_log_index_key",
+      "type": "u",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "UNIQUE (chain_id, tx_hash, log_index)"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events_address_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "CHECK (((to_address = lower(to_address)) AND (to_address ~ '^0x[0-9a-f]{40}$'::text)))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events_amount_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "CHECK ((actual_received_usdt > (0)::numeric))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events_chain_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "CHECK ((chain_id = 56))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events_hash_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "CHECK ((tx_hash ~ '^0x[0-9a-f]{64}$'::text))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events_outcome_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "CHECK ((outcome = ANY (ARRAY['matched'::text, 'already_matched'::text, 'unmatched'::text, 'ambiguous_order_payment'::text, 'tx_conflict'::text, 'terminal_recharge'::text, 'invalid_window'::text])))"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events_pkey",
+      "type": "p",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events_recharge_id_fkey",
+      "type": "f",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "FOREIGN KEY (recharge_id) REFERENCES account_recharges(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events_token_check",
+      "type": "c",
+      "table": "account_recharge_bep20_scan_events",
+      "definition": "CHECK (((token_contract = lower(token_contract)) AND (token_contract ~ '^0x[0-9a-f]{40}$'::text)))"
+    },
+    {
+      "name": "account_recharges_match_method_check",
+      "type": "c",
+      "table": "account_recharges",
+      "definition": "CHECK (((match_method IS NULL) OR (match_method = ANY (ARRAY['manual_tx_hash'::text, 'amount_fingerprint'::text, 'admin_manual'::text]))))"
+    },
+    {
+      "name": "account_recharges_pkey",
+      "type": "p",
+      "table": "account_recharges",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "account_recharges_recharge_no_key",
+      "type": "u",
+      "table": "account_recharges",
+      "definition": "UNIQUE (recharge_no)"
+    },
+    {
+      "name": "account_recharges_status_check",
+      "type": "c",
+      "table": "account_recharges",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'waiting_payment'::text, 'submitted'::text, 'reviewing'::text, 'approved'::text, 'processing'::text, 'succeeded'::text, 'failed'::text, 'rejected'::text, 'cancelled'::text, 'expired'::text, 'paid'::text, 'closed'::text, 'refunded'::text])))"
+    },
+    {
+      "name": "account_recharges_usdt_cny_amounts_check",
+      "type": "c",
+      "table": "account_recharges",
+      "definition": "CHECK ((((requested_cny_amount IS NULL) AND (expected_usdt_amount IS NULL) AND (actual_received_usdt IS NULL) AND (credited_cny_amount IS NULL) AND (settlement_currency IS NULL) AND (locked_market_rate IS NULL) AND (locked_settlement_rate IS NULL) AND (rate_source IS NULL) AND (rate_effective_date IS NULL) AND (rate_effective_at IS NULL) AND (rate_locked_at IS NULL)) OR ((channel_code = 'usdt_bep20'::text) AND (channel = 'usdt_bep20'::text) AND (currency = 'CNY'::text) AND (settlement_currency = 'USDT'::text) AND (payment_address ~* '^0x[0-9a-f]{40}$'::text) AND (payment_token_contract ~* '^0x[0-9a-f]{40}$'::text) AND (requested_cny_amount > (0)::numeric) AND (expected_usdt_amount > (0)::numeric) AND (locked_market_rate > (0)::numeric) AND (locked_settlement_rate > (0)::numeric) AND (locked_settlement_rate = trunc(locked_market_rate, 1)) AND ((length(btrim(rate_source)) >= 1) AND (length(btrim(rate_source)) <= 120)) AND (rate_effective_date IS NOT NULL) AND (rate_effective_at IS NOT NULL) AND (rate_locked_at IS NOT NULL) AND ((actual_received_usdt IS NULL) OR (actual_received_usdt > (0)::numeric)) AND ((credited_cny_amount IS NULL) OR (credited_cny_amount > (0)::numeric)))))"
+    },
+    {
+      "name": "account_recharges_user_id_fkey",
+      "type": "f",
+      "table": "account_recharges",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "bep20_transaction_usage_chain_check",
+      "type": "c",
+      "table": "bep20_transaction_usage_registry",
+      "definition": "CHECK ((chain_id = 56))"
+    },
+    {
+      "name": "bep20_transaction_usage_hash_check",
+      "type": "c",
+      "table": "bep20_transaction_usage_registry",
+      "definition": "CHECK ((tx_hash ~ '^0x[0-9a-f]{64}$'::text))"
+    },
+    {
+      "name": "bep20_transaction_usage_registry_pkey",
+      "type": "p",
+      "table": "bep20_transaction_usage_registry",
+      "definition": "PRIMARY KEY (chain_id, tx_hash)"
+    },
+    {
+      "name": "bep20_transaction_usage_type_check",
+      "type": "c",
+      "table": "bep20_transaction_usage_registry",
+      "definition": "CHECK ((usage_type = ANY (ARRAY['order'::text, 'account_recharge'::text])))"
+    },
+    {
+      "name": "profiles_account_status_check",
+      "type": "c",
+      "table": "profiles",
+      "definition": "CHECK ((account_status = ANY (ARRAY['active'::text, 'restricted'::text, 'suspended'::text, 'disabled'::text])))"
+    },
+    {
+      "name": "profiles_id_fkey",
+      "type": "f",
+      "table": "profiles",
+      "definition": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "profiles_invite_code_key",
+      "type": "u",
+      "table": "profiles",
+      "definition": "UNIQUE (invite_code)"
+    },
+    {
+      "name": "profiles_pkey",
+      "type": "p",
+      "table": "profiles",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "profiles_referred_by_fkey",
+      "type": "f",
+      "table": "profiles",
+      "definition": "FOREIGN KEY (referred_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "profiles_risk_status_check",
+      "type": "c",
+      "table": "profiles",
+      "definition": "CHECK ((risk_status = ANY (ARRAY['normal'::text, 'watch'::text, 'high_risk'::text, 'blocked'::text])))"
+    },
+    {
+      "name": "profiles_role_check",
+      "type": "c",
+      "table": "profiles",
+      "definition": "CHECK ((role = ANY (ARRAY['user'::text, 'admin'::text, 'support'::text, 'finance'::text])))"
+    },
+    {
+      "name": "account_recharge_chain_claims_address_check",
+      "type": "c",
+      "table": "account_recharge_chain_claims",
+      "definition": "CHECK (((token_contract ~ '^0x[0-9a-f]{40}$'::text) AND (to_address ~ '^0x[0-9a-f]{40}$'::text) AND ((from_address IS NULL) OR (from_address ~ '^0x[0-9a-f]{40}$'::text))))"
+    },
+    {
+      "name": "account_recharge_chain_claims_amount_check",
+      "type": "c",
+      "table": "account_recharge_chain_claims",
+      "definition": "CHECK (((raw_amount > (0)::numeric) AND (actual_received_usdt > (0)::numeric)))"
+    },
+    {
+      "name": "account_recharge_chain_claims_chain_check",
+      "type": "c",
+      "table": "account_recharge_chain_claims",
+      "definition": "CHECK ((chain_id = 56))"
+    },
+    {
+      "name": "account_recharge_chain_claims_chain_id_tx_hash_key",
+      "type": "u",
+      "table": "account_recharge_chain_claims",
+      "definition": "UNIQUE (chain_id, tx_hash)"
+    },
+    {
+      "name": "account_recharge_chain_claims_confirmation_check",
+      "type": "c",
+      "table": "account_recharge_chain_claims",
+      "definition": "CHECK ((confirmation_count > 0))"
+    },
+    {
+      "name": "account_recharge_chain_claims_hash_check",
+      "type": "c",
+      "table": "account_recharge_chain_claims",
+      "definition": "CHECK ((tx_hash ~ '^0x[0-9a-f]{64}$'::text))"
+    },
+    {
+      "name": "account_recharge_chain_claims_pkey",
+      "type": "p",
+      "table": "account_recharge_chain_claims",
+      "definition": "PRIMARY KEY (recharge_id)"
+    },
+    {
+      "name": "account_recharge_chain_claims_recharge_id_fkey",
+      "type": "f",
+      "table": "account_recharge_chain_claims",
+      "definition": "FOREIGN KEY (recharge_id) REFERENCES account_recharges(id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "account_recharge_amount_reservations_address_check",
+      "type": "c",
+      "table": "account_recharge_amount_reservations",
+      "definition": "CHECK (((payment_address = lower(payment_address)) AND (payment_address ~ '^0x[0-9a-f]{40}$'::text)))"
+    },
+    {
+      "name": "account_recharge_amount_reservations_amount_check",
+      "type": "c",
+      "table": "account_recharge_amount_reservations",
+      "definition": "CHECK ((expected_usdt_amount > (0)::numeric))"
+    },
+    {
+      "name": "account_recharge_amount_reservations_pkey",
+      "type": "p",
+      "table": "account_recharge_amount_reservations",
+      "definition": "PRIMARY KEY (payment_address, expected_usdt_amount)"
+    },
+    {
+      "name": "account_recharge_amount_reservations_recharge_id_key",
+      "type": "u",
+      "table": "account_recharge_amount_reservations",
+      "definition": "UNIQUE (recharge_id)"
+    },
+    {
+      "name": "account_recharge_amount_reservations_time_check",
+      "type": "c",
+      "table": "account_recharge_amount_reservations",
+      "definition": "CHECK (((expires_at > reserved_at) AND (quarantine_until >= expires_at)))"
+    }
+  ]
+}

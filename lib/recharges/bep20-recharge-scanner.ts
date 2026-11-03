@@ -472,9 +472,13 @@ async function scanOrderDrivenTransfers(
   if (windows.length === 0) return { ...output, idleReason: blockedHistory ? "HISTORY_REVIEW_REQUIRED" : "NO_OPEN_WINDOWS" };
   if (!dryRun && !token) throw new RechargeBep20ScannerError("ORDER_SCAN_BUSY", "扫描租约被占用");
   const deadline = Date.now() + 180_000;
-  let requests = 0;
+  // Count the initial chain/decimals validation too: at most 128 network reads.
+  let requests = 2;
+  const rpcBudget = 128;
+  const rpcBudgetReserve = 16;
+  let committedChunks = 0;
   const boundedRpc = async <T>(method: string, params: unknown[]) => {
-    if (++requests > 128 || Date.now() >= deadline) {
+    if (++requests > rpcBudget || Date.now() >= deadline) {
       throw new RechargeBep20ScannerError("ORDER_SCAN_RESOURCE_BUDGET", "本轮读取预算已达上限，保留进度等待下一轮");
     }
     return rpc<T>(config, method, params);
@@ -497,79 +501,104 @@ async function scanOrderDrivenTransfers(
       }
       return { timestamp: Number(parseHexQuantity(block.timestamp, "BSC_BLOCK_TIMESTAMP_INVALID")), hash: String(block.hash) };
     };
-    const ranges = await planOrderScanRanges(windows, finalized, readBlock);
     let remaining = config.maxBlocksPerRun;
     let first: bigint | null = null, last = BigInt(0);
     const result = { ...output, headBlock: head.toString(), finalizedBlock: finalized.toString() };
+    const finish = (idleReason?: string) => ({ ...result, fromBlock: (first ?? BigInt(0)).toString(), toBlock: last.toString(),
+      ...(idleReason ? { idleReason } : first === null ? { idleReason: "WAIT_CONFIRMATIONS" } : {}) });
+    const budgetLow = () => requests > rpcBudget - rpcBudgetReserve || Date.now() >= deadline - 5_000;
+    const budgetStop = () => {
+      if (!committedChunks) throw new RechargeBep20ScannerError("ORDER_SCAN_RESOURCE_BUDGET", "资源预算不足且没有提交进度");
+      return finish("RESOURCE_BUDGET");
+    };
     const retired = new Set<string>();
-    for (const range of ranges) {
-      let from = range.from;
-      while (from <= range.to && remaining > 0) {
-        const live = range.windows.filter((w) => !retired.has(w.id) && w.to >= from);
-        if (!live.length) break;
-        const needed = live.reduce((lowest, w) => minBigInt(lowest, maxBigInt(from, w.from)), range.to);
-        from = maxBigInt(from, needed);
-        const to = minBigInt(range.to, from + BigInt(Math.min(config.chunkSize, remaining)) - BigInt(1));
-        const boundary = await readBlock(to);
-        const logs = await boundedRpc<unknown>("eth_getLogs", [{ fromBlock: toHexQuantity(from), toBlock: toHexQuantity(to), address: config.tokenContract, topics: [TRANSFER_TOPIC, null, `0x${config.receiveAddress.slice(2).padStart(64, "0")}`] }]);
-        if (!Array.isArray(logs)) throw new RechargeBep20ScannerError("BSC_LOGS_INVALID", "BSC 日志格式无效");
-        const evidence = [];
-        for (const log of logs) {
-          if (log.removed) continue;
-          await readBlock(parseHexQuantity(log.blockNumber, "BSC_BLOCK_NUMBER_INVALID"));
-          const entry = await parseTransferEvidence(config, log, head, blocks);
-          if (BigInt(entry.blockNumber) < from || BigInt(entry.blockNumber) > to) {
-            throw new RechargeBep20ScannerError("BSC_LOG_RANGE_MISMATCH", "日志超出请求范围");
-          }
-          evidence.push(entry);
-        }
-        // Anchor the chunk after reading logs: abort on a boundary reorg.
-        const anchor = await boundedRpc<RpcBlock>("eth_getBlockByNumber", [toHexQuantity(to), false]);
-        if (!anchor || parseHexQuantity(anchor.number, "BSC_BLOCK_NUMBER_INVALID") !== to
-          || Number(parseHexQuantity(anchor.timestamp, "BSC_BLOCK_TIMESTAMP_INVALID")) !== boundary.timestamp
-          || anchor.hash?.toLowerCase() !== boundary.hash.toLowerCase()) {
-          throw new RechargeBep20ScannerError("BSC_BLOCK_EVIDENCE_MISMATCH", "扫描期间区块证据变化");
-        }
-        const progress = range.windows.filter((w) => !retired.has(w.id) && w.from <= to && w.to >= from).map((w) => ({
-          id: w.id, from: maxBigInt(from, w.from).toString(), to: minBigInt(to, w.to).toString(),
-          complete: w.complete && to >= w.to,
-        }));
-        if (!dryRun) {
-          const applied = await service.rpc("apply_recharge_order_scan_chunk_v1", {
-            p_token: token, p_progress: progress, p_evidence: evidence, p_chain_id: config.chainId,
-            p_contract: config.tokenContract, p_address: config.receiveAddress,
-            p_boundary_timestamp: new Date(boundary.timestamp * 1000).toISOString(),
-          });
-          if (applied.error || !Array.isArray(applied.data?.results) || !Array.isArray(applied.data?.completed)) {
-            throw new RechargeBep20ScannerError("ORDER_SCAN_CHUNK_UNCERTAIN", "扫描块事务结果不确定，停止并保留进度");
-          }
-          for (const id of applied.data.completed) {
-            if (typeof id !== "string" || !progress.some((p) => p.id === id)) throw new RechargeBep20ScannerError("ORDER_SCAN_CHUNK_UNCERTAIN", "扫描返回窗口无效");
-            retired.add(id);
-          }
-          for (const value of applied.data.results) {
-            const match = parseMatchResult(value);
-            if (match.credited) result.credited++;
-            if (match.alreadyCredited) result.alreadyCredited++;
-            if (match.result === "matched") result.matched++;
-            else if (match.result === "already_matched") result.alreadyMatched++;
-            else if (match.result === "ambiguous_order_payment") result.ambiguous++;
-            else if (match.result === "tx_conflict") result.conflicts++;
-            else if (match.result === "terminal_recharge") result.terminal++;
-            else result.unmatched++;
-            if ((match.credited || match.alreadyCredited) && match.rechargeId) {
-              await queueRechargeSuccessEmailBestEffort(match.rechargeId, "bep20_scanner").catch(() => undefined);
+    const orderedWindows = [...windows].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)
+      || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    try {
+      for (const window of orderedWindows) {
+        if (!remaining) break;
+        if (budgetLow()) return budgetStop();
+        // Plan one funding window, then commit its chunks before planning the next.
+        const ranges = await planOrderScanRanges([window], finalized, readBlock);
+        for (const range of ranges) {
+          let from = range.from;
+          while (from <= range.to && remaining > 0) {
+            if (budgetLow()) return budgetStop();
+            const live = range.windows.filter((w) => !retired.has(w.id) && w.to >= from);
+            if (!live.length) break;
+            const needed = live.reduce((lowest, w) => minBigInt(lowest, maxBigInt(from, w.from)), range.to);
+            from = maxBigInt(from, needed);
+            const to = minBigInt(range.to, from + BigInt(Math.min(config.chunkSize, remaining)) - BigInt(1));
+            const boundary = await readBlock(to);
+            const logs = await boundedRpc<unknown>("eth_getLogs", [{ fromBlock: toHexQuantity(from), toBlock: toHexQuantity(to), address: config.tokenContract, topics: [TRANSFER_TOPIC, null, `0x${config.receiveAddress.slice(2).padStart(64, "0")}`] }]);
+            if (!Array.isArray(logs)) throw new RechargeBep20ScannerError("BSC_LOGS_INVALID", "BSC 日志格式无效");
+            const evidence = [];
+            for (const log of logs) {
+              if (log.removed) continue;
+              await readBlock(parseHexQuantity(log.blockNumber, "BSC_BLOCK_NUMBER_INVALID"));
+              const entry = await parseTransferEvidence(config, log, head, blocks);
+              if (BigInt(entry.blockNumber) < from || BigInt(entry.blockNumber) > to) {
+                throw new RechargeBep20ScannerError("BSC_LOG_RANGE_MISMATCH", "日志超出请求范围");
+              }
+              evidence.push(entry);
             }
+            // Anchor the chunk after reading logs: abort on a boundary reorg.
+            const anchor = await boundedRpc<RpcBlock>("eth_getBlockByNumber", [toHexQuantity(to), false]);
+            if (!anchor || parseHexQuantity(anchor.number, "BSC_BLOCK_NUMBER_INVALID") !== to
+              || Number(parseHexQuantity(anchor.timestamp, "BSC_BLOCK_TIMESTAMP_INVALID")) !== boundary.timestamp
+              || anchor.hash?.toLowerCase() !== boundary.hash.toLowerCase()) {
+              throw new RechargeBep20ScannerError("BSC_BLOCK_EVIDENCE_MISMATCH", "扫描期间区块证据变化");
+            }
+            const progress = range.windows.filter((w) => !retired.has(w.id) && w.from <= to && w.to >= from).map((w) => ({
+              id: w.id, from: maxBigInt(from, w.from).toString(), to: minBigInt(to, w.to).toString(),
+              complete: w.complete && to >= w.to,
+            }));
+            if (!dryRun) {
+              const applied = await service.rpc("apply_recharge_order_scan_chunk_v1", {
+                p_token: token, p_progress: progress, p_evidence: evidence, p_chain_id: config.chainId,
+                p_contract: config.tokenContract, p_address: config.receiveAddress,
+                p_boundary_timestamp: new Date(boundary.timestamp * 1000).toISOString(),
+              });
+              if (applied.error || !Array.isArray(applied.data?.results) || !Array.isArray(applied.data?.completed)) {
+                throw new RechargeBep20ScannerError("ORDER_SCAN_CHUNK_UNCERTAIN", "扫描块事务结果不确定，停止并保留进度");
+              }
+              for (const id of applied.data.completed) {
+                if (typeof id !== "string" || !progress.some((p) => p.id === id)) throw new RechargeBep20ScannerError("ORDER_SCAN_CHUNK_UNCERTAIN", "扫描返回窗口无效");
+                retired.add(id);
+              }
+              for (const value of applied.data.results) {
+                const match = parseMatchResult(value);
+                if (match.credited) result.credited++;
+                if (match.alreadyCredited) result.alreadyCredited++;
+                if (match.result === "matched") result.matched++;
+                else if (match.result === "already_matched") result.alreadyMatched++;
+                else if (match.result === "ambiguous_order_payment") result.ambiguous++;
+                else if (match.result === "tx_conflict") result.conflicts++;
+                else if (match.result === "terminal_recharge") result.terminal++;
+                else result.unmatched++;
+                if ((match.credited || match.alreadyCredited) && match.rechargeId) {
+                  await queueRechargeSuccessEmailBestEffort(match.rechargeId, "bep20_scanner").catch(() => undefined);
+                }
+              }
+              committedChunks++;
+            }
+            result.scannedTransfers += evidence.length;
+            const count = Number(to - from + BigInt(1));
+            result.scannedBlocks += count; remaining -= count;
+            first ??= from; last = to; from = to + BigInt(1);
           }
+          if (!remaining) break;
         }
-        result.scannedTransfers += evidence.length;
-        const count = Number(to - from + BigInt(1));
-        result.scannedBlocks += count; remaining -= count;
-        first ??= from; last = to; from = to + BigInt(1);
       }
-      if (!remaining) break;
+    } catch (error) {
+      // A planner or an unusually dense log chunk can consume the reserve.
+      // Never apply that unfinished chunk. Earlier atomic commits remain valid.
+      if (error instanceof RechargeBep20ScannerError && error.code === "ORDER_SCAN_RESOURCE_BUDGET" && committedChunks > 0) {
+        return finish("RESOURCE_BUDGET");
+      }
+      throw error;
     }
-    return { ...result, fromBlock: (first ?? BigInt(0)).toString(), toBlock: last.toString(), ...(first === null ? { idleReason: "WAIT_CONFIRMATIONS" } : {}) };
+    return finish();
   } finally {
     if (token && !dryRun) {
       // A failed release leaves a bounded lease, never clears somebody else's token.

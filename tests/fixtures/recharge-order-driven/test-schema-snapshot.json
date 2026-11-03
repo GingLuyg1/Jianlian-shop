@@ -1,0 +1,1389 @@
+{
+  "tables": [
+    {
+      "name": "account_recharge_amount_reservations",
+      "type": "text",
+      "column": "payment_address",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_amount_reservations",
+      "type": "numeric",
+      "column": "expected_usdt_amount",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_amount_reservations",
+      "type": "uuid",
+      "column": "recharge_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_amount_reservations",
+      "type": "timestamptz",
+      "column": "reserved_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_amount_reservations",
+      "type": "timestamptz",
+      "column": "expires_at",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_amount_reservations",
+      "type": "timestamptz",
+      "column": "quarantine_until",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "uuid",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "int4",
+      "column": "chain_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "text",
+      "column": "tx_hash",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "int4",
+      "column": "log_index",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "numeric",
+      "column": "block_number",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "timestamptz",
+      "column": "block_timestamp",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "text",
+      "column": "token_contract",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "text",
+      "column": "to_address",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "numeric",
+      "column": "actual_received_usdt",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "uuid",
+      "column": "recharge_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "text",
+      "column": "recharge_no",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "text",
+      "column": "outcome",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "text",
+      "column": "error_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_events",
+      "type": "timestamptz",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state",
+      "type": "text",
+      "column": "scanner_key",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state",
+      "type": "int4",
+      "column": "chain_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state",
+      "type": "text",
+      "column": "token_contract",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state",
+      "type": "text",
+      "column": "receive_address",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state",
+      "type": "numeric",
+      "column": "last_scanned_block",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state",
+      "type": "timestamptz",
+      "column": "last_scanned_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_bep20_scan_state",
+      "type": "timestamptz",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "uuid",
+      "column": "recharge_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "int4",
+      "column": "chain_id",
+      "default": "56",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "text",
+      "column": "tx_hash",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "int4",
+      "column": "log_index",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "numeric",
+      "column": "block_number",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "text",
+      "column": "block_hash",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "timestamptz",
+      "column": "block_timestamp",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "text",
+      "column": "token_contract",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "text",
+      "column": "from_address",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "text",
+      "column": "to_address",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "numeric",
+      "column": "raw_amount",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "numeric",
+      "column": "actual_received_usdt",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "int4",
+      "column": "confirmation_count",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "timestamptz",
+      "column": "verified_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharge_chain_claims",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "uuid",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "recharge_no",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "uuid",
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "user_email",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "channel",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "network",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "fee_amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "payable_amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "received_amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "status",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "provider_trade_no",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "paid_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "callback_status",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "exception_type",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "error_summary",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "user_note",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "admin_note",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "channel_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "channel_name",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "provider",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "currency",
+      "default": "'CNY'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "requested_amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "credited_amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "payment_url",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "qr_code_url",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "payment_address",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "jsonb",
+      "column": "raw_response",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "client_request_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "completed_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "customer_note",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "payment_method",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "review_mode",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "review_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "requested_cny_amount",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "expected_usdt_amount",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "actual_received_usdt",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "credited_cny_amount",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "settlement_currency",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "payment_token_contract",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "locked_market_rate",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "numeric",
+      "column": "locked_settlement_rate",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "rate_source",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "date",
+      "column": "rate_effective_date",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "rate_effective_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "rate_locked_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "transaction_reference",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "submitted_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "expires_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "timestamptz",
+      "column": "matched_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "account_recharges",
+      "type": "text",
+      "column": "match_method",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "uuid",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "uuid",
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "text",
+      "column": "transaction_no",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "text",
+      "column": "business_type",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "text",
+      "column": "business_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "text",
+      "column": "direction",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "numeric",
+      "column": "amount",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "numeric",
+      "column": "balance_before",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "numeric",
+      "column": "balance_after",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "text",
+      "column": "currency",
+      "default": "'CNY'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "text",
+      "column": "status",
+      "default": "'completed'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "text",
+      "column": "remark",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "jsonb",
+      "column": "metadata",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "balance_transactions",
+      "type": "timestamptz",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "bep20_transaction_usage_registry",
+      "type": "int4",
+      "column": "chain_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "bep20_transaction_usage_registry",
+      "type": "text",
+      "column": "tx_hash",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "bep20_transaction_usage_registry",
+      "type": "text",
+      "column": "usage_type",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "bep20_transaction_usage_registry",
+      "type": "uuid",
+      "column": "business_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "bep20_transaction_usage_registry",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "uuid",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "uuid",
+      "column": "order_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "uuid",
+      "column": "payment_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "payment_method",
+      "default": "'usdt_bep20'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "network",
+      "default": "'BEP20'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "int4",
+      "column": "chain_id",
+      "default": "56",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "asset",
+      "default": "'USDT'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "token_contract",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "int4",
+      "column": "token_decimals",
+      "default": "18",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "numeric",
+      "column": "expected_amount",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "numeric",
+      "column": "expected_raw_amount",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "receive_address",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "status",
+      "default": "'waiting_payment'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "expires_at",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "submitted_tx_hash",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "numeric",
+      "column": "confirmed_amount",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "numeric",
+      "column": "confirmed_raw_amount",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "confirmed_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "last_checked_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "failure_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "manual_review_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "request_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "order_currency",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "numeric",
+      "column": "order_amount",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "payment_currency",
+      "default": "'USDT'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "numeric",
+      "column": "exchange_rate",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "exchange_rate_source",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "exchange_rate_fetched_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "exchange_rate_expires_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "pricing_status",
+      "default": "'frozen'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "uuid",
+      "column": "completion_attempt_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "completion_started_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "completion_error",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "uuid",
+      "column": "last_rechecked_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "last_rechecked_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "last_recheck_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "manual_review_decision",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "timestamptz",
+      "column": "manual_review_decided_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "uuid",
+      "column": "manual_review_decided_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "text",
+      "column": "manual_review_decision_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "chain_payment_sessions",
+      "type": "uuid",
+      "column": "payment_session_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "uuid",
+      "column": "id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "profiles",
+      "type": "text",
+      "column": "email",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "text",
+      "column": "phone",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "text",
+      "column": "role",
+      "default": "'user'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "profiles",
+      "type": "numeric",
+      "column": "balance",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "profiles",
+      "type": "numeric",
+      "column": "promotion_balance",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "profiles",
+      "type": "text",
+      "column": "invite_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "uuid",
+      "column": "referred_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "profiles",
+      "type": "timestamptz",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "profiles",
+      "type": "text",
+      "column": "account_status",
+      "default": "'active'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "profiles",
+      "type": "text",
+      "column": "risk_status",
+      "default": "'normal'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "profiles",
+      "type": "text",
+      "column": "status_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "text",
+      "column": "risk_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "timestamptz",
+      "column": "status_updated_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "uuid",
+      "column": "status_updated_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "timestamptz",
+      "column": "risk_updated_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "uuid",
+      "column": "risk_updated_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "timestamptz",
+      "column": "last_login_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "timestamptz",
+      "column": "deleted_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "timestamptz",
+      "column": "anonymized_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "profiles",
+      "type": "timestamptz",
+      "column": "deletion_requested_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "uuid",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "uuid",
+      "column": "recharge_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "text",
+      "column": "recharge_no",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "uuid",
+      "column": "actor_user_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "text",
+      "column": "actor_type",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "text",
+      "column": "action",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "text",
+      "column": "from_status",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "text",
+      "column": "to_status",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "text",
+      "column": "reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "text",
+      "column": "request_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "jsonb",
+      "column": "metadata",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "name": "recharge_review_events",
+      "type": "timestamptz",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    }
+  ],
+  "functions": [
+    {
+      "md5": "09f9894d55b4e11bbd99bdcdbac8ac17",
+      "name": "credit_auto_matched_account_recharge_bep20_v3",
+      "definition": "CREATE OR REPLACE FUNCTION public.credit_auto_matched_account_recharge_bep20_v3(p_recharge_id uuid, p_tx_hash text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  target_recharge public.account_recharges;\n  target_claim public.account_recharge_chain_claims;\n  target_usage public.bep20_transaction_usage_registry;\n  target_profile public.profiles;\n  existing_transaction public.balance_transactions;\n  created_transaction public.balance_transactions;\n  normalized_hash text := lower(btrim(p_tx_hash));\n  prior_status text;\n  credited_cny numeric(18, 2);\n  before_balance numeric(18, 2);\n  after_balance numeric(18, 2);\n  transaction_no text;\nbegin\n  if auth.role() <> 'service_role' then\n    raise exception 'credit_auto_matched_account_recharge_bep20_v3 requires service_role';\n  end if;\n\n  if p_recharge_id is null\n     or normalized_hash is null\n     or normalized_hash !~ '^0x[0-9a-f]{64}$' then\n    raise exception 'invalid account recharge auto-credit input';\n  end if;\n\n  select * into target_recharge\n  from public.account_recharges\n  where id = p_recharge_id\n  for update;\n\n  if not found then\n    raise exception 'account recharge auto-credit target not found';\n  end if;\n\n  if target_recharge.channel is distinct from 'usdt_bep20'\n     or target_recharge.channel_code is distinct from 'usdt_bep20'\n     or target_recharge.currency is distinct from 'CNY'\n     or target_recharge.settlement_currency is distinct from 'USDT'\n     or target_recharge.requested_cny_amount is null\n     or target_recharge.requested_cny_amount <= 0\n     or target_recharge.expected_usdt_amount is null\n     or target_recharge.expected_usdt_amount <= 0\n     or target_recharge.actual_received_usdt is distinct from target_recharge.expected_usdt_amount\n     or target_recharge.match_method is distinct from 'amount_fingerprint'\n     or target_recharge.matched_at is null\n     or target_recharge.transaction_reference is distinct from normalized_hash\n     or target_recharge.provider_trade_no is distinct from normalized_hash then\n    raise exception 'account recharge is not eligible for fingerprint auto-credit';\n  end if;\n\n  select * into target_claim\n  from public.account_recharge_chain_claims\n  where recharge_id = target_recharge.id\n  for update;\n\n  if not found\n     or target_claim.chain_id is distinct from 56\n     or target_claim.tx_hash is distinct from normalized_hash\n     or target_claim.actual_received_usdt is distinct from target_recharge.expected_usdt_amount\n     or lower(target_claim.token_contract) is distinct from lower(target_recharge.payment_token_contract)\n     or lower(target_claim.to_address) is distinct from lower(target_recharge.payment_address) then\n    raise exception 'account recharge auto-credit chain evidence mismatch';\n  end if;\n\n  select * into target_usage\n  from public.bep20_transaction_usage_registry\n  where chain_id = 56\n    and tx_hash = normalized_hash\n  for update;\n\n  if not found\n     or target_usage.usage_type is distinct from 'account_recharge'\n     or target_usage.business_id is distinct from target_recharge.id then\n    raise exception 'account recharge auto-credit transaction ownership mismatch';\n  end if;\n\n  credited_cny := target_recharge.requested_cny_amount;\n\n  select * into existing_transaction\n  from public.balance_transactions\n  where business_type = 'account_recharge'\n    and business_id = target_recharge.recharge_no\n    and status = 'completed'\n  order by created_at asc\n  limit 1\n  for update;\n\n  if found then\n    if existing_transaction.user_id is distinct from target_recharge.user_id\n       or existing_transaction.direction is distinct from 'credit'\n       or existing_transaction.currency is distinct from 'CNY'\n       or existing_transaction.amount is distinct from credited_cny\n       or existing_transaction.metadata->>'credit_policy' is distinct from 'requested_cny_exact'\n       or existing_transaction.metadata->>'match_method' is distinct from 'amount_fingerprint'\n       or target_recharge.status is distinct from 'paid'\n       or target_recharge.credited_cny_amount is distinct from credited_cny\n       or target_recharge.credited_amount is distinct from credited_cny\n       or target_recharge.received_amount is distinct from credited_cny\n       or target_recharge.provider_trade_no is distinct from normalized_hash\n       or target_recharge.callback_status is distinct from 'success' then\n      raise exception 'existing account recharge credit is inconsistent';\n    end if;\n\n    return jsonb_build_object(\n      'rechargeId', target_recharge.id,\n      'rechargeNo', target_recharge.recharge_no,\n      'credited', false,\n      'alreadyCredited', true,\n      'transactionNo', existing_transaction.transaction_no\n    );\n  end if;\n\n  if target_recharge.status is distinct from 'submitted'\n     or target_recharge.credited_cny_amount is not null\n     or coalesce(target_recharge.credited_amount, 0) <> 0 then\n    raise exception 'account recharge status does not allow fingerprint auto-credit';\n  end if;\n\n  select * into target_profile\n  from public.profiles\n  where id = target_recharge.user_id\n  for update;\n\n  if not found then\n    raise exception 'account recharge auto-credit profile not found';\n  end if;\n\n  prior_status := target_recharge.status;\n  before_balance := coalesce(target_profile.balance, 0);\n  after_balance := before_balance + credited_cny;\n  transaction_no := 'BT' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISS')\n    || upper(substr(md5(gen_random_uuid()::text), 1, 8));\n\n  update public.profiles\n  set balance = after_balance,\n      updated_at = now()\n  where id = target_recharge.user_id;\n\n  insert into public.balance_transactions (\n    user_id, transaction_no, business_type, business_id, direction, amount,\n    balance_before, balance_after, currency, status, remark, metadata\n  ) values (\n    target_recharge.user_id,\n    transaction_no,\n    'account_recharge',\n    target_recharge.recharge_no,\n    'credit',\n    credited_cny,\n    before_balance,\n    after_balance,\n    'CNY',\n    'completed',\n    'USDT-BEP20 fingerprint recharge credited by exact requested CNY amount',\n    jsonb_build_object(\n      'settlement_currency', 'USDT',\n      'expected_usdt_amount', target_recharge.expected_usdt_amount,\n      'actual_received_usdt', target_recharge.actual_received_usdt,\n      'requested_cny_amount', target_recharge.requested_cny_amount,\n      'credited_cny_amount', credited_cny,\n      'credit_policy', 'requested_cny_exact',\n      'match_method', 'amount_fingerprint',\n      'tx_hash_present', true\n    )\n  )\n  returning * into created_transaction;\n\n  update public.account_recharges\n  set status = 'paid',\n      provider_trade_no = normalized_hash,\n      credited_cny_amount = credited_cny,\n      credited_amount = credited_cny,\n      received_amount = credited_cny,\n      paid_at = coalesce(paid_at, now()),\n      callback_status = 'success',\n      updated_at = now()\n  where id = target_recharge.id;\n\n  insert into public.recharge_review_events (\n    recharge_id, recharge_no, actor_user_id, actor_type, action,\n    from_status, to_status, reason, request_id, metadata\n  ) values (\n    target_recharge.id,\n    target_recharge.recharge_no,\n    null,\n    'system',\n    'auto_bep20_fingerprint_credit_v3',\n    prior_status,\n    'paid',\n    'BEP20 fingerprint recharge credited atomically by requested CNY amount',\n    gen_random_uuid()::text,\n    jsonb_build_object(\n      'requested_cny_amount', target_recharge.requested_cny_amount,\n      'expected_usdt_amount', target_recharge.expected_usdt_amount,\n      'actual_received_usdt', target_recharge.actual_received_usdt,\n      'credited_cny_amount', credited_cny,\n      'credit_policy', 'requested_cny_exact',\n      'match_method', 'amount_fingerprint',\n      'chain_id', 56,\n      'tx_hash_present', true\n    )\n  );\n\n  return jsonb_build_object(\n    'rechargeId', target_recharge.id,\n    'rechargeNo', target_recharge.recharge_no,\n    'credited', true,\n    'alreadyCredited', false,\n    'transactionNo', created_transaction.transaction_no\n  );\nend;\n$function$\n"
+    },
+    {
+      "md5": "ae16cfeccc3a33e14f5a44370c6f7039",
+      "name": "match_account_recharge_bep20_fingerprint_v2",
+      "definition": "CREATE OR REPLACE FUNCTION public.match_account_recharge_bep20_fingerprint_v2(p_chain_id integer, p_tx_hash text, p_log_index integer, p_block_number numeric, p_block_hash text, p_block_timestamp timestamp with time zone, p_token_contract text, p_from_address text, p_to_address text, p_raw_amount numeric, p_actual_received_usdt numeric, p_confirmation_count integer)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  normalized_hash text := lower(btrim(p_tx_hash));\n  normalized_block_hash text := lower(btrim(p_block_hash));\n  normalized_token text := lower(btrim(p_token_contract));\n  normalized_to text := lower(btrim(p_to_address));\n  normalized_from text := nullif(lower(btrim(coalesce(p_from_address, ''))), '');\n  target_reservation public.account_recharge_amount_reservations;\n  target_recharge public.account_recharges;\n  existing_usage public.bep20_transaction_usage_registry;\n  existing_claim public.account_recharge_chain_claims;\n  order_collision_count integer := 0;\n  prior_status text;\nbegin\n  if auth.role() <> 'service_role' then\n    raise exception 'match_account_recharge_bep20_fingerprint_v2 requires service_role';\n  end if;\n\n  if p_chain_id is distinct from 56\n     or normalized_hash is null\n     or normalized_hash !~ '^0x[0-9a-f]{64}$'\n     or normalized_block_hash is null\n     or normalized_block_hash !~ '^0x[0-9a-f]{64}$'\n     or normalized_token is null\n     or normalized_token !~ '^0x[0-9a-f]{40}$'\n     or normalized_to is null\n     or normalized_to !~ '^0x[0-9a-f]{40}$'\n     or (normalized_from is not null and normalized_from !~ '^0x[0-9a-f]{40}$')\n     or p_log_index is null\n     or p_log_index < 0\n     or p_block_number is null\n     or p_block_number < 0\n     or p_raw_amount is null\n     or p_raw_amount <= 0\n     or p_actual_received_usdt is null\n     or p_actual_received_usdt <= 0\n     or p_confirmation_count is null\n     or p_confirmation_count <= 0\n     or p_block_timestamp is null then\n    raise exception 'invalid account recharge BEP20 scan evidence';\n  end if;\n\n  select * into target_reservation\n  from public.account_recharge_amount_reservations\n  where payment_address = normalized_to\n    and expected_usdt_amount = p_actual_received_usdt\n  order by reserved_at desc\n  limit 1\n  for update;\n\n  if not found then\n    insert into public.account_recharge_bep20_scan_events (\n      chain_id, tx_hash, log_index, block_number, block_timestamp,\n      token_contract, to_address, actual_received_usdt, outcome, error_code, updated_at\n    ) values (\n      p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_timestamp,\n      normalized_token, normalized_to, p_actual_received_usdt, 'unmatched', 'RECHARGE_FINGERPRINT_NOT_FOUND', now()\n    )\n    on conflict (chain_id, tx_hash, log_index) do update\n      set outcome = excluded.outcome,\n          error_code = excluded.error_code,\n          updated_at = now();\n\n    return jsonb_build_object('result', 'unmatched');\n  end if;\n\n  select * into target_recharge\n  from public.account_recharges\n  where id = target_reservation.recharge_id\n  for update;\n\n  if not found\n     or target_recharge.channel <> 'usdt_bep20'\n     or target_recharge.channel_code <> 'usdt_bep20'\n     or target_recharge.currency <> 'CNY'\n     or target_recharge.settlement_currency <> 'USDT'\n     or target_recharge.requested_cny_amount is null\n     or target_recharge.requested_cny_amount <= 0\n     or target_recharge.expected_usdt_amount <> p_actual_received_usdt\n     or lower(target_recharge.payment_address) <> normalized_to\n     or lower(target_recharge.payment_token_contract) <> normalized_token then\n    insert into public.account_recharge_bep20_scan_events (\n      chain_id, tx_hash, log_index, block_number, block_timestamp,\n      token_contract, to_address, actual_received_usdt, recharge_id, recharge_no,\n      outcome, error_code, updated_at\n    ) values (\n      p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_timestamp,\n      normalized_token, normalized_to, p_actual_received_usdt,\n      target_reservation.recharge_id, target_recharge.recharge_no,\n      'terminal_recharge', 'RECHARGE_FINGERPRINT_TARGET_INVALID', now()\n    )\n    on conflict (chain_id, tx_hash, log_index) do update\n      set recharge_id = excluded.recharge_id,\n          recharge_no = excluded.recharge_no,\n          outcome = excluded.outcome,\n          error_code = excluded.error_code,\n          updated_at = now();\n\n    return jsonb_build_object('result', 'terminal_recharge');\n  end if;\n\n  prior_status := target_recharge.status;\n\n  if target_recharge.status not in ('waiting_payment', 'submitted') then\n    insert into public.account_recharge_bep20_scan_events (\n      chain_id, tx_hash, log_index, block_number, block_timestamp,\n      token_contract, to_address, actual_received_usdt, recharge_id, recharge_no,\n      outcome, error_code, updated_at\n    ) values (\n      p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_timestamp,\n      normalized_token, normalized_to, p_actual_received_usdt,\n      target_recharge.id, target_recharge.recharge_no,\n      'terminal_recharge', 'RECHARGE_STATUS_NOT_AUTO_MATCHABLE', now()\n    )\n    on conflict (chain_id, tx_hash, log_index) do update\n      set recharge_id = excluded.recharge_id,\n          recharge_no = excluded.recharge_no,\n          outcome = excluded.outcome,\n          error_code = excluded.error_code,\n          updated_at = now();\n\n    return jsonb_build_object(\n      'result', 'terminal_recharge',\n      'rechargeId', target_recharge.id,\n      'rechargeNo', target_recharge.recharge_no\n    );\n  end if;\n\n  if target_recharge.expires_at is null\n     or p_block_timestamp < target_recharge.created_at - interval '2 minutes'\n     or p_block_timestamp > target_recharge.expires_at\n     or p_block_timestamp > target_reservation.expires_at then\n    insert into public.account_recharge_bep20_scan_events (\n      chain_id, tx_hash, log_index, block_number, block_timestamp,\n      token_contract, to_address, actual_received_usdt, recharge_id, recharge_no,\n      outcome, error_code, updated_at\n    ) values (\n      p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_timestamp,\n      normalized_token, normalized_to, p_actual_received_usdt,\n      target_recharge.id, target_recharge.recharge_no,\n      'invalid_window', 'RECHARGE_PAYMENT_OUTSIDE_WINDOW', now()\n    )\n    on conflict (chain_id, tx_hash, log_index) do update\n      set recharge_id = excluded.recharge_id,\n          recharge_no = excluded.recharge_no,\n          outcome = excluded.outcome,\n          error_code = excluded.error_code,\n          updated_at = now();\n\n    return jsonb_build_object(\n      'result', 'invalid_window',\n      'rechargeId', target_recharge.id,\n      'rechargeNo', target_recharge.recharge_no\n    );\n  end if;\n\n  -- Shared-address safety gate:\n  -- if the same exact on-chain amount could also belong to any BEP20 order\n  -- whose payment window contains this block timestamp, V2 refuses automatic\n  -- recharge ownership and leaves the transfer for manual reconciliation.\n  select count(*) into order_collision_count\n  from public.chain_payment_sessions cps\n  where cps.chain_id = p_chain_id\n    and cps.payment_method = 'usdt_bep20'\n    and lower(cps.token_contract) = normalized_token\n    and lower(cps.receive_address) = normalized_to\n    and cps.expected_amount = p_actual_received_usdt\n    and coalesce(cps.created_at, '-infinity'::timestamptz) <= p_block_timestamp\n    and cps.expires_at >= p_block_timestamp;\n\n  if order_collision_count > 0 then\n    insert into public.account_recharge_bep20_scan_events (\n      chain_id, tx_hash, log_index, block_number, block_timestamp,\n      token_contract, to_address, actual_received_usdt, recharge_id, recharge_no,\n      outcome, error_code, updated_at\n    ) values (\n      p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_timestamp,\n      normalized_token, normalized_to, p_actual_received_usdt,\n      target_recharge.id, target_recharge.recharge_no,\n      'ambiguous_order_payment', 'BEP20_SHARED_ADDRESS_AMOUNT_AMBIGUOUS', now()\n    )\n    on conflict (chain_id, tx_hash, log_index) do update\n      set recharge_id = excluded.recharge_id,\n          recharge_no = excluded.recharge_no,\n          outcome = excluded.outcome,\n          error_code = excluded.error_code,\n          updated_at = now();\n\n    return jsonb_build_object(\n      'result', 'ambiguous_order_payment',\n      'rechargeId', target_recharge.id,\n      'rechargeNo', target_recharge.recharge_no\n    );\n  end if;\n\n  select * into existing_claim\n  from public.account_recharge_chain_claims\n  where recharge_id = target_recharge.id\n  for update;\n\n  if found then\n    if existing_claim.tx_hash = normalized_hash\n       and existing_claim.log_index = p_log_index\n       and existing_claim.actual_received_usdt = p_actual_received_usdt then\n      insert into public.account_recharge_bep20_scan_events (\n        chain_id, tx_hash, log_index, block_number, block_timestamp,\n        token_contract, to_address, actual_received_usdt, recharge_id, recharge_no,\n        outcome, error_code, updated_at\n      ) values (\n        p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_timestamp,\n        normalized_token, normalized_to, p_actual_received_usdt,\n        target_recharge.id, target_recharge.recharge_no,\n        'already_matched', null, now()\n      )\n      on conflict (chain_id, tx_hash, log_index) do update\n        set recharge_id = excluded.recharge_id,\n            recharge_no = excluded.recharge_no,\n            outcome = excluded.outcome,\n            error_code = null,\n            updated_at = now();\n\n      return jsonb_build_object(\n        'result', 'already_matched',\n        'rechargeId', target_recharge.id,\n        'rechargeNo', target_recharge.recharge_no\n      );\n    end if;\n\n    return jsonb_build_object(\n      'result', 'tx_conflict',\n      'rechargeId', target_recharge.id,\n      'rechargeNo', target_recharge.recharge_no\n    );\n  end if;\n\n  insert into public.bep20_transaction_usage_registry (chain_id, tx_hash, usage_type, business_id)\n  values (p_chain_id, normalized_hash, 'account_recharge', target_recharge.id)\n  on conflict (chain_id, tx_hash) do nothing;\n\n  select * into existing_usage\n  from public.bep20_transaction_usage_registry\n  where chain_id = p_chain_id and tx_hash = normalized_hash\n  for update;\n\n  if existing_usage.usage_type <> 'account_recharge'\n     or existing_usage.business_id <> target_recharge.id then\n    insert into public.account_recharge_bep20_scan_events (\n      chain_id, tx_hash, log_index, block_number, block_timestamp,\n      token_contract, to_address, actual_received_usdt, recharge_id, recharge_no,\n      outcome, error_code, updated_at\n    ) values (\n      p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_timestamp,\n      normalized_token, normalized_to, p_actual_received_usdt,\n      target_recharge.id, target_recharge.recharge_no,\n      'tx_conflict', 'BEP20_TRANSACTION_ALREADY_ASSIGNED', now()\n    )\n    on conflict (chain_id, tx_hash, log_index) do update\n      set recharge_id = excluded.recharge_id,\n          recharge_no = excluded.recharge_no,\n          outcome = excluded.outcome,\n          error_code = excluded.error_code,\n          updated_at = now();\n\n    return jsonb_build_object(\n      'result', 'tx_conflict',\n      'rechargeId', target_recharge.id,\n      'rechargeNo', target_recharge.recharge_no\n    );\n  end if;\n\n  insert into public.account_recharge_chain_claims (\n    recharge_id, chain_id, tx_hash, log_index, block_number, block_hash,\n    block_timestamp, token_contract, from_address, to_address, raw_amount,\n    actual_received_usdt, confirmation_count\n  ) values (\n    target_recharge.id, p_chain_id, normalized_hash, p_log_index, p_block_number, normalized_block_hash,\n    p_block_timestamp, normalized_token, normalized_from, normalized_to, p_raw_amount,\n    p_actual_received_usdt, p_confirmation_count\n  );\n\n  update public.account_recharges\n  set actual_received_usdt = p_actual_received_usdt,\n      transaction_reference = normalized_hash,\n      provider_trade_no = normalized_hash,\n      status = 'submitted',\n      submitted_at = coalesce(submitted_at, now()),\n      matched_at = coalesce(matched_at, now()),\n      match_method = 'amount_fingerprint',\n      updated_at = now()\n  where id = target_recharge.id;\n\n  insert into public.recharge_review_events (\n    recharge_id, recharge_no, actor_user_id, actor_type, action,\n    from_status, to_status, reason, request_id, metadata\n  ) values (\n    target_recharge.id,\n    target_recharge.recharge_no,\n    null,\n    'system',\n    'auto_bep20_fingerprint_match_v2',\n    prior_status,\n    'submitted',\n    'BEP20 transfer matched by exact amount fingerprint',\n    gen_random_uuid()::text,\n    jsonb_build_object(\n      'chain_id', p_chain_id,\n      'tx_hash', normalized_hash,\n      'log_index', p_log_index,\n      'block_number', p_block_number,\n      'actual_received_usdt', p_actual_received_usdt,\n      'confirmation_count', p_confirmation_count\n    )\n  );\n\n  insert into public.account_recharge_bep20_scan_events (\n    chain_id, tx_hash, log_index, block_number, block_timestamp,\n    token_contract, to_address, actual_received_usdt, recharge_id, recharge_no,\n    outcome, error_code, updated_at\n  ) values (\n    p_chain_id, normalized_hash, p_log_index, p_block_number, p_block_timestamp,\n    normalized_token, normalized_to, p_actual_received_usdt,\n    target_recharge.id, target_recharge.recharge_no,\n    'matched', null, now()\n  )\n  on conflict (chain_id, tx_hash, log_index) do update\n    set recharge_id = excluded.recharge_id,\n        recharge_no = excluded.recharge_no,\n        outcome = excluded.outcome,\n        error_code = null,\n        updated_at = now();\n\n  return jsonb_build_object(\n    'result', 'matched',\n    'rechargeId', target_recharge.id,\n    'rechargeNo', target_recharge.recharge_no\n  );\nend;\n$function$\n"
+    },
+    {
+      "md5": "1f4307c0e21af6086b2d1721c37829e8",
+      "name": "match_and_credit_account_recharge_bep20_v3",
+      "definition": "CREATE OR REPLACE FUNCTION public.match_and_credit_account_recharge_bep20_v3(p_chain_id integer, p_tx_hash text, p_log_index integer, p_block_number numeric, p_block_hash text, p_block_timestamp timestamp with time zone, p_token_contract text, p_from_address text, p_to_address text, p_raw_amount numeric, p_actual_received_usdt numeric, p_confirmation_count integer)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  normalized_hash text := lower(btrim(p_tx_hash));\n  normalized_block_hash text := lower(btrim(p_block_hash));\n  normalized_token text := lower(btrim(p_token_contract));\n  normalized_to text := lower(btrim(p_to_address));\n  normalized_from text := nullif(lower(btrim(coalesce(p_from_address, ''))), '');\n  existing_claim public.account_recharge_chain_claims;\n  match_result jsonb;\n  credit_result jsonb;\n  match_kind text;\nbegin\n  if auth.role() <> 'service_role' then\n    raise exception 'match_and_credit_account_recharge_bep20_v3 requires service_role';\n  end if;\n\n  if p_chain_id is distinct from 56\n     or normalized_hash is null\n     or normalized_hash !~ '^0x[0-9a-f]{64}$'\n     or normalized_block_hash is null\n     or normalized_block_hash !~ '^0x[0-9a-f]{64}$'\n     or normalized_token is null\n     or normalized_token !~ '^0x[0-9a-f]{40}$'\n     or normalized_to is null\n     or normalized_to !~ '^0x[0-9a-f]{40}$'\n     or (normalized_from is not null and normalized_from !~ '^0x[0-9a-f]{40}$')\n     or p_log_index is null\n     or p_log_index < 0\n     or p_block_number is null\n     or p_block_number < 0\n     or p_raw_amount is null\n     or p_raw_amount <= 0\n     or p_actual_received_usdt is null\n     or p_actual_received_usdt <= 0\n     or p_confirmation_count is null\n     or p_confirmation_count <= 0\n     or p_block_timestamp is null then\n    raise exception 'invalid account recharge BEP20 auto-credit evidence';\n  end if;\n\n  -- Paid or submitted replay: never call V2 again for the same claimed transfer.\n  -- Locate the claim without locking it first. The helper then takes locks in the\n  -- same recharge -> claim order as V2, avoiding a claim -> recharge inversion.\n  -- Full evidence is re-read under that lock before this transaction can commit.\n  select * into existing_claim\n  from public.account_recharge_chain_claims\n  where chain_id = p_chain_id\n    and tx_hash = normalized_hash;\n\n  if found then\n    credit_result := public.credit_auto_matched_account_recharge_bep20_v3(\n      existing_claim.recharge_id,\n      normalized_hash\n    );\n\n    select * into existing_claim\n    from public.account_recharge_chain_claims\n    where chain_id = p_chain_id\n      and tx_hash = normalized_hash\n    for update;\n\n    if not found then\n      raise exception 'existing account recharge claim disappeared during replay';\n    end if;\n\n    if existing_claim.log_index is distinct from p_log_index\n       or existing_claim.block_number is distinct from p_block_number\n       or lower(existing_claim.block_hash) is distinct from normalized_block_hash\n       or existing_claim.block_timestamp is distinct from p_block_timestamp\n       or lower(existing_claim.token_contract) is distinct from normalized_token\n       or lower(existing_claim.from_address) is distinct from normalized_from\n       or lower(existing_claim.to_address) is distinct from normalized_to\n       or existing_claim.raw_amount is distinct from p_raw_amount\n       or existing_claim.actual_received_usdt is distinct from p_actual_received_usdt\n       or p_confirmation_count < existing_claim.confirmation_count then\n      raise exception 'existing account recharge claim evidence mismatch';\n    end if;\n\n    return jsonb_build_object(\n      'result', 'already_matched',\n      'rechargeId', existing_claim.recharge_id\n    ) || credit_result;\n  end if;\n\n  match_result := public.match_account_recharge_bep20_fingerprint_v2(\n    p_chain_id,\n    normalized_hash,\n    p_log_index,\n    p_block_number,\n    normalized_block_hash,\n    p_block_timestamp,\n    normalized_token,\n    normalized_from,\n    normalized_to,\n    p_raw_amount,\n    p_actual_received_usdt,\n    p_confirmation_count\n  );\n\n  match_kind := match_result->>'result';\n  if match_kind in ('matched', 'already_matched') then\n    credit_result := public.credit_auto_matched_account_recharge_bep20_v3(\n      (match_result->>'rechargeId')::uuid,\n      normalized_hash\n    );\n    return match_result || credit_result;\n  end if;\n\n  if match_kind is null or match_kind not in (\n    'unmatched',\n    'ambiguous_order_payment',\n    'tx_conflict',\n    'terminal_recharge',\n    'invalid_window'\n  ) then\n    raise exception 'account recharge BEP20 V2 returned an unknown match result';\n  end if;\n\n  return match_result || jsonb_build_object(\n    'credited', false,\n    'alreadyCredited', false\n  );\nend;\n$function$\n"
+    }
+  ],
+  "tables_rls": [
+    {
+      "rls": true,
+      "name": "account_recharges"
+    },
+    {
+      "rls": true,
+      "name": "balance_transactions"
+    }
+  ]
+}

@@ -30,3 +30,8 @@ test("future and already scanned windows require no log range",async()=>{
 test("invalid expiry is not silently widened",async()=>{
  await assert.rejects(planOrderScanRanges([{...window("a",time-100),expires_at:iso(time+1800)}],head,read),/WINDOW_INVALID/);
 });
+for (const minutes of [10,15,11,12,20]) test(`exact ${minutes} minute planner window`,async()=>{
+ const w={...window('ttl',time-1500),expires_at:iso(time-1500+minutes*60)};
+ if([10,15].includes(minutes))assert.equal((await planOrderScanRanges([w],head,read)).length,1);
+ else await assert.rejects(planOrderScanRanges([w],head,read),/WINDOW_INVALID/);
+});
