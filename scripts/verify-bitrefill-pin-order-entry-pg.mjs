@@ -237,6 +237,10 @@ try {
     ["supabase/migrations/20260810190000_user_delivery_compatibility.sql","get_order_delivery_for_user"]]) await sql(extract(file,name));
   await sql("revoke all on function public.claim_supplier_fulfillment(uuid,uuid,text,text,text,text,text) from public,anon,authenticated;grant execute on function public.claim_supplier_fulfillment(uuid,uuid,text,text,text,text,text) to service_role;revoke all on function public.get_order_delivery_for_user(text) from public,anon;grant execute on function public.get_order_delivery_for_user(text) to authenticated,service_role;");
   await runOrderEntryCases();
+  if (process.argv.includes('--personal-budget')) {
+    const { runPersonalBudgetCases } = await import('../tests/support/bitrefill-personal-budget-pg.mjs');
+    await runPersonalBudgetCases({ sql, root, pass });
+  }
 } finally {
   if (started) await exec("pg_ctl",["-D",dataDir,"-w","stop","-m","fast"],"",true);
   fs.writeFileSync(path.join(run,"receipt.json"),JSON.stringify({database:db,pg17:true,completedCases:passed,passed:passed.length,productionConnected:false,supplierNetworkCalls:0,realFunds:false,clusterStopped:started,
