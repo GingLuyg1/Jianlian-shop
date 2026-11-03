@@ -26,7 +26,7 @@ export default function AdminSidebar() {
   }, [pathname, routeGroup]);
 
   return (
-    <aside className="flex h-full w-[var(--admin-sidebar-width)] shrink-0 flex-col overflow-hidden border-r border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]">
+    <aside data-admin-shell-sidebar className="flex h-full w-[var(--admin-sidebar-width)] shrink-0 flex-col overflow-hidden border-r border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]">
       <div className="flex h-[var(--admin-header-height)] items-center border-b border-[var(--admin-v2-border)] px-4">
         <Link href="/admin" className="flex min-w-0 items-center gap-2 rounded-[var(--admin-v2-control-radius)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-offset-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--admin-v2-control-radius)] bg-[var(--admin-v2-text-primary)] text-xs font-bold text-white">

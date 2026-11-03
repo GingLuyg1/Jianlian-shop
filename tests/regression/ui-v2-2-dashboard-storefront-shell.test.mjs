@@ -23,11 +23,11 @@ test("Dashboard hover tooltip follows the selected metrics and preserves missing
   const dashboard = file("app/admin/page.tsx");
 
   assert.match(dashboard, /onPointerMove=/);
-  assert.match(dashboard, /onPointerLeave=\{\(\) => setActiveIndex\(null\)\}/);
+  assert.match(dashboard, /onPointerLeave=\{\(event\) => \{ if \(event\.pointerType === "mouse"\) setActiveIndex\(null\); \}\}/);
   assert.match(dashboard, /strokeDasharray="3 3"/);
   assert.match(dashboard, /index === activeIndex \? "4" : "2\.5"/);
   assert.match(dashboard, /selectedSeries\.map\(\(item\) =>/);
-  assert.match(dashboard, /activeIndex !== null && activeIndex >= points\.length \/ 2/);
+  assert.match(dashboard, /activeIndex !== null && activeIndex > 0 && activeIndex >= points\.length \/ 2/);
   assert.match(dashboard, /value === null \? "—"/);
   assert.doesNotMatch(dashboard, /item\.values\[activeIndex \?\? 0\]\s*\?\?\s*0/);
   assert.doesNotMatch(dashboard, /Math\.random|mock(?:Data|Metric|Trend)/i);

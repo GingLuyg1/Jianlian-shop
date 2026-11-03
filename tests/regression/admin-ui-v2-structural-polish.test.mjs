@@ -1,4 +1,5 @@
 import test from "node:test";
+import { renderDashboard } from "../helpers/admin-dashboard-ui-harness.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,8 +29,11 @@ test("Dashboard uses compact status and task structures without fabricated data"
 
   assert.match(dashboard, /variant="v2"/);
   assert.match(dashboard, /xl:grid-cols-\[minmax\(0,2fr\)_minmax\(0,1fr\)\]/);
-  assert.match(dashboard, /<AdminMetricValueCard[\s\S]*?compact/);
-  assert.match(dashboard, /gap-px bg-\[var\(--admin-v2-border\)\]/);
+  const html = renderDashboard();
+  assert.match(html, /dashboard-operations-title/);
+  assert.match(html, /dashboard-operations-grid/);
+  assert.match(html, /待处理订单/);
+  assert.match(file('app/admin/dashboard-v21.css'), /dashboard-operations-grid \{ grid-template-columns: repeat\(5/);
   assert.match(metrics, /compact \? "min-h-\[68px\]"/);
   assert.doesNotMatch(dashboard + metrics, /Math\.random|mock(?:Data|Metric|Trend)/i);
 });

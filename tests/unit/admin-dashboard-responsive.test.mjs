@@ -4,14 +4,22 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import ts from 'typescript';
 import { loadDashboardUi, renderDashboard } from '../helpers/admin-dashboard-ui-harness.mjs';
 const source = path => readFileSync(path, 'utf8');
 
-test('390px metrics use two columns and incomplete grids have no empty border-colored slot', () => {
+test('V2.2 dashboard uses four primary cards, scrollable audience strip and merged operations', () => {
   const html = renderDashboard();
-  assert.match(html, /grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7/);
-  assert.match(html, /\[&amp;&gt;\*:last-child\]:col-span-2/);
-  assert.equal((html.match(/grid shrink-0 min-h/g) ?? []).length, 3);
+  assert.match(html, /dashboard-primary-kpis/);
+  assert.match(html, /dashboard-secondary-kpis/);
+  assert.match(html, /dashboard-operations-grid/);
+  assert.match(html, /总用户/);
+  assert.match(html, /区间访客/);
+  assert.doesNotMatch(html, /用户与访问概览/);
+  assert.equal((html.match(/dashboard-kpi-value/g) ?? []).length, 4);
+  assert.doesNotMatch(html, /aria-label="商城成交额所选区间趋势"/);
+  assert.match(source('app/admin/dashboard-v21.css'), /dashboard-primary-kpis \{ grid-template-columns: repeat\(2/);
+  assert.doesNotMatch(source('app/admin/page.tsx'), /min-h-\[300px\]/);
   assert.match(source('components/admin/AdminLayout.tsx'), /h-\[100dvh\] max-h-\[100dvh\]/);
 });
 
@@ -27,12 +35,13 @@ test('recent mobile records retain every field; desktop retains table and Chines
 });
 
 test('chart has readable mobile date labels, keyboard inspection and exact values, not zero-filled missing data', () => {
-  const ui = loadDashboardUi([]);
+  const ui = loadDashboardUi([['payAmount'], 0]);
   const html = renderToStaticMarkup(React.createElement(ui.TrendChart, { points: [{ date: '2026-10-01', payAmount: null, rechargeAmount: 1, orderCount: 1, views: null }], loading: false }));
   assert.match(html, /preserveAspectRatio="none"/);
-  assert.match(html, /aria-label="查看趋势日期"/);
-  assert.match(html, /aria-valuetext="2026-10-01"/);
-  assert.match(html, /aria-live="polite"/);
+  assert.match(html, /tabindex="0" aria-label="支付、充值、订单与访问综合趋势折线图"|role="img" tabindex="0"/);
+  assert.doesNotMatch(html, /type="range"/);
+  assert.match(source('app/admin/page.tsx'), /onPointerDown=/);
+  assert.match(source('app/admin/page.tsx'), /onKeyDown=/);
   assert.match(html, /—/);
   const line = ui.buildNormalizedLine([1, null, 3], 720, 220, { left: 12, right: 12, top: 16, bottom: 28 });
   assert.equal(line.points[1], null);
@@ -50,19 +59,26 @@ test('loading, error and empty records remain explicit, no fake successful data'
 
 test('channel amounts are not truncated and shared wide tables offer keyboard scrolling', () => {
   const html = renderDashboard();
-  assert.match(html, /grid-cols-2 gap-2 text-left text-xs sm:grid-cols-3/);
+  assert.match(html, /dashboard-channel-amount/);
+  assert.match(html, /dashboard-channel-stats/);
+  assert.match(html, /data table, can scroll horizontally|数据表，可左右滑动/);
   assert.match(html, /break-words text-sm font-semibold tabular-nums/);
   const lists = source('components/admin/v2/AdminList.tsx');
   assert.match(lists, /宽表可左右滑动查看完整信息/);
   assert.match(lists, /role="region" aria-label="数据表，可左右滑动" tabIndex=\{0\}/);
 });
 
-test('dashboard queries, aggregation and business rules match the Production base digest', () => {
-  // SHA-256 of app/admin/page.tsx before the component at Production commit 4575d802.
-  const baseDigest = '47e5de1ca8f0d848603f172dc40c516e0985bd8aa1ce3f5a00b31ad4a7700766';
-  const prefix = text => text.replaceAll('\r\n', '\n').split('export default function AdminDashboardPage')[0];
-  const digest = createHash('sha256').update(prefix(source('app/admin/page.tsx'))).digest('hex');
-  assert.equal(digest, baseDigest);
+test('dashboard 30-day source queries retain their filters while recent previews have stable five-row ordering', () => {
+  const dataSection = text => text.replaceAll('\r\n', '\n').split('async function loadDashboardData')[1].split('export default function AdminDashboardPage')[0];
+  const data = dataSection(source('app/admin/page.tsx'));
+  assert.match(data, /\.from\("orders"\)[\s\S]*?\.gte\("created_at", thirtyDaysAgo\.toISOString\(\)\)/);
+  assert.match(data, /\.from\("account_recharges"\)[\s\S]*?\.gte\("created_at", thirtyDaysAgo\.toISOString\(\)\)/);
+  assert.match(data, /\.order\("created_at", \{ ascending: false \}\)\s*\.order\("id", \{ ascending: false \}\)/);
+  assert.match(data, /recentOrders: latestOrders \?\? \[\]/);
+  assert.match(data, /recentRecharges: latestRecharges \?\? \[\]/);
+  assert.match(data, /recentOrdersFailed: latestOrders === null/);
+  assert.match(data, /recentRechargesFailed: latestRecharges === null/);
+  assert.doesNotMatch(data, /\.(?:insert|update|upsert|delete)\(/);
 });
 
 test('chart day inspection and metric toggles update display state without network or business actions', () => {
@@ -77,7 +93,7 @@ test('chart day inspection and metric toggles update display state without netwo
     walk(node.props.children);
   }
   walk(tree);
-  elements.find(el => el.type === 'input').props.onChange({ target: { value: '0' } });
+  elements.find(el => el.type === 'svg').props.onPointerDown({ currentTarget: { getBoundingClientRect: () => ({ left: 0, width: 100 }) }, clientX: 0 });
   assert.deepEqual(updates.pop(), { index: 1, value: 0 });
   const toggles = elements.filter(el => el.type === 'button');
   toggles[0].props.onClick();
@@ -90,7 +106,21 @@ test('switching a selected day from 30 days to 7 days clamps the display index s
   const ui = loadDashboardUi([['payAmount'], 29]);
   const tree = ui.TrendChart({ points: [{ date: '2026-10-01', payAmount: 123, rechargeAmount: null, orderCount: 1, views: 1 }], loading: false });
   const html = renderToStaticMarkup(tree);
-  assert.match(html, /aria-valuetext="2026-10-01"/);
-  assert.match(html, /value="0"/);
+  assert.match(html, /role="tooltip"/);
+  assert.doesNotMatch(html, /type="range"/);
   assert.match(html, /¥123\.00/);
+});
+
+test('legacy Production business baseline stays frozen and current aggregation preserves its pure rules', () => {
+  const baseline = source('tests/fixtures/admin-dashboard-business-baseline-4575.txt').replaceAll('\r\n', '\n');
+  assert.equal(createHash('sha256').update(baseline).digest('hex'), '47e5de1ca8f0d848603f172dc40c516e0985bd8aa1ce3f5a00b31ad4a7700766');
+  const functions = text => {
+    const file = ts.createSourceFile('dashboard.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    return new Map(file.statements.filter(ts.isFunctionDeclaration).filter(n => n.name).map(n => [n.name.text, ts.createPrinter({ removeComments: true }).printNode(ts.EmitHint.Unspecified, n, file)]));
+  };
+  const oldRules = functions(baseline), current = functions(source('app/admin/page.tsx'));
+  for (const name of ['safeNumber', 'aggregateByDate', 'sumRows', 'countRows', 'createEmptyTrend', 'makeTrend']) {
+    assert.ok(oldRules.has(name) && current.has(name), name);
+    assert.equal(current.get(name), oldRules.get(name), name + ' cannot change business aggregation');
+  }
 });

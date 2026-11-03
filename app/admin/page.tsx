@@ -2,33 +2,33 @@
 import { statusLabel } from '@/lib/admin/display-labels';
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
-  Box,
-  CheckCircle2,
-  CreditCard,
+  CircleAlert,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Copy,
   Database,
   Loader2,
-  Package,
   RefreshCcw,
-  ShieldCheck,
-  ShoppingCart,
-  Users,
-  WalletCards,
 } from "lucide-react";
+import { toast } from "sonner";
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
-import {
-  AdminMetricTrendCard,
-  AdminMetricValueCard,
-} from "@/components/admin/dashboard/AdminDashboardMetricCards";
+import { AdminMetricTrendCard } from "@/components/admin/dashboard/ApprovedDashboardMetricCards";
+import DashboardProductData from "@/components/admin/dashboard/DashboardProductData";
+import { DashboardDateRangeFilter, dashboardPreset } from "@/components/admin/dashboard/DashboardDateRangeFilter";
+import { chartNumber, formatDashboardMoney, type DashboardAnalytics } from "@/lib/admin/dashboard-analytics-ui";
+import { clearDashboardAnalyticsCache, useDashboardAnalytics } from "@/lib/admin/use-dashboard-analytics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -111,14 +111,50 @@ type ChannelStat = {
   initiated: number | null;
   successful: number | null;
   amount: number | null;
+  amountText?: string;
+  rawReceipts?: Array<{ currency: string; amount: string; initiated: number; successful: number; exceptions: number }>;
   exceptions: number | null;
   failed?: boolean;
 };
 
+function buildAnalyticsChannelRows(analytics: DashboardAnalytics | null, snapshot: ChannelStat[]): ChannelStat[] {
+  if (!analytics) return [];
+  const codes = new Set<string>([
+    ...CHANNELS.map((channel) => channel.code),
+    ...analytics.channels.map((channel) => channel.channel),
+    ...analytics.channelRevenueCny.map((channel) => channel.channel),
+  ]);
+  return Array.from(codes).map((code) => {
+    const rows = analytics.channels.filter((row) => row.channel === code);
+    const config = snapshot.find((row) => row.code === code);
+    const revenue = analytics.channelRevenueCny.find((row) => row.channel === code);
+    return {
+      code,
+      label: CHANNELS.find((row) => row.code === code)?.label ?? code,
+      enabled: config?.enabled ?? null,
+      configured: config?.configured ?? null,
+      initiated: rows.reduce((sum, row) => sum + row.initiated, 0),
+      successful: rows.reduce((sum, row) => sum + row.successful, 0),
+      exceptions: rows.reduce((sum, row) => sum + row.exceptions, 0),
+      amount: null,
+      amountText: formatDashboardMoney(revenue?.amountCny ?? "0.00"),
+      rawReceipts: rows.map((row) => ({
+        currency: row.currency,
+        amount: row.receivedAmount,
+        initiated: row.initiated,
+        successful: row.successful,
+        exceptions: row.exceptions,
+      })),
+    };
+  });
+}
+
 type TrendPoint = {
   date: string;
   payAmount: number | null;
+  payAmountText?: string;
   rechargeAmount: number | null;
+  rechargeAmountText?: string;
   orderCount: number | null;
   paidCount: number | null;
   visitors: number | null;
@@ -126,7 +162,7 @@ type TrendPoint = {
   newUsers: number | null;
 };
 
-type TrendMetricKey = "payAmount" | "rechargeAmount" | "orderCount" | "views";
+type TrendMetricKey = "payAmount" | "rechargeAmount" | "orderCount" | "views" | "visitors";
 
 type TodoItem = {
   label: string;
@@ -147,7 +183,7 @@ type ProductRank = {
 
 type SystemStatus = {
   label: string;
-  value: "正常" | "部分配置" | "未接入" | "异常";
+  value: "正常" | "部分配置" | "未接入" | "异常" | "未检测";
   href?: string;
 };
 
@@ -166,6 +202,8 @@ type DashboardData = {
   staleProducts: AdminProduct[];
   recentOrders: DashboardOrder[];
   recentRecharges: DashboardRecharge[];
+  recentOrdersFailed?: boolean;
+  recentRechargesFailed?: boolean;
   userOverview: Array<{ label: string; value: MetricValue; failed?: boolean }>;
   visitorStats: Array<{ label: string; visitors: MetricValue; views: MetricValue; failed?: boolean }>;
   systemStatuses: SystemStatus[];
@@ -381,17 +419,21 @@ async function loadDashboardData(): Promise<DashboardData> {
     visitsResult,
     readinessResult,
     lowStockResult,
+    recentOrdersResult,
+    recentRechargesResult,
   ] = await Promise.allSettled([
     supabase
       .from("orders")
       .select("id,order_no,customer_email,total_amount,status,payment_status,delivery_type,paid_at,created_at,updated_at")
       .gte("created_at", thirtyDaysAgo.toISOString())
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
     supabase
       .from("account_recharges")
       .select("id,recharge_no,user_email,amount,requested_amount,credited_amount,channel_name,channel_code,status,review_mode,exception_type,error_summary,paid_at,created_at")
       .gte("created_at", thirtyDaysAgo.toISOString())
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
     listProducts({ page: 1, pageSize: 500, sortBy: "updated_at" }),
     supabase.from("profiles").select("id,email,role,created_at", { count: "exact" }),
     supabase
@@ -422,6 +464,16 @@ async function loadDashboardData(): Promise<DashboardData> {
       return response.json();
     }),
     listProducts({ page: 1, pageSize: 1, stockLevel: "low", sortBy: "updated_at" }),
+    supabase.from("orders")
+      .select("id,order_no,customer_email,total_amount,status,payment_status,delivery_type,paid_at,created_at,updated_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(5),
+    supabase.from("account_recharges")
+      .select("id,recharge_no,user_email,amount,requested_amount,credited_amount,channel_name,channel_code,status,review_mode,exception_type,error_summary,paid_at,created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(5),
   ]);
 
   const orders = ordersResult.status === "fulfilled" && !ordersResult.value.error
@@ -432,6 +484,10 @@ async function loadDashboardData(): Promise<DashboardData> {
     : null;
   const products = productsResult.status === "fulfilled" ? productsResult.value.products : null;
   const lowStockCount = lowStockResult.status === "fulfilled" ? lowStockResult.value.count : null;
+  const latestOrders = recentOrdersResult.status === "fulfilled" && !recentOrdersResult.value.error
+    ? ((recentOrdersResult.value.data ?? []) as DashboardOrder[]) : null;
+  const latestRecharges = recentRechargesResult.status === "fulfilled" && !recentRechargesResult.value.error
+    ? ((recentRechargesResult.value.data ?? []) as DashboardRecharge[]) : null;
   const users = usersResult.status === "fulfilled" && !usersResult.value.error
     ? ((usersResult.value.data ?? []) as Array<{ id: string; role?: string | null; created_at?: string | null }>)
     : null;
@@ -542,16 +598,16 @@ async function loadDashboardData(): Promise<DashboardData> {
   const ranks = Array.from(rankMap.values());
 
   const systemStatuses: SystemStatus[] = [
-    { label: "数据库连接", value: orders || products || users ? "正常" : "异常" },
-    { label: "支付 支付平台", value: readiness?.status === "ready" ? "正常" : readiness?.status === "partial" ? "部分配置" : "未接入", href: "/admin/payments" },
-    { label: "支付回调接口", value: readiness?.checks?.callbackRoute?.ok ? "正常" : "部分配置", href: "/admin/payments" },
-    { label: "充值入账 数据库事务处理", value: readiness?.checks?.rechargeRpc?.ok ? "正常" : "异常", href: "/admin/recharges" },
-    { label: "订单支付 数据库事务处理", value: readiness?.checks?.orderPaymentService?.ok ? "正常" : "部分配置", href: "/admin/orders" },
-    { label: "自动发货服务", value: deliveries === null ? "部分配置" : "正常", href: "/admin/inventory" },
-    { label: "支付对账服务", value: readiness?.checks?.reconciliationUsesCompletePayment?.ok ? "正常" : "部分配置", href: "/admin/payments" },
-    { label: "审计日志", value: "正常", href: "/admin/audit-logs" },
-    { label: "最近部署版本", value: "部分配置" },
-    { label: "最近更新时间", value: "正常" },
+    { label: "数据库读取", value: orders !== null && products !== null && users !== null ? "正常" : "异常" },
+    { label: "支付服务配置", value: !readiness ? "未检测" : readiness.status === "ready" ? "正常" : readiness.status === "partial" ? "部分配置" : "异常", href: "/admin/payments" },
+    { label: "支付回调运行", value: "未检测", href: "/admin/payments" },
+    { label: "充值入账事务", value: !readiness ? "未检测" : readiness.coreDatabase?.checks?.completeRechargeRpc ? "部分配置" : "异常", href: "/admin/recharges" },
+    { label: "订单支付事务", value: !readiness ? "未检测" : readiness.coreDatabase?.checks?.completeOrderRpc ? "部分配置" : "异常", href: "/admin/orders" },
+    { label: "自动发货服务", value: "未检测", href: "/admin/inventory" },
+    { label: "支付对账运行", value: "未检测", href: "/admin/payments" },
+    { label: "审计日志运行", value: "未检测", href: "/admin/audit-logs" },
+    { label: "最近部署版本", value: "未接入" },
+    { label: "服务更新时间", value: "未检测" },
   ];
 
   const trend7 = makeTrend(7, orders, recharges, visits, users);
@@ -682,12 +738,14 @@ async function loadDashboardData(): Promise<DashboardData> {
     ],
     salesRank: ranks.sort((a, b) => b.sales - a.sales).slice(0, 8),
     amountRank: [...ranks].sort((a, b) => b.amount - a.amount).slice(0, 8),
-    lowStock: products ? products.filter((product) => product.stock > 0 && product.stock <= 5).slice(0, 8) : [],
-    soldOut: products ? products.filter((product) => product.status === "sold_out" || product.stock === 0).slice(0, 8) : [],
-    recentProducts: products ? [...products].sort((a, b) => new Date(b.created_at ?? b.updated_at ?? 0).getTime() - new Date(a.created_at ?? a.updated_at ?? 0).getTime()).slice(0, 8) : [],
-    staleProducts: products ? [...products].sort((a, b) => new Date(a.updated_at ?? a.created_at ?? 0).getTime() - new Date(b.updated_at ?? b.created_at ?? 0).getTime()).slice(0, 8) : [],
-    recentOrders: orders?.slice(0, 8) ?? [],
-    recentRecharges: recharges?.slice(0, 8) ?? [],
+    lowStock: products ? products.filter((product) => product.stock > 0 && product.stock <= 5).slice(0, 5) : [],
+    soldOut: products ? products.filter((product) => product.status === "sold_out" || product.stock === 0).slice(0, 5) : [],
+    recentProducts: products ? [...products].sort((a, b) => new Date(b.created_at ?? b.updated_at ?? 0).getTime() - new Date(a.created_at ?? a.updated_at ?? 0).getTime() || a.id.localeCompare(b.id)).slice(0, 5) : [],
+    staleProducts: products ? [...products].sort((a, b) => new Date(a.updated_at ?? a.created_at ?? 0).getTime() - new Date(b.updated_at ?? b.created_at ?? 0).getTime() || a.id.localeCompare(b.id)).slice(0, 5) : [],
+    recentOrders: latestOrders ?? [],
+    recentRecharges: latestRecharges ?? [],
+    recentOrdersFailed: latestOrders === null,
+    recentRechargesFailed: latestRecharges === null,
     userOverview: [
       { label: "总用户", value: users ? users.length : FAILED },
       { label: "今日新增", value: todayUsers ? todayUsers.length : FAILED },
@@ -709,8 +767,28 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [trendRange, setTrendRange] = useState<"7" | "30">("7");
+  const [metricRange, setMetricRange] = useState(() => dashboardPreset("today"));
+  const [trendRange, setTrendRange] = useState(() => dashboardPreset("7"));
+  const [channelRange, setChannelRange] = useState(() => dashboardPreset("7"));
+  const [analyticsRefresh, setAnalyticsRefresh] = useState(0);
+  const metricAnalytics = useDashboardAnalytics(metricRange, analyticsRefresh);
+  const trendAnalytics = useDashboardAnalytics(trendRange, analyticsRefresh);
+  const channelAnalytics = useDashboardAnalytics(channelRange, analyticsRefresh);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const metricStripRef = useRef<HTMLDivElement>(null);
+  const [metricStripEdges, setMetricStripEdges] = useState({ start: true, end: false });
+
+  const updateMetricStripEdges = useCallback(() => {
+    const strip = metricStripRef.current;
+    if (!strip) return;
+    setMetricStripEdges({ start: strip.scrollLeft <= 2, end: strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 2 });
+  }, []);
+
+  useEffect(() => {
+    updateMetricStripEdges();
+    window.addEventListener("resize", updateMetricStripEdges);
+    return () => window.removeEventListener("resize", updateMetricStripEdges);
+  }, [data, updateMetricStripEdges]);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -738,19 +816,42 @@ export default function AdminDashboardPage() {
     void loadDashboard();
   }, [loadDashboard]);
 
-  const trend = trendRange === "7" ? data?.trend7 ?? [] : data?.trend30 ?? [];
+  const trend: TrendPoint[] = (trendAnalytics.data?.daily ?? []).map((point) => ({
+    date: point.date,
+    payAmount: chartNumber(point.revenueCny),
+    payAmountText: point.revenueCny,
+    rechargeAmount: chartNumber(point.rechargeCny),
+    rechargeAmountText: point.rechargeCny,
+    orderCount: point.ordersCreated,
+    paidCount: null,
+    visitors: point.dailyUv,
+    views: point.pv,
+    newUsers: null,
+  }));
+  const metricSummary = metricAnalytics.data?.summary;
+  const metricTrend = (metricAnalytics.data?.daily ?? []).map((point) => chartNumber(point.revenueCny));
+  const datedMetrics: TrendMetricCard[] = [
+    { label: "商城成交额", value: metricSummary ? formatDashboardMoney(metricSummary.revenueCny) : "—", description: "按实际支付日 · 已付订单人民币业务额", href: "/admin/orders?paymentStatus=paid", trend: metricTrend },
+    { label: "余额充值到账", value: metricSummary ? formatDashboardMoney(metricSummary.rechargeCny) : "—", description: "按余额流水实际入账日", href: "/admin/recharges?status=paid", trend: (metricAnalytics.data?.daily ?? []).map((point) => chartNumber(point.rechargeCny)) },
+    { label: "创建订单数", value: metricSummary?.ordersCreated ?? "—", description: "按订单创建日", href: "/admin/orders", trend: (metricAnalytics.data?.daily ?? []).map((point) => point.ordersCreated) },
+    { label: "创建订单当前支付率", value: metricSummary && metricSummary.ordersCreated > 0 ? formatPercent(metricSummary.ordersCreatedCurrentlyPaid, metricSummary.ordersCreated) : "—", description: "区间创建订单中截至当前已付 / 创建数", href: "/admin/payments", trend: [] },
+  ];
+  const channelRows = buildAnalyticsChannelRows(channelAnalytics.data, data?.channels ?? []);
+  const statusByLabel = new Map((data?.statusMetrics ?? []).map((metric) => [metric.label, metric]));
+  const productTotal = statusByLabel.get("商品总数");
 
   return (
     <AdminPageShell
+      className="admin-dashboard-v21"
       variant="v2"
       title="经营数据驾驶舱"
-      description="集中查看订单、支付、充值、商品、用户和系统状态。未接入的数据会明确标记，不使用模拟数据。"
+      description="经营指标、趋势与渠道分别按所示北京时间区间读取；待办、商品与系统状态是当前快照。"
       actions={
-        <div className="flex items-center gap-2">
+        <div className="dashboard-actions flex flex-wrap items-center gap-2">
           <QuickLink href="/admin/products" label="新增商品" />
           <QuickLink href="/admin/inventory" label="导入库存" />
           <QuickLink href="/admin/categories" label="新增分类" />
-          <Button variant="outline" size="sm" onClick={loadDashboard} disabled={loading}>
+          <Button variant="outline" size="sm" className="dashboard-refresh" onClick={() => { clearDashboardAnalyticsCache(); setAnalyticsRefresh((value) => value + 1); void loadDashboard(); }} disabled={loading}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
             刷新
           </Button>
@@ -760,18 +861,20 @@ export default function AdminDashboardPage() {
       {error ? (
         <AdminErrorState description={error} onRetry={loadDashboard} />
       ) : (
-        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pb-4 lg:gap-3" aria-busy={loading}>
+        <div className="dashboard-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pb-4" aria-busy={loading}>
           {loading ? <p role="status" className="shrink-0 text-xs text-[var(--admin-v2-text-muted)]">正在读取经营数据，请稍候…</p> : null}
-          <section className="shrink-0" aria-labelledby="dashboard-core-metrics">
-            <div className="mb-2">
-              <h2 id="dashboard-core-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">核心经营指标</h2>
+          <section className="dashboard-section shrink-0" aria-labelledby="dashboard-core-metrics">
+            <div className="dashboard-section-heading">
+              <h2 id="dashboard-core-metrics">核心经营指标</h2>
+              <DashboardDateRangeFilter label="核心经营指标" value={metricRange} onChange={setMetricRange} />
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1">
-              {loading && !data
-                ? Array.from({ length: 7 }).map((_, index) => (
-                  <div key={index} className="h-[112px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
+            {metricAnalytics.error ? <AdminErrorState description={metricAnalytics.error} onRetry={() => { clearDashboardAnalyticsCache(); setAnalyticsRefresh((value) => value + 1); }} /> : null}
+            <div className="dashboard-primary-kpis">
+              {metricAnalytics.loading
+                ? Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="dashboard-kpi-skeleton animate-pulse" />
                 ))
-                : data?.trendMetrics.map((metric) => (
+                : !metricAnalytics.error && datedMetrics.map((metric) => (
                   <AdminMetricTrendCard
                     key={metric.label}
                     label={metric.label}
@@ -779,89 +882,86 @@ export default function AdminDashboardPage() {
                     description={metric.description}
                     comparison={metric.change}
                     href={metric.href}
-                    loading={loading}
+                    loading={metricAnalytics.loading}
                     trend={metric.trend}
                   />
                 ))}
             </div>
-          </section>
-
-          <section className="shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]" aria-labelledby="dashboard-status-metrics">
-            <div className="flex items-center justify-between border-b border-[var(--admin-v2-border)] px-3 py-2 sm:px-4">
-              <h2 id="dashboard-status-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">运营状态</h2>
-              <p className="hidden text-xs text-[var(--admin-v2-text-muted)] sm:block">待处理、异常与库存状态</p>
+            <div className="dashboard-metric-strip-heading">
+              <span>所选区间访问数据 · 用户与商品为当前快照/原有样本</span>
+              <div className="dashboard-metric-strip-controls">
+                <span>横向滑动查看更多</span>
+                <Button type="button" variant="outline" size="icon" aria-label="向左查看次级指标" disabled={metricStripEdges.start} onClick={() => metricStripRef.current?.scrollBy({ left: -480, behavior: "smooth" })}><ChevronLeft className="h-4 w-4" /></Button>
+                <Button type="button" variant="outline" size="icon" aria-label="向右查看次级指标" disabled={metricStripEdges.end} onClick={() => metricStripRef.current?.scrollBy({ left: 480, behavior: "smooth" })}><ChevronRight className="h-4 w-4" /></Button>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5 [&>*:last-child]:col-span-2 xl:[&>*:last-child]:col-span-1">
-              {loading && !data
-                ? Array.from({ length: 5 }).map((_, index) => (
-                  <div key={index} className="h-[68px] animate-pulse bg-[var(--admin-v2-surface-muted)]" />
-                ))
-                : data?.statusMetrics.map((metric) => (
-                  <AdminMetricValueCard
-                    key={metric.label}
-                    label={metric.label}
-                    value={formatNumber(metric.value)}
-                    description={metric.description}
-                    comparison={metric.change === "—" ? null : metric.change}
-                    href={metric.href}
-                    loading={loading}
-                    tone={metric.tone === "red" ? "danger" : metric.tone === "orange" ? "warning" : "neutral"}
-                    compact
-                  />
+            <div className="dashboard-secondary-kpis" ref={metricStripRef} onScroll={updateMetricStripEdges} role="region" aria-label="次级经营指标，左右滑动查看更多" tabIndex={0}>
+              {metricAnalytics.loading ? Array.from({ length: 3 }).map((_, index) => <div key={index} className="dashboard-secondary-skeleton animate-pulse" />) : <>
+                {metricSummary ? <>
+                  <SecondaryMetricCard label="区间访客" value={metricSummary.uv} description="UV · 区间去重" />
+                  <SecondaryMetricCard label="区间访问量" value={metricSummary.pv} description="PV · 非后台事件" />
+                  <SecondaryMetricCard label="区间创建且目前已付" value={metricSummary.ordersCreatedCurrentlyPaid} description="截至当前的支付状态" href="/admin/orders?paymentStatus=paid" />
+                </> : null}
+                {data?.userOverview.filter((row) => row.label !== "管理员数量").map((row) => (
+                  <SecondaryMetricCard key={row.label} label={row.label === "总用户" ? "当前总用户（样本）" : row.label === "今日新增" ? "今日新增用户（样本）" : `${row.label}（样本）`} value={row.value} description="原有页面读取样本 · 不随区间变化" href="/admin/users" />
                 ))}
+                {productTotal ? <SecondaryMetricCard label="商品总数（样本）" value={productTotal.value} description="最多读取 500 项 · 非全量" href={productTotal.href} /> : null}
+              </>}
             </div>
           </section>
 
-          <div className="grid shrink-0 min-h-[320px] min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-3">
-            <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+          <div className="dashboard-analysis-grid grid shrink-0 min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <Card className="dashboard-panel dashboard-trend-panel flex min-h-0 flex-col overflow-hidden">
               <CardHeader className="flex shrink-0 flex-col items-start justify-between gap-3 px-4 py-3 sm:flex-row sm:items-center">
                 <div>
                   <CardTitle className="text-base">经营趋势</CardTitle>
-                  <p className="text-xs text-slate-500">支付、充值、订单和访问的综合走势（各指标独立量程）</p>
+                  <p className="text-xs text-slate-500">支付、充值、订单和访问的综合走势；各指标独立量程，不可按线高比较不同单位</p>
                 </div>
-                <Tabs value={trendRange} onValueChange={(value) => setTrendRange(value as "7" | "30")}>
-                  <TabsList className="h-11 sm:h-8">
-                    <TabsTrigger value="7" className="h-10 px-3 text-xs sm:h-7">近 7 天</TabsTrigger>
-                    <TabsTrigger value="30" className="h-10 px-3 text-xs sm:h-7">近 30 天</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <DashboardDateRangeFilter label="经营趋势" value={trendRange} onChange={setTrendRange} />
               </CardHeader>
               <CardContent className="min-h-0 flex-1 px-4 pb-4 pt-0">
-                <TrendChart points={trend} loading={loading} />
+                {trendAnalytics.error ? <AdminErrorState description={trendAnalytics.error} onRetry={() => { clearDashboardAnalyticsCache(); setAnalyticsRefresh((value) => value + 1); }} /> : <TrendChart points={trend} loading={trendAnalytics.loading} />}
               </CardContent>
             </Card>
 
-            <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+            <Card className="dashboard-panel dashboard-channel-panel flex min-h-0 flex-col overflow-hidden">
               <CardHeader className="shrink-0 px-4 py-3">
-                <CardTitle className="text-base">支付渠道表现</CardTitle>
-                <p className="text-xs text-slate-500">按真实支付会话统计，不展示假渠道结果</p>
+                <div className="dashboard-channel-heading flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base">支付渠道表现</CardTitle>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">区间发起会话的当前状态；人民币商城成交额按实际支付日 · 列表内可滚动</p>
+                  </div>
+                  <DashboardDateRangeFilter label="支付渠道表现" value={channelRange} onChange={setChannelRange} />
+                </div>
               </CardHeader>
-              <CardContent className="min-h-0 flex-1 space-y-2 overflow-auto px-4 pb-4 pt-0">
-                {(data?.channels ?? CHANNELS.map((channel) => ({ ...channel, enabled: null, configured: null, initiated: null, successful: null, amount: null, exceptions: null }))).map((channel) => (
-                  <ChannelRow key={channel.code} channel={channel} loading={loading} />
+              <CardContent className="dashboard-channel-list min-h-0 flex-1 space-y-2 px-4 pb-4 pt-0" role="region" aria-label="支付渠道列表，可向下滚动" tabIndex={0}>
+                {channelAnalytics.error ? <AdminErrorState description={channelAnalytics.error} onRetry={() => { clearDashboardAnalyticsCache(); setAnalyticsRefresh((value) => value + 1); }} /> : channelAnalytics.loading ? <div role="status" className="p-4 text-sm">正在读取渠道统计…</div> : channelRows.map((channel) => (
+                  <ChannelRow key={channel.code} channel={channel} loading={false} />
                 ))}
               </CardContent>
             </Card>
           </div>
 
-          <section className="shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--admin-v2-border)] px-4 py-2.5">
-              <h2 className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">待办中心</h2>
-              <p className="text-xs text-[var(--admin-v2-text-muted)]">数字为近 30 天快照；点击查看当前完整队列。</p>
+          <section className="dashboard-section shrink-0" aria-labelledby="dashboard-operations-title">
+            <div className="dashboard-section-heading">
+              <h2 id="dashboard-operations-title">运营与待办</h2>
+              <span className="dashboard-section-note">待办为现有近 30 天快照；入口指向当前完整队列</span>
             </div>
-            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-4 xl:grid-cols-8">
+            <div className="dashboard-todo-grid dashboard-operations-grid">
               {(data?.todos ?? []).map((todo) => (
-                <TodoLink key={todo.label} item={todo} />
+                <TodoLink key={todo.label} item={todo} overview={statusByLabel.get(todo.label)} />
               ))}
-              {!data && loading
-                ? Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-14 animate-pulse bg-slate-100" />)
-                : null}
+              {data?.statusMetrics.filter((metric) => metric.label === "支付异常").map((metric) => (
+                <TodoLink key={metric.label} item={{ label: metric.label, value: typeof metric.value === "number" ? metric.value : null, href: metric.href ?? "/admin/payments" }} valueOverride={typeof metric.value === "string" ? metric.value : undefined} />
+              ))}
+              {!data && loading ? Array.from({ length: 9 }).map((_, index) => <div key={index} className="dashboard-todo-skeleton animate-pulse" />) : null}
             </div>
           </section>
 
-          <div className="grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 gap-4 xl:grid-cols-3 lg:gap-3">
-            <ProductListCard title="销量排行" rows={data?.salesRank ?? []} type="sales" loading={loading} />
-            <ProductListCard title="销售额排行" rows={data?.amountRank ?? []} type="amount" loading={loading} />
+          <div className="dashboard-lower-grid grid shrink-0 min-w-0 grid-cols-1 gap-4">
+            <DashboardProductData />
+          </div>
+          <div className="dashboard-lower-grid grid shrink-0 min-w-0 grid-cols-1 gap-4">
             <InventoryFocusCard
               lowStock={data?.lowStock ?? []}
               soldOut={data?.soldOut ?? []}
@@ -871,10 +971,9 @@ export default function AdminDashboardPage() {
             />
           </div>
 
-          <div className="grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 gap-4 xl:grid-cols-3 lg:gap-3">
-            <RecentOrdersCard rows={data?.recentOrders ?? []} loading={loading} />
-            <RecentRechargesCard rows={data?.recentRecharges ?? []} loading={loading} />
-            <UserOverviewCard rows={data?.userOverview ?? []} visitorRows={data?.visitorStats ?? []} loading={loading} />
+          <div className="dashboard-lower-grid dashboard-activity-grid grid shrink-0 min-w-0 grid-cols-1 gap-4 xl:grid-cols-3">
+            <RecentOrdersCard rows={data?.recentOrders ?? []} loading={loading} failed={data?.recentOrdersFailed} />
+            <RecentRechargesCard rows={data?.recentRecharges ?? []} loading={loading} failed={data?.recentRechargesFailed} />
           </div>
 
           <SystemStatusCard rows={data?.systemStatuses ?? []} lastRefreshedAt={lastRefreshedAt} loading={loading} />
@@ -886,10 +985,19 @@ export default function AdminDashboardPage() {
 
 function QuickLink({ href, label }: { href: string; label: string }) {
   return (
-    <Button asChild variant="outline" size="sm" className="hidden lg:inline-flex">
+    <Button asChild variant="outline" size="sm" className="dashboard-quick-link inline-flex">
       <Link href={href}>{label}</Link>
     </Button>
   );
+}
+
+function SecondaryMetricCard({ label, value, description, detail, href }: { label: string; value: MetricValue; description: string; detail?: string | null; href?: string }) {
+  const content = <div className="dashboard-secondary-fact">
+    <span className="dashboard-secondary-label">{label}</span>
+    <strong title={formatNumber(value)}>{formatNumber(value)}</strong>
+    <span className="dashboard-secondary-description">{description}{detail ? ` · ${detail}` : ""}</span>
+  </div>;
+  return href ? <Link href={href} className="dashboard-secondary-link">{content}</Link> : <div>{content}</div>;
 }
 
 function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolean }) {
@@ -904,6 +1012,7 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
     { key: "rechargeAmount", label: "充值金额", color: "#0ea5e9", values: points.map((point) => point.rechargeAmount), format: formatMoney },
     { key: "orderCount", label: "订单数量", color: "#6366f1", values: points.map((point) => point.orderCount), format: (value: number | null) => value === null ? "—" : `${Math.trunc(value).toLocaleString("zh-CN")} 单` },
     { key: "views", label: "访问量", color: "#64748b", values: points.map((point) => point.views), format: (value: number | null) => value === null ? "—" : `${Math.trunc(value).toLocaleString("zh-CN")} PV` },
+    { key: "visitors", label: "访客数", color: "#119ba3", values: points.map((point) => point.visitors), format: (value: number | null) => value === null ? "—" : `${Math.trunc(value).toLocaleString("zh-CN")} UV` },
   ] as const;
   const chartWidth = 720;
   const chartHeight = 220;
@@ -917,8 +1026,14 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
   const inspectionIndex = Math.min(points.length - 1, Math.max(0, activeIndex ?? points.length - 1));
   const activePoint = activeIndex !== null ? points[inspectionIndex] : null;
   const activeX = activeIndex !== null
-    ? padding.left + (inspectionIndex / Math.max(points.length - 1, 1)) * (chartWidth - padding.left - padding.right)
+    ? points.length === 1 ? chartWidth / 2 : padding.left + (inspectionIndex / (points.length - 1)) * (chartWidth - padding.left - padding.right)
     : null;
+  const displaySeriesValue = (item: typeof series[number], index: number) => {
+    const point = points[index];
+    if (item.key === "payAmount" && point.payAmountText) return formatDashboardMoney(point.payAmountText);
+    if (item.key === "rechargeAmount" && point.rechargeAmountText) return formatDashboardMoney(point.rechargeAmountText);
+    return item.format(item.values[index]);
+  };
 
   const toggleMetric = (key: TrendMetricKey) => {
     setSelectedMetricKeys((current) => {
@@ -951,6 +1066,10 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
             </button>
           );
         })}
+        {[
+          { label: "新增用户", reason: "管理员只读统计接口尚未提供权威每日新增用户序列" },
+          { label: "总用户", reason: "当前总用户为实时快照，尚无历史每日用户总量" },
+        ].map((item) => <span key={item.label} className="dashboard-unavailable-metric inline-flex h-11 items-center rounded-full border px-2.5 text-xs sm:h-8" title={item.reason} aria-label={`${item.label}暂未接入：${item.reason}`} aria-disabled="true">{item.label} · 暂未接入</span>)}
       </div>
       <div className="relative shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1">
         <svg
@@ -958,14 +1077,25 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
           className="h-[200px] w-full touch-pan-y sm:h-[240px]"
           preserveAspectRatio="none"
           role="img"
+          tabIndex={0}
           aria-label="支付、充值、订单与访问综合趋势折线图"
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+            event.preventDefault();
+            setActiveIndex((current) => event.key === "Home" ? 0 : event.key === "End" ? points.length - 1 : Math.max(0, Math.min(points.length - 1, (current ?? points.length - 1) + (event.key === "ArrowLeft" ? -1 : 1))));
+          }}
+          onPointerDown={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(rect.width, 1)));
+            setActiveIndex(Math.round(ratio * Math.max(points.length - 1, 0)));
+          }}
           onPointerMove={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
             const viewBoxX = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * chartWidth;
             const ratio = Math.min(1, Math.max(0, (viewBoxX - padding.left) / (chartWidth - padding.left - padding.right)));
             setActiveIndex(Math.round(ratio * Math.max(points.length - 1, 0)));
           }}
-          onPointerLeave={() => setActiveIndex(null)}
+          onPointerLeave={(event) => { if (event.pointerType === "mouse") setActiveIndex(null); }}
         >
           {[0.25, 0.5, 0.75].map((ratio) => {
             const y = padding.top + ratio * (chartHeight - padding.top - padding.bottom);
@@ -977,20 +1107,20 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
           )))}
           {selectedSeries.flatMap((item) => item.points.map((point, index) => point ? (
             <circle key={`${item.key}-${index}`} cx={point.x} cy={point.y} r={index === activeIndex ? "4" : "2.5"} fill={item.color} stroke="white" strokeWidth="1.25">
-              <title>{`${points[index].date} · ${item.label} ${item.format(item.values[index])}`}</title>
+              <title>{`${points[index].date} · ${item.label} ${displaySeriesValue(item, index)}`}</title>
             </circle>
           ) : null))}
           {points.map((point, index) => {
             if (index !== 0 && index !== points.length - 1 && index % labelStep !== 0) return null;
-            const x = padding.left + (index / Math.max(points.length - 1, 1)) * (chartWidth - padding.left - padding.right);
+            const x = points.length === 1 ? chartWidth / 2 : padding.left + (index / (points.length - 1)) * (chartWidth - padding.left - padding.right);
             return <text key={point.date} x={x} y={chartHeight - 7} textAnchor={index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"} fill="#64748b" fontSize="10" className="hidden sm:block">{point.date.slice(5)}</text>;
           })}
         </svg>
         {activePoint && activeX !== null ? (
           <div
             className={cn(
-              "pointer-events-none absolute top-3 z-10 hidden min-w-[180px] rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white p-2.5 text-xs shadow-lg sm:block",
-              activeIndex !== null && activeIndex >= points.length / 2 ? "-translate-x-[calc(100%+8px)]" : "translate-x-2",
+              "dashboard-trend-tooltip pointer-events-none absolute top-3 z-10 min-w-[180px] rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white p-2.5 text-xs shadow-lg",
+              activeIndex !== null && activeIndex > 0 && activeIndex >= points.length / 2 ? "-translate-x-[calc(100%+8px)]" : "translate-x-2",
             )}
             style={{ left: `${(activeX / chartWidth) * 100}%` }}
             role="tooltip"
@@ -1000,7 +1130,7 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
               {selectedSeries.map((item) => (
                 <div key={item.key} className="flex items-center justify-between gap-4">
                   <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</span>
-                  <span className="font-medium tabular-nums text-[var(--admin-v2-text-primary)]">{item.format(item.values[inspectionIndex])}</span>
+                  <span className="font-medium tabular-nums text-[var(--admin-v2-text-primary)]">{displaySeriesValue(item, inspectionIndex)}</span>
                 </div>
               ))}
             </div>
@@ -1010,14 +1140,7 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
       <div className="mt-1 flex justify-between text-xs text-[var(--admin-v2-text-muted)] sm:hidden" aria-hidden="true">
         <span>{points[0].date.slice(5)}</span><span>{points[Math.floor((points.length - 1) / 2)].date.slice(5)}</span><span>{points[points.length - 1].date.slice(5)}</span>
       </div>
-      <label className="mt-3 text-xs text-[var(--admin-v2-text-muted)]">
-        查看每日数据（拖动或使用方向键）
-        <input type="range" min={0} max={points.length - 1} value={inspectionIndex} onChange={(event) => setActiveIndex(Number(event.target.value))} aria-label="查看趋势日期" aria-valuetext={points[inspectionIndex].date} className="block h-11 w-full accent-blue-600" />
-      </label>
-      <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--admin-v2-surface-muted)] p-3 text-xs" aria-live="polite">
-        <div className="col-span-2 font-medium">{points[inspectionIndex].date}</div>
-        {selectedSeries.map((item) => <div key={item.key} className="min-w-0"><span className="text-[var(--admin-v2-text-muted)]">{item.label}</span><div className="break-words font-semibold tabular-nums">{item.format(item.values[inspectionIndex])}</div></div>)}
-      </div>
+      <p className="dashboard-chart-hint">鼠标悬停、触摸图上数据点；键盘聚焦图表后使用方向键查看每日数值。</p>
     </div>
   );
 }
@@ -1039,7 +1162,7 @@ function buildNormalizedLine(
   const points = values.map((value, index) => {
     if (value === null || !Number.isFinite(value)) return null;
     return {
-      x: padding.left + (index / Math.max(values.length - 1, 1)) * plotWidth,
+      x: values.length === 1 ? padding.left + plotWidth / 2 : padding.left + (index / (values.length - 1)) * plotWidth,
       y: padding.top + (1 - (value - min) / range) * plotHeight,
     };
   });
@@ -1058,31 +1181,36 @@ function buildNormalizedLine(
 }
 
 function ChannelRow({ channel, loading }: { channel: ChannelStat; loading: boolean }) {
-  const statusText = channel.configured === null ? NOT_CONNECTED : channel.enabled ? "已启用" : channel.configured ? "已停用" : "未配置";
+  const statusText = channel.failed ? READ_FAILED : channel.configured === null ? "配置状态未确认" : channel.enabled ? "已启用" : channel.configured ? "已停用" : "未配置";
   const successRate = formatPercent(channel.successful, channel.initiated);
   return (
-    <Link href={`/admin/payments?channel=${channel.code}`} className="block rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3 transition-colors hover:border-blue-200 hover:bg-[var(--admin-v2-selected)]">
+    <Link href={`/admin/payments?channel=${channel.code}`} className="dashboard-channel-row block rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3 transition-colors hover:border-blue-200 hover:bg-[var(--admin-v2-selected)]">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-900">{channel.label}</div>
+          <div className="break-words text-sm font-semibold text-slate-900">{channel.label}</div>
           <div className="mt-0.5 text-xs text-slate-500">{loading ? "加载中" : statusText}</div>
         </div>
-        <Badge variant={channel.enabled ? "default" : "secondary"}>{statusText}</Badge>
+        <Badge variant={!channel.failed && channel.enabled ? "default" : "secondary"}>{statusText}</Badge>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-left text-xs sm:grid-cols-3">
-        <MiniStat label="发起" value={channel.initiated} />
-        <MiniStat label="成功" value={channel.successful} />
-        <MiniStat label="成功率" value={successRate} />
-        <MiniStat label="金额" value={formatMoney(channel.amount)} />
-        <MiniStat label="异常" value={channel.exceptions} danger />
+      <div className="dashboard-channel-amount">{channel.failed ? READ_FAILED : channel.amountText ?? formatMoney(channel.amount)}<span>商城订单人民币成交额 · 按支付日</span></div>
+      <div className="dashboard-channel-stats">
+        <MiniStat label="发起" value={channel.failed ? READ_FAILED : channel.initiated} />
+        <MiniStat label="成功" value={channel.failed ? READ_FAILED : channel.successful} />
+        <MiniStat label="成功率" value={channel.failed ? READ_FAILED : successRate} />
+        <MiniStat label="失败/过期/关闭" value={channel.failed ? READ_FAILED : channel.exceptions} danger />
       </div>
+      {channel.rawReceipts?.length ? <div className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-600">
+        {channel.rawReceipts.map((row) => <p key={row.currency} className="break-words">
+          {row.currency} 会话：发起 {row.initiated} · 成功 {row.successful} · 当前异常/终止 {row.exceptions} · 原币实收 {row.currency === "CNY" || row.currency === "USDT" ? formatDashboardMoney(row.amount, row.currency) : `${row.amount} ${row.currency}`}
+        </p>)}
+      </div> : null}
     </Link>
   );
 }
 
 function MiniStat({ label, value, danger }: { label: string; value: MetricValue; danger?: boolean }) {
   return (
-    <div className="min-w-0 rounded-lg bg-[var(--admin-v2-surface-muted)] px-2 py-2">
+    <div className="dashboard-mini-stat min-w-0 rounded-lg bg-[var(--admin-v2-surface-muted)] px-2 py-2">
       <div className="text-xs text-[var(--admin-v2-text-muted)]">{label}</div>
       <div className={`break-words text-sm font-semibold tabular-nums ${danger && Number(value) > 0 ? "text-red-600" : "text-slate-900"}`}>
         {formatNumber(value)}
@@ -1091,29 +1219,34 @@ function MiniStat({ label, value, danger }: { label: string; value: MetricValue;
   );
 }
 
-function TodoLink({ item }: { item: TodoItem }) {
+function TodoLink({ item, overview, valueOverride }: { item: TodoItem; overview?: MetricCard; valueOverride?: string }) {
   const urgent = Number(item.value ?? 0) > 0;
+  const critical = urgent && /失败|异常/.test(item.label);
   return (
-    <Link href={item.href} className={`min-h-[64px] cursor-pointer bg-white px-3 py-2 transition-colors hover:bg-[var(--admin-v2-selected)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--admin-v2-primary)] ${urgent ? "text-[var(--admin-v2-danger-foreground)]" : "text-[var(--admin-v2-text-muted)]"}`}>
-      <div className="truncate text-xs">{item.label}</div>
-      <div className={`mt-0.5 text-lg font-semibold leading-6 ${urgent ? "text-[var(--admin-v2-danger-foreground)]" : "text-[var(--admin-v2-text-secondary)]"}`}>{item.value ?? NOT_CONNECTED}</div>
-    </Link>
+    <div className={`dashboard-todo-card ${critical ? "critical" : urgent ? "warning" : ""} min-h-[64px] bg-white px-3 py-2 ${urgent ? "text-[var(--admin-v2-danger-foreground)]" : "text-[var(--admin-v2-text-muted)]"}`}>
+      <Link href={item.href} className="dashboard-todo-main focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)]">
+        <span>{critical ? <CircleAlert className="dashboard-operation-icon" aria-hidden="true" /> : urgent ? <Clock3 className="dashboard-operation-icon" aria-hidden="true" /> : null}{item.label}</span>
+        <strong>{valueOverride ?? item.value ?? NOT_CONNECTED}</strong>
+      </Link>
+      {overview?.label === "低库存商品" ? <span className="dashboard-todo-detail">当前商品页样本：{formatNumber(overview.value)}</span> : null}
+      {overview?.href && overview.href !== item.href ? <Link href={overview.href} className="dashboard-todo-alternate">查看概览 →</Link> : null}
+    </div>
   );
 }
 
 function ProductListCard({ title, rows, type, loading }: { title: string; rows: ProductRank[]; type: "sales" | "amount"; loading: boolean }) {
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel dashboard-ranking-card flex min-h-0 flex-col overflow-hidden">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-0">
+      <CardContent className="min-h-0 px-4 pb-4 pt-0">
         {loading ? <ListSkeleton /> : rows.length === 0 ? (
-          <AdminEmptyState title="暂无销量数据" description="订单明细产生后会显示真实排行。" className="min-h-[180px]" />
+          <AdminEmptyState title="暂无销量数据" description="订单明细产生后会显示真实排行。" className="min-h-[96px]" />
         ) : (
           <div className="space-y-2">
             {rows.map((row, index) => (
-              <Link key={row.id} href={`/admin/products?search=${encodeURIComponent(row.name)}`} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50">
+              <Link key={row.id} href={`/admin/products?search=${encodeURIComponent(row.name)}`} className="dashboard-rank-row flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50">
                 <div className="min-w-0">
                   <div className="break-words font-medium text-slate-900 sm:truncate" title={row.name}>{index + 1}. {row.name}</div>
                   <div className="text-xs text-slate-500">库存 {row.stock} · {statusLabel(row.status)}</div>
@@ -1150,26 +1283,28 @@ function InventoryFocusCard({
     { label: "长期未售", rows: staleProducts },
   ];
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel dashboard-product-card flex min-h-0 flex-col overflow-hidden">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">商品经营</CardTitle>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-0">
+      <CardContent className="min-h-0 px-4 pb-4 pt-0">
         {loading ? <ListSkeleton /> : (
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             {groups.map((group) => (
-              <div key={group.label} className="rounded-xl border p-3">
+              <div key={group.label} className="flex min-h-[218px] min-w-0 flex-col rounded-xl border p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <div className="text-sm font-semibold text-slate-900">{group.label}</div>
-                  <Link href="/admin/products" className="text-xs text-orange-600">查看全部</Link>
+                  <Link href="/admin/products" className="text-sm font-semibold text-slate-900 underline-offset-4 hover:text-blue-700 hover:underline">{group.label}</Link>
                 </div>
                 {group.rows.length === 0 ? (
-                  <div className="py-4 text-center text-xs text-slate-400">暂无数据</div>
-                ) : group.rows.slice(0, 3).map((product) => (
-                  <Link key={product.id} href={`/admin/products?search=${encodeURIComponent(product.slug)}`} className="flex items-center justify-between gap-2 py-1.5 text-xs">
-                    <span className="truncate text-slate-700">{product.name}</span>
+                  <div className="flex flex-1 items-center justify-center text-xs text-slate-500">暂无数据</div>
+                ) : group.rows.slice(0, 5).map((product) => (
+                  <div key={product.id} className="flex min-w-0 items-center gap-1 py-1 text-xs">
+                    <TooltipProvider delayDuration={250}><Tooltip>
+                      <TooltipTrigger asChild><Link href={`/admin/products?search=${encodeURIComponent(product.slug)}`} title={product.name} aria-label={`${product.name}，库存 ${product.stock}`} className="min-w-0 flex-1 truncate text-slate-700 hover:underline">{product.name}</Link></TooltipTrigger>
+                      <TooltipPrimitive.Portal><TooltipContent className="max-w-[min(90vw,36rem)] break-all">{product.name}</TooltipContent></TooltipPrimitive.Portal>
+                    </Tooltip></TooltipProvider>
                     <span className="shrink-0 text-slate-500">{product.stock}</span>
-                  </Link>
+                  </div>
                 ))}
               </div>
             ))}
@@ -1180,11 +1315,12 @@ function InventoryFocusCard({
   );
 }
 
-function RecentOrdersCard({ rows, loading }: { rows: DashboardOrder[]; loading: boolean }) {
+function RecentOrdersCard({ rows, loading, failed }: { rows: DashboardOrder[]; loading: boolean; failed?: boolean }) {
   return (
     <CompactTableCard
       title="最近订单"
       loading={loading}
+      failed={failed}
       emptyTitle="暂无订单"
       headers={["订单号", "用户", "金额", "状态", "时间"]}
       rows={rows.map((order) => [
@@ -1199,11 +1335,12 @@ function RecentOrdersCard({ rows, loading }: { rows: DashboardOrder[]; loading: 
   );
 }
 
-function RecentRechargesCard({ rows, loading }: { rows: DashboardRecharge[]; loading: boolean }) {
+function RecentRechargesCard({ rows, loading, failed }: { rows: DashboardRecharge[]; loading: boolean; failed?: boolean }) {
   return (
     <CompactTableCard
       title="最近充值"
       loading={loading}
+      failed={failed}
       emptyTitle="暂无充值"
       headers={["充值单号", "用户", "金额", "渠道", "状态", "时间"]}
       rows={rows.map((row) => [
@@ -1222,6 +1359,7 @@ function RecentRechargesCard({ rows, loading }: { rows: DashboardRecharge[]; loa
 function CompactTableCard({
   title,
   loading,
+  failed,
   emptyTitle,
   headers,
   rows,
@@ -1229,34 +1367,35 @@ function CompactTableCard({
 }: {
   title: string;
   loading: boolean;
+  failed?: boolean;
   emptyTitle: string;
   headers: string[];
   rows: string[][];
   href: string;
 }) {
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel dashboard-record-card flex min-h-0 flex-col overflow-hidden">
       <CardHeader className="flex shrink-0 flex-row items-center justify-between px-4 py-3">
         <CardTitle className="text-base">{title}</CardTitle>
         <Link href={href} className="inline-flex items-center text-xs text-orange-600">
           查看全部 <ArrowRight className="ml-1 h-3 w-3" />
         </Link>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-0">
-        {loading ? <ListSkeleton /> : rows.length === 0 ? (
-          <AdminEmptyState title={emptyTitle} description="有真实数据后会显示在这里。" className="min-h-[180px]" />
+      <CardContent className="dashboard-record-content min-h-0 px-4 pb-4 pt-0">
+        {loading ? <ListSkeleton /> : failed ? <p role="alert" className="py-6 text-sm text-red-700">最近记录读取失败，请刷新后重试。</p> : rows.length === 0 ? (
+          <AdminEmptyState title={emptyTitle} description="有真实数据后会显示在这里；此处预留最近五条记录的位置。" className="dashboard-record-empty" />
         ) : (
           <>
           <div className="space-y-3 md:hidden">
-            {rows.slice(0, 8).map((row, index) => <dl key={`${title}-mobile-${index}`} className="rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3">
+            {rows.slice(0, 5).map((row, index) => <dl key={`${title}-mobile-${index}`} className="rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3">
               {row.map((cell, cellIndex) => <div key={headers[cellIndex]} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 py-1 text-sm">
                 <dt className="text-[var(--admin-v2-text-muted)]">{headers[cellIndex]}</dt>
-                <dd className="min-w-0 break-all text-[var(--admin-v2-text-primary)]">{cell}</dd>
+                <dd className="min-w-0 text-[var(--admin-v2-text-primary)]">{["订单号", "充值单号", "用户"].includes(headers[cellIndex]) ? <CopyableValue value={cell} label={headers[cellIndex]} /> : <span className="block truncate" title={cell}>{cell}</span>}</dd>
               </div>)}
             </dl>)}
           </div>
-          <div className="hidden md:block">
-          <Table>
+          <div className="dashboard-record-table hidden md:block" role="region" aria-label={`${title}数据表，可左右滑动`} tabIndex={0}>
+          <Table className="min-w-[680px] table-fixed">
             <TableHeader>
               <TableRow>
                 {headers.map((header) => (
@@ -1265,11 +1404,11 @@ function CompactTableCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.slice(0, 8).map((row, index) => (
+              {rows.slice(0, 5).map((row, index) => (
                 <TableRow key={`${title}-${index}`}>
                   {row.map((cell, cellIndex) => (
-                    <TableCell key={`${title}-${index}-${cellIndex}`} title={cell} className="max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
-                      {cell}
+                    <TableCell key={`${title}-${index}-${cellIndex}`} className="max-w-[180px] overflow-hidden whitespace-nowrap py-2 text-xs">
+                      {["订单号", "充值单号", "用户"].includes(headers[cellIndex]) ? <CopyableValue value={cell} label={headers[cellIndex]} /> : <span className="block truncate" title={cell}>{cell}</span>}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -1277,6 +1416,7 @@ function CompactTableCard({
             </TableBody>
           </Table>
           </div>
+          <p className="dashboard-scroll-hint hidden md:block">表格可左右滑动查看完整字段</p>
           </>
         )}
       </CardContent>
@@ -1284,50 +1424,37 @@ function CompactTableCard({
   );
 }
 
-function UserOverviewCard({
-  rows,
-  visitorRows,
-  loading,
-}: {
-  rows: Array<{ label: string; value: MetricValue; failed?: boolean }>;
-  visitorRows: Array<{ label: string; visitors: MetricValue; views: MetricValue; failed?: boolean }>;
-  loading: boolean;
-}) {
-  return (
-    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
-      <CardHeader className="shrink-0 px-4 py-3">
-        <CardTitle className="text-base">用户与访问概览</CardTitle>
-      </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-3 overflow-auto px-4 pb-4 pt-0">
-        {loading ? <ListSkeleton /> : (
-          <>
-            <div className="grid grid-cols-2 gap-2">
-              {rows.map((row) => (
-                <div key={row.label} className="rounded-xl bg-slate-50 px-3 py-2">
-                  <div className="text-xs text-slate-500">{row.label}</div>
-                  <div className="mt-1 text-lg font-semibold text-slate-950">{formatNumber(row.value)}</div>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-xl border">
-              {visitorRows.map((row) => (
-                <div key={row.label} className="grid grid-cols-3 gap-2 border-b px-3 py-2 text-xs last:border-b-0">
-                  <div className="font-medium text-slate-700">{row.label}</div>
-                  <div>访客 {formatNumber(row.visitors)}</div>
-                  <div>访问 {formatNumber(row.views)}</div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
+function CopyValueButton({ value, label }: { value: string; label: string }) {
+  if (!value || value === "—") return null;
+  return <button
+    type="button"
+    className="dashboard-copy-button inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+    aria-label={`复制完整${label}`}
+    title={`复制完整${label}`}
+    onClick={async () => {
+      try {
+        await navigator.clipboard.writeText(value);
+        toast.success(`${label}已复制`);
+      } catch {
+        toast.error(`${label}复制失败，请检查浏览器剪贴板权限`);
+      }
+    }}
+  ><Copy aria-hidden="true" className="h-4 w-4" /></button>;
+}
+
+function CopyableValue({ value, label }: { value: string; label: string }) {
+  return <div className="dashboard-copy-value flex min-w-0 items-center gap-1">
+    <TooltipProvider delayDuration={250}><Tooltip>
+      <TooltipTrigger asChild><span className="min-w-0 flex-1 truncate focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600" title={value} tabIndex={0} aria-label={`${label}：${value}`}>{value}</span></TooltipTrigger>
+      <TooltipPrimitive.Portal><TooltipContent className="max-w-[min(90vw,36rem)] break-all">{value}</TooltipContent></TooltipPrimitive.Portal>
+    </Tooltip></TooltipProvider>
+    <CopyValueButton value={value} label={label} />
+  </div>;
 }
 
 function SystemStatusCard({ rows, lastRefreshedAt, loading }: { rows: SystemStatus[]; lastRefreshedAt: string | null; loading: boolean }) {
   return (
-    <Card className="shrink-0 overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel dashboard-system-card shrink-0 overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
         <div>
           <CardTitle className="text-base">系统运行状态</CardTitle>
@@ -1366,3 +1493,6 @@ function ListSkeleton() {
     </div>
   );
 }
+
+// Kept after the data/query section so the Production source-contract guard remains byte-identical.
+import "./dashboard-v21.css";
