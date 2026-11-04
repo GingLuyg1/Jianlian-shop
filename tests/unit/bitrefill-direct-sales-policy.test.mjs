@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateBitrefillTarget15Price as price, evaluateBitrefillDirectSale as sale } from "../../lib/providers/bitrefill/direct-sales-policy.mjs";
+import { calculateBitrefillTarget15Price as price, calculateBitrefillDisplayMarkup10Preview as preview10, evaluateBitrefillDirectSale as sale } from "../../lib/providers/bitrefill/direct-sales-policy.mjs";
 const now = Date.parse("2026-11-01T01:00:00Z"), checkedAt = new Date(now).toISOString(), expiresAt = new Date(now + 60000).toISOString();
 const fixture = {
   supplier: "bitrefill", productId: "fixture-pin", packageId: "fixture-pin<&>10", salePriceCny: "100.00",
@@ -69,5 +69,40 @@ test("missing CNY-side fees are unknown, never silently verified as zero", () =>
   for (const change of [{ additionalCnyCostsVerified: false }, { additionalCnyCost: undefined }]) {
     const result = sale({ ...fixture, ...change }, now);
     assert.ok(result.reasons.includes("CNY_FEES_UNVERIFIED"));assert.equal(result.actualMargin, null);
+  }
+});
+
+test("user-selected display USD price plus 10% converts exactly and rounds final CNY up to cents", () => {
+  const cases = [
+    ["13.44", "7.16", "105.86"],
+    ["20.15", "7.16", "158.71"],
+    ["26.87", "7.16", "211.63"],
+    ["13.44", "1", "14.79"],
+    ["20.15", "1", "22.17"],
+    ["26.87", "1", "29.56"],
+  ];
+  for (const [displayPriceUsd, usdCnyRate, expected] of cases) {
+    const result = preview10({ displayPriceUsd, usdCnyRate });
+    assert.equal(result.salePriceCny, expected);
+    assert.equal(result.markupPercent, "10");
+    assert.equal(result.allInCostVerified, false);
+    assert.equal(result.netProfitVerified, false);
+    assert.equal(result.canActivateSales, false);
+    assert.ok(Object.isFrozen(result));
+  }
+});
+test("display markup preview cannot forge a trusted cost or unlock sales", () => {
+  const displayed = preview10({ displayPriceUsd: "13.44", usdCnyRate: "7.16" });
+  const result = sale({ ...fixture, salePriceCny: displayed.salePriceCny,
+    quote: { ...fixture.quote, source: "display_quote", allInUsd: "13.44" } }, now);
+  assert.equal(result.canAcceptPayment, false);
+  assert.equal(result.actualMargin, null);
+  assert.ok(result.reasons.includes("ALL_IN_COST_AND_ENFORCEABLE_CAP"));
+  assert.ok(result.reasons.includes("PRODUCTION_PURCHASE_RELEASE_DISABLED"));
+});
+test("display markup rejects zero, negative, exponent, float, and missing FX", () => {
+  for (const value of ["0", "-1", "1e2", 10, "", null]) {
+    assert.throws(() => preview10({ displayPriceUsd: value, usdCnyRate: "7.16" }));
+    assert.throws(() => preview10({ displayPriceUsd: "13.44", usdCnyRate: value }));
   }
 });
