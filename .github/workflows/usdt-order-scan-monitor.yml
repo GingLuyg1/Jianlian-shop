@@ -1,0 +1,33 @@
+name: USDT order-driven monitor targeted
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ops/*order-scan*'
+      - 'tests/unit/recharge-order-scan-*.test.mjs'
+      - '.github/workflows/usdt-order-scan-monitor.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/*order-scan*'
+      - 'tests/unit/recharge-order-scan-*.test.mjs'
+      - '.github/workflows/usdt-order-scan-monitor.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fake scanner, read-only snapshot, fake Resend and real POSIX state permissions
+        run: >-
+          node --test
+          tests/unit/recharge-order-scan-alert-state.test.mjs
+          tests/unit/recharge-order-scan-monitor.test.mjs
+          scripts/ops/verify-order-scan-monitor-posix.mjs
