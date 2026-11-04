@@ -53,7 +53,7 @@ function route(authorize) {
   const calls=[];const user={id:'authenticated-user',email:'synthetic@example.invalid'};
   const client={auth:{getUser:async()=>({data:{user},error:null})},from:()=>({select:()=>({eq(){return this;},then:yes=>Promise.resolve({count:1,error:null}).then(yes)})}),
     rpc:async(name,args)=>{calls.push({name,args});return {data:null,error:{code:'PGRST202',message:'synthetic missing function'}};}};
-  const mocks={NextResponse:{json:(body,options={})=>({body,status:options.status??200})},authorizeBitrefillPinOrder:authorize,ensureBitrefillProductionRuntime:()=>{},
+  const mocks={NextResponse:{json:(body,options={})=>({body,status:options.status??200})},authorizeBitrefillStorefrontOrder:authorize,
     hasSupabaseServerConfig:()=>true,getSupabaseServerClient:()=>client,checkRequestSize:()=>null,checkRateLimit:()=>({allowed:true}),getUserRateLimitKey:()=>'',
     assertUserBusinessAllowed:async()=>{},normalizePaymentMethod:x=>x,isLiuhaoyiPaymentMethod:()=>false,checkOrderProductAvailability:async()=>({available:true}),
     verifyCheckoutAgreements:async()=>[],evaluateOrderRisk:async()=>({}),shouldBlockRisk:()=>false,getOrderErrorMessage:()=> 'synthetic error'};

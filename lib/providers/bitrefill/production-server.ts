@@ -3,9 +3,19 @@ import { getSupabaseServiceRoleClient } from '@/lib/supabase/service-role';
 import { createBitrefillProductionRuntime } from './production-composition.mjs';
 import { REAL_BITREFILL_PURCHASE_ENABLED } from './prelaunch-policy.mjs';
 import { GIFFGAFF_PIN_SKUS } from './pin-order-entry.mjs';
-import { installBitrefillPinRuntime } from './pin-runtime.mjs';
+import { authorizeBitrefillPinOrder, installBitrefillPinRuntime } from './pin-runtime.mjs';
+import { authorizePinLocalOrPurchase } from './pin-local-entry.mjs';
 
 let installed = false;
+export async function authorizeBitrefillStorefrontOrder(input: {
+  userId: string; productId: string; skuId: string | null; quantity: number; clientRequestId: string;
+}) {
+  if (!GIFFGAFF_PIN_SKUS.includes(input.skuId ?? '')) return { applicable: false };
+  return authorizePinLocalOrPurchase({ input, service: getSupabaseServiceRoleClient(), authorizePurchase: async () => {
+    ensureBitrefillProductionRuntime(input.skuId);
+    return authorizeBitrefillPinOrder(input);
+  } });
+}
 // Both call sites are server-only, restricted to frozen Bitrefill/PIN scope.
 // The literal release gate remains false. No env-only opt-in can activate it.
 export function ensureBitrefillProductionRuntime(skuId?: string | null) {
