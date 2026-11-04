@@ -32,3 +32,13 @@ The REST client can be constructed with `purchaseEnabled:false`; the compile-tim
 - Return: `KNOWN_INVOICE_GET`, `CHILD_GET`, `FROZEN_IDENTITY_MATCH`, `SECRET_REDACTION`, `USD_DEBIT_AUTHORITATIVE`, `FEE_INCLUSION_VERIFIED`, `SUPPLIER_MAX_DEBIT_ENFORCEABLE`, `PAYMENT_EXECUTED=no`, `SUPPLIER_PURCHASE_EXECUTED=no`, `PRODUCTION_CHANGED=no`, `EXACT_BLOCKER`, `NEXT_ACTION=STOP`.
 
 This preparation deliberately does **not** reinterpret a fixture as Production evidence.
+
+## Authenticated Personal MCP status fallback (read-only; no additional purchase)
+
+The existing provider Personal API key also supports the documented `get-invoice-by-id` MCP tool. `createBitrefillMcpReadonlyClient({credentials,fetchImpl})` exposes `readKnownInvoiceStatus(invoiceId)` for this one **already-owned** invoice UUID. This is an MCP `tools/call` over HTTP POST, **not** the spending `buy-products` tool; the allowlist rejects all other tool names or extra arguments. It returns only a strictly validated `invoice_id` match and documented `invoice_status`. The underlying response may contain actual PINs, links or access tokens, but the output deliberately drops them all; never print the raw response.
+
+The MCP status read is an **additional** fallback when existing `/v2/invoices/:id` and `/v2/orders/:id` cannot be reconciled through the exact Child verifier. A complete Invoice alone does **not** establish the frozen Child identity, a correct PIN, the actual USD debit, fee inclusion or upstream max debit. Do not convert `invoiceComplete=true` into `fulfilled` or `canAcceptPayment=true`.
+
+For the known November 4 purchase, the Bitrefill receipt and already-open browser Invoice tab share the same UUID; the browser shows an order completed and the USD wallet balance at 0.75. This is corroborating **checkout-page** evidence, not authenticated REST/MCP API acceptance. Read the protected original receipt for the ID (do not commit it or paste checkout links/access tokens).
+
+Use the existing server credential source without echoing secrets. Call the known-ID read exactly once. If the returned TOON shape differs, stop and record only sanitized field names/errors; never log redemption content or blindly broaden the parser. A failed GET or missing status is `NOT_VERIFIED`, not permission to submit another purchase.
