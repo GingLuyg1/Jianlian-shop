@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
 import { createOrderDrivenMonitor, createOrderScanSnapshotReader } from '../../scripts/ops/recharge-order-scan-monitor.mjs';
 import { initialMonitorState } from '../../scripts/ops/recharge-order-scan-alert-state.mjs';
 import { createMonitorResendSender } from '../../scripts/ops/recharge-order-scan-monitor-production.mjs';
@@ -134,4 +135,16 @@ test('patched runner keeps its one POST and independent review alerts, suppresse
   vm.runInNewContext(patched, context); await context.main();
   assert.equal(f.calls.length, 1); assert.equal(f.mail.length, 0);
   assert.deepEqual(legacy, ['existing_review_category']);
+});
+
+// Regression: Production Node 20 may not expose a native WebSocket. The
+// standalone monitor must follow the application's installed 'ws' transport.
+test('Production Supabase monitor explicitly supplies ws Realtime transport on Node 20', () => {
+  const runtime = readFileSync(new globalThis.URL('../../scripts/ops/recharge-order-scan-monitor-production.mjs', import.meta.url), 'utf8');
+  const app = readFileSync(new globalThis.URL('../../lib/supabase/service-role.ts', import.meta.url), 'utf8');
+  const pkg = JSON.parse(readFileSync(new globalThis.URL('../../package.json', import.meta.url), 'utf8'));
+  assert.ok(pkg.dependencies.ws, 'ws must be a production dependency');
+  assert.match(app, /realtime:\s*\{\s*transport:\s*ws\s+as\s+any/);
+  assert.match(runtime, /const\s+wsTransport\s*=\s*require\(['"]ws['"]\)/);
+  assert.match(runtime, /const service = createClient\(url\.origin, key, \{[\s\S]*?realtime:\s*\{\s*transport:\s*wsTransport\s*\}/);
 });

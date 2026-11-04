@@ -41,8 +41,12 @@ export function loadMonitorRuntime() {
   const key = environment.SUPABASE_SECRET_KEY || environment.SUPABASE_SERVICE_ROLE_KEY;
   need(typeof key === 'string' && key.trim());
   const { createClient } = require('@supabase/supabase-js');
+  // Node 20 has no dependable native WebSocket for supabase-js Realtime.
+  // Mirror the server application's explicit ws transport, without connecting.
+  const wsTransport = require('ws');
   const service = createClient(url.origin, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: wsTransport },
     global: { fetch: (input, options) => fetch(input, { ...options, redirect: 'error', signal: AbortSignal.timeout(10_000) }) },
   });
   // Preserve the existing systemd email configuration. Fallback only for the
