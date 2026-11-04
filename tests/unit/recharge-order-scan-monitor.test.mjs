@@ -140,9 +140,9 @@ test('patched runner keeps its one POST and independent review alerts, suppresse
 // Regression: Production Node 20 may not expose a native WebSocket. The
 // standalone monitor must follow the application's installed 'ws' transport.
 test('Production Supabase monitor explicitly supplies ws Realtime transport on Node 20', () => {
-  const runtime = readFileSync(new URL('../../scripts/ops/recharge-order-scan-monitor-production.mjs', import.meta.url), 'utf8');
-  const app = readFileSync(new URL('../../lib/supabase/service-role.ts', import.meta.url), 'utf8');
-  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const runtime = readFileSync(new globalThis.URL('../../scripts/ops/recharge-order-scan-monitor-production.mjs', import.meta.url), 'utf8');
+  const app = readFileSync(new globalThis.URL('../../lib/supabase/service-role.ts', import.meta.url), 'utf8');
+  const pkg = JSON.parse(readFileSync(new globalThis.URL('../../package.json', import.meta.url), 'utf8'));
   assert.ok(pkg.dependencies.ws, 'ws must be a production dependency');
   assert.match(app, /realtime:\s*\{\s*transport:\s*ws\s+as\s+any/);
   assert.match(runtime, /const\s+wsTransport\s*=\s*require\(['"]ws['"]\)/);
