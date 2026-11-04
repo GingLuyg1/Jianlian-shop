@@ -1,0 +1,42 @@
+name: Bitrefill PIN local inventory first
+on:
+  pull_request:
+    paths:
+      - 'lib/providers/bitrefill/pin-local-entry.mjs'
+      - 'lib/providers/bitrefill/production-server.ts'
+      - 'app/api/orders/route.ts'
+      - 'supabase/migrations/20261104084434_bitrefill_pin_local_inventory_first.sql'
+      - 'tests/support/bitrefill-pin-local-stock-pg.mjs'
+      - 'tests/unit/bitrefill-pin-local-entry.test.mjs'
+      - '.github/workflows/bitrefill-pin-local-inventory.yml'
+permissions:
+  contents: read
+jobs:
+  local-stock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: synthetic-local-stock-only
+          PGPASSWORD: synthetic-local-stock-only
+          POSTGRES_DB: pin_isolated_anchor
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node --test tests/unit/bitrefill-pin-local-entry.test.mjs tests/unit/bitrefill-pin-order-entry.test.mjs
+      - name: Only new local-stock SQL cases, no production data or credentials
+        env:
+          PIN_TEST_CONTAINER: ${{ job.services.postgres.id }}
+          PIN_TEST_EVIDENCE: ${{ runner.temp }}/pin-local-stock-evidence
+        run: node scripts/verify-bitrefill-pin-order-entry-pg.mjs --isolated-ci-container --local-stock-only

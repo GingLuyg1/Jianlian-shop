@@ -137,6 +137,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   function activationCandidates() {
     const diagnosticsBySku = new Map((diagnostics?.supplier_rows ?? []).map((row) => [row.sku_id, row]));
     return rowsRef.current.flatMap((row) => {
+      if (!row.sku && isSkuDraftEmpty(row.draft)) return [];
       if (row.draft.status !== "active" || row.sku?.status === "active") return [];
       const effectiveDeliveryType = row.draft.delivery_type || product?.delivery_type || defaults.delivery_type;
       if (effectiveDeliveryType !== "automatic") return [];
