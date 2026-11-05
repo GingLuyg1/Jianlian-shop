@@ -141,9 +141,9 @@ export default function AccountOverviewPage() {
           <div className="flex min-w-0 items-center gap-3">
             <span className={`${glass.icon} ${styles.sectionIcon}`}><WalletCards className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" /></span>
             <div>
-            <CardTitle className="text-xl">账户中心</CardTitle>
+            <CardTitle className="text-lg">账号资料</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              查看账户资产、登录信息与安全资料。
+              账户余额、基础资料与可用服务。
             </p>
             </div>
           </div>

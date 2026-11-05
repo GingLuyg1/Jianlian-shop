@@ -60,7 +60,8 @@ export default function SidebarSlidingList({ activeKey, layoutKey, children }: {
     const update = () => {
       const links = Array.from(list.querySelectorAll<HTMLElement>("[data-sidebar-link]"));
       const href = readyHref() ?? indicator.dataset.currentHref ?? lastSnapshot?.href;
-      const active = links.find((link) => link.dataset.sidebarLink === href);
+      const active = links.find((link) => link.dataset.sidebarLink === href) ??
+        (href?.startsWith("/account/") && !href.startsWith("/account/orders") ? links.find((link) => link.dataset.sidebarLink === "/account") : undefined);
       if (active) place(active); else indicator.dataset.visible = "false";
     };
     update();

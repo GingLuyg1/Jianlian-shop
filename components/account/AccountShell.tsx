@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertCircle, Code2, FileLock2, LogOut, Shield, UserCircle, WalletCards } from "lucide-react";
+import { AlertCircle, CheckCircle2, Code2, Copy, FileLock2, LogOut, Shield, UserCircle, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -16,11 +16,11 @@ import center from "@/components/account/AccountCenter.module.css";
 import { isAccountDataPage } from "@/lib/motion/account-page-ready";
 
 const navItems = [
-  { label: "账户概览", href: "/account", icon: WalletCards },
-  { label: "个人资料", href: "/account/profile", icon: UserCircle },
-  { label: "账号安全", href: "/account/security", icon: Shield },
-  { label: "隐私设置", href: "/account/privacy", icon: FileLock2 },
-  { label: "API 接口", href: "/account/api", icon: Code2 },
+  { label: "账号资料", description: "账户余额与基础信息", href: "/account", icon: WalletCards },
+  { label: "个人资料", description: "联系信息与常用地址", href: "/account/profile", icon: UserCircle },
+  { label: "账号安全", description: "登录密码与安全验证", href: "/account/security", icon: Shield },
+  { label: "隐私设置", description: "个人数据与隐私请求", href: "/account/privacy", icon: FileLock2 },
+  { label: "API 接口", description: "接口服务 · 暂未开放", href: "/account/api", icon: Code2 },
 ];
 
 export default function AccountShell({ children }: { children: ReactNode }) {
@@ -227,12 +227,9 @@ export default function AccountShell({ children }: { children: ReactNode }) {
       <div className={`mx-auto flex w-full max-w-[1640px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
         {emailNotice}
 
-        <div className={`${center.workspace} grid min-w-0 flex-1 grid-cols-1 gap-5 overflow-visible md:min-h-0 md:grid-cols-[212px_minmax(0,1fr)] md:overflow-hidden`}>
-          <aside className={`${glass.surface} ${center.panel} ${center.nav} hidden h-full min-h-0 flex-col overflow-hidden p-3 md:flex`}>
-            <div className="mb-3 flex items-center gap-2.5 border-b border-white/80 px-2 pb-4 pt-1">
-              <span className={`${glass.icon} h-9 w-9`}><UserCircle className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" /></span>
-              <div><p className="text-sm font-semibold text-slate-800">我的账户</p><p className="mt-0.5 text-xs text-slate-500">资料与服务</p></div>
-            </div>
+        <div className={`${center.workspace} grid min-w-0 flex-1 grid-cols-1 gap-5 overflow-visible md:min-h-0 md:grid-cols-[248px_minmax(0,1fr)] md:overflow-hidden`}>
+          <aside className={`${glass.surface} ${center.panel} ${center.nav} sidebar-scroll hidden h-full min-h-0 flex-col overflow-y-auto p-3 md:flex`}>
+            <AccountIdentity email={email} verified={emailVerified} />
             <AccountNav pathname={pathname || "/account"} />
             <button
               type="button"
@@ -245,7 +242,9 @@ export default function AccountShell({ children }: { children: ReactNode }) {
           </aside>
 
           <div className="min-w-0 md:hidden">
-            <div className={`${glass.surface} ${center.panel} flex gap-2 overflow-x-auto p-2`}>
+            <div className={`${glass.surface} ${center.panel} overflow-hidden p-2`}>
+              <AccountIdentity email={email} verified={emailVerified} compact />
+              <div className="flex gap-2 overflow-x-auto">
               <AccountNav pathname={pathname || "/account"} compact />
               <button
                 type="button"
@@ -255,6 +254,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
                 <LogOut className="h-4 w-4" />
                 退出登录
               </button>
+              </div>
             </div>
           </div>
 
@@ -263,6 +263,20 @@ export default function AccountShell({ children }: { children: ReactNode }) {
       </div>
     </PublicLayout>
   );
+}
+
+function AccountIdentity({ email, verified, compact = false }: { email: string; verified: boolean; compact?: boolean }) {
+  const name = email.split("@")[0] || "我的账号";
+  return <div className={cn(center.identity, compact && center.identityCompact)}>
+    <span className={center.identityAvatar} aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+    <div className="min-w-0 flex-1">
+      <p className="text-xs font-medium text-slate-500">个人中心</p>
+      <p className="mt-1 truncate text-base font-semibold text-slate-900" title={name}>{name}</p>
+      <div className="mt-1 flex min-w-0 items-center gap-1"><span className="truncate text-xs text-slate-500" title={email}>{email}</span><button type="button" disabled={!email} aria-label="复制登录邮箱" className="shrink-0 rounded-md p-1 text-orange-500 hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={async () => { try { await navigator.clipboard.writeText(email); toast.success("邮箱已复制"); } catch { toast.error("复制失败，请手动复制邮箱"); } }}><Copy className="h-3 w-3" /></button></div>
+      <span className="mt-2 inline-flex items-center gap-1 text-[11px] text-slate-500"><CheckCircle2 className={cn("h-3 w-3", verified ? "text-emerald-500" : "text-orange-500")} />{verified ? "邮箱已验证" : "邮箱待验证"}</span>
+    </div>
+    {!compact ? <div className={center.membership}><span>会员权益</span><span className="text-slate-400">暂未开放</span></div> : null}
+  </div>;
 }
 
 function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string }) {
@@ -316,7 +330,7 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
               pendingRef.current = item.href;
             }}
             className={cn("flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", center.navLink, compact && "shrink-0", active ? "font-medium text-primary" : "text-slate-500")}
-          ><Icon className="h-4 w-4" />{item.label}</Link>
+          ><span className={center.navIcon}><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block">{item.label}</span>{!compact ? <span className="mt-0.5 block text-[11px] font-normal text-slate-500">{item.description}</span> : null}</span></Link>
         );
       })}
     </div>

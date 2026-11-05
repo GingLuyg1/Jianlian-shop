@@ -43,7 +43,10 @@
 }
 .table thead { background: #faf5ef; color: #8b7868; }
 .table tbody > tr { border-color: #f1e8df; }
-.table tbody > tr:hover { background: rgb(255 245 232 / 65%); }
+.table:not([data-empty="true"]) tbody > tr:hover { background: rgb(255 245 232 / 65%); }
+.table[data-empty="true"] table { height:100%; }
+.table[data-empty="true"] tbody > tr { background:transparent; }
+.table[data-empty="true"] td { vertical-align:middle; }
 .footer { border-color: #eee4da; background: rgb(255 251 246 / 50%); }
 .button { border-color: #ead8c6; background: rgb(255 255 255 / 80%); box-shadow: inset 0 1px 0 #fff; }
 .login { min-height: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; }

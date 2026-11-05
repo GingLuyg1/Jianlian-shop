@@ -21,6 +21,7 @@ import {
   BookOpen,
   HelpCircle,
   Headphones,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import selectionMotion from "@/components/ui/SelectionMotion.module.css";
@@ -46,6 +47,7 @@ const menuItems = [
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
   { label: "推广赚钱", href: "/promotion", icon: Share2 },
   { label: "我的订单", href: "/account/orders", icon: ClipboardList },
+  { label: "个人中心", href: "/account", icon: UserCircle },
 ];
 
 const helpItems = [
@@ -78,6 +80,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
   const isActive = (href: string) => {
     if (pendingCategoryHref) return pendingCategoryHref === href;
     if (href === "/") return pathname === "/";
+    if (href === "/account") return pathname === "/account" || (pathname.startsWith("/account/") && !pathname.startsWith("/account/orders"));
     return pathname.startsWith(href);
   };
 

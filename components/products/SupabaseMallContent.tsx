@@ -855,7 +855,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
             {currencySymbol}{Number(product.originalPrice).toFixed(2)}
           </div>
         ) : null}
-        <div className="shrink-0 text-lg font-bold text-blue-600">
+        <div className="shrink-0 text-lg font-bold text-orange-600">
           {product.stockStatus === "out-of-stock" ? "已售罄" : priceText}
         </div>
       </div>
@@ -918,7 +918,7 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, selec
             )}
           >
             <span>库存</span>
-            <span>{stock}</span>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">{stock}</span>
           </div>
         ) : null}
         {product.originalPrice ? (
@@ -926,7 +926,7 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, selec
             {currencySymbol}{Number(product.originalPrice).toFixed(2)}
           </div>
         ) : null}
-        <div className="min-w-[92px] shrink-0 text-center text-lg font-bold text-blue-600">
+        <div className="min-w-[92px] shrink-0 text-center text-lg font-bold text-orange-600">
           {hasStock ? priceText : "已售罄"}
         </div>
       </div>

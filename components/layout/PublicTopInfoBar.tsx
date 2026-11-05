@@ -82,7 +82,7 @@ function getDisplayName(user: User | null) {
 }
 
 const accountMenuItems = [
-  { label: "账户概览", href: "/account", icon: WalletCards },
+  { label: "个人中心", href: "/account", icon: WalletCards },
   { label: "个人资料", href: "/account/profile", icon: UserCircle },
   { label: "账号安全", href: "/account/security", icon: Shield },
 ];

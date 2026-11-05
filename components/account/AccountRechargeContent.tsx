@@ -44,6 +44,7 @@ import RecordLoadingPlaceholder from "@/components/account/RecordLoadingPlacehol
 import { accountRecordPreload, AccountRecordsError } from "@/lib/account/record-preload";
 import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
 import channelGridStyles from "./RechargeChannelGrid.module.css";
+import { usePaymentCardTilt } from "@/hooks/use-payment-card-tilt";
 
 type RechargeListError = {
   message: string;
@@ -66,6 +67,7 @@ const CHANNEL_PRESENTATION = [
 ] as const;
 
 export default function AccountRechargeContent() {
+  const channelTilt = usePaymentCardTilt();
   const router = useRouter();
   const recordIdentity = useAccountRecordIdentity();
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>(() => peekPublicRechargeChannels() ?? []);
@@ -301,7 +303,7 @@ export default function AccountRechargeContent() {
               <CardContent className="p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2"><Info className="h-4 w-4 text-primary" /><h2 className="text-[18px] font-semibold leading-6 whitespace-nowrap">充值须知</h2></div>
-                  <button type="button" onClick={openPublicSupport} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"><Headphones className="h-3.5 w-3.5" /> 在线客服 <ArrowUpRight className="h-3 w-3" /></button>
+                  <button type="button" onClick={openPublicSupport} className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-orange-200/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-primary shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><Headphones className="h-3.5 w-3.5" /> 在线客服 <ArrowUpRight className="h-3 w-3" /></button>
                 </div>
                 <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
                   <Notice icon={FileText} title="付款说明"><span className="block">收款页无法显示，请关闭代理后重试。</span><span className="block">二维码超限，请关闭支付页重新获取。</span></Notice>
@@ -343,8 +345,9 @@ export default function AccountRechargeContent() {
                     ? `手续费 ${Number((channel.feeRate * 100).toFixed(2))}%` : item.description;
 
                   return (
+                    <div key={item.code} data-payment-tilt-frame className="h-[84px] min-w-0">
                     <button
-                      key={item.code}
+                      {...channelTilt}
                       data-payment-channel={item.code}
                       aria-pressed={selected}
                       type="button"
@@ -352,7 +355,7 @@ export default function AccountRechargeContent() {
                       onClick={() => { if (channel) selectChannel(channel.code); }}
                       className={cn(
                         channelGridStyles.channelCard,
-                        "relative flex h-[84px] min-w-0 items-center rounded-xl border border-slate-200/80 bg-white pl-[13px] pr-2.5 text-left transition-colors hover:border-primary/35 disabled:cursor-not-allowed disabled:bg-slate-50/70 disabled:opacity-60",
+                        "relative flex h-[84px] w-full min-w-0 items-center rounded-xl border border-slate-200/80 bg-white pl-[13px] pr-2.5 text-left hover:border-primary/35 disabled:cursor-not-allowed disabled:bg-slate-50/70 disabled:opacity-60",
                         selected &&
                           "border-primary bg-orange-50 ring-1 ring-primary/15"
                       )}
@@ -374,6 +377,7 @@ export default function AccountRechargeContent() {
                         </span>
                       </div>
                     </button>
+                    </div>
                   );
                 })}
                 {!channelsLoading ? <button data-payment-channel="unavailable" type="button" disabled className={cn(channelGridStyles.channelCard, "relative flex h-[84px] min-w-0 cursor-not-allowed items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-100/70 pl-[13px] pr-2.5 text-left text-slate-400")}><span className="absolute right-2 top-2 h-3.5 w-3.5 rounded-full border border-slate-300" /><span data-channel-icon className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-slate-200/70"><LockKeyhole className="h-[23px] w-[23px]" /></span><span className="min-w-0"><span className="block whitespace-nowrap text-[14px] font-semibold leading-5 sm:text-[16px] sm:leading-[22px]">暂未开放</span><span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px]">敬请期待</span></span></button> : null}
@@ -392,10 +396,10 @@ export default function AccountRechargeContent() {
                     inputMode="decimal"
                     onChange={(event) => updateAmount(event.target.value)}
                     disabled={!selectedChannel}
-                    placeholder={isUsdtCnyRecharge ? "请输入人民币金额，最低 21 元" : selectedChannel ? `请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}` : "请先选择支付渠道"}
-                    className={cn("h-11", !isUsdtCnyRecharge && selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16", isUsdtCnyRecharge && "pr-16")}
+                    placeholder={isUsdtCnyRecharge ? "请输入金额，最低 21 CNY" : selectedChannel ? `请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}` : "请先选择支付渠道"}
+                    className={cn("h-11", !isUsdtCnyRecharge && selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16", (isUsdtCnyRecharge || selectedChannel?.currency === "CNY") && "pr-16")}
                   />
-                  {isUsdtCnyRecharge ? (
+                  {isUsdtCnyRecharge || selectedChannel?.currency === "CNY" ? (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">CNY</span>
                   ) : null}
                 </div>
