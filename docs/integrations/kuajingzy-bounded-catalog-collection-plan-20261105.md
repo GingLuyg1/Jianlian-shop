@@ -48,3 +48,13 @@ Codex 在现有已登录网页点击普通 API 下的「查询跨境商城目录
 本次**唯一下一步**：Codex 离线核实 `/api/open/v1/catalog/mall` 是否支持分页，写出参数/响应字段证据和 `PAGINATION_VERIFIED`，决定是否允许启动“有界分页读取”的下一阶段开发。**本轮不得发起新真实目录 GET。**
 
 完成后更新 `D:\Jianlian\_project_handoffs\CURRENT_HANDOFF.md` 与跨境资源网独立交接；只追加本主线状态，不覆盖其他主线；输出 `PAGINATION_VERIFIED`、`DOCUMENTED_QUERY_PARAMS`、`RESPONSE_TERMINATION_CONTRACT`、`CATALOG_COLLECTION_NEXT_STEP`、`PURCHASE_EXECUTED=no`、`PRODUCTION_CHANGED=no` 和 `NEXT_ACTION=STOP`。
+
+## 2026-11-05 后续：无网络有界分页状态审计模块
+
+已实际开发 `lib/providers/kuajingzy/bounded-catalog-pages.mjs` 和 `tests/unit/kuajingzy-bounded-catalog-pages.test.mjs`。本模块**不生成 URL、不发送 API 请求、不推测分页参数、不读取/打印 API Key**；只校验后续官方分页适配器提供的标准化页摘要。
+
+内建固定门禁：最多 5 页、单页最多 262144 字节、累计最多 1048576 字节、单页最多 1000 项、合计最多 5000 项；必须顺序递增且 `hasMore` 为明确布尔值；重复商品（以内部 SHA256 摘要比较）、空页仍声明有下一页、单页超限或不确定终止一律失败或标记部分采集。只有收到显式结束标记时才会返回 COMPLETE，即使 COMPLETE 仍 `saleAuthorized=false`，不能自动上架或自动采购。
+
+本地 Node 离线 9 项模拟测试通过；GitHub 最新提交 CI 状态需要另外核对。**尚未确认跨境资源网普通 API 的 `GET /api/open/v1/catalog/mall` 支持分页**；这份离线模块不是供应商合同或真实目录验收。
+
+仍然唯一下一步：本地 Codex 通过已授权的本机浏览器**仅阅读文档**中的「普通 API → 查询跨境商城目录」接口参数表，确认 `PAGINATION_VERIFIED=YES/NO/NOT_VERIFIED`、所有允许的 query 参数、响应结束标记，并保存非敏感证据。若看不到，先询问供应商，不调用真实目录猜参数。不重新查询余额、不调采购接口、不更改默认 256 KiB API 读取门禁、不合并/部署 PR #103。
