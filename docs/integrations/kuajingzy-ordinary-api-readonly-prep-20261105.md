@@ -15,7 +15,7 @@
 
 API origin 为 https://888.kuajing.one，请求使用 Authorization: Bearer API_KEY。成功响应外层为 {data:...}，错误为 {error:{code,message}}。每个新采购需新的 Idempotency-Key；不确定时只可查询原单、不能使用不同键再次下单。该平台不提供第三方回调，也不提供 API 充值，后续履约只能基于认证订单查询。限流为会员 60 次/60秒、IP 300 次/60秒。金额以 CNY 实扣、最多四位小数；页面的 USD=7.2 CNY 为展示价规则，不能当作 Jianlian Shop 的实时外汇结算依据。
 
-**最关键前置条件：** 用户在登录 API 页面看到“尚未申请”；必须由账号持有人在“申请 / 查看 API 接入”申请，经平台审批后取得独立 API Key。网页登录态不能替代 API Key。
+**最新账号状态（2026-11-05 晚间）：** 已在账号登录状态的 API 文档确认“已通过”，页面提供掩码后的密钥与复制鉴权头功能。审批门禁已经解除；完整 API Key 未读取、未输出、未提交 GitHub、未配置生产服务器。网页登录态仍不能替代服务器端安全注入的 API Key。
 
 ## 本次实际开发
 
@@ -32,7 +32,7 @@ API origin 为 https://888.kuajing.one，请求使用 Authorization: Bearer API_
 
 ## 下一步唯一主线
 
-1. 用户在目标站 API 文档点击“申请 / 查看 API 接入”，完成申请；无需重复操作。若站点允许账号内读写，申请成功后只保存审批状态，不在 GitHub/聊天复制密钥。
+1. API 审批已通过，无需重复申请。由本地 Codex 通过获准的私密方式安全配置 API Key，禁止出现在聊天、GitHub、日志或网页公开内容中。
 2. 审批通过后，Codex 从受保护环境注入 API Key，进行**单次**认证只读余额和 mall 目录 GET。只保存脱敏字段/类型、可售 SKU 及价格/库存是否权威，不保存原始私密信息。若 401/403、无合适商品或协议不完整，停止。
 3. 核实所选商品是否允许转售，是否有自动卡密、订单取回、退款及纠纷处理机制。优先选择可验证的合法数字商品，不盲目接入社媒账号、接码或流量类服务。
 4. 确认真实 catalog/schema 后，另外起一个**默认禁止采购**的最小 PR：商品 SKU/类型/数量冻结、报价与成交价校验、CNY 毛利与费用、库存新鲜度、单笔/日采购上限、单次持久化 Idempotency-Key、POST 不确定时只查原订单、GET 交付身份与私密交付原子写、防重复发货和紧急开关。
@@ -42,9 +42,10 @@ API origin 为 https://888.kuajing.one，请求使用 Authorization: Bearer API_
 
 - 已开发：独立普通 API 只读适配器；15 项合成测试通过。
 - GitHub PR：此文件应出现在独立 Draft PR 中；以该 PR 实际 URL/SHA 为证。禁止自动合并或部署。
-- 认证真实 API：NOT_RUN（目前密钥申请状态：尚未申请）。
+- 认证真实 API：NOT_RUN（账号 API 审批状态：已通过，密钥尚未安全配置到测试环境）。
+- 一次性只读探针：`scripts/probe-kuajingzy-readonly.mjs`，仅对余额和 mall 目录各调用 1 次 GET，不打印余额值、商品数据或凭据；合成测试 `tests/unit/kuajingzy-readonly-probe.test.mjs`。
 - 自动采购/商品上架：DISABLED。
 - 资金变更/Production 数据库写/部署：无。
-- 唯一下一步：API 接入申请获批后，完成单次只读余额和目录取证。
+- 唯一下一步：本地 Codex 安全注入已获批密钥，使用当前 Draft PR 的只读探针完成单次余额和目录取证；按真实字段规划无资金采购适配。
 
 Codex 在下次进入本地 Windows 环境时须读取 D:\Jianlian\_project_handoffs\CURRENT_HANDOFF.md、主线独立交接，追加本供应商独立记录及本 PR 的准确状态、测试与证据，不得覆盖其他供应商/支付/USDT/UI 已有成果。
