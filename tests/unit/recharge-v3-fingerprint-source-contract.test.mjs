@@ -70,7 +70,7 @@ test("account recharge stays scrollable and presents the minimal BEP20 flow", ()
   assert.doesNotMatch(ui, /付款后人工审核|人工付款信息/);
   assert.doesNotMatch(ui, /最终按链上实际到账 USDT 与本单锁定汇率折算人民币|少付或多付均按实收结算/);
   assert.match(ui, /payableDisplay =[^;]+expectedUsdtAmount[\s\S]*label="预计应付" value=\{payableDisplay\}/);
-  assert.match(ui, /label="精确应付" value=\{`\$\{record\.expectedUsdtAmount\} USDT`\}/);
+  assert.match(ui, /请精确支付 \{record\.expectedUsdtAmount\} USDT/);
   assert.match(paymentPage, /人工复核/);
   assert.match(ui, /compareRechargeDecimals\(requestedCnyAmount, "21\.00"\)/);
   assert.match(ui, /calculateExpectedUsdtAmount\(requestedCnyAmount, dailyRate\.settlementRate\)/);
