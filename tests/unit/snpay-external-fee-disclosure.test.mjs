@@ -88,16 +88,29 @@ async function publicChannels(rows) {
 }
 
 function renderRecharge(channel, options = {}) {
-  const states = [[channel], channel.code, false, null, "1", "", null, false,
-    [], false, "0:1", null, 1, 0, null, null, false, false, 0, "recharges"];
+  const states = { paymentChannels: [channel], selectedChannelCode: channel.code,
+    channelsLoading: false, channelsError: null, amountText: options.amount ?? "1",
+    customerNote: "", submitMessage: null, isSubmitting: false, records: [],
+    recordsLoading: false, recordViewKey: "0:1", recordsError: null, recordPage: 1,
+    recordCount: 0, dailyRate: null, rateError: null, amountLimitDialogOpen: false,
+    historyNowTick: 0, historyTab: "recharges" };
+  const hookNames = [];
+  const ast = ts.createSourceFile("recharge.tsx", source("components/account/AccountRechargeContent.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && ts.isArrayBindingPattern(node.name)
+      && node.initializer && ts.isCallExpression(node.initializer)
+      && node.initializer.expression.getText(ast) === "useState") hookNames.push(node.name.elements[0].getText(ast));
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
   let stateIndex = 0;
-  if (options.amount) states[4] = options.amount;
   const hooks = {
     ...React,
     useState: (initial) => {
       const index = stateIndex++;
-      return [index < states.length ? states[index] : initial,
-        options.events ? (value) => options.events.push([index, value]) : noNetwork];
+      const name = hookNames[index];
+      return [Object.hasOwn(states, name) ? states[name] : typeof initial === "function" ? initial() : initial,
+        options.events ? (value) => options.events.push([name, value]) : noNetwork];
     },
     useEffect: () => {}, useMemo: (fn) => fn(), useCallback: (fn) => fn,
     useRef: (value) => ({ current: value }),
@@ -128,6 +141,8 @@ function renderRecharge(channel, options = {}) {
     "@/components/layout/public-content": { publicMainPanelHeightClassName: "" },
     "./RechargeChannelGrid.module.css": { default: new Proxy({}, { get: (_, key) => String(key) }), __esModule: true },
     "@/lib/payments/online-payment-policy.mjs": onlinePolicy,
+    "@/lib/account/record-presentation": { rechargeCreditedCny: () => "—", rechargeDisplayNumber: () => "000000" },
+    "@/hooks/use-payment-card-tilt": { usePaymentCardTilt: () => ({}) },
     "next/link": { default: box, __esModule: true },
     "next/navigation": { useRouter: () => ({ push: noNetwork }) },
     sonner: { toast: { error: noNetwork } },
@@ -156,7 +171,7 @@ test("actual recharge handler opens the limit dialog before any create request",
   const create = buttons.find(button => String(JSON.stringify(button.children)).includes("创建充值单"));
   assert.equal(create.disabled, false);
   await create.onClick(); // Primary action explains the limit, without dispatch.
-  assert.deepEqual(events, [[17, true]]);
+  assert.deepEqual(events, [["amountLimitDialogOpen", true]]);
 });
 
 test("actual recharge page separates 100 principal from estimated 3 fee and 103 cashier total", async () => {
@@ -164,8 +179,8 @@ test("actual recharge page separates 100 principal from estimated 3 fee and 103 
   const html = renderRecharge(channel, { amount: "100" });
   assert.match(html, /充值金额/);
   assert.match(html, /value="100"/);
-  assert.match(html, /约 ¥3\.00/);
-  assert.match(html, /预计应付[\s\S]*约 ¥103\.00/);
+  assert.match(html, /¥3\.00/);
+  assert.match(html, /预计应付[\s\S]*¥103\.00/);
   assert.match(html, /预计到账金额[\s\S]*¥100\.00/);
 });
 
@@ -179,19 +194,17 @@ test("SNPAY disclosure separates site fee, approximate provider fee and credited
 });
 
 for (const code of ["alipay", "wechat"]) {
-  test(`enabled SNPAY ${code}: actual public GET preserves disclosure and UI renders it before create`, async () => {
+  test(`enabled SNPAY ${code}: public GET preserves disclosure while compact UI retains fee estimates`, async () => {
     const [channel] = await publicChannels([row(code)]);
     assert.equal(channel.code, code);
     assert.equal(channel.provider, "snpay");
     assert.equal(channel.providerExternalFeeDisclosure, registry.providerCapabilities.snpay.providerExternalFeeDisclosure);
     const html = renderRecharge(channel);
-    const disclosure = html.indexOf(channel.providerExternalFeeDisclosure);
-    const create = html.indexOf("创建充值单");
-    assert.ok(disclosure >= 0 && create > disclosure);
-    assert.match(html, /本站手续费/);
-    assert.match(html, /支付平台可能额外收取约 3%/);
+    assert.ok(!html.includes(channel.providerExternalFeeDisclosure), "requested UI removes the long pre-create paragraph");
+    assert.match(html, /平台手续费（3%）[\s\S]*¥0\.03/);
+    assert.match(source("app/payment/page.tsx"), /providerExternalFeeDisclosure/);
     assert.match(html, /预计到账金额[\s\S]*¥1\.00/);
-    assert.match(html, /预计应付[\s\S]*?约 ¥1\.03/);
+    assert.match(html, /预计应付[\s\S]*?¥1\.03/);
     assert.equal(channel.feeRate, 0);
     assert.deepEqual(channels.calculateRechargeAmounts(channel, 1), {
       amount: 1, fee: 0, payableAmount: 1, arrivalAmount: 1, currency: "CNY", decimals: 2,
@@ -206,12 +219,16 @@ test("USDT public payload and recharge UI never inherit SNPAY disclosure", async
   assert.doesNotMatch(renderRecharge(channel), /约 3%|额外费用不增加充值本金|支付平台可能另收通道手续费/);
 });
 
-test("Liuhaoyi public payload and pre-create disclosure remain unchanged", async () => {
+test("Liuhaoyi public payload preserves disclosure and compact UI preserves fee and arrival", async () => {
   const expected = "支付平台可能额外收取约 3% 通道手续费；实际付款金额以支付页面为准，本站本金不增加该费用。";
   assert.equal(registry.providerCapabilities.liuhaoyi.providerExternalFeeDisclosure, expected);
   const [channel] = await publicChannels([row("alipay", "liuhaoyi")]);
   assert.equal(channel.providerExternalFeeDisclosure, expected);
-  assert.ok(renderRecharge(channel).includes(expected));
+  const html = renderRecharge(channel);
+  assert.ok(!html.includes(expected));
+  assert.match(html, /预计应付[\s\S]*¥1\.03/);
+  assert.match(html, /预计到账金额[\s\S]*¥1\.00/);
+  assert.match(source("app/payment/page.tsx"), /providerExternalFeeDisclosure/);
 });
 
 test("disclosure is presentation-only: zero site fee, payable and arrival principal unchanged", () => {

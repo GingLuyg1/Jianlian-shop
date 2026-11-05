@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertCircle, Code2, FileLock2, LogOut, Shield, UserCircle, WalletCards } from "lucide-react";
+import { AlertCircle, FileLock2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -15,13 +15,8 @@ import glass from "@/components/account/AccountGlass.module.css";
 import center from "@/components/account/AccountCenter.module.css";
 import { isAccountDataPage } from "@/lib/motion/account-page-ready";
 
-const navItems = [
-  { label: "账户概览", href: "/account", icon: WalletCards },
-  { label: "个人资料", href: "/account/profile", icon: UserCircle },
-  { label: "账号安全", href: "/account/security", icon: Shield },
-  { label: "隐私设置", href: "/account/privacy", icon: FileLock2 },
-  { label: "API 接口", href: "/account/api", icon: Code2 },
-];
+import { accountNavigation } from "@/components/account/account-navigation";
+import { AccountEmailContext } from "@/components/account/AccountEmailContext";
 
 export default function AccountShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -227,12 +222,9 @@ export default function AccountShell({ children }: { children: ReactNode }) {
       <div className={`mx-auto flex w-full max-w-[1640px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
         {emailNotice}
 
-        <div className={`${center.workspace} grid min-w-0 flex-1 grid-cols-1 gap-5 overflow-visible md:min-h-0 md:grid-cols-[212px_minmax(0,1fr)] md:overflow-hidden`}>
-          <aside className={`${glass.surface} ${center.panel} ${center.nav} hidden h-full min-h-0 flex-col overflow-hidden p-3 md:flex`}>
-            <div className="mb-3 flex items-center gap-2.5 border-b border-white/80 px-2 pb-4 pt-1">
-              <span className={`${glass.icon} h-9 w-9`}><UserCircle className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" /></span>
-              <div><p className="text-sm font-semibold text-slate-800">我的账户</p><p className="mt-0.5 text-xs text-slate-500">资料与服务</p></div>
-            </div>
+        <div className={`${center.workspace} grid min-w-0 flex-1 grid-cols-1 gap-5 overflow-visible md:min-h-0 md:grid-cols-[248px_minmax(0,1fr)] md:overflow-hidden`}>
+          <aside className={`${glass.surface} ${center.panel} ${center.nav} sidebar-scroll hidden h-full min-h-0 flex-col overflow-y-auto p-3 md:flex`}>
+            <AccountIdentity />
             <AccountNav pathname={pathname || "/account"} />
             <button
               type="button"
@@ -245,7 +237,9 @@ export default function AccountShell({ children }: { children: ReactNode }) {
           </aside>
 
           <div className="min-w-0 md:hidden">
-            <div className={`${glass.surface} ${center.panel} flex gap-2 overflow-x-auto p-2`}>
+            <div className={`${glass.surface} ${center.panel} overflow-hidden p-2`}>
+              <AccountIdentity compact />
+              <div className="flex gap-2 overflow-x-auto">
               <AccountNav pathname={pathname || "/account"} compact />
               <button
                 type="button"
@@ -255,14 +249,22 @@ export default function AccountShell({ children }: { children: ReactNode }) {
                 <LogOut className="h-4 w-4" />
                 退出登录
               </button>
+              </div>
             </div>
           </div>
 
-          <main ref={contentRef} className={`${center.content} ${center.contentFrame} min-w-0 overflow-visible md:min-h-0 md:overflow-y-auto`}>{children}</main>
+          <main ref={contentRef} className={`${center.content} ${center.contentFrame} min-w-0 overflow-visible md:min-h-0 md:overflow-y-auto`}><AccountEmailContext.Provider value={email}>{children}</AccountEmailContext.Provider></main>
         </div>
       </div>
     </PublicLayout>
   );
+}
+
+function AccountIdentity({ compact = false }: { compact?: boolean }) {
+  return <div className={cn(center.identity, compact && center.identityCompact)}>
+    <p className="text-base font-semibold text-slate-900">个人中心</p>
+    <p className="text-xs text-slate-500">账户资料与安全设置</p>
+  </div>;
 }
 
 function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string }) {
@@ -306,7 +308,7 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
   return (
     <div ref={listRef} className={cn(center.slidingNav, compact && center.compactNav)}>
       <span ref={indicatorRef} className={center.navIndicator} data-testid="account-nav-indicator" aria-hidden="true" />
-      {navItems.map((item) => {
+      {accountNavigation.map((item) => {
         const Icon = item.icon;
         const active = selected === item.href;
         return (
@@ -316,7 +318,7 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
               pendingRef.current = item.href;
             }}
             className={cn("flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", center.navLink, compact && "shrink-0", active ? "font-medium text-primary" : "text-slate-500")}
-          ><Icon className="h-4 w-4" />{item.label}</Link>
+          ><span className={center.navIcon}><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block">{item.label}</span>{!compact ? <span className="mt-0.5 block text-[11px] font-normal text-slate-500">{item.description}</span> : null}</span></Link>
         );
       })}
     </div>

@@ -16,6 +16,7 @@ import {
   Share2,
   Sparkles,
   Wallet,
+  UserCircle,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -25,6 +26,8 @@ import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-q
 import { prefetchPublicProductCounts } from "@/lib/catalog/public-product-count-cache";
 import { startCatalogRouteExit } from "@/lib/motion/catalog-route-exit";
 import SidebarSlidingList from "./SidebarSlidingList";
+import styles from "./PublicSidebarGlass.module.css";
+import selectionMotion from "@/components/ui/SelectionMotion.module.css";
 
 const menuItems = [
   { label: "首页", href: "/", icon: Home },
@@ -36,6 +39,7 @@ const menuItems = [
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
   { label: "推广赚钱", href: "/promotion", icon: Share2 },
   { label: "我的订单", href: "/account/orders", icon: ClipboardList },
+  { label: "个人中心", href: "/account", icon: UserCircle },
 ];
 
 const helpItems = [
@@ -63,9 +67,16 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
   const visibleMenuItems = menuItems.filter(
     (item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href)
   );
+  const navigationGroups = [
+    { title: "", items: visibleMenuItems.filter((item) => item.href === "/") },
+    { title: "资源中心", items: visibleMenuItems.filter((item) => isCatalogCategoryHref(item.href)) },
+    { title: "帮助中心", items: helpItems },
+    { title: "我的", items: visibleMenuItems.filter((item) => item.href !== "/" && !isCatalogCategoryHref(item.href)) },
+  ];
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
+    if (href === "/account") return pathname === "/account" || (pathname.startsWith("/account/") && !pathname.startsWith("/account/orders"));
     return pathname.startsWith(href);
   };
 
@@ -97,7 +108,8 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
             startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
           }}
           className={cn(
-            "relative mx-auto flex h-[42px] w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-md px-3 text-left text-sm transition-colors duration-150",
+            selectionMotion.item,
+            "relative mx-auto flex h-[46px] w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-xl px-3 text-left text-sm transition-colors duration-150",
             "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
         >
@@ -110,10 +122,11 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
 
   return (
     <aside className={cn(
-      "fixed left-0 top-0 z-40 hidden h-screen w-[var(--storefront-sidebar-width)] flex-col border-r border-border bg-white/95",
+      styles.panel,
+      "fixed z-40 hidden w-[var(--storefront-sidebar-width)] flex-col",
       mobileNavigationUntilLg ? "lg:flex" : "md:flex",
     )}>
-      <div className="flex h-[83px] items-center px-3">
+      <div className={styles.brand}>
         <Link
           href="/"
           className="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -140,14 +153,16 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
 
       <SidebarSlidingList activeKey={pathname} layoutKey={`${confirmed}:${visibleMenuItems.map((item) => item.href).join(",")}`}>
         <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 pb-4 pt-0">
-          <ul className="space-y-1.5">{visibleMenuItems.map(renderLink)}</ul>
+          {navigationGroups.map((group) => group.items.length > 0 ? (
+            <section key={group.title || "home"} aria-label={group.title || "首页"}>
+              {group.title ? <h2 className={styles.groupTitle}>{group.title}</h2> : null}
+              <ul className="space-y-1.5">{group.items.map(renderLink)}</ul>
+            </section>
+          ) : null)}
         </nav>
-        <div className="px-2 pb-3">
-          <ul className="space-y-1.5">{helpItems.map(renderLink)}</ul>
-        </div>
       </SidebarSlidingList>
 
-      <div className="border-t border-border px-2 py-4">
+      <div className="shrink-0 border-t border-orange-100/70 px-3 py-4">
         <button
           type="button"
           onClick={onSupportOpen}

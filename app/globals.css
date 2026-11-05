@@ -61,6 +61,31 @@
   }
 }
 
+/* Public storefront surfaces only. Keep measurements, spacing and pill/icon
+   geometry intact; admin pages continue to use their own design tokens. */
+[data-storefront-ui] {
+  --radius: 0.875rem;
+  --storefront-panel-radius: 26px;
+  --storefront-card-radius: 18px;
+}
+
+[data-storefront-ui] :where(div, section, article, aside, form, nav, a, button).rounded-xl {
+  border-radius: var(--storefront-card-radius);
+}
+[data-storefront-ui] [data-storefront-topbar] .rounded-xl {
+  border-radius: 8px;
+}
+[data-storefront-ui] :where(div, section, article, aside, form).rounded-2xl,
+[data-storefront-ui] :where(div, section, article, aside, form).rounded-\[20px\],
+[data-storefront-ui] :where(div, section, article, aside, form).border.rounded-lg {
+  border-radius: var(--storefront-panel-radius);
+}
+/* Radix modal portals are outside the public shell. Sheets retain their edge
+   geometry; rounded-full badges and controls are deliberately untouched. */
+body:has([data-storefront-ui]) [role="dialog"]:not([class*="inset-y-0"]) {
+  border-radius: 26px;
+}
+
 /* Seamless marquee scrolling animation for announcements */
 @keyframes marquee-scroll {
   0% {

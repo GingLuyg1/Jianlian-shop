@@ -743,6 +743,7 @@ export default function AdminDashboardPage() {
   return (
     <AdminPageShell
       variant="v2"
+      className="admin-dashboard-v21"
       title="经营数据驾驶舱"
       description="集中查看订单、支付、充值、商品、用户和系统状态。未接入的数据会明确标记，不使用模拟数据。"
       actions={
@@ -760,13 +761,13 @@ export default function AdminDashboardPage() {
       {error ? (
         <AdminErrorState description={error} onRetry={loadDashboard} />
       ) : (
-        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pb-4 lg:gap-3" aria-busy={loading}>
+        <div className="dashboard-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pb-4 lg:gap-3" aria-busy={loading}>
           {loading ? <p role="status" className="shrink-0 text-xs text-[var(--admin-v2-text-muted)]">正在读取经营数据，请稍候…</p> : null}
           <section className="shrink-0" aria-labelledby="dashboard-core-metrics">
             <div className="mb-2">
               <h2 id="dashboard-core-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">核心经营指标</h2>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1">
+            <div className="dashboard-restored-kpis grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1">
               {loading && !data
                 ? Array.from({ length: 7 }).map((_, index) => (
                   <div key={index} className="h-[112px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
@@ -791,7 +792,7 @@ export default function AdminDashboardPage() {
               <h2 id="dashboard-status-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">运营状态</h2>
               <p className="hidden text-xs text-[var(--admin-v2-text-muted)] sm:block">待处理、异常与库存状态</p>
             </div>
-            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5 [&>*:last-child]:col-span-2 xl:[&>*:last-child]:col-span-1">
+            <div className="dashboard-status-grid grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5 [&>*:last-child]:col-span-2 xl:[&>*:last-child]:col-span-1">
               {loading && !data
                 ? Array.from({ length: 5 }).map((_, index) => (
                   <div key={index} className="h-[68px] animate-pulse bg-[var(--admin-v2-surface-muted)]" />
@@ -812,8 +813,8 @@ export default function AdminDashboardPage() {
             </div>
           </section>
 
-          <div className="grid shrink-0 min-h-[320px] min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-3">
-            <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+          <div className="dashboard-analysis-grid grid shrink-0 min-h-[320px] min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-3">
+            <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
               <CardHeader className="flex shrink-0 flex-col items-start justify-between gap-3 px-4 py-3 sm:flex-row sm:items-center">
                 <div>
                   <CardTitle className="text-base">经营趋势</CardTitle>
@@ -831,7 +832,7 @@ export default function AdminDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+            <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
               <CardHeader className="shrink-0 px-4 py-3">
                 <CardTitle className="text-base">支付渠道表现</CardTitle>
                 <p className="text-xs text-slate-500">按真实支付会话统计，不展示假渠道结果</p>
@@ -1103,7 +1104,7 @@ function TodoLink({ item }: { item: TodoItem }) {
 
 function ProductListCard({ title, rows, type, loading }: { title: string; rows: ProductRank[]; type: "sales" | "amount"; loading: boolean }) {
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
@@ -1150,7 +1151,7 @@ function InventoryFocusCard({
     { label: "长期未售", rows: staleProducts },
   ];
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">商品经营</CardTitle>
       </CardHeader>
@@ -1235,7 +1236,7 @@ function CompactTableCard({
   href: string;
 }) {
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="flex shrink-0 flex-row items-center justify-between px-4 py-3">
         <CardTitle className="text-base">{title}</CardTitle>
         <Link href={href} className="inline-flex items-center text-xs text-orange-600">
@@ -1294,7 +1295,7 @@ function UserOverviewCard({
   loading: boolean;
 }) {
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">用户与访问概览</CardTitle>
       </CardHeader>

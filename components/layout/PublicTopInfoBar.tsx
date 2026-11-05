@@ -9,13 +9,11 @@ import {
   LogIn,
   LogOut,
   Megaphone,
-  Shield,
-  UserCircle,
   UserPlus,
-  WalletCards,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
+import { accountNavigation } from "@/components/account/account-navigation";
 import { Button } from "@/components/ui/button";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
 import {
@@ -81,11 +79,7 @@ function getDisplayName(user: User | null) {
   return user.email;
 }
 
-const accountMenuItems = [
-  { label: "账户概览", href: "/account", icon: WalletCards },
-  { label: "个人资料", href: "/account/profile", icon: UserCircle },
-  { label: "账号安全", href: "/account/security", icon: Shield },
-];
+
 
 function getAnnouncementAnimationDelay() {
   if (typeof window === "undefined") return 0;
@@ -220,7 +214,7 @@ export default function PublicTopInfoBar({
   const balance = profile?.balance ?? 0;
 
   return (
-    <div className="sticky top-0 z-30 border-b border-border bg-[#fcf8f3]/90 backdrop-blur-sm">
+    <div data-storefront-topbar className="sticky top-0 z-30 bg-[#fcf8f3]/90 backdrop-blur-sm">
       <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 px-[var(--storefront-content-padding-x)] xl:grid-cols-[minmax(0,1fr)_142px_150px]">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
@@ -286,7 +280,7 @@ export default function PublicTopInfoBar({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  {accountMenuItems.map((item) => {
+                  {accountNavigation.map((item) => {
                     const Icon = item.icon;
                     const active =
                       item.href === "/account"

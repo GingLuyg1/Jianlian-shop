@@ -7,15 +7,13 @@ import {
   AlertCircle,
   Clock,
   ReceiptText,
-  RefreshCw,
   TrendingDown,
   TrendingUp,
   WalletCards,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import AccountInformation from "@/components/account/AccountInformation";
+import AccountMembership from "@/components/account/AccountMembership";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
 
@@ -141,22 +139,19 @@ export default function AccountOverviewPage() {
           <div className="flex min-w-0 items-center gap-3">
             <span className={`${glass.icon} ${styles.sectionIcon}`}><WalletCards className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" /></span>
             <div>
-            <CardTitle className="text-xl">账户中心</CardTitle>
+            <CardTitle className="text-lg">账号资料</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              查看账户资产、登录信息与安全资料。
+              账户余额、基础资料与可用服务。
             </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void loadOverview()} disabled={loading}>
-            <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
-            重新加载
-          </Button>
+
         </CardHeader>
         <CardContent className="space-y-3">
           {error ? (
             <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
+              <span className="min-w-0 flex-1">{error}</span><button type="button" className="shrink-0 underline underline-offset-4" onClick={() => void loadOverview()}>重试</button>
             </div>
           ) : null}
           {diagnostics?.balanceTransactionError ? (
@@ -172,7 +167,7 @@ export default function AccountOverviewPage() {
               </div>
               <dl className={styles.balanceDetails}>
                 <div className="min-w-0"><dt className="text-xs text-slate-500">可用余额</dt><dd className="mt-2 break-words text-base font-semibold text-slate-800">{loading || !data ? "/" : formatMoney(data.summary.availableBalance)}</dd></div>
-                <div className="min-w-0"><dt className="text-xs text-slate-500">冻结余额</dt><dd className="mt-2 break-words text-sm font-medium text-slate-600">{loading ? "/" : data?.summary.frozenBalance == null ? "暂未开放" : formatMoney(data.summary.frozenBalance)}</dd></div>
+                <div className="min-w-0"><dt className="text-xs text-slate-500">冻结余额</dt><dd className="mt-2 break-words text-sm font-medium text-slate-600">{loading ? "/" : formatMoney(data?.summary.frozenBalance ?? 0)}</dd></div>
               </dl>
             </section>
             <div className={styles.metricGrid}>
@@ -187,7 +182,7 @@ export default function AccountOverviewPage() {
         </CardContent>
       </Card>
 
-      <AccountInformation email={data?.profile.email ?? null} loading={loading} />
+      <AccountMembership totalSpend={data?.summary.totalSpend ?? null} loading={loading} />
     </div>
   );
 }
