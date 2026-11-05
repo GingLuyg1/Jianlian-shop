@@ -57,7 +57,8 @@ test("storefront entry points and APIs share the effective visibility contract",
   assert.match(listRoute, /CATEGORY_NOT_FOUND/);
   assert.match(detailRoute, /isProductEffectivelyVisible/);
   assert.match(sidebar, /visibleMenuItems\.map/);
-  assert.match(mobile, /visibleMenuItems\.map/);
+  assert.match(mobile, /visibleMenuItems\.filter/);
+  assert.match(mobile, /group\.items\.map/);
   assert.match(home, /visibleCategoryCards\.map/);
   assert.doesNotMatch(mall, /setError\(`未找到“\$\{fallbackTitle\}”一级分类/);
   assert.equal(filterEffectivelyVisibleCategories(categories(false, true)).length, 0);
