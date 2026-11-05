@@ -64,6 +64,12 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
   const visibleMenuItems = menuItems.filter(
     (item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href)
   );
+  const navigationGroups = [
+    { title: "", items: visibleMenuItems.filter((item) => item.href === "/") },
+    { title: "资源中心", items: visibleMenuItems.filter((item) => isCatalogCategoryHref(item.href)) },
+    { title: "帮助中心", items: helpItems },
+    { title: "我的", items: visibleMenuItems.filter((item) => item.href !== "/" && !isCatalogCategoryHref(item.href)) },
+  ];
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -142,11 +148,13 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
 
       <SidebarSlidingList activeKey={pathname} layoutKey={`${confirmed}:${visibleMenuItems.map((item) => item.href).join(",")}`}>
         <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 pb-4 pt-0">
-          <ul className="space-y-1.5">{visibleMenuItems.map(renderLink)}</ul>
+          {navigationGroups.map((group) => group.items.length > 0 ? (
+            <section key={group.title || "home"} aria-label={group.title || "首页"}>
+              {group.title ? <h2 className={styles.groupTitle}>{group.title}</h2> : null}
+              <ul className="space-y-1.5">{group.items.map(renderLink)}</ul>
+            </section>
+          ) : null)}
         </nav>
-        <div className="px-2 pb-3">
-          <ul className="space-y-1.5">{helpItems.map(renderLink)}</ul>
-        </div>
       </SidebarSlidingList>
 
       <div className="shrink-0 border-t border-orange-100/70 px-3 py-4">

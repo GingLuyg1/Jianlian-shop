@@ -67,6 +67,12 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
   const visibleMenuItems = menuItems.filter(
     (item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href)
   );
+  const navigationGroups = [
+    { title: "", items: visibleMenuItems.filter((item) => item.href === "/") },
+    { title: "资源中心", items: visibleMenuItems.filter((item) => isCatalogCategoryHref(item.href)) },
+    { title: "帮助中心", items: helpItems },
+    { title: "我的", items: visibleMenuItems.filter((item) => item.href !== "/" && !isCatalogCategoryHref(item.href)) },
+  ];
 
   const isActive = (href: string) => {
     if (pendingCategoryHref) return pendingCategoryHref === href;
@@ -91,7 +97,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
         className="w-[var(--storefront-sidebar-width,160px)] max-w-none p-0"
       >
         <SheetTitle className="sr-only">导航菜单</SheetTitle>
-        <div className="flex items-center border-b border-border px-3 py-4 pr-8">
+        <div className="flex shrink-0 items-center border-b border-border px-3 py-4 pr-8">
           <div className="flex min-w-0 items-center gap-2">
             <img
               src="/assets/jianlian-brand-logo.png"
@@ -110,8 +116,11 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-3">
+          {navigationGroups.map((group) => group.items.length > 0 ? (
+          <section key={group.title || "home"} aria-label={group.title || "首页"}>
+          {group.title ? <h2 className="mb-2 mt-5 px-2 text-[11px] font-medium text-muted-foreground">{group.title}</h2> : null}
           <ul className="space-y-1">
-            {visibleMenuItems.map((item) => {
+            {group.items.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
               if (isCatalogCategoryHref(item.href) && !confirmed) {
@@ -145,33 +154,9 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
               );
             })}
           </ul>
+          </section>
+          ) : null)}
         </nav>
-
-        <div className="px-2 pb-3">
-          <ul className="space-y-1">
-            {helpItems.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.href);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      "flex items-center gap-2 whitespace-nowrap rounded-md px-2 py-2 text-[13px] transition-colors duration-150",
-                      active
-                        ? "border border-primary/20 bg-primary/10 font-medium text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span>{item.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
 
         <div className="border-t border-border px-2 py-4">
           <button
