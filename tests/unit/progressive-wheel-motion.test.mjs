@@ -5,8 +5,8 @@ import { loadPureTypeScript } from "../helpers/load-pure-typescript.mjs";
 const { centeredScrollTop, wheelVisual, WHEEL_CONFIG } = loadPureTypeScript(new URL("../../lib/motion/progressive-wheel.ts", import.meta.url));
 
 test("wheel plateau follows scroll position, not direction", () => {
-  assert.equal(WHEEL_CONFIG.minScale, 0.90);
-  assert.equal(WHEEL_CONFIG.secondaryMinScale, 0.92);
+  assert.equal(WHEEL_CONFIG.minScale, 0.97);
+  assert.equal(WHEEL_CONFIG.secondaryMinScale, 0.93);
   assert.equal(WHEEL_CONFIG.maxScale, 1);
   assert.equal(wheelVisual(100, 1000, 0).scale, 1);
   assert.equal(wheelVisual(1000, 1000, 0).scale, WHEEL_CONFIG.minScale);

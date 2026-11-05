@@ -32,7 +32,7 @@ export const productListFiveRowsClassName =
   "scroll-fade-y h-[470px] min-h-0 w-full shrink-0 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll";
 
 export const compactProductRowClassName =
-  "w-full rounded-xl border border-slate-100 bg-slate-50 px-5 py-3 text-left md:h-[86px] md:py-0";
+  "w-full rounded-xl border border-slate-100 bg-slate-50 px-5 py-[11px] text-left md:h-[84px] md:py-0";
 
 export const productSupportTextClassName =
   "mt-3 shrink-0 text-sm text-muted-foreground";

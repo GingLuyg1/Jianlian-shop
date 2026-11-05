@@ -56,7 +56,7 @@ test("storefront floating sidebar reserves its desktop footprint and retains com
   assert.match(productUi, /categoryPanelInnerClassName =\s*\r?\n\s*"[^"]*to-white"/);
   assert.match(file("components/products/SupabaseMallContent.tsx"), /<Card data-testid="storefront-secondary-categories"[^\r\n]*>\s*<CardContent className="h-full min-h-0 p-3">/);
   assert.match(productUi, /productPanelContentClassName =\s*\r?\n\s*"[^"]*p-4"/);
-  assert.match(productUi, /compactProductRowClassName =\s*\r?\n\s*"[^"]*px-5 py-3[^"]*"/);
+  assert.match(productUi, /compactProductRowClassName =\s*\r?\n\s*"[^"]*px-5 py-\[11px\][^"]*"/);
   assert.match(productDetail, /lg:grid-cols-\[minmax\(0,1fr\)_386px\]/);
   assert.match(productDetail, /data-testid="product-detail-left"[\s\S]{0,180}overflow-visible px-1/);
 });

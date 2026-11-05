@@ -799,6 +799,7 @@ function ProductPanel({
                         currencySymbol={currencySymbol}
                         showStock={showStock}
                         disabled={!resultReady}
+                        selected={selectedProductId === product.id}
                         onSelect={() => {
                           setSelectedProductId(product.id);
                           centerItem(product.id);
@@ -862,7 +863,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
   );
 }
 
-function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSelect }: { currencySymbol: string; product: Product; showStock: boolean; disabled: boolean; onSelect: () => void }) {
+function ProductRowCompact({ currencySymbol, product, showStock, disabled, selected, onSelect }: { currencySymbol: string; product: Product; showStock: boolean; disabled: boolean; selected: boolean; onSelect: () => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
   const imageSrc = product.imageUrl || productImageFallbackSrc;
@@ -879,6 +880,7 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSel
       type="button"
       disabled={disabled}
       data-catalog-card
+      data-selected={selected ? "true" : undefined}
       onClick={() => {
         onSelect();
         router.push(checkoutHref(product.id, window.location.pathname + window.location.search));
@@ -936,7 +938,7 @@ function ProductSkeleton({ count }: { count: number }) {
   return (
     <div className="h-full space-y-2.5 overflow-hidden px-1.5 py-1 pr-2">
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} data-testid="catalog-product-skeleton-item" className="catalog-placeholder h-[86px] rounded-xl border border-slate-100 bg-slate-50 p-4" style={{ animationDelay: `${index * 35}ms` }}>
+        <div key={index} data-testid="catalog-product-skeleton-item" className="catalog-placeholder h-[72px] rounded-xl border border-slate-100 bg-slate-50 p-[11px] md:h-[84px] md:p-4" style={{ animationDelay: `${index * 35}ms` }}>
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 rounded-xl bg-slate-200" />
             <div className="flex-1 space-y-2">

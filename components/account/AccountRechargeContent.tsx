@@ -303,11 +303,11 @@ export default function AccountRechargeContent() {
                   <div className="flex items-center gap-2"><Info className="h-4 w-4 text-primary" /><h2 className="text-[18px] font-semibold leading-6 whitespace-nowrap">充值须知</h2></div>
                   <button type="button" onClick={openPublicSupport} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"><Headphones className="h-3.5 w-3.5" /> 在线客服 <ArrowUpRight className="h-3 w-3" /></button>
                 </div>
-                <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-5">
-                  <Notice icon={FileText} title="付款说明" className="xl:col-span-2"><span className="block">如果无法刷出收款页面，请关闭代理软件重试下！</span><span className="block">二维码收款上限无法支付，请关闭支付页面重新获取新二维码！</span></Notice>
-                  <Notice icon={WalletCards} title="到账与异常"><span className="block">扫码支付成功后，等待 1 分钟，刷新网站页面；</span><span className="block">如果没有到账，请发送付款截图及用户名给在线客服。</span></Notice>
-                  <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔限额2000；</span><span className="block">超过 2000 元请联系客服处理。USDT无限制</span></Notice>
-                  <Notice icon={Clock3} title="费用说明">手续费：支付宝和微信 3%<br />USDT BEP20 无手续费</Notice>
+                <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
+                  <Notice icon={FileText} title="付款说明"><span className="block">收款页无法显示，请关闭代理后重试。</span><span className="block">二维码超限，请关闭支付页重新获取。</span></Notice>
+                  <Notice icon={WalletCards} title="到账与异常"><span className="block">支付成功后，等待1分钟再刷新页面。</span><span className="block">未到账，请发付款截图及用户名给客服。</span></Notice>
+                  <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔上限2000元。</span><span className="block">超额请联系客服，USDT无限制。</span></Notice>
+                  <Notice icon={Clock3} title="费用说明"><span className="block">支付宝 / 微信：手续费3%</span><span className="block">USDT BEP20：无手续费</span></Notice>
                 </div>
               </CardContent>
             </Card>
@@ -423,7 +423,7 @@ export default function AccountRechargeContent() {
                 ) : null}
 
                 <label className="mt-3 block text-sm font-medium">充值备注（可选）</label>
-                <div className="relative mt-1.5"><Input value={customerNote} maxLength={500} onChange={(event) => { setCustomerNote(event.target.value); clientRequestIdRef.current = null; }} placeholder="填写必要的付款说明，最多 500 字" className="h-11 pr-16" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{customerNote.length}/500</span></div>
+                <div className="relative mt-1.5"><Input value={customerNote} maxLength={100} onChange={(event) => { setCustomerNote(event.target.value.slice(0, 100)); clientRequestIdRef.current = null; }} placeholder="填写必要的付款说明，最多 100 字" className="h-11 pr-16" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{customerNote.length}/100</span></div>
 
                 <div data-testid="recharge-summary" className="mt-4 flex flex-col gap-5 rounded-2xl bg-gradient-to-r from-orange-50/80 to-orange-50/40 p-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-orange-200/60 text-xs text-slate-500">
@@ -439,7 +439,6 @@ export default function AccountRechargeContent() {
                     {isSubmitting ? "提交中..." : <>创建充值单 <ArrowUpRight className="ml-2 h-4 w-4" /></>}
                   </Button>
                 </div>
-                {isUsdtCnyRecharge ? <p className="mt-3 text-xs leading-5 text-slate-500">创建充值单后生成 4 位小数的精确应付 USDT；匹配成功后按申请的人民币金额原额到账。</p> : null}
               </div>
             </CardContent>
             </Card>

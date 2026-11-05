@@ -2,6 +2,16 @@
 
 # UI 恢复与充值页精简，2026-11-05
 
+## 最新追加：93%/97%、须知等宽两行与商品选中反馈
+
+本次最新要求覆盖下文：二级93%～100%、三级97%～100%，选中100%。三级实际卡片桌面86→84px，手机74→72px，加载卡片同步72/84px并协调内边距，间距不变。图标仍顺时针8度；选中时暖色阴影增强、玻璃背景放大1.01、图标1.12。新增data-selected复用既有selectedProductId，不改点击/请求/路由；按钮与wheel本体不加transform。减少动态效果关闭这些放大，名称颜色保持。
+
+充值备注输入maxLength100、计数/placeholder100，并截断超长输入；仅前端输入约束，不改API/数据库合同。删除用户指定的创建单前4位USDT说明段；创建后的真实付款/记录精确金额说明保留。充值须知改四个等宽块，精简文案但保留关闭代理/二维码超限重取、付款后等1分钟、付款截图+用户名、2000限额、USDT不限和手续费含义。1440px实测每块265.5px、两段各20px，全部正文两行；手机自然排版。
+
+本地复制版保留/preview多页入口。为用户观看选中动画，Git外next.tsx仅在商品列表点击结算链接时停留在原列表，实际页面setSelectedProductId仍执行；源码正式路由仍正常跳详情，没有加等待。复制版商品只作合成视觉展示，不执行结算/真实业务。
+
+TypeScript、定向Lint无错误（4项既有img建议）、25项相关测试、最终Build通过。Chrome实测二级0.93～1/三级0.97～1、选中外层1.0000/按钮transform none、玻璃1.01/图标约1.12、字体同色；reduced-motion下不放大；1440/390无溢出，备注130字输入截为100，USDT指定提示消失，无页面异常/外部或写请求。证据replica/SELECTION_NOTICE_RESULTS.json、selection-hover/pressed/selected-1440.png、notice-four-cards-1440/390.png、selection-mobile-390.png；selection-notices-tests-final.log、selection-notices-build-final.log。仍为隔离合成数据，不是已登录真实Test。
+
 ## 当前最新：右旋、92%/90%及多页面复制版
 
 用户本次要求覆盖以下历史值：三级图标顺时针/向右8度；二级wheel最小0.92、三级最小0.90，上限/选中均1。顶部登录、注册、余额、公告改8px圆角，其余尺寸/间距保持。共享算法及hook不分叉。

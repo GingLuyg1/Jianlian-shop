@@ -1,6 +1,6 @@
 export const WHEEL_CONFIG = {
-  minScale: 0.90,
-  secondaryMinScale: 0.92,
+  minScale: 0.97,
+  secondaryMinScale: 0.93,
   maxScale: 1,
   minOpacity: 0.78,
   topPlateauEnd: 0.55,
