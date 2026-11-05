@@ -1,5 +1,5 @@
-.panel { left:20px; top:20px; bottom:20px; height:calc(100dvh - 40px); border:1px solid rgb(255 255 255 / 92%); border-radius:24px; background:linear-gradient(155deg,rgb(255 255 255 / 96%),rgb(255 250 245 / 87%)); box-shadow:0 14px 40px -20px rgb(133 82 43 / 26%),inset 0 1px 0 white; backdrop-filter:blur(20px) saturate(120%); overflow:hidden; }
-.brand { display:flex; align-items:center; flex-shrink:0; height:74px; padding:0 20px; border-bottom:1px solid rgb(245 226 211 / 65%); margin-bottom:14px; }
+.panel { left:20px; top:20px; bottom:20px; height:calc(100dvh - 40px); border:1px solid rgb(255 255 255 / 92%); border-radius:26px; background:linear-gradient(155deg,rgb(255 255 255 / 96%),rgb(255 250 245 / 87%)); box-shadow:0 14px 40px -20px rgb(133 82 43 / 26%),inset 0 1px 0 white; backdrop-filter:blur(20px) saturate(120%); overflow:hidden; }
+.brand { display:flex; align-items:center; flex-shrink:0; height:74px; padding:0 20px; margin-bottom:14px; }
 .panel nav { padding-inline:12px; }
 .groupTitle { margin:20px 15px 8px; font-size:11px; font-weight:500; line-height:18px; color:#9b938d; }
 @media(prefers-reduced-transparency:reduce){.panel{background:#fffcf8;backdrop-filter:none}}

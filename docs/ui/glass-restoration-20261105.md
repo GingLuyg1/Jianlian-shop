@@ -2,6 +2,18 @@
 
 # UI 恢复与充值页精简，2026-11-05
 
+## 当前追加验收版本：圆角与90%～100%滚动
+
+按用户最新要求，覆盖下文先前98%下限：共享WHEEL_CONFIG.minScale现为0.90、maxScale为1。二级和三级继续用同一计算、滚动位置与点击居中机制，选中项100%，不需滚动的短列表/手机及减少动态效果保持自然100%。三级图标保留顺时针8度、1.08倍；暖橙细条及阴影、名称不变色，未向一二级增加此增强。
+
+前台PublicLayout标记下统一26px外面板、18px内卡片，小控件采用14px基础圆角，胶囊徽标/圆形保持。账户中心、充值Tab及订单弹窗的专用玻璃样式同步协调；客服等Radix弹窗在前台路由下采用26px，侧边Sheet边缘不改。该规则不应用于后台，未调整padding、gap、字段或业务逻辑。
+
+桌面一级导航从246px至251px，main offset从266px至271px，二级240px不变。浏览器实测三级外框从886px至881px，栏间距保持16px。品牌与首页间及公告下方分隔线删除。其他前台内容随可用宽度自然收缩5px，原最大宽度/间距保留，手机不强制桌面宽度。
+
+TypeScript、定向Lint（1项既有img建议）、14项wheel/预取/布局回归、Build PASS。Chrome1440/390分类、首页、充值及客服弹窗无溢出；20项二三级列表顶部/中间/底部/反向滚动实际scale范围0.90～1.00，含连续中间值，三级图标实际顺时针7.999999度、名称颜色不变。证据replica/ROUNDED_BROWSER_RESULTS.json、ROUNDED_LAYOUT_RESULTS.json、rounded-*.png；日志rounded-wheel-tests.log、rounded-wheel-build.log。预览仍http://127.0.0.1:3027/products/digital-accounts，为明确隔离合成数据，未连接真实Test/Production。
+
+以下为本轮各历史阶段说明，和当前版冲突时以上述最新追加要求为准。
+
 基于 main f415d5d22aa632fd4e43d9457e79dca8d594c56e，独立分支 codex/ui-glass-restore-20261105。用户授权本轮提交、Push、独立 PR；不合并或部署。PR103 的供应商只读接口成果不纳入本分支。
 
 - 后台首页复用 c1f44a8 的 V2.5 Premium Glass CSS，接入现有首页 DOM；恢复磨砂背景、柔和圆角卡片、4+3 指标布局及首页专属 shell 材质。保留当前 main 查询、指标聚合、权限、状态和交互；并非把旧数据组件或未发布 RPC 覆盖到 main。

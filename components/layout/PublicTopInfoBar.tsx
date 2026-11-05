@@ -220,7 +220,7 @@ export default function PublicTopInfoBar({
   const balance = profile?.balance ?? 0;
 
   return (
-    <div className="sticky top-0 z-30 border-b border-border bg-[#fcf8f3]/90 backdrop-blur-sm">
+    <div className="sticky top-0 z-30 bg-[#fcf8f3]/90 backdrop-blur-sm">
       <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 px-[var(--storefront-content-padding-x)] xl:grid-cols-[minmax(0,1fr)_142px_150px]">
         {announcementText && (
           <div className="min-w-0 overflow-hidden">
