@@ -1,7 +1,8 @@
 // One-shot, credentials-protected KuajingZy ordinary API read-only preflight.
-// Usage (host only): KUAJINGZY_API_KEY=... node scripts/probe-kuajingzy-readonly.mjs
+// Usage (host only): load KUAJINGZY_API_KEY from an existing protected secret source;
+// then run: node scripts/probe-kuajingzy-readonly.mjs --catalog-only
 // NEVER print raw catalog, auth headers, keys, customer data, invoices or account balance.
-import { createKuajingZyReadonlyClient } from '../lib/providers/kuajingzy/readonly-client.mjs';
+import { createKuajingZyReadonlyClient, KuajingZyReadError } from '../lib/providers/kuajingzy/readonly-client.mjs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -23,20 +24,29 @@ export function summarizeKuajingZyCatalogShape(data) {
     stockVerified: false,
   });
 }
-export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch}={}) {
+export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch,scope='balance-and-catalog'}={}) {
+  if (scope !== 'balance-and-catalog' && scope !== 'catalog-only') {
+    throw new KuajingZyReadError('SCOPE_INVALID');
+  }
   const client=createKuajingZyReadonlyClient({apiKey:key,fetchImpl});
-  const balance=await client.readBalance(); // GET once, no amount printed
-  const catalog=await client.readMallCatalog(); // GET once, no item contents printed
+  // The historical balance GET already passed. Never repeat it during a
+  // catalog-only read unless a separate task expressly requires it.
+  const balance=scope === 'catalog-only' ? null : await client.readBalance();
+  const catalog=await client.readMallCatalog(); // GET once, no amount or raw catalog printed
   const result={
     operation:'KUAJINGZY_ORDINARY_READONLY_PROBE',
-    balanceGet:'PASS', balanceCurrency:balance.currency,
+    balanceGet:balance ? 'PASS' : 'SKIPPED_PRIOR_PASS',
+    balanceCurrency:balance?.currency ?? null,
     catalogGet:'PASS', catalogShape:summarizeKuajingZyCatalogShape(catalog.data),
     paymentExecuted:false, purchaseExecuted:false, productionChanged:false,
   };
   return result;
 }
 if (process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
-  main().then(result => {
+  const args=process.argv.slice(2);
+  const scope=args.length===1 && args[0]==='--catalog-only'
+    ? 'catalog-only' : args.length===0 ? 'balance-and-catalog' : 'INVALID';
+  main({scope}).then(result => {
     process.stdout.write(JSON.stringify(result)+'\n');
   }).catch(error=>{
     // Only controlled classification. Never serialize upstream error, key or stack.
