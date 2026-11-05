@@ -142,9 +142,11 @@ test("manual recharge public channel exposes only safe payment instructions", ()
     assert.match(rechargeUtils, new RegExp(`\\b${field}\\b`));
   }
 
-  assert.match(accountPage, /manualPayment/);
-  assert.match(accountPage, /付款地址|收款地址/);
-  assert.match(accountPage, /代币合约|Token 合约/);
+  const paymentPage = file("app/payment/page.tsx");
+  assert.doesNotMatch(accountPage, /selectedChannel\.manualPayment\.payment_address/);
+  assert.match(paymentPage, /收款地址[\s\S]*recharge\.paymentAddress/);
+  assert.match(paymentPage, /Token 合约[\s\S]*recharge\.paymentTokenContract/);
+  assert.match(paymentPage, /canTransfer && recharge\.paymentAddress/);
   assert.match(accountPage, /付款说明/);
 
   assert.doesNotMatch(channelsRoute, /\bsecret_config\b/);
