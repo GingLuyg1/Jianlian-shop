@@ -41,6 +41,7 @@ import {
 } from "@/lib/supabase/public-catalog";
 import CategoryContentBoundary from "./CategoryContentBoundary";
 import SecondarySlidingIndicator from "./SecondarySlidingIndicator";
+import selectionMotion from "@/components/ui/SelectionMotion.module.css";
 import {
   categoryListScrollClassName,
   categoryPanelInnerClassName,
@@ -638,6 +639,7 @@ function CategoryButton({
       onClick={onClick}
       className={cn(
         interactiveButtonClass,
+        selectionMotion.item,
         "flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-left disabled:cursor-default [-webkit-tap-highlight-color:transparent]",
         active
           ? "border border-transparent bg-transparent text-primary"
@@ -827,11 +829,11 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   return (
-    <button type="button" onClick={() => router.push(checkoutHref(product.id, window.location.pathname + window.location.search))} className={cn(compactProductRowClassName, "group")}>
+    <button type="button" onClick={() => router.push(checkoutHref(product.id, window.location.pathname + window.location.search))} className={cn(compactProductRowClassName, selectionMotion.item, "group")}>
       <div className="flex h-full min-w-0 items-center gap-5">
         <img src={imageSrc} alt={product.name} onError={(event) => setProductImageFallback(event.currentTarget)} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" />
         <div className="min-w-0 flex-1 text-left">
-          <div className="line-clamp-1 text-base font-semibold text-slate-700 group-hover:text-primary">{product.name}</div>
+          <div data-selection-title className="line-clamp-1 text-base font-semibold text-slate-700">{product.name}</div>
           {product.description ? <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{product.description}</div> : null}
           <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
             <span>{product.deliveryLabel}</span>
@@ -877,7 +879,7 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSel
         onSelect();
         router.push(checkoutHref(product.id, window.location.pathname + window.location.search));
       }}
-      className={cn(compactProductRowClassName, "group")}
+      className={cn(compactProductRowClassName, selectionMotion.item, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-5">
         <img
@@ -887,7 +889,7 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSel
           className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover"
         />
         <div className="min-w-0 flex-1 text-left">
-          <div className="line-clamp-1 text-base font-semibold text-slate-700 group-hover:text-primary">
+          <div data-selection-title className="line-clamp-1 text-base font-semibold text-slate-700">
             {product.name}
           </div>
           {product.description ? (

@@ -26,6 +26,7 @@ import { prefetchPublicProductCounts } from "@/lib/catalog/public-product-count-
 import { startCatalogRouteExit } from "@/lib/motion/catalog-route-exit";
 import SidebarSlidingList from "./SidebarSlidingList";
 import styles from "./PublicSidebarGlass.module.css";
+import selectionMotion from "@/components/ui/SelectionMotion.module.css";
 
 const menuItems = [
   { label: "首页", href: "/", icon: Home },
@@ -104,7 +105,7 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
             startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
           }}
           className={cn(
-            styles.navLink,
+            selectionMotion.item,
             "relative mx-auto flex h-[46px] w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-xl px-3 text-left text-sm transition-colors duration-150",
             "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
