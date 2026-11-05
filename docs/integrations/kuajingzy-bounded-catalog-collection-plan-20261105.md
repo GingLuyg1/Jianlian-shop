@@ -58,3 +58,27 @@ Codex 在现有已登录网页点击普通 API 下的「查询跨境商城目录
 本地 Node 离线 9 项模拟测试通过；GitHub 最新提交 CI 状态需要另外核对。**尚未确认跨境资源网普通 API 的 `GET /api/open/v1/catalog/mall` 支持分页**；这份离线模块不是供应商合同或真实目录验收。
 
 仍然唯一下一步：本地 Codex 通过已授权的本机浏览器**仅阅读文档**中的「普通 API → 查询跨境商城目录」接口参数表，确认 `PAGINATION_VERIFIED=YES/NO/NOT_VERIFIED`、所有允许的 query 参数、响应结束标记，并保存非敏感证据。若看不到，先询问供应商，不调用真实目录猜参数。不重新查询余额、不调采购接口、不更改默认 256 KiB API 读取门禁、不合并/部署 PR #103。
+
+## 2026-11-05 用户实拍 API 详情：无分页参数，改为定向过滤查询
+
+用户提供的普通 API 「查询跨境商城目录」接口实际截图，路径为 `GET /api/open/v1/catalog/mall`。请求参数表**仅三行**：
+
+| 名称 | 位置、类型 | 必填 | 文档限制 |
+| --- | --- | --- | --- |
+| `Authorization` | Header, string | 是 | `Bearer <API_KEY>` |
+| `category` | Query, string | 否 | 分类名称，最多 120 字节；国家选择使用返回的类别 ID |
+| `search` | Query, string | 否 | 搜索商品，最多 200 字节 |
+
+截图中的响应示例为 `{data:{domain:"mall",items:[...]}}`；可见的商品字段包括 `id`、`categoryId`、`categoryName`、`platform`、`name`、`titleEnglish`、`image`、`description`、`unitPrice`、`prices`。该截图不证明任何实际商品的售价、库存、可用性或转售授权。截图中的说明特别指出库存随读取时刻更新、`prices` 为 CNY/USD 展示、`pricing.memberLevel` 表示会员等级、实际服务端订单金额才是准值。
+
+**分页结论：** 官方界面的该 GET 参数表不包含 `page` / `pageSize` / `limit` / `offset` / `cursor`，因此 `PAGINATION_DOCUMENTED=NO`。不能把其他接口或通用错误描述里的“分页”当作此接口已经支持分页；响应是否还有未展示字段也不能猜。原离线分页审计模块保留为备用设计，不得用于当前供应商真实请求。
+
+**现有 PR #103 新增可执行的更小权限替代：**
+- `buildKuajingZyMallFilterPath({search})` 或 `({category})`：严格**恰好一个**被文档列明的字符串参数，按 UTF-8 字节上限校验和百分号编码；拒绝空串、组合、未列明分页参数、注入和控制字符。
+- `readMallCatalogFiltered`：固定同一 HTTPS 主机和 GET、12 秒超时、单响应最多 256 KiB、绝不自动重试、严格校验 `data.domain=mall` 和 `data.items` 为数组；只做定向取证，返回 `fullCatalog=false, saleAuthorized=false, costVerified=false, inventoryVerified=false`。
+- 操作员 `node scripts/probe-kuajingzy-readonly.mjs --catalog-filtered`：仅允许当前**过滤模式**，需要从受保护环境提供 `KUAJINGZY_API_KEY`，以及**二选一**的 `KUAJINGZY_CATALOG_SEARCH` 或 `KUAJINGZY_CATALOG_CATEGORY`。无参数/旧的全量 CLI 模式已禁用，防止再次意外查询大目录。**单次一个 GET，无余额请求、无采购 POST。**
+- 只输出根字段名、条目字段名及计数、错误安全代码，不输出 API Key、真实商品详情、账户余额、客户资料或卡密。受限筛选结果不等于完整目录，也不等于可售 SKU。
+- `tests/unit/kuajingzy-filtered-catalog.test.mjs` 验证参数白名单、UTF-8 字节长度、百分号编码、无重复请求、大小限制、身份/金额禁用、异常脱敏。最新 CI 必须通过后才能做下一轮真实只读验收。
+
+**唯一后续受控动作：** 本地 Codex 核对已加密密钥、最新交接、该 PR HEAD 和 CI；选择一个与待售合法数字商品相关的**精准关键词**（建议先用“礼品卡”，但不保证该供应商拥有该品类），通过受保护环境只执行一次 `--catalog-filtered`。若仍然 `RESPONSE_TOO_LARGE`，停止，不加限制、不换关键词重试；若成功，记录脱敏 `data.items` 结构、是否存在所需金额/库存/发货字段，并准备下一步销售与自动交付接口映射。禁止第二个自动 GET、余额复查、真实采购、充值、Prod 修改、合并或部署。完成后更新总交接和跨境资源网独立交接。
+
