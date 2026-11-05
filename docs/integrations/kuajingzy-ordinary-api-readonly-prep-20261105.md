@@ -49,3 +49,15 @@ API origin 为 https://888.kuajing.one，请求使用 Authorization: Bearer API_
 - 唯一下一步：本地 Codex 安全注入已获批密钥，使用当前 Draft PR 的只读探针完成单次余额和目录取证；按真实字段规划无资金采购适配。
 
 Codex 在下次进入本地 Windows 环境时须读取 D:\Jianlian\_project_handoffs\CURRENT_HANDOFF.md、主线独立交接，追加本供应商独立记录及本 PR 的准确状态、测试与证据，不得覆盖其他供应商/支付/USDT/UI 已有成果。
+
+## 2026-11-05 晚间 — 真实 GET 回执和离线诊断修复
+
+用户提供的最新 Codex 回执：BALANCE_PASS_CNY，认证余额 GET 一次通过；Mall catalog GET 一次、HTTP 200，但读取正文失败，旧客户端只报 KUAJINGZY_TRANSPORT_FAILED。商品 ID、售价、库存、交付均 NOT_VERIFIED。密钥已加密保存，未购买、充值、部署、迁移或重试。原始 Windows 受保护报告在本轮连接器中未读取，不冒充独立复核。
+
+本次仅补只读诊断：新增 HEADERS_UNREADABLE、CONTENT_TYPE_INVALID、BODY_READER_MISSING、BODY_READER_ACQUIRE_FAILED、BODY_STREAM_READ_FAILED、BODY_UTF8_INVALID、BODY_JSON_INVALID、RESPONSE_TOO_LARGE、UPSTREAM_CONTRACT_INVALID、REQUEST_TIMEOUT 等精确安全错误码；原有 TRANSPORT_FAILED 保留用于网络层。禁止输出原始错误 message、正文、密钥、Header 或堆栈。
+
+只读探针新增 --catalog-only 模式：只调用一次 GET /api/open/v1/catalog/mall，输出 balanceGet=SKIPPED_PRIOR_PASS，不再访问已验证的余额。未知 CLI 参数在任何请求前拒绝。仍保持 12 秒超时、256 KiB 响应体上限、不重试、不存在下单/充值方法。若上限不足，必须以 RESPONSE_TOO_LARGE 失败收尾，不能擅自放宽。
+
+下一次 Codex 唯一执行条件：核对本 PR HEAD 和 CI、本地保密报告；复用现有受保护的 API Key 注入来源，不能在聊天、GitHub、命令行历史、日志暴露。离线测试通过后，运行 node scripts/probe-kuajingzy-readonly.mjs --catalog-only 恰好一次。如果成功仅保留脱敏字段名/结构和商品适配性判断；如果失败仅记录 CATALOG_ERROR_STAGE 安全代码并 STOP。无真实下单、充值、余额复查、分页重复 GET、合并、部署、Production DB 写或供应商开关修改。更新总交接与 KuajingZy 独立交接；其他独立主线保持原样。
+
+注意：模拟测试通过不代表真实 catalog 已验收。旧代码返回 TRANSPORT_FAILED，不能据此断言到底是哪一步出错；只有新的单次受控取证可以判定。
