@@ -126,8 +126,6 @@ export default function AccountRechargeContent() {
   const feeDisplay = !summaryReady ? "/" : isUsdtCnyRecharge ? "0" : externalBuyerFee && summary?.fee === 0 ? `约 ¥${externalBuyerFee.buyerFeeEstimate}` : summary ? formatPaymentAmount(summary.fee, selectedChannel!.currency) : "/";
   const payableDisplay = !summaryReady ? "/" : isUsdtCnyRecharge ? `${expectedUsdtAmount} USDT` : externalBuyerFee && summary?.fee === 0 ? `约 ¥${externalBuyerFee.cashierTotalEstimate}` : summary ? formatPaymentAmount(summary.payableAmount, selectedChannel!.currency) : "/";
   const arrivalDisplay = !summaryReady ? "/" : isUsdtCnyRecharge ? formatPaymentAmount(Number(requestedCnyAmount), "CNY") : summary ? formatPaymentAmount(summary.arrivalAmount, selectedChannel!.currency) : "/";
-  const externalFeeChannel = selectedChannel?.currency === "CNY" && ["snpay", "liuhaoyi"].includes(selectedChannel.provider) && Boolean(selectedChannel.providerExternalFeeDisclosure);
-  const feeContractDifference = selectedChannel && (isUsdtCnyRecharge ? selectedChannel.feeRate !== 0 : externalFeeChannel ? selectedChannel.feeRate !== 0 : selectedChannel.feeRate !== 0.03);
 
   const loadRecords = useCallback(async (page: number, force = false) => {
     const requestId = ++recordRequestId.current;
@@ -305,8 +303,8 @@ export default function AccountRechargeContent() {
                   <div className="flex items-center gap-2"><Info className="h-4 w-4 text-primary" /><h2 className="text-[18px] font-semibold leading-6 whitespace-nowrap">充值须知</h2></div>
                   <button type="button" onClick={openPublicSupport} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"><Headphones className="h-3.5 w-3.5" /> 在线客服 <ArrowUpRight className="h-3 w-3" /></button>
                 </div>
-                <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
-                  <Notice icon={FileText} title="付款说明"><span className="block">如果无法刷出收款页面，请关闭代理软件重试下！</span><span className="block">如果二维码收款上限无法支付，请关闭支付页面重新获取新的二维码！</span></Notice>
+                <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-5">
+                  <Notice icon={FileText} title="付款说明" className="xl:col-span-2"><span className="block">如果无法刷出收款页面，请关闭代理软件重试下！</span><span className="block">二维码收款上限无法支付，请关闭支付页面重新获取新二维码！</span></Notice>
                   <Notice icon={WalletCards} title="到账与异常"><span className="block">扫码支付成功后，等待 1 分钟，刷新网站页面；</span><span className="block">如果没有到账，请发送付款截图及用户名给在线客服。</span></Notice>
                   <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔限额2000；</span><span className="block">超过 2000 元请联系客服处理。USDT无限制</span></Notice>
                   <Notice icon={Clock3} title="费用说明">手续费：支付宝和微信 3%<br />USDT BEP20 无手续费</Notice>
@@ -380,7 +378,6 @@ export default function AccountRechargeContent() {
                 })}
                 {!channelsLoading ? <button data-payment-channel="unavailable" type="button" disabled className={cn(channelGridStyles.channelCard, "relative flex h-[84px] min-w-0 cursor-not-allowed items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-100/70 pl-[13px] pr-2.5 text-left text-slate-400")}><span className="absolute right-2 top-2 h-3.5 w-3.5 rounded-full border border-slate-300" /><span data-channel-icon className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-slate-200/70"><LockKeyhole className="h-[23px] w-[23px]" /></span><span className="min-w-0"><span className="block whitespace-nowrap text-[14px] font-semibold leading-5 sm:text-[16px] sm:leading-[22px]">暂未开放</span><span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px]">敬请期待</span></span></button> : null}
               </div>
-              {feeContractDifference ? <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">当前渠道实际费率与本页展示要求不同。下方金额按实时渠道配置计算，最终付款以充值单为准。</p> : null}
 
               <div className="order-3 mt-8 flex flex-col border-t border-border/70 pt-6 md:mt-auto md:pt-8">
                 <label className="mb-1.5 block text-sm font-medium">
@@ -489,8 +486,8 @@ export default function AccountRechargeContent() {
   );
 }
 
-function Notice({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
-  return <div data-testid="recharge-notice-item" className={cn(channelGridStyles.noticeItem, "min-w-0 p-3")}><div className="mb-2 flex items-center gap-2.5"><span className={cn(channelGridStyles.noticeIcon, "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-orange-500")}><Icon className="h-[18px] w-[18px]" /></span><h3 className="font-semibold text-slate-800">{title}</h3></div><div>{children}</div></div>;
+function Notice({ icon: Icon, title, children, className }: { icon: LucideIcon; title: string; children: ReactNode; className?: string }) {
+  return <div data-testid="recharge-notice-item" className={cn(channelGridStyles.noticeItem, "min-w-0 p-3", className)}><div className="mb-2 flex items-center gap-2.5"><span className={cn(channelGridStyles.noticeIcon, "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-orange-500")}><Icon className="h-[18px] w-[18px]" /></span><h3 className="font-semibold text-slate-800">{title}</h3></div><div>{children}</div></div>;
 }
 
 function SummaryItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
