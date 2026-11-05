@@ -141,6 +141,7 @@ function renderRecharge(channel, options = {}) {
     "@/components/layout/public-content": { publicMainPanelHeightClassName: "" },
     "./RechargeChannelGrid.module.css": { default: new Proxy({}, { get: (_, key) => String(key) }), __esModule: true },
     "@/lib/payments/online-payment-policy.mjs": onlinePolicy,
+    "@/lib/account/record-presentation": { rechargeCreditedCny: () => "—", rechargeDisplayNumber: () => "000000" },
     "next/link": { default: box, __esModule: true },
     "next/navigation": { useRouter: () => ({ push: noNetwork }) },
     sonner: { toast: { error: noNetwork } },
@@ -177,8 +178,8 @@ test("actual recharge page separates 100 principal from estimated 3 fee and 103 
   const html = renderRecharge(channel, { amount: "100" });
   assert.match(html, /充值金额/);
   assert.match(html, /value="100"/);
-  assert.match(html, /约 ¥3\.00/);
-  assert.match(html, /预计应付[\s\S]*约 ¥103\.00/);
+  assert.match(html, /¥3\.00/);
+  assert.match(html, /预计应付[\s\S]*¥103\.00/);
   assert.match(html, /预计到账金额[\s\S]*¥100\.00/);
 });
 
@@ -199,10 +200,10 @@ for (const code of ["alipay", "wechat"]) {
     assert.equal(channel.providerExternalFeeDisclosure, registry.providerCapabilities.snpay.providerExternalFeeDisclosure);
     const html = renderRecharge(channel);
     assert.ok(!html.includes(channel.providerExternalFeeDisclosure), "requested UI removes the long pre-create paragraph");
-    assert.match(html, /平台手续费（约3%）[\s\S]*约 ¥0\.03/);
+    assert.match(html, /平台手续费（3%）[\s\S]*¥0\.03/);
     assert.match(source("app/payment/page.tsx"), /providerExternalFeeDisclosure/);
     assert.match(html, /预计到账金额[\s\S]*¥1\.00/);
-    assert.match(html, /预计应付[\s\S]*?约 ¥1\.03/);
+    assert.match(html, /预计应付[\s\S]*?¥1\.03/);
     assert.equal(channel.feeRate, 0);
     assert.deepEqual(channels.calculateRechargeAmounts(channel, 1), {
       amount: 1, fee: 0, payableAmount: 1, arrivalAmount: 1, currency: "CNY", decimals: 2,
@@ -224,7 +225,7 @@ test("Liuhaoyi public payload preserves disclosure and compact UI preserves fee 
   assert.equal(channel.providerExternalFeeDisclosure, expected);
   const html = renderRecharge(channel);
   assert.ok(!html.includes(expected));
-  assert.match(html, /预计应付[\s\S]*约 ¥1\.03/);
+  assert.match(html, /预计应付[\s\S]*¥1\.03/);
   assert.match(html, /预计到账金额[\s\S]*¥1\.00/);
   assert.match(source("app/payment/page.tsx"), /providerExternalFeeDisclosure/);
 });
