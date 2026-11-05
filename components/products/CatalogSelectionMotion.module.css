@@ -19,7 +19,7 @@
 @media(hover:hover) and (pointer:fine) {
   .card.card:not(:disabled):hover::before { opacity:1; }
   .card:not(:disabled):hover::after { opacity:1; transform:translateY(-50%) scaleY(1); }
-  .card:not(:disabled):hover [data-selection-icon] { transform:scale(1.08) rotate(8deg); }
+  .card:not(:disabled):hover [data-selection-icon] { transform:scale(1.08) rotate(-8deg); }
 }
 .card:not(:disabled):focus-visible { outline-color:#df7334; }
 .card:not(:disabled):focus-visible::after { opacity:1; transform:translateY(-50%) scaleY(1); }

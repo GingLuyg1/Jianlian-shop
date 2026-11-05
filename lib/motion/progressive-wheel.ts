@@ -1,5 +1,6 @@
 export const WHEEL_CONFIG = {
-  minScale: 0.90,
+  minScale: 0.98,
+  secondaryMinScale: 0.95,
   maxScale: 1,
   minOpacity: 0.78,
   topPlateauEnd: 0.55,
@@ -10,7 +11,7 @@ export function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-export function wheelVisual(itemCenter: number, viewportHeight: number, scrollProgress: number, active = false) {
+export function wheelVisual(itemCenter: number, viewportHeight: number, scrollProgress: number, active = false, minimumScale: number = WHEEL_CONFIG.minScale) {
   if (active || viewportHeight <= 0) return { scale: WHEEL_CONFIG.maxScale, opacity: 1 };
   const position = clamp(itemCenter / viewportHeight, 0, 1);
   const progress = clamp(scrollProgress, 0, 1);
@@ -25,7 +26,7 @@ export function wheelVisual(itemCenter: number, viewportHeight: number, scrollPr
       : 0;
   const intensity = clamp(distance, 0, 1);
   return {
-    scale: WHEEL_CONFIG.maxScale - (WHEEL_CONFIG.maxScale - WHEEL_CONFIG.minScale) * intensity,
+    scale: WHEEL_CONFIG.maxScale - (WHEEL_CONFIG.maxScale - clamp(minimumScale, 0, WHEEL_CONFIG.maxScale)) * intensity,
     opacity: 1 - (1 - WHEEL_CONFIG.minOpacity) * intensity,
   };
 }

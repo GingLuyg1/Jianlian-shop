@@ -2,16 +2,17 @@
 
 import { useCallback, useLayoutEffect, useRef } from "react";
 
-import { centeredScrollTop, wheelVisual } from "@/lib/motion/progressive-wheel";
+import { centeredScrollTop, wheelVisual, WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 
 type WheelMotionOptions = {
   activeId?: string;
   contentKey: string;
   resetKey?: string;
+  minScale?: number;
 };
 
 /** One DOM-only animation loop shared by the secondary rail and product list. */
-export function useProgressiveWheelMotion({ activeId, contentKey, resetKey }: WheelMotionOptions) {
+export function useProgressiveWheelMotion({ activeId, contentKey, resetKey, minScale = WHEEL_CONFIG.minScale }: WheelMotionOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scheduleRef = useRef<() => void>(() => undefined);
   const previousResetKey = useRef(resetKey);
@@ -35,7 +36,7 @@ export function useProgressiveWheelMotion({ activeId, contentKey, resetKey }: Wh
       const progress = (container.scrollTop / Math.max(1, container.scrollHeight - viewportHeight));
       // Read layout for every row before writing styles, avoiding read/write thrash.
       const values = items.map((item) => animate
-        ? wheelVisual(item.offsetTop - container.scrollTop + item.offsetHeight / 2, viewportHeight, progress, item.dataset.wheelItem === activeId)
+        ? wheelVisual(item.offsetTop - container.scrollTop + item.offsetHeight / 2, viewportHeight, progress, item.dataset.wheelItem === activeId, minScale)
         : { scale: 1, opacity: 1 });
       items.forEach((item, index) => {
         item.style.setProperty("--wheel-scale", values[index].scale.toFixed(4));
@@ -58,7 +59,7 @@ export function useProgressiveWheelMotion({ activeId, contentKey, resetKey }: Wh
       cancelAnimationFrame(frame);
       scheduleRef.current = () => undefined;
     };
-  }, [activeId, contentKey, resetKey]);
+  }, [activeId, contentKey, resetKey, minScale]);
 
   const centerItem = useCallback((id: string) => {
     const container = containerRef.current;

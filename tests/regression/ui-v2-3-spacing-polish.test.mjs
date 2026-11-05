@@ -38,17 +38,17 @@ test("storefront floating sidebar reserves its desktop footprint and retains com
   const productUi = file("components/products/product-ui.ts");
   const productDetail = file("app/products/[id]/page.tsx");
 
-  assert.match(layout, /lg:\[--storefront-sidebar-width:251px\]/);
-  assert.match(layout, /lg:\[--storefront-main-offset:271px\]/);
-  assert.match(layout, /md:\[--storefront-sidebar-width:251px\]/);
-  assert.match(layout, /md:\[--storefront-main-offset:271px\]/);
+  assert.match(layout, /lg:\[--storefront-sidebar-width:248px\]/);
+  assert.match(layout, /lg:\[--storefront-main-offset:268px\]/);
+  assert.match(layout, /md:\[--storefront-sidebar-width:248px\]/);
+  assert.match(layout, /md:\[--storefront-main-offset:268px\]/);
   assert.match(publicSidebar, /mx-auto flex h-\[46px\] w-\[calc\(100%-6px\)\] items-center justify-start/);
   assert.match(publicSidebar, /text-left text-sm/);
   assert.match(publicSidebar, /sidebar-scroll flex-1 overflow-y-auto px-2/);
   assert.equal((publicSidebar.match(/w-\[calc\(100%-6px\)\]/g) ?? []).length, 2);
   assert.match(layout, /--storefront-content-padding-x:16px/);
   assert.match(boundary, /mallShellClassName/);
-  assert.match(productUi, /gap-4[^"\r\n]*lg:grid-cols-\[240px_minmax\(0,1fr\)\]/);
+  assert.match(productUi, /gap-4[^"\r\n]*lg:grid-cols-\[243px_minmax\(0,1fr\)\]/);
   assert.doesNotMatch(productUi, /lg:grid-cols-\[(?:249|2[5-9]\d|[3-9]\d\d)px_/);
   assert.match(productUi, /categoryListScrollClassName =\s*\r?\n\s*"[^"]*px-1 py-1[^"]*"/);
   assert.match(productUi, /productListFiveRowsClassName =\s*\r?\n\s*"[^"]*w-full[^"]*px-1\.5 py-1 pr-2[^"]*"/);

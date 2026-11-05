@@ -105,8 +105,8 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   return (
     <div data-storefront-ui className={cn(
       viewportLocked ? "h-dvh overflow-hidden" : "min-h-screen overflow-x-hidden",
-      "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:271px] lg:[--storefront-sidebar-width:251px]",
-      !mobileNavigationUntilLg && "md:[--storefront-main-offset:271px] md:[--storefront-sidebar-width:251px]",
+      "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:268px] lg:[--storefront-sidebar-width:248px]",
+      !mobileNavigationUntilLg && "md:[--storefront-main-offset:268px] md:[--storefront-sidebar-width:248px]",
     )}>
       <Suspense fallback={null}>
         <RouteLoadingIndicator />

@@ -28,6 +28,7 @@ import { fallbackCategoriesByPath, type StorefrontFallbackCategory } from "@/lib
 import { clearPublicProductCounts, forgetPublicProductCount, getPublicProductCount, getPublicProductCountForRoute, rememberPublicProductCount, retainVisiblePublicProductCounts, subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion } from "@/lib/catalog/public-product-count-cache";
 import { forgetPublicProductPage, getPublicProductPage, peekPublicProductPage, prefetchPublicProductPage } from "@/lib/catalog/public-product-query-cache";
 import { useProgressiveWheelMotion } from "@/hooks/use-progressive-wheel-motion";
+import { WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 import { findVisibleStorefrontPrimaryCategory } from "@/hooks/use-visible-storefront-categories";
 import { getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
 import {
@@ -559,6 +560,7 @@ function CategoryPanel({
   const { containerRef, centerItem } = useProgressiveWheelMotion({
     activeId: selectedCategoryId,
     contentKey: categories.map((category) => category.id).join(","),
+    minScale: WHEEL_CONFIG.secondaryMinScale,
   });
   return (
     <Card data-testid="storefront-secondary-categories" data-catalog-secondary-route={pageRoute} data-catalog-secondary-ready={!isLoading && !error && !showPlaceholder ? "true" : "false"} data-placeholder-phase={placeholderPhase} className="relative h-full min-h-0 overflow-hidden">

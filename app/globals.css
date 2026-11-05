@@ -72,6 +72,9 @@
 [data-storefront-ui] :where(div, section, article, aside, form, nav, a, button).rounded-xl {
   border-radius: var(--storefront-card-radius);
 }
+[data-storefront-ui] [data-storefront-topbar] .rounded-xl {
+  border-radius: 12px;
+}
 [data-storefront-ui] :where(div, section, article, aside, form).rounded-2xl,
 [data-storefront-ui] :where(div, section, article, aside, form).rounded-\[20px\],
 [data-storefront-ui] :where(div, section, article, aside, form).border.rounded-lg {
