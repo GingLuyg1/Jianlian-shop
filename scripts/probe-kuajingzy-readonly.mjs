@@ -26,7 +26,7 @@ export function summarizeKuajingZyCatalogShape(data) {
     stockVerified: false,
   });
 }
-export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch,scope='balance-and-catalog',filter}={}) {
+export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch,scope='balance-and-catalog',filter,onDiagnostics}={}) {
   if (!['balance-and-catalog', 'catalog-only', 'catalog-filtered'].includes(scope)) {
     throw new KuajingZyReadError('SCOPE_INVALID');
   }
@@ -38,7 +38,7 @@ export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch,sc
       throw new KuajingZyReadError('CATALOG_FILTER_INVALID');
     }
   }
-  const client=createKuajingZyReadonlyClient({apiKey:key,fetchImpl});
+  const client=createKuajingZyReadonlyClient({apiKey:key,fetchImpl,onDiagnostics});
   // The historical balance GET already passed; never repeat for filtered reads.
   const balance=scope === 'balance-and-catalog' ? await client.readBalance() : null;
   const catalog=scope === 'catalog-filtered'
@@ -64,12 +64,14 @@ if (process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1]))
   const category=process.env.KUAJINGZY_CATALOG_CATEGORY;
   const filter=search !== undefined && category === undefined ? {search}
     : category !== undefined && search === undefined ? {category} : null;
-  main({scope,filter}).then(result => {
-    process.stdout.write(JSON.stringify(result)+'\n');
+  const diagnostics=[];
+  main({scope,filter,onDiagnostics:value=>diagnostics.push(value)}).then(result => {
+    process.stdout.write(JSON.stringify({...result,diagnostics})+'\n');
   }).catch(error=>{
     // Only controlled classification. Never serialize upstream error, key or stack.
     const allowed = /^KUAJINGZY_[A-Z0-9_]+$/.test(error?.code ?? '') ? error.code : 'KUAJINGZY_PROBE_FAILED';
     process.stderr.write('PROBE_ERROR='+allowed+'\n');
+    process.stderr.write('PROBE_DIAGNOSTICS='+JSON.stringify(diagnostics)+'\n');
     process.exitCode=1;
   });
 }
