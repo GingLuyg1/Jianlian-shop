@@ -12,6 +12,9 @@
 .vipDetails { margin-top:20px; }
 .vipLevels { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:16px; }
 .vipLevel { min-width:0; border:1px solid rgb(236 218 193 / 60%); border-radius:15px; padding:18px; background:linear-gradient(145deg, rgb(255 255 255 / 85%), rgb(253 239 217 / 45%)); box-shadow:inset 0 1px 0 white; }
+.vipLevel[data-current=true] { border-color:#edc59a; background:linear-gradient(135deg,#fff0dc,#fffaf2); box-shadow:inset 0 1px 0 white,0 5px 14px -12px #b4793e; }
+.vipProgress { height:7px; overflow:hidden; border-radius:999px; background:#f0e5d7; box-shadow:inset 0 1px 2px rgb(130 92 51 / 8%); }
+.vipProgress > span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#e3ac68,#d87a34); }
 .navIcon { display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:12px; background:rgb(255 255 255 / 68%); border:1px solid rgb(236 218 198 / 65%); }
 .compactNav .navIcon { width:24px; height:24px; border:0; background:transparent; }
 .contentFrame {

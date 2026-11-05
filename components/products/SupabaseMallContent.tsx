@@ -796,6 +796,7 @@ function ProductPanel({
                     <div className="catalog-enter-item" style={{ animationDelay: `${Math.min(index * 35, 210)}ms` }}>
                       <ProductRowCompact
                         product={product}
+                        category={activeCategory}
                         currencySymbol={currencySymbol}
                         showStock={showStock}
                         disabled={!resultReady}
@@ -863,10 +864,18 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
   );
 }
 
-function ProductRowCompact({ currencySymbol, product, showStock, disabled, selected, onSelect }: { currencySymbol: string; product: Product; showStock: boolean; disabled: boolean; selected: boolean; onSelect: () => void }) {
+function CatalogProductIcon({ product, category }: { product: Product; category: DisplayCategory | null }) {
+  const [failed, setFailed] = useState<string[]>([]);
+  const ownImage = product.imageUrl?.trim();
+  const source = [ownImage, category?.displayImage].find(value => value && !failed.includes(value));
+  const Icon = category?.displayIcon ? iconMap[category.displayIcon] : KeyRound;
+  return source ? <img data-selection-icon src={source} alt={product.name} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" onError={() => setFailed(values => [...values, source])} />
+    : <span data-selection-icon className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10"><Icon className="h-6 w-6 text-primary" aria-label={category?.name || "商品"} /></span>;
+}
+
+function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; onSelect: () => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
-  const imageSrc = product.imageUrl || productImageFallbackSrc;
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
@@ -888,13 +897,7 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, selec
       className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-5">
-        <img
-          data-selection-icon
-          src={imageSrc}
-          alt={product.name}
-          onError={(event) => setProductImageFallback(event.currentTarget)}
-          className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover"
-        />
+        <CatalogProductIcon product={product} category={category} />
         <div className="min-w-0 flex-1 text-left">
           <div data-selection-title className="line-clamp-1 text-base font-semibold text-slate-700">
             {product.name}

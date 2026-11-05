@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import { estimateExternalBuyerFee } from "@/lib/payments/online-payment-policy.mjs";
+import { rechargeCreditedCny, rechargeDisplayNumber } from "@/lib/account/record-presentation";
 import RechargeEmptyState from "@/components/account/RechargeEmptyState";
 import RecordLoginState from "@/components/account/RecordLoginState";
 import { loadPublicRechargeChannels, peekPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
@@ -125,8 +126,8 @@ export default function AccountRechargeContent() {
     && ["snpay", "liuhaoyi"].includes(selectedChannel.provider) && selectedChannel.providerExternalFeeDisclosure
     ? estimateExternalBuyerFee(amountText) : null;
   const summaryReady = Boolean(selectedChannel && (isUsdtCnyRecharge ? requestedCnyAmount && expectedUsdtAmount && dailyRate : summary && summary.amount > 0));
-  const feeDisplay = !summaryReady ? "/" : isUsdtCnyRecharge ? "0" : externalBuyerFee && summary?.fee === 0 ? `约 ¥${externalBuyerFee.buyerFeeEstimate}` : summary ? formatPaymentAmount(summary.fee, selectedChannel!.currency) : "/";
-  const payableDisplay = !summaryReady ? "/" : isUsdtCnyRecharge ? `${expectedUsdtAmount} USDT` : externalBuyerFee && summary?.fee === 0 ? `约 ¥${externalBuyerFee.cashierTotalEstimate}` : summary ? formatPaymentAmount(summary.payableAmount, selectedChannel!.currency) : "/";
+  const feeDisplay = !summaryReady ? "/" : isUsdtCnyRecharge ? "0" : externalBuyerFee && summary?.fee === 0 ? `¥${externalBuyerFee.buyerFeeEstimate}` : summary ? formatPaymentAmount(summary.fee, selectedChannel!.currency) : "/";
+  const payableDisplay = !summaryReady ? "/" : isUsdtCnyRecharge ? `${expectedUsdtAmount} USDT` : externalBuyerFee && summary?.fee === 0 ? `¥${externalBuyerFee.cashierTotalEstimate}` : summary ? formatPaymentAmount(summary.payableAmount, selectedChannel!.currency) : "/";
   const arrivalDisplay = !summaryReady ? "/" : isUsdtCnyRecharge ? formatPaymentAmount(Number(requestedCnyAmount), "CNY") : summary ? formatPaymentAmount(summary.arrivalAmount, selectedChannel!.currency) : "/";
 
   const loadRecords = useCallback(async (page: number, force = false) => {
@@ -243,7 +244,6 @@ export default function AccountRechargeContent() {
     const channel = paymentChannels.find((item) => item.code === channelCode);
     if (!channel || !channel.enabled) return;
     setSelectedChannelCode(channelCode);
-    setAmountText("");
     setSubmitMessage(null);
     clientRequestIdRef.current = null;
   };
@@ -431,7 +431,7 @@ export default function AccountRechargeContent() {
 
                 <div data-testid="recharge-summary" className="mt-4 flex flex-col gap-5 rounded-2xl bg-gradient-to-r from-orange-50/80 to-orange-50/40 p-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-orange-200/60 text-xs text-slate-500">
-                    <SummaryItem icon={FileText} label={externalBuyerFee && summary?.fee === 0 ? "平台手续费（约3%）" : "手续费"} value={feeDisplay} />
+                    <SummaryItem icon={FileText} label={externalBuyerFee && summary?.fee === 0 ? "平台手续费（3%）" : "手续费"} value={feeDisplay} />
                     <SummaryItem icon={Clock3} label="预计应付" value={payableDisplay} />
                     <SummaryItem icon={WalletCards} label="预计到账金额" value={arrivalDisplay} />
                   </div>
@@ -533,7 +533,7 @@ function RechargeRecords({ records, loading, loadingCount, error, page, count, n
       <div className="space-y-3 md:min-h-0 md:flex-1 md:overflow-y-auto">
         {records.map((record) => {
           const now = new Date(Date.now() + nowTick * 0);
-          const expired = record.status === "expired" || isRechargePastDue(record.expiresAt, now);
+          const expired = record.status === "expired" || (["pending", "waiting_payment"].includes(String(record.status)) && isRechargePastDue(record.expiresAt, now));
           const isExternalCny = record.channelCode === "alipay" || record.channelCode === "wechat";
           const canContinue = isExternalCny
             ? canContinueLiuhaoyiRechargePayment(record as unknown as Record<string, unknown>, now)
@@ -542,34 +542,21 @@ function RechargeRecords({ records, loading, loadingCount, error, page, count, n
           const remainingSeconds = secondsUntil(record.expiresAt, now);
           return <div key={record.rechargeNo} className="min-w-0 rounded-2xl border border-[#eee4d9] bg-white p-4 text-sm shadow-[0_2px_10px_-8px_rgba(91,62,38,0.25)]">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="min-w-0 break-all font-semibold text-slate-800" title={record.rechargeNo}>{record.rechargeNo}</span>
+              <button type="button" className="min-w-0 truncate rounded-md font-semibold text-slate-800 underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-primary" title={`完整订单编号：${record.rechargeNo}`} aria-label={`订单编号 ${rechargeDisplayNumber(record.rechargeNo)}，复制完整编号`} onClick={() => void copyRechargeNo(record.rechargeNo)}>订单编号 {rechargeDisplayNumber(record.rechargeNo)}</button>
               <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{rechargeStatusLabel(status)}</span>
             </div>
             <dl className="grid gap-2 text-muted-foreground">
               <RecordLine label="支付渠道" value={record.channelName} />
-              {record.network ? <RecordLine label="网络" value={record.network} /> : null}
               <RecordLine label="充值金额" value={record.requestedCnyAmount ? `¥${record.requestedCnyAmount}` : formatPaymentAmount(record.requestedAmount, record.currency)} />
-              {record.lockedSettlementRate ? <RecordLine label="锁定汇率" value={`1 USDT = ¥${record.lockedSettlementRate}`} /> : null}
-              {record.expectedUsdtAmount ? <RecordLine label="精确应付" value={`${record.expectedUsdtAmount} USDT`} /> : null}
-              <CopyableRecordLine label="订单编号" value={record.rechargeNo} />
+              <RecordLine label="实际到账" value={rechargeCreditedCny(record)} />
+              <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />
+              <RecordLine label="到账时间" value={record.completedAt ? formatDateTime(record.completedAt) : "—"} />
               {record.expiresAt ? <RecordLine label="支付有效期至" value={formatDateTime(record.expiresAt)} /> : null}
               {canContinue ? <RecordLine label="待支付剩余时间" value={formatCountdown(remainingSeconds)} /> : null}
-              {record.paymentAddress ? <RecordLine label="收款地址" value={record.paymentAddress} /> : null}
-              {record.paymentTokenContract ? <RecordLine label="Token 合约" value={record.paymentTokenContract} /> : null}
-              {record.actualReceivedUsdt ? <RecordLine label="实际到账" value={`${record.actualReceivedUsdt} USDT`} /> : null}
-              <RecordLine label="本站手续费" value={record.feeAmount === 0 ? "0" : formatPaymentAmount(record.feeAmount, record.currency)} />
-              {record.providerExternalFeeDisclosure ? <RecordLine label="支付通道手续费" value={record.providerExternalFeeDisclosure} /> : null}
-              {!record.expectedUsdtAmount ? <RecordLine label="应付金额" value={formatPaymentAmount(record.payableAmount, record.currency)} /> : null}
-              <RecordLine label="到账金额" value={record.creditedCnyAmount ? `¥${record.creditedCnyAmount}` : formatPaymentAmount(record.creditedAmount, record.currency)} />
-              <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />
-              {record.completedAt ? <RecordLine label="到账时间" value={formatDateTime(record.completedAt)} /> : null}
               {record.reviewReason && ["failed", "rejected", "cancelled"].includes(String(record.status)) ? <RecordLine label="处理说明" value={record.reviewReason} /> : null}
             </dl>
             {canContinue ? <Button asChild size="sm" className="mt-3"><Link href={`/payment?recharge=${encodeURIComponent(record.rechargeNo)}`}>继续支付</Link></Button> : null}
-            {expired ? <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-              <p>充值订单已过期。如您已完成转账，请联系人工客服并提供充值订单编号。</p>
-              <Button type="button" size="sm" variant="outline" className="mt-2" onClick={openPublicSupport}>联系客服</Button>
-            </div> : null}
+
             {!expired && ["waiting_payment", "submitted", "rejected"].includes(String(record.status)) ? (record.expectedUsdtAmount ? <RechargeBep20VerifyForm record={record} onSubmitted={onProofSubmitted} /> : <RechargeProofForm record={record} onSubmitted={onProofSubmitted} />) : null}
           </div>;
         })}
@@ -653,17 +640,6 @@ function RechargeProofForm({ record, onSubmitted }: { record: RechargeRecord; on
   return <div className="mt-3 border-t pt-3">{!open ? <Button size="sm" variant="outline" onClick={() => setOpen(true)}>{record.status === "submitted" ? "补充支付凭证" : "提交支付凭证"}</Button> : <div className="space-y-2 rounded-lg border bg-white p-3"><div className="text-xs text-slate-500">付款金额：{formatPaymentAmount(record.payableAmount, record.currency)}</div><Input value={reference} maxLength={160} onChange={(e) => setReference(e.target.value)} placeholder="交易流水号" /><Input value={payer} maxLength={120} onChange={(e) => setPayer(e.target.value)} placeholder="付款账号摘要（请勿填写完整敏感信息）" /><Input type="datetime-local" value={paymentTime} onChange={(e) => setPaymentTime(e.target.value)} /><Input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="用户备注（可选）" /><Input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 3))} /><p className="text-xs text-slate-500">支持 JPG、PNG、WEBP、PDF，单个最大 5MB，最多 3 个。</p><div className="flex gap-2"><Button size="sm" disabled={submitting} onClick={() => void submit()}>{submitting ? "提交中..." : "提交审核"}</Button><Button size="sm" variant="outline" disabled={submitting} onClick={() => setOpen(false)}>取消</Button></div></div>}</div>;
 }
 
-function CopyableRecordLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex min-w-0 items-start justify-between gap-3">
-      <dt className="shrink-0 text-slate-500">{label}：</dt>
-      <dd className="flex min-w-0 flex-wrap items-center justify-end gap-1 text-right text-slate-600">
-        <span className="min-w-0 break-all" title={value}>{value}</span>
-        <Button type="button" size="sm" variant="ghost" className="h-8 shrink-0 px-2" onClick={() => void copyRechargeNo(value)}>复制</Button>
-      </dd>
-    </div>
-  );
-}
 
 async function copyRechargeNo(value: string) {
   try {

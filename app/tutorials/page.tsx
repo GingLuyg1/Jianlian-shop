@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import {
+  BookOpen,
+  ArrowUpRight,
   CheckCircle2,
   ClipboardCheck,
   CreditCard,
@@ -10,7 +13,12 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { openPublicSupport } from "@/lib/support/open-public-support";
+import glass from "@/components/account/AccountGlass.module.css";
+import styles from "@/components/account/AccountCenter.module.css";
+import tutorial from "@/components/account/TutorialsGlass.module.css";
 
 const steps = [
   {
@@ -48,123 +56,34 @@ const serviceRules = [
 ];
 
 export default function TutorialsPage() {
-  return (
-    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-y-auto px-4 py-3 md:px-6">
-      <div className="mx-auto grid h-full max-w-[1500px] gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="space-y-5">
-          <Card className="overflow-hidden border-orange-100 bg-orange-50">
-            <CardContent className="p-6 md:p-8">
-              <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-primary">
-                Jianlian 使用教程
+  const [search, setSearch] = useState("");
+  const query = search.trim().toLocaleLowerCase();
+  const matches = !query || ["使用必读", "购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])].some(text => text.toLocaleLowerCase().includes(query));
+  return <div className={tutorial.shell}><PublicLayout viewportLocked contentClassName="max-w-none px-4 py-3 md:px-6">
+    <div data-testid="tutorial-workspace" className={tutorial.workspace}>
+      <aside data-testid="tutorial-navigation" className={`${glass.surface} ${styles.panel} ${tutorial.navigation}`}>
+        <label htmlFor="tutorial-search" className="text-sm font-semibold text-slate-900">搜索商品教程</label>
+        <div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" aria-hidden="true" /><Input id="tutorial-search" value={search} onChange={event => setSearch(event.target.value)} placeholder="输入商品 / 教程关键词" className="h-11 rounded-xl border-orange-100 bg-white/80 pl-9" /></div>
+        <nav aria-label="使用教程分类" className="mt-4"><button type="button" aria-current="page" className={tutorial.selected} onClick={() => setSearch("")}><BookOpen className="h-5 w-5 shrink-0" aria-hidden="true" /><span className="flex-1 text-left">使用必读</span><span className={styles.pill}>必读</span></button></nav>
+      </aside>
+      <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content}`}>
+        <header className={`${glass.hero} ${tutorial.header}`}><h1 className="text-xl font-semibold text-slate-900">使用必读</h1><p className="mt-2 text-sm leading-6 text-slate-500">下单前了解商品规则、购买流程与交付说明。</p></header>
+        <div data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto`} tabIndex={0} role="region" aria-label="使用必读正文">
+          {!matches ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => setSearch("")}>清空搜索</Button></div> : <div className="space-y-7">
+            <section aria-labelledby="tutorial-service-title">
+              <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
+                <div className={`${glass.inset} rounded-2xl p-5 sm:p-6`}><span className={styles.pill}>Jianlian 数字商品服务</span><p className="mt-4 text-sm leading-7 text-slate-600">本商城提供数字账号、礼品卡、通信及相关数字商品服务。请在购买前确认商品地区、规格、使用条件与交付方式。具体商品说明优先于通用教程。</p><p className="mt-3 text-sm leading-7 text-slate-500">遇到不确定的信息，请先联系在线客服确认，避免购买不适用的商品。</p></div>
+                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">{serviceRules.map(({ title, text, icon: Icon }) => <div key={title} className={`${glass.inset} flex items-start gap-3 rounded-2xl p-4`}><Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><div><h3 className="text-sm font-semibold">{title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{text}</p></div></div>)}</div>
               </div>
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-950">
-                购买与交付指南
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground">
-                下单前核对商品信息，交付后及时完成核验。不同商品的地区、规格、交付方式和售后规则可能不同，请始终以商品详情页展示内容为准。
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-5 md:p-6">
-              <div className="mb-4 flex items-end justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-950">购买流程</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    按顺序完成核对和提交，减少买错或信息填错。
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-4">
-                {steps.map((step, index) => {
-                  const Icon = step.icon;
-                  return (
-                    <div
-                      key={step.title}
-                      className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                          {index + 1}
-                        </span>
-                        <Icon className="h-5 w-5 text-primary" />
-                      </div>
-                      <h3 className="mt-4 text-base font-bold text-slate-950">
-                        {step.title}
-                      </h3>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        {step.text}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="grid gap-4 p-5 md:grid-cols-3 md:p-6">
-              {serviceRules.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <div
-                    key={item.title}
-                    className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4"
-                  >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h3 className="font-bold text-slate-950">{item.title}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {item.text}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </section>
-
-        <aside className="space-y-5">
-          <Card className="border-orange-100">
-            <CardContent className="p-5">
-              <h2 className="text-lg font-bold text-slate-950">下单提醒</h2>
-              <div className="mt-4 space-y-3">
-                {notices.map((notice, index) => (
-                  <div
-                    key={notice}
-                    className="flex gap-3 rounded-xl bg-orange-50/70 p-3 text-sm leading-6 text-slate-700"
-                  >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-primary">
-                      {index + 1}
-                    </span>
-                    <span>{notice}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-primary text-white">
-            <CardContent className="p-5">
-              <h2 className="text-lg font-bold">需要补货、批量购买或不确定商品是否适用？</h2>
-              <p className="mt-3 text-sm leading-7 text-white/90">
-                先联系在线客服确认后再下单。
-              </p>
-              <button
-                type="button"
-                className="mt-5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-primary"
-                {...({ popovertarget: "support-popover" } as Record<string, string>)}
-              >
-                联系在线客服
-              </button>
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
-    </PublicLayout>
-  );
+            </section>
+            <section className="rounded-2xl border border-orange-200/70 bg-orange-50/40 p-5 sm:p-6"><h2 className="flex items-center gap-2 text-base font-semibold text-[#b96532]"><ShieldCheck className="h-5 w-5" aria-hidden="true" />合规与账户安全</h2><p className="mt-3 text-sm leading-7 text-slate-600">仅限合法用途。请勿提交涉及违法、欺诈、侵权或他人隐私的内容。不要通过公开渠道发送账号密码、卡密、验证码或支付凭证。</p></section>
+            <section aria-labelledby="tutorial-purchase-title"><div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ClipboardCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-purchase-title" className="text-lg font-semibold">购买与交付指南</h2><p className="mt-1 text-xs text-slate-500">按顺序核对，减少商品或订单信息填写错误。</p></div></div><div className="grid gap-3 sm:grid-cols-2">{steps.map(({ title, text, icon: Icon }, index) => <article key={title} className={`${glass.inset} rounded-2xl p-5`}><div className="flex items-center gap-2 text-sm font-semibold"><span className="text-xs tabular-nums text-[#b18c63]">0{index + 1}</span><Icon className="h-4 w-4 text-primary" aria-hidden="true" /><h3>{title}</h3></div><p className="mt-3 text-sm leading-7 text-slate-500">{text}</p></article>)}</div></section>
+            <section className={`${glass.inset} rounded-2xl p-5 sm:p-6`}><h2 className="text-base font-semibold">下单与售后提醒</h2><ul className="mt-4 list-disc space-y-3 pl-4 text-sm leading-7 text-slate-600">{notices.map(notice => <li key={notice}>{notice}</li>)}</ul></section>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-orange-100 pt-5"><p className="text-sm text-slate-500">需要补货、批量购买或确认商品是否适用？</p><Button variant="outline" onClick={openPublicSupport}><Headphones className="mr-2 h-4 w-4" />联系在线客服<ArrowUpRight className="ml-2 h-4 w-4" /></Button></div>
+          </div>}
+        </div>
+      </section>
+    </div>
+  </PublicLayout></div>;
 }

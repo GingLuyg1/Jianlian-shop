@@ -167,7 +167,7 @@ export default function AccountOverviewPage() {
               </div>
               <dl className={styles.balanceDetails}>
                 <div className="min-w-0"><dt className="text-xs text-slate-500">可用余额</dt><dd className="mt-2 break-words text-base font-semibold text-slate-800">{loading || !data ? "/" : formatMoney(data.summary.availableBalance)}</dd></div>
-                <div className="min-w-0"><dt className="text-xs text-slate-500">冻结余额</dt><dd className="mt-2 break-words text-sm font-medium text-slate-600">{loading ? "/" : data?.summary.frozenBalance == null ? "暂未开放" : formatMoney(data.summary.frozenBalance)}</dd></div>
+                <div className="min-w-0"><dt className="text-xs text-slate-500">冻结余额</dt><dd className="mt-2 break-words text-sm font-medium text-slate-600">{loading ? "/" : formatMoney(data?.summary.frozenBalance ?? 0)}</dd></div>
               </dl>
             </section>
             <div className={styles.metricGrid}>

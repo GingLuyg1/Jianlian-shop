@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { balanceRechargeChannel, meaningfulBalanceRemark } from "@/lib/account/record-presentation";
+import type { RechargeRecord } from "@/lib/payments/recharge-utils";
 import RechargeEmptyState from "@/components/account/RechargeEmptyState";
 import RecordLoginState from "@/components/account/RecordLoginState";
 import RecordLoadingPlaceholder from "@/components/account/RecordLoadingPlaceholder";
@@ -15,7 +17,7 @@ type Transaction = {
   direction: "credit" | "debit"; amount: number; currency: string;
   balanceBefore: number | null; balanceAfter: number | null;
   status: string; remark: string | null; subtype: string | null;
-  createdAt: string | null;
+  createdAt: string | null; channelName?: string | null; channelCode?: string | null;
 };
 const types: Record<string, string> = {
   account_recharge: "充值入账", order_payment: "订单消费", admin_adjustment: "管理员调整",
@@ -34,11 +36,9 @@ async function copyProductName(fullName: string) {
 }
 
 function BalanceRemark({ value }: { value: string | null }) {
-  const meaningfulLines = value?.split(/\r?\n/).map((line) => line.trim()).filter((line) =>
-    line && !/^订单余额支付[。！!]?$/u.test(line) && !/测试环境|测试余额充值/u.test(line)
-  );
-  if (!meaningfulLines?.length) return null;
-  return <p className="mt-3 whitespace-pre-line break-words border-t border-[#f1e9e0] pt-3 text-xs leading-5 text-[#8e7f71]">{meaningfulLines.join("\n")}</p>;
+  const text = meaningfulBalanceRemark(value);
+  if (!text) return null;
+  return <p className="mt-3 whitespace-pre-line break-words border-t border-[#f1e9e0] pt-3 text-xs leading-5 text-[#8e7f71]">{text}</p>;
 }
 
 export default function BalanceTransactionRecords() {
@@ -122,6 +122,7 @@ export default function BalanceTransactionRecords() {
       {loading ? <RecordLoadingPlaceholder count={loadingCount} label="资金变动记录加载中" /> : error ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600"><p>{error}</p><div className="mt-3 flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => { forceReload.current = true; setRetry((value) => value + 1); }}>重试</Button></div></div> : rows.length === 0 ? <RechargeEmptyState variant="balance" title="暂无资金变动记录" /> : <div className="space-y-3">{rows.map((item) => <article key={item.transactionNo} className="min-w-0 rounded-2xl border border-[#eee4d9] bg-white p-4 text-sm shadow-[0_2px_10px_-8px_rgba(91,62,38,0.25)]">
         <div className="font-semibold">{item.subtype === "bep20_underpayment_wallet_credit" ? "BEP20 欠额转余额" : types[item.businessType] ?? item.businessType}</div>
         <dl className="mt-3 space-y-2 text-xs text-slate-500">
+          {item.businessType === "account_recharge" ? <div className="flex justify-between gap-2"><dt>充值渠道</dt><dd>{balanceRechargeChannel(item, accountRecordPreload.peek<RechargeRecord>("recharges", 1)?.data.find(record => record.rechargeNo === item.businessId)?.channelName)}</dd></div> : null}
           <div className="flex items-center justify-between gap-2"><dt className="shrink-0">变动金额</dt><dd className={item.direction === "credit" ? "whitespace-nowrap text-base font-semibold tabular-nums text-emerald-600" : "whitespace-nowrap text-base font-semibold tabular-nums text-red-600"}>{item.direction === "credit" ? "+" : "-"}{money(item.amount, item.currency)}</dd></div>
           {item.businessType === "order_payment" ? <div data-testid="balance-product-block" className="min-w-0 rounded-xl border border-[#f0e8de] bg-[#fbf8f4] px-3 py-2.5"><dt className="mb-1 text-[11px] text-[#9a8a7b]">商品名称</dt><dd className="flex h-6 min-w-0 items-center gap-2 overflow-hidden"><span data-testid="balance-product-name" title={productNames[item.transactionNo] ?? (namesLoading ? "读取中…" : "商品名称暂不可用")} className="block min-w-0 flex-1 truncate leading-6 text-slate-700">{productNames[item.transactionNo] ?? (namesLoading ? "读取中…" : "商品名称暂不可用")}</span><Button type="button" size="icon" variant="ghost" className="h-6 w-6 shrink-0 p-0 text-[#a18b77]" aria-label="复制完整商品名称" title="复制完整商品名称" disabled={!productNames[item.transactionNo]} onClick={() => void copyProductName(productNames[item.transactionNo])}><Copy className="h-3 w-3" /></Button></dd></div> : null}
           <div className="flex justify-between gap-2"><dt className="shrink-0">变动时间</dt><dd className="text-right">{item.createdAt ? new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false }) : "—"}</dd></div>
