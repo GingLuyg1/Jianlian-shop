@@ -104,6 +104,7 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
             startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
           }}
           className={cn(
+            styles.navLink,
             "relative mx-auto flex h-[46px] w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-xl px-3 text-left text-sm transition-colors duration-150",
             "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}

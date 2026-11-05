@@ -23,6 +23,7 @@ import {
   Headphones,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import styles from "./PublicSidebarGlass.module.css";
 import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
 import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
 import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-query-cache";
@@ -134,6 +135,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    aria-current={active ? "page" : undefined}
                     onFocus={() => { if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows, true); }}
                     onClick={(event) => {
                       if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows);
@@ -141,6 +143,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                       setOpen(false);
                     }}
                     className={cn(
+                      styles.navLink,
                       "flex items-center gap-2 whitespace-nowrap rounded-md px-2 py-2 text-[13px] transition-colors duration-150",
                       active
                         ? "border border-primary/20 bg-primary/10 font-medium text-primary"
