@@ -17,3 +17,15 @@ TypeScript PASS，定向Next Lint无错误（3项既有图片优化建议），�
 本地证据 D:/Jianlian/_ui_glass_restore_20261105/：build.log、BROWSER_FIXTURE_RESULTS.json、admin/recharge-FIXTURE-1440.png、admin/recharge-FIXTURE-390.png。使用实际页面组件静态渲染和隔离合成数据，Chrome1440/390无横向溢出；20元USDT提交禁用，21元（合成汇率6.6、渠道最低1USDT）可提交。没有触发POST或真实登录，不把Fixture称为真实Test/Production验收。
 
 界面仍需用户通过PR或部署后的正常管理员登录确认。服务器、Production、数据库、Daju、Bitrefill、USDT扫描器均未操作。
+
+## 后续视觉接续
+
+导航已按资源中心、帮助中心、我的分组，首页独立保留。一级导航采用浅橙玻璃悬停及按压反馈。
+
+二级分类和三级商品根据用户新参考改为蓝色边缘反馈：进入时左侧3px蓝条从中点展开，退出时收回；鼠标处于卡片中部区域时名称变蓝，图标放大1.08倍并顺时针旋转6度。二、三级内部整体不再平移，价格与库存位置稳定；一级仍使用原轻移效果。
+
+共享基础材质在SelectionMotion.module.css，二/三级增强在CatalogSelectionMotion.module.css。指针处理只改展示data属性，无React状态、无路由/请求/购买逻辑。禁用及触屏跳过中部检测；同一区域连续移动不重复写DOM。支持键盘焦点及减少动态效果。
+
+外层wheel、按钮本体不加变换；二级滑块、点击居中、98%～100%算法及商品可操作保护保持。新增3项指针处理测试，与wheel、预取、布局相关检查共13项PASS；TypeScript、定向Lint、Build通过。BLUE_EDGE_MOTION.json记录真实Chrome隔离演示中的中部变色、边缘不变色、离开复原、图标旋转、禁用/reduced-motion、外层0.98和390px无溢出。仍不代表真实Test登录或商品/付款验收。
+
+本地http://127.0.0.1:3024/catalog 可查看动效，明确标注隔离演示，不加载真实商品或执行下单。

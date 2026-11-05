@@ -5,16 +5,16 @@
 .item > svg, .item > span, .item > div { transition:transform 180ms cubic-bezier(.22,1,.36,1); }
 @media(hover:hover) and (pointer:fine) {
   .item.item:not(:disabled):not([aria-disabled="true"]):hover { background:transparent; color:hsl(var(--primary)); }
-  .item.item:not(:disabled):not([aria-disabled="true"]):hover [data-selection-title] { color:hsl(var(--primary)); }
+  .item.item:not(:disabled):not([aria-disabled="true"]):hover [data-selection-title] { color:var(--selection-title-color,hsl(var(--primary))); }
   .item:not(:disabled):not([aria-disabled="true"]):hover:not([data-sidebar-current="true"]):not([aria-current="page"]):not([aria-pressed="true"])::before { opacity:1; }
   .item:not(:disabled):not([aria-disabled="true"]):hover > svg,
   .item:not(:disabled):not([aria-disabled="true"]):hover > span,
-  .item:not(:disabled):not([aria-disabled="true"]):hover > div { transform:translateX(3px); }
+  .item:not(:disabled):not([aria-disabled="true"]):hover > div { transform:translateX(var(--selection-shift,3px)); }
 }
 .item:not(:disabled):not([aria-disabled="true"]):active::before { opacity:1; transform:scale(.985); }
 .item:not(:disabled):not([aria-disabled="true"]):active > svg,
 .item:not(:disabled):not([aria-disabled="true"]):active > span,
-.item:not(:disabled):not([aria-disabled="true"]):active > div { transform:translateX(1px); }
+.item:not(:disabled):not([aria-disabled="true"]):active > div { transform:translateX(var(--selection-press-shift,1px)); }
 .item:focus-visible { outline:2px solid hsl(var(--primary) / 65%); outline-offset:2px; }
 @media(prefers-reduced-motion:reduce) {
   .item.item,.item::before,.item > svg,.item > span,.item > div { transition:none; }

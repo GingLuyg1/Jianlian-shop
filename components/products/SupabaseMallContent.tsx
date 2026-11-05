@@ -42,6 +42,8 @@ import {
 import CategoryContentBoundary from "./CategoryContentBoundary";
 import SecondarySlidingIndicator from "./SecondarySlidingIndicator";
 import selectionMotion from "@/components/ui/SelectionMotion.module.css";
+import catalogMotion from "./CatalogSelectionMotion.module.css";
+import { updateCatalogPointer, clearCatalogPointer } from "./catalog-selection-motion";
 import {
   categoryListScrollClassName,
   categoryPanelInnerClassName,
@@ -632,6 +634,10 @@ function CategoryButton({
   return (
     <button
       onMouseEnter={onIntent}
+      data-catalog-card
+      onPointerMove={updateCatalogPointer}
+      onPointerLeave={clearCatalogPointer}
+      onPointerCancel={clearCatalogPointer}
       onFocus={onIntent}
       type="button"
       aria-pressed={active}
@@ -640,6 +646,7 @@ function CategoryButton({
       className={cn(
         interactiveButtonClass,
         selectionMotion.item,
+        catalogMotion.card,
         "flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-left disabled:cursor-default [-webkit-tap-highlight-color:transparent]",
         active
           ? "border border-transparent bg-transparent text-primary"
@@ -649,6 +656,7 @@ function CategoryButton({
       <div className="flex min-w-0 items-center gap-3">
         {category.displayImage ? (
           <img
+            data-selection-icon
             src={category.displayImage}
             alt={category.name}
             onError={(event) => setProductImageFallback(event.currentTarget)}
@@ -658,11 +666,11 @@ function CategoryButton({
             )}
           />
         ) : (
-          <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", active ? "bg-primary/15" : "bg-primary/10")}>
+          <div data-selection-icon className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", active ? "bg-primary/15" : "bg-primary/10")}>
             <Icon className="h-6 w-6 text-primary" />
           </div>
         )}
-        <div className="max-w-[130px] truncate whitespace-nowrap text-base font-semibold">{category.name}</div>
+        <div data-selection-title className="max-w-[130px] truncate whitespace-nowrap text-base font-semibold">{category.name}</div>
       </div>
       <ChevronRight className="h-5 w-5 shrink-0" />
     </button>
@@ -829,9 +837,9 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   return (
-    <button type="button" onClick={() => router.push(checkoutHref(product.id, window.location.pathname + window.location.search))} className={cn(compactProductRowClassName, selectionMotion.item, "group")}>
+    <button type="button" data-catalog-card onPointerMove={updateCatalogPointer} onPointerLeave={clearCatalogPointer} onPointerCancel={clearCatalogPointer} onClick={() => router.push(checkoutHref(product.id, window.location.pathname + window.location.search))} className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}>
       <div className="flex h-full min-w-0 items-center gap-5">
-        <img src={imageSrc} alt={product.name} onError={(event) => setProductImageFallback(event.currentTarget)} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" />
+        <img data-selection-icon src={imageSrc} alt={product.name} onError={(event) => setProductImageFallback(event.currentTarget)} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" />
         <div className="min-w-0 flex-1 text-left">
           <div data-selection-title className="line-clamp-1 text-base font-semibold text-slate-700">{product.name}</div>
           {product.description ? <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{product.description}</div> : null}
@@ -875,14 +883,19 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSel
     <button
       type="button"
       disabled={disabled}
+      data-catalog-card
+      onPointerMove={updateCatalogPointer}
+      onPointerLeave={clearCatalogPointer}
+      onPointerCancel={clearCatalogPointer}
       onClick={() => {
         onSelect();
         router.push(checkoutHref(product.id, window.location.pathname + window.location.search));
       }}
-      className={cn(compactProductRowClassName, selectionMotion.item, "group")}
+      className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-5">
         <img
+          data-selection-icon
           src={imageSrc}
           alt={product.name}
           onError={(event) => setProductImageFallback(event.currentTarget)}
