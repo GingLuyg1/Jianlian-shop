@@ -142,6 +142,7 @@ function renderRecharge(channel, options = {}) {
     "./RechargeChannelGrid.module.css": { default: new Proxy({}, { get: (_, key) => String(key) }), __esModule: true },
     "@/lib/payments/online-payment-policy.mjs": onlinePolicy,
     "@/lib/account/record-presentation": { rechargeCreditedCny: () => "—", rechargeDisplayNumber: () => "000000" },
+    "@/hooks/use-payment-card-tilt": { usePaymentCardTilt: () => ({}) },
     "next/link": { default: box, __esModule: true },
     "next/navigation": { useRouter: () => ({ push: noNetwork }) },
     sonner: { toast: { error: noNetwork } },
