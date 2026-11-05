@@ -2,6 +2,8 @@
 // Usage (host only): KUAJINGZY_API_KEY=... node scripts/probe-kuajingzy-readonly.mjs
 // NEVER print raw catalog, auth headers, keys, customer data, invoices or account balance.
 import { createKuajingZyReadonlyClient } from '../lib/providers/kuajingzy/readonly-client.mjs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const safeKeys = value => value && typeof value === 'object' && !Array.isArray(value)
   ? Object.keys(value).slice(0, 40).filter(key => /^[A-Za-z_][A-Za-z0-9_]{0,49}$/.test(key)).sort()
@@ -33,7 +35,7 @@ export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch}={
   };
   return result;
 }
-if (process.argv[1] && import.meta.url===new URL('file://'+process.argv[1]).href) {
+if (process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
   main().then(result => {
     process.stdout.write(JSON.stringify(result)+'\n');
   }).catch(error=>{
