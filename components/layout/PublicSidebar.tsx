@@ -25,6 +25,7 @@ import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-q
 import { prefetchPublicProductCounts } from "@/lib/catalog/public-product-count-cache";
 import { startCatalogRouteExit } from "@/lib/motion/catalog-route-exit";
 import SidebarSlidingList from "./SidebarSlidingList";
+import styles from "./PublicSidebarGlass.module.css";
 
 const menuItems = [
   { label: "首页", href: "/", icon: Home },
@@ -97,7 +98,7 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
             startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
           }}
           className={cn(
-            "relative mx-auto flex h-[42px] w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-md px-3 text-left text-sm transition-colors duration-150",
+            "relative mx-auto flex h-[46px] w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-xl px-3 text-left text-sm transition-colors duration-150",
             "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
         >
@@ -110,10 +111,11 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
 
   return (
     <aside className={cn(
-      "fixed left-0 top-0 z-40 hidden h-screen w-[var(--storefront-sidebar-width)] flex-col border-r border-border bg-white/95",
+      styles.panel,
+      "fixed z-40 hidden w-[var(--storefront-sidebar-width)] flex-col",
       mobileNavigationUntilLg ? "lg:flex" : "md:flex",
     )}>
-      <div className="flex h-[83px] items-center px-3">
+      <div className={styles.brand}>
         <Link
           href="/"
           className="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -147,7 +149,7 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
         </div>
       </SidebarSlidingList>
 
-      <div className="border-t border-border px-2 py-4">
+      <div className="shrink-0 border-t border-orange-100/70 px-3 py-4">
         <button
           type="button"
           onClick={onSupportOpen}

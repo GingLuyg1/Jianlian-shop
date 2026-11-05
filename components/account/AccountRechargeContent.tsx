@@ -86,7 +86,6 @@ export default function AccountRechargeContent() {
   const [recordCount, setRecordCount] = useState(() => accountRecordPreload.peek("recharges", 1)?.count ?? 0);
   const [dailyRate, setDailyRate] = useState<RechargeRate | null>(null);
   const [rateError, setRateError] = useState<string | null>(null);
-  const [rateLoading, setRateLoading] = useState(false);
   const [amountLimitDialogOpen, setAmountLimitDialogOpen] = useState(false);
   const [historyNowTick, setHistoryNowTick] = useState(0);
   const [historyTab, setHistoryTab] = useState<"recharges" | "balance">("recharges");
@@ -109,7 +108,7 @@ export default function AccountRechargeContent() {
     ? compareRechargeDecimals(expectedUsdtAmount, String(selectedChannel.minimumAmount))
     : null;
   const reachesMin = isUsdtCnyRecharge
-    ? minimumComparison !== null && minimumComparison >= 0
+    ? Boolean(requestedCnyAmount && (compareRechargeDecimals(requestedCnyAmount, "21.00") ?? -1) >= 0) && minimumComparison !== null && minimumComparison >= 0
     : Boolean(selectedChannel && summary && summary.amount >= selectedChannel.minimumAmount);
   const hasValidAmount = isUsdtCnyRecharge
     ? Boolean(requestedCnyAmount && expectedUsdtAmount && dailyRate && reachesMin)
@@ -221,17 +220,16 @@ export default function AccountRechargeContent() {
   useEffect(() => {
     // A fiat-only or unconfigured form has no exchange-rate calculation to do.
     // Fetch the live rate when an enabled USDT CNY-recharge channel is selected.
-    if (!isUsdtCnyRecharge) { setDailyRate(null); setRateError(null); setRateLoading(false); return; }
+    if (!isUsdtCnyRecharge) { setDailyRate(null); setRateError(null);  return; }
     let active = true;
-    setRateLoading(true); setRateError(null);
+    setRateError(null);
     void fetch("/api/recharges/rate", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json().catch(() => null) as { rate?: RechargeRate; error?: string } | null;
         if (!response.ok || !payload?.rate) throw new Error(payload?.error ?? "今日充值汇率读取失败");
         if (active) { setDailyRate(payload.rate); setRateError(null); }
       })
-      .catch((error) => { if (active) setRateError(getClientErrorMessage(error, "今日充值汇率读取失败")); })
-      .finally(() => { if (active) setRateLoading(false); });
+      .catch((error) => { if (active) setRateError(getClientErrorMessage(error, "今日充值汇率读取失败")); });
     return () => { active = false; };
   }, [isUsdtCnyRecharge]);
 
@@ -308,8 +306,8 @@ export default function AccountRechargeContent() {
                   <button type="button" onClick={openPublicSupport} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"><Headphones className="h-3.5 w-3.5" /> 在线客服 <ArrowUpRight className="h-3 w-3" /></button>
                 </div>
                 <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
-                  <Notice icon={FileText} title="可用渠道">{channelsLoading ? "正在读取…" : channelsError ? "读取失败，请稍后重试" : visibleChannels.filter((channel) => channel.enabled && channel.status === "active").map((channel) => ({ alipay: "支付宝", wechat: "微信", usdt_bep20: "USDT" })[channel.code as "alipay" | "wechat" | "usdt_bep20"]).join("/") || "当前暂无可用渠道"}</Notice>
-                  <Notice icon={WalletCards} title="到账与异常"><span className="block">付款后以充值订单状态和实际核验结果为准；</span><span className="block">异常订单请凭订单号联系客服。</span></Notice>
+                  <Notice icon={FileText} title="付款说明"><span className="block">如果无法刷出收款页面，请关闭代理软件重试下！</span><span className="block">如果二维码收款上限无法支付，请关闭支付页面重新获取新的二维码！</span></Notice>
+                  <Notice icon={WalletCards} title="到账与异常"><span className="block">扫码支付成功后，等待 1 分钟，刷新网站页面；</span><span className="block">如果没有到账，请发送付款截图及用户名给在线客服。</span></Notice>
                   <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔限额2000；</span><span className="block">超过 2000 元请联系客服处理。USDT无限制</span></Notice>
                   <Notice icon={Clock3} title="费用说明">手续费：支付宝和微信 3%<br />USDT BEP20 无手续费</Notice>
                 </div>
@@ -374,9 +372,7 @@ export default function AccountRechargeContent() {
                           <span className="block whitespace-nowrap text-[14px] font-semibold leading-5 sm:text-[16px] sm:leading-[22px]">
                             {item.name}
                           </span>
-                          <span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px] text-muted-foreground">
-                            {actualFeeDescription}{disabled ? " · 未开放" : ""}
-                          </span>
+                          {item.code === "usdt_bep20" || disabled ? <span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px] text-muted-foreground">{item.code === "usdt_bep20" ? actualFeeDescription : ""}{disabled ? " · 未开放" : ""}</span> : null}
                         </span>
                       </div>
                     </button>
@@ -385,65 +381,6 @@ export default function AccountRechargeContent() {
                 {!channelsLoading ? <button data-payment-channel="unavailable" type="button" disabled className={cn(channelGridStyles.channelCard, "relative flex h-[84px] min-w-0 cursor-not-allowed items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-100/70 pl-[13px] pr-2.5 text-left text-slate-400")}><span className="absolute right-2 top-2 h-3.5 w-3.5 rounded-full border border-slate-300" /><span data-channel-icon className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-slate-200/70"><LockKeyhole className="h-[23px] w-[23px]" /></span><span className="min-w-0"><span className="block whitespace-nowrap text-[14px] font-semibold leading-5 sm:text-[16px] sm:leading-[22px]">暂未开放</span><span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px]">敬请期待</span></span></button> : null}
               </div>
               {feeContractDifference ? <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">当前渠道实际费率与本页展示要求不同。下方金额按实时渠道配置计算，最终付款以充值单为准。</p> : null}
-
-              {selectedChannel?.manualPayment ? (
-                <div className="order-4 mt-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-semibold text-emerald-950">
-                      USDT-BEP20 付款信息
-                    </h3>
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
-                      链上自动识别，异常交易进入人工复核
-                    </span>
-                  </div>
-
-                  <div className="mt-3 grid gap-3 text-sm">
-                    <div>
-                      <div className="text-xs font-medium text-emerald-800">
-                        收款地址
-                      </div>
-                      <div className="mt-1 break-all rounded-lg border border-emerald-200 bg-white px-3 py-2 font-mono text-xs text-slate-800">
-                        {selectedChannel.manualPayment.payment_address}
-                      </div>
-                    </div>
-
-                    {selectedChannel.manualPayment.token_contract ? (
-                      <div>
-                        <div className="text-xs font-medium text-emerald-800">
-                          Token 合约
-                        </div>
-                        <div className="mt-1 break-all rounded-lg border border-emerald-200 bg-white px-3 py-2 font-mono text-xs text-slate-800">
-                          {selectedChannel.manualPayment.token_contract}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div>
-                      <div className="text-xs font-medium text-emerald-800">网络</div>
-                      <div className="mt-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-slate-800">
-                        {selectedChannel.networkLabel === "BSC" ? "BNB Smart Chain (BEP20)" : selectedChannel.networkLabel ?? selectedChannel.network ?? "—"}
-                      </div>
-                    </div>
-
-                    {selectedChannel.manualPayment.payment_instructions ? (
-                      <div>
-                        <div className="text-xs font-medium text-emerald-800">
-                          付款说明
-                        </div>
-                        <div className="mt-1 whitespace-pre-wrap rounded-lg border border-emerald-200 bg-white px-3 py-2 leading-6 text-slate-700">
-                          {selectedChannel.manualPayment.payment_instructions}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <p className="text-xs leading-5 text-amber-700">
-                      {isUsdtCnyRecharge
-                        ? "请严格按充值单最终生成的精确 USDT 金额付款。金额不一致、晚到账或其他异常交易将进入人工复核；匹配成功后按申请的人民币金额入账。"
-                        : "请严格核对币种和网络，按实际支付金额足额转账。不要向其他网络或其他合约地址转账。"}
-                    </p>
-                  </div>
-                </div>
-              ) : null}
 
               <div className="order-3 mt-8 flex flex-col border-t border-border/70 pt-6 md:mt-auto md:pt-8">
                 <label className="mb-1.5 block text-sm font-medium">
@@ -458,7 +395,7 @@ export default function AccountRechargeContent() {
                     inputMode="decimal"
                     onChange={(event) => updateAmount(event.target.value)}
                     disabled={!selectedChannel}
-                    placeholder={isUsdtCnyRecharge ? "请输入希望充值的人民币金额" : selectedChannel ? `请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}` : "请先选择支付渠道"}
+                    placeholder={isUsdtCnyRecharge ? "请输入人民币金额，最低 21 元" : selectedChannel ? `请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}` : "请先选择支付渠道"}
                     className={cn("h-11", !isUsdtCnyRecharge && selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16", isUsdtCnyRecharge && "pr-16")}
                   />
                   {isUsdtCnyRecharge ? (
@@ -467,7 +404,7 @@ export default function AccountRechargeContent() {
                 </div>
                 {(isUsdtCnyRecharge ? requestedCnyAmount !== null : legacyChannelAmount > 0) && !reachesMin ? (
                   <p className="mt-2 text-xs text-red-500">
-                    当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。
+                    {isUsdtCnyRecharge ? "最低充值 21 元，且须满足渠道实时最低金额。" : <>当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。</>}
                   </p>
                 ) : null}
                 {channelOverLimit ? (
@@ -480,19 +417,7 @@ export default function AccountRechargeContent() {
                   </button>
                 ) : null}
 
-                {isUsdtCnyRecharge ? (
-                  <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm">
-                    {dailyRate ? (
-                      <>
-                        <p className="font-semibold text-sky-900">今日结算汇率</p>
-                        <p className="mt-1 text-sky-800">1 USDT = {dailyRate.settlementRate} CNY</p>
-                        <p className="mt-1 text-xs text-sky-700">汇率日期：{dailyRate.effectiveDate}。创建充值单后汇率即锁定。</p>
-                      </>
-                    ) : rateLoading ? <p role="status" className="text-sky-700">正在读取今日充值汇率…</p> : <p className="text-red-600">{rateError ?? "今日充值汇率尚未设置"}</p>}
-                  </div>
-                ) : null}
-
-                {selectedChannel?.providerExternalFeeDisclosure ? <p className="mt-3 text-xs leading-5 text-slate-500">{selectedChannel.providerExternalFeeDisclosure} 手续费由买家承担，不扣减到账本金。</p> : null}
+                {isUsdtCnyRecharge && !dailyRate ? <p role="status" className="mt-3 text-xs text-slate-500">{rateError ?? "正在准备应付金额…"}</p> : null}
 
                 {submitMessage ? (
                   <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">

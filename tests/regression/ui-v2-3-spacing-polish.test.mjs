@@ -31,18 +31,18 @@ test("checkout keeps a compact purchase column and aligns product detail surface
   assert.doesNotMatch(checkout, /<h3[^>]*>\{"\\u8d2d\\u4e70\\u63d0\\u9192"\}/);
 });
 
-test("storefront allocates more desktop width to category and product content", () => {
+test("storefront floating sidebar reserves its desktop footprint and retains compact catalog panels", () => {
   const layout = file("components/layout/PublicLayout.tsx");
   const publicSidebar = file("components/layout/PublicSidebar.tsx");
   const boundary = file("components/products/CategoryContentBoundary.tsx");
   const productUi = file("components/products/product-ui.ts");
   const productDetail = file("app/products/[id]/page.tsx");
 
-  assert.match(layout, /lg:\[--storefront-sidebar-width:195px\]/);
-  assert.match(layout, /lg:\[--storefront-main-offset:195px\]/);
-  assert.match(layout, /md:\[--storefront-sidebar-width:176px\]/);
-  assert.match(layout, /md:\[--storefront-main-offset:176px\]/);
-  assert.match(publicSidebar, /mx-auto flex h-\[42px\] w-\[calc\(100%-6px\)\] items-center justify-start/);
+  assert.match(layout, /lg:\[--storefront-sidebar-width:246px\]/);
+  assert.match(layout, /lg:\[--storefront-main-offset:266px\]/);
+  assert.match(layout, /md:\[--storefront-sidebar-width:246px\]/);
+  assert.match(layout, /md:\[--storefront-main-offset:266px\]/);
+  assert.match(publicSidebar, /mx-auto flex h-\[46px\] w-\[calc\(100%-6px\)\] items-center justify-start/);
   assert.match(publicSidebar, /text-left text-sm/);
   assert.match(publicSidebar, /sidebar-scroll flex-1 overflow-y-auto px-2/);
   assert.equal((publicSidebar.match(/w-\[calc\(100%-6px\)\]/g) ?? []).length, 2);
