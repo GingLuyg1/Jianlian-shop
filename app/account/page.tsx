@@ -7,15 +7,13 @@ import {
   AlertCircle,
   Clock,
   ReceiptText,
-  RefreshCw,
   TrendingDown,
   TrendingUp,
   WalletCards,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import AccountInformation from "@/components/account/AccountInformation";
+import AccountMembership from "@/components/account/AccountMembership";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
 
@@ -147,16 +145,13 @@ export default function AccountOverviewPage() {
             </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void loadOverview()} disabled={loading}>
-            <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
-            重新加载
-          </Button>
+
         </CardHeader>
         <CardContent className="space-y-3">
           {error ? (
             <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
+              <span className="min-w-0 flex-1">{error}</span><button type="button" className="shrink-0 underline underline-offset-4" onClick={() => void loadOverview()}>重试</button>
             </div>
           ) : null}
           {diagnostics?.balanceTransactionError ? (
@@ -187,7 +182,7 @@ export default function AccountOverviewPage() {
         </CardContent>
       </Card>
 
-      <AccountInformation email={data?.profile.email ?? null} loading={loading} />
+      <AccountMembership totalSpend={data?.summary.totalSpend ?? null} loading={loading} />
     </div>
   );
 }

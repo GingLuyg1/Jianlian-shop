@@ -9,13 +9,11 @@ import {
   LogIn,
   LogOut,
   Megaphone,
-  Shield,
-  UserCircle,
   UserPlus,
-  WalletCards,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
+import { accountNavigation } from "@/components/account/account-navigation";
 import { Button } from "@/components/ui/button";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
 import {
@@ -81,11 +79,7 @@ function getDisplayName(user: User | null) {
   return user.email;
 }
 
-const accountMenuItems = [
-  { label: "个人中心", href: "/account", icon: WalletCards },
-  { label: "个人资料", href: "/account/profile", icon: UserCircle },
-  { label: "账号安全", href: "/account/security", icon: Shield },
-];
+
 
 function getAnnouncementAnimationDelay() {
   if (typeof window === "undefined") return 0;
@@ -286,7 +280,7 @@ export default function PublicTopInfoBar({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  {accountMenuItems.map((item) => {
+                  {accountNavigation.map((item) => {
                     const Icon = item.icon;
                     const active =
                       item.href === "/account"

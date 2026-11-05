@@ -10,7 +10,7 @@ export default function AccountInformation({ email, loading }: { email: string |
         <header className={styles.sectionHeading}>
           <div className="flex min-w-0 items-center gap-3">
             <span className={`${glass.icon} h-10 w-10`}><Store className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" /></span>
-            <div><h2 id="account-information-title" className="text-base font-semibold text-slate-900">账户信息</h2><p className="mt-1 text-xs leading-5 text-slate-500">账户身份与登录信息，请妥善保管。</p></div>
+            <div><h2 id="account-information-title" className="text-base font-semibold text-slate-900">商户信息</h2><p className="mt-1 text-xs leading-5 text-slate-500">商户身份与接口资料。</p></div>
           </div>
           <span className={styles.pill}>安全资料</span>
         </header>

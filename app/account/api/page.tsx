@@ -3,8 +3,10 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Activity, ArrowUpRight, BookOpen, Code2, KeyRound, LockKeyhole, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
+import { Activity, ArrowUpRight, BookOpen, Code2, KeyRound, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
 
+import AccountInformation from "@/components/account/AccountInformation";
+import { useAccountEmail } from "@/components/account/AccountEmailContext";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
 import { Button } from "@/components/ui/button";
@@ -18,6 +20,7 @@ const tabs = [
 type ApiTab = (typeof tabs)[number]["value"];
 
 export default function AccountApiPage() {
+  const email = useAccountEmail();
   const [activeTab, setActiveTab] = useState<ApiTab>("overview");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -31,11 +34,10 @@ export default function AccountApiPage() {
           </div>
           <Button type="button" variant="outline" disabled title="接口文档暂未开放"><BookOpen className="mr-2 h-4 w-4" aria-hidden="true" />接口文档 · 暂未开放</Button>
         </header>
-        <div className="flex items-start gap-2.5 px-6 pb-5 pt-2 text-sm leading-6 text-[#94734f]" role="status">
-          <LockKeyhole className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
-          <p>API 服务暂未开放。开放后可在这里管理接口接入；当前不提供 API Key，也不会通过此页面创建订单或扣款。</p>
-        </div>
+
       </section>
+
+      <AccountInformation email={email || null} loading={false} />
 
       <div className={styles.apiTop}>
         <section className={`${glass.surface} ${styles.panel} p-5 sm:p-6`} aria-labelledby="api-credentials-title">
