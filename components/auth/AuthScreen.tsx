@@ -88,6 +88,14 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const reason = searchParams?.get("auth_error");
+    if (reason === "restricted") setError("账户已被禁用或暂时受限，请联系客服。");
+    else if (reason === "invite") setError("邀请关系绑定失败，请联系客服核实。");
+    else if (reason === "invalid_link") setError("登录链接已过期或无效，请重新登录。");
+    else if (reason === "config") setError("登录服务暂时不可用。");
+  }, [searchParams]);
+
+  useEffect(() => {
     const inviteCode = inviteFromUrl.trim();
     if (!inviteCode || !hasSupabaseConfig()) return;
 
