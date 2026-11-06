@@ -53,14 +53,15 @@ export default function SidebarSlidingList({ activeKey, layoutKey, children }: {
       }
       if (window.location.pathname !== activeKey || destination !== activeKey) return null;
       const heading = document.querySelector("main h1")?.textContent?.trim();
-      if (activeKey === "/tutorials") return heading === "购买与交付指南" ? activeKey : null;
+      if (activeKey === "/tutorials") return document.querySelector('[data-testid="tutorial-workspace"]') ? activeKey : null;
       if (activeKey === "/faq") return heading === "购买、交付、售后问题集中说明" ? activeKey : null;
       return document.querySelector("main") && !document.querySelector("main .next-error-h1") ? activeKey : null;
     };
     const update = () => {
       const links = Array.from(list.querySelectorAll<HTMLElement>("[data-sidebar-link]"));
       const href = readyHref() ?? indicator.dataset.currentHref ?? lastSnapshot?.href;
-      const active = links.find((link) => link.dataset.sidebarLink === href);
+      const active = links.find((link) => link.dataset.sidebarLink === href) ??
+        (href?.startsWith("/account/") && !href.startsWith("/account/orders") ? links.find((link) => link.dataset.sidebarLink === "/account") : undefined);
       if (active) place(active); else indicator.dataset.visible = "false";
     };
     update();

@@ -61,17 +61,18 @@ test("account recharge stays scrollable and presents the minimal BEP20 flow", ()
   assert.doesNotMatch(ui, /contentClassName="[^"]*overflow-hidden/);
   assert.match(ui, /账户充值/);
   assert.match(ui, /请选择可用渠道，填写充值金额，付款信息以创建后的充值单为准/);
-  assert.match(ui, /BNB Smart Chain/);
-  assert.match(ui, /今日结算汇率/);
+  assert.match(paymentPage, /BNB Smart Chain/);
+  assert.doesNotMatch(ui, /今日结算汇率/);
   assert.match(ui, /预计应付/);
   assert.match(ui, /创建充值单/);
-  assert.match(ui, /USDT-BEP20 付款信息/);
-  assert.match(ui, /链上自动识别，异常交易进入人工复核/);
+  assert.doesNotMatch(ui, /USDT-BEP20 付款信息/);
+  assert.match(paymentPage, /canTransfer && recharge\.paymentAddress/);
   assert.doesNotMatch(ui, /付款后人工审核|人工付款信息/);
   assert.doesNotMatch(ui, /最终按链上实际到账 USDT 与本单锁定汇率折算人民币|少付或多付均按实收结算/);
   assert.match(ui, /payableDisplay =[^;]+expectedUsdtAmount[\s\S]*label="预计应付" value=\{payableDisplay\}/);
-  assert.match(ui, /label="精确应付" value=\{`\$\{record\.expectedUsdtAmount\} USDT`\}/);
-  assert.match(ui, /金额不一致、晚到账或其他异常交易将进入人工复核；匹配成功后按申请的人民币金额入账/);
+  assert.match(ui, /请精确支付 \{record\.expectedUsdtAmount\} USDT/);
+  assert.match(paymentPage, /人工复核/);
+  assert.match(ui, /compareRechargeDecimals\(requestedCnyAmount, "21\.00"\)/);
   assert.match(ui, /calculateExpectedUsdtAmount\(requestedCnyAmount, dailyRate\.settlementRate\)/);
 });
 

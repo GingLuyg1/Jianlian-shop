@@ -5,7 +5,8 @@ import { loadPureTypeScript } from "../helpers/load-pure-typescript.mjs";
 const { centeredScrollTop, wheelVisual, WHEEL_CONFIG } = loadPureTypeScript(new URL("../../lib/motion/progressive-wheel.ts", import.meta.url));
 
 test("wheel plateau follows scroll position, not direction", () => {
-  assert.equal(WHEEL_CONFIG.minScale, 0.98);
+  assert.equal(WHEEL_CONFIG.minScale, 0.97);
+  assert.equal(WHEEL_CONFIG.secondaryMinScale, 0.93);
   assert.equal(WHEEL_CONFIG.maxScale, 1);
   assert.equal(wheelVisual(100, 1000, 0).scale, 1);
   assert.equal(wheelVisual(1000, 1000, 0).scale, WHEEL_CONFIG.minScale);
@@ -19,6 +20,18 @@ test("wheel plateau follows scroll position, not direction", () => {
   const slightlyUp = wheelVisual(300, 1000, 0.99).scale;
   assert.ok(Math.abs(bottom - slightlyUp) < 0.01, "reverse movement must be continuous");
   assert.equal(wheelVisual(1000, 1000, 0, true).scale, 1, "clicked active item cannot shrink");
+});
+
+test("secondary and product scales share continuous ramps with independent floors", () => {
+  for (const floor of [WHEEL_CONFIG.secondaryMinScale, WHEEL_CONFIG.minScale]) {
+    assert.equal(wheelVisual(0, 1000, 0.5, false, floor).scale, floor);
+    assert.equal(wheelVisual(1000, 1000, 0.5, false, floor).scale, floor);
+    const middleRamp = wheelVisual(125, 1000, 0.5, false, floor).scale;
+    assert.ok(middleRamp > floor && middleRamp < 1);
+    assert.equal(wheelVisual(0, 1000, 0.5, true, floor).scale, 1);
+    assert.equal(wheelVisual(1000, 1000, 0.5, true, floor).scale, 1);
+    assert.ok(Math.abs(wheelVisual(300, 1000, 1, false, floor).scale - wheelVisual(300, 1000, 0.99, false, floor).scale) < 0.01);
+  }
 });
 
 test("20 secondary and 20 product items use the same clamped centering", () => {

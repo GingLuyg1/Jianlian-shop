@@ -28,6 +28,7 @@ import { fallbackCategoriesByPath, type StorefrontFallbackCategory } from "@/lib
 import { clearPublicProductCounts, forgetPublicProductCount, getPublicProductCount, getPublicProductCountForRoute, rememberPublicProductCount, retainVisiblePublicProductCounts, subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion } from "@/lib/catalog/public-product-count-cache";
 import { forgetPublicProductPage, getPublicProductPage, peekPublicProductPage, prefetchPublicProductPage } from "@/lib/catalog/public-product-query-cache";
 import { useProgressiveWheelMotion } from "@/hooks/use-progressive-wheel-motion";
+import { WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 import { findVisibleStorefrontPrimaryCategory } from "@/hooks/use-visible-storefront-categories";
 import { getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
 import {
@@ -41,6 +42,8 @@ import {
 } from "@/lib/supabase/public-catalog";
 import CategoryContentBoundary from "./CategoryContentBoundary";
 import SecondarySlidingIndicator from "./SecondarySlidingIndicator";
+import selectionMotion from "@/components/ui/SelectionMotion.module.css";
+import catalogMotion from "./CatalogSelectionMotion.module.css";
 import {
   categoryListScrollClassName,
   categoryPanelInnerClassName,
@@ -557,6 +560,7 @@ function CategoryPanel({
   const { containerRef, centerItem } = useProgressiveWheelMotion({
     activeId: selectedCategoryId,
     contentKey: categories.map((category) => category.id).join(","),
+    minScale: WHEEL_CONFIG.secondaryMinScale,
   });
   return (
     <Card data-testid="storefront-secondary-categories" data-catalog-secondary-route={pageRoute} data-catalog-secondary-ready={!isLoading && !error && !showPlaceholder ? "true" : "false"} data-placeholder-phase={placeholderPhase} className="relative h-full min-h-0 overflow-hidden">
@@ -638,6 +642,7 @@ function CategoryButton({
       onClick={onClick}
       className={cn(
         interactiveButtonClass,
+        selectionMotion.item,
         "flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-left disabled:cursor-default [-webkit-tap-highlight-color:transparent]",
         active
           ? "border border-transparent bg-transparent text-primary"
@@ -791,9 +796,11 @@ function ProductPanel({
                     <div className="catalog-enter-item" style={{ animationDelay: `${Math.min(index * 35, 210)}ms` }}>
                       <ProductRowCompact
                         product={product}
+                        category={activeCategory}
                         currencySymbol={currencySymbol}
                         showStock={showStock}
                         disabled={!resultReady}
+                        selected={selectedProductId === product.id}
                         onSelect={() => {
                           setSelectedProductId(product.id);
                           centerItem(product.id);
@@ -827,11 +834,11 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   return (
-    <button type="button" onClick={() => router.push(checkoutHref(product.id, window.location.pathname + window.location.search))} className={cn(compactProductRowClassName, "group")}>
+    <button type="button" data-catalog-card onClick={() => router.push(checkoutHref(product.id, window.location.pathname + window.location.search))} className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}>
       <div className="flex h-full min-w-0 items-center gap-5">
-        <img src={imageSrc} alt={product.name} onError={(event) => setProductImageFallback(event.currentTarget)} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" />
+        <img data-selection-icon src={imageSrc} alt={product.name} onError={(event) => setProductImageFallback(event.currentTarget)} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" />
         <div className="min-w-0 flex-1 text-left">
-          <div className="line-clamp-1 text-base font-semibold text-slate-700 group-hover:text-primary">{product.name}</div>
+          <div data-selection-title className="line-clamp-1 text-base font-semibold text-slate-700">{product.name}</div>
           {product.description ? <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{product.description}</div> : null}
           <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
             <span>{product.deliveryLabel}</span>
@@ -849,7 +856,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
             {currencySymbol}{Number(product.originalPrice).toFixed(2)}
           </div>
         ) : null}
-        <div className="shrink-0 text-lg font-bold text-blue-600">
+        <div className="shrink-0 text-lg font-bold text-orange-600">
           {product.stockStatus === "out-of-stock" ? "已售罄" : priceText}
         </div>
       </div>
@@ -857,10 +864,18 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
   );
 }
 
-function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSelect }: { currencySymbol: string; product: Product; showStock: boolean; disabled: boolean; onSelect: () => void }) {
+function CatalogProductIcon({ product, category }: { product: Product; category: DisplayCategory | null }) {
+  const [failed, setFailed] = useState<string[]>([]);
+  const ownImage = product.imageUrl?.trim();
+  const source = [ownImage, category?.displayImage].find(value => value && !failed.includes(value));
+  const Icon = category?.displayIcon ? iconMap[category.displayIcon] : KeyRound;
+  return source ? <img data-selection-icon src={source} alt={product.name} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" onError={() => setFailed(values => [...values, source])} />
+    : <span data-selection-icon className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10"><Icon className="h-6 w-6 text-primary" aria-label={category?.name || "商品"} /></span>;
+}
+
+function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; onSelect: () => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
-  const imageSrc = product.imageUrl || productImageFallbackSrc;
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
@@ -873,21 +888,18 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSel
     <button
       type="button"
       disabled={disabled}
+      data-catalog-card
+      data-selected={selected ? "true" : undefined}
       onClick={() => {
         onSelect();
         router.push(checkoutHref(product.id, window.location.pathname + window.location.search));
       }}
-      className={cn(compactProductRowClassName, "group")}
+      className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-5">
-        <img
-          src={imageSrc}
-          alt={product.name}
-          onError={(event) => setProductImageFallback(event.currentTarget)}
-          className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover"
-        />
+        <CatalogProductIcon product={product} category={category} />
         <div className="min-w-0 flex-1 text-left">
-          <div className="line-clamp-1 text-base font-semibold text-slate-700 group-hover:text-primary">
+          <div data-selection-title className="line-clamp-1 text-base font-semibold text-slate-700">
             {product.name}
           </div>
           {product.description ? (
@@ -909,7 +921,7 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSel
             )}
           >
             <span>库存</span>
-            <span>{stock}</span>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">{stock}</span>
           </div>
         ) : null}
         {product.originalPrice ? (
@@ -917,7 +929,7 @@ function ProductRowCompact({ currencySymbol, product, showStock, disabled, onSel
             {currencySymbol}{Number(product.originalPrice).toFixed(2)}
           </div>
         ) : null}
-        <div className="min-w-[92px] shrink-0 text-center text-lg font-bold text-blue-600">
+        <div className="min-w-[92px] shrink-0 text-center text-lg font-bold text-orange-600">
           {hasStock ? priceText : "已售罄"}
         </div>
       </div>
@@ -929,7 +941,7 @@ function ProductSkeleton({ count }: { count: number }) {
   return (
     <div className="h-full space-y-2.5 overflow-hidden px-1.5 py-1 pr-2">
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} data-testid="catalog-product-skeleton-item" className="catalog-placeholder h-[86px] rounded-xl border border-slate-100 bg-slate-50 p-4" style={{ animationDelay: `${index * 35}ms` }}>
+        <div key={index} data-testid="catalog-product-skeleton-item" className="catalog-placeholder h-[72px] rounded-xl border border-slate-100 bg-slate-50 p-[11px] md:h-[84px] md:p-4" style={{ animationDelay: `${index * 35}ms` }}>
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 rounded-xl bg-slate-200" />
             <div className="flex-1 space-y-2">

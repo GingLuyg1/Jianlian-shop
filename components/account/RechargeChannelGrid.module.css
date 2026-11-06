@@ -58,17 +58,35 @@
 .noticeItem {
   position: relative;
   border: 1px solid rgb(239 219 202 / 75%);
-  border-radius: 14px;
+  border-radius: 18px;
   background: linear-gradient(130deg, rgb(255 255 255 / 86%), rgb(255 250 244 / 60%));
   box-shadow: inset 0 1px 0 #fff, 0 3px 12px -9px rgb(140 95 59 / 20%);
 }
 
 .channelCard {
   isolation: isolate;
+  transform-origin:center;
+  transition:transform 180ms cubic-bezier(.22,1,.36,1),box-shadow 180ms ease-out,border-color 180ms ease-out,background-color 180ms ease-out;
   background: linear-gradient(125deg, rgb(255 255 255 / 96%), rgb(255 246 237 / 74%));
   -webkit-backdrop-filter: blur(8px) saturate(135%);
   backdrop-filter: blur(8px) saturate(135%);
   box-shadow: inset 0 1px 1px #fff, inset 0 -1px 1px rgb(226 192 164 / 20%), 0 5px 12px -9px rgb(141 88 46 / 28%);
+}
+.channelCard > div { position:relative; z-index:1; }
+.channelCard > span { z-index:1; }
+.channelCard::before {
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; opacity:0;
+  background:radial-gradient(circle at var(--glare-x,50%) var(--glare-y,50%),rgb(255 255 255 / 92%),transparent 70%);
+  transition:opacity 180ms ease-out;
+}
+@media (hover:hover) and (pointer:fine) {
+  .channelCard:not(:disabled)[data-tilting="true"] { transform:perspective(650px) rotateX(var(--tilt-x,0deg)) rotateY(var(--tilt-y,0deg)) translateY(-1px); box-shadow:inset 0 1px 0 white,0 9px 18px -12px rgb(152 91 46 / 38%); }
+  .channelCard:not(:disabled)[data-tilting="true"]::before { opacity:.72; }
+}
+.channelCard:not(:disabled):focus-visible { outline:2px solid #df8d55; outline-offset:3px; }
+@media(prefers-reduced-motion:reduce) {
+  .channelCard,.channelCard::before { transition:none; }
+  .channelCard:not(:disabled)[data-tilting="true"] { transform:none; }
 }
 .channelCard[aria-pressed="true"] {
   background: linear-gradient(125deg, #fffaf4, rgb(255 231 209 / 65%));
@@ -89,7 +107,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: 4px;
   border: 1px solid #efe6dc;
-  border-radius: 16px;
+  border-radius: 22px;
   background: #f7f3ef;
   isolation: isolate;
 }
@@ -100,7 +118,7 @@
   bottom: 4px;
   left: 4px;
   width: calc(50% - 4px);
-  border-radius: 12px;
+  border-radius: 18px;
   background: #dc6a2a;
   box-shadow: 0 2px 5px rgb(164 87 39 / 12%);
   pointer-events: none;

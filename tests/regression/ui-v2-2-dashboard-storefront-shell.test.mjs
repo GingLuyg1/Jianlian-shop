@@ -42,10 +42,13 @@ test("Storefront shell shares responsive sidebar and main offset tokens", () => 
   assert.match(layout, /--storefront-content-padding-x:16px/);
   assert.match(layout, /--storefront-main-offset:0px/);
   assert.match(layout, /--storefront-sidebar-width:160px/);
-  assert.match(layout, /md:\[--storefront-main-offset:176px\]/);
-  assert.match(layout, /md:\[--storefront-sidebar-width:176px\]/);
-  assert.match(layout, /lg:\[--storefront-main-offset:195px\]/);
-  assert.match(layout, /lg:\[--storefront-sidebar-width:195px\]/);
+  assert.match(layout, /md:\[--storefront-main-offset:268px\]/);
+  assert.match(layout, /md:\[--storefront-sidebar-width:248px\]/);
+  assert.match(layout, /lg:\[--storefront-main-offset:268px\]/);
+  assert.match(layout, /lg:\[--storefront-sidebar-width:248px\]/);
+  const glass = file("components/layout/PublicSidebarGlass.module.css");
+  assert.match(glass, /left:20px; top:20px; bottom:20px/);
+  assert.match(glass, /flex-shrink:0/);
   assert.match(layout, /md:ml-\[var\(--storefront-main-offset\)\]/);
   assert.match(layout, /paddingInline: "var\(--storefront-content-padding-x\)"/);
   assert.match(sidebar, /w-\[var\(--storefront-sidebar-width\)\]/);

@@ -103,10 +103,10 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
 
   return (
-    <div className={cn(
+    <div data-storefront-ui className={cn(
       viewportLocked ? "h-dvh overflow-hidden" : "min-h-screen overflow-x-hidden",
-      "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:195px] lg:[--storefront-sidebar-width:195px]",
-      !mobileNavigationUntilLg && "md:[--storefront-main-offset:176px] md:[--storefront-sidebar-width:176px]",
+      "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:268px] lg:[--storefront-sidebar-width:248px]",
+      !mobileNavigationUntilLg && "md:[--storefront-main-offset:268px] md:[--storefront-sidebar-width:248px]",
     )}>
       <Suspense fallback={null}>
         <RouteLoadingIndicator />

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileLock2, RefreshCcw, ShieldAlert, Trash2 } from "lucide-react";
+import { Download, FileLock2, ShieldAlert, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import glass from "@/components/account/AccountGlass.module.css";
@@ -169,15 +169,11 @@ export default function AccountPrivacyPage() {
             <h1 className="text-xl font-semibold text-slate-950">隐私设置</h1>
             <p className="mt-1 text-sm text-slate-500">管理个人数据导出、账号注销和数据保留说明。</p>
           </div>
-          <Button variant="outline" size="sm" onClick={loadSummary} disabled={loading}>
-            <RefreshCcw className="mr-2 h-4 w-4" />
-            重新加载
-          </Button>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-6">
-        {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+        {error ? <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button type="button" className="shrink-0 underline underline-offset-4" onClick={loadSummary}>重试</button></div> : null}
         {loading ? (
           <div className="h-64 animate-pulse rounded-xl bg-orange-50" />
         ) : (
