@@ -140,7 +140,7 @@ export default function AccountOverviewPage() {
             <span className={`${glass.icon} ${styles.sectionIcon}`}><WalletCards className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" /></span>
             <div>
             <CardTitle className="text-lg">账号资料</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-[15px] leading-6 text-muted-foreground">
               账户余额、基础资料与可用服务。
             </p>
             </div>
@@ -166,8 +166,8 @@ export default function AccountOverviewPage() {
                 {loading ? <div className="h-12 w-40 animate-pulse rounded-lg bg-white/70 motion-reduce:animate-none" /> : <p className={styles.balanceValue}>{data ? formatMoney(data.profile.balance) : "/"}</p>}
               </div>
               <dl className={styles.balanceDetails}>
-                <div className="min-w-0"><dt className="text-xs text-slate-500">可用余额</dt><dd className="mt-2 break-words text-base font-semibold text-slate-800">{loading || !data ? "/" : formatMoney(data.summary.availableBalance)}</dd></div>
-                <div className="min-w-0"><dt className="text-xs text-slate-500">冻结余额</dt><dd className="mt-2 break-words text-sm font-medium text-slate-600">{loading ? "/" : formatMoney(data?.summary.frozenBalance ?? 0)}</dd></div>
+                <div className="min-w-0"><dt className="text-[13px] leading-5 text-slate-500">可用余额</dt><dd className="mt-2 break-words text-base font-semibold text-slate-800">{loading || !data ? "/" : formatMoney(data.summary.availableBalance)}</dd></div>
+                <div className="min-w-0"><dt className="text-[13px] leading-5 text-slate-500">冻结余额</dt><dd className="mt-2 break-words text-sm font-medium text-slate-600">{loading ? "/" : formatMoney(data?.summary.frozenBalance ?? 0)}</dd></div>
               </dl>
             </section>
             <div className={styles.metricGrid}>
@@ -200,7 +200,7 @@ function InfoCard({
 }) {
   return (
     <div className={`${glass.inset} ${styles.stat}`}>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-[13px] leading-5 text-muted-foreground">
         <Icon className="h-4 w-4 text-primary" />
         {label}
       </div>
