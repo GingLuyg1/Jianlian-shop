@@ -41,6 +41,8 @@ test('signup both paths preserve invitation code without granting role or touchi
   assert.match(alternate,/data: \{ invite_code: inviteCode\.toUpperCase\(\) \}/);
   assert.match(alternate,/bind_referrer_by_code/);
   assert.match(callback,/bind_referrer_by_code/);
+  assert.match(callback,/isNewSignup && INVITE_CODE\.test\(invite\)/);
+  assert.match(alternate,/isRegister && isNewSignup && INVITE\.test\(inviteCode\)/);
   assert.match(alternate,/const INVITE = \/\^JL/);
   assert.match(callback,/const INVITE_CODE = \/\^JL/);
   assert.doesNotMatch(alternate,/\bservice_role\b|\badmin\b|\bbalance\s*=/);
