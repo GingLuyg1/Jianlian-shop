@@ -25,15 +25,20 @@ test('mall collector defaults to 50, encodes official filters, and advances only
     assert.equal(url.searchParams.get('limit'), '50');
     return calls.length === 1 ? page(['A'], 2, 'opaque+/=') : page(['B'], 2, null);
   });
-  const result = await supplier.collectMallCatalog({ category: '礼品卡', itemId: 'A+B' });
+  const result = await supplier.collectMallCatalog({ category: '礼品卡' });
   assert.equal(calls[0].searchParams.get('category'), '礼品卡');
-  assert.equal(calls[0].searchParams.get('itemId'), 'A+B');
+  assert.equal(new URLSearchParams(buildKuajingZyMallPagePath({ itemId: 'A+B' }).split('?')[1]).get('itemId'), 'A+B');
   assert.equal(calls[1].searchParams.get('cursor'), 'opaque+/=');
   assert.equal(result.complete, true);
   assert.equal(result.fullCatalog, false);
   assert.deepEqual(result.items.map(item => item.id), ['A', 'B']);
   assert.throws(() => buildKuajingZyMallPagePath({ limit: 201 }), /LIMIT_INVALID/);
   assert.throws(() => buildKuajingZyMallPagePath({ limit: 0 }), /LIMIT_INVALID/);
+});
+
+test('single-item catalog refuses a provider response for a different item', async () => {
+  const supplier = client(async () => page(['OTHER'], 1, null));
+  await assert.rejects(supplier.collectMallCatalog({ itemId: 'EXPECTED' }), /CATALOG_ITEM_ID_MISMATCH/);
 });
 
 test('aborted and resumed windows cannot masquerade as a full directory', async () => {
