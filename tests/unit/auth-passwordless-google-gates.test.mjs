@@ -18,7 +18,7 @@ test('email OTP uses documented method, explicit account-creation policy and 6 d
   assert.match(alternate,/shouldCreateUser: isRegister/);
   assert.match(alternate,/auth\.verifyOtp/);
   assert.match(alternate,/type: "email"/);
-  assert.match(alternate,/const CODE = \/\\d\{6\}\$\//);
+  assert.match(alternate,/const CODE = \/\^\\d\{6\}\$\//);
   assert.match(alternate,/autoComplete="one-time-code"/);
 });
 test('OAuth uses Google and existing same-site PKCE callback, not a second user store',()=>{
