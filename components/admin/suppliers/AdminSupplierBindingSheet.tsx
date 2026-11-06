@@ -206,8 +206,8 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
-        <SheetHeader><SheetTitle>供应商绑定</SheetTitle><SheetDescription>复用当前商品规格供应商配置；Daju 维持原流程，Bitrefill 仅保存待审核候选。</SheetDescription></SheetHeader>
+      <SheetContent className="w-full overflow-y-auto border-orange-100 bg-gradient-to-br from-orange-50/80 via-white to-slate-50 sm:max-w-3xl">
+        <SheetHeader className="mb-4 rounded-2xl border border-orange-100 bg-white/80 p-4 text-left"><SheetTitle>供应商绑定</SheetTitle><SheetDescription>复用当前商品规格供应商配置；Daju 维持原流程，Bitrefill 仅保存待审核候选。</SheetDescription></SheetHeader>
         {product ? (
           <div className="mt-5 space-y-5">
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold text-slate-950">{product.name}</div><div className="mt-1 font-mono text-xs text-slate-500">{sku ? `${sku.sku_title ?? sku.sku_code} · ${sku.id}` : product.id}</div></div><Badge variant={currentSupplier === "daju" ? "secondary" : "outline"}>{currentSupplier === "daju" ? "已绑定：大橘AI" : currentSupplier ? `已绑定：${currentSupplier}` : "未绑定"}</Badge></div><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><div>当前售价：¥{(sku?.price ?? product.price).toFixed(2)}</div><div>绑定层级：{sku ? "网站商品规格" : "商品"}</div><div>供应商：大橘AI / daju</div><div>当前 供应商商品ID：{currentSupplierProductId || "—"}</div></div></section>

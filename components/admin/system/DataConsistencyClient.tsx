@@ -138,7 +138,6 @@ export default function DataConsistencyClient() {
       <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">数据一致性巡检</h1>
-          <p className="mt-1 text-sm text-slate-500">只读检查订单、支付、充值、余额、退款、数字库存和交付数据，提供人工核对建议。</p>
         </div>
         <Button onClick={runScan} disabled={running} className="shrink-0">
           <RefreshCw className={`mr-2 h-4 w-4 ${running ? "animate-spin" : ""}`} />
