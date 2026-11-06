@@ -11,7 +11,7 @@ const fakeKuajing=(calls)=>({
     calls.push(args);
     const map={
       'Apple ID':[ku('Apple ID 老号',123)],
-      'Telegram':[ku('Telegram 新号',124)],
+      'TG':[ku('TG飞机 新号',124)],
       'Threads':[ku('Threads 账号',125)],
       'Instagram':[ku('Instagram 账号',126)],
       'Outlook':[ku('Outlook 邮箱',127)],
@@ -30,10 +30,11 @@ test('Daju in-stock auto-delivery Apple ID has priority; other brands use filter
     kuajingzy:fakeKuajing(kuCalls),
   });
   assert.equal(out.complete,true);assert.equal(out.blocked,null);
-  assert.equal(out.requests,8);assert.equal(dajuCalls,1);assert.equal(kuCalls.length,7);
-  assert.equal(kuCalls[0].search,'Telegram');
-  assert.equal(out.families['apple-id'].status,'DAJU_AVAILABLE');
-  assert.deepEqual(out.candidates.filter(x=>x.family==='apple-id').map(x=>x.provider),['daju']);
+  assert.equal(out.requests,9);assert.equal(dajuCalls,1);assert.equal(kuCalls.length,8);
+  assert.equal(kuCalls[0].search,'Apple ID');
+  assert.equal(kuCalls[1].search,'TG');
+  assert.equal(out.families['apple-id'].status,'DAJU_PRIORITY_WITH_FALLBACK_CANDIDATES');
+  assert.deepEqual(out.candidates.filter(x=>x.family==='apple-id').map(x=>x.provider),['daju','kuajingzy']);
   assert.equal(out.candidates.some(x=>x.family==='steam'&&x.title==='Steam 礼品卡'),false);
   assert.ok(out.candidates.some(x=>x.family==='google'&&x.groupKey==='google-edu-enterprise'));
   assert.ok(out.candidates.every(x=>!x.saleEnabled&&!x.finalFeeInclusiveDebitVerified&&!x.fulfillmentContractVerified));
