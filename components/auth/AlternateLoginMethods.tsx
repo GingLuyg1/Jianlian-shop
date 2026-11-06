@@ -139,7 +139,11 @@ export default function AlternateLoginMethods({
       }
       await getOrCreateProfile(supabase, data.user);
       await validateAccountAccess(supabase, data.user.id);
-      if (isRegister && INVITE.test(inviteCode)) {
+      const createdAtMs = Date.parse(data.user.created_at);
+      const isNewSignup = Number.isFinite(createdAtMs) &&
+        Date.now() >= createdAtMs && Date.now() - createdAtMs <= 15 * 60 * 1000;
+      if (isRegister && isNewSignup && INVITE.test(inviteCode)) {
+        // Invitation is for a newly created account, not retrospective linking.
         // Existing DB RPC enforces self-invite, repeat and ownership restrictions.
         const { error: bindError } = await supabase.rpc("bind_referrer_by_code", {
           input_invite_code: inviteCode.toUpperCase(),
