@@ -60,7 +60,6 @@ import {
 import type { PaymentChannel, PaymentSubmitForm } from "@/lib/payments/channel-types";
 import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import { openPublicSupport } from "@/lib/support/open-public-support";
-import ExternalCashierFeeSummary from "@/components/payments/ExternalCashierFeeSummary";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
@@ -882,12 +881,6 @@ export default function CheckoutPage() {
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
                   </p>
                 ) : null}
-                {selectedPaymentChannel?.providerExternalFeeDisclosure ? (
-                  <div className="mt-2 text-xs leading-5 text-amber-700">
-                    {selectedPaymentChannel.providerExternalFeeDisclosure}
-                    <ExternalCashierFeeSummary principal={orderAmount} provider={selectedPaymentChannel.provider} currency={selectedPaymentChannel.currency} />
-                  </div>
-                ) : null}
                 {paymentMethod === "balance" && balanceStatus === "error" ? (
                   <div className="mt-2 flex items-center justify-between gap-3 text-xs text-red-700">
                     <span>{balanceError}</span>
@@ -1049,12 +1042,6 @@ function PaymentMethodSelect({
     return Boolean(option && ORDER_ENABLED_PAYMENT_METHODS.has(option.code)
       && (option.code === "balance" || channels.some((channel) => option.channelCodes.includes(channel.code) && channel.enabled)));
   };
-  const descriptionFor = (option: typeof selectedOption) => {
-    const channel = channels.find((item) => option.channelCodes.includes(item.code));
-    return channel?.maximumAmount && channel.currency === "CNY"
-      ? `${option.label}，单笔最高 ¥${channel.maximumAmount}`
-      : option.description;
-  };
   const selectedIndex = Math.max(0, CHECKOUT_PAYMENT_OPTIONS.findIndex((option) => option.code === selected));
   const [activeIndex, setActiveIndex] = useState(selectedIndex);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -1125,7 +1112,6 @@ function PaymentMethodSelect({
           <PaymentMethodIcon method={selectedOption.code} />
           <span className="min-w-0">
             <span className="block truncate font-medium text-slate-900">{selectedOption.label}</span>
-            <span className="block truncate text-xs text-muted-foreground">{descriptionFor(selectedOption)}</span>
           </span>
         </span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open ? "rotate-180" : "")} />
@@ -1169,7 +1155,6 @@ function PaymentMethodSelect({
                   <PaymentMethodIcon method={option.code} />
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{option.label}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{descriptionFor(option)}</span>
                   </span>
                 </span>
                 {unavailable ? (

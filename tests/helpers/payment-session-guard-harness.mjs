@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import ts from "typescript";
 import * as contracts from "../../lib/payments/provider-contracts.mjs";
 import * as onlinePolicy from "../../lib/payments/online-payment-policy.mjs";
@@ -158,7 +158,7 @@ export function harness({ data = fixture(), backend, beforeReserve = async () =>
   });
   const amounts=loadTs("lib/payments/channels.ts", {"@/lib/i18n/money":{formatCurrency:String}});
   const rechargeRoute=loadTs("app/api/recharges/route.ts", {
-    "node:crypto":{randomUUID},"next/server":response,"@/lib/payments/channels":amounts,
+    "node:crypto":{randomInt,randomUUID},"next/server":response,"@/lib/payments/channels":amounts,
     "@/lib/payments/recharge-api-failure.mjs":rechargeFailure,"@/lib/payments/liuhaoyi-limits.mjs":limits,
     "@/lib/payments/payment-session-service":service,"@/lib/payments/providers":registry,
     "@/lib/payments/provider-contracts.mjs":contracts,"@/lib/payments/request-client-ip":{getPaymentClientIp:()=>"127.0.0.1"},

@@ -1,22 +1,13 @@
 import Link from "next/link";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
-import * as Accordion from "@radix-ui/react-accordion";
-import { ChevronDown } from "lucide-react";
+import type { ReactNode } from "react";
 import TutorialImage from "./TutorialImage";
 import tutorial from "./TutorialsGlass.module.css";
 import selection from "@/components/ui/SelectionMotion.module.css";
 
-export const appleArticles = [
-  { id: "login", title: "登录与下载", chapters: [
-    ["apple-product", "商品说明"], ["apple-id-formats", "交付格式"], ["apple-store-login", "App Store 登录"],
-  ] },
-  { id: "security", title: "账号安全与恢复", chapters: [
-    ["apple-account-recovery", "账号恢复"], ["apple-account-settings", "修改资料"], ["apple-faq", "常见问题"],
-  ] },
+export const appleChapters = [
+  ["apple-product", "商品说明"], ["apple-id-formats", "交付格式"], ["apple-store-login", "App Store 登录"],
+  ["apple-account-recovery", "账号恢复"], ["apple-account-settings", "修改资料"], ["apple-faq", "常见问题"],
 ] as const;
-
-export type AppleArticle = (typeof appleArticles)[number]["id"];
-type AppleAccordionProps = { openArticle: AppleArticle | ""; onChange: (article: AppleArticle | "") => void };
 
 const formats = [
   {
@@ -62,65 +53,18 @@ function AppleLink({ href, children }: { href: string; children: ReactNode }) {
 
 function scrollToChapter(id: string) {
   const heading = document.getElementById(id);
-  const article = heading?.closest<HTMLElement>("[data-apple-article-content]");
-  if (!heading || !article || article.dataset.state !== "open") return;
-  const jump = () => {
-    if (!heading.isConnected || article.dataset.state !== "open") return;
-    heading.scrollIntoView({ block: "start" });
-    heading.focus({ preventScroll: true });
-  };
-  // A chapter near the end of an opening article cannot be reached until
-  // the accordion has expanded to its full scrollable height.
-  const opening = article.getAnimations().find(animation => animation.playState === "running");
-  if (opening) void opening.finished.then(jump, () => {});
-  else jump();
+  heading?.scrollIntoView({ block: "start" });
+  heading?.focus({ preventScroll: true });
 }
 
-export function AppleIdContents({ openArticle, onChange }: AppleAccordionProps) {
+export function AppleIdContents() {
   return <nav aria-label="Apple ID 教程目录" className={tutorial.appleContents}>
-    <Accordion.Root type="single" collapsible value={openArticle} onValueChange={value => onChange(value as AppleArticle | "")}>
-      {appleArticles.map(({ id, title, chapters }) => <Accordion.Item key={id} value={id}>
-        <Accordion.Header>
-          <Accordion.Trigger className={`${tutorial.contentsLink} ${tutorial.treeArticle} ${selection.item}`} data-sidebar-current={openArticle === id || undefined}>
-            <span className="min-w-0 flex-1">{title}</span>
-            <span><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>
-          </Accordion.Trigger>
-        </Accordion.Header>
-        <Accordion.Content className={tutorial.accordionContent}>
-          <ul className={tutorial.chapters}>
-            {chapters.map(([anchor, label]) => <li key={anchor}>
-              <button type="button" onClick={() => scrollToChapter(anchor)} className={`${tutorial.contentsLink} ${selection.item}`}><span>{label}</span></button>
-            </li>)}
-          </ul>
-        </Accordion.Content>
-      </Accordion.Item>)}
-    </Accordion.Root>
+    {appleChapters.map(([id, label]) => <button key={id} type="button" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => scrollToChapter(id)}><span>{label}</span></button>)}
   </nav>;
 }
 
-export default function AppleIdTutorial({ openArticle, onChange }: AppleAccordionProps) {
-  const pendingChapter = useRef<{ article: AppleArticle; id: string } | null>(null);
-  useLayoutEffect(() => {
-    const pending = pendingChapter.current;
-    if (!pending) return;
-    if (pending.article !== openArticle) {
-      pendingChapter.current = null;
-    } else if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      pendingChapter.current = null;
-      scrollToChapter(pending.id);
-    }
-  }, [openArticle]);
-
-  function openChapter(article: AppleArticle, id: string) {
-    if (article === openArticle) {
-      scrollToChapter(id);
-    } else {
-      pendingChapter.current = { article, id };
-      onChange(article);
-    }
-  }
-
-  const login = <>
+export default function AppleIdTutorial() {
+  return <div className={`${tutorial.appleArticle} space-y-6`}>
     <section aria-labelledby="apple-product" className={`${tutorial.appleCard} p-5 sm:p-6`}>
       <GuideHeading number="01" id="apple-product">商品说明</GuideHeading>
       <p className="mt-3 text-sm leading-7 text-slate-600">Apple ID 也叫 Apple 账户。App Store、iCloud 和其他 Apple 服务的可用范围取决于账号类型和商品说明。</p>
@@ -175,8 +119,6 @@ export default function AppleIdTutorial({ openArticle, onChange }: AppleAccordio
         </Step>
       </ol>
     </section>
-  </>;
-  const security = <>
     <section aria-labelledby="apple-account-recovery" className={`${tutorial.appleCard} p-5 sm:p-6`}>
       <h2 id="apple-account-recovery" tabIndex={-1} className="scroll-mt-4 text-lg font-semibold">账号被锁定、停用或处于非活跃状态</h2>
       <ul className="mt-3 list-disc space-y-3 pl-5 text-sm leading-7 text-slate-600">
@@ -210,30 +152,10 @@ export default function AppleIdTutorial({ openArticle, onChange }: AppleAccordio
       <div className={`${tutorial.appleFaq} mt-4 space-y-3 text-sm leading-7 text-slate-600`}>
         <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">无法登录或一直转圈</summary><p className="mt-2">先核对「媒体与购买项目」当前账号，再检查网络。可尝试开关飞行模式、临时关闭代理、在 Wi-Fi 与移动数据之间切换，或重启后再登录。也可到 Apple 官网检查账号是否能通过验证。</p></details>
         <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">更新 App 时要求输入原账号</summary><p className="mt-2">用原下载账号更新。若要改用当前账号重新下载，先备份应用数据并确认该账号及所在商店能下载该 App，再决定是否删除旧版本。</p></details>
-        <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">提示密码错误</summary><p className="mt-2">先确认在 <button type="button" onClick={() => openChapter("login", "apple-store-login")} className="text-primary underline">「媒体与购买项目」登录</button>，并核对输入的是正确账号。新购账号可从卡密复制对应值，避免带上标签、空格或分隔符；Apple 官网验证仍失败时联系订单客服。已修改过资料的账号应使用更新后的邮箱和密码，忘记密码可走 Apple 官方恢复流程。</p></details>
-        <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">账号锁定、非活跃或 App Store 账户停用</summary><p className="mt-2">按屏幕提示选择对应的 <button type="button" onClick={() => openChapter("security", "apple-account-recovery")} className="text-primary underline">Apple 账户恢复入口</button>。</p></details>
+        <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">提示密码错误</summary><p className="mt-2">先确认在 <button type="button" onClick={() => scrollToChapter("apple-store-login")} className="text-primary underline">「媒体与购买项目」登录</button>，并核对输入的是正确账号。新购账号可从卡密复制对应值，避免带上标签、空格或分隔符；Apple 官网验证仍失败时联系订单客服。已修改过资料的账号应使用更新后的邮箱和密码，忘记密码可走 Apple 官方恢复流程。</p></details>
+        <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">账号锁定、非活跃或 App Store 账户停用</summary><p className="mt-2">按屏幕提示选择对应的 <button type="button" onClick={() => scrollToChapter("apple-account-recovery")} className="text-primary underline">Apple 账户恢复入口</button>。</p></details>
       </div>
     </section>
     <p className="px-2 text-xs text-slate-500">步骤配图来源：大橘 Apple ID 使用教程。</p>
-  </>;
-
-  return <Accordion.Root type="single" collapsible value={openArticle} onValueChange={value => onChange(value as AppleArticle | "")} className={tutorial.articles}>
-    {appleArticles.map(({ id, title }) => <Accordion.Item key={id} value={id}>
-      <Accordion.Header className={tutorial.articleHeading}>
-        <Accordion.Trigger className={tutorial.articleTrigger}>
-          <span className="min-w-0 flex-1">{title}</span>
-          <span><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>
-        </Accordion.Trigger>
-      </Accordion.Header>
-      <Accordion.Content data-apple-article-content className={tutorial.accordionContent} onAnimationEnd={event => {
-        const pending = pendingChapter.current;
-        if (event.target === event.currentTarget && openArticle === id && pending?.article === id) {
-          pendingChapter.current = null;
-          scrollToChapter(pending.id);
-        }
-      }}>
-        <div className={`${tutorial.appleArticle} space-y-6`}>{id === "login" ? login : security}</div>
-      </Accordion.Content>
-    </Accordion.Item>)}
-  </Accordion.Root>;
+  </div>;
 }

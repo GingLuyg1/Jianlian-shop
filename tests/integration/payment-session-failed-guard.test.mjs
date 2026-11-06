@@ -123,7 +123,10 @@ for (const channel of ['alipay','wechat']) test(`actual ${channel} recharge API 
   const h=harness({data});const response=await h.rechargePost();
   assert.ok(response.ok,JSON.stringify(await response.clone().json()));
   assert.equal(data.account_recharges.length,1);
-  const row=data.account_recharges[0];assert.equal(Date.parse(row.expires_at)-Date.parse(row.created_at),600000);
+  const row=data.account_recharges[0];
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" }).replaceAll("-", "");
+  assert.match(row.recharge_no, new RegExp("^CZ" + today + "[A-Z0-9]{4}$"));
+  assert.equal(Date.parse(row.expires_at)-Date.parse(row.created_at),600000);
   assert.equal(data.payment_sessions.length,1);assert.equal(data.payment_sessions[0].expires_at,row.expires_at);
   assert.equal(h.stats.fundsWrites,0);
 });

@@ -15,7 +15,7 @@ test("UI explains the provider 3 percent charge without adding it to local amoun
   assert.match(providerRegistry, /providerExternalFeeDisclosure: "支付平台可能额外收取约 3% 通道手续费/);
   assert.match(rechargeUi, /selectedChannel\.providerExternalFeeDisclosure/);
   assert.match(paymentPage, /session\.providerExternalFeeDisclosure/);
-  assert.match(checkout, /selectedPaymentChannel\.providerExternalFeeDisclosure/);
+  assert.doesNotMatch(checkout, /selectedPaymentChannel\.providerExternalFeeDisclosure|ExternalCashierFeeSummary/);
   assert.match(rechargeRoute, /summary\.fee !== 0 \|\| summary\.payableAmount !== summary\.amount/);
   assert.match(provider, /assertLiuhaoyiAmountBreakdown\(input\.requestedAmount, input\.feeAmount, input\.payableAmount\)/);
   assert.doesNotMatch(provider, /\*\s*1\.03|1\.03\s*\*/);
@@ -33,12 +33,13 @@ test("Alipay and WeChat recharge requests preserve the normalized decimal string
   assert.match(rechargeRoute, /parsePublicRechargeAmount\(body\.amount, 6\)/);
 });
 
-test("recharge history exposes order number, countdown, continue payment and customer service", () => {
+test("recharge history exposes order number and continue payment and customer service", () => {
   assert.match(rechargeUi, /<RechargeRecordTabs/);
   const tabs = readFileSync(new URL("../../components/account/RechargeRecordTabs.tsx", import.meta.url), "utf8");
   assert.match(tabs, /value: "recharges", label: "充值记录"/);
   assert.doesNotMatch(rechargeUi, /资金变动记录/);
-  assert.match(rechargeUi, /待支付剩余时间/);
+  assert.doesNotMatch(rechargeUi, /待支付剩余时间|支付有效期至/);
+  assert.match(rechargeUi, /订单状态/);
   assert.match(rechargeUi, /继续支付/);
   assert.match(rechargeUi, /订单编号/);
   assert.match(rechargeUi, /openPublicSupport/);

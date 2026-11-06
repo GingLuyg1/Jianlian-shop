@@ -157,7 +157,6 @@ export default function AdminReportsPage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">经营报表</h1>
-          <p className="text-sm text-slate-500">统一统计订单、支付、充值、退款、商品、用户、库存和交付数据。</p>
         </div>
         <Button variant="outline" className="gap-2" onClick={loadReport} disabled={loading}>
           <RefreshCcw className="h-4 w-4" />

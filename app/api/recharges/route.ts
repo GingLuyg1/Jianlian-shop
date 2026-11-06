@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { calculateRechargeAmounts } from "@/lib/payments/channels";
@@ -621,9 +621,11 @@ function logRechargeFailure(
 }
 
 function generateRechargeNo() {
-  const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `RC${stamp}${random}`;
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date()).filter(part => part.type !== "literal").map(part => part.value).join("");
+  const suffix = randomInt(36 ** 4).toString(36).toUpperCase().padStart(4, "0");
+  return `CZ${date}${suffix}`;
 }
 
 function positiveInteger(value: string | null, fallback: number) {

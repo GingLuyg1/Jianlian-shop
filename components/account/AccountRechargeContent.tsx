@@ -539,11 +539,10 @@ function RechargeRecords({ records, loading, loadingCount, error, page, count, n
             ? canContinueLiuhaoyiRechargePayment(record as unknown as Record<string, unknown>, now)
             : Boolean(record.expectedUsdtAmount && ["pending", "waiting_payment"].includes(String(record.status)) && !expired);
           const status = expired ? "expired" : record.status;
-          const remainingSeconds = secondsUntil(record.expiresAt, now);
           return <div key={record.rechargeNo} className="min-w-0 rounded-2xl border border-[#eee4d9] bg-white p-4 text-sm shadow-[0_2px_10px_-8px_rgba(91,62,38,0.25)]">
             <div className="mb-3 flex items-center justify-between gap-3">
               <button type="button" className="min-w-0 truncate rounded-md font-semibold text-slate-800 underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-primary" title={`完整订单编号：${record.rechargeNo}`} aria-label={`订单编号 ${rechargeDisplayNumber(record.rechargeNo)}，复制完整编号`} onClick={() => void copyRechargeNo(record.rechargeNo)}>订单编号 {rechargeDisplayNumber(record.rechargeNo)}</button>
-              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{rechargeStatusLabel(status)}</span>
+              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">订单状态 · {rechargeStatusLabel(status)}</span>
             </div>
             <dl className="grid gap-2 text-muted-foreground">
               <RecordLine label="支付渠道" value={record.channelName} />
@@ -551,13 +550,11 @@ function RechargeRecords({ records, loading, loadingCount, error, page, count, n
               <RecordLine label="实际到账" value={rechargeCreditedCny(record)} />
               <RecordLine label="创建时间" value={formatDateTime(record.createdAt)} />
               <RecordLine label="到账时间" value={record.completedAt ? formatDateTime(record.completedAt) : "—"} />
-              {record.expiresAt ? <RecordLine label="支付有效期至" value={formatDateTime(record.expiresAt)} /> : null}
-              {canContinue ? <RecordLine label="待支付剩余时间" value={formatCountdown(remainingSeconds)} /> : null}
               {record.reviewReason && ["failed", "rejected", "cancelled"].includes(String(record.status)) ? <RecordLine label="处理说明" value={record.reviewReason} /> : null}
             </dl>
             {canContinue ? <Button asChild size="sm" className="mt-3"><Link href={`/payment?recharge=${encodeURIComponent(record.rechargeNo)}`}>继续支付</Link></Button> : null}
 
-            {!expired && ["waiting_payment", "submitted", "rejected"].includes(String(record.status)) ? (record.expectedUsdtAmount ? <RechargeBep20VerifyForm record={record} onSubmitted={onProofSubmitted} /> : <RechargeProofForm record={record} onSubmitted={onProofSubmitted} />) : null}
+            {!expired && ["waiting_payment", "submitted", "rejected"].includes(String(record.status)) ? (!record.expectedUsdtAmount ? <RechargeProofForm record={record} onSubmitted={onProofSubmitted} /> : null) : null}
           </div>;
         })}
       </div>
@@ -571,42 +568,6 @@ function RechargeRecords({ records, loading, loadingCount, error, page, count, n
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function RechargeBep20VerifyForm({ record, onSubmitted }: { record: RechargeRecord; onSubmitted: () => void }) {
-  const [txHash, setTxHash] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  async function verify() {
-    if (submitting || !/^0x[0-9a-fA-F]{64}$/.test(txHash.trim())) {
-      setError("请输入合法的 0x 开头 32 字节交易哈希。");
-      return;
-    }
-    setSubmitting(true); setError(""); setMessage("");
-    try {
-      const response = await fetch(`/api/recharges/${encodeURIComponent(record.rechargeNo)}/bep20/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ txHash: txHash.trim() }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string; actualReceivedUsdt?: string; creditedCnyAmount?: string } | null;
-      if (!response.ok) throw new Error(payload?.error ?? "链上交易核验失败");
-      setMessage(`已核验实际到账 ${payload?.actualReceivedUsdt ?? "—"} USDT，预计入账 ¥${payload?.creditedCnyAmount ?? "—"}。等待管理员审核。`);
-      onSubmitted();
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "链上交易核验失败");
-    } finally { setSubmitting(false); }
-  }
-  return (
-    <div className="mt-3 space-y-2 border-t pt-3">
-      <p className="text-xs font-medium text-amber-700">请精确支付 {record.expectedUsdtAmount} USDT，此 4 位小数金额用于识别你的充值单，请勿自行修改。金额不一致或超时付款将转人工处理。</p>
-      <Input value={txHash} onChange={(event) => setTxHash(event.target.value)} placeholder="输入 BEP20 TxHash" maxLength={66} />
-      {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
-      <Button size="sm" disabled={submitting} onClick={() => void verify()}>{submitting ? "核验中..." : "提交 TxHash 并核验"}</Button>
     </div>
   );
 }
@@ -650,14 +611,6 @@ async function copyRechargeNo(value: string) {
   }
 }
 
-function secondsUntil(expiresAt: string | null, now: Date) {
-  if (!expiresAt) return 0;
-  return Math.max(0, Math.floor((Date.parse(expiresAt) - now.getTime()) / 1000));
-}
-
-function formatCountdown(totalSeconds: number) {
-  return `${Math.floor(totalSeconds / 60)} 分 ${totalSeconds % 60} 秒`;
-}
 
 function normalizeAmountInput(value: string, currency: PaymentCurrency) {
   const cleaned = value.replace(/[^\d.]/g, "");

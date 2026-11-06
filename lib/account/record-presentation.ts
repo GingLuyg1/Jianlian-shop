@@ -1,5 +1,6 @@
 // A stable display alias only; never send this value to payment/order APIs.
 export function rechargeDisplayNumber(rechargeNo: string) {
+  if (/^CZ\d{8}[0-9A-Z]{4}$/.test(rechargeNo)) return rechargeNo;
   let hash = 2166136261;
   for (const char of rechargeNo) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
   return String((hash >>> 0) % 1000000).padStart(6, "0");
