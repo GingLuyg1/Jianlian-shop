@@ -5,8 +5,10 @@ import {fulfillSupplierCandidates} from '../../lib/providers/core/fulfillment-co
 import {decideKuajingZyOfflineContinuation,validateKuajingZyOfflineDelivery} from '../../lib/providers/kuajingzy/offline-purchase-policy.mjs';
 function fixture({timeout=false,knownOrder=true}={}){
   let state='NEW',externalOrderId=null,purchases=0,queries=0,deliveries=0,privatePin=null;
-  const requestId='kuajingzy:ITEM',hash='a'.repeat(64),identity={requestId,externalOrderId:'SUPPLIER-ORDER',productId:'P-1',specificationKey:'SYNTHETIC',currency:'CNY',quantity:1};
-  const result={...identity,status:'delivered',deliveredCount:1,totalDebitCny:'8',pin:'SYNTHETIC_PRIVATE_PIN'};
+  const requestId='kuajingzy:ITEM',hash='a'.repeat(64),identity={requestId,externalOrderId:'SUPPLIER-ORDER',productId:'P-1',skuId:'SYNTHETIC',currency:'CNY',quantity:1};
+  const result={id:identity.externalOrderId,orderCode:identity.externalOrderId,domain:'mall',itemId:identity.productId,
+    skuId:identity.skuId,currency:'CNY',quantity:1,status:'completed',amount:'8',
+    refund:{status:'none',amount:0,currency:'CNY'},delivery:'SYNTHETIC_PRIVATE_PIN'};
   const store={
     async claim(){
       if(state==='NEW'){state='PURCHASING';return {action:'PURCHASE',status:state,orderCode:null};}
@@ -17,7 +19,7 @@ function fixture({timeout=false,knownOrder=true}={}){
     async recordOutcome(o){
       if(o.state==='FULFILLED'){
         if(state==='FULFILLED')return;
-        assert.equal(o.deliveredContent,result.pin);privatePin=o.deliveredContent;deliveries++;
+        assert.equal(o.deliveredContent,result.delivery);privatePin=o.deliveredContent;deliveries++;
       }
       state=o.state;externalOrderId=o.orderCode??externalOrderId;
     },
@@ -28,10 +30,10 @@ function fixture({timeout=false,knownOrder=true}={}){
     validateReadiness:()=>({ok:true,inputs:{}}),decideError:()=>({state:'UNCERTAIN',retryable:false,code:'TIMEOUT'}),
     decideOrderResult:o=>validateKuajingZyOfflineDelivery({expected:{...identity,maximumTotalDebitCny:'8'},observed:o,authoritativeGet:true,privateStorageReady:true,deliveryCommitted:state==='FULFILLED'}).eligibleForExistingPrivateDelivery
       ?{kind:'fulfilled'}:{kind:'uncertain',code:'DELIVERY_NOT_CONFIRMED'},
-    extractDeliveredContent:o=>o.pin,
+    extractDeliveredContent:o=>o.delivery,
     outcome:(_candidate,_claim,_requestId,nextState,retryable,code,extra={})=>({state:nextState,retryable,code,...extra}),
   };
-  return {input,get counters(){return {purchases,queries,deliveries,state};},get hasPrivatePin(){return privatePin===result.pin;}};
+  return {input,get counters(){return {purchases,queries,deliveries,state};},get hasPrivatePin(){return privatePin===result.delivery;}};
 }
 test('existing orchestration + atomic claim test double handles duplicate tasks and delivery once',async()=>{
   const f=fixture();const summaries=await Promise.all([fulfillSupplierCandidates(f.input),fulfillSupplierCandidates(f.input)]);

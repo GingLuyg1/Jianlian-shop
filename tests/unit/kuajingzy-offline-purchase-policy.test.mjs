@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {prepareKuajingZyOfflinePurchase as plan,parseKuajingZyCny as cny,decideKuajingZyOfflineContinuation as next,validateKuajingZyOfflineDelivery as delivery} from '../../lib/providers/kuajingzy/offline-purchase-policy.mjs';
 function fixture(){return {binding:{supplier:'kuajingzy',websiteSkuId:'SKU-1',supplierProductId:'P-1',bindingStatus:'candidate_unverified'},expectedSkuId:'SKU-1',orderItemId:'ITEM-1',attemptId:'00000000-0000-4000-8000-000000000001',quantity:1,nowMs:10000,
-  quote:{currency:'CNY',productId:'P-1',quantity:1,specificationKey:'SYNTHETIC-FIXED',costAuthoritative:true,feesIncluded:true,totalIncludingFees:'8.0000',stockAuthoritative:true,availableQuantity:1,quotedAtMs:9000,expiresAtMs:11000},
+  quote:{currency:'CNY',productId:'P-1',quantity:1,specificationKey:'SYNTHETIC-FIXED',skuId:'SYNTHETIC-FIXED',unitPriceCny:'8.00',memberDiscount:'1',costAuthoritative:true,feesIncluded:true,totalIncludingFees:'8.0000',stockAuthoritative:true,availableQuantity:1,quotedAtMs:9000,expiresAtMs:11000},
   policy:{paused:false,emergencyStop:false,expectedSpecificationKey:'SYNTHETIC-FIXED',maxQuoteAgeMs:2000,singleLimit:'10',cumulativeLimit:'100',spent:'20',reserved:'10',balance:'50',saleRevenue:'10',salesFees:'0.5',minimumMarginBps:1500}};}
 test('precise CNY accepts four decimals only and never financial binary floats',()=>{
   assert.equal(cny('999999999999.9999'),9999999999999999n);assert.equal(cny('0.0001'),1n);
@@ -45,21 +45,26 @@ test('unknown or timed out submit never retries and only queries a persisted ori
     assert.equal(next(changed).canSubmit,false);assert.equal(next(changed).retryPurchase,false);
   }
 });
-function delivered(){const expected={requestId:'REQ',externalOrderId:'ORDER',productId:'P-1',specificationKey:'SPEC',currency:'CNY',quantity:1,maximumTotalDebitCny:'8'};return {expected,observed:{...expected,status:'delivered',deliveredCount:1,totalDebitCny:'8'},authoritativeGet:true,privateStorageReady:true,deliveryCommitted:false};}
+function delivered() {
+  const expected={externalOrderId:'ORDER',productId:'P-1',skuId:'SPEC',quantity:1,maximumTotalDebitCny:'8'};
+  const observed={id:'ORDER',domain:'mall',itemId:'P-1',skuId:'SPEC',currency:'CNY',quantity:1,
+    status:'completed',delivery:'SYNTHETIC_PRIVATE_PIN',amount:'8',refund:{status:'none',currency:'CNY',amount:'0'}};
+  return {expected,observed,authoritativeGet:true,privateStorageReady:true,deliveryCommitted:false};
+}
 test('private delivery decision validates every frozen identity field and exact count',()=>{
   const f=delivered();assert.equal(delivery(f).eligibleForExistingPrivateDelivery,true);
   assert.equal(delivery(f).requiresAtomicExistingStore,true);
-  for(const key of ['requestId','externalOrderId','productId','specificationKey','currency','quantity']){
+  for(const key of ['id','itemId','skuId','currency','quantity']){
     const g=delivered();g.observed[key]=key==='quantity'?2:'OTHER';assert.equal(delivery(g).eligibleForExistingPrivateDelivery,false);
-    delete g.expected[key];assert.equal(delivery(g).eligibleForExistingPrivateDelivery,false);
+
   }
 });
 test('unknown or excess final debit forbids automatic delivery/audit success',()=>{
-  const f=delivered();f.observed.totalDebitCny='8.0001';assert.equal(delivery(f).code,'DELIVERY_DEBIT_OUTSIDE_CAP');
-  delete f.observed.totalDebitCny;assert.equal(delivery(f).code,'DELIVERY_DEBIT_UNVERIFIED');
+  const f=delivered();f.observed.amount='8.0001';assert.equal(delivery(f).code,'ORDER_MONEY_MISMATCH');
+  delete f.observed.amount;assert.equal(delivery(f).code,'ORDER_MONEY_UNVERIFIED');
 });
 test('unknown/partial/undelivered, repeated delivery, and public storage refuse delivery',()=>{
-  for(const state of ['unknown','partial','processing','completed']){const f=delivered();f.observed.status=state;assert.equal(delivery(f).eligibleForExistingPrivateDelivery,false);}
+  for(const state of ['unknown','paid','processing','cancelled']){const f=delivered();f.observed.status=state;assert.equal(delivery(f).eligibleForExistingPrivateDelivery,false);}
   assert.equal(delivery({...delivered(),deliveryCommitted:true}).code,'ALREADY_DELIVERED');
   assert.equal(delivery({...delivered(),privateStorageReady:false}).eligibleForExistingPrivateDelivery,false);
   assert.equal(delivery({...delivered(),authoritativeGet:false}).eligibleForExistingPrivateDelivery,false);

@@ -26,8 +26,8 @@ export function summarizeKuajingZyCatalogShape(data) {
     stockVerified: false,
   });
 }
-export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch,scope='balance-and-catalog',filter,onDiagnostics}={}) {
-  if (!['balance-and-catalog', 'catalog-only', 'catalog-filtered'].includes(scope)) {
+export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch,scope='balance-and-catalog',filter,onDiagnostics,signal}={}) {
+  if (!['balance-and-catalog', 'catalog-only', 'catalog-filtered', 'catalog-paged'].includes(scope)) {
     throw new KuajingZyReadError('SCOPE_INVALID');
   }
   // Reject missing/ambiguous filters BEFORE any outbound request.
@@ -39,6 +39,18 @@ export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch,sc
     }
   }
   const client=createKuajingZyReadonlyClient({apiKey:key,fetchImpl,onDiagnostics});
+  if (scope === 'catalog-paged') {
+    const catalog = await client.collectMallCatalog(filter ?? {}, { signal });
+    return {
+      operation:'KUAJINGZY_MALL_PAGED_PROBE',
+      catalogGet:catalog.status,
+      fullCatalogVerified:catalog.fullCatalog,
+      pageCount:catalog.pages ?? catalog.partial.pages,
+      collectedItemCount:(catalog.items ?? catalog.partial.items).length,
+      errorCode:catalog.errorCode ?? null,
+      purchaseExecuted:false, paymentExecuted:false, productionChanged:false,
+    };
+  }
   // The historical balance GET already passed; never repeat for filtered reads.
   const balance=scope === 'balance-and-catalog' ? await client.readBalance() : null;
   const catalog=scope === 'catalog-filtered'
@@ -57,15 +69,26 @@ export async function main({key=process.env.KUAJINGZY_API_KEY,fetchImpl=fetch,sc
 }
 if (process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
   const args=process.argv.slice(2);
-  // CLI is intentionally filtered-only. Legacy unfiltered and balance GET
-  // remain accessible only to synthetic unit tests, not operator CLI.
-  const scope=args.length===1 && args[0]==='--catalog-filtered' ? 'catalog-filtered' : 'INVALID';
+  // Older unbounded and balance reads remain library-only for regression.
+  const scope = args.length === 1 && ['--catalog-filtered', '--catalog-paged'].includes(args[0])
+    ? args[0].slice(2) : 'INVALID';
   const search=process.env.KUAJINGZY_CATALOG_SEARCH;
   const category=process.env.KUAJINGZY_CATALOG_CATEGORY;
   const filter=search !== undefined && category === undefined ? {search}
     : category !== undefined && search === undefined ? {category} : null;
   const diagnostics=[];
-  main({scope,filter,onDiagnostics:value=>diagnostics.push(value)}).then(result => {
+  const controller = new AbortController();
+  const interrupt = () => controller.abort();
+  process.once('SIGINT', interrupt);
+  const itemId = process.env.KUAJINGZY_CATALOG_ITEM_ID;
+  const pageFilter = {
+    ...(search === undefined ? {} : { search }),
+    ...(category === undefined ? {} : { category }),
+    ...(itemId === undefined ? {} : { itemId }),
+  };
+  main({scope,filter:scope === 'catalog-paged' ? pageFilter : filter,signal:controller.signal,
+    onDiagnostics:value=>diagnostics.push(value)}).then(result => {
+    if (scope === 'catalog-paged' && result.catalogGet !== 'COMPLETE') process.exitCode = 2;
     process.stdout.write(JSON.stringify({...result,diagnostics})+'\n');
   }).catch(error=>{
     // Only controlled classification. Never serialize upstream error, key or stack.
@@ -73,5 +96,5 @@ if (process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1]))
     process.stderr.write('PROBE_ERROR='+allowed+'\n');
     process.stderr.write('PROBE_DIAGNOSTICS='+JSON.stringify(diagnostics)+'\n');
     process.exitCode=1;
-  });
+  }).finally(() => process.removeListener('SIGINT', interrupt));
 }
