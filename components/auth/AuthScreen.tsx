@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { getSafeInternalRedirect } from "@/lib/auth/redirect";
 import { getSafeAuthErrorMessage, getSafeNetworkAuthMessage, isEmailFormatValid, validateAuthPassword } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
+import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
 import {
   getOrCreateProfile,
   getSupabaseBrowserClient,
@@ -543,6 +544,13 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                     {loading ? "处理中..." : isRegister ? "注册" : "登录"}
                   </Button>
                 </form>
+
+                <AlternateLoginMethods
+                  mode={mode}
+                  redirectTo={redirectTo === "/" ? "/account" : redirectTo}
+                  inviteCode={inviteCode}
+                  acceptedTerms={acceptedTerms}
+                />
 
                 <div className="mt-5 flex items-center justify-between text-sm">
                   <Link
