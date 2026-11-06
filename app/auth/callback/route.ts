@@ -47,7 +47,10 @@ export async function GET(request: NextRequest) {
   // Registration via invited Google OAuth redirects through this route.
   // Database RPC handles referral ownership/self-referral and repeat binding.
   const invite = requestUrl.searchParams.get("invite")?.trim().toUpperCase() ?? "";
-  if (INVITE_CODE.test(invite)) {
+  const createdAtMs = Date.parse(user.created_at);
+  const isNewSignup = Number.isFinite(createdAtMs) &&
+    Date.now() >= createdAtMs && Date.now() - createdAtMs <= 15 * 60 * 1000;
+  if (isNewSignup && INVITE_CODE.test(invite)) {
     const { error: bindError } = await supabase.rpc("bind_referrer_by_code", {
       input_invite_code: invite,
     });
