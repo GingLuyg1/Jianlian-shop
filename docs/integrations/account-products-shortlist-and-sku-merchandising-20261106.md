@@ -4,7 +4,7 @@
 
 选品范围先为 **Apple ID、Telegram/TG、Threads、Instagram/INS、Outlook/Hotmail、Google/Gmail、Facebook、Steam**。先读取真实供应商目录形成候选清单，**由用户确认选哪些商品**，之后再创建新商品链接与 SKU。新链接**标题格式必须等用户单独确认**，不得擅自生成或上线。
 
-Apple ID：**优先大橘（Daju）**。只有大橘确无相同有效 SKU、或确实没有可用库存且允许备选时，才评估跨境资源网；必须要求商品/地区/新老号/交付及安全属性完全一致。不能把“两个供应商都叫 Apple ID”视为可以互相自动替代；真实跨供应商自动回退需要单独的身份、成本、库存及交付合同验收。
+Apple ID：**逐个 SKU 优先大橘（Daju）**。只有大橘确无相同有效 SKU、或确实没有可用库存且允许备选时，才评估跨境资源网；必须要求商品/地区/新老号/交付及安全属性完全一致。不能把“两个供应商都叫 Apple ID”视为可以互相自动替代；真实跨供应商自动回退需要单独的身份、成本、库存及交付合同验收。
 
 其他七组：先用跨境资源网普通 API 文档支持的 `search` 关键词做定向只读候选调查，不猜分页参数，不假定品牌/商品存在。Steam 账号与 Steam 礼品卡不能混为同一类；非账号商品标记其他主线。
 
@@ -12,8 +12,8 @@ Apple ID：**优先大橘（Daju）**。只有大橘确无相同有效 SKU、或
 
 GitHub `scripts/collect-account-product-shortlist.mjs`：
 - 首次通过已有大橘 `GET /products?q=苹果` 查 Apple ID；只用已有 Daju client-core，不查询余额、不调用采购。
-- 若没有**已观察库存>0且自动交付**的 Apple ID 大橘候选，则只读跨境资源网 `GET /api/open/v1/catalog/mall?search=Apple+ID`，作为**备选候选**而不是直接启用回退。
-- 按顺序查询跨境资源网的 `Telegram`、`Threads`、`Instagram`、`Outlook`、`Gmail`、`Facebook`、`Steam`，恰好一条文档支持的 `search` 过滤 GET / 品牌。合计最多 9 次只读 GET（若大橘有适合的 Apple ID，则最多 8 次）。
+- 不论大橘是否存在部分 Apple ID 库存，都只读跨境资源网 `GET /api/open/v1/catalog/mall?search=Apple+ID`，用于比对大橘**未覆盖的具体地区/新老号/规格 SKU**；仅作为备选候选而不是直接启用自动回退。
+- 按顺序查询跨境资源网的 `TG`、`Threads`、`Instagram`、`Outlook`、`Gmail`、`Facebook`、`Steam`，恰好一条文档支持的 `search` 过滤 GET / 品牌。合计最多 **9 次只读 GET**（1 次大橘、8 次跨境资源网）。
 - 必须从已有受保护环境加载 `DAJU_API_KEY` 和 `KUAJINGZY_API_KEY`，以及受保护的 **`JIANLIAN_SHORTLIST_OUTPUT` 新文件路径**。不在命令行正文或 GitHub、聊天粘贴 Key；输出新文件仅保存已脱敏的商品 ID、候选名称、展示价、库存快照、品牌/小组及有限供应商 SKU 标识，不保留描述、邮箱、原始响应、账号密码或卡密。安全文件权限要求 0600（Windows 本地还需 Codex 确认 ACL）。
 - Daju 已有请求 10 秒超时、256KiB 返回体限制；KuajingZy 保持 12 秒超时、256KiB 限制；禁止重试、禁止余额查询、失败时立即停止整个任务，保存已有**部分结果**与错误安全代码。部分结果不得当成“没有这个供应商商品”的证明；真实字段缺失不能编造。
 - 脚本只读，返回 `purchaseEnabled=false`、`productionChanged=false`。每个商品标记 `finalFeeInclusiveDebitVerified=false`、`stockAuthoritative=false`、`fulfillmentContractVerified=false`、`saleEnabled=false`，未验收不得转为可售或自动采购。
