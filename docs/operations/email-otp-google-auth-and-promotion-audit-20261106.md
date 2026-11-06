@@ -42,7 +42,7 @@
 - 现有邀请码的 profiles 数量 **6**，转介绍关系 **1**，佣金记录 **0**；这是当前数据量，**不是**实际佣金已经自动发放的证明。
 - `site_settings` 配置 `promotion_enabled=true`、`promotion_commission_rate=0.03`、`promotion_min_withdraw_amount=100`。
 - `public.promotion_visits` **不存在**，但 `app/api/referrals/route.ts` 会查询该表计算“访问量”。因此访问统计**尚未完成真实闭环**，不可标记 Production PASS。
-- 当前 `public.orders` 有 7 条 payment_status=paid，佣金记录 0；没有证据说明这些订单属于被邀请用户，**不能直接判定佣金丢失**。仅见到订单更新时间/支付到期的触发器，未看到订单表上自动触发佣金同步的触发器。需继续核实付款服务端是否有其他明确的 `sync_referral_commission_for_order` 调用；代码定义或函数存在不代表订单真实付款会产生佣金。
+- 当前 `public.orders` 有 7 条 payment_status=paid，佣金记录 0；随后只读关联了 `orders.user_id = referrals.referred_user_id` 并排除 cancelled/refunded/failed 状态，核实**符合这组条件的被邀请用户已付款订单为 0 条**。因此目前不存在这组订单的漏发佣金证据，但不能据此声明佣金同步闭环通过。仅见到订单更新时间/支付到期的触发器，未看到订单表上自动触发佣金同步的触发器。需继续核实付款服务端是否有其他明确的 `sync_referral_commission_for_order` 调用；代码定义或函数存在不代表订单真实付款会产生佣金。
 - `/promotion` 前台展示链接、邀请数、佣金及分页，`/r/[inviteCode]` 跳转注册，真实业务闭环中的「访问采集、佣金自动结算、防刷、提现管理和退款冲回」仍需逐项仅针对缺口验收。
 - 既有默认 3% 和 ¥100 是已配置业务参数，不建议未经用户许可修改佣金比例/门槛或进行真实提现。
 
