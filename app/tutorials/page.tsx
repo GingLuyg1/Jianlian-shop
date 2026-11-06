@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import * as Collapsible from "@radix-ui/react-collapsible";
 import {
   BookOpen,
   ArrowUpRight,
   CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
   CreditCard,
   Headphones,
@@ -16,6 +18,10 @@ import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { openPublicSupport } from "@/lib/support/open-public-support";
+import BinanceTutorial from "@/components/account/BinanceTutorial";
+import AppleIdTutorial, { AppleIdContents, appleArticles, type AppleArticle } from "@/components/account/AppleIdTutorial";
+import sidebar from "@/components/layout/SidebarSlidingList.module.css";
+import selection from "@/components/ui/SelectionMotion.module.css";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
 import tutorial from "@/components/account/TutorialsGlass.module.css";
@@ -55,21 +61,64 @@ const serviceRules = [
   { title: "交付后核验", text: "收到账号、卡密或充值结果后及时检查", icon: CheckCircle2 },
 ];
 
+const tutorialTopics = [
+  { id: "required", label: "使用必读", title: "使用必读", description: "下单前了解商品规则、购买流程与交付说明。", icon: BookOpen, keywords: ["购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])] },
+  { id: "binance", label: "币安教程", title: "币安 · USDT 交易教程", description: "下载安装、注册买币，以及使用 BSC（BEP20）转账充值。", icon: CreditCard, keywords: ["Binance", "BEP20", "安卓", "iPhone", "Apple", "注册", "邀请码", "JIANLIAN", "购买 USDT", "提现", "支付", "收款地址", "网络手续费"] },
+  { id: "apple-id", label: "Apple ID", title: "Apple ID 使用教程", description: "", icon: ShieldCheck, keywords: ["苹果 ID", "苹果ID", "卡密", "密保", "生日", "格式 A", "格式 B", "格式 C", "iCloud", ...appleArticles.flatMap(({ title, chapters }) => [title, ...chapters.map(([, label]) => label)])] },
+] as const;
+
 export default function TutorialsPage() {
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>("required");
+  const [appleTreeOpen, setAppleTreeOpen] = useState(true);
+  const [appleArticle, setAppleArticle] = useState<AppleArticle | "">("");
+  const scrollRef = useRef<HTMLDivElement>(null);
   const query = search.trim().toLocaleLowerCase();
-  const matches = !query || ["使用必读", "购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])].some(text => text.toLocaleLowerCase().includes(query));
+  const matchingTopics = tutorialTopics.filter(topic => [topic.label, topic.title, topic.description, ...topic.keywords].some(text => text.toLocaleLowerCase().includes(query)));
+  const topic = matchingTopics.find(item => item.id === selected) ?? matchingTopics[0] ?? tutorialTopics.find(item => item.id === selected)!;
+  const showApple = matchingTopics.length > 0 && topic.id === "apple-id";
+  const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
+  const changeAppleArticle = (article: AppleArticle | "") => {
+    setAppleTreeOpen(true);
+    setAppleArticle(article);
+    resetScroll();
+  };
   return <div className={tutorial.shell}><PublicLayout viewportLocked contentClassName="max-w-none px-4 py-3 md:px-6">
     <div data-testid="tutorial-workspace" className={tutorial.workspace}>
+      <Collapsible.Root asChild open={showApple && appleTreeOpen} onOpenChange={open => {
+        setAppleTreeOpen(open);
+        if (!open) setAppleArticle("");
+      }}>
       <aside data-testid="tutorial-navigation" className={`${glass.surface} ${styles.panel} ${tutorial.navigation}`}>
         <label htmlFor="tutorial-search" className="text-sm font-semibold text-slate-900">搜索商品教程</label>
-        <div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" aria-hidden="true" /><Input id="tutorial-search" value={search} onChange={event => setSearch(event.target.value)} placeholder="输入商品 / 教程关键词" className="h-11 rounded-xl border-orange-100 bg-white/80 pl-9" /></div>
-        <nav aria-label="使用教程分类" className="mt-4"><button type="button" aria-current="page" className={tutorial.selected} onClick={() => setSearch("")}><BookOpen className="h-5 w-5 shrink-0" aria-hidden="true" /><span className="flex-1 text-left">使用必读</span><span className={styles.pill}>必读</span></button></nav>
+        <div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" aria-hidden="true" /><Input id="tutorial-search" value={search} onChange={event => { setSearch(event.target.value); resetScroll(); }} placeholder="输入商品 / 教程关键词" className="h-11 rounded-xl border-orange-100 bg-white/80 pl-9" /></div>
+        <nav aria-label="使用教程分类" className={tutorial.topicList} data-topic={topic.id}>
+          <span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.topicIndicator}`} data-ready="true" data-visible={matchingTopics.length > 0} />
+          {tutorialTopics.map(({ id, label, icon: Icon }) => {
+            const current = topic.id === id && matchingTopics.length > 0;
+            const button = <button type="button" aria-current={current ? "true" : undefined} data-sidebar-current={current || undefined} className={`${tutorial.navItem} ${selection.item}`} onClick={() => {
+              setSelected(id);
+              setSearch("");
+              if (id !== "apple-id") setAppleArticle("");
+              resetScroll();
+            }}>
+              <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>
+              {id === "required" && <span className={`${styles.pill} hidden md:inline`}>必读</span>}
+              {id === "apple-id" && <span className="hidden md:inline"><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
+            </button>;
+            return id === "apple-id" ? <Collapsible.Trigger asChild key={id}>{button}</Collapsible.Trigger> : <div className="min-w-0" key={id}>{button}</div>;
+          })}
+        </nav>
+        <Collapsible.Content className={tutorial.tree}>
+          <AppleIdContents openArticle={appleArticle} onChange={changeAppleArticle} />
+        </Collapsible.Content>
       </aside>
+      </Collapsible.Root>
       <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content}`}>
-        <header className={`${glass.hero} ${tutorial.header}`}><h1 className="text-xl font-semibold text-slate-900">使用必读</h1><p className="mt-2 text-sm leading-6 text-slate-500">下单前了解商品规则、购买流程与交付说明。</p></header>
-        <div data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto`} tabIndex={0} role="region" aria-label="使用必读正文">
-          {!matches ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => setSearch("")}>清空搜索</Button></div> : <div className="space-y-7">
+        <header className={`${glass.hero} ${tutorial.header}`}><div key={topic.id} className={tutorial.topicEnter}><h1 className="text-xl font-semibold text-slate-900">{topic.title}</h1>{topic.description && <p className="mt-2 text-sm leading-6 text-slate-500">{topic.description}</p>}</div></header>
+        <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
+          <div key={matchingTopics.length ? topic.id : "empty"} className={tutorial.topicEnter}>
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial openArticle={appleArticle} onChange={changeAppleArticle} /> : <div className="space-y-7">
             <section aria-labelledby="tutorial-service-title">
               <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
@@ -82,6 +131,7 @@ export default function TutorialsPage() {
             <section className={`${glass.inset} rounded-2xl p-5 sm:p-6`}><h2 className="text-base font-semibold">下单与售后提醒</h2><ul className="mt-4 list-disc space-y-3 pl-4 text-sm leading-7 text-slate-600">{notices.map(notice => <li key={notice}>{notice}</li>)}</ul></section>
             <div className="flex flex-wrap items-center justify-between gap-4 border-t border-orange-100 pt-5"><p className="text-sm text-slate-500">需要补货、批量购买或确认商品是否适用？</p><Button variant="outline" onClick={openPublicSupport}><Headphones className="mr-2 h-4 w-4" />联系在线客服<ArrowUpRight className="ml-2 h-4 w-4" /></Button></div>
           </div>}
+          </div>
         </div>
       </section>
     </div>

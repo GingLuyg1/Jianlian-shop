@@ -318,7 +318,7 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
               pendingRef.current = item.href;
             }}
             className={cn("flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", center.navLink, compact && "shrink-0", active ? "font-medium text-primary" : "text-slate-500")}
-          ><span className={center.navIcon}><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block">{item.label}</span>{!compact ? <span className="mt-0.5 block text-[11px] font-normal text-slate-500">{item.description}</span> : null}</span></Link>
+          ><span className={center.navIcon}><Icon className="h-4 w-4" aria-hidden="true" /></span><span>{item.label}</span></Link>
         );
       })}
     </div>
