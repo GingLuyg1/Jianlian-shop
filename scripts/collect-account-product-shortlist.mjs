@@ -1,5 +1,6 @@
 // Account-product selection evidence collector. Read-only, purchase-disabled.
-// Daju Apple ID first; KuajingZy fallback only if verified Daju stock isn't suitable.
+// Daju Apple ID is first preference PER MATCHING SKU; read KuajingZy too
+// so uncovered Apple regions/age variants can be reviewed as fallback candidates.
 // For other brands query KuajingZy only, one documented search per brand.
 // Never write raw upstream responses or credentials to stdout / public CI.
 import { createDajuHttpClient } from '../lib/providers/daju/client-core.mjs';
@@ -10,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 
 const FAMILIES = Object.freeze([
   { key:'apple-id', query:'Apple ID', pattern:/apple[\s_-]*id|苹果[\s_-]*(?:id|账号|帐号)|icloud/i },
-  { key:'telegram', query:'Telegram', pattern:/telegram|电报|tg(?:账号|账户|成品|号)/i },
+  { key:'telegram', query:'TG', pattern:/telegram|电报|tg[\s_-]*(?:飞机|协议|账号|账户|成品|号)/i },
   { key:'threads', query:'Threads', pattern:/threads/i },
   { key:'instagram', query:'Instagram', pattern:/instagram|ins(?:账号|账户|成品|号)/i },
   { key:'outlook', query:'Outlook', pattern:/outlook|hotmail/i },
@@ -99,7 +100,7 @@ export async function collectAccountShortlist({daju,kuajingzy}) {
       &&p.stockSnapshot!==null&&p.stockSnapshot>0&&p.autoDeliveryObserved===true);
     out.families[apple.key].status=usableApple?'DAJU_AVAILABLE':'KUAIJINGZY_FALLBACK_PENDING';
     // Apple fallback is a candidate discovery only, never an automatic supplier switch.
-    const queryFamilies=usableApple?FAMILIES.slice(1):FAMILIES;
+    const queryFamilies=FAMILIES; // Always compare Apple candidates; never auto-substitute suppliers.
     for(const family of queryFamilies){
       out.requests++;
       const response=await kuajingzy.readMallCatalogFiltered({search:family.query});
@@ -109,7 +110,7 @@ export async function collectAccountShortlist({daju,kuajingzy}) {
       push(response.data.items.map(row=>projectKuajing(row,family)).filter(Boolean),family.key);
       out.families[family.key].status='READ_PASS_PARTIAL_FILTER';
     }
-    if(usableApple)out.families[apple.key].status='DAJU_AVAILABLE';
+    out.families[apple.key].status=usableApple?'DAJU_PRIORITY_WITH_FALLBACK_CANDIDATES':'DAJU_UNAVAILABLE_FALLBACK_REVIEW';
     out.complete=true;
   }catch(error){out.blocked=statusError(error);out.complete=false;}
   return out;
