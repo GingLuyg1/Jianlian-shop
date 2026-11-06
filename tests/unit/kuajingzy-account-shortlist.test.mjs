@@ -43,7 +43,7 @@ test('Daju in-stock auto-delivery Apple ID has priority; other brands use filter
 test('No in-stock auto Daju Apple ID causes one Kuajing Apple fallback query',async()=>{
   const calls=[];
   const out=await collectAccountShortlist({
-    daju:{async getProducts(){return [aju('苹果ID 新号',0),aju('苹果ID 老号',3,false)]}},
+    daju:{async getProducts(){return [aju('苹果ID 新号',0),{...aju('苹果ID 老号',3,false),id:34}]}},
     kuajingzy:fakeKuajing(calls),
   });
   assert.equal(out.complete,true);
