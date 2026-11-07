@@ -34,13 +34,13 @@ test("recharge request, limit dialog and existing record actions stay wired", ()
     'setAmountLimitDialogOpen(true)',
     'USDT无限制',
     '继续支付',
-    '提交 TxHash 并核验',
     '提交支付凭证',
     '上一页',
     '下一页',
   ]) {
     assert.ok(recharge.includes(marker), `${marker} must remain available`);
   }
+  assert.doesNotMatch(recharge, /输入 BEP20 TxHash|提交 TxHash 并核验|支付有效期至/);
   assert.doesNotMatch(recharge, /compareRechargeDecimals\(requestedCnyAmount, "2000"\)/);
   assert.doesNotMatch(recharge, /¥2000 充值本金/);
 });

@@ -170,7 +170,6 @@ export default function AdminLegalSettingsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-950">协议版本管理</h1>
-          <p className="mt-1 text-sm text-slate-500">发布协议版本，保留下单时真实确认依据。</p>
         </div>
         <Button variant="outline" onClick={() => void loadDocuments()} disabled={loading}>
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}

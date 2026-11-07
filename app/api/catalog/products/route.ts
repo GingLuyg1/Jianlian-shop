@@ -143,7 +143,7 @@ export async function GET(request: Request) {
     const visible = products
       .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap))
       .filter((product) => matchSearch(product, skuMap.get(product.id) ?? [], keyword))
-      .sort(compareProducts);
+      .sort((a, b) => compareProducts(a, b, categoryMap));
 
     const total = visible.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -290,13 +290,18 @@ function matchSearch(product: ProductView, skus: SkuRow[], keyword: string) {
   return haystack.includes(keyword.toLowerCase());
 }
 
-function compareProducts(a: ProductView, b: ProductView) {
+function compareProducts(a: ProductView, b: ProductView, categories: Map<string, CategoryRow>) {
+  const aCategory = a.category_id ? categories.get(a.category_id) : undefined;
+  const bCategory = b.category_id ? categories.get(b.category_id) : undefined;
+  const aRoot = aCategory?.parent_id ? categories.get(aCategory.parent_id) : aCategory;
+  const bRoot = bCategory?.parent_id ? categories.get(bCategory.parent_id) : bCategory;
+  const categoryOrder = (aRoot?.sort_order ?? 0) - (bRoot?.sort_order ?? 0)
+    || (aCategory?.sort_order ?? 0) - (bCategory?.sort_order ?? 0);
+  if (categoryOrder !== 0) return categoryOrder;
   const stockWeight =
     Number(a.status === "sold_out" || a.effective_stock <= 0) -
     Number(b.status === "sold_out" || b.effective_stock <= 0);
   if (stockWeight !== 0) return stockWeight;
-  const sortOrder = Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0);
-  if (sortOrder !== 0) return sortOrder;
   const updatedAt = (Date.parse(b.updated_at ?? "") || 0) - (Date.parse(a.updated_at ?? "") || 0);
   if (updatedAt !== 0) return updatedAt;
   return a.id.localeCompare(b.id);

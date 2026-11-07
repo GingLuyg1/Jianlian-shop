@@ -62,7 +62,7 @@ export default function AdminAnnouncementsPage() {
   }
 
   return <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 lg:p-5">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex items-start gap-3"><Button asChild size="icon" variant="outline"><Link href="/admin/settings"><ArrowLeft className="h-4 w-4" /></Link></Button><div><h1 className="text-xl font-semibold text-slate-950">公告管理</h1><p className="mt-1 text-sm text-slate-500">管理公告内容、展示位置和有效时间。</p></div></div><Button variant="outline" onClick={() => void load()} disabled={loading}>{loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}刷新</Button></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex items-start gap-3"><Button asChild size="icon" variant="outline"><Link href="/admin/settings"><ArrowLeft className="h-4 w-4" /></Link></Button><div><h1 className="text-xl font-semibold text-slate-950">公告管理</h1></div></div><Button variant="outline" onClick={() => void load()} disabled={loading}>{loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}刷新</Button></div>
     <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
       <Card className="min-h-0 overflow-auto"><CardHeader className="border-b px-4 py-3"><CardTitle className="text-base">{editingId ? "编辑公告" : "新增公告"}</CardTitle></CardHeader><CardContent className="space-y-3 p-4">
         <Input placeholder="公告标题" maxLength={120} value={form.title} onChange={(e) => setForm((v) => ({ ...v, title: e.target.value }))} />

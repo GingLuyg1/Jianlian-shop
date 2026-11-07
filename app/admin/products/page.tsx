@@ -40,6 +40,7 @@ import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminSyncedHorizontalScroller from "@/components/admin/AdminSyncedHorizontalScroller";
 import glass from "@/components/admin/v2/AdminPremiumGlass.module.css";
 import AdminSupplierBindingSheet from "@/components/admin/suppliers/AdminSupplierBindingSheet";
+import AdminProductImagePicker from "@/components/admin/products/AdminProductImagePicker";
 import AdminProductSkuManager, { type ProductSkuManagerHandle } from "@/components/admin/products/AdminProductSkuManager";
 import { getSupplierUiDefinition } from "@/components/admin/suppliers/supplier-ui-registry";
 import {
@@ -1574,6 +1575,7 @@ function ProductTable({
                       >
                         {product.name}
                       </div>
+                      {(product.operational_summary?.sku_total ?? 0) >= 2 ? <Badge variant="outline" className="mt-1 h-5 border-blue-200 bg-blue-50 px-1.5 text-[10px] text-blue-700">多商品规格</Badge> : null}
                       <ProductOperationsSummary product={product} />
                     </div>
                   </div>
@@ -1714,9 +1716,11 @@ function ProductFormDialog({
     ? getEnabledChildren(categories, form.primaryCategoryId)
     : [];
   const selectedImage = form?.image_url.trim();
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const skuManagerRef = useRef<ProductSkuManagerHandle>(null);
 
   return (
+    <>
     <ModalFrame
       open={Boolean(form)}
       title={form?.id ? "编辑商品" : "新增商品"}
@@ -1730,7 +1734,7 @@ function ProductFormDialog({
           if (!skuManagerRef.current?.validate()) return;
           if (!await skuManagerRef.current.prepareSave()) return;
           onSubmit(event, (savedProduct) => skuManagerRef.current!.saveAll(savedProduct));
-        }} className="flex max-h-[calc(100vh-48px)] flex-col">
+        }} className="flex max-h-[calc(100dvh-84px)] flex-col">
           {submitError && (
             <div className="mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <p className="font-semibold">商品保存失败</p>
@@ -1742,10 +1746,10 @@ function ProductFormDialog({
               请检查表单中标红的内容后再保存。
             </div>
           )}
-          <div className="grid gap-5 overflow-y-auto px-6 py-5 md:grid-cols-2">
+          <div className="grid min-h-0 grid-cols-1 gap-4 overflow-y-auto bg-slate-50/60 px-4 py-5 sm:px-6 md:grid-cols-2">
             <FormSection title="基础信息" className="md:col-span-2">
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="商品名称" required error={errors.name}>
+                <Field label="标题" required error={errors.name}>
                   <Input
                     value={form.name}
                     onChange={(event) => {
@@ -1758,33 +1762,28 @@ function ProductFormDialog({
                     }}
                   />
                 </Field>
-                <Field label="slug" required error={errors.slug}>
+                <Field label="商家编码" required error={errors.slug}>
                   <Input
                     value={form.slug}
                     onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })}
                     placeholder="lowercase-slug"
                   />
                 </Field>
-                <Field label="简短说明" className="md:col-span-2" error={errors.short_description}>
+                <Field label="副标题" className="md:col-span-2" error={errors.short_description}>
                   <Input
                     value={form.short_description}
                     onChange={(event) => onUpdate({ ...form, short_description: event.target.value })}
                   />
                 </Field>
-                <Field label="详细说明" className="md:col-span-2">
-                  <Textarea
-                    rows={4}
-                    value={form.description}
-                    onChange={(event) => onUpdate({ ...form, description: event.target.value })}
-                  />
-                </Field>
                 <Field label="商品图片" className="md:col-span-2" error={errors.image_url}>
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Input
+                      className="min-w-32 flex-1"
                       value={form.image_url}
                       onChange={(event) => onUpdate({ ...form, image_url: event.target.value })}
                       placeholder="/assets/example.png 或 https://..."
                     />
+                    <Button type="button" variant="outline" onClick={() => setImagePickerOpen(true)}>从媒体库选择</Button>
                     <img
                       src={selectedImage || "/assets/jianlian-brand-logo.png"}
                       alt=""
@@ -1839,37 +1838,12 @@ function ProductFormDialog({
               </Field>
             </FormSection>
 
-            <FormSection title="价格与库存 / 商品规格" className="md:col-span-2">
+            <FormSection title="价格、库存与交付规格" className="md:col-span-2">
+              <p className="mb-3 text-xs text-slate-600">在规格行设置交付方式和规格状态。商品上架或下架请在列表操作。</p>
               <AdminProductSkuManager ref={skuManagerRef} product={product} refreshKey={skuRefreshKey}
                 defaults={{ price: form.price, original_price: form.original_price, stock: form.stock, delivery_type: form.delivery_type, status: form.status }}
                 onSummary={(summary) => { onSkuDirty(); onUpdate({ ...form, price: String(summary.price ?? form.price), stock: String(summary.stock) }); }}
                 onSupplierBinding={onSupplierBinding} />
-            </FormSection>
-
-            <FormSection title="交付与状态">
-              <Field label="交付方式" required>
-                <NativeSelect value={form.delivery_type} onChange={(value) => onUpdate({ ...form, delivery_type: value as DeliveryType })}>
-                  {Object.entries(deliveryLabel).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Field>
-            </FormSection>
-            <FormSection title="商品状态">
-              <Field label="商品排序" required error={errors.sort_order}>
-                <Input type="number" step="1" value={form.sort_order} onChange={(event) => onUpdate({ ...form, sort_order: event.target.value })} />
-              </Field>
-              <Field label="状态" required>
-                <NativeSelect value={form.status} onChange={(value) => onUpdate({ ...form, status: value as ProductStatus })}>
-                  {Object.entries(productStatusLabel).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Field>
             </FormSection>
 
             <FormSection title="可选扩展信息" className="md:col-span-2">
@@ -1886,6 +1860,11 @@ function ProductFormDialog({
         </form>
       )}
     </ModalFrame>
+    {form && imagePickerOpen && <AdminProductImagePicker onClose={() => setImagePickerOpen(false)} onSelect={url => {
+      onUpdate({ ...form, image_url: url });
+      setImagePickerOpen(false);
+    }} />}
+    </>
   );
 }
 
@@ -2014,7 +1993,7 @@ function ModalFrame({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-2 backdrop-blur-sm sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !isSaving) onClose();
       }}
@@ -2025,12 +2004,12 @@ function ModalFrame({
     >
       <div
         className={cn(
-          "relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl",
+          "relative w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl",
           size
         )}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b px-6 py-4">
+        <div className="flex items-center justify-between border-b border-orange-100 bg-gradient-to-br from-orange-50 to-white px-5 py-4">
           <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
           <button
             type="button"
