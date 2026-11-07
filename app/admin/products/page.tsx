@@ -1507,15 +1507,14 @@ function ProductTable({
         </colgroup>
         <TableHeader className="sticky top-0 z-20">
           <TableRow>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品网址标识</TableHead>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>商品网址标识</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>交付方式</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>供应商</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>排序</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
             <TableHead className={cn("sticky right-0 z-30 h-10 px-3 text-center text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
           </TableRow>
@@ -1523,7 +1522,7 @@ function ProductTable({
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="h-48">
+              <TableCell colSpan={10} className="h-48">
                 <AdminEmptyState
                   className="min-h-[180px]"
                   title={hasFilters ? "没有符合条件的商品" : "暂无商品数据"}
