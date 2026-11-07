@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
+import BoundEmailChange from "@/components/auth/BoundEmailChange";
 import { getSafeAuthErrorMessage, isEmailFormatValid } from "@/lib/auth/password-policy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -116,11 +117,13 @@ export default function AccountSecurityPage() {
     <Card data-account-page="/account/security" data-account-ready={true} aria-busy={false} className={`${glass.surface} ${styles.panel} ${styles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden`}>
       <CardHeader className={`${glass.hero} ${styles.pageHeader}`}>
         <CardTitle className="text-xl">账号安全</CardTitle>
-        <p className="text-sm text-muted-foreground">修改密码前需要重新验证当前密码。</p>
+        <p className="text-sm text-muted-foreground">管理邮箱验证与登录密码，保护你的账户。</p>
       </CardHeader>
       <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <EmailBinding />
         <form onSubmit={handleSubmit} className={`${styles.formGroup} flex w-full max-w-xl flex-col gap-5`}>
+          <h2 className="font-semibold">登录密码</h2>
+          <p className="text-xs text-slate-500">修改密码前需要重新验证当前密码。</p>
 
           <PasswordField
             id="currentPassword"
@@ -262,10 +265,11 @@ function EmailBinding() {
   }
 
   return (
-    <section className="mb-6 max-w-xl space-y-3 border-b pb-5" aria-label="邮箱绑定">
-      <h2 className="font-semibold">邮箱绑定</h2>
+    <section className={`${styles.formGroup} mb-5 w-full max-w-xl space-y-4`} aria-label="邮箱绑定">
+      <h2 className="font-semibold">邮箱安全</h2>
+      {!account && !error && <div role="status" aria-label="读取邮箱绑定状态" className="space-y-2 motion-safe:animate-pulse"><span className="block h-3 w-24 rounded bg-orange-100/70" /><span className="block h-4 w-48 max-w-full rounded bg-orange-100/50" /></div>}
       {account?.email ? (
-        <p className="break-all text-sm text-muted-foreground">{account.email}</p>
+        <BoundEmailChange account={{ id: account.id, email: account.email }} onUpdated={email => setAccount({ id: account.id, email })} />
       ) : pendingEmail ? (
         <EmailVerificationForm
           email={pendingEmail}
