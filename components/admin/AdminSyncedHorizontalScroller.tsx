@@ -7,10 +7,14 @@ export default function AdminSyncedHorizontalScroller({ children }: { children: 
   const viewportRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  const [overflowing, setOverflowing] = useState(false);
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const measure = () => setWidth(viewport.scrollWidth);
+    const measure = () => {
+      setWidth(viewport.scrollWidth);
+      setOverflowing(viewport.scrollWidth > viewport.clientWidth + 1);
+    };
     const observer = new ResizeObserver(measure);
     observer.observe(viewport);
     if (viewport.firstElementChild) observer.observe(viewport.firstElementChild);
@@ -29,7 +33,7 @@ export default function AdminSyncedHorizontalScroller({ children }: { children: 
         }}>
         {children}
       </div>
-      <div ref={railRef} tabIndex={0} role="region" aria-label="商品表格横向滚动" data-admin-horizontal-rail
+      <div ref={railRef} hidden={!overflowing} tabIndex={0} role="region" aria-label="商品表格横向滚动" data-admin-horizontal-rail
         className="sticky bottom-0 z-30 h-7 shrink-0 overflow-x-auto overflow-y-hidden border-t bg-white sm:h-5"
         onScroll={() => {
           if (viewportRef.current && railRef.current && viewportRef.current.scrollLeft !== railRef.current.scrollLeft)

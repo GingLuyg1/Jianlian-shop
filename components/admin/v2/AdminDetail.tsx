@@ -6,6 +6,7 @@ import { useRef, type ReactNode } from "react";
 import { ArrowLeft, ArrowUpRight, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import glass from "./AdminPremiumGlass.module.css";
 import v2Styles from "@/components/admin/v2/AdminV2.module.css";
 
 export function AdminDetailBackLink({ href, children }: { href: string; children: ReactNode }) {
@@ -100,7 +101,7 @@ export function AdminDetailDrawer({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/30" />
         <DialogPrimitive.Content
-          className={cn(v2Styles.scope, "fixed inset-y-0 right-0 z-[60] isolate flex h-dvh w-full max-w-[820px] flex-col overflow-hidden border-l border-[var(--admin-v2-border)] bg-white shadow-xl focus:outline-none", className)}
+          className={cn(v2Styles.scope, glass.detailDrawer, "fixed inset-y-0 right-0 z-[60] isolate flex h-dvh w-full max-w-[820px] flex-col overflow-hidden border-l border-[var(--admin-v2-border)] bg-white shadow-xl focus:outline-none", className)}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             closeButtonRef.current?.focus();

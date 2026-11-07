@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ExternalLink, Loader2, Search } from "lucide-react";
+import { Check, ExternalLink, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
+import glass from "@/components/admin/v2/AdminPremiumGlass.module.css";
+import { cn } from "@/lib/utils";
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
@@ -206,38 +208,191 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
-        <SheetHeader><SheetTitle>供应商绑定</SheetTitle><SheetDescription>复用当前商品规格供应商配置；Daju 维持原流程，Bitrefill 仅保存待审核候选。</SheetDescription></SheetHeader>
-        {product ? (
-          <div className="mt-5 space-y-5">
-            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold text-slate-950">{product.name}</div><div className="mt-1 font-mono text-xs text-slate-500">{sku ? `${sku.sku_title ?? sku.sku_code} · ${sku.id}` : product.id}</div></div><Badge variant={currentSupplier === "daju" ? "secondary" : "outline"}>{currentSupplier === "daju" ? "已绑定：大橘AI" : currentSupplier ? `已绑定：${currentSupplier}` : "未绑定"}</Badge></div><div className="mt-3 grid gap-2 text-sm sm:grid-cols-2"><div>当前售价：¥{(sku?.price ?? product.price).toFixed(2)}</div><div>绑定层级：{sku ? "网站商品规格" : "商品"}</div><div>供应商：大橘AI / daju</div><div>当前 供应商商品ID：{currentSupplierProductId || "—"}</div></div></section>
+      <SheetContent className={glass.supplierSheet}>
+        <SheetHeader className={glass.supplierHeader}>
+          <SheetTitle className="text-xl text-slate-900">供应商绑定</SheetTitle>
+          <SheetDescription>选择供货来源，核对商品、规格和成本后保存。</SheetDescription>
+        </SheetHeader>
+        <div className={glass.supplierBody}>
+          {product ? (
+            <>
+              <section className={glass.supplierSummary}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="break-words font-semibold text-slate-900">{product.name}</h2>
+                    <p className="mt-1 break-all font-mono text-xs text-slate-500">
+                      {sku ? `${sku.sku_title ?? sku.sku_code} · ${sku.id}` : product.id}
+                    </p>
+                  </div>
+                  <Badge variant="outline">{currentSupplier === "daju" ? "已绑定：大橘AI" : currentSupplier ? `已绑定：${currentSupplier}` : "未绑定"}</Badge>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+                  <div><dt className="text-slate-500">当前售价</dt><dd className="mt-1 font-semibold text-slate-900">¥{(sku?.price ?? product.price).toFixed(2)}</dd></div>
+                  <div><dt className="text-slate-500">绑定层级</dt><dd className="mt-1">{sku ? "网站商品规格" : "商品"}</dd></div>
+                  <div><dt className="text-slate-500">当前供应商</dt><dd className="mt-1">{currentSupplier || "尚未绑定"}</dd></div>
+                  <div><dt className="text-slate-500">当前供应商商品 ID</dt><dd className="mt-1 break-all">{currentSupplierProductId || "—"}</dd></div>
+                </dl>
+              </section>
 
-            <label className="block text-sm font-semibold">选择供应商<select aria-label="选择供应商" value={provider} disabled={saving} onChange={(event) => setProvider(event.target.value)} className="ml-3 min-h-[44px] rounded border px-3"><option value="daju">Daju</option><option value="bitrefill">Bitrefill（候选，不启用）</option></select></label>
-            {provider === "bitrefill" ? sku ? <BitrefillSkuBindingFields key={`${product.id}:${sku.id}`} product={product} sku={sku} onSaved={(saved) => { onSaved({ sku: saved.sku }); toast.success("Bitrefill 候选已保存，原采购来源未改变"); onOpenChange(false); }} /> : <p role="alert">Bitrefill 仅允许逐个商品规格绑定，请从商品规格行打开。</p> : <>
-            <section><div className="mb-2 text-sm font-semibold text-slate-950">1. 搜索并选择供应商商品</div><div className="flex gap-2"><div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void searchProducts(); }} placeholder="输入 Daju 商品名称" /></div><Button onClick={searchProducts} disabled={searching}>{searching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}搜索</Button></div>
-              {searchError ? <SupplierErrorCard error={searchError} /> : searching ? <AdminTableSkeleton rows={4} className="mt-2" /> : searchLoaded && products.length === 0 ? <AdminEmptyState className="mt-2 min-h-[150px]" title="没有匹配的供应商商品" /> : products.length ? <div className="mt-2 max-h-56 overflow-auto rounded-xl border"><div className="divide-y">{products.map((item) => <button key={item.id} type="button" onClick={() => loadDetail(item.id)} className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-slate-50"><div className="min-w-0"><div className="truncate text-sm font-medium text-slate-950">{item.title}</div><div className="mt-1 text-xs text-slate-500">#{item.id} · 库存 {item.stock} · 销量 {item.sales}</div></div><div className="shrink-0 text-sm font-medium">¥{item.price}</div></button>)}</div></div> : null}
-            </section>
+              <div className={glass.providerTabs} role="group" aria-label="选择供应商">
+                {[
+                  { value: "daju", name: "大橘 AI", note: "Daju · 商品与规格绑定" },
+                  { value: "bitrefill", name: "Bitrefill", note: "仅保存待审核候选，不启用" },
+                ].map(option => (
+                  <button key={option.value} type="button" aria-pressed={provider === option.value} disabled={saving} onClick={() => setProvider(option.value)}>
+                    <span><span className="block text-sm font-semibold">{option.name}</span><span className="mt-1 block text-xs">{option.note}</span></span>
+                    {provider === option.value ? <Check className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
+                  </button>
+                ))}
+              </div>
 
-            <section><div className="mb-2 text-sm font-semibold text-slate-950">2. 核对商品详情与绑定参数</div>{detailLoading ? <AdminTableSkeleton rows={5} /> : detailError ? <SupplierErrorCard error={detailError} /> : detail ? <div className="space-y-4 rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold text-slate-950">{detail.title}</div><div className="mt-1 text-xs text-slate-500">供应商商品ID：{detail.id}</div></div><Badge variant="secondary">已选择</Badge></div><div className="grid gap-3 text-sm sm:grid-cols-3"><Metric label="供应商价格" value={`¥${detail.price}`} /><Metric label="库存" value={String(detail.stock)} /><Metric label="数量范围" value={`${detail.minQty} - ${detail.maxQty}`} /></div><div className="text-sm">商品规格商品：{detail.isSku ? "是" : "否"}</div>
-              <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="supplier-sku">供应商商品规格{detail.isSku ? "（必选）" : "（可选）"}</Label>{supplierSkuOptions.length ? <div className="space-y-2">{supplierSkuOptions.map((option) => <button type="button" key={option.sku} onClick={() => { setSupplierSku(option.sku); if (option.price) setMaxUnitCost(option.price); }} className={`w-full rounded-lg border p-3 text-left text-sm ${supplierSku === option.sku ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}><div className="font-medium text-slate-950">{option.title}</div><div className="mt-1 text-xs text-slate-500">供应商商品规格: {option.sku} · 成本: {option.price ? `¥${option.price}` : "—"} · 库存: {option.stock}</div></button>)}</div> : <Input id="supplier-sku" value={supplierSku} onChange={(event) => setSupplierSku(event.target.value)} placeholder="请按供应商商品规格原始数据人工确认" />}{detail.isSku && !supplierSku.trim() ? <p className="text-xs font-medium text-amber-700">商品规格商品必须明确选择 供应商商品规格，不能使用商品总库存。</p> : null}</div><div className="space-y-2"><Label htmlFor="supplier-cost-limit">供应商成本上限</Label><Input id="supplier-cost-limit" value={maxUnitCost} onChange={(event) => setMaxUnitCost(event.target.value)} inputMode="decimal" /><p className="text-xs text-slate-500">供应商实际单价超过此成本上限时，自动采购会被阻止。当前价格 ¥{detail.price}，成本上限 ¥{maxUnitCost || "—"}。</p></div></div>
-              {!detail.isAuto ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">该供应商商品不支持自动交付，不能绑定到自动履约商品。</div> : null}
-              {detail.id === 15 && supplierSkuOptions.some((option) => option.sku === "14") ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><span className="font-semibold">需要确认经营方案：</span>Daju #15 / 供应商商品规格 #14 只能在确认网站零售价、展示规格和是否公开销售后，单独绑定到网站商品规格；不得继承父商品映射或总库存。</div> : null}
-              <div><div className="text-sm font-medium text-slate-900">订单字段映射</div>{detail.requiredInputs.length ? <div className="mt-2 space-y-3">{detail.requiredInputs.map((field) => <div key={field} className="grid gap-2 sm:grid-cols-[180px_1fr] sm:items-center"><div className="font-mono text-sm text-slate-700">{field}</div><select value={inputsMapping[field] ?? ""} onChange={(event) => setInputsMapping((current) => ({ ...current, [field]: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="">不配置</option>{ORDER_FIELD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}（{option.value}）</option>)}</select></div>)}</div> : <p className="mt-2 text-sm text-slate-500">该商品没有 requiredInputs，将提交空映射。</p>}</div>
-              {missingRequiredInputs.length > 0 ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">以下供应商必填字段尚未映射：{missingRequiredInputs.join("、")}</div> : null}
-              <ReadOnlyJson title="需填写的信息 原始数据" value={detail.requiredInputs} /><ReadOnlyJson title="商品规格原始数据" value={detail.skuVariants} /><ReadOnlyJson title="规格原始数据" value={detail.specs} />
-            </div> : <AdminEmptyState className="min-h-[160px]" title="尚未选择供应商商品" description="先搜索并选择一个真实供应商商品。" />}</section>
+              {provider === "bitrefill" ? (
+                sku ? (
+                  <div className="mt-5">
+                    <BitrefillSkuBindingFields
+                      key={`${product.id}:${sku.id}`}
+                      product={product}
+                      sku={sku}
+                      onSaved={saved => {
+                        onSaved({ sku: saved.sku });
+                        toast.success("Bitrefill 候选已保存，原采购来源未改变");
+                        onOpenChange(false);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <p role="alert" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    Bitrefill 仅允许逐个商品规格绑定，请从商品规格行打开。
+                  </p>
+                )
+              ) : (
+                <>
+                  <div className={glass.supplierColumns}>
+                    <section aria-label="搜索并选择供应商商品">
+                      <h3 className="mb-3 text-sm font-semibold text-slate-900">1. 选择供应商商品</h3>
+                      <div className="flex gap-2">
+                        <div className="relative min-w-0 flex-1">
+                          <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" aria-hidden="true" />
+                          <Input
+                            className="pl-9"
+                            aria-label="搜索 Daju 商品"
+                            value={query}
+                            onChange={event => setQuery(event.target.value)}
+                            onKeyDown={event => { if (event.key === "Enter") void searchProducts(); }}
+                            placeholder="名称或关键词"
+                          />
+                        </div>
+                        <Button className={glass.primary} onClick={searchProducts} disabled={searching}>
+                          {searching ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}搜索
+                        </Button>
+                      </div>
+                      {searchError ? <SupplierErrorCard error={searchError} /> : searching ? (
+                        <AdminTableSkeleton rows={4} className="mt-3" />
+                      ) : searchLoaded && products.length === 0 ? (
+                        <AdminEmptyState className="mt-3 min-h-[180px]" title="没有匹配的供应商商品" />
+                      ) : products.length ? (
+                        <div className={glass.supplierResults}>
+                          {products.map(item => (
+                            <button key={item.id} type="button" aria-pressed={detail?.id === item.id} onClick={() => loadDetail(item.id)}>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium text-slate-900" title={item.title}>{item.title}</span>
+                                <span className="mt-1 block text-xs text-slate-500">#{item.id} · 库存 {item.stock} · 销量 {item.sales}</span>
+                              </span>
+                              <span className="shrink-0 text-sm font-semibold text-slate-700">¥{item.price}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : <AdminEmptyState className="min-h-[200px]" title="搜索供应商商品" description="输入名称后选择需要绑定的供货商品。" />}
+                    </section>
 
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">当前版本仅支持绑定或更新绑定；解绑需要独立、受审计的后端操作。</div>
-            </>}
-          </div>
-        ) : <AdminErrorState title="未选择网站商品" description="请关闭后从商品列表重新打开。" />}
-
-        <SheetFooter className="mt-6 gap-2 sm:space-x-0"><Button asChild variant="outline"><Link href="/admin/suppliers">打开供应商中心<ExternalLink className="ml-2 h-4 w-4" /></Link></Button><Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>{provider === "daju" ? <Button onClick={saveBinding} disabled={saving || !detail || !detail.isAuto || (detail.isSku && !supplierSku.trim()) || missingRequiredInputs.length > 0}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}保存供应商绑定</Button> : null}</SheetFooter>
+                    <section aria-label="核对商品详情与绑定参数">
+                      <h3 className="mb-3 text-sm font-semibold text-slate-900">2. 核对详情与绑定参数</h3>
+                      {detailLoading ? <AdminTableSkeleton rows={5} /> : detailError ? <SupplierErrorCard error={detailError} /> : detail ? (
+                        <div className="space-y-4">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div><h4 className="font-semibold text-slate-900">{detail.title}</h4><p className="mt-1 text-xs text-slate-500">供应商商品 ID：{detail.id}</p></div>
+                            <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">已选择</Badge>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <Metric label="供应商价格" value={`¥${detail.price}`} />
+                            <Metric label="库存" value={String(detail.stock)} />
+                            <Metric label="数量范围" value={`${detail.minQty} – ${detail.maxQty}`} />
+                          </div>
+                          <p className="text-xs text-slate-500">商品规格商品：{detail.isSku ? "是" : "否"}</p>
+                          <div className="space-y-2">
+                            <Label htmlFor="supplier-sku">供应商商品规格{detail.isSku ? "（必选）" : "（可选）"}</Label>
+                            {supplierSkuOptions.length ? (
+                              <div className="grid gap-2">
+                                {supplierSkuOptions.map(option => (
+                                  <button
+                                    type="button" key={option.sku} aria-pressed={supplierSku === option.sku}
+                                    onClick={() => { setSupplierSku(option.sku); if (option.price) setMaxUnitCost(option.price); }}
+                                    className={cn("w-full rounded-xl border p-3 text-left text-sm", supplierSku === option.sku ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50")}
+                                  >
+                                    <span className="block font-medium text-slate-900">{option.title}</span>
+                                    <span className="mt-1 block text-xs text-slate-500">规格 {option.sku} · 成本 {option.price ? `¥${option.price}` : "—"} · 库存 {option.stock}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : <Input id="supplier-sku" value={supplierSku} onChange={event => setSupplierSku(event.target.value)} placeholder="按供应商原始规格数据确认" />}
+                            {detail.isSku && !supplierSku.trim() ? <p className="text-xs text-amber-700">必须明确选择供应商规格，不能使用商品总库存。</p> : null}
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="supplier-cost-limit">供应商成本上限</Label>
+                            <Input id="supplier-cost-limit" value={maxUnitCost} onChange={event => setMaxUnitCost(event.target.value)} inputMode="decimal" />
+                            <p className="text-xs leading-5 text-slate-500">实际单价超过此上限时阻止自动采购。当前价格 ¥{detail.price}，上限 ¥{maxUnitCost || "—"}。</p>
+                          </div>
+                          {!detail.isAuto ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">该供应商商品不支持自动交付，不能绑定到自动履约商品。</div> : null}
+                          {detail.id === 15 && supplierSkuOptions.some(option => option.sku === "14") ? (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Daju #15 / 规格 #14 须确认网站零售价、展示规格和公开销售方案后单独绑定，不得继承父商品映射或总库存。</div>
+                          ) : null}
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-900">订单字段映射</h4>
+                            {detail.requiredInputs.length ? (
+                              <div className="mt-2 space-y-3">
+                                {detail.requiredInputs.map(field => (
+                                  <label key={field} className="grid min-w-0 gap-2 text-sm">
+                                    <span className="break-all font-mono text-slate-600">{field}</span>
+                                    <select value={inputsMapping[field] ?? ""} onChange={event => setInputsMapping(current => ({ ...current, [field]: event.target.value }))} className="h-10 w-full rounded-lg border px-3 text-sm">
+                                      <option value="">不配置</option>
+                                      {ORDER_FIELD_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}（{option.value}）</option>)}
+                                    </select>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : <p className="mt-2 text-xs text-slate-500">该商品无需额外订单信息，将提交空映射。</p>}
+                          </div>
+                          {missingRequiredInputs.length > 0 ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">必填字段尚未映射：{missingRequiredInputs.join("、")}</p> : null}
+                          <div className="space-y-2 border-t border-slate-100 pt-3">
+                            <ReadOnlyJson title="需填写的信息原始数据" value={detail.requiredInputs} />
+                            <ReadOnlyJson title="商品规格原始数据" value={detail.skuVariants} />
+                            <ReadOnlyJson title="规格原始数据" value={detail.specs} />
+                          </div>
+                        </div>
+                      ) : <AdminEmptyState className="min-h-[240px]" title="尚未选择供应商商品" description="从左侧搜索结果中选择商品，核对详情。" />}
+                    </section>
+                  </div>
+                  <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                    当前仅支持绑定或更新绑定；解绑须使用独立、受审计的后端操作。
+                  </p>
+                </>
+              )}
+            </>
+          ) : <AdminErrorState title="未选择网站商品" description="请关闭后从商品列表重新打开。" />}
+        </div>
+        <SheetFooter className={glass.supplierFooter}>
+          <Button asChild variant="outline" className={glass.secondary}><Link href="/admin/suppliers">供应商中心<ExternalLink className="ml-2 h-4 w-4" /></Link></Button>
+          <Button variant="outline" className={glass.secondary} onClick={() => onOpenChange(false)}>取消</Button>
+          {provider === "daju" ? (
+            <Button className={glass.primary} onClick={saveBinding} disabled={saving || !detail || !detail.isAuto || (detail.isSku && !supplierSku.trim()) || missingRequiredInputs.length > 0}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}保存供应商绑定
+            </Button>
+          ) : null}
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   );
 }
-
 function SupplierErrorCard({ error }: { error: SupplierError }) {
   return <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><div>{error.message}</div>{error.code ? <div className="mt-1 text-xs">错误代码：<span className="font-mono">{error.code}</span></div> : null}{error.requestId ? <div className="mt-1 text-xs">请求追踪编号：<span className="font-mono">{error.requestId}</span></div> : null}</div>;
 }

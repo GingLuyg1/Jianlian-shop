@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
+import { ChevronDown, ListFilter, MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { Portal as HoverCardPortal } from "@radix-ui/react-hover-card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +38,7 @@ import {
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminSyncedHorizontalScroller from "@/components/admin/AdminSyncedHorizontalScroller";
+import glass from "@/components/admin/v2/AdminPremiumGlass.module.css";
 import AdminSupplierBindingSheet from "@/components/admin/suppliers/AdminSupplierBindingSheet";
 import AdminProductSkuManager, { type ProductSkuManagerHandle } from "@/components/admin/products/AdminProductSkuManager";
 import { getSupplierUiDefinition } from "@/components/admin/suppliers/supplier-ui-registry";
@@ -222,9 +225,9 @@ function isValidImagePath(value: string) {
 
 function ProductTableSkeleton() {
   return (
-    <div className="min-h-0 flex-1 space-y-2 overflow-hidden">
+    <div className="min-h-[240px] flex-1 space-y-2 overflow-hidden md:min-h-0" role="status" aria-label="正在读取商品列表">
       {Array.from({ length: 8 }).map((_, index) => (
-        <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />
+        <div key={index} aria-hidden="true" className={cn(glass.loading, "h-14 rounded-xl motion-safe:animate-pulse")} />
       ))}
     </div>
   );
@@ -276,6 +279,7 @@ export default function AdminProductsPage() {
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [productListError, setProductListError] = useState("");
   const [productForm, setProductForm] = useState<ProductFormState | null>(null);
   const [productInitialForm, setProductInitialForm] = useState<ProductFormState | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryFormState | null>(null);
@@ -371,7 +375,7 @@ export default function AdminProductsPage() {
   const loadProducts = useCallback(async () => {
     const requestSequence = ++productListRequestRef.current;
     setIsProductLoading(true);
-    setError("");
+    setProductListError("");
     try {
       const result = await listProducts({
         search: debouncedSearch,
@@ -395,7 +399,7 @@ export default function AdminProductsPage() {
       setProductCount(result.count);
     } catch (loadError) {
       if (productListRequestRef.current !== requestSequence) return;
-      setError(getErrorText(loadError, "商品列表读取失败"));
+      setProductListError(getErrorText(loadError, "商品列表读取失败"));
     } finally {
       if (productListRequestRef.current === requestSequence) setIsProductLoading(false);
     }
@@ -939,6 +943,7 @@ export default function AdminProductsPage() {
   return (
     <AdminPageShell
       title={activeView === "products" ? "商品管理" : "分类管理"}
+      className={activeView === "products" ? glass.workspace : undefined}
       description={
         activeView === "products"
           ? "管理商品信息、分类归属、价格、库存展示和交付方式。"
@@ -949,6 +954,7 @@ export default function AdminProductsPage() {
           <Button
             variant="outline"
             size="sm"
+            className={activeView === "products" ? glass.secondary : undefined}
             disabled={isRefreshing}
             onClick={() => {
               void loadCategories();
@@ -958,7 +964,7 @@ export default function AdminProductsPage() {
             <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
             刷新
           </Button>
-          <Button size="sm" onClick={activeView === "products" ? openNewProduct : openNewCategory}>
+          <Button size="sm" className={activeView === "products" ? glass.primary : undefined} onClick={activeView === "products" ? openNewProduct : openNewCategory}>
             <Plus className="mr-2 h-4 w-4" />
             {activeView === "products" ? "新增商品" : "新增分类"}
           </Button>
@@ -967,10 +973,10 @@ export default function AdminProductsPage() {
     >
 
       {error && (
-        <div
+        <div role="alert"
           className={cn(
             "mb-2 shrink-0 rounded-xl border px-4 py-2 text-sm",
-            "border-red-200 bg-red-50 text-red-700"
+            activeView === "products" ? glass.error : "border-red-200 bg-red-50 text-red-700"
           )}
         >
           {error}
@@ -978,20 +984,38 @@ export default function AdminProductsPage() {
       )}
 
       {activeView === "products" ? (
-          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <CardHeader className="shrink-0 px-4 py-3">
+          <Card className={cn(glass.surface, "flex min-h-0 flex-1 flex-col overflow-hidden")}>
+            <CardHeader className="shrink-0 px-4 py-2.5">
               <div className="flex min-h-10 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                 <CardTitle className="text-base">商品列表</CardTitle>
-                <span className="text-sm text-slate-500">当前结果 {productCount} 条</span>
+                <div className={cn(glass.tableTools, glass.filters)}>
+                  <span className={cn(glass.count, "self-start px-2.5 py-1 text-xs tabular-nums lg:self-center")}>当前结果 {productCount} 条</span>
+
+                  <div className={glass.filterActions}>
+                    <Button variant="outline" size="sm" onClick={resetProductFilters}>重置</Button>
+                    <button
+                      type="button"
+                      className={glass.moreFilters}
+                      aria-expanded={moreFiltersOpen}
+                      aria-controls="product-advanced-filters"
+                      onClick={() => setMoreFiltersOpen(current => !current)}
+                    >
+                      <ListFilter className="h-3.5 w-3.5" aria-hidden="true" />
+                      更多筛选
+                      <ChevronDown className={cn("h-3 w-3 transition-transform motion-reduce:transition-none", moreFiltersOpen && "rotate-180")} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pb-0 pt-0 md:overflow-hidden">
-              <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
+              <div className={cn(glass.filters, glass.filterBar, "w-full shrink-0")}>
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
                     className="pl-9"
-                    placeholder="搜索商品名称或 slug"
+                    aria-label="搜索标题或商家编码"
+                    placeholder="搜索标题或商家编码"
                     value={productSearch}
                     onChange={(event) => {
                       setProductSearch(event.target.value);
@@ -1070,16 +1094,7 @@ export default function AdminProductsPage() {
                     </option>
                   ))}
                 </NativeSelect>
-                <NativeSelect
-                  value={sortBy}
-                  onChange={(value) => {
-                    setSortBy(value as ProductSortBy);
-                    setProductPage(1);
-                  }}
-                >
-                  <option value="updated_at">按更新时间</option>
-                  <option value="sort_order">按排序</option>
-                </NativeSelect>
+
                 <NativeSelect
                   value={stockFilter}
                   onChange={(value) => {
@@ -1092,20 +1107,16 @@ export default function AdminProductsPage() {
                   <option value="low_stock">低库存（1–5）</option>
                   <option value="in_stock">有库存</option>
                 </NativeSelect>
-                <Button variant="outline" onClick={resetProductFilters}>
-                  重置
-                </Button>
+
               </div>
 
-              <details
-                className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2"
-                open={moreFiltersOpen}
-                onToggle={(event) => setMoreFiltersOpen(event.currentTarget.open)}
+              <div
+                id="product-advanced-filters"
+                hidden={!moreFiltersOpen}
+                className={cn(glass.advanced, glass.filters, "shrink-0 px-3 py-2")}
               >
-                <summary className="cursor-pointer select-none text-sm font-medium text-slate-700">
-                  更多运营筛选
-                </summary>
-                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+
+                <div className={glass.advancedFields}>
                   <NativeSelect
                     value={skuStatusFilter}
                     onChange={(value) => {
@@ -1169,7 +1180,7 @@ export default function AdminProductsPage() {
                   </NativeSelect>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">未绑定供应商不等于无法履约；商品仍可能使用商品规格级本地数字库存。</p>
-              </details>
+              </div>
 
               {activeProductFilters.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -1181,6 +1192,13 @@ export default function AdminProductsPage() {
 
               {isProductLoading ? (
                 <ProductTableSkeleton />
+              ) : productListError ? (
+                <div role="alert" className={cn(glass.error, "flex min-h-[180px] flex-1 flex-col items-center justify-center gap-3 rounded-xl border p-4 text-center")}>
+                  <p className="text-sm">{productListError}</p>
+                  <Button variant="outline" size="sm" className={glass.secondary} onClick={() => void loadProducts()}>
+                    重新加载
+                  </Button>
+                </div>
               ) : (
                 <ProductTable
                   categoryMap={categoryMap}
@@ -1197,7 +1215,7 @@ export default function AdminProductsPage() {
                 />
               )}
 
-              <div className="flex min-h-12 shrink-0 flex-col gap-2 border-t py-2 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+              <div className={cn(glass.pagination, "flex min-h-12 shrink-0 flex-col gap-2 border-t py-2 text-sm md:flex-row md:items-center md:justify-between")}>
                 <span>
                   共 {productCount} 条，第 {productPage} / {totalProductPages} 页
                 </span>
@@ -1371,10 +1389,10 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
       <div className="flex flex-col items-center gap-0.5">
         <Badge
           variant="outline"
-          className={summary.supplier_unbound > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-blue-200 bg-blue-50 text-blue-700"}
+          className={cn("whitespace-nowrap px-1.5 text-[10px]", summary.supplier_unbound > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-blue-200 bg-blue-50 text-blue-700")}
           title={summary.supplier_unbound > 0 ? "未绑定供应商不等于无法履约；商品规格仍可能使用本地数字库存。" : "所有商品规格均具备完整供应商绑定"}
         >
-          {summary.supplier_unbound > 0 ? `${summary.supplier_unbound} 商品规格未绑定` : "商品规格全部已绑定"}
+          {summary.supplier_unbound > 0 ? `${summary.supplier_unbound} 规格未绑定` : "规格全部已绑定"}
         </Badge>
         {stockIssue ? <span className="text-[10px] font-medium text-amber-700">{stockIssue}</span> : null}
       </div>
@@ -1399,25 +1417,49 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
   return <div className="flex flex-col items-center gap-0.5"><Badge variant="outline" className={definition ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}>{definition?.name ?? supplier}</Badge>{supplierProductId ? <span className="font-mono text-[10px] text-slate-500">#{supplierProductId}</span> : null}{stockLabel ? <span className="text-[10px] font-medium text-amber-700">{stockLabel}</span> : null}</div>;
 }
 
+type OperationTag = { text: string; tone: "info" | "success" | "warning" | "orange" };
+
+function OperationTag({ tag }: { tag: OperationTag }) {
+  return <span className={glass.tag} data-tone={tag.tone} title={tag.text}>{tag.text}</span>;
+}
+
 function ProductOperationsSummary({ product }: { product: AdminProduct }) {
+  const [overflowOpen, setOverflowOpen] = useState(false);
   const summary = product.operational_summary;
   if (!product.has_skus || !summary) return null;
+
+  const tags: OperationTag[] = [];
+  if (summary.sku_total >= 2) tags.push({ text: "多商品规格", tone: "info" });
+  if (summary.fulfillment_ready > 0) tags.push({ text: `${summary.fulfillment_ready} 可以销售`, tone: "success" });
+  if (summary.fulfillment_attention > 0) tags.push({ text: `${summary.fulfillment_attention} 需要注意`, tone: "warning" });
+  if (summary.requires_verification > 0) tags.push({ text: `${summary.requires_verification} 待验证`, tone: "orange" });
+  if (summary.supplier_unbound > 0) tags.push({ text: `${summary.supplier_unbound} 未绑定`, tone: "warning" });
+  if (tags.length === 0) return null;
+
   return (
-    <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-600">
-      <span>{summary.sku_total} 商品规格</span>
-      <span>· {summary.sku_active} Active</span>
-      <span>· {summary.sku_draft} 草稿</span>
-      <span>· Active 库存 {summary.effective_stock}</span>
-      <Badge variant="outline" className="h-5 border-emerald-200 bg-emerald-50 px-1.5 text-[10px] text-emerald-700">{summary.fulfillment_ready} 可以销售</Badge>
-      {summary.fulfillment_blocked > 0 ? <Badge variant="outline" className="h-5 border-red-200 bg-red-50 px-1.5 text-[10px] text-red-700">{summary.fulfillment_blocked} 暂不可销售</Badge> : null}
-      {summary.fulfillment_attention > 0 ? <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">{summary.fulfillment_attention} 需要注意</Badge> : null}
-      {summary.fulfillment_unknown > 0 ? <Badge variant="outline" className="h-5 border-slate-200 bg-slate-50 px-1.5 text-[10px] text-slate-600">{summary.fulfillment_unknown} 暂未获取</Badge> : null}
-      {summary.fulfillment_no_source > 0 ? <Badge variant="outline" className="h-5 border-red-200 bg-white px-1.5 text-[10px] text-red-700">{summary.fulfillment_no_source} 没有供货来源</Badge> : null}
-      {summary.local_inventory_available > 0 ? <span>· {summary.local_inventory_available} Local</span> : null}
-      {summary.requires_verification > 0 ? <Badge variant="outline" className="h-5 border-orange-200 bg-orange-50 px-1.5 text-[10px] text-orange-700">{summary.requires_verification} 待验证</Badge> : null}
-      {summary.supplier_unbound > 0 ? <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">{summary.supplier_unbound} 未绑定</Badge> : null}
-      {summary.supplier_stock_unknown > 0 ? <span>· Snapshot {summary.supplier_stock_unknown} unknown</span> : null}
-      {summary.inventory_diagnostics_failed ? <Badge variant="outline" className="h-5 border-red-200 bg-red-50 px-1.5 text-[10px] text-red-700">诊断读取失败</Badge> : null}
+    <div className={glass.tagLine}>
+      {tags.slice(0, 3).map(tag => <OperationTag key={tag.text} tag={tag} />)}
+      {tags.length > 3 ? (
+        <HoverCard open={overflowOpen} onOpenChange={setOverflowOpen} openDelay={120} closeDelay={150}>
+          <HoverCardTrigger asChild>
+            <button
+              type="button"
+              className={glass.moreTags}
+              aria-label={`查看另外 ${tags.length - 3} 个商品标签`}
+              aria-expanded={overflowOpen}
+              onClick={() => setOverflowOpen(true)}
+              onFocus={() => setOverflowOpen(true)}
+            >
+              …
+            </button>
+          </HoverCardTrigger>
+          <HoverCardPortal>
+            <HoverCardContent align="start" sideOffset={6} className={glass.tagPopup}>
+              {tags.map(tag => <OperationTag key={tag.text} tag={tag} />)}
+            </HoverCardContent>
+          </HoverCardPortal>
+        </HoverCard>
+      ) : null}
     </div>
   );
 }
@@ -1448,41 +1490,39 @@ function ProductTable({
   hasFilters: boolean;
 }) {
   return (
-    <div className="flex min-h-[240px] min-w-0 flex-1 flex-col md:min-h-0">
+    <div className="flex min-h-[240px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dce3ee] md:min-h-0">
     <AdminSyncedHorizontalScroller>
-      <table className="w-full min-w-[1560px] table-fixed caption-bottom text-sm">
+      <table className={cn(glass.table, "w-full min-w-[1072px] table-fixed caption-bottom text-sm")}>
         <colgroup>
-          <col className="w-[260px]" />
-          <col className="w-[140px]" />
-          <col className="w-[210px]" />
+          <col className="w-[252px]" />
+          <col className="w-[82px]" />
           <col className="w-[90px]" />
-          <col className="w-[75px]" />
-          <col className="w-[105px]" />
-          <col className="w-[120px]" />
-          <col className="w-[90px]" />
-          <col className="w-[65px]" />
-          <col className="w-[165px]" />
-          <col className="w-[240px]" />
+          <col className="w-[70px]" />
+          <col className="w-[76px]" />
+          <col className="w-[68px]" />
+          <col className="w-[96px]" />
+          <col className="w-[74px]" />
+          <col className="w-[104px]" />
+          <col className="w-[160px]" />
         </colgroup>
-        <TableHeader className="sticky top-0 z-20 bg-slate-50 [&_th]:bg-slate-50">
+        <TableHeader className="sticky top-0 z-20">
           <TableRow>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>商品网址标识</TableHead>
-            <TableHead className={cn("h-10 px-3 text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>商品网址标识</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>交付方式</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>供应商</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>排序</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
-            <TableHead className={cn("sticky right-0 z-30 h-10 bg-slate-50 px-3 text-center text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
+            <TableHead className={cn("sticky right-0 z-30 h-10 px-3 text-center text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="h-48">
+              <TableCell colSpan={10} className="h-48">
                 <AdminEmptyState
                   className="min-h-[180px]"
                   title={hasFilters ? "没有符合条件的商品" : "暂无商品数据"}
@@ -1500,11 +1540,11 @@ function ProductTable({
                 : product.stock;
 
               return (
-              <TableRow key={product.id} className={cn("min-h-14 hover:bg-slate-50/70", hasCategoryIssue && "bg-orange-50/40")}>
+              <TableRow key={product.id} data-attention={hasCategoryIssue || undefined}>
                 <TableCell className="min-w-0 px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="group relative h-9 w-9 shrink-0 overflow-visible">
-                      <div className="h-9 w-9 overflow-hidden rounded-md border border-slate-200 bg-white">
+                    <div className="group relative h-10 w-10 shrink-0 overflow-visible">
+                      <div className="h-10 w-10 overflow-hidden rounded-lg border border-[#dce3ee] bg-white">
                       <img
                         src={product.image_url || PRODUCT_FALLBACK_IMAGE}
                         alt=""
@@ -1534,13 +1574,7 @@ function ProductTable({
                       >
                         {product.name}
                       </div>
-                      {product.has_skus ? <Badge variant="outline" className="mt-1 h-5 border-blue-200 bg-blue-50 px-1.5 text-[10px] text-blue-700">多商品规格</Badge> : null}
                       <ProductOperationsSummary product={product} />
-                      {product.short_description && (
-                        <div className="mt-0.5 truncate text-xs text-slate-500" title={product.short_description}>
-                          {product.short_description}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </TableCell>
@@ -1552,16 +1586,17 @@ function ProductTable({
                   {product.slug}
                 </TableCell>
                 <TableCell
-                  className={cn("truncate px-3 py-2", hasCategoryIssue ? "text-orange-700" : "text-slate-600", HORIZONTAL_TEXT_CLASS)}
+                  className={cn("px-2 py-2 text-xs", hasCategoryIssue ? "text-orange-700" : "text-slate-600")}
                   title={hasCategoryIssue ? "分类层级异常" : categoryPath}
                 >
-                  {hasCategoryIssue ? "分类层级异常" : categoryPath}
+                  <span className="line-clamp-2 break-words">{hasCategoryIssue ? "分类层级异常" : categoryPath}</span>
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
                   ¥{product.price.toFixed(2)}
                 </TableCell>
-                <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS, effectiveStock === 0 ? "text-red-600" : effectiveStock <= 5 ? "text-orange-600" : "text-green-600")}>
-                  <div>{product.has_skus ? `商品规格汇总库存（仅 Active） ${effectiveStock}` : `库存 ${effectiveStock}`}</div>
+                <TableCell className={cn("px-2 py-2 text-center tabular-nums", effectiveStock === 0 ? "text-red-600" : effectiveStock <= 5 ? "text-orange-600" : "text-green-600")}>
+                  <div className="font-semibold">{effectiveStock}</div>
+                  <div className="mt-0.5 text-[10px] text-slate-500" title={product.has_skus ? "仅汇总 Active 商品规格库存" : undefined}>{product.has_skus ? "规格库存" : "商品库存"}</div>
                   {product.metadata?.supplier_stock_sync_status === "synced" ? <div className="mt-0.5 text-[10px] font-normal text-blue-600" title={typeof product.metadata.supplier_stock_synced_at === "string" ? `最后同步：${formatAdminDate(product.metadata.supplier_stock_synced_at)}` : "供应商同步"}>供应商同步</div> : null}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>
@@ -1570,7 +1605,7 @@ function ProductTable({
                 <TableCell className="px-3 py-2 text-center">
                   <SupplierBindingBadge product={product} />
                 </TableCell>
-                <TableCell className="px-3 py-2 text-center">
+                <TableCell className="px-2 py-2 text-center">
                   <div className="flex w-full justify-center">
                     <Badge
                       variant="outline"
@@ -1584,15 +1619,12 @@ function ProductTable({
                     </Badge>
                   </div>
                 </TableCell>
-                <TableCell className={cn("px-3 py-2 text-center tabular-nums", HORIZONTAL_TEXT_CLASS)}>
-                  {product.sort_order}
-                </TableCell>
-                <TableCell className="px-3 py-2 text-center">
+                <TableCell className="px-1 py-2 text-center">
                   <time className="block whitespace-nowrap text-xs tabular-nums text-slate-500">
                     {formatAdminDate(product.updated_at)}
                   </time>
                 </TableCell>
-                <TableCell className="sticky right-0 z-10 bg-white px-3 py-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
+                <TableCell className="sticky right-0 z-10 px-2 py-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
                   <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                     <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onEdit(product)}>
                       编辑

@@ -30,7 +30,7 @@ test("table viewport accepts touch horizontal scrolling and keeps the synchroniz
   assert.match(rail, /h-7 shrink-0.*sm:h-5/);
   const source = read("app/admin/products/page.tsx");
   assert.match(source, /<AdminSyncedHorizontalScroller>\s*<table/);
-  assert.match(source, /sticky top-0 z-20 bg-slate-50/);
+  assert.match(source, /TableHeader className="sticky top-0 z-20"/);
   assert.match(source, /sticky right-0 z-30/);
 });
 test("root and child category cards keep all three actions on one compact row", () => {

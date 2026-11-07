@@ -1,5 +1,7 @@
 import { ReactNode } from "react";
 
+import glass from "./v2/AdminPremiumGlass.module.css";
+
 import { cn } from "@/lib/utils";
 
 type AdminPageShellProps = {
@@ -21,7 +23,7 @@ export default function AdminPageShell({
 }: AdminPageShellProps) {
   const isV2 = variant === "v2";
   return (
-    <section className={cn("flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:[padding-inline:var(--admin-content-padding-x)] lg:py-4", className)}>
+    <section className={cn(glass.workspace, "flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-3 lg:[padding-inline:var(--admin-content-padding-x)] lg:py-4", className)}>
       <header className="mb-4 flex shrink-0 flex-col items-start justify-between gap-3 sm:flex-row sm:gap-4">
         <div className="min-w-0">
           <h1 className={cn("break-words text-2xl font-semibold text-slate-950 sm:truncate", isV2 && "text-xl leading-7 text-[var(--admin-v2-text-primary)] sm:text-2xl sm:leading-8")}>{title}</h1>

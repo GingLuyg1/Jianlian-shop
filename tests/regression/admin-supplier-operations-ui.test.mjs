@@ -45,7 +45,7 @@ test("supplier operations UI uses existing admin APIs without changing fulfillme
   assert.doesNotMatch(bindingSheet, /placeholder="输入对应订单字段/);
   assert.match(bindingSheet, /async function saveBinding\(\)[\s\S]*if \(!detail\.isAuto\)[\s\S]*toast\.error\("该供应商商品不支持自动交付/);
   assert.match(bindingSheet, /async function saveBinding\(\)[\s\S]*missingRequiredInputs\.length > 0[\s\S]*toast\.error\(`以下供应商必填字段尚未映射/);
-  assert.match(bindingSheet, /以下供应商必填字段尚未映射：\{missingRequiredInputs\.join\("、"\)\}/);
+  assert.match(bindingSheet, /必填字段尚未映射：\{missingRequiredInputs\.join\("、"\)\}/);
   assert.match(bindingSheet, /disabled=\{saving \|\| !detail \|\| !detail\.isAuto \|\| \(detail\.isSku && !supplierSku\.trim\(\)\) \|\| missingRequiredInputs\.length > 0\}/);
   assert.match(bindingSheet, /window\.confirm/);
   assert.doesNotMatch(bindingSheet, /\/unbind|action:\s*["']unbind["']|delete\s+metadata\.(?:supplier|fulfillment_source)/i);

@@ -4,11 +4,12 @@ import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import glass from "./AdminPremiumGlass.module.css";
 import { cn } from "@/lib/utils";
 
 export function AdminListStats({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("mb-3 grid shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] sm:grid-cols-2 xl:grid-cols-4", className)}>
+    <div className={cn(glass.sharedStats, "mb-3 grid shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] grid-cols-2 xl:grid-cols-4", className)}>
       {children}
     </div>
   );
@@ -26,7 +27,7 @@ export function AdminListStat({
   icon?: ReactNode;
 }) {
   return (
-    <div className={cn("min-w-0 border-b border-[var(--admin-v2-border)] px-4 py-3 last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0", tone === "warning" && "bg-[var(--admin-v2-warning-background)]")}>
+    <div className={cn("min-w-0 border-b border-[var(--admin-v2-border)] px-4 py-3 last:border-b-0 [&:nth-last-child(-n+2)]:border-b-0 [&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0", tone === "warning" && "bg-[var(--admin-v2-warning-background)]")}>
       <div className="flex items-center justify-between gap-2 text-xs font-medium text-[var(--admin-v2-text-muted)]">
         <span>{label}</span>{icon ? <span className="shrink-0">{icon}</span> : null}
       </div>
@@ -37,7 +38,7 @@ export function AdminListStat({
 
 export function AdminListSurface({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <section className={cn("flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-none", className)}>
+    <section className={cn(glass.surface, "flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-none", className)}>
       {children}
     </section>
   );
@@ -56,7 +57,7 @@ export function AdminFilterBar({
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="shrink-0 border-b border-[var(--admin-v2-border)] px-3 py-2.5 sm:px-4">
+    <div className={cn(glass.sharedFilters, "shrink-0 border-b border-[var(--admin-v2-border)] px-3 py-2.5 sm:px-4")}>
       <div className={cn("grid items-center gap-2", className)}>
         {children ?? primary}
         {advanced ? (
@@ -104,7 +105,7 @@ export function AdminListPagination({
   leading?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--admin-v2-border)] px-3 py-2 text-sm text-[var(--admin-v2-text-muted)] sm:px-4">
+    <div className={cn(glass.sharedPagination, "flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--admin-v2-border)] px-3 py-2 text-sm text-[var(--admin-v2-text-muted)] sm:px-4")}>
       <span>{summary}</span>
       <div className="flex items-center gap-2">
         {leading}
@@ -118,5 +119,5 @@ export function AdminListPagination({
 
 export const adminListControlClass = "h-11 min-w-0 rounded-[var(--admin-v2-control-radius)] border-[var(--admin-v2-border)] bg-white text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] sm:h-9";
 export const adminListTableClass = "w-full table-fixed text-sm";
-export const adminListTableHeadClass = "sticky top-0 z-10 bg-[var(--admin-v2-surface-muted)] text-left text-xs font-medium text-[var(--admin-v2-text-muted)]";
-export const adminListRowClass = "h-12 border-b border-[var(--admin-v2-border)] bg-white hover:bg-slate-50/70";
+export const adminListTableHeadClass = glass.listTableHead + " sticky top-0 z-10 bg-[var(--admin-v2-surface-muted)] text-left text-xs font-medium text-[var(--admin-v2-text-muted)]";
+export const adminListRowClass = "h-12 border-b border-[var(--admin-v2-border)] bg-white hover:bg-slate-50/70" + " " + glass.listRow;

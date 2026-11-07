@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 
+import glass from "./AdminPremiumGlass.module.css";
 import { cn } from "@/lib/utils";
 
 export default function AdminSection({
@@ -18,6 +19,7 @@ export default function AdminSection({
   return (
     <section
       className={cn(
+        glass.surface,
         "min-w-0 rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-none",
         className,
       )}

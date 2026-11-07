@@ -25,11 +25,11 @@ test("supplier binding provides friendly SKU choices and saves website SKU mappi
   const sheet = file("components/admin/suppliers/AdminSupplierBindingSheet.tsx");
   const route = file("app/api/admin/suppliers/daju/bindings/[productId]/route.ts");
   assert.match(sheet, /listDajuSkuStockOptions/);
-  assert.match(sheet, /供应商商品规格:/);
-  assert.match(sheet, /成本:/);
-  assert.match(sheet, /库存:/);
+  assert.match(sheet, /供应商商品规格\{detail\.isSku/);
+  assert.match(sheet, /成本 \{option\.price/);
+  assert.match(sheet, /库存 \{option\.stock\}/);
   assert.match(sheet, /website_sku_id/);
-  assert.match(sheet, /需要确认经营方案/);
+  assert.match(sheet, /须确认网站零售价、展示规格和公开销售方案后单独绑定/);
   assert.match(sheet, /detail\.id === 15/);
   assert.match(sheet, /option\.sku === "14"/);
   assert.match(route, /from\("product_skus"\)/);

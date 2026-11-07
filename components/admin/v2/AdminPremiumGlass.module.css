@@ -1,0 +1,235 @@
+/* Scoped to admin components. Palette and glass recipe follow the V2.5 dashboard. */
+.shell, .workspace, .supplierSheet, .detailDrawer, .mobileNav {
+  --primary: 226 69% 55%;
+  --primary-foreground: 0 0% 100%;
+  --background: 220 60% 99%;
+  --accent: 222 70% 95%;
+  --accent-foreground: 223 45% 38%;
+  --border: 220 26% 89%;
+  --input: 220 26% 89%;
+  --ring: 226 69% 55%;
+  --glass-ink: #202d42;
+  --glass-muted: #52627b;
+  --glass-accent: #3f63dc;
+  --glass-orange: #a85221;
+  --glass-border: #dce3ee;
+  --glass-radius: 21px;
+  --glass-control-radius: 10px;
+  --glass-fill: rgb(255 255 255 / 78%);
+  --glass-shadow: inset 0 1px 0 #fff, 0 16px 38px -22px rgb(45 59 91 / 27%), 0 4px 14px rgb(53 64 91 / 5%);
+  background:
+    radial-gradient(ellipse at 4% 0%, rgb(247 220 230 / 65%), transparent 44%),
+    radial-gradient(ellipse at 98% 10%, rgb(208 223 250 / 70%), transparent 52%),
+    linear-gradient(150deg, #fbf8f7, #f2f5fb 52%, #fbf9f6);
+  color: var(--glass-ink);
+}
+
+.shell .workspace { background: transparent; }
+
+.shell.shell.shell [data-admin-shell-sidebar] {
+  height: calc(100% - 32px);
+  width: calc(var(--admin-sidebar-width) - 12px);
+  margin: 16px 0 16px 12px;
+  border: 1px solid rgb(255 255 255 / 95%);
+  border-radius: 24px;
+  background: linear-gradient(160deg, rgb(255 255 255 / 93%), rgb(240 245 255 / 87%));
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(20px) saturate(135%);
+}
+
+.shell.shell.shell [data-admin-shell-sidebar] > div:first-child { height: 76px; flex-shrink: 0; border-bottom: 0; padding-inline: 12px; }
+.shell.shell.shell [data-admin-shell-sidebar] nav { padding: 8px 10px 16px; }
+.shell.shell.shell [data-admin-shell-sidebar] nav :is(a, button) { border-radius: 12px; }
+.shell.shell.shell [data-admin-shell-sidebar] nav a[aria-current="page"] {
+  border: 1px solid #cfdbf7;
+  background: linear-gradient(130deg, #e5edff, #f3f6ff);
+  color: #3454bf;
+  box-shadow: inset 0 1px 0 white, 0 3px 10px rgb(63 99 220 / 9%);
+}
+.shell.shell.shell [data-admin-shell-sidebar] nav :is(a, button):hover { background-color: #edf2fd; }
+
+.shell.shell.shell [data-admin-shell-topbar] {
+  height: 56px;
+  margin: 16px 16px 0;
+  padding-inline: 14px;
+  border: 1px solid rgb(255 255 255 / 95%);
+  border-radius: 20px;
+  background: rgb(255 255 255 / 78%);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px);
+}
+.shell.shell.shell [data-admin-shell-topbar] input { border-radius: 12px; background: #f3f6fc; border-color: #dce3ee; }
+
+.filterBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filterBar > div { flex: 1 1 190px; max-width: 220px; }
+.filterBar > select { flex: 1 1 124px; max-width: 152px; }
+.filters :is(input, select) { height: 36px; font-size: 12px; }
+.filters select {
+  appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%2364748b' stroke-width='1.5'%3E%3Cpath d='m4 5 3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.advancedFields { display: flex; flex-wrap: wrap; gap: 8px; }
+.advancedFields > select { width: 190px; max-width: 100%; }
+.tableTools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filterActions { display: flex; flex-direction: column; align-items: stretch; gap: 3px; }
+.moreFilters { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 25px; padding: 2px 8px; border-radius: 8px; font-size: 11px; color: var(--glass-muted); }
+.moreFilters:hover { background: #edf2fd; }
+.moreFilters:focus-visible { outline: 2px solid var(--glass-accent); outline-offset: 2px; }
+
+.tagLine { display: flex; align-items: center; gap: 4px; margin-top: 7px; white-space: nowrap; }
+.tag { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; height: 21px; border: 1px solid; border-radius: 6px; padding: 0 5px; font-size: 10px; line-height: 19px; font-weight: 500; }
+.tag[data-tone="info"] { color: #3e5ebd; background: #edf3ff; border-color: #d3def6; }
+.tag[data-tone="success"] { color: #287357; background: #edf8f2; border-color: #cde9da; }
+.tag[data-tone="warning"] { color: #946218; background: #fff8ea; border-color: #f0dfb6; }
+.tag[data-tone="orange"] { color: #a55624; background: #fff2e8; border-color: #eed5bd; }
+.moreTags { flex-shrink: 0; height: 21px; min-width: 25px; border: 1px solid #d7e0ed; border-radius: 6px; background: #f1f5fc; color: #53627b; font-size: 12px; }
+.tagPopup { display: flex; flex-wrap: wrap; gap: 6px; max-width: min(340px, calc(100vw - 24px)); border: 1px solid #dce3ee; border-radius: 12px; padding: 12px; background: #fcfdff; box-shadow: 0 12px 32px -12px rgb(45 59 91 / 28%); }
+
+.supplierSheet.supplierSheet { display: flex; flex-direction: column; top: 16px; right: 16px; bottom: 16px; height: calc(100dvh - 32px); padding: 0; width: min(1024px, calc(100vw - 32px)); max-width: none; overflow: hidden; border: 1px solid #eef2fa; border-radius: 26px; box-shadow: -12px 16px 60px -20px rgb(28 42 75 / 28%), inset 0 1px 0 white; }
+.supplierHeader { flex-shrink: 0; margin: 0; padding: 22px 26px 18px; border-bottom: 1px solid #dce3ee; background: rgb(255 255 255 / 65%); text-align: left; }
+.supplierBody { min-height: 0; flex: 1; overflow-y: auto; padding: 20px 26px; }
+.supplierSummary { border: 1px solid #dce3ee; border-radius: 14px; background: rgb(255 255 255 / 80%); padding: 16px; }
+.providerTabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.providerTabs button { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 54px; flex: 1 1 210px; border: 1px solid #dce3ee; border-radius: 12px; padding: 10px 14px; background: #fcfdff; color: #52627b; text-align: left; }
+.providerTabs button[aria-pressed="true"] { border-color: #9db3ec; background: #edf3ff; color: #3454bf; box-shadow: inset 0 1px 0 white; }
+.supplierColumns { display: grid; align-items: start; grid-template-columns: minmax(250px, .8fr) minmax(0, 1.2fr); gap: 16px; margin-top: 18px; }
+.supplierColumns > section { min-width: 0; padding: 16px; border: 1px solid #dce3ee; border-radius: 18px; background: rgb(255 255 255 / 86%); }
+.supplierResults { margin-top: 12px; max-height: 460px; overflow-y: auto; border: 1px solid #e1e7f0; border-radius: 10px; }
+.supplierResults button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; text-align: left; border-bottom: 1px solid #e9edf4; }
+.supplierResults button:is(:hover, [aria-pressed="true"]) { background: #edf3ff; }
+.supplierSheet :is(input, select) { min-width: 0; border-radius: 10px; border-color: #dce3ee; background-color: #fcfdff; }
+.supplierFooter { flex-shrink: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin: 0; padding: 14px 26px; border-top: 1px solid #dce3ee; background: #fcfdff; }
+.supplierFooter a { margin-right: auto; }
+
+@media (max-width: 767px) {
+  .supplierColumns { grid-template-columns: minmax(0, 1fr); }
+  .supplierSheet.supplierSheet { top: 8px; right: 8px; bottom: 8px; height: calc(100dvh - 16px); width: calc(100vw - 16px); border-radius: 22px; }
+  .supplierHeader, .supplierBody, .supplierFooter { padding: 16px; }
+  .filterBar > div { max-width: none; flex-basis: 100%; }
+  .filterBar > select { max-width: none; flex-basis: calc(50% - 4px); }
+  .advancedFields > select { width: 100%; }
+  .shell.shell.shell [data-admin-shell-topbar] { margin: 10px 12px 0; padding-inline: 10px; }
+}
+
+.workspace > header h1 {
+  color: var(--glass-ink);
+  font-weight: 700;
+  letter-spacing: -.025em;
+}
+
+.surface {
+  border: 1px solid rgb(255 255 255 / 90%);
+  border-radius: var(--glass-radius);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px) saturate(145%);
+}
+
+.primary {
+  border-radius: var(--glass-control-radius);
+  background: var(--glass-accent);
+  color: white;
+  box-shadow: 0 5px 12px -5px rgb(63 99 220 / 65%);
+}
+
+.primary:hover { background: #3155ca; }
+
+.secondary, .filters :is(input, select), .filters button, .pagination :is(select, button) {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-control-radius);
+  background: #fcfdff;
+  color: var(--glass-ink);
+}
+
+.secondary:hover, .filters button:hover, .pagination button:hover {
+  background: #eef3fb;
+}
+
+.filters :is(input, select):focus-visible, .advanced summary:focus-visible {
+  outline: 2px solid var(--glass-accent);
+  outline-offset: 1px;
+}
+
+.count {
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: #f3f6fb;
+  color: var(--glass-muted);
+}
+
+.advanced {
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: #f1f5fb;
+  color: var(--glass-muted);
+}
+
+.advanced[open] { background: #f6f8fc; }
+
+.table {
+  --table-head: #edf2f9;
+  --table-row: #fcfdff;
+  --table-alt: #f8fafe;
+  --table-hover: #edf3ff;
+  --table-attention: #fff8f0;
+  background: var(--table-row);
+  color: var(--glass-ink);
+}
+
+.table thead th {
+  background: var(--table-head);
+  color: var(--glass-muted);
+  font-weight: 650;
+}
+
+.table tbody tr { --row-fill: var(--table-row); background: var(--row-fill); }
+.table tbody tr:nth-child(even) { --row-fill: var(--table-alt); }
+.table tbody tr[data-attention="true"] { --row-fill: var(--table-attention); }
+.table tbody tr:is(:hover, :focus-within) { --row-fill: var(--table-hover); }
+.table :is(th, td) { border-bottom: 1px solid #e6ebf3; }
+.table td:last-child { background: var(--row-fill); }
+
+.table button { border-radius: 8px; }
+.table button:hover { background: #e2ebfc; }
+
+.pagination { border-color: var(--glass-border); color: var(--glass-muted); }
+
+.loading { background: #e9eff8; }
+
+.error { border-color: #eed7dc; background: #fff4f5; color: #9f3845; }
+
+@media (prefers-reduced-transparency: reduce) {
+  .surface { background: #fcfdff; backdrop-filter: none; }
+}
+
+/* Shared list and detail surfaces. Dashboard content keeps its existing design. */
+.sharedStats { border-radius: 18px; border-color: #e1e7f1; background: rgb(255 255 255 / 82%); box-shadow: inset 0 1px 0 white, 0 5px 16px -12px rgb(44 60 91 / 24%); }
+.sharedFilters { border-color: #e4eaf3; background: rgb(245 248 253 / 70%); padding-block: 12px; }
+.sharedFilters :is(input, select, button) { border-radius: 10px; }
+.sharedPagination { background: #fbfcff; border-color: #e4eaf3; }
+.sharedPagination > div { flex-wrap: wrap; }
+.sharedPagination button { border-radius: 9px; }
+.listTableHead { background: #edf2f9; color: #52627b; }
+.listRow { background: rgb(255 255 255 / 82%); transition: background-color 150ms ease-out; }
+.listRow:nth-child(even) { background: #f8fafe; }
+.listRow:hover { background: #edf3ff; }
+.detailDrawer.detailDrawer { top: 14px; right: 14px; bottom: 14px; height: calc(100dvh - 28px); width: calc(100% - 28px); border: 1px solid #e1e7f1; border-radius: 24px; }
+.detailDrawer > header { background: rgb(255 255 255 / 80%); }
+.detailDrawer [data-admin-detail-scroll] { background: transparent; }
+.tagPopup .tag { flex-shrink: 0; overflow: visible; }
+@media (max-width: 767px) {
+  .detailDrawer.detailDrawer { top: 8px; right: 8px; bottom: 8px; height: calc(100dvh - 16px); width: calc(100% - 16px); border-radius: 20px; }
+  .sharedFilters { padding-block: 10px; max-height: min(280px, 32dvh); overflow-y: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .listRow { transition: none; } }
+
+.metricTile { min-width: 0; border: 1px solid #dce3ee; border-radius: 15px; background: linear-gradient(135deg, #fff, #f2f6fd); box-shadow: inset 0 1px 0 white; }
+.statePanel { padding: 24px 16px; }
+.emptyIcon { border: 1px solid #dbe4f5; border-radius: 14px; background: linear-gradient(135deg, white, #eaf1ff); box-shadow: inset 0 1px 0 white, 0 5px 12px -7px #9fafd1; }
+.errorIcon { border: 1px solid #f0dce0; border-radius: 14px; background: linear-gradient(135deg, white, #fff0f2); }
+
+.mobileNav.mobileNav { top: 8px; left: 8px; bottom: 8px; height: calc(100dvh - 16px); width: min(280px, calc(100vw - 32px)); border: 1px solid #eef2fa; border-radius: 24px; background: linear-gradient(160deg, #fff, #edf3ff); box-shadow: 0 12px 45px -12px rgb(30 44 75 / 30%); }
+.mobileNav nav :is(button, a) { border-radius: 11px; }
