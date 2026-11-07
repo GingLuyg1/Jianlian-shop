@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -20,8 +20,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSafeInternalRedirect } from "@/lib/auth/redirect";
+import { getAuthSiteOrigin } from "@/lib/auth/site-origin";
 import { getSafeAuthErrorMessage, getSafeNetworkAuthMessage, isEmailFormatValid, validateAuthPassword } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
+import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
+import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import {
   getOrCreateProfile,
   getSupabaseBrowserClient,
@@ -39,14 +42,11 @@ const features = ["安全账号", "快速下单", "订单查询"];
 
 
 function getAuthRedirectUrl(path: string) {
-  if (typeof window === "undefined") return `https://www.jianlian.shop${path}`;
-  const origin = window.location.origin.includes("localhost")
-    ? "http://localhost:3000"
-    : "https://www.jianlian.shop";
+  const origin = getAuthSiteOrigin(typeof window === "undefined" ? undefined : window.location.origin);
   return `${origin}${path}`;
 }
 
-async function getLoginRestrictionMessage(supabase: ReturnType<typeof getSupabaseBrowserClient>, userId: string) {
+async function getLoginRestrictionMessage(supabase: ReturnType<typeof getSupabaseBrowserClient>, userId: string, strict = true) {
   try {
     const { data, error } = await supabase
       .from("profiles")
@@ -54,12 +54,12 @@ async function getLoginRestrictionMessage(supabase: ReturnType<typeof getSupabas
       .eq("id", userId)
       .maybeSingle();
 
-    if (error) return "";
+    if (error || !data) return strict ? "暂时无法确认账户状态，请稍后登录。" : "";
     if (data?.account_status === "disabled") return "账户已被禁用，请联系客服。";
     if (data?.risk_status === "blocked") return "账户当前受限，请联系客服。";
     return "";
   } catch {
-    return "";
+    return strict ? "暂时无法确认账户状态，请稍后登录。" : "";
   }
 }
 export default function AuthScreen({ mode }: AuthScreenProps) {
@@ -85,6 +85,86 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [registration, setRegistration] = useState<{ email: string; userId: string; invite: string } | null>(null);
+
+  async function verifyRegistration(code: string) {
+    if (loading || !registration) return;
+    setError("");
+    setMessage("");
+    setLoading(true);
+    const supabase = getSupabaseBrowserClient();
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: registration.email,
+        token: code,
+        type: "signup",
+      });
+      if (verifyError) {
+        setError(getSafeAuthErrorMessage(verifyError, "验证码无效或已过期，请重新获取。"));
+        return;
+      }
+      if (!data.session || data.user?.id !== registration.userId || !data.user.email_confirmed_at) {
+        if (data.session) await supabase.auth.signOut({ scope: "local" });
+        setError("无法确认此注册，请重新开始。");
+        return;
+      }
+      await getOrCreateProfile(supabase, data.user);
+      const restriction = await getLoginRestrictionMessage(supabase, data.user.id, true);
+      if (restriction) {
+        await supabase.auth.signOut({ scope: "local" });
+        setError(restriction);
+        return;
+      }
+      if (registration.invite) {
+        const { error: bindError } = await supabase.rpc("bind_referrer_by_code", {
+          input_invite_code: registration.invite,
+        });
+        if (bindError) {
+          await supabase.auth.signOut({ scope: "local" });
+          setError("注册邮箱已验证，邀请码绑定失败，请联系客服。");
+          return;
+        }
+      }
+      toast.success("邮箱已验证，注册完成。");
+      router.replace("/account");
+      router.refresh();
+    } catch {
+      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      setError("注册验证暂时不可用，请稍后重试。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendRegistrationCode() {
+    if (loading || !registration) return;
+    setError("");
+    setMessage("");
+    setLoading(true);
+    try {
+      const { error: resendError } = await getSupabaseBrowserClient().auth.resend({
+        type: "signup",
+        email: registration.email,
+      });
+      if (resendError) {
+        setError(getSafeAuthErrorMessage(resendError, "暂时无法重发验证码，请稍后重试。"));
+        return;
+      }
+      setMessage("验证码已重新发送，请使用最新一封邮件。");
+    } catch {
+      setError("暂时无法重发验证码，请稍后重试。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const reason = searchParams?.get("auth_error");
+    if (reason === "restricted") setError("账户已被禁用或暂时受限，请联系客服。");
+    else if (reason === "invite") setError("邀请关系绑定失败，请联系客服核实。");
+    else if (reason === "invalid_link") setError("登录链接已过期或无效，请重新登录。");
+    else if (reason === "config") setError("登录服务暂时不可用。");
+  }, [searchParams]);
 
   useEffect(() => {
     const inviteCode = inviteFromUrl.trim();
@@ -122,8 +202,15 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
     getSupabaseBrowserClient()
       .auth.getUser()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (!active || !data.user) return;
+        const restriction = await getLoginRestrictionMessage(getSupabaseBrowserClient(), data.user.id);
+        if (!active) return;
+        if (restriction) {
+          await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
+          setError(restriction);
+          return;
+        }
         router.replace(redirectTo === "/" ? "/account" : redirectTo);
       })
       .catch(() => undefined);
@@ -202,31 +289,18 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           return;
         }
 
-        if (data?.session) {
-          await getOrCreateProfile(supabase, data.session.user).catch(() =>
-            console.warn("[Supabase Auth] Failed to prepare profile")
-          );
-          if (normalizedInviteCode) {
-            try {
-              const { error } = await supabase.rpc("bind_referrer_by_code", {
-                input_invite_code: normalizedInviteCode,
-              });
-              if (error) {
-                console.warn("[Promotion] Failed to bind invite code");
-              }
-            } catch (bindError) {
-              console.warn("[Promotion] Failed to bind invite code");
-            }
-          }
-          toast.success("注册成功，正在进入账户中心。");
-          router.push("/account");
-          router.refresh();
+        if (data.session) {
+          await supabase.auth.signOut({ scope: "local" });
+          setError("注册服务尚未启用邮箱确认，请稍后重试。");
           return;
         }
-
-        setMessage(
-          "注册成功。如 Supabase 开启了邮箱验证，请完成验证后再登录。"
-        );
+        if (!data.user) {
+          setError("无法开始邮箱验证，请稍后重试。");
+          return;
+        }
+        setRegistration({ email: normalizedEmail, userId: data.user.id, invite: normalizedInviteCode });
+        setPassword("");
+        setConfirmPassword("");
         return;
       }
 
@@ -244,8 +318,12 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         return;
       }
 
-      toast.success("登录成功，正在进入账户中心。");
-      if (signInData?.user) {
+      if (!signInData?.session || !signInData.user?.email_confirmed_at) {
+        await supabase.auth.signOut({ scope: "local" });
+        setError("邮箱尚未验证，请先完成注册验证。");
+        return;
+      }
+      if (signInData.user) {
         await getOrCreateProfile(supabase, signInData.user).catch(() =>
           console.warn("[Supabase Auth] Failed to prepare profile")
         );
@@ -262,6 +340,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         }
       }
 
+      toast.success("登录成功，正在进入账户中心。");
       router.push(redirectTo);
       router.refresh();
     } catch (authException) {
@@ -381,11 +460,24 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {isRegister
-                      ? "填写邮箱和密码，创建你的 Jianlian 账号。"
+                      ? "设置密码并验证邮箱，创建你的 Jianlian 账号。"
                       : "登录成功后将进入账户中心。"}
                   </p>
                 </div>
 
+                {registration ? (
+                  <>
+                    <EmailVerificationForm
+                      email={registration.email}
+                      busy={loading}
+                      onVerify={verifyRegistration}
+                      onResend={resendRegistrationCode}
+                      onBack={() => { setRegistration(null); setError(""); setMessage(""); }}
+                    />
+                    {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
+                    {message && <p role="status" className="mt-3 text-sm text-emerald-700">{message}</p>}
+                  </>
+                ) : <>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {isRegister ? (
                     <div className="space-y-2">
@@ -543,6 +635,14 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                     {loading ? "处理中..." : isRegister ? "注册" : "登录"}
                   </Button>
                 </form>
+
+                <AlternateLoginMethods
+                  mode={mode}
+                  redirectTo={redirectTo === "/" ? "/account" : redirectTo}
+                  inviteCode={inviteCode}
+                  acceptedTerms={acceptedTerms}
+                />
+                </>}
 
                 <div className="mt-5 flex items-center justify-between text-sm">
                   <Link
