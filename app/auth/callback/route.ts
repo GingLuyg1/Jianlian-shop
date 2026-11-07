@@ -32,14 +32,14 @@ export async function GET(request: NextRequest) {
   try {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
     if (exchangeError) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       return loginError(requestUrl, "invalid_link");
     }
 
     // OTP, Google and password login must respect the same real account locks.
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       return loginError(requestUrl, "restricted");
     }
     const { data: profile, error: profileError } = await supabase
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
 
     if (profileError || !profile || profile.account_status === "disabled" || profile.risk_status === "blocked") {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       return loginError(requestUrl, "restricted");
     }
 
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     const value = request.cookies.get(GOOGLE_SIGNUP_COOKIE)?.value;
     const intent = value ? readGoogleSignupIntent(value, process.env.AUTH_OAUTH_INTENT_SECRET) : null;
     if (value && (!intent || requestUrl.searchParams.get("signup_nonce") !== intent.nonce)) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       return loginError(requestUrl, "invite");
     }
     const isGoogle = user.app_metadata?.provider === "google"
@@ -68,14 +68,14 @@ export async function GET(request: NextRequest) {
         input_invite_code: intent.invite,
       });
       if (bindError) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: "local" });
         return loginError(requestUrl, "invite");
       }
     }
 
     return finish(NextResponse.redirect(new URL(next, requestUrl.origin)));
   } catch {
-    await supabase.auth.signOut().catch(() => undefined);
+    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
     return loginError(requestUrl, "restricted");
   }
 }

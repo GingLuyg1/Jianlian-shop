@@ -45,7 +45,7 @@ test('both new paths refuse restricted/unknown account status before navigation'
   assert.match(callback,/auth\.getUser\(\)/);
   assert.match(callback,/profile\.account_status === "disabled"/);
   assert.match(callback,/profile\.risk_status === "blocked"/);
-  assert.match(callback,/auth\.signOut\(\)/);
+  assert.match(callback,/auth\.signOut\(\{ scope: "local" \}\)/);
 });
 test('signup both paths preserve invitation code without granting role or touching balances',()=>{
   assert.match(screen,/invite_code: normalizedInviteCode/);

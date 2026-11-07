@@ -333,7 +333,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           signInData.user.id
         );
         if (loginRestriction) {
-          await supabase.auth.signOut();
+          await supabase.auth.signOut({ scope: "local" });
           setMessage("");
           setError(loginRestriction);
           return;

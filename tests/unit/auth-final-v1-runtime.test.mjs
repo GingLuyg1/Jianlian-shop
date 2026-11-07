@@ -40,7 +40,7 @@ function callbackFixture(options = {}) {
         if (options.throwUser) throw Error("SYNTHETIC-SENSITIVE-DETAIL");
         return { data: { user: options.noUser ? null : { id: "fixture-user", created_at: options.createdAt ?? new Date(now - 5000).toISOString(), app_metadata: { provider: "google" } } }, error: null };
       },
-      async signOut() { stats.signOut++; },
+      async signOut(options) { assert.deepEqual(options, { scope: "local" }); stats.signOut++; },
     },
     from(table) {
       assert.equal(table, "profiles");
