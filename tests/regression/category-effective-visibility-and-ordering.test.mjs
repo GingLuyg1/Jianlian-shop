@@ -143,7 +143,7 @@ test("Admin data tables keep semantic alignment while form fields remain left al
   ]) {
     assert.match(file(path), /text-center/, `${path} must encode centered short/status/time/action columns`);
   }
-  assert.match(file("components/admin/products/AdminProductSkuManager.tsx"), /text-left font-medium/, "editable SKU form cells stay left aligned");
+  assert.match(file("components/admin/products/AdminProductSkuManager.tsx"), /<th[^>]*text-center font-medium/, "SKU column headers are centered");
 });
 
 test("global Sonner feedback is compact and centered from the single root toaster", () => {

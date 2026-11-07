@@ -32,7 +32,9 @@ test("manual TxHash fallback requires the exact fingerprint and respects expiry"
   assert.match(verifyRoute, /RECHARGE_AMOUNT_MISMATCH/);
   assert.match(verifyRoute, /RECHARGE_PAYMENT_EXPIRED/);
   assert.match(verifyRoute, /compareRechargeDecimals\(evidence\.actualReceivedUsdt, expectedUsdtAmount\) !== 0/);
-  assert.match(ui, /精确支付/);
+  assert.match(paymentPage, /canSubmitRechargeTxHash/);
+  assert.ok(paymentPage.includes("/bep20/verify"));
+  assert.doesNotMatch(ui, /输入 BEP20 TxHash/);
 });
 
 test("manual BEP20 receipt inspection can use a dedicated RPC without changing scanner RPC", () => {
@@ -70,7 +72,8 @@ test("account recharge stays scrollable and presents the minimal BEP20 flow", ()
   assert.doesNotMatch(ui, /付款后人工审核|人工付款信息/);
   assert.doesNotMatch(ui, /最终按链上实际到账 USDT 与本单锁定汇率折算人民币|少付或多付均按实收结算/);
   assert.match(ui, /payableDisplay =[^;]+expectedUsdtAmount[\s\S]*label="预计应付" value=\{payableDisplay\}/);
-  assert.match(ui, /请精确支付 \{record\.expectedUsdtAmount\} USDT/);
+  assert.doesNotMatch(ui, /请精确支付|RechargeBep20VerifyForm/);
+  assert.match(paymentPage, /recharge\.expectedUsdtAmount/);
   assert.match(paymentPage, /人工复核/);
   assert.match(ui, /compareRechargeDecimals\(requestedCnyAmount, "21\.00"\)/);
   assert.match(ui, /calculateExpectedUsdtAmount\(requestedCnyAmount, dailyRate\.settlementRate\)/);

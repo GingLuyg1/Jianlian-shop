@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import type { Product, ProductCategory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { refreshPublicCategories, usePublicCategorySnapshot } from "@/lib/catalog/public-category-snapshot";
-import { fallbackCategoriesByPath, type StorefrontFallbackCategory } from "@/lib/catalog/storefront-category-visuals";
+import { simRegionCode, fallbackCategoriesByPath, type StorefrontFallbackCategory } from "@/lib/catalog/storefront-category-visuals";
 import { clearPublicProductCounts, forgetPublicProductCount, getPublicProductCount, getPublicProductCountForRoute, rememberPublicProductCount, retainVisiblePublicProductCounts, subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion } from "@/lib/catalog/public-product-count-cache";
 import { forgetPublicProductPage, getPublicProductPage, peekPublicProductPage, prefetchPublicProductPage } from "@/lib/catalog/public-product-query-cache";
 import { useProgressiveWheelMotion } from "@/hooks/use-progressive-wheel-motion";
@@ -73,6 +73,7 @@ export type SupabaseMallContentProps = PublicCatalogConfig & {
 };
 
 type DisplayCategory = PublicCategory & {
+  displayCode?: string;
   displayImage?: string;
   displayIcon?: keyof typeof iconMap;
 };
@@ -174,6 +175,7 @@ function SupabaseMallContentInner({
 
       return {
         ...category,
+        displayCode: visuals === fallbackCategoriesByPath["/products/sim-cards"] && category.parent_id ? simRegionCode(category.slug, category.name) : undefined,
         displayImage: fallback?.image,
         displayIcon: fallback?.icon,
       };
@@ -650,7 +652,9 @@ function CategoryButton({
       )}
     >
       <div className="flex min-w-0 items-center gap-3">
-        {category.displayImage ? (
+        {category.displayCode ? (
+          <span aria-hidden="true" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-sm font-bold tracking-wide text-primary">{category.displayCode}</span>
+        ) : category.displayImage ? (
           <img
             src={category.displayImage}
             alt={category.name}
@@ -842,7 +846,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
           {product.description ? <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{product.description}</div> : null}
           <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
             <span>{product.deliveryLabel}</span>
-            {hasSkus ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">多 SKU</span> : null}
+
           </div>
         </div>
         {showStock ? (
@@ -905,11 +909,6 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
           {product.description ? (
             <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
               {product.description}
-            </div>
-          ) : null}
-          {hasSkus ? (
-            <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">多 SKU</span>
             </div>
           ) : null}
         </div>

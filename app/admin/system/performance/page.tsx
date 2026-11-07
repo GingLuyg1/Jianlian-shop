@@ -97,7 +97,6 @@ export default function AdminPerformancePage() {
       <header className="mb-3 flex shrink-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-slate-950">性能检查</h1>
-          <p className="mt-1 text-sm text-slate-500">查看慢请求摘要、接口频率和最近性能事件，不展示 SQL、密钥或用户敏感输入。</p>
         </div>
         <button
           type="button"

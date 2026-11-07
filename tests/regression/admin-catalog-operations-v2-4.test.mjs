@@ -70,11 +70,12 @@ test("product operations default to updated time and remove only original price 
   assert.equal((page.match(/<TableHead/g) ?? []).length > 0, true);
 });
 
-test("public catalog ordering stays stock-first with stable sort-order ties", () => {
+test("public catalog follows category rank, availability, then stable product ties", () => {
   const route = file("app/api/catalog/products/route.ts");
   assert.match(route, /sort_order,updated_at/);
   assert.match(route, /if \(stockWeight !== 0\) return stockWeight/);
-  assert.match(route, /const sortOrder = Number\(a\.sort_order/);
+  assert.match(route, /aRoot\?\.sort_order[\s\S]*?aCategory\?\.sort_order[\s\S]*?if \(categoryOrder !== 0\) return categoryOrder/);
+  assert.doesNotMatch(route, /const sortOrder = Number\(a\.sort_order/);
   assert.match(route, /Date\.parse\(b\.updated_at \?\? ""\).*Date\.parse\(a\.updated_at \?\? ""\)/);
   assert.match(route, /a\.id\.localeCompare\(b\.id\)/);
 });

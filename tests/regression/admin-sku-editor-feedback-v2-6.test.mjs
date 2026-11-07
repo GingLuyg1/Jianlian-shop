@@ -3,12 +3,12 @@ import fs from "node:fs";
 import test from "node:test";
 const file = (name) => fs.readFileSync(new URL("../../" + name, import.meta.url), "utf8");
 
-test("SKU table replaces duplicate price-stock form and preserves product sorting", () => {
+test("SKU table owns price, inventory, delivery and variant status editing", () => {
   const page = file("app/admin/products/page.tsx");
   const editor = file("components/admin/products/AdminProductSkuManager.tsx");
-  assert.match(page, /title="价格与库存 \/ 商品规格"/);
+  assert.match(page, /title="价格、库存与交付规格"/);
   assert.doesNotMatch(page, /title="商品规格 \/ 规格与供应商绑定"|title="价格与库存"/);
-  assert.match(page, /label="商品排序"/);
+  assert.doesNotMatch(page, /label="商品排序"|title="交付与状态"/);
   assert.match(editor, /\["名称", "编码", "价格", "库存", "交付方式", "状态", "绑定供货商"\]/);
   assert.match(editor, /<table/);
   assert.match(editor, /h-8/);
@@ -89,7 +89,6 @@ test("operation errors use existing toast and leave page load states intact", ()
     ["components/admin/suppliers/AdminSupplierBindingSheet.tsx", "供应商绑定保存失败"],
     ["components/admin/system/DataConsistencyClient.tsx", "数据巡检执行失败"],
     ["components/admin/EmailDeliveryActions.tsx", "toast.error"],
-    ["components/account/AccountRechargeContent.tsx", "链上交易核验失败"],
     ["app/payment/page.tsx", "链上交易校验失败"],
   ]) {
     const source = file(name);

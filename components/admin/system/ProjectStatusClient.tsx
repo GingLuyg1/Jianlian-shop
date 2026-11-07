@@ -108,9 +108,6 @@ export default function ProjectStatusClient() {
       <header className="mb-4 flex shrink-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-slate-950">项目验收面板</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            只读汇总当前版本、数据库结构升级、功能矩阵、支付平台 状态和上线阻塞项；检查会写入审计日志。
-          </p>
         </div>
         <button
           type="button"
