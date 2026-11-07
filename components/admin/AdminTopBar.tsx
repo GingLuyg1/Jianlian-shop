@@ -14,6 +14,7 @@ import {
   type AdminNavigationGroupKey,
 } from "./admin-navigation";
 import { toggleNavigationGroup } from "./admin-navigation-state.mjs";
+import glass from "./v2/AdminPremiumGlass.module.css";
 import v2Styles from "./v2/AdminV2.module.css";
 import {
   Sheet,
@@ -45,7 +46,7 @@ export default function AdminTopBar() {
                 <Menu className="h-4 w-4" />
               </button>
             </SheetTrigger>
-            <SheetContent side="left" className={cn(v2Styles.scope, "w-64 border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] p-0 text-[var(--admin-v2-text-primary)]")}>
+            <SheetContent side="left" className={cn(v2Styles.scope, "w-64 border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] p-0 text-[var(--admin-v2-text-primary)]", glass.mobileNav)}>
               <SheetTitle className="sr-only">后台导航</SheetTitle>
               <div className="flex h-[var(--admin-header-height)] items-center border-b border-[var(--admin-v2-border)] px-4">
                 <div className="flex items-center gap-3">

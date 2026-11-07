@@ -61,7 +61,11 @@ test("product operations default to updated time and remove only original price 
   assert.match(page, /updateProduct\(editingProductId, saveSkus \? basePayload : updatePayload\)/);
   assert.match(page, /price: previewPrice, stock: previewStock, \.\.\.basePayload/);
   assert.match(categories, /updateProduct\(productForm\.id, updatePayload\)/);
-  assert.match(page, /TableHeader className="sticky top-0 z-20 bg-slate-50 \[&_th\]:bg-slate-50"/);
+  assert.match(page, /TableHeader className="sticky top-0 z-20"/);
+  assert.match(file("components/admin/v2/AdminPremiumGlass.module.css"), /\.table thead th\s*\{\s*background: var\(--table-head\)/);
+  assert.doesNotMatch(page, />排序<\/TableHead>/);
+  assert.doesNotMatch(page, /aria-label="商品排序"/);
+  assert.match(categories, /sortBy: "sort_order"/);
   assert.match(page, />更新时间</);
   assert.equal((page.match(/<TableHead/g) ?? []).length > 0, true);
 });

@@ -6,6 +6,8 @@ import { AlertTriangle, CheckCircle2, ExternalLink, Factory, Loader2, PackageSea
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
+import glass from "@/components/admin/v2/AdminPremiumGlass.module.css";
+import { cn } from "@/lib/utils";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import { supplierUiRegistry } from "@/components/admin/suppliers/supplier-ui-registry";
@@ -151,7 +153,7 @@ export default function AdminSuppliersWorkspace() {
       actions={<Button asChild variant="outline"><Link href="/admin/products">前往商品管理<ExternalLink className="ml-2 h-4 w-4" /></Link></Button>}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <div className="flex shrink-0 items-center gap-2" aria-label="供应商选择">
+        <div className={cn(glass.providerTabs, "!mt-0 shrink-0")} aria-label="供应商选择">
           <span className="text-sm font-medium text-slate-700">供应商：</span>
           {supplierUiRegistry.map((supplier) => (
             <Button
@@ -171,7 +173,7 @@ export default function AdminSuppliersWorkspace() {
             </Button>
           ))}
         </div>
-        <nav className="flex shrink-0 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm" aria-label="供应商工作区">
+        <nav className={cn(glass.surface, "flex shrink-0 flex-wrap gap-2 p-2")} aria-label="供应商工作区">
           <Button asChild variant="ghost" size="sm"><Link href="/admin/suppliers/bitrefill">Bitrefill 采购记录（只读）</Link></Button>
           <Button asChild variant="ghost" size="sm"><Link href="/admin/suppliers/bitrefill/catalog">Bitrefill 商品目录</Link></Button>
           <Button variant={activeArea === "overview" ? "default" : "ghost"} size="sm" onClick={() => setActiveArea("overview")}>供应商概览</Button>
@@ -180,7 +182,7 @@ export default function AdminSuppliersWorkspace() {
 
         {activeArea === "overview" ? (
           <div className="min-h-0 flex-1 overflow-auto">
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className={cn(glass.surface, "p-5")}>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><Factory className="h-5 w-5" /></div>
@@ -204,21 +206,21 @@ export default function AdminSuppliersWorkspace() {
             </section>
           </div>
         ) : (
-          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <section className={cn(glass.surface, "flex min-h-0 flex-1 flex-col overflow-hidden")}>
             <div className="flex shrink-0 flex-wrap gap-2 border-b border-slate-100 p-3">
-              <div className="relative min-w-[280px] flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void loadProducts(); }} className="pl-9" placeholder="搜索供应商商品" /></div>
+              <div className="relative min-w-0 basis-full sm:min-w-[280px] sm:flex-1 sm:basis-auto"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void loadProducts(); }} className="pl-9" placeholder="搜索供应商商品" /></div>
               <Button onClick={loadProducts} disabled={productsLoading}>{productsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}搜索</Button>
               <Button variant="outline" onClick={loadProducts} disabled={productsLoading}><RefreshCcw className="mr-2 h-4 w-4" />刷新</Button>
             </div>
             {productsError ? <AdminErrorState title="供应商商品目录不可用" description={productsError.message} action={<div className="text-left text-red-700"><SupplierErrorDetails error={productsError} /></div>} /> : productsLoading ? <AdminTableSkeleton rows={8} /> : products.length === 0 ? <AdminEmptyState icon={<PackageSearch className="h-5 w-5" />} title={query.trim() ? "没有匹配的供应商商品" : "供应商商品目录为空"} description="请调整搜索关键词或稍后刷新。" /> : (
-              <div className="min-h-0 flex-1 overflow-auto"><table className="min-w-[980px] w-full table-fixed text-left text-sm"><thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">供应商商品</th><th className="px-4 py-3 text-center">编号</th><th className="px-4 py-3 text-center">价格</th><th className="px-4 py-3 text-center">库存</th><th className="px-4 py-3 text-center">销量</th><th className="px-4 py-3 text-center">自动交付</th><th className="px-4 py-3 text-center">排序 ID</th><th className="px-4 py-3 text-center">操作</th></tr></thead><tbody className="divide-y divide-slate-100">{products.map((product) => <tr key={product.id} className="hover:bg-slate-50/70"><td className="min-w-0 px-4 py-3"><div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100"><PackageSearch className="h-4 w-4 text-slate-400" /></div><div className="min-w-0"><div className="truncate font-medium text-slate-950" title={product.title}>{product.title}</div><div className="truncate text-xs text-slate-500" title={product.cover ?? ""}>封面：{product.cover || "—"}</div></div></div></td><td className="px-4 py-3 text-center font-mono text-xs">{product.id}</td><td className="px-4 py-3 text-center tabular-nums">¥{product.price}</td><td className="px-4 py-3 text-center tabular-nums">{product.stock}</td><td className="px-4 py-3 text-center tabular-nums">{product.sales}</td><td className="px-4 py-3 text-center"><Badge variant={product.isAuto ? "secondary" : "outline"}>{product.isAuto ? "是" : "否"}</Badge></td><td className="px-4 py-3 text-center">{product.sortId ?? "—"}</td><td className="px-4 py-3 text-center whitespace-nowrap"><Button variant="outline" size="sm" onClick={() => openProductDetail(product.id)}>查看详情</Button></td></tr>)}</tbody></table></div>
+              <div className="min-h-0 flex-1 overflow-auto"><table className={cn(glass.table, "min-w-[980px] w-full table-fixed text-left text-sm")}><thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">供应商商品</th><th className="px-4 py-3 text-center">编号</th><th className="px-4 py-3 text-center">价格</th><th className="px-4 py-3 text-center">库存</th><th className="px-4 py-3 text-center">销量</th><th className="px-4 py-3 text-center">自动交付</th><th className="px-4 py-3 text-center">排序 ID</th><th className="px-4 py-3 text-center">操作</th></tr></thead><tbody className="divide-y divide-slate-100">{products.map((product) => <tr key={product.id} className="hover:bg-slate-50/70"><td className="min-w-0 px-4 py-3"><div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100"><PackageSearch className="h-4 w-4 text-slate-400" /></div><div className="min-w-0"><div className="truncate font-medium text-slate-950" title={product.title}>{product.title}</div><div className="truncate text-xs text-slate-500" title={product.cover ?? ""}>封面：{product.cover || "—"}</div></div></div></td><td className="px-4 py-3 text-center font-mono text-xs">{product.id}</td><td className="px-4 py-3 text-center tabular-nums">¥{product.price}</td><td className="px-4 py-3 text-center tabular-nums">{product.stock}</td><td className="px-4 py-3 text-center tabular-nums">{product.sales}</td><td className="px-4 py-3 text-center"><Badge variant={product.isAuto ? "secondary" : "outline"}>{product.isAuto ? "是" : "否"}</Badge></td><td className="px-4 py-3 text-center">{product.sortId ?? "—"}</td><td className="px-4 py-3 text-center whitespace-nowrap"><Button variant="outline" size="sm" onClick={() => openProductDetail(product.id)}>查看详情</Button></td></tr>)}</tbody></table></div>
             )}
           </section>
         )}
       </div>
 
       <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
+        <SheetContent className={cn(glass.detailDrawer, "w-full overflow-y-auto sm:max-w-2xl")}>
           <SheetHeader><SheetTitle>供应商商品详情</SheetTitle><SheetDescription>详情来自本站 Admin API 返回的实时供应商数据。</SheetDescription></SheetHeader>
           {detailLoading ? <AdminTableSkeleton rows={7} className="mt-4" /> : detailError ? <AdminErrorState title="商品详情读取失败" description={detailError.message} action={<SupplierErrorDetails error={detailError} />} /> : detail ? <div className="mt-5 space-y-4"><div><h3 className="font-semibold text-slate-950">{detail.title}</h3><div className="mt-1 font-mono text-xs text-slate-500">编号 {detail.id}</div><div className="mt-2 text-sm">¥{detail.price} · 库存 {detail.stock} · 销量 {detail.sales}</div><div className="mt-2 break-all text-xs text-slate-500">封面：{detail.cover || "—"}</div></div><DetailGrid detail={detail} /><ReadOnlyJson title="需填写的信息" value={detail.requiredInputs} /><ReadOnlyJson title="规格原始数据" value={detail.specs} /><ReadOnlyJson title="商品规格原始数据" value={detail.skuVariants} />{detail.description ? <div><div className="text-sm font-medium text-slate-900">商品说明</div><p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{detail.description}</p></div> : null}</div> : null}
         </SheetContent>
@@ -228,7 +230,7 @@ export default function AdminSuppliersWorkspace() {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">{label}</div><div className="mt-2 text-xl font-semibold tabular-nums text-slate-950">{value}</div></div>;
+  return <div className={cn(glass.metricTile, "p-4")}><div className="text-xs text-slate-500">{label}</div><div className="mt-2 text-xl font-semibold tabular-nums text-slate-950">{value}</div></div>;
 }
 
 function DetailGrid({ detail }: { detail: DajuProductDetail }) {

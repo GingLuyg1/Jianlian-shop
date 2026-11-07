@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import glass from "./v2/AdminPremiumGlass.module.css";
 import { cn } from "@/lib/utils";
 
 type AdminErrorStateProps = {
@@ -26,7 +27,7 @@ export default function AdminErrorState({
         className
       )}
     >
-      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-500">
+      <div className={cn(glass.errorIcon, "mb-3 flex h-11 w-11 items-center justify-center text-red-500")}>
         <AlertTriangle className="h-5 w-5" />
       </div>
       <div className="text-sm font-semibold text-slate-900">{title}</div>

@@ -5,6 +5,7 @@ import AdminGuard from "@/components/auth/AdminGuard";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopBar from "./AdminTopBar";
 import v2Styles from "./v2/AdminV2.module.css";
+import glass from "./v2/AdminPremiumGlass.module.css";
 import { cn } from "@/lib/utils";
 
 interface AdminLayoutProps {
@@ -14,7 +15,7 @@ interface AdminLayoutProps {
 
 function AdminShell({ children }: AdminLayoutProps) {
   return (
-    <div data-admin-shell className={cn(v2Styles.scope, "fixed inset-0 flex h-[100dvh] max-h-[100dvh] min-h-0 w-full overflow-hidden bg-[var(--admin-v2-background)] text-[var(--admin-v2-text-primary)] [--admin-content-padding-x:16px] [--admin-header-height:62px] [--admin-main-offset:204px] [--admin-sidebar-width:204px]")}>
+    <div data-admin-shell className={cn(v2Styles.scope, glass.shell, "fixed inset-0 flex h-[100dvh] max-h-[100dvh] min-h-0 w-full overflow-hidden bg-[var(--admin-v2-background)] text-[var(--admin-v2-text-primary)] [--admin-content-padding-x:16px] [--admin-header-height:62px] [--admin-main-offset:204px] [--admin-sidebar-width:204px]")}>
       <div className="hidden h-full w-[var(--admin-main-offset)] shrink-0 lg:flex">
         <AdminSidebar />
       </div>

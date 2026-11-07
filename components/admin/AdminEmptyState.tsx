@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Inbox } from "lucide-react";
 
+import glass from "./v2/AdminPremiumGlass.module.css";
 import { cn } from "@/lib/utils";
 
 type AdminEmptyStateProps = {
@@ -19,8 +20,8 @@ export default function AdminEmptyState({
   className,
 }: AdminEmptyStateProps) {
   return (
-    <div className={cn("flex min-h-[220px] flex-1 flex-col items-center justify-center rounded-xl text-center", className)}>
-      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+    <div className={cn(glass.statePanel, "flex min-h-[220px] flex-1 flex-col items-center justify-center rounded-xl text-center", className)}>
+      <div className={cn(glass.emptyIcon, "mb-3 flex h-11 w-11 items-center justify-center text-slate-500")}>
         {icon ?? <Inbox className="h-5 w-5" />}
       </div>
       <div className="text-sm font-semibold text-slate-900">{title}</div>
