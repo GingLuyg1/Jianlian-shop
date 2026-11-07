@@ -6,8 +6,8 @@ const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8
 test("mobile product filters scroll without collapsing the real product table", async () => {
   const source = await read("app/admin/products/page.tsx");
   assert.match(source, /CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto[^"\n]*md:overflow-hidden/);
-  assert.match(source, /<div className="flex min-h-\[240px\] min-w-0 flex-1 flex-col md:min-h-0">\s*<AdminSyncedHorizontalScroller>/);
-  assert.match(source, /min-w-\[1560px\]/);
+  assert.match(source, /<div className="flex min-h-\[240px\] min-w-0 flex-1 flex-col[^"\n]*md:min-h-0">\s*<AdminSyncedHorizontalScroller>/);
+  assert.match(source, /min-w-\[1072px\]/);
 });
 
 test("mobile layout keeps native wide-table scrolling and bidirectional bottom-rail sync", async () => {
@@ -16,5 +16,7 @@ test("mobile layout keeps native wide-table scrolling and bidirectional bottom-r
   assert.match(source, /data-admin-horizontal-rail/);
   assert.match(source, /railRef\.current\.scrollLeft = viewportRef\.current\.scrollLeft/);
   assert.match(source, /viewportRef\.current\.scrollLeft = railRef\.current\.scrollLeft/);
-  assert.match(await read("app/admin/products/page.tsx"), /sticky right-0 z-10 bg-white/);
+  assert.match(await read("app/admin/products/page.tsx"), /sticky right-0 z-10/);
+  assert.match(await read("components/admin/v2/AdminPremiumGlass.module.css"), /\.table td:last-child \{ background: var\(--row-fill\); \}/);
+  assert.match(source, /hidden=\{!overflowing\}/);
 });

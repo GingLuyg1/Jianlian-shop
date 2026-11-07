@@ -22,6 +22,7 @@ export function loadDashboardUi(initialStates, onStateChange = () => {}) {
     const code = ts.transpileModule(text, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
     const module = { exports: {} };
     const imports = name => {
+      if (name.endsWith('.module.css')) return { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
       if (name === 'next/link') return { __esModule: true, default: ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children) };
       if (name.startsWith('@/lib/supabase/')) return fakeClient;
       if (name.endsWith('dashboard-payment-schema.mjs')) return {};
