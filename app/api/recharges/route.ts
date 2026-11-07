@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { calculateRechargeAmounts } from "@/lib/payments/channels";
@@ -574,6 +574,9 @@ async function insertRecharge(
     if ((lastError as { code?: string }).code === "23505") {
       const existing = await findExistingRecharge(serviceClient, input.userId, input.clientRequestId);
       if (existing?.rechargeNo) return existing.rechargeNo;
+      // Only an authoritative collision of this business number permits a new number.
+      // Other unique keys and uncertain responses must retain their original identity.
+      if (!isRechargeNumberCollision(lastError)) break;
       continue;
     }
     break;
@@ -620,10 +623,20 @@ function logRechargeFailure(
   );
 }
 
-function generateRechargeNo() {
-  const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `RC${stamp}${random}`;
+function generateRechargeNo(date = new Date()) {
+  const stamp = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(date).replace(/\D/g, "");
+  const random = randomInt(36 ** 6).toString(36).toUpperCase().padStart(6, "0");
+  return `CZ${stamp}${random}`;
+}
+
+function isRechargeNumberCollision(error: unknown) {
+  const value = error as { code?: string; constraint?: string; message?: string };
+  return value?.code === "23505" && (
+    value.constraint === "account_recharges_recharge_no_key"
+    || value.message?.includes('"account_recharges_recharge_no_key"') === true
+  );
 }
 
 function positiveInteger(value: string | null, fallback: number) {
