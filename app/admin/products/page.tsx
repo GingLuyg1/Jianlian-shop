@@ -1746,7 +1746,7 @@ function ProductFormDialog({
               请检查表单中标红的内容后再保存。
             </div>
           )}
-          <div className="grid min-h-0 gap-4 overflow-y-auto bg-slate-50/60 px-4 py-5 sm:px-6 md:grid-cols-2">
+          <div className="grid min-h-0 grid-cols-1 gap-4 overflow-y-auto bg-slate-50/60 px-4 py-5 sm:px-6 md:grid-cols-2">
             <FormSection title="基础信息" className="md:col-span-2">
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="标题" required error={errors.name}>
