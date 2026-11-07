@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import glass from "@/components/account/AccountGlass.module.css";
+import security from "@/components/account/AccountSecurity.module.css";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isEmailFormatValid } from "@/lib/auth/password-policy";
 import { beginSecureEmailChange, verifySecureEmailChange, readEmailChangeAccount, emailChangeErrorMessage,
@@ -131,7 +132,7 @@ export default function BoundEmailChange({ account, onUpdated }: { account: Emai
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row"><Input ref={emailInput} id="change-new-email" type="email" autoComplete="email" maxLength={254} value={newEmail} disabled={busy || identityChanged} onChange={event => setNewEmail(event.target.value)} required className="min-w-0 flex-1 rounded-xl" />
           <Button type="submit" className="shrink-0 rounded-xl" disabled={busy || identityChanged || remaining > 0}>{remaining ? `${remaining} 秒后可发送` : "发送验证邮件"}</Button></div>
       </form> : <>
-        <ol aria-label="邮箱更换验证进度" className="grid min-w-0 gap-3 lg:grid-cols-2">
+        <ol aria-label="邮箱更换验证进度" className={security.emailSteps}>
           {(["current", "new"] as const).map(side => <li key={side} className={`${glass.inset} min-w-0 rounded-2xl p-4`}>
             <form onSubmit={event => void verify(event, side)} className="min-w-0 space-y-3">
               <h3 className="flex items-center gap-2 font-medium text-slate-800">{confirmed[side] ? <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" /> : <Mail className="h-4 w-4 text-primary" aria-hidden="true" />}{side === "current" ? "1. 验证原邮箱" : "2. 验证新邮箱"}</h3>
