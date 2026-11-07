@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSafeInternalRedirect } from "@/lib/auth/redirect";
 import { getAuthSiteOrigin } from "@/lib/auth/site-origin";
+import { PENDING_SIGNUP_KEY, encodePendingSignup, decodePendingSignup, type PendingSignup } from "@/lib/auth/pending-signup";
 import { getSafeAuthErrorMessage, getSafeNetworkAuthMessage, isEmailFormatValid, validateAuthPassword } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
@@ -85,7 +86,20 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [registration, setRegistration] = useState<{ email: string; userId: string; invite: string } | null>(null);
+  const [registration, setRegistration] = useState<PendingSignup | null>(null);
+
+  useEffect(() => {
+    if (!isRegister) return;
+    try {
+      const pending = decodePendingSignup(window.sessionStorage.getItem(PENDING_SIGNUP_KEY));
+      if (pending) setRegistration(pending);
+      else window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
+    } catch { /* Verification remains usable when browser storage is unavailable. */ }
+  }, [isRegister]);
+
+  function forgetPendingSignup() {
+    try { window.sessionStorage.removeItem(PENDING_SIGNUP_KEY); } catch { /* No credentials are stored. */ }
+  }
 
   async function verifyRegistration(code: string) {
     if (loading || !registration) return;
@@ -126,6 +140,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         }
       }
       toast.success("邮箱已验证，注册完成。");
+      forgetPendingSignup();
       router.replace("/account");
       router.refresh();
     } catch {
@@ -211,6 +226,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           setError(restriction);
           return;
         }
+        forgetPendingSignup();
         router.replace(redirectTo === "/" ? "/account" : redirectTo);
       })
       .catch(() => undefined);
@@ -298,7 +314,9 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           setError("无法开始邮箱验证，请稍后重试。");
           return;
         }
-        setRegistration({ email: normalizedEmail, userId: data.user.id, invite: normalizedInviteCode });
+        const pending = { email: normalizedEmail, userId: data.user.id, invite: normalizedInviteCode };
+        try { window.sessionStorage.setItem(PENDING_SIGNUP_KEY, encodePendingSignup(pending)); } catch { /* No password/token persistence. */ }
+        setRegistration(pending);
         setPassword("");
         setConfirmPassword("");
         return;
@@ -472,7 +490,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                       busy={loading}
                       onVerify={verifyRegistration}
                       onResend={resendRegistrationCode}
-                      onBack={() => { setRegistration(null); setError(""); setMessage(""); }}
+                      onBack={() => { forgetPendingSignup(); setRegistration(null); setError(""); setMessage(""); }}
                     />
                     {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
                     {message && <p role="status" className="mt-3 text-sm text-emerald-700">{message}</p>}

@@ -8,6 +8,7 @@ This auth-only change starts from deployed main 55025ea7150b0791c5c8654eb4581b8f
 
 - Email/password login; no passwordless email login entry.
 - Password registration requires signup confirmation using six digits and type signup. Reject an automatic pre-confirmation session, a mismatched identity, or unconfirmed user. Errors after verification sign out. Original registration layout remains intact.
+- Refreshing the registration tab can restore bounded, one-hour pending identity progress from sessionStorage. It contains no password, OTP or token and grants no session; the real signup OTP and matching confirmed user are still required. Corrupt/expired/extra-field progress is rejected and successful confirmation clears it.
 - First email binding rechecks the authenticated account before send and verification, then verifies email_change and the same account's confirmed address. Existing email remains display-only.
 - Profile reads fail closed; disabled/blocked users sign out before navigation. Roles and financial authorization never come from user_metadata.
 - Google starts through a same-origin, size/rate-limited endpoint using the existing Supabase PKCE identity store. Retain loopback ports and approved first-party origins; existing internal redirect checks remain effective.
@@ -24,6 +25,8 @@ AUTH_OAUTH_INTENT_SECRET is a server-only random signing key, at least 32 charac
 Read-only Test schema checks found no referrals table, ensure_my_referral_code, generate_unique_referral_code, or bind_referrer_by_code; there is no existing email-less phone test account. Real invitation and first-binding E2E remain gated on legitimate Test dependencies. Do not replay old Production migrations or fabricate authenticated tokens to hide these gaps.
 
 29 targeted tests pass. Ten browser scenarios execute actual React components with a synthetic provider and no external/write requests. They cover terms, confirmation-before-access, invalid/expired code, resend, confirmation success, restricted login, first binding, existing-email display, identity mismatch and desktop/mobile layout. These are synthetic evidence, not real SMTP/Google/database E2E. Exact real receipts and CI are recorded separately.
+
+Three additional pending-progress tests pass. Real SMTP acceptance found Test Email OTP length was eight while the page accepts six; only the Test setting was corrected to six, keeping expiration 3600 seconds and email confirmation enabled. The same pending identity then confirmed successfully, with no additional signup. Real confirmation-before-session, confirmation, refresh persistence, used/wrong-code rejection, password login, duplicate registration, existing-email display-only and disabled-profile sign-out passed. The original controller lost its process-only signup password, so password login uses a separately prepared password on this same newly created, owned Test fixture; it is protected with CurrentUser DPAPI and is not claimed as validation of the lost original password. The temporary disabled status was restored to active/normal. No older or Production user was modified. Google actual user consent/callback and legitimate first-binding/invitation fixtures remain separate real gates.
 
 ## Production plan — not authorized by this document
 
