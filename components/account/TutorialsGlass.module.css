@@ -5,6 +5,7 @@
 .topicList { --topic-height:48px; --topic-gap:8px; --topic-index:0; position:relative; isolation:isolate; display:grid; gap:var(--topic-gap); margin-top:16px; }
 .topicList[data-topic=binance] { --topic-index:1; }
 .topicList[data-topic=apple-id] { --topic-index:2; }
+.topicList[data-topic=giffgaff] { --topic-index:3; }
 .topicIndicator { width:100%; height:var(--topic-height); transform:translateY(calc(var(--topic-index) * (var(--topic-height) + var(--topic-gap)))); }
 .navItem { display:flex; width:100%; height:var(--topic-height); min-width:0; align-items:center; gap:10px; border-radius:18px; padding:0 12px; color:#665749; }
 .navItem[aria-current=true] { color:#ac5624; font-weight:600; }
@@ -35,9 +36,10 @@
   .shell > [data-storefront-ui] > main { padding-top:56px; }
   .workspace { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:12px; }
   .navigation { max-height:40dvh; padding:14px; }
-  .topicList { --topic-width:calc((100% - 2 * var(--topic-gap)) / 3); grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:12px; }
+  .topicList { --topic-width:calc((100% - 3 * var(--topic-gap)) / 4); grid-template-columns:repeat(4,minmax(0,1fr)); margin-top:12px; }
   .topicIndicator { width:var(--topic-width); transform:translateX(calc(var(--topic-index) * (100% + var(--topic-gap)))); }
   .navItem { gap:6px; padding:8px; font-size:13px; }
+  .navItem > svg { display:none; }
   .header { padding:18px; }
   .scroll { padding:18px; }
 }

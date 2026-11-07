@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import BinanceTutorial from "@/components/account/BinanceTutorial";
+import GiffgaffTutorial from "@/components/account/GiffgaffTutorial";
 import AppleIdTutorial, { AppleIdContents, appleChapters } from "@/components/account/AppleIdTutorial";
 import sidebar from "@/components/layout/SidebarSlidingList.module.css";
 import selection from "@/components/ui/SelectionMotion.module.css";
@@ -65,6 +66,7 @@ const tutorialTopics = [
   { id: "required", label: "使用必读", title: "使用必读", description: "下单前了解商品规则、购买流程与交付说明。", icon: BookOpen, keywords: ["购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])] },
   { id: "binance", label: "币安教程", title: "币安 · USDT 交易教程", description: "下载安装、注册买币，以及使用 BSC（BEP20）转账充值。", icon: CreditCard, keywords: ["Binance", "BEP20", "安卓", "iPhone", "Apple", "注册", "邀请码", "JIANLIAN", "购买 USDT", "提现", "支付", "收款地址", "网络手续费"] },
   { id: "apple-id", label: "Apple ID", title: "Apple ID 使用教程", description: "", icon: ShieldCheck, keywords: ["苹果 ID", "苹果ID", "卡密", "密保", "生日", "格式 A", "格式 B", "格式 C", "iCloud", ...appleChapters.map(([, label]) => label)] },
+  { id: "giffgaff", label: "Giffgaff", title: "Giffgaff 保号助手", description: "少量移动数据的使用步骤、费用估算与号码活跃核对。", icon: ShieldCheck, keywords: ["英国", "SIM", "保号", "移动数据", "漫游", "120KB", "流量", "余额"] },
 ] as const;
 
 export default function TutorialsPage() {
@@ -112,7 +114,7 @@ export default function TutorialsPage() {
         <header className={`${glass.hero} ${tutorial.header}`}><div key={topic.id} className={tutorial.topicEnter}><h1 className="text-xl font-semibold text-slate-900">{topic.title}</h1>{topic.description && <p className="mt-2 text-sm leading-6 text-slate-500">{topic.description}</p>}</div></header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
           <div key={matchingTopics.length ? topic.id : "empty"} className={tutorial.topicEnter}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : <div className="space-y-7">
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? <GiffgaffTutorial /> : <div className="space-y-7">
             <section aria-labelledby="tutorial-service-title">
               <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
