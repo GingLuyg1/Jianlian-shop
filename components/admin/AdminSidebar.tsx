@@ -28,7 +28,7 @@ export default function AdminSidebar() {
   return (
     <aside data-admin-shell-sidebar className="flex h-full w-[var(--admin-sidebar-width)] shrink-0 flex-col overflow-hidden border-r border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]">
       <div className="flex h-[var(--admin-header-height)] items-center border-b border-[var(--admin-v2-border)] px-4">
-        <Link href="/admin" className="flex min-w-0 items-center gap-2 rounded-[var(--admin-v2-control-radius)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-offset-2">
+        <Link prefetch={false} href="/admin" className="flex min-w-0 items-center gap-2 rounded-[var(--admin-v2-control-radius)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-offset-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--admin-v2-control-radius)] bg-[var(--admin-v2-text-primary)] text-xs font-bold text-white">
             JL
           </div>
@@ -68,7 +68,7 @@ export default function AdminSidebar() {
                     {item.children.map((child) => (
                       <Link
                         key={child.href}
-                        href={child.href}
+                        prefetch={false} href={child.href}
                         aria-current={isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view")) ? "page" : undefined}
                         className={cn(
                           "mx-auto block min-h-[43px] w-[calc(100%-5px)] min-w-0 truncate rounded-[var(--admin-v2-control-radius)] px-2.5 py-[9.5px] text-[13px] leading-6 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
@@ -90,7 +90,7 @@ export default function AdminSidebar() {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              prefetch={false} href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "mx-auto flex min-h-[43px] w-[calc(100%-5px)] min-w-0 items-center gap-2.5 rounded-[var(--admin-v2-control-radius)] px-2.5 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
