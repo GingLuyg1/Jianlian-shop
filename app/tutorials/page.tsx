@@ -13,6 +13,7 @@ import {
   PackageCheck,
   Search,
   ShieldCheck,
+  Smartphone,
 } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,9 @@ import { Input } from "@/components/ui/input";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import BinanceTutorial from "@/components/account/BinanceTutorial";
 import GiffgaffTutorial from "@/components/account/GiffgaffTutorial";
-import AppleIdTutorial, { AppleIdContents, appleChapters } from "@/components/account/AppleIdTutorial";
+import GiffgaffActivationTutorial from "@/components/account/GiffgaffActivationTutorial";
+import HahaSimTutorial from "@/components/account/HahaSimTutorial";
+import AppleIdTutorial, { appleChapters } from "@/components/account/AppleIdTutorial";
 import sidebar from "@/components/layout/SidebarSlidingList.module.css";
 import selection from "@/components/ui/SelectionMotion.module.css";
 import glass from "@/components/account/AccountGlass.module.css";
@@ -66,25 +69,24 @@ const tutorialTopics = [
   { id: "required", label: "使用必读", title: "使用必读", description: "下单前了解商品规则、购买流程与交付说明。", icon: BookOpen, keywords: ["购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])] },
   { id: "binance", label: "币安教程", title: "币安 · USDT 交易教程", description: "下载安装、注册买币，以及使用 BSC（BEP20）转账充值。", icon: CreditCard, keywords: ["Binance", "BEP20", "安卓", "iPhone", "Apple", "注册", "邀请码", "JIANLIAN", "购买 USDT", "提现", "支付", "收款地址", "网络手续费"] },
   { id: "apple-id", label: "Apple ID", title: "Apple ID 使用教程", description: "", icon: ShieldCheck, keywords: ["苹果 ID", "苹果ID", "卡密", "密保", "生日", "格式 A", "格式 B", "格式 C", "iCloud", ...appleChapters.map(([, label]) => label)] },
-  { id: "giffgaff", label: "Giffgaff", title: "Giffgaff 保号助手", description: "少量移动数据的使用步骤、费用估算与号码活跃核对。", icon: ShieldCheck, keywords: ["英国", "SIM", "保号", "移动数据", "漫游", "120KB", "流量", "余额"] },
+  { id: "giffgaff", label: "Giffgaff", title: "Giffgaff 教程", description: "", icon: ShieldCheck, keywords: ["英国", "SIM", "激活", "保号", "移动数据", "漫游", "120KB", "流量", "余额", "eSIM", "实体卡"] },
+  { id: "haha-sim", label: "Haha SIM", title: "Haha SIM 实体卡激活与保号教程", description: "首次插卡、漫游设置、官方 App、故障排查与实名登记。", icon: Smartphone, keywords: ["Haha", "haha SIM", "haha Travel", "实体卡", "激活", "数据漫游", "ICCID", "短信", "APN", "实名", "保号", "香港", "中港澳"] },
 ] as const;
 
 export default function TutorialsPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>("required");
-  const [appleTreeOpen, setAppleTreeOpen] = useState(true);
+  const [giffgaffTreeOpen, setGiffgaffTreeOpen] = useState(false);
+  const [giffgaffGuide, setGiffgaffGuide] = useState<"activation" | "keeper">("activation");
   const scrollRef = useRef<HTMLDivElement>(null);
   const query = search.trim().toLocaleLowerCase();
   const matchingTopics = tutorialTopics.filter(topic => [topic.label, topic.title, topic.description, ...topic.keywords].some(text => text.toLocaleLowerCase().includes(query)));
   const topic = matchingTopics.find(item => item.id === selected) ?? matchingTopics[0] ?? tutorialTopics.find(item => item.id === selected)!;
   const showApple = matchingTopics.length > 0 && topic.id === "apple-id";
+  const showGiffgaff = matchingTopics.length > 0 && topic.id === "giffgaff";
   const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   return <div className={tutorial.shell}><PublicLayout viewportLocked contentClassName="max-w-none px-4 py-3 md:px-6">
     <div data-testid="tutorial-workspace" className={tutorial.workspace}>
-      <Collapsible.Root asChild open={showApple && appleTreeOpen} onOpenChange={open => {
-        setAppleTreeOpen(open);
-
-      }}>
       <aside data-testid="tutorial-navigation" className={`${glass.surface} ${styles.panel} ${tutorial.navigation}`}>
         <label htmlFor="tutorial-search" className="text-sm font-semibold text-slate-900">搜索商品教程</label>
         <div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" aria-hidden="true" /><Input id="tutorial-search" value={search} onChange={event => { setSearch(event.target.value); resetScroll(); }} placeholder="输入商品 / 教程关键词" className="h-11 rounded-xl border-orange-100 bg-white/80 pl-9" /></div>
@@ -95,26 +97,24 @@ export default function TutorialsPage() {
             const button = <button type="button" aria-current={current ? "true" : undefined} data-sidebar-current={current || undefined} className={`${tutorial.navItem} ${selection.item}`} onClick={() => {
               setSelected(id);
               setSearch("");
+              if (id === "giffgaff" && !showGiffgaff) setGiffgaffTreeOpen(true);
+              if (id !== "giffgaff") setGiffgaffTreeOpen(false);
 
               resetScroll();
             }}>
               <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>
               {id === "required" && <span className={`${styles.pill} hidden md:inline`}>必读</span>}
-              {id === "apple-id" && <span className="hidden md:inline"><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
+              {id === "giffgaff" && <span className="hidden md:inline"><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
             </button>;
-            return id === "apple-id" ? <Collapsible.Trigger asChild key={id}>{button}</Collapsible.Trigger> : <div className="min-w-0" key={id}>{button}</div>;
+            return id === "giffgaff" ? <Collapsible.Root key={id} asChild open={showGiffgaff && giffgaffTreeOpen} onOpenChange={setGiffgaffTreeOpen}><div className={`${tutorial.treeItem} min-w-0`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Giffgaff 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={giffgaffGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={giffgaffGuide === "activation" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("activation"); resetScroll(); }}>实体卡激活与使用</button><button type="button" aria-current={giffgaffGuide === "keeper" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("keeper"); resetScroll(); }}>保号助手</button></nav></Collapsible.Content></div></Collapsible.Root> : <div className="min-w-0" key={id}>{button}</div>;
           })}
         </nav>
-        <Collapsible.Content className={tutorial.tree}>
-          <AppleIdContents />
-        </Collapsible.Content>
       </aside>
-      </Collapsible.Root>
       <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content}`}>
-        <header className={`${glass.hero} ${tutorial.header}`}><div key={topic.id} className={tutorial.topicEnter}><h1 className="text-xl font-semibold text-slate-900">{topic.title}</h1>{topic.description && <p className="mt-2 text-sm leading-6 text-slate-500">{topic.description}</p>}</div></header>
+        <header className={`${glass.hero} ${tutorial.header}`}><div key={`${topic.id}-${giffgaffGuide}`} className={tutorial.topicEnter}><h1 className="text-xl font-semibold text-slate-900">{showGiffgaff ? "Giffgaff" : topic.title}</h1>{topic.description && <p className="mt-2 text-sm leading-6 text-slate-500">{topic.description}</p>}</div></header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
-          <div key={matchingTopics.length ? topic.id : "empty"} className={tutorial.topicEnter}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? <GiffgaffTutorial /> : <div className="space-y-7">
+          <div key={matchingTopics.length ? `${topic.id}-${giffgaffGuide}` : "empty"} className={tutorial.topicEnter}>
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : <div className="space-y-7">
             <section aria-labelledby="tutorial-service-title">
               <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">

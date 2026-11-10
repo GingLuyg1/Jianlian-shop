@@ -6,6 +6,7 @@
 .topicList[data-topic=binance] { --topic-index:1; }
 .topicList[data-topic=apple-id] { --topic-index:2; }
 .topicList[data-topic=giffgaff] { --topic-index:3; }
+.topicList[data-topic=haha-sim] { --topic-index:4; }
 .topicIndicator { width:100%; height:var(--topic-height); transform:translateY(calc(var(--topic-index) * (var(--topic-height) + var(--topic-gap)))); }
 .navItem { display:flex; width:100%; height:var(--topic-height); min-width:0; align-items:center; gap:10px; border-radius:18px; padding:0 12px; color:#665749; }
 .navItem[aria-current=true] { color:#ac5624; font-weight:600; }
@@ -15,13 +16,19 @@
 .scroll:focus-visible { outline:2px solid #de9d62; outline-offset:-3px; }
 .topicEnter { min-height:100%; animation:topic-enter 240ms cubic-bezier(.22,1,.36,1); }
 @keyframes topic-enter { from { opacity:0; transform:translateY(5px); } }
-.tree { --expanded-height:var(--radix-collapsible-content-height); }
+.tree { --expanded-height:var(--radix-collapsible-content-height); min-width:0; grid-column:1/-1; }
+.treeItem { min-width:0; }
 .tree[data-state=open] { animation:expand 300ms cubic-bezier(.22,1,.36,1); }
 .tree[data-state=closed] { animation:collapse 220ms cubic-bezier(.22,1,.36,1); }
 @keyframes expand { from { height:0; overflow:hidden; opacity:.55; } to { height:var(--expanded-height); overflow:hidden; opacity:1; } }
 @keyframes collapse { from { height:var(--expanded-height); overflow:hidden; opacity:1; } to { height:0; overflow:hidden; opacity:0; } }
 .appleContents { margin:8px 2px 4px 14px; padding-left:9px; border-left:1px solid #ead7c5; }
 .contentsLink { display:block; width:100%; padding:6px 8px; border-radius:8px; text-align:left; font-size:13px; line-height:1.5; color:#665749; }
+.subtopics { position:relative; isolation:isolate; }
+.subtopics .contentsLink { position:relative; height:36px; padding:8px 10px; border-radius:12px; }
+.subtopics .contentsLink[aria-current=page] { color:#ac5624; font-weight:600; }
+.subtopicIndicator { left:9px; width:calc(100% - 9px); height:36px; border-radius:12px; transform:translateY(0); }
+.subtopics[data-guide=keeper] .subtopicIndicator { transform:translateY(36px); }
 .chevron { width:15px; height:15px; transition:transform 240ms cubic-bezier(.22,1,.36,1); }
 [aria-expanded=true] > span > .chevron { transform:rotate(180deg); }
 .appleArticle { padding:12px 0 4px; }
@@ -32,12 +39,27 @@
 .appleArticle figcaption { background:#f1f5f9; }
 .appleArticle figcaption svg { color:#456883; }
 .appleFaq p button { color:#315e80; }
+.guideHero { position:relative; isolation:isolate; overflow:hidden; border:1px solid #edd9c5; border-radius:22px; padding:24px; background:radial-gradient(ellipse at 94% 0%,rgb(255 221 180 / 58%),transparent 45%),linear-gradient(120deg,#fffaf4,#fff 68%); box-shadow:inset 0 1px 0 #fff,0 13px 28px -25px rgb(112 72 41 / 42%); }
+.guideHero::after { content:""; position:absolute; z-index:-1; top:-46px; right:-34px; width:200px; height:170px; border:1px solid rgb(226 163 101 / 25%); border-radius:50%; transform:rotate(-22deg); pointer-events:none; }
+.guideStep { position:relative; min-width:0; border:1px solid #ebe0d4; border-radius:19px; padding:19px; background:linear-gradient(145deg,#fff,#fffaf4 96%); box-shadow:inset 0 1px 0 #fff,0 10px 21px -24px rgb(109 72 42 / 50%); }
+.guideNumber { display:grid; width:30px; height:30px; flex-shrink:0; place-items:center; border:1px solid #f6dfc5; border-radius:10px; background:#fff1df; color:#b86632; font-size:12px; font-weight:700; }
+.guideMedia { min-width:0; border:1px solid #e9ded2; border-radius:20px; padding:16px; background:linear-gradient(155deg,#fff,#fff9f2); box-shadow:inset 0 1px 0 #fff,0 9px 24px -25px rgb(109 72 42 / 55%); }
+.guideMedia :global(figure) { border-radius:14px; }
+.guideFaq details { border:1px solid #dde6ee; border-radius:14px; background:#fff; padding:14px 16px; box-shadow:0 7px 18px -20px rgb(59 69 86 / 40%); }
+.guideFaq details[open] { border-color:#efd5bb; background:linear-gradient(145deg,#fff,#fffcf8); }
+.guideFaq summary { display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600; color:#1e293b; }
+.guideFaq summary::marker { color:#c8753b; }
+.guideFaq p { display:flex; align-items:flex-start; gap:10px; margin-top:12px; border-top:1px solid #f1e9e0; padding-top:12px; }
+.questionBadge, .answerBadge { display:grid; width:25px; height:25px; flex-shrink:0; place-items:center; border-radius:8px; font-size:12px; font-weight:700; }
+.questionBadge { background:#fff1df; color:#a75523; }
+.answerBadge { background:#eff5f9; color:#456883; }
 @media(max-width:767px) {
   .shell > [data-storefront-ui] > main { padding-top:56px; }
   .workspace { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:12px; }
   .navigation { max-height:40dvh; padding:14px; }
-  .topicList { --topic-width:calc((100% - 3 * var(--topic-gap)) / 4); grid-template-columns:repeat(4,minmax(0,1fr)); margin-top:12px; }
-  .topicIndicator { width:var(--topic-width); transform:translateX(calc(var(--topic-index) * (100% + var(--topic-gap)))); }
+  .topicList { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; min-width:0; max-width:100%; margin-top:12px; overflow:visible; padding-bottom:0; }
+  .treeItem { grid-column:1/-1; }
+  .topicIndicator { display:none; }
   .navItem { gap:6px; padding:8px; font-size:13px; }
   .navItem > svg { display:none; }
   .header { padding:18px; }

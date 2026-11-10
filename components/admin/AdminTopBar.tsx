@@ -91,7 +91,7 @@ export default function AdminTopBar() {
                               {item.children.map((child) => (
                                 <li key={child.href}>
                                   <Link
-                                    href={child.href}
+                                    prefetch={false} href={child.href}
                                     aria-current={isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view")) ? "page" : undefined}
                                     onClick={() => setMobileNavigationOpen(false)}
                                     className={cn(
@@ -115,7 +115,7 @@ export default function AdminTopBar() {
                     return (
                       <li key={item.href}>
                         <Link
-                          href={item.href}
+                          prefetch={false} href={item.href}
                           aria-current={active ? "page" : undefined}
                           onClick={() => setMobileNavigationOpen(false)}
                           className={cn(
