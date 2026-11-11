@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { getSafeInternalRedirect } from "@/lib/auth/redirect";
 import { getSafeAuthErrorMessage, getSafeNetworkAuthMessage, isEmailFormatValid, validateAuthPassword } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
+import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
 import {
   getOrCreateProfile,
   getSupabaseBrowserClient,
@@ -85,6 +86,14 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const reason = searchParams?.get("auth_error");
+    if (reason === "restricted") setError("账户已被禁用或暂时受限，请联系客服。");
+    else if (reason === "invite") setError("邀请关系绑定失败，请联系客服核实。");
+    else if (reason === "invalid_link") setError("登录链接已过期或无效，请重新登录。");
+    else if (reason === "config") setError("登录服务暂时不可用。");
+  }, [searchParams]);
 
   useEffect(() => {
     const inviteCode = inviteFromUrl.trim();
@@ -543,6 +552,13 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                     {loading ? "处理中..." : isRegister ? "注册" : "登录"}
                   </Button>
                 </form>
+
+                <AlternateLoginMethods
+                  mode={mode}
+                  redirectTo={redirectTo === "/" ? "/account" : redirectTo}
+                  inviteCode={inviteCode}
+                  acceptedTerms={acceptedTerms}
+                />
 
                 <div className="mt-5 flex items-center justify-between text-sm">
                   <Link
