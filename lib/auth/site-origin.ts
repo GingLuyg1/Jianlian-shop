@@ -11,3 +11,9 @@ export function getAuthSiteOrigin(origin?: string) {
   }
   return "https://www.jianlian.shop";
 }
+
+/** Recovery must return to the same approved origin, including preview ports. */
+export function getAuthRecoveryRedirectTo(origin?: string) {
+  return `${getAuthSiteOrigin(origin)}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
+}
+

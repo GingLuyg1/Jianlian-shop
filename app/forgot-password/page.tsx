@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,18 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isEmailFormatValid } from "@/lib/auth/password-policy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getAuthRecoveryRedirectTo } from "@/lib/auth/site-origin";
 
 const SUCCESS_MESSAGE = "如果该邮箱已注册，重置邮件将发送至邮箱。";
 
 function getResetRedirectTo() {
-  const path = `/auth/callback?next=${encodeURIComponent("/reset-password")}`;
-  if (typeof window === "undefined") return `https://www.jianlian.shop${path}`;
-
-  const origin = window.location.origin.includes("localhost")
-    ? "http://localhost:3000"
-    : "https://www.jianlian.shop";
-
-  return `${origin}${path}`;
+  return getAuthRecoveryRedirectTo(
+    typeof window === "undefined" ? undefined : window.location.origin
+  );
 }
 
 export default function ForgotPasswordPage() {
@@ -128,3 +124,4 @@ export default function ForgotPasswordPage() {
     </main>
   );
 }
+
