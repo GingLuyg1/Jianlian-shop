@@ -57,6 +57,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
@@ -268,3 +269,4 @@ body:has([data-storefront-ui]) [role="dialog"]:not([class*="inset-y-0"]) {
   .catalog-enter-item, .catalog-title-enter, .catalog-exiting, .catalog-placeholder { animation: none !important; }
   .catalog-placeholder-leaving { transition: none !important; }
 }
+
