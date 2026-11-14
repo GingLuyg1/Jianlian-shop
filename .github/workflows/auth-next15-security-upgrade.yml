@@ -1,0 +1,54 @@
+name: Auth Next 15 security upgrade
+
+on:
+  push:
+    branches: [codex/auth-next15-security-20261113]
+    paths-ignore:
+      - .github/workflows/auth-next15-security-upgrade.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auth-next15-security-upgrade
+  cancel-in-progress: false
+
+jobs:
+  upgrade-and-verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/auth-next15-security-20261113
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Upgrade only Next security dependencies
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund next@15.5.29 eslint-config-next@15.5.29
+      - name: Install exact lockfile
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify security version and source gates
+        shell: bash
+        run: |
+          test "$(node -p "require('./node_modules/next/package.json').version")" = "15.5.29"
+          ! grep -R -n --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' -E '^\\s*["'"']use server["'"']\\s*;?\\s*$' app lib middleware.ts
+          grep -q 'unoptimized: true' next.config.js
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Commit generated dependency upgrade
+        shell: bash
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo 'No dependency diff produced'; exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git commit -m 'fix(security): upgrade Next.js to 15.5.29'
+          git push origin HEAD:codex/auth-next15-security-20261113
