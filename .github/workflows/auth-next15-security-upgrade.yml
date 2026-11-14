@@ -26,12 +26,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Migrate all Next 15 async request APIs
+        run: npx --yes @next/codemod@15.5.29 next-async-request-api .
       - name: Upgrade only Next security dependencies
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund next@15.5.29 eslint-config-next@15.5.29
       - name: Install exact lockfile
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Migrate all Next 15 async request APIs
-        run: npx --yes @next/codemod@15.5.29 next-async-request-api .
       - name: Scan dynamic routes and source safety gates
         shell: bash
         run: |
