@@ -17,7 +17,7 @@ import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/se
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type RouteContext = {
-  params: { productId: string };
+  params: Promise<{ productId: string }>;
 };
 
 type SupabaseErrorLike = {
