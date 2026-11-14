@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { auditKnownBitrefillPinInvoice } from '../../lib/providers/bitrefill/single-item-purchase.mjs';
 import { BitrefillPurchaseHttpTransport } from '../../lib/providers/bitrefill/purchase-http-transport.mjs';
+import { normalizeBitrefillInvoice, normalizeBitrefillReadonlyInvoice } from '../../lib/providers/bitrefill/provider-core.mjs';
 
 const invoiceId = 'fixture-invoice-1';
 const orderId = 'fixture-child-1';
@@ -61,14 +62,11 @@ test('known Giffgaff PIN invoice uses only its exact REST Invoice and Child GET;
   assert.ok(Object.isFrozen(result));
 });
 
-test('pending Invoice/Child may match identity but cannot be described as delivered', async () => {
+test('pending Invoice/Child fails closed instead of certifying delivery identity', async () => {
   const f = fixture({ invoice: { status: 'pending', orders: [{ id: orderId, status: 'processing' }] },
     order: { status: 'processing', redemption_info: undefined } });
-  const result = await auditKnownBitrefillPinInvoice({ transport: f.transport, ...expected });
-  assert.equal(result.frozenIdentityVerified, true);
-  assert.equal(result.delivered, false);
-  assert.equal(result.redemptionPresent, false);
-  assert.equal(result.childStatus, 'PROCESSING');
+  await assert.rejects(auditKnownBitrefillPinInvoice({ transport: f.transport, ...expected }),
+    /BITREFILL_KNOWN_INVOICE_AUDIT_MISMATCH/);
   assert.equal(f.calls.length, 2);
 });
 
@@ -78,11 +76,86 @@ test('malformed or missing known binding fails without any supplier request', as
     { invoiceId: '../invoices' }, { expectedProductId: undefined },
     { expectedPackageId: 'bad\npackage' }, { expectedFaceValue: '10.0000001' },
     { expectedFaceCurrency: 'USD/GBP' }, { expectedChildId: '../children' },
+    { expectedChildId: undefined },
   ]) {
     await assert.rejects(auditKnownBitrefillPinInvoice({ transport: f.transport, ...expected, ...bad }),
       /BITREFILL_KNOWN_INVOICE_AUDIT_INPUT_INVALID/);
   }
   assert.equal(f.calls.length, 0);
+});
+
+test('observed REST top-level all_delivered plus payment.complete is read-only compatible only', async () => {
+  const invoice = { id: invoiceId, status: 'all_delivered', payment: { status: 'complete', currency: 'USD' },
+    orders: [{ id: orderId, status: 'delivered' }] };
+  assert.equal(normalizeBitrefillInvoice(invoice).state, 'UNKNOWN'); // real purchase path unchanged
+  assert.equal(normalizeBitrefillReadonlyInvoice(invoice).status, 'complete');
+  const f = fixture({ invoice });
+  const out = await auditKnownBitrefillPinInvoice({ transport: f.transport, ...expected });
+  assert.equal(out.frozenIdentityVerified, true);
+  assert.equal(out.delivered, true);
+  assert.equal(out.authoritativeUsdDebitVerified, false);
+  assert.equal(JSON.stringify(out).includes(secret), false);
+  assert.equal(f.calls.length, 2);
+});
+
+for (const [label, invoice] of [
+  ['missing payment', { status: 'all_delivered' }],
+  ['unknown payment', { status: 'all_delivered', payment: { status: 'settled' } }],
+  ['payment conflict', { status: 'all_delivered', payment: { status: 'unpaid' } }],
+  ['legacy payment conflict', { status: 'complete', payment: { status: 'unpaid' } }],
+  ['wrong status location', { status: 'unknown', orders_delivery_status: 'all_delivered' }],
+  ['unverified status alias', { status: 'complete', orders_delivery_status: 'blocked' }],
+]) test('read-only invoice rejects '+label, async () => {
+  const f = fixture({ invoice });
+  await assert.rejects(auditKnownBitrefillPinInvoice({ transport: f.transport, ...expected }),
+    /BITREFILL_KNOWN_INVOICE_AUDIT_MISMATCH/);
+});
+
+for (const field of ['package_id', 'currency', 'id', 'value', 'quantity']) {
+  test('required frozen identity cannot be inferred when missing '+field, async () => {
+    const product = { id: productId, package_id: packageId, value: 10, currency: 'GBP' };
+    const order = { product, quantity: 1 };
+    if (field === 'quantity') order.quantity = undefined;
+    else delete product[field];
+    const f = fixture({ invoice: { status: 'all_delivered', payment: { status: 'complete' } }, order });
+    await assert.rejects(auditKnownBitrefillPinInvoice({ transport: f.transport, ...expected }),
+      /BITREFILL_KNOWN_INVOICE_AUDIT_MISMATCH/);
+  });
+}
+
+test('observed website child shape without package/quantity does not get invented identities', async () => {
+  const f = fixture({ invoice: { status: 'all_delivered', payment: { status: 'complete' } },
+    order: { product: { id: productId, name: 'Synthetic PIN', value: 10, currency: 'GBP', href: 'https://example.test/private' },
+      quantity: undefined, invoice_id: undefined } });
+  await assert.rejects(auditKnownBitrefillPinInvoice({ transport: f.transport, ...expected }),
+    /BITREFILL_KNOWN_INVOICE_AUDIT_MISMATCH/);
+  assert.equal(f.calls.length, 2);
+});
+
+test('unauthorized REST response cannot disclose supplier errors or secrets', async () => {
+  let calls = 0;
+  const transport = new BitrefillPurchaseHttpTransport({ authMode: 'personal', apiKey: 'synthetic-auth',
+    fetchImpl: async (_url, options) => { calls++; assert.equal(options.method, 'GET');
+      return Response.json({ message: secret }, { status: 401 }); } });
+  await assert.rejects(auditKnownBitrefillPinInvoice({ transport, ...expected }), error => {
+    assert.equal(error.code, 'BITREFILL_AUTH_OR_PERMISSION');
+    assert.equal(String(error).includes(secret), false);
+    return true;
+  });
+  assert.equal(calls, 1);
+});
+
+for (const [field, value] of [['id','other'],['package_id','other'],['value',15],['currency','USD']]) {
+  test('embedded invoice child cannot conflict with authoritative GET '+field, async () => {
+    const f = fixture({ invoice: { orders: [{ id: orderId, status: 'delivered', product: { [field]: value } }] } });
+    await assert.rejects(auditKnownBitrefillPinInvoice({ transport: f.transport, ...expected }),
+      /BITREFILL_KNOWN_INVOICE_AUDIT_MISMATCH/);
+  });
+}
+
+test('absent authorization is rejected before REST fetch', () => {
+  assert.throws(() => new BitrefillPurchaseHttpTransport({ authMode: 'personal', apiKey: '',
+    fetchImpl: async () => { throw Error('NETWORK_FORBIDDEN'); } }), /BITREFILL/);
 });
 
 test('unknown, multiple or wrong invoice child never triggers child GET', async () => {
