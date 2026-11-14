@@ -26,7 +26,7 @@ export function loadDashboardUi(initialStates, onStateChange = () => {}) {
       if (name === 'next/link') return { __esModule: true, default: ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children) };
       if (name.startsWith('@/lib/supabase/')) return fakeClient;
       if (name.endsWith('dashboard-payment-schema.mjs')) return {};
-      if (isDashboard && name === 'react') return { ...React, useEffect: () => {}, useCallback: fn => fn, useState: value => {
+      if (isDashboard && name === 'react') return { ...React, useEffect: () => {}, useCallback: fn => fn, useMemo: factory => factory(), useState: value => {
         if (stateIndex >= initialStates.length) {
           const index = stateIndex++;
           return [value, update => onStateChange(index, typeof update === 'function' ? update(value) : update)];
