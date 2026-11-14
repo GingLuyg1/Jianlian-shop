@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   upgrade-and-verify:
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'fix(security): upgrade Next.js 15.5.29')
+    if: "${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'fix(security): upgrade Next.js 15.5.29') }}"
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
@@ -36,12 +36,33 @@ jobs:
         shell: bash
         run: |
           mkdir -p .next15-security
-          find app -type f \( -name '*\[*.ts' -o -name '*\[*.tsx' \) | sort > .next15-security/dynamic-files.txt || true
-          find app -type f \( -path '*/route.ts' -o -path '*/page.tsx' -o -path '*/layout.tsx' \) | grep '\\[' | sort >> .next15-security/dynamic-files.txt || true
-          sort -u .next15-security/dynamic-files.txt -o .next15-security/dynamic-files.txt
-          test "$(wc -l < .next15-security/dynamic-files.txt)" -ge 52
-          if grep -R -n --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' -E '^\s*["'"']use server["'"']\s*;?\s*$' app lib middleware.ts; then exit 1; fi
-          if git diff --unified=0 | grep -E '^\\+.*(@ts-ignore|@ts-expect-error|\\bany\\b)' ; then exit 1; fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { execFileSync } = require('node:child_process');
+          const files = [];
+          function scan(target) {
+            if (!fs.existsSync(target)) return;
+            if (fs.statSync(target).isDirectory()) {
+              for (const name of fs.readdirSync(target)) scan(path.join(target, name));
+            } else if (/\.(?:ts|tsx|js|jsx|mjs)$/.test(target)) files.push(target.replaceAll('\\', '/'));
+          }
+          scan('app');
+          scan('lib');
+          scan('middleware.ts');
+          const dynamic = files.filter(p => p.startsWith('app/') && /\[[^/]+\]/.test(p) && /\/(?:page|route|layout)\.(?:ts|tsx|js|jsx)$/.test(p)).sort();
+          fs.writeFileSync('.next15-security/dynamic-files.txt', dynamic.join('\n') + '\n');
+          console.log('DYNAMIC_FILES=' + dynamic.length);
+          if (dynamic.length < 52) { console.error('Dynamic route coverage below 52'); process.exit(1); }
+          const directives = files.filter(p => /^\s*['\"]use server['\"]\s*;?\s*$/m.test(fs.readFileSync(p, 'utf8')));
+          if (directives.length) { console.error('Unexpected Server Actions directives:', directives.join(', ')); process.exit(1); }
+          const changed = execFileSync('git', ['diff', '--name-only'], { encoding: 'utf8' }).split(/\r?\n/).filter(p => /\.(?:ts|tsx|js|jsx|mjs)$/.test(p));
+          if (changed.length) {
+            const diff = execFileSync('git', ['diff', '--unified=0', '--', ...changed], { encoding: 'utf8' });
+            const unsafe = diff.split(/\r?\n/).filter(line => line.startsWith('+') && !line.startsWith('+++') && /@ts-(?:ignore|expect-error)|\bany\b/.test(line));
+            if (unsafe.length) { console.error('New unsafe type escapes detected:', unsafe.join('\n')); process.exit(1); }
+          }
+          NODE
           grep -q 'unoptimized: true' next.config.js
       - name: Verify security version
         run: test "$(node -p "require('./node_modules/next/package.json').version")" = "15.5.29"
