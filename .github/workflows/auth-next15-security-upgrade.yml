@@ -3,8 +3,6 @@ name: Auth Next 15 security upgrade
 on:
   push:
     branches: [codex/auth-next15-security-20261113]
-    paths-ignore:
-      - .github/workflows/auth-next15-security-upgrade.yml
   workflow_dispatch:
 
 permissions:
@@ -16,6 +14,7 @@ concurrency:
 
 jobs:
   upgrade-and-verify:
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message != 'fix(security): upgrade Next.js to 15.5.29'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -44,9 +43,7 @@ jobs:
       - name: Commit generated dependency upgrade
         shell: bash
         run: |
-          if git diff --quiet -- package.json package-lock.json; then
-            echo 'No dependency diff produced'; exit 1
-          fi
+          if git diff --quiet -- package.json package-lock.json; then echo 'No dependency diff produced'; exit 1; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add package.json package-lock.json
