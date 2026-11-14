@@ -16,7 +16,8 @@ function safeError(error: unknown, fallback = "数据巡检异常处理失败") 
   return fallback;
 }
 
-export async function PATCH(request: Request, { params }: { params: { issueId: string } }) {
+export async function PATCH(request: Request, props: { params: Promise<{ issueId: string }> }) {
+  const params = await props.params;
   const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
 

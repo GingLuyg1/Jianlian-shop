@@ -8,7 +8,7 @@ import { classifyLegalDatabaseError, getLegalConstraintSummary } from "@/lib/leg
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 function json(body: unknown, status = 200) {
   const response = NextResponse.json(body, { status });
@@ -39,7 +39,7 @@ export async function GET(_request: Request, context: RouteContext) {
   if (!admin.ok) return json({ error: admin.message }, admin.status);
 
   try {
-    const document = await getLegalDocumentById(admin.supabase, context.params.id);
+    const document = await getLegalDocumentById(admin.supabase, (await context.params).id);
     if (!document) return json({ error: "协议版本不存在。" }, 404);
     return json({ document });
   } catch (error) {
@@ -53,7 +53,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!admin.ok) return json({ error: admin.message }, admin.status);
 
   try {
-    const document = await getLegalDocumentById(admin.supabase, context.params.id);
+    const document = await getLegalDocumentById(admin.supabase, (await context.params).id);
     if (!document) return json({ error: "协议版本不存在。" }, 404);
     if (document.status !== "draft") return json({ error: "已发布或已归档协议不能直接编辑，请创建新版本。" }, 409);
 
@@ -66,7 +66,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { data, error } = await admin.supabase
       .from("legal_documents")
       .update({ title, version, content, content_hash: hashLegalContent(content), updated_at: new Date().toISOString() })
-      .eq("id", context.params.id)
+      .eq("id", (await context.params).id)
       .eq("status", "draft")
       .select("*")
       .single();
@@ -78,7 +78,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: "update_legal_document_draft",
       module: "settings",
       targetType: "legal_document",
-      targetId: context.params.id,
+      targetId: (await context.params).id,
       targetLabel: `${document.document_type} ${version}`,
       result: "success",
       beforeSummary: { title: document.title, version: document.version, content_hash: document.content_hash },
@@ -100,7 +100,7 @@ export async function POST(request: Request, context: RouteContext) {
   const action = cleanText(body?.action, 40);
 
   try {
-    const document = await getLegalDocumentById(admin.supabase, context.params.id);
+    const document = await getLegalDocumentById(admin.supabase, (await context.params).id);
     if (!document) return json({ error: "协议版本不存在。" }, 404);
 
     if (action === "publish") {
@@ -129,7 +129,7 @@ export async function POST(request: Request, context: RouteContext) {
           publish_reason: reason,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", context.params.id)
+        .eq("id", (await context.params).id)
         .eq("status", "draft")
         .select("*")
         .single();
@@ -141,7 +141,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "publish_legal_document",
         module: "settings",
         targetType: "legal_document",
-        targetId: context.params.id,
+        targetId: (await context.params).id,
         targetLabel: `${document.document_type} ${document.version}`,
         result: "success",
         afterSummary: { document_type: document.document_type, version: document.version, effective_at: effectiveAt, reason },
@@ -155,7 +155,7 @@ export async function POST(request: Request, context: RouteContext) {
       const { data, error } = await admin.supabase
         .from("legal_documents")
         .update({ status: "archived", is_current: false, archived_at: new Date().toISOString(), archived_by: admin.user.id, updated_at: new Date().toISOString() })
-        .eq("id", context.params.id)
+        .eq("id", (await context.params).id)
         .neq("id", "00000000-0000-0000-0000-000000000000")
         .select("*")
         .single();
@@ -167,7 +167,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "archive_legal_document",
         module: "settings",
         targetType: "legal_document",
-        targetId: context.params.id,
+        targetId: (await context.params).id,
         targetLabel: `${document.document_type} ${document.version}`,
         result: "success",
       });
@@ -182,7 +182,7 @@ export async function POST(request: Request, context: RouteContext) {
       action: action || "legal_document_action",
       database_error_code: classified.code,
       constraint_summary: getLegalConstraintSummary(error),
-      document_id_summary: documentIdSummary(context.params.id),
+      document_id_summary: documentIdSummary((await context.params).id),
     });
     return json({ error: classified.message }, classified.status);
   }

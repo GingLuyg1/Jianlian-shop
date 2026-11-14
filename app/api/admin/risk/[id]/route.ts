@@ -5,14 +5,14 @@ import { isValidRiskEventId, normalizeRiskError, number, requireRiskAdmin, text 
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 const ACTIONS = new Set(["approve", "reject", "monitor", "release"]);
 
 export async function GET(_request: Request, context: RouteContext) {
   const admin = await requireRiskAdmin();
   if (!admin.ok) return admin.response;
-  if (!isValidRiskEventId(context.params.id)) {
+  if (!isValidRiskEventId((await context.params).id)) {
     return NextResponse.json({ error: "风险事件编号格式无效。" }, { status: 400 });
   }
 
@@ -20,7 +20,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const { data, error } = await admin.supabase
       .from("risk_events")
       .select("*,risk_reviews(*)")
-      .eq("id", context.params.id)
+      .eq("id", (await context.params).id)
       .maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "风险事件不存在。" }, { status: 404 });
@@ -33,7 +33,7 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   const admin = await requireRiskAdmin();
   if (!admin.ok) return admin.response;
-  if (!isValidRiskEventId(context.params.id)) {
+  if (!isValidRiskEventId((await context.params).id)) {
     return NextResponse.json({ error: "风险事件编号格式无效。" }, { status: 400 });
   }
 
@@ -47,7 +47,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const beforeResult = await admin.supabase
       .from("risk_events")
       .select("*")
-      .eq("id", context.params.id)
+      .eq("id", (await context.params).id)
       .maybeSingle();
     if (beforeResult.error) throw beforeResult.error;
     const before = beforeResult.data as Record<string, unknown> | null;
@@ -66,13 +66,13 @@ export async function PATCH(request: Request, context: RouteContext) {
         resolved_at: ["approved", "rejected", "resolved"].includes(nextStatus) ? now : null,
         updated_at: now,
       })
-      .eq("id", context.params.id)
+      .eq("id", (await context.params).id)
       .select("*")
       .single();
     if (updateError) throw updateError;
 
     const reviewInsert = await admin.supabase.from("risk_reviews").insert({
-      risk_event_id: context.params.id,
+      risk_event_id: (await context.params).id,
       business_type: text(before.business_type),
       business_id: text(before.business_id),
       review_status: nextStatus,
@@ -89,7 +89,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: `risk_${action}`,
       module: "system",
       targetType: "risk_event",
-      targetId: context.params.id,
+      targetId: (await context.params).id,
       targetLabel: text(before.rule_code),
       result: "success",
       beforeSummary: summarizeRisk(before),
@@ -108,7 +108,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: `risk_${action || "unknown"}`,
       module: "system",
       targetType: "risk_event",
-      targetId: context.params.id,
+      targetId: (await context.params).id,
       result: "failed",
       errorMessage: normalizeRiskError(error),
     });

@@ -13,7 +13,7 @@ import { prepareDajuBindingMetadata } from "@/lib/providers/core/admin-sku-bindi
 
 export const dynamic = "force-dynamic";
 
-type Context = { params: { productId: string } };
+type Context = { params: Promise<{ productId: string }> };
 
 function json(body: unknown, status = 200) {
   const response = NextResponse.json(body, { status });
@@ -73,7 +73,7 @@ export async function POST(request: Request, context: Context) {
   const { data: product, error: readError } = await service
     .from("products")
     .select("id,name,metadata,delivery_type")
-    .eq("id", context.params.productId)
+    .eq("id", (await context.params).productId)
     .maybeSingle();
   if (readError || !product) return json({ error: "网站商品不存在", code: "PRODUCT_NOT_FOUND", requestId }, 404);
 
@@ -94,7 +94,7 @@ export async function POST(request: Request, context: Context) {
   let saveError: { code?: string } | null = null;
   let savedSku: Record<string, unknown> | null = null;
   if (websiteSkuId) {
-    const { data: sku, error: skuReadError } = await service.from("product_skus").select("id,product_id,metadata,updated_at").eq("id", websiteSkuId).eq("product_id", context.params.productId).maybeSingle();
+    const { data: sku, error: skuReadError } = await service.from("product_skus").select("id,product_id,metadata,updated_at").eq("id", websiteSkuId).eq("product_id", (await context.params).productId).maybeSingle();
     if (skuReadError || !sku) return json({ error: "网站 SKU 不存在或不属于当前商品", code: "WEBSITE_SKU_NOT_FOUND", requestId }, 404);
     const skuMetadata = sku.metadata && typeof sku.metadata === "object" && !Array.isArray(sku.metadata) ? sku.metadata as Record<string, unknown> : {};
     if ((input.expected_updated_at !== undefined && input.expected_updated_at !== sku.updated_at) ||
@@ -108,7 +108,7 @@ export async function POST(request: Request, context: Context) {
       metadata: nextSkuMetadata,
       delivery_type: "automatic",
       stock: stockResolution.stock,
-    }).eq("id", websiteSkuId).eq("product_id", context.params.productId);
+    }).eq("id", websiteSkuId).eq("product_id", (await context.params).productId);
     updateQuery = sku.updated_at ? updateQuery.eq("updated_at", sku.updated_at) : updateQuery.is("updated_at", null);
     updateQuery = skuMetadata.supplier_binding_version == null ? updateQuery.is("metadata->>supplier_binding_version", null)
       : updateQuery.eq("metadata->>supplier_binding_version", String(skuMetadata.supplier_binding_version));
@@ -116,9 +116,9 @@ export async function POST(request: Request, context: Context) {
     savedSku = skuUpdate.data as Record<string, unknown> | null;
     saveError = skuUpdate.error;
     if (!saveError && savedSku) {
-      const { data: activeSkus } = await service.from("product_skus").select("stock").eq("product_id", context.params.productId).eq("status", "active");
+      const { data: activeSkus } = await service.from("product_skus").select("stock").eq("product_id", (await context.params).productId).eq("status", "active");
       const effectiveStock = (activeSkus ?? []).reduce((sum, row) => sum + Math.max(0, Number(row.stock) || 0), 0);
-      const productUpdate = await service.from("products").update({ stock: effectiveStock }).eq("id", context.params.productId).select("id,name,stock,metadata,delivery_type").single();
+      const productUpdate = await service.from("products").update({ stock: effectiveStock }).eq("id", (await context.params).productId).select("id,name,stock,metadata,delivery_type").single();
       saved = productUpdate.data as Record<string, unknown> | null;
       saveError = productUpdate.error;
     }
@@ -127,7 +127,7 @@ export async function POST(request: Request, context: Context) {
     const productUpdate = await service
       .from("products")
       .update({ metadata: nextMetadata, delivery_type: "automatic", stock: stockResolution.stock })
-      .eq("id", context.params.productId)
+      .eq("id", (await context.params).productId)
       .select("id,name,stock,metadata,delivery_type")
       .single();
     saved = productUpdate.data as Record<string, unknown> | null;
@@ -145,7 +145,7 @@ export async function POST(request: Request, context: Context) {
     action: "bind_daju_supplier_product",
     module: "products",
     targetType: websiteSkuId ? "product_sku" : "product",
-    targetId: websiteSkuId ?? context.params.productId,
+    targetId: websiteSkuId ?? (await context.params).productId,
     targetLabel: String(product.name ?? ""),
     result: "success",
     beforeSummary: { fulfillment_source: currentMetadata.fulfillment_source ?? null, supplier: currentMetadata.supplier ?? null },

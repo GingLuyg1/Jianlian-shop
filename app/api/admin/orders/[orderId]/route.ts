@@ -19,9 +19,9 @@ import { reconcileDajuExistingOrderWithSupabase } from "@/lib/providers/daju/ful
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     orderId: string;
-  };
+  }>;
 };
 
 type AuditAdmin = {
@@ -49,7 +49,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "denied",
         errorMessage: admin.message,
       });
@@ -74,7 +74,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: "ORDER_PAYMENT_STATUS_REQUIRES_PAYMENT_FLOW",
         errorMessage: "订单支付成功状态必须通过支付完成流程写入",
@@ -96,7 +96,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: "invalid_order_status",
         errorMessage: "无效订单状态",
@@ -113,7 +113,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: "invalid_payment_status",
         errorMessage: "无效支付状态",
@@ -123,7 +123,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const { data, error } = await admin.supabase.rpc("admin_update_order_status", {
-      p_order_id: context.params.orderId,
+      p_order_id: (await context.params).orderId,
       p_to_status: toStatus,
       p_payment_status: paymentStatus ?? null,
       p_admin_note: body?.admin_note ?? null,
@@ -137,7 +137,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: typeof error.code === "string" ? error.code : null,
         errorMessage: message,
@@ -154,7 +154,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (promotionSettings.enabled) {
       const { error: commissionError } = await admin.supabase.rpc("sync_referral_commission_for_order", {
-        p_order_id: context.params.orderId,
+        p_order_id: (await context.params).orderId,
         p_commission_rate: promotionSettings.commissionRate,
       });
 
@@ -169,7 +169,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: "update_order_status",
       module: "orders",
       targetType: "order",
-      targetId: context.params.orderId,
+      targetId: (await context.params).orderId,
       targetLabel: getOrderLabel(data),
       result: "success",
       afterSummary: {
@@ -189,7 +189,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: "update_order_status",
       module: "orders",
       targetType: "order",
-      targetId: context.params.orderId,
+      targetId: (await context.params).orderId,
       result: "failed",
       errorMessage: message,
     });
@@ -208,7 +208,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "update_delivery",
         module: "delivery",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "denied",
         errorMessage: admin.message,
       });
@@ -238,7 +238,7 @@ export async function POST(request: Request, context: RouteContext) {
           action: "expire_unpaid_order",
           module: "orders",
           targetType: "order",
-          targetId: context.params.orderId,
+          targetId: (await context.params).orderId,
           result: "failed",
           errorCode: "missing_reason",
           errorMessage: "关闭未支付订单必须填写原因",
@@ -246,14 +246,14 @@ export async function POST(request: Request, context: RouteContext) {
         return NextResponse.json({ error: "请填写关闭原因" }, { status: 400 });
       }
 
-      const result = await expireUnpaidOrder(context.params.orderId, `admin:${reason}`);
+      const result = await expireUnpaidOrder((await context.params).orderId, `admin:${reason}`);
       await writeAdminAuditLog({
         request,
         admin: auditAdmin,
         action: "expire_unpaid_order",
         module: "orders",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: result.ok ? "success" : "failed",
         errorCode: result.ok ? null : result.code,
         errorMessage: result.ok ? null : result.message,
@@ -280,7 +280,7 @@ export async function POST(request: Request, context: RouteContext) {
       try {
         const result = await reconcileDajuExistingOrderWithSupabase({
           service: serviceClient,
-          orderId: context.params.orderId,
+          orderId: (await context.params).orderId,
           orderItemId,
           orderCode: providerOrderCode,
           triggerSource: "admin_reconcile_existing_daju_order",
@@ -291,7 +291,7 @@ export async function POST(request: Request, context: RouteContext) {
           action: "reconcile_daju_order",
           module: "delivery",
           targetType: "order",
-          targetId: context.params.orderId,
+          targetId: (await context.params).orderId,
           result: "success",
           afterSummary: { provider_order_code: result.orderCode, delivered_count: result.deliveredCount, request_id: result.requestId },
         });
@@ -312,7 +312,7 @@ export async function POST(request: Request, context: RouteContext) {
           action: "reconcile_daju_order",
           module: "delivery",
           targetType: "order",
-          targetId: context.params.orderId,
+          targetId: (await context.params).orderId,
           result: "failed",
           errorCode: code,
           errorMessage: "供应商已有订单协调失败，未执行新采购",
@@ -329,7 +329,7 @@ export async function POST(request: Request, context: RouteContext) {
           action: "retry_auto_delivery",
           module: "delivery",
           targetType: "order",
-          targetId: context.params.orderId,
+          targetId: (await context.params).orderId,
           result: "failed",
           errorCode: "service_role_unavailable",
           errorMessage: "服务端交付权限未配置",
@@ -337,12 +337,12 @@ export async function POST(request: Request, context: RouteContext) {
         return NextResponse.json({ error: "服务端交付权限未配置" }, { status: 503 });
       }
       try {
-        const result = await deliverDigitalOrder(serviceClient, context.params.orderId, "admin_retry");
+        const result = await deliverDigitalOrder(serviceClient, (await context.params).orderId, "admin_retry");
         const { error: paymentErrorCleanupError } = await serviceClient
           .from("payment_sessions")
           .update({ last_error: null })
           .eq("business_type", "order")
-          .eq("business_id", context.params.orderId)
+          .eq("business_id", (await context.params).orderId)
           .eq("status", "paid");
         if (paymentErrorCleanupError) {
           console.warn("[Admin Orders] paid payment delivery error cleanup skipped", {
@@ -355,7 +355,7 @@ export async function POST(request: Request, context: RouteContext) {
           action: "retry_auto_delivery",
           module: "delivery",
           targetType: "order",
-          targetId: context.params.orderId,
+          targetId: (await context.params).orderId,
           result: "success",
           afterSummary: { delivered_count: result.delivered_count ?? 0 },
         });
@@ -368,7 +368,7 @@ export async function POST(request: Request, context: RouteContext) {
           action: "retry_auto_delivery",
           module: "delivery",
           targetType: "order",
-          targetId: context.params.orderId,
+          targetId: (await context.params).orderId,
           result: "failed",
           errorMessage: message,
         });
@@ -383,7 +383,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "manual_inventory_delivery",
         module: "inventory",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: "legacy_inventory_delivery_disabled",
         errorMessage: "旧版指定库存发货入口已停用，请使用安全的自动交付或逐项人工交付流程",
@@ -396,7 +396,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (body?.action === "mark_failed") {
       const { error } = await admin.supabase.rpc("admin_mark_delivery_failed", {
-        p_order_id: context.params.orderId,
+        p_order_id: (await context.params).orderId,
         p_note: body.note ?? null,
       });
 
@@ -408,7 +408,7 @@ export async function POST(request: Request, context: RouteContext) {
           action: "mark_delivery_failed",
           module: "delivery",
           targetType: "order",
-          targetId: context.params.orderId,
+          targetId: (await context.params).orderId,
           result: "failed",
           errorCode: typeof error.code === "string" ? error.code : null,
           errorMessage: message,
@@ -422,7 +422,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "mark_delivery_failed",
         module: "delivery",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "success",
         metadata: { has_note: Boolean(body.note) },
       });
@@ -437,7 +437,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "append_manual_delivery",
         module: "delivery",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: "missing_delivery_content",
         errorMessage: "请填写交付信息",
@@ -452,7 +452,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "append_manual_delivery",
         module: "delivery",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: "missing_order_item",
         errorMessage: "请选择需要人工交付的订单商品",
@@ -468,7 +468,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "append_manual_delivery",
         module: "delivery",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: "service_role_unavailable",
         errorMessage: "服务端交付权限未配置",
@@ -477,7 +477,7 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const { data, error } = await serviceClient.rpc("admin_deliver_order_item_manual", {
-      p_order_id: context.params.orderId,
+      p_order_id: (await context.params).orderId,
       p_order_item_id: body.order_item_id,
       p_delivery_content: deliveryContent,
       p_delivery_note: body?.note ?? null,
@@ -491,7 +491,7 @@ export async function POST(request: Request, context: RouteContext) {
         action: "append_manual_delivery",
         module: "delivery",
         targetType: "order",
-        targetId: context.params.orderId,
+        targetId: (await context.params).orderId,
         result: "failed",
         errorCode: typeof error.code === "string" ? error.code : null,
         errorMessage: message,
@@ -510,7 +510,7 @@ export async function POST(request: Request, context: RouteContext) {
       action: "append_manual_delivery",
       module: "delivery",
       targetType: "order",
-      targetId: context.params.orderId,
+      targetId: (await context.params).orderId,
       result: "success",
       metadata: {
         order_item_id: body?.order_item_id ?? null,
@@ -529,7 +529,7 @@ export async function POST(request: Request, context: RouteContext) {
       action: "update_delivery",
       module: "delivery",
       targetType: "order",
-      targetId: context.params.orderId,
+      targetId: (await context.params).orderId,
       result: "failed",
       errorMessage: message,
     });

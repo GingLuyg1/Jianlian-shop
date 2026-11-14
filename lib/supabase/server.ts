@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
 export function hasSupabaseServerConfig() {
@@ -17,7 +17,7 @@ export function getSupabaseServerClient() {
 
   // Next.js 15 resolves request cookies asynchronously; the SSR adapter
   // supports Promise-returning cookie methods without changing call sites.
-  const cookieStore = cookies();
+  const cookieStore = (cookies() as unknown as UnsafeUnwrappedCookies);
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

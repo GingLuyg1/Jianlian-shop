@@ -6,7 +6,7 @@ import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { userId: string } };
+type RouteContext = { params: Promise<{ userId: string }> };
 type PatchBody = {
   adminLevel?: "admin" | "super_admin";
   status?: "active" | "disabled";
@@ -23,7 +23,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!reason) return NextResponse.json({ error: "请填写管理员变更原因" }, { status: 400 });
 
   const { data, error } = await admin.supabase.rpc("manage_admin_user", {
-    p_target_user_id: context.params.userId,
+    p_target_user_id: (await context.params).userId,
     p_admin_level: body?.adminLevel ?? null,
     p_status: body?.status ?? null,
     p_permissions: body?.permissions ?? null,
@@ -36,7 +36,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: "admin_authorization_update",
       module: "users",
       targetType: "admin_user",
-      targetId: context.params.userId,
+      targetId: (await context.params).userId,
       requestId,
       result: "failed",
       errorCode: error.code,
@@ -55,7 +55,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     action: "admin_authorization_update",
     module: "users",
     targetType: "admin_user",
-    targetId: context.params.userId,
+    targetId: (await context.params).userId,
     requestId,
     result: "success",
     afterSummary: data,

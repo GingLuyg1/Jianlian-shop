@@ -83,10 +83,10 @@ async function findVisibleProductSlugByCatalogApi(request: Request, identifier: 
 }
 export async function GET(
   request: Request,
-  context: { params: { identifier?: string } }
+  context: { params: Promise<{ identifier?: string }> }
 ) {
   const requestId = randomUUID();
-  const identifier = decodeURIComponent(String(context.params.identifier ?? "")).trim();
+  const identifier = decodeURIComponent(String((await context.params).identifier ?? "")).trim();
 
   if (!identifier || identifier.length > 160) {
     return jsonError(400, "INVALID_PRODUCT_IDENTIFIER", "Invalid product identifier", requestId);

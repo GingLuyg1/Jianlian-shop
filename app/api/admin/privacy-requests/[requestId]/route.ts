@@ -6,7 +6,7 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { requestId: string } };
+type RouteContext = { params: Promise<{ requestId: string }> };
 type Row = Record<string, unknown>;
 
 function json(body: unknown, init?: ResponseInit) {
@@ -18,7 +18,7 @@ function json(body: unknown, init?: ResponseInit) {
 export async function GET(_request: Request, context: RouteContext) {
   const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
-  const requestId = context.params.requestId;
+  const requestId = (await context.params).requestId;
   if (!isUuid(requestId)) return json({ error: "隐私请求 ID 格式无效。" }, { status: 400 });
 
   const service = getSupabaseServiceRoleClient();
