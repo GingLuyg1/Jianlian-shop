@@ -2302,7 +2302,7 @@ function CompactTableCard({
               {rows.slice(0, 8).map((row, index) => (
                 <TableRow key={`${title}-${index}`}>
                   {row.map((cell, cellIndex) => (
-                    <TableCell key={`${title}-${index}-${cellIndex}`} title={cell} className="max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
+                    <TableCell key={`${title}-${index}-${cellIndex}`} title={cell} className="h-9 max-w-[160px] truncate whitespace-nowrap py-2 text-xs">
                       {cell}
                     </TableCell>
                   ))}
@@ -2310,7 +2310,7 @@ function CompactTableCard({
               ))}
               {Array.from({ length: Math.max(0, minRows - rows.length) }, (_, index) => (
                 <TableRow key={`empty-${index}`} aria-label={rows.length === 0 && index === 0 ? emptyTitle : "空行"}>
-                  {headers.map((header, column) => <TableCell key={header} className="h-10 text-xs text-slate-400">{rows.length === 0 && index === 0 && column === 0 ? emptyTitle : "—"}</TableCell>)}
+                  {headers.map((header, column) => <TableCell key={header} className="h-9 whitespace-nowrap py-2 text-xs text-slate-400">{rows.length === 0 && index === 0 && column === 0 ? emptyTitle : "—"}</TableCell>)}
                 </TableRow>
               ))}
             </TableBody>
