@@ -10,7 +10,8 @@ const source = path => readFileSync(path, 'utf8');
 test('390px metrics keep two columns while the current dashboard scales to five desktop KPIs', () => {
   const html = renderDashboard();
   assert.match(html, /grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5/);
-  assert.equal((html.match(/grid shrink-0 min-h/g) ?? []).length, 3);
+  assert.match(html, /dashboard-analysis-grid dashboard-aligned-columns/);
+  assert.match(html, /dashboard-sales-grid/);
   assert.match(source('components/admin/AdminLayout.tsx'), /h-\[100dvh\] max-h-\[100dvh\]/);
 });
 
