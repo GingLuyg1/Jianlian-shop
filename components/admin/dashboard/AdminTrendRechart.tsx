@@ -143,7 +143,7 @@ export function AdminTrendRechart({
       </div>
 
       <div className="h-[240px] w-full rounded-lg border border-slate-200 bg-white p-2 pt-3">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={240} minWidth={0}>
           <AreaChart data={chartData} margin={{ top: 8, right: hasCount || hasPercent ? 8 : 12, left: 0, bottom: 0 }}>
             <defs>
               {SERIES.map((item) => (
@@ -221,6 +221,7 @@ export function AdminTrendRechart({
                 yAxisId={item.yAxisId}
                 stroke={item.color}
                 strokeWidth={2}
+                dot={chartData.length === 1 ? { r: 4 } : false}
                 fill={`url(#adminTrendFill-${item.key})`}
                 activeDot={{ r: 4, strokeWidth: 0, fill: item.color }}
               />

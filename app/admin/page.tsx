@@ -1359,7 +1359,8 @@ export default function AdminDashboardPage() {
                     value={activeVisitorConversionValue}
                     description="有消费用户 / 访客数 (UV)"
                     comparison={`${periodLabel}访客成交转化`}
-                    href="/admin/orders"
+                    minRows={8}
+      href="/admin/orders"
                     loading={loading}
                     trend={[]}
                   />
@@ -1632,8 +1633,8 @@ export default function AdminDashboardPage() {
             </div>
           </section>
 
-          <div className="dashboard-analysis-grid grid shrink-0 min-h-[320px] min-w-0 grid-cols-1 items-stretch gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-3">
-            <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+          <div className="dashboard-analysis-grid dashboard-aligned-columns grid shrink-0 min-h-[320px] min-w-0 grid-cols-1 items-stretch gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-3">
+            <Card className="dashboard-panel dashboard-fixed-card flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
               <CardHeader className="flex shrink-0 flex-col items-start justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center">
                 <div>
                   <CardTitle className="text-base">经营趋势</CardTitle>
@@ -1647,7 +1648,7 @@ export default function AdminDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none xl:h-[364px]">
+            <Card className="dashboard-panel dashboard-fixed-card flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none xl:h-[364px]">
               <CardHeader className="shrink-0 px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-base">支付渠道表现</CardTitle>
@@ -1663,8 +1664,8 @@ export default function AdminDashboardPage() {
             </Card>
           </div>
 
-          <div className="grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 items-stretch gap-4 xl:grid-cols-3 lg:gap-3">
-            <Card className="dashboard-panel flex h-full min-h-0 flex-col justify-between overflow-hidden border-[var(--admin-v2-border)] shadow-none xl:col-span-2">
+          <div className="dashboard-sales-grid grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 items-stretch gap-4 xl:grid-cols-3 lg:gap-3">
+            <Card className="dashboard-panel dashboard-fixed-card flex h-full min-h-0 flex-col justify-between overflow-hidden border-[var(--admin-v2-border)] shadow-none xl:col-span-2">
               <CardHeader className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between space-y-0">
                 <div>
                   <div className="flex items-center gap-2">
@@ -1676,43 +1677,6 @@ export default function AdminDashboardPage() {
                   <p className="text-xs text-slate-500">跟随顶部时间筛选，多维度排序与翻页</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
-                    {(
-                      [
-                        { key: "amount", label: "销售额" },
-                        { key: "orders", label: "订单量" },
-                        { key: "stock", label: "库存" },
-                        { key: "conversionRate", label: "转化率" },
-                      ] as const
-                    ).map((opt) => {
-                      const isActive = productSortBy === opt.key;
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => {
-                            if (isActive) {
-                              setProductSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
-                            } else {
-                              setProductSortBy(opt.key);
-                              setProductSortOrder("desc");
-                            }
-                          }}
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                            isActive
-                              ? "bg-white text-slate-900 shadow-sm"
-                              : "text-slate-600 hover:text-slate-900"
-                          )}
-                        >
-                          <span>{opt.label}</span>
-                          <span className="text-[10px] leading-none text-slate-400">
-                            {isActive ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
                   <select
                     aria-label="每页显示条数"
                     value={productPageSize}
@@ -2159,7 +2123,7 @@ function TodoLink({ item }: { item: TodoItem }) {
 
 function ProductListCard({ title, rows, type, loading }: { title: string; rows: ProductRank[]; type: "sales" | "amount"; loading: boolean }) {
   return (
-    <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel dashboard-fixed-card flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
@@ -2206,7 +2170,7 @@ function InventoryFocusCard({
     { label: "长期未售", rows: staleProducts },
   ];
   return (
-    <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel dashboard-fixed-card flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="shrink-0 px-4 py-3">
         <CardTitle className="text-base">商品经营</CardTitle>
       </CardHeader>
@@ -2291,7 +2255,7 @@ function CompactTableCard({
   href: string;
 }) {
   return (
-    <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+    <Card className="dashboard-panel dashboard-fixed-card flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
       <CardHeader className="flex shrink-0 flex-row items-center justify-between px-4 py-3">
         <CardTitle className="text-base">{title}</CardTitle>
         <Link href={href} className="inline-flex items-center text-xs text-orange-600">
@@ -2328,6 +2292,11 @@ function CompactTableCard({
                       {cell}
                     </TableCell>
                   ))}
+                </TableRow>
+              ))}
+              {Array.from({ length: Math.max(0, minRows - rows.length) }, (_, index) => (
+                <TableRow key={`empty-${index}`} aria-label={rows.length === 0 && index === 0 ? emptyTitle : "空行"}>
+                  {headers.map((header, column) => <TableCell key={header} className="h-10 text-xs text-slate-400">{rows.length === 0 && index === 0 && column === 0 ? emptyTitle : "—"}</TableCell>)}
                 </TableRow>
               ))}
             </TableBody>

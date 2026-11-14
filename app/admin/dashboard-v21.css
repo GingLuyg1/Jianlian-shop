@@ -499,3 +499,12 @@
 .admin-dashboard-v21 .dashboard-panel { backdrop-filter:blur(16px); }
 @media(min-width:1200px){ .admin-dashboard-v21 .dashboard-restored-kpis{grid-template-columns:repeat(12,minmax(0,1fr));}.admin-dashboard-v21 .dashboard-restored-kpis > *{grid-column:span 3}.admin-dashboard-v21 .dashboard-restored-kpis > :nth-child(n+5){grid-column:span 4} }
 @media(max-width:639px){.admin-dashboard-v21 .dashboard-restored-kpis [title]{font-size:23px}.admin-dashboard-v21 .dashboard-restored-kpis > * > div{padding:12px}.admin-dashboard-v21 .dashboard-analysis-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Keep desktop analysis and sales columns aligned. */
+@media (min-width: 1280px) {
+ .admin-dashboard-v21 .dashboard-aligned-columns,
+ .admin-dashboard-v21 .dashboard-sales-grid { grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap:16px; }
+ .admin-dashboard-v21 .dashboard-sales-grid > .dashboard-panel { grid-column:auto; }
+ .admin-dashboard-v21 .dashboard-fixed-card { height:480px; }
+ .admin-dashboard-v21 .dashboard-aligned-columns > .dashboard-panel { height:364px; }
+}
