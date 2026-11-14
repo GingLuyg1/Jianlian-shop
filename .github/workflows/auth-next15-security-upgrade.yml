@@ -73,7 +73,7 @@ jobs:
       - name: Commit generated dependency and compatibility upgrade
         shell: bash
         run: |
-          git add -A
+          git add -u
           git diff --cached --check
           git diff --cached --quiet && { echo 'No upgrade diff produced'; exit 1; }
           git config user.name 'github-actions[bot]'
