@@ -30,8 +30,12 @@ export function useProgressiveWheelMotion({ activeId, contentKey, resetKey, minS
     let frame = 0;
     const render = () => {
       frame = 0;
+      const isMobilePreview = document.documentElement.dataset.mobilePreview === "true";
+      if (!desktop.matches || isMobilePreview || motionPreference.matches) {
+        return;
+      }
       const items = Array.from(container.querySelectorAll<HTMLElement>("[data-wheel-item]"));
-      const animate = desktop.matches && !motionPreference.matches && container.scrollHeight > container.clientHeight + 1;
+      const animate = container.scrollHeight > container.clientHeight + 1;
       const viewportHeight = container.clientHeight;
       const progress = (container.scrollTop / Math.max(1, container.scrollHeight - viewportHeight));
       // Read layout for every row before writing styles, avoiding read/write thrash.
@@ -68,17 +72,30 @@ export function useProgressiveWheelMotion({ activeId, contentKey, resetKey, minS
     const index = items.findIndex((item) => item.dataset.wheelItem === id);
     if (index < 0) return;
     const item = items[index];
-    const top = centeredScrollTop(
-      item.offsetTop,
-      item.offsetHeight,
-      container.clientHeight,
-      container.scrollHeight - container.clientHeight,
-      index,
-      items.length,
-    );
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
     item.style.setProperty("--wheel-scale", "1");
     item.style.setProperty("--wheel-opacity", "1");
-    container.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    if (container.scrollWidth > container.clientWidth + 1 && container.scrollHeight <= container.clientHeight + 1) {
+      const left = centeredScrollTop(
+        item.offsetLeft,
+        item.offsetWidth,
+        container.clientWidth,
+        container.scrollWidth - container.clientWidth,
+        index,
+        items.length,
+      );
+      container.scrollTo({ left, behavior });
+    } else {
+      const top = centeredScrollTop(
+        item.offsetTop,
+        item.offsetHeight,
+        container.clientHeight,
+        container.scrollHeight - container.clientHeight,
+        index,
+        items.length,
+      );
+      container.scrollTo({ top, behavior });
+    }
     scheduleRef.current();
   }, []);
 

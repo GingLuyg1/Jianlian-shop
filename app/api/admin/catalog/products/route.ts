@@ -55,9 +55,14 @@ async function readOperationalSkuRows(service: SupabaseClient, productIds: strin
   for (let index = 0; index < productIds.length; index += SKU_PRODUCT_BATCH_SIZE) {
     batches.push(productIds.slice(index, index + SKU_PRODUCT_BATCH_SIZE));
   }
+  const skuFields = (
+    getSupabaseServiceRoleClient()
+      ? SKU_OPERATION_FIELDS
+      : SKU_OPERATION_FIELDS.replace(",metadata", "")
+  ) as typeof SKU_OPERATION_FIELDS;
   const results = await Promise.all(batches.map((ids) => service
     .from("product_skus")
-    .select(SKU_OPERATION_FIELDS, { count: "exact" })
+    .select(skuFields, { count: "exact" })
     .in("product_id", ids)
     .range(0, SKU_BATCH_ROW_LIMIT - 1)));
   const rows: Array<Record<string, unknown>> = [];
@@ -104,7 +109,12 @@ export async function GET(request: Request) {
   const to = from + pageSize - 1;
   const operationalScan = hasOperationalScanFilters(filters);
 
-  let query = service.from("products").select(PRODUCT_FIELDS, { count: "exact" });
+  const selectFields = (
+    getSupabaseServiceRoleClient()
+      ? PRODUCT_FIELDS
+      : PRODUCT_FIELDS.replace(",metadata,", ",")
+  ) as typeof PRODUCT_FIELDS;
+  let query = service.from("products").select(selectFields, { count: "exact" });
 
   if (search) {
     const escaped = search.replace(/[%,]/g, "");

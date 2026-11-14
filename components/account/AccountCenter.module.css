@@ -120,6 +120,14 @@
   .apiTab { padding: 9px 14px; }
   .apiPage { min-height: auto; }
 }
+:global(html[data-mobile-preview="true"]) .overviewStats { grid-template-columns: minmax(0, 1fr); }
+:global(html[data-mobile-preview="true"]) .vipPanel { padding: 16px; }
+:global(html[data-mobile-preview="true"]) .vipSummary { align-items: flex-start; padding: 14px; gap: 10px; flex-wrap: wrap; }
+:global(html[data-mobile-preview="true"]) .vipLevels { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+:global(html[data-mobile-preview="true"]) .contentFrame { padding: 12px; border-radius: 22px; }
+:global(html[data-mobile-preview="true"]) .pageHeader { padding: 16px; }
+:global(html[data-mobile-preview="true"]) .balanceHero { padding: 16px; }
+:global(html[data-mobile-preview="true"]) .formGroup { padding: 14px; }
 @media (prefers-reduced-motion: reduce) { .navLink, .apiTab, .navIndicator[data-ready=true] { transition: none; } }
 @media (prefers-reduced-transparency: reduce) { .panel, .contentFrame, .contentFrame .panel { background: #fffcf7; -webkit-backdrop-filter: none; backdrop-filter: none; } }
 @supports not (backdrop-filter: blur(1px)) { .panel { background-color: #fffcf7; } }

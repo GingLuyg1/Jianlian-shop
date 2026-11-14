@@ -19,10 +19,14 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const routeGroup = getAdminNavigationGroup(pathname);
-  const [openSection, setOpenSection] = useState<AdminNavigationGroupKey | null>(routeGroup);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
+    routeGroup ? { [routeGroup]: true } : {}
+  );
 
   useEffect(() => {
-    setOpenSection(routeGroup);
+    if (routeGroup) {
+      setOpenSections((prev) => ({ ...prev, [routeGroup]: true }));
+    }
   }, [pathname, routeGroup]);
 
   return (
@@ -44,6 +48,7 @@ export default function AdminSidebar() {
           const Icon = item.icon;
           if (item.type === "group") {
             const active = isAdminNavigationGroupActive(pathname, item);
+            const openSection = openSections[item.key] ? item.key : null;
             const open = openSection === item.key;
             return (
               <div key={item.key}>
@@ -51,7 +56,16 @@ export default function AdminSidebar() {
                   type="button"
                   aria-expanded={open}
                   aria-controls={`admin-sidebar-group-${item.key}`}
-                  onClick={() => setOpenSection((current) => toggleNavigationGroup(current, item.key) as AdminNavigationGroupKey | null)}
+                  onClick={() =>
+                    setOpenSections((prev) => {
+                      const current = prev[item.key] ? item.key : null;
+                      const nextGroup = toggleNavigationGroup(current, item.key);
+                      return {
+                        ...prev,
+                        [item.key]: Boolean(nextGroup),
+                      };
+                    })
+                  }
                   className={cn(
                     "mx-auto flex min-h-[43px] w-[calc(100%-5px)] min-w-0 items-center gap-2.5 rounded-[var(--admin-v2-control-radius)] px-2.5 py-2 text-left text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
                     active

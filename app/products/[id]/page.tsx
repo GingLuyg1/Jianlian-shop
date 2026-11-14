@@ -594,7 +594,7 @@ export default function ProductDetailPage() {
                     </div>
                   ) : null}
 
-                  {hasSkus ? (
+                  {hasSkus && skus.length >= 2 ? (
                     <div>
                       <div className="mb-2 text-sm font-medium">商品规格</div>
                       <div className="grid gap-2">

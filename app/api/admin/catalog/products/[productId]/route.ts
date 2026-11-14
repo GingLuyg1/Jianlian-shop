@@ -17,7 +17,7 @@ import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/se
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type RouteContext = {
-  params: Promise<{ productId: string }>;
+  params: { productId: string };
 };
 
 type SupabaseErrorLike = {
@@ -94,8 +94,7 @@ function getProductSaveFailure(error: unknown, fallback = "商品保存失败，
 }
 
 
-export async function GET(request: Request, props: RouteContext) {
-  const params = await props.params;
+export async function GET(request: Request, { params }: RouteContext) {
   const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
@@ -106,9 +105,14 @@ export async function GET(request: Request, props: RouteContext) {
     return productFailureResponse("INVALID_PRODUCT_ID", "商品 ID 无效", requestId, 400);
   }
 
+  const selectFields = (
+    getSupabaseServiceRoleClient()
+      ? PRODUCT_FIELDS
+      : PRODUCT_FIELDS.replace(",metadata,", ",")
+  ) as typeof PRODUCT_FIELDS;
   const { data, error } = await service
     .from("products")
-    .select(PRODUCT_FIELDS)
+    .select(selectFields)
     .eq("id", productId)
     .maybeSingle();
 
@@ -129,8 +133,7 @@ export async function GET(request: Request, props: RouteContext) {
   return response;
 }
 
-export async function PATCH(request: Request, props: RouteContext) {
-  const params = await props.params;
+export async function PATCH(request: Request, { params }: RouteContext) {
   const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
@@ -302,8 +305,7 @@ export async function PATCH(request: Request, props: RouteContext) {
   return response;
 }
 
-export async function DELETE(request: Request, props: RouteContext) {
-  const params = await props.params;
+export async function DELETE(request: Request, { params }: RouteContext) {
   const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;

@@ -5,7 +5,6 @@ const CATEGORY_ROUTE_MATCHERS: Record<string, { slugs: string[]; names: string[]
   "/products/gift-cards": { slugs: ["gift-cards", "gift-card", "recharge-card"], names: ["礼品卡", "充值卡"] },
   "/products/digital-accounts": { slugs: ["digital-accounts", "digital-account"], names: ["数字账号"] },
   "/products/ai-membership": { slugs: ["ai-membership", "ai-member", "ai-recharge"], names: ["ai", "会员"] },
-  "/products/sms-code": { slugs: ["sms-code", "sms-codes"], names: ["接码服务", "接码"] },
 };
 
 function normalize(value: string | null | undefined) {

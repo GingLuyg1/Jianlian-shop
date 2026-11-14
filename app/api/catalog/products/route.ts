@@ -302,6 +302,8 @@ function compareProducts(a: ProductView, b: ProductView, categories: Map<string,
     Number(a.status === "sold_out" || a.effective_stock <= 0) -
     Number(b.status === "sold_out" || b.effective_stock <= 0);
   if (stockWeight !== 0) return stockWeight;
+  const productOrder = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+  if (productOrder !== 0) return productOrder;
   const updatedAt = (Date.parse(b.updated_at ?? "") || 0) - (Date.parse(a.updated_at ?? "") || 0);
   if (updatedAt !== 0) return updatedAt;
   return a.id.localeCompare(b.id);

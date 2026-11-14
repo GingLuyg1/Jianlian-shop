@@ -16,6 +16,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { openPublicSupport } from "@/lib/support/open-public-support";
@@ -74,10 +75,12 @@ const tutorialTopics = [
 ] as const;
 
 export default function TutorialsPage() {
+  const { isMobile } = useMobileStorefront();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>("required");
   const [giffgaffTreeOpen, setGiffgaffTreeOpen] = useState(false);
   const [giffgaffGuide, setGiffgaffGuide] = useState<"activation" | "keeper">("activation");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const query = search.trim().toLocaleLowerCase();
   const matchingTopics = tutorialTopics.filter(topic => [topic.label, topic.title, topic.description, ...topic.keywords].some(text => text.toLocaleLowerCase().includes(query)));
@@ -85,34 +88,65 @@ export default function TutorialsPage() {
   const showApple = matchingTopics.length > 0 && topic.id === "apple-id";
   const showGiffgaff = matchingTopics.length > 0 && topic.id === "giffgaff";
   const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
-  return <div className={tutorial.shell}><PublicLayout viewportLocked contentClassName="max-w-none px-4 py-3 md:px-6">
-    <div data-testid="tutorial-workspace" className={tutorial.workspace}>
-      <aside data-testid="tutorial-navigation" className={`${glass.surface} ${styles.panel} ${tutorial.navigation}`}>
-        <label htmlFor="tutorial-search" className="text-sm font-semibold text-slate-900">搜索商品教程</label>
-        <div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" aria-hidden="true" /><Input id="tutorial-search" value={search} onChange={event => { setSearch(event.target.value); resetScroll(); }} placeholder="输入商品 / 教程关键词" className="h-11 rounded-xl border-orange-100 bg-white/80 pl-9" /></div>
-        <nav aria-label="使用教程分类" className={tutorial.topicList} data-topic={topic.id}>
-          <span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.topicIndicator}`} data-ready="true" data-visible={matchingTopics.length > 0} />
-          {tutorialTopics.map(({ id, label, icon: Icon }) => {
-            const current = topic.id === id && matchingTopics.length > 0;
-            const button = <button type="button" aria-current={current ? "true" : undefined} data-sidebar-current={current || undefined} className={`${tutorial.navItem} ${selection.item}`} onClick={() => {
-              setSelected(id);
-              setSearch("");
-              if (id === "giffgaff" && !showGiffgaff) setGiffgaffTreeOpen(true);
-              if (id !== "giffgaff") setGiffgaffTreeOpen(false);
+  return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName="max-w-none px-4 py-3 md:px-6">
+    <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!grid-cols-1 !h-auto !gap-3" : ""}`}>
+      <aside data-testid="tutorial-navigation" className={`${glass.surface} ${styles.panel} ${tutorial.navigation} ${isMobile ? "!max-h-none !p-3" : ""}`}>
+        {isMobile ? (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <BookOpen className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-[11px] text-muted-foreground">当前浏览教程</div>
+                <div className="truncate text-sm font-bold text-slate-900">
+                  {topic.label}{topic.id === "giffgaff" ? ` · ${giffgaffGuide === "activation" ? "激活与使用" : "保号助手"}` : ""}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              data-testid="tutorial-mobile-nav-toggle"
+              onClick={() => setMobileNavOpen((prev) => !prev)}
+              className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-orange-200/80 bg-orange-50/80 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm"
+            >
+              <span>{mobileNavOpen ? "收起目录" : "切换教程目录"}</span>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mobileNavOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <label htmlFor="tutorial-search" className="text-sm font-semibold text-slate-900">搜索商品教程</label>
+        )}
+        <div className={isMobile && !mobileNavOpen ? "hidden" : "mt-3 border-t border-orange-100/70 pt-3 lg:border-0 lg:pt-0"}>
+          {isMobile ? <label htmlFor="tutorial-search" className="sr-only">搜索商品教程</label> : null}
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" aria-hidden="true" /><Input id="tutorial-search" value={search} onChange={event => { setSearch(event.target.value); resetScroll(); }} placeholder="输入商品 / 教程关键词" className="h-11 rounded-xl border-orange-100 bg-white/80 pl-9" /></div>
+          <nav aria-label="使用教程分类" className={`${tutorial.topicList} ${isMobile ? "!grid !grid-cols-2 !gap-2 !mt-2.5" : ""}`} data-topic={topic.id}>
+            {!isMobile ? <span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.topicIndicator}`} data-ready="true" data-visible={matchingTopics.length > 0} /> : null}
+            {tutorialTopics.map(({ id, label, icon: Icon }) => {
+              const current = topic.id === id && matchingTopics.length > 0;
+              const button = <button type="button" aria-current={current ? "true" : undefined} data-sidebar-current={current || undefined} className={`${tutorial.navItem} ${selection.item} ${isMobile ? `!h-10 !justify-start !rounded-xl !px-3 !text-xs border ${current ? "border-orange-300 bg-orange-50/90 font-semibold text-primary" : "border-slate-100 bg-white/80"}` : ""}`} onClick={() => {
+                setSelected(id);
+                setSearch("");
+                if (id === "giffgaff" && !showGiffgaff) setGiffgaffTreeOpen(true);
+                if (id !== "giffgaff") {
+                  setGiffgaffTreeOpen(false);
+                  if (isMobile) setMobileNavOpen(false);
+                }
 
-              resetScroll();
-            }}>
-              <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>
-              {id === "required" && <span className={`${styles.pill} hidden md:inline`}>必读</span>}
-              {id === "giffgaff" && <span className="hidden md:inline"><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
-            </button>;
-            return id === "giffgaff" ? <Collapsible.Root key={id} asChild open={showGiffgaff && giffgaffTreeOpen} onOpenChange={setGiffgaffTreeOpen}><div className={`${tutorial.treeItem} min-w-0`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Giffgaff 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={giffgaffGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={giffgaffGuide === "activation" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("activation"); resetScroll(); }}>实体卡激活与使用</button><button type="button" aria-current={giffgaffGuide === "keeper" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("keeper"); resetScroll(); }}>保号助手</button></nav></Collapsible.Content></div></Collapsible.Root> : <div className="min-w-0" key={id}>{button}</div>;
-          })}
-        </nav>
+                resetScroll();
+              }}>
+                <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>
+                {id === "required" && <span className={`${styles.pill} hidden md:inline`}>必读</span>}
+                {id === "giffgaff" && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
+              </button>;
+              return id === "giffgaff" ? <Collapsible.Root key={id} asChild open={showGiffgaff && giffgaffTreeOpen} onOpenChange={setGiffgaffTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Giffgaff 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={giffgaffGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={giffgaffGuide === "activation" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("activation"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>实体卡激活与使用</button><button type="button" aria-current={giffgaffGuide === "keeper" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("keeper"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>保号助手</button></nav></Collapsible.Content></div></Collapsible.Root> : <div className="min-w-0" key={id}>{button}</div>;
+            })}
+          </nav>
+        </div>
       </aside>
-      <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content}`}>
-        <header className={`${glass.hero} ${tutorial.header}`}><div key={`${topic.id}-${giffgaffGuide}`} className={tutorial.topicEnter}><h1 className="text-xl font-semibold text-slate-900">{showGiffgaff ? "Giffgaff" : topic.title}</h1>{topic.description && <p className="mt-2 text-sm leading-6 text-slate-500">{topic.description}</p>}</div></header>
-        <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
+      <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content} ${isMobile ? "!overflow-visible" : ""}`}>
+        <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}><div key={`${topic.id}-${giffgaffGuide}`} className={tutorial.topicEnter}><h1 className="text-lg font-semibold text-slate-900 sm:text-xl">{showGiffgaff ? "Giffgaff" : topic.title}</h1>{topic.description && <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm sm:leading-6">{topic.description}</p>}</div></header>
+        <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
           <div key={matchingTopics.length ? `${topic.id}-${giffgaffGuide}` : "empty"} className={tutorial.topicEnter}>
           {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : <div className="space-y-7">
             <section aria-labelledby="tutorial-service-title">

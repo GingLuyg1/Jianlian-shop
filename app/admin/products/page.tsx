@@ -1748,10 +1748,11 @@ function ProductFormDialog({
           )}
           <div className="grid min-h-0 grid-cols-1 gap-4 overflow-y-auto bg-slate-50/60 px-4 py-5 sm:px-6 md:grid-cols-2">
             <FormSection title="基础信息" className="md:col-span-2">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_180px_minmax(0,1.5fr)] items-end">
                 <Field label="标题" required error={errors.name}>
                   <Input
                     value={form.name}
+                    placeholder="商品展示标题"
                     onChange={(event) => {
                       const name = event.target.value;
                       onUpdate({
@@ -1769,92 +1770,94 @@ function ProductFormDialog({
                     placeholder="lowercase-slug"
                   />
                 </Field>
-                <Field label="副标题" className="md:col-span-2" error={errors.short_description}>
-                  <Input
-                    value={form.short_description}
-                    onChange={(event) => onUpdate({ ...form, short_description: event.target.value })}
-                  />
-                </Field>
-                <Field label="商品图片" className="md:col-span-2" error={errors.image_url}>
-                  <div className="flex flex-wrap items-center gap-2">
+                <Field label="商品图片" error={errors.image_url}>
+                  <div className="flex items-center gap-1.5">
                     <Input
-                      className="min-w-32 flex-1"
+                      className="min-w-0 flex-1 text-xs"
                       value={form.image_url}
                       onChange={(event) => onUpdate({ ...form, image_url: event.target.value })}
-                      placeholder="/assets/example.png 或 https://..."
+                      placeholder="图片链接 /assets/..."
                     />
-                    <Button type="button" variant="outline" onClick={() => setImagePickerOpen(true)}>从媒体库选择</Button>
+                    <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 px-2.5 text-xs" onClick={() => setImagePickerOpen(true)}>
+                      媒体库
+                    </Button>
                     <img
                       src={selectedImage || "/assets/jianlian-brand-logo.png"}
                       alt=""
-                      className="h-10 w-10 rounded-lg border object-cover"
+                      className="h-9 w-9 shrink-0 rounded-lg border object-cover"
                       onError={(event) => {
                         event.currentTarget.src = "/assets/jianlian-brand-logo.png";
                       }}
                     />
                   </div>
-                  {selectedImage && !errors.image_url && (
-                    <p className="text-xs text-slate-500">图片加载失败不会阻止保存，会使用默认占位图。</p>
-                  )}
                 </Field>
               </div>
             </FormSection>
 
-            <FormSection title="商品分类">
-              <Field label="一级分类" required error={errors.primaryCategoryId}>
-                <NativeSelect
-                  value={form.primaryCategoryId}
-                  onChange={(value) => onUpdate({ ...form, primaryCategoryId: value, category_id: "" })}
-                >
-                  <option value="">请选择一级分类</option>
-                  {rootCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
+            <FormSection title="商品分类 *" className="md:col-span-2">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="一级分类" required error={errors.primaryCategoryId}>
+                  <NativeSelect
+                    value={form.primaryCategoryId}
+                    onChange={(value) => onUpdate({ ...form, primaryCategoryId: value, category_id: "" })}
+                  >
+                    <option value="">请选择一级分类</option>
+                    {rootCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field label="二级分类" required={secondaryCategories.length > 0} error={errors.category_id}>
+                  <NativeSelect
+                    value={form.category_id}
+                    disabled={!form.primaryCategoryId || secondaryCategories.length === 0}
+                    onChange={(value) => onUpdate({ ...form, category_id: value })}
+                  >
+                    <option value="">
+                      {!form.primaryCategoryId
+                        ? "请先选择一级分类"
+                        : secondaryCategories.length === 0
+                          ? "该一级分类暂无可用二级分类，请先在分类管理中添加。"
+                          : "请选择二级分类"}
                     </option>
-                  ))}
-                </NativeSelect>
-              </Field>
-            </FormSection>
-            <FormSection title="二级分类">
-              <Field label="二级分类" required={secondaryCategories.length > 0} error={errors.category_id}>
-                <NativeSelect
-                  value={form.category_id}
-                  disabled={!form.primaryCategoryId || secondaryCategories.length === 0}
-                  onChange={(value) => onUpdate({ ...form, category_id: value })}
-                >
-                  <option value="">
-                    {!form.primaryCategoryId
-                      ? "请先选择一级分类"
-                      : secondaryCategories.length === 0
-                        ? "该一级分类暂无可用二级分类，请先在分类管理中添加。"
-                        : "请选择二级分类"}
-                  </option>
-                  {secondaryCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Field>
+                    {secondaryCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              </div>
             </FormSection>
 
-            <FormSection title="价格、库存与交付规格" className="md:col-span-2">
-              <p className="mb-3 text-xs text-slate-600">在规格行设置交付方式和规格状态。商品上架或下架请在列表操作。</p>
+            <FormSection
+              title="价格、库存与交付规格"
+              description="在规格行设置交付方式和规格状态。商品上架或下架请在列表操作。"
+              className="md:col-span-2"
+              action={
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900"
+                  onClick={() => {
+                    skuManagerRef.current?.reload?.();
+                    setSkuRefreshKey((k) => k + 1);
+                  }}
+                >
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                  刷新
+                </Button>
+              }
+            >
               <AdminProductSkuManager ref={skuManagerRef} product={product} refreshKey={skuRefreshKey}
                 defaults={{ price: form.price, original_price: form.original_price, stock: form.stock, delivery_type: form.delivery_type, status: form.status }}
                 onSummary={(summary) => { onSkuDirty(); onUpdate({ ...form, price: String(summary.price ?? form.price), stock: String(summary.stock) }); }}
                 onSupplierBinding={onSupplierBinding} />
             </FormSection>
 
-            <FormSection title="可选扩展信息" className="md:col-span-2">
-              <Field label="metadata.note">
-                <Input
-                  value={form.metadata_note}
-                  onChange={(event) => onUpdate({ ...form, metadata_note: event.target.value })}
-                  placeholder="内部备注，可选"
-                />
-              </Field>
-            </FormSection>
           </div>
           <DialogActions disableSave={!isDirty} isSaving={isSaving} saveLabel="保存商品" onCancel={onClose} />
         </form>
@@ -2155,14 +2158,24 @@ function FormSection({
   children,
   className,
   title,
+  action,
+  description,
 }: {
   children: ReactNode;
   className?: string;
   title: string;
+  action?: ReactNode;
+  description?: ReactNode;
 }) {
   return (
     <section className={cn("rounded-xl border border-slate-200 bg-slate-50/40 p-4", className)}>
-      <h3 className="mb-4 text-sm font-semibold text-slate-900">{title}</h3>
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+        </div>
+        {action}
+      </div>
       {children}
     </section>
   );

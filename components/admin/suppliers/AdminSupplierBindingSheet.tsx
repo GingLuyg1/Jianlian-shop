@@ -199,6 +199,29 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
     }
   }
 
+  async function unbindSupplier() {
+    if (!product) return;
+    const label = sku ? `商品规格“${sku.sku_title || sku.sku_code}”` : `商品“${product.name}”`;
+    if (!window.confirm(`确认解除 ${label} 的供应商绑定？解绑后将恢复为手动交付，不再自动调用供应商下单与扣费。`)) return;
+    setSaving(true);
+    try {
+      const url = `/api/admin/suppliers/daju/bindings/${product.id}${sku ? `?website_sku_id=${sku.id}` : ""}`;
+      const response = await fetch(url, { method: "DELETE" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "解除绑定失败");
+      toast.success("已成功解除供应商绑定");
+      onSaved({
+        ...(payload.product && typeof payload.product === "object" ? payload.product : {}),
+        sku: payload.sku && typeof payload.sku === "object" ? payload.sku as AdminProductSku : null,
+      } as BindingSavedProduct);
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "解除绑定失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const sourceMetadata = sku?.metadata ?? product?.metadata;
   const metadata = sourceMetadata && typeof sourceMetadata === "object" && !Array.isArray(sourceMetadata) ? sourceMetadata : {};
   const currentSupplier = metadata.fulfillment_source === "supplier" ? readString(metadata, "supplier") : "";
@@ -372,22 +395,58 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
                       ) : <AdminEmptyState className="min-h-[240px]" title="尚未选择供应商商品" description="从左侧搜索结果中选择商品，核对详情。" />}
                     </section>
                   </div>
-                  <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
-                    当前仅支持绑定或更新绑定；解绑须使用独立、受审计的后端操作。
-                  </p>
+                  {currentSupplier ? (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50/80 p-3 text-xs text-red-900">
+                      <div>
+                        <div className="font-semibold text-red-950">
+                          当前已绑定供应商：{currentSupplier} (#{currentSupplierProductId})
+                        </div>
+                        <p className="mt-0.5 text-red-700">
+                          若不再需要从该供应商自动采购，可随时解除绑定。解绑后商品将恢复为普通人工处理。
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        disabled={saving}
+                        onClick={unbindSupplier}
+                      >
+                        {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                        解除绑定
+                      </Button>
+                    </div>
+                  ) : null}
                 </>
               )}
             </>
           ) : <AdminErrorState title="未选择网站商品" description="请关闭后从商品列表重新打开。" />}
         </div>
         <SheetFooter className={glass.supplierFooter}>
-          <Button asChild variant="outline" className={glass.secondary}><Link href="/admin/suppliers">供应商中心<ExternalLink className="ml-2 h-4 w-4" /></Link></Button>
-          <Button variant="outline" className={glass.secondary} onClick={() => onOpenChange(false)}>取消</Button>
-          {provider === "daju" ? (
-            <Button className={glass.primary} onClick={saveBinding} disabled={saving || !detail || !detail.isAuto || (detail.isSku && !supplierSku.trim()) || missingRequiredInputs.length > 0}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}保存供应商绑定
-            </Button>
-          ) : null}
+          <div className="flex w-full items-center justify-between gap-2">
+            <div>
+              {currentSupplier ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={saving}
+                  onClick={unbindSupplier}
+                >
+                  解除绑定
+                </Button>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="outline" className={glass.secondary}><Link href="/admin/suppliers">供应商中心<ExternalLink className="ml-2 h-4 w-4" /></Link></Button>
+              <Button variant="outline" className={glass.secondary} onClick={() => onOpenChange(false)}>取消</Button>
+              {provider === "daju" ? (
+                <Button className={glass.primary} onClick={saveBinding} disabled={saving || !detail || !detail.isAuto || (detail.isSku && !supplierSku.trim()) || missingRequiredInputs.length > 0}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}保存供应商绑定
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>

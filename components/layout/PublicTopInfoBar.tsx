@@ -28,9 +28,12 @@ import {
   hasSupabaseConfig,
   type UserProfile,
 } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 
 interface PublicTopInfoBarProps {
   announcementText?: string;
+  mobileNavigationUntilLg?: boolean;
 }
 
 type CachedAuthState = {
@@ -106,9 +109,11 @@ function getAnnouncementAnimationDelay() {
 
 export default function PublicTopInfoBar({
   announcementText,
+  mobileNavigationUntilLg = false,
 }: PublicTopInfoBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { isMobile } = useMobileStorefront();
   const [user, setUser] = useState<User | null>(cachedAuthState.user);
   const [profile, setProfile] = useState<UserProfile | null>(
     cachedAuthState.profile
@@ -214,15 +219,25 @@ export default function PublicTopInfoBar({
   const balance = profile?.balance ?? 0;
 
   return (
-    <div data-storefront-topbar className="sticky top-0 z-30 bg-[#fcf8f3]/90 backdrop-blur-sm">
-      <div className="mx-auto grid h-[62px] max-w-[1540px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 px-[var(--storefront-content-padding-x)] xl:grid-cols-[minmax(0,1fr)_142px_150px]">
+    <div
+      data-storefront-topbar
+      className={cn(
+        "sticky top-[53px] z-30 bg-[#fcf8f3]/90 backdrop-blur-sm",
+        mobileNavigationUntilLg ? "lg:top-0" : "md:top-0",
+        isMobile && "relative !top-0"
+      )}
+    >
+      <div className={cn(
+        "mx-auto grid max-w-[1540px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2 px-[var(--storefront-content-padding-x)]",
+        !isMobile && "sm:h-[62px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 sm:py-0 xl:grid-cols-[minmax(0,1fr)_142px_150px]"
+      )}>
         {announcementText && (
-          <div className="min-w-0 overflow-hidden">
-            <div className="flex h-9 items-center gap-2 rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60">
+          <div className={cn("col-span-2 min-w-0 overflow-hidden", !isMobile && "sm:col-span-1")}>
+            <div className="flex h-8 items-center gap-2 rounded-xl border border-orange-100 bg-white px-2.5 shadow-sm shadow-orange-100/60 sm:h-9 sm:px-3">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-primary">
                 <Megaphone className="h-3.5 w-3.5" />
               </span>
-              <span className="shrink-0 text-[13px] font-semibold text-orange-700">
+              <span className="shrink-0 text-[12px] font-semibold text-orange-700 sm:text-[13px]">
                 公告
               </span>
               <span className="h-3.5 w-px shrink-0 bg-orange-200" />
@@ -231,11 +246,11 @@ export default function PublicTopInfoBar({
                   className="animate-marquee-track inline-flex min-w-max"
                   style={{ animationDelay: `${announcementDelay}s` }}
                 >
-                  <span className="pr-10 text-[13px] text-orange-700/90">
+                  <span className="pr-10 text-[12px] text-orange-700/90 sm:text-[13px]">
                     {renderAnnouncementText(announcementText)}
                   </span>
                   <span
-                    className="pr-10 text-[13px] text-orange-700/90"
+                    className="pr-10 text-[12px] text-orange-700/90 sm:text-[13px]"
                     aria-hidden="true"
                   >
                     {renderAnnouncementText(announcementText)}
@@ -246,23 +261,23 @@ export default function PublicTopInfoBar({
           </div>
         )}
 
-        <div className="flex h-9 min-w-[132px] items-center justify-center gap-1.5 justify-self-center rounded-xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60 xl:w-[142px]">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-primary">
+        <div className="flex h-8 min-w-0 items-center justify-start gap-1.5 justify-self-start rounded-xl border border-orange-100 bg-white px-2.5 shadow-sm shadow-orange-100/60 sm:h-9 sm:min-w-[132px] sm:justify-center sm:justify-self-center sm:px-3 xl:w-[142px]">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-primary sm:h-6 sm:w-6">
             <CreditCard className="h-3.5 w-3.5" />
           </span>
           <span className="whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
             余额
           </span>
-          <span className="min-w-[52px] whitespace-nowrap text-center text-[13px] font-bold text-primary">
+          <span className="min-w-[44px] whitespace-nowrap text-center text-[12px] font-bold text-primary sm:min-w-[52px] sm:text-[13px]">
             ¥{balance.toFixed(2)}
           </span>
         </div>
 
-        <div className="flex h-9 w-[150px] items-center justify-end gap-1.5">
+        <div className="flex h-8 min-w-0 items-center justify-end gap-1.5 justify-self-end sm:h-9 sm:w-[150px]">
           {!authReady ? (
-            <div className="flex h-9 items-center gap-2" aria-hidden="true">
-              <div className="h-9 w-20 animate-pulse rounded-xl bg-orange-100/70" />
-              <div className="h-9 w-20 animate-pulse rounded-xl bg-orange-100/70" />
+            <div className="flex h-8 items-center gap-2 sm:h-9" aria-hidden="true">
+              <div className="h-8 w-16 animate-pulse rounded-xl bg-orange-100/70 sm:h-9 sm:w-20" />
+              <div className="h-8 w-16 animate-pulse rounded-xl bg-orange-100/70 sm:h-9 sm:w-20" />
             </div>
           ) : user ? (
             <>
@@ -271,7 +286,7 @@ export default function PublicTopInfoBar({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 w-full min-w-0 justify-between rounded-xl border-orange-100 bg-white px-3 text-[13px] font-semibold shadow-sm shadow-orange-100/60 hover:bg-orange-50"
+                    className="h-8 max-w-[180px] min-w-0 justify-between rounded-xl border-orange-100 bg-white px-2.5 text-[12px] font-semibold shadow-sm shadow-orange-100/60 hover:bg-orange-50 sm:h-9 sm:w-full sm:max-w-none sm:px-3 sm:text-[13px]"
                   >
                     <span className="min-w-0 flex-1 truncate text-left">
                       {getDisplayName(user)}
@@ -318,7 +333,7 @@ export default function PublicTopInfoBar({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 min-w-[72px] rounded-xl border-orange-100 bg-white px-3 text-[13px] font-semibold shadow-sm shadow-orange-100/60 hover:bg-orange-50"
+                className="h-8 min-w-[64px] rounded-xl border-orange-100 bg-white px-2.5 text-[12px] font-semibold shadow-sm shadow-orange-100/60 hover:bg-orange-50 sm:h-9 sm:min-w-[72px] sm:px-3 sm:text-[13px]"
                 asChild
               >
                 <Link href="/login">
@@ -328,7 +343,7 @@ export default function PublicTopInfoBar({
               </Button>
               <Button
                 size="sm"
-                className="h-9 min-w-[72px] rounded-xl px-3 text-[13px] font-semibold shadow-sm shadow-orange-200/70"
+                className="h-8 min-w-[64px] rounded-xl px-2.5 text-[12px] font-semibold shadow-sm shadow-orange-200/70 sm:h-9 sm:min-w-[72px] sm:px-3 sm:text-[13px]"
                 asChild
               >
                 <Link href="/register">

@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { cn } from "@/lib/utils";
 import glass from "@/components/account/AccountGlass.module.css";
@@ -186,6 +187,7 @@ function ReferralPagination({
 }
 
 export default function PromotionPage() {
+  const { isMobile } = useMobileStorefront();
   const identity = useAccountRecordIdentity();
   const [storedData, setData] = useState<ReferralResponse | null>(null);
   const [loadedEpoch, setLoadedEpoch] = useState(identity.epoch);
@@ -303,8 +305,8 @@ export default function PromotionPage() {
   }
 
   return (
-    <PublicLayout contentClassName="mx-auto max-w-none px-4 py-3 md:px-5">
-      <div data-testid="promotion-glass-page" className={`mx-auto flex w-full min-w-0 max-w-[1540px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
+    <PublicLayout mobileNavigationUntilLg contentClassName="mx-auto max-w-none px-4 py-3 md:px-5">
+      <div data-testid="promotion-glass-page" className={cn(`mx-auto flex w-full min-w-0 max-w-[1540px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !min-h-0 !overflow-visible")}>
         {error && (
           <div className="flex h-10 shrink-0 items-center rounded-xl border border-red-100 bg-red-50 px-4 text-sm text-red-700">
             <span className="min-w-0 flex-1 truncate">{error}</span>
@@ -399,7 +401,36 @@ export default function PromotionPage() {
 
           <div data-empty={!data?.records.length ? "true" : undefined} className={cn(glass.table, "min-h-0 flex-1 overflow-hidden rounded-2xl")}>
             <div className="h-full overflow-auto">
-              <table className="w-full min-w-[920px] border-collapse text-sm">
+              {data?.records.length ? (
+                <div className={cn("space-y-2.5 p-3 md:hidden", isMobile && "!block")}>
+                  {data.records.map((record) => (
+                    <div key={record.id} className="rounded-xl border border-orange-100/80 bg-white p-3.5 text-xs shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-slate-900">{record.referredUser}</span>
+                        <span className={cn("inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1", statusStyles[record.status])}>
+                          {statusLabels[record.status]}
+                        </span>
+                      </div>
+                      <div className="mt-2.5 grid grid-cols-2 gap-2 text-slate-500">
+                        <div>充值金额：<span className="font-medium tabular-nums text-slate-800">{formatMoney(record.orderAmount)}</span></div>
+                        <div>佣金变动：<span className="font-semibold tabular-nums text-orange-600">{formatMoney(record.commissionAmount)}</span></div>
+                      </div>
+                      <div className="mt-1.5 text-[11px] tabular-nums text-slate-400">支付时间：{formatDateTime(record.paidAt)}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={cn("px-4 py-10 text-center md:hidden", isMobile && "!block")}>
+                  <div className="mx-auto flex min-h-[220px] max-w-sm flex-col items-center justify-center">
+                    <div className={cn(glass.icon, "h-14 w-14")}>
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <div className="mt-3 text-base font-semibold text-slate-900">暂无真实推广记录</div>
+                    <p className="mt-1 text-sm text-slate-500">推荐用户完成有效订单后，推广记录会显示在这里。</p>
+                  </div>
+                </div>
+              )}
+              <table className={cn("hidden w-full min-w-[920px] border-collapse text-sm md:table", isMobile && "!hidden")}>
                 <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
                   <tr>
                     <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">用户名</th>

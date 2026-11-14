@@ -2,19 +2,19 @@ export const interactiveButtonClass =
   "transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2";
 
 export const mallContentClassName =
-  "max-w-none px-4 md:px-6 py-3 overflow-hidden";
+  "max-w-none px-4 md:px-6 py-3 lg:overflow-hidden";
 
 export const mallShellClassName =
-  "grid h-[calc(100dvh-87px)] min-h-0 grid-cols-1 items-stretch gap-4 overflow-hidden lg:grid-cols-[243px_minmax(0,1fr)]";
+  "grid min-h-0 grid-cols-1 items-stretch gap-3 lg:h-[calc(100dvh-87px)] lg:gap-4 lg:overflow-hidden lg:grid-cols-[243px_minmax(0,1fr)]";
 
 export const categoryListScrollClassName =
-  "scroll-fade-y min-h-0 flex-1 space-y-2.5 overflow-y-auto px-1 py-1 sidebar-scroll";
+  "min-h-0 flex-1 flex gap-2 overflow-x-auto px-1 py-1 sidebar-scroll lg:scroll-fade-y lg:block lg:space-y-2.5 lg:overflow-x-hidden lg:overflow-y-auto";
 
 export const categoryPanelInnerClassName =
   "flex h-full min-h-0 flex-col rounded-xl bg-gradient-to-b from-orange-50/55 to-white";
 
 export const productPanelContentClassName =
-  "flex h-full min-h-0 flex-col overflow-hidden p-4";
+  "flex h-full min-h-0 flex-col lg:overflow-hidden p-3 sm:p-4";
 
 export const shopNoticeClassName =
   "mb-4 rounded-lg border border-primary/15 bg-primary/5 px-5 py-9 text-sm text-primary";

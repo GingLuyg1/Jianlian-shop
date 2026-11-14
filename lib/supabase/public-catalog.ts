@@ -417,6 +417,10 @@ export function mapPublicProductToProduct(
     typeof (row as PublicCatalogProductRow).max_price === "number"
       ? Number((row as PublicCatalogProductRow).max_price)
       : row.price;
+  const salesCount =
+    typeof (row as PublicCatalogProductRow).sales_count === "number"
+      ? Math.max(0, Number((row as PublicCatalogProductRow).sales_count))
+      : 0;
   const stockStatus: StockStatus =
     row.status === "sold_out" || effectiveStock <= 0
       ? "out-of-stock"
@@ -437,7 +441,7 @@ export function mapPublicProductToProduct(
     originalPrice: row.original_price,
     stock: effectiveStock,
     sortOrder: row.sort_order,
-    metadata: { ...publicProductMetadata(row.metadata), slug: row.slug, hasSkus, minPrice, maxPrice },
+    metadata: { ...publicProductMetadata(row.metadata), slug: row.slug, hasSkus, minPrice, maxPrice, salesCount },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     price: minPrice,

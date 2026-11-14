@@ -8,7 +8,6 @@ import {
   useMemo,
   useRef,
   useState,
-  Suspense,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -36,6 +35,7 @@ import {
   Zap,
 } from "lucide-react";
 import PublicLayout from "@/components/layout/PublicLayout";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -197,14 +197,7 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
 }
 
 export default function CheckoutPage() {
-  return (
-    <Suspense fallback={<div role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">结算页面加载中...</div>}>
-      <CheckoutPageContent />
-    </Suspense>
-  );
-}
-
-function CheckoutPageContent() {
+  const { isMobile } = useMobileStorefront();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { settings } = usePublicSettings();
@@ -558,7 +551,7 @@ function CheckoutPageContent() {
 
   if (!product || !productRow) {
     return (
-      <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 max-w-none px-4 py-5 sm:px-5 lg:mt-0 lg:px-6">
+      <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none px-4 py-5 sm:px-5 lg:mt-0 lg:px-6">
         <Card>
           <CardContent className="py-20 text-center">
             <h2 className="text-lg font-semibold">商品未找到</h2>
@@ -770,8 +763,8 @@ function CheckoutPageContent() {
   };
 
   return (
-    <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 max-w-none py-4 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
-      <div data-testid="checkout-layout" className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
+    <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden lg:py-4 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
+      <div data-testid="checkout-layout" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isMobile && "!grid-cols-1 !h-auto")}>
         <ProductDetailCard
           product={product}
           loading={productLoading}
@@ -779,7 +772,7 @@ function CheckoutPageContent() {
           closeHref={safeProductReturnTo(searchParams.get("returnTo")) ?? getProductListHref(product)}
         />
 
-        <Card data-testid="checkout-purchase-panel" className="h-auto min-h-0 overflow-hidden lg:h-full">
+        <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden lg:h-full">
           <CardContent className="flex h-full min-h-0 flex-col p-0">
             <div className="min-h-0 flex-1 bg-white p-4 lg:overflow-y-auto">
               <div className="flex min-h-full flex-col gap-4">
@@ -892,7 +885,7 @@ function CheckoutPageContent() {
                   </p>
                 ) : null}
                 {selectedPaymentChannel?.providerExternalFeeDisclosure ? (
-                  <div className="mt-2 text-xs leading-5 text-amber-700">
+                  <div className="sr-only" aria-hidden="true">
                     {selectedPaymentChannel.providerExternalFeeDisclosure}
                     <ExternalCashierFeeSummary principal={orderAmount} provider={selectedPaymentChannel.provider} currency={selectedPaymentChannel.currency} />
                   </div>
@@ -1260,9 +1253,9 @@ function ProductDetailSkeleton() {
 }
 
 function CheckoutLoadingShell() {
-  return <PublicLayout mobileNavigationUntilLg contentClassName="mt-12 max-w-none py-4 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
-    <div data-testid="checkout-progressive-loading" className="grid min-h-0 grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
-      <Card className="min-h-0 overflow-auto"><CardContent className="p-6"><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
+  return <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden lg:py-4 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
+    <div data-testid="checkout-progressive-loading" className="grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
+      <Card className="min-h-0 overflow-auto"><CardContent className="p-4 sm:p-6"><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
       <Card className="min-h-0"><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
     </div>
   </PublicLayout>;
@@ -1280,12 +1273,13 @@ function ProductDetailCard({
   closeHref: string;
 }) {
   const router = useRouter();
+  const { isMobile } = useMobileStorefront();
   const family = resolveRechargeProductFamily(product);
   return (
     <Card data-testid="checkout-product-detail" className="relative h-auto min-h-0 overflow-hidden lg:h-full">
       <button
         type="button"
-        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground"
+        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground sm:right-4 sm:top-4 sm:h-9 sm:w-9"
         onClick={() => {
           router.push(closeHref);
         }}
@@ -1293,24 +1287,24 @@ function ProductDetailCard({
       >
         <X className="h-4 w-4" />
       </button>
-      <CardContent className={cn("h-auto p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]", loading && "flex flex-col")}>
+      <CardContent className={cn("h-auto p-4 sm:p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]", isMobile && "!h-auto !overflow-visible !p-3.5", loading && "flex flex-col")}>
         <div data-testid="checkout-product-detail-content" className={cn("mx-auto w-full max-w-[1040px]", loading && "flex min-h-0 flex-1 flex-col")}>
-        <div className="mb-5 shrink-0 text-sm font-medium text-muted-foreground">
+        <div className="mb-3 pr-9 shrink-0 text-xs font-medium text-muted-foreground sm:mb-5 sm:text-sm">
           {product.categoryLabel}
         </div>
 
-        <div className="grid shrink-0 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <div className="flex min-h-[210px] items-center justify-center rounded-xl bg-slate-50">
+        <div className={cn("grid shrink-0 gap-4 sm:gap-6 lg:grid-cols-[240px_minmax(0,1fr)]", isMobile && "!grid-cols-1 !gap-3.5")}>
+          <div className="flex min-h-[140px] items-center justify-center rounded-xl bg-slate-50 py-3 sm:min-h-[210px] sm:py-0">
             <ProductArtwork product={product} />
           </div>
 
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold">{product.name}</h1>
-            <p className="mt-3 w-full text-sm leading-relaxed text-muted-foreground">
+            <h1 className="text-xl font-bold leading-snug sm:text-2xl">{product.name}</h1>
+            <p className="mt-2 w-full text-sm leading-relaxed text-muted-foreground sm:mt-3">
               {product.description}
             </p>
 
-            <div className="mt-8 grid w-full grid-cols-1 gap-4 rounded-xl border border-border bg-white p-5 sm:grid-cols-2">
+            <div className="mt-4 grid w-full grid-cols-2 gap-3 rounded-xl border border-border bg-white p-3.5 sm:mt-8 sm:gap-4 sm:p-5">
               <DetailMetric label="商品分类" value={product.categoryLabel} />
               <DetailMetric label="商品单价" value={priceLabel} highlight />
               <DetailMetric
@@ -1320,6 +1314,17 @@ function ProductDetailCard({
                 danger={product.stockStatus === "out-of-stock"}
               />
               <DetailMetric label="商品发货方式" value={product.deliveryLabel} />
+            </div>
+
+            <div className={cn("mt-3.5 lg:hidden", isMobile && "!block")}>
+              <button
+                type="button"
+                onClick={() => document.getElementById("checkout-purchase-card")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-primary/25 bg-orange-50/80 px-4 text-sm font-semibold text-primary shadow-sm transition-colors active:bg-orange-100"
+              >
+                <span>选择规格 / 填写订单</span>
+                <ChevronDown className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </div>

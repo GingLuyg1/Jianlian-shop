@@ -18,16 +18,20 @@ function text(value: unknown, max = 200) { return typeof value === "string" && v
 function money(value: unknown, optional = false) { if (optional && (value === null || value === "" || value === undefined)) return null; const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : undefined; }
 function integer(value: unknown) { const n = Number(value); return Number.isSafeInteger(n) && n >= 0 ? n : undefined; }
 
-export async function GET(_request: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
+export async function GET(_request: Request, { params }: { params: { id: string } }) {
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
+  const hasServiceRole = Boolean(getSupabaseServiceRoleClient());
   const service = getSupabaseServiceRoleClient() ?? admin.supabase;
+  const skuFields = (hasServiceRole ? SKU_FIELDS : SKU_FIELDS.replace(",metadata,", ",")) as typeof SKU_FIELDS;
+  const productFields = (
+    hasServiceRole ? "id,slug,stock,metadata,delivery_type" : "id,slug,stock,delivery_type"
+  ) as "id,slug,stock,metadata,delivery_type";
   const [schemaReadiness, skuResult, productResult] = await Promise.all([
     inspectCatalogSkuSchema(service),
-    service.from("product_skus").select(SKU_FIELDS).eq("product_id", params.id).order("sort_order").order("created_at"),
-    service.from("products").select("id,slug,stock,metadata,delivery_type").eq("id", params.id).maybeSingle(),
+    service.from("product_skus").select(skuFields).eq("product_id", params.id).order("sort_order").order("created_at"),
+    service.from("products").select(productFields).eq("id", params.id).maybeSingle(),
   ]);
   if (skuResult.error && schemaReadiness.ready) return json({ error: "SKU 读取失败", requestId }, 500);
   if (productResult.error || !productResult.data) return json({ error: "商品不存在", requestId }, 404);
@@ -49,8 +53,7 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
   });
 }
 
-export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
+export async function POST(request: Request, { params }: { params: { id: string } }) {
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;

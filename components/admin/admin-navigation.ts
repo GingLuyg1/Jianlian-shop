@@ -2,9 +2,10 @@ import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   ClipboardList,
-  FileLock2,
   Factory,
+  FileLock2,
   ImageIcon,
+  Landmark,
   LayoutDashboard,
   MailCheck,
   Package,
@@ -20,7 +21,7 @@ import {
   isAdminPathActive,
 } from "./admin-navigation-state.mjs";
 
-export type AdminNavigationGroupKey = "products" | "system";
+export type AdminNavigationGroupKey = "products" | "suppliers" | "trade" | "finance" | "users" | "system";
 
 type AdminNavigationLink = {
   type: "link";
@@ -48,26 +49,64 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
   {
     type: "group",
     key: "products",
-    label: "商品管理",
+    label: "商品与库存",
     icon: Package,
+    routePrefixes: ["/admin/products", "/admin/categories", "/admin/inventory", "/admin/media"],
     children: [
       { label: "商品列表", href: "/admin/products" },
       { label: "分类管理", href: "/admin/categories" },
+      { label: "数字库存", href: "/admin/inventory" },
+      { label: "媒体资源", href: "/admin/media" },
     ],
   },
-  { type: "link", label: "数字库存", href: "/admin/inventory", icon: PackageCheck },
-  { type: "link", label: "供应商管理", href: "/admin/suppliers", icon: Factory },
-  { type: "link", label: "供应商履约", href: "/admin/supplier-fulfillment", icon: Factory },
-  { type: "link", label: "余额流水", href: "/admin/balance-ledger", icon: WalletCards },
-  { type: "link", label: "媒体资源", href: "/admin/media", icon: ImageIcon },
-  { type: "link", label: "支付管理", href: "/admin/payments", icon: WalletCards },
-  { type: "link", label: "充值管理", href: "/admin/recharges", icon: WalletCards },
-  { type: "link", label: "订单管理", href: "/admin/orders", icon: ClipboardList },
-  { type: "link", label: "售后退款", href: "/admin/refunds", icon: RotateCcw },
-  { type: "link", label: "风险审核", href: "/admin/risk", icon: ShieldCheck },
-  { type: "link", label: "用户管理", href: "/admin/users", icon: Users },
-  { type: "link", label: "隐私请求", href: "/admin/privacy-requests", icon: FileLock2 },
-  { type: "link", label: "邮件通知", href: "/admin/notifications/email-deliveries", icon: MailCheck },
+  {
+    type: "group",
+    key: "suppliers",
+    label: "供应链管理",
+    icon: Factory,
+    routePrefixes: ["/admin/suppliers", "/admin/supplier-fulfillment"],
+    children: [
+      { label: "供应商管理", href: "/admin/suppliers" },
+      { label: "供应商履约", href: "/admin/supplier-fulfillment" },
+    ],
+  },
+  {
+    type: "group",
+    key: "trade",
+    label: "订单与交易",
+    icon: ClipboardList,
+    routePrefixes: ["/admin/orders", "/admin/refunds", "/admin/risk"],
+    children: [
+      { label: "订单管理", href: "/admin/orders" },
+      { label: "售后退款", href: "/admin/refunds" },
+      { label: "风险审核", href: "/admin/risk" },
+    ],
+  },
+  {
+    type: "group",
+    key: "finance",
+    label: "财务管理",
+    icon: Landmark,
+    routePrefixes: ["/admin/finance", "/admin/payments", "/admin/recharges", "/admin/balance-ledger"],
+    children: [
+      { label: "财务看板", href: "/admin/finance" },
+      { label: "支付管理", href: "/admin/payments" },
+      { label: "充值管理", href: "/admin/recharges" },
+      { label: "余额流水", href: "/admin/balance-ledger" },
+    ],
+  },
+  {
+    type: "group",
+    key: "users",
+    label: "用户与通信",
+    icon: Users,
+    routePrefixes: ["/admin/users", "/admin/privacy-requests", "/admin/notifications"],
+    children: [
+      { label: "用户管理", href: "/admin/users" },
+      { label: "隐私请求", href: "/admin/privacy-requests" },
+      { label: "邮件通知", href: "/admin/notifications/email-deliveries" },
+    ],
+  },
   { type: "link", label: "系统设置", href: "/admin/settings", icon: Settings },
   {
     type: "group",
