@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSafeInternalRedirect } from "@/lib/auth/redirect";
 import { getAuthSiteOrigin } from "@/lib/auth/site-origin";
-import { PENDING_SIGNUP_KEY, encodePendingSignup, decodePendingSignup, type PendingSignup } from "@/lib/auth/pending-signup";
+import { PENDING_SIGNUP_KEY, encodePendingSignup, decodePendingSignup, readPendingSignup, type PendingSignup } from "@/lib/auth/pending-signup";
 import { getSafeAuthErrorMessage, getSafeNetworkAuthMessage, isEmailFormatValid, validateAuthPassword } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
@@ -91,14 +91,27 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   useEffect(() => {
     if (!isRegister) return;
     try {
-      const pending = decodePendingSignup(window.sessionStorage.getItem(PENDING_SIGNUP_KEY));
-      if (pending) setRegistration(pending);
-      else window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
+      const pending = readPendingSignup(window.localStorage);
+      if (pending) {
+        setRegistration(pending);
+        return;
+      }
+      // Migrate the one previous session-scoped value into localStorage once.
+      const legacyRaw = window.sessionStorage.getItem(PENDING_SIGNUP_KEY);
+      const legacy = decodePendingSignup(legacyRaw);
+      if (legacy) {
+        window.localStorage.setItem(PENDING_SIGNUP_KEY, encodePendingSignup(legacy));
+        setRegistration(legacy);
+      }
+      window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
     } catch { /* Verification remains usable when browser storage is unavailable. */ }
   }, [isRegister]);
 
   function forgetPendingSignup() {
-    try { window.sessionStorage.removeItem(PENDING_SIGNUP_KEY); } catch { /* No credentials are stored. */ }
+    try {
+      window.localStorage.removeItem(PENDING_SIGNUP_KEY);
+      window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
+    } catch { /* No credentials are stored. */ }
   }
 
   async function verifyRegistration(code: string) {
@@ -319,7 +332,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           return;
         }
         const pending = { email: normalizedEmail, userId: data.user.id, invite: normalizedInviteCode };
-        try { window.sessionStorage.setItem(PENDING_SIGNUP_KEY, encodePendingSignup(pending)); } catch { /* No password/token persistence. */ }
+        try { window.localStorage.setItem(PENDING_SIGNUP_KEY, encodePendingSignup(pending)); } catch { /* No password/token persistence. */ }
         setRegistration(pending);
         setPassword("");
         setConfirmPassword("");
