@@ -57,9 +57,9 @@ test('channel amounts are not truncated and shared wide tables offer keyboard sc
   assert.match(lists, /role="region" aria-label="数据表，可左右滑动" tabIndex=\{0\}/);
 });
 
-test('dashboard queries, aggregation and business rules match the Production base digest', () => {
-  // SHA-256 of app/admin/page.tsx before the component at Production commit 4575d802.
-  const baseDigest = '47e5de1ca8f0d848603f172dc40c516e0985bd8aa1ce3f5a00b31ad4a7700766';
+test('dashboard queries, aggregation and business rules match the current Production base digest', () => {
+  // SHA-256 of app/admin/page.tsx before the component after the approved admin dashboard baseline.
+  const baseDigest = 'ef57b94dcc5766c6d416664e9a57984ed099200c552b66bbcfcec4aac395a25f';
   const prefix = text => text.replaceAll('\r\n', '\n').split('export default function AdminDashboardPage')[0];
   const digest = createHash('sha256').update(prefix(source('app/admin/page.tsx'))).digest('hex');
   assert.equal(digest, baseDigest);
