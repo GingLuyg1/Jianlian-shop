@@ -213,6 +213,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
   useEffect(() => {
     if (!hasSupabaseConfig()) return;
+    // A successful signup with email confirmation enabled has no session yet.
+    // Keep the OTP step visible while the signup state is active instead of
+    // allowing a late getUser() result to clear it or redirect away.
+    if (registration) return;
     let active = true;
 
     getSupabaseBrowserClient()
@@ -234,7 +238,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
     return () => {
       active = false;
     };
-  }, [redirectTo, router]);
+  }, [redirectTo, registration, router]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
