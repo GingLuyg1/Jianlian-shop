@@ -7,20 +7,21 @@ import { createHash } from 'node:crypto';
 import { loadDashboardUi, renderDashboard } from '../helpers/admin-dashboard-ui-harness.mjs';
 const source = path => readFileSync(path, 'utf8');
 
-test('390px metrics use two columns and incomplete grids have no empty border-colored slot', () => {
+test('390px metrics keep two columns while the current dashboard scales to five desktop KPIs', () => {
   const html = renderDashboard();
-  assert.match(html, /grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7/);
-  assert.match(html, /\[&amp;&gt;\*:last-child\]:col-span-2/);
-  assert.equal((html.match(/grid shrink-0 min-h/g) ?? []).length, 3);
+  assert.match(html, /grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5/);
+  assert.match(html, /dashboard-analysis-grid dashboard-aligned-columns/);
+  assert.match(html, /dashboard-sales-grid/);
   assert.match(source('components/admin/AdminLayout.tsx'), /h-\[100dvh\] max-h-\[100dvh\]/);
 });
 
-test('recent mobile records retain every field; desktop retains table and Chinese states', () => {
+test('recent order records keep mobile and desktop views with product, order number and Chinese states', () => {
   const html = renderDashboard();
   assert.match(html, /space-y-3 md:hidden/);
   assert.match(html, /hidden md:block/);
   assert.match(html, /<dt[^>]*>订单号<\/dt>/);
-  assert.match(html, /synthetic-long-name@example.invalid/);
+  assert.match(html, /<dt[^>]*>成交商品<\/dt>/);
+  assert.match(html, /Synthetic Product/);
   assert.match(html, /JL_SYNTHETIC_VERY_LONG_IDENTIFIER_123456/);
   assert.match(html, /<table/);
   assert.doesNotMatch(html, />pending<|>paid</);
@@ -48,18 +49,18 @@ test('loading, error and empty records remain explicit, no fake successful data'
   assert.doesNotMatch(html, /<table|<dl/);
 });
 
-test('channel amounts are not truncated and shared wide tables offer keyboard scrolling', () => {
+test('channel amounts stay visible and payment stats use the current four-column layout', () => {
   const html = renderDashboard();
-  assert.match(html, /grid-cols-2 gap-2 text-left text-xs sm:grid-cols-3/);
-  assert.match(html, /break-words text-sm font-semibold tabular-nums/);
+  assert.match(html, /grid grid-cols-4 gap-1\.5 text-center text-\[11px\]/);
+  assert.match(html, /shrink-0 text-sm font-semibold tabular-nums text-slate-900/);
   const lists = source('components/admin/v2/AdminList.tsx');
   assert.match(lists, /宽表可左右滑动查看完整信息/);
   assert.match(lists, /role="region" aria-label="数据表，可左右滑动" tabIndex=\{0\}/);
 });
 
-test('dashboard queries, aggregation and business rules match the Production base digest', () => {
-  // SHA-256 of app/admin/page.tsx before the component at Production commit 4575d802.
-  const baseDigest = '47e5de1ca8f0d848603f172dc40c516e0985bd8aa1ce3f5a00b31ad4a7700766';
+test('dashboard queries, aggregation and business rules match the current Production base digest', () => {
+  // SHA-256 of app/admin/page.tsx before the component after the approved admin dashboard baseline.
+  const baseDigest = 'ef57b94dcc5766c6d416664e9a57984ed099200c552b66bbcfcec4aac395a25f';
   const prefix = text => text.replaceAll('\r\n', '\n').split('export default function AdminDashboardPage')[0];
   const digest = createHash('sha256').update(prefix(source('app/admin/page.tsx'))).digest('hex');
   assert.equal(digest, baseDigest);

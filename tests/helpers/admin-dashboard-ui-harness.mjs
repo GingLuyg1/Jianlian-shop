@@ -26,8 +26,11 @@ export function loadDashboardUi(initialStates, onStateChange = () => {}) {
       if (name === 'next/link') return { __esModule: true, default: ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children) };
       if (name.startsWith('@/lib/supabase/')) return fakeClient;
       if (name.endsWith('dashboard-payment-schema.mjs')) return {};
-      if (isDashboard && name === 'react') return { ...React, useEffect: () => {}, useCallback: fn => fn, useState: value => {
-        if (stateIndex >= initialStates.length) return React.useState(value);
+      if (isDashboard && name === 'react') return { ...React, useEffect: () => {}, useCallback: fn => fn, useMemo: factory => factory(), useState: value => {
+        if (stateIndex >= initialStates.length) {
+          const index = stateIndex++;
+          return [value, update => onStateChange(index, typeof update === 'function' ? update(value) : update)];
+        }
         const index = stateIndex++;
         return [initialStates[index], update => onStateChange(index, typeof update === 'function' ? update(initialStates[index]) : update)];
       } };
@@ -57,15 +60,36 @@ export function dashboardFixture() {
     channels: ['alipay', 'wechat', 'usdt_bep20'].map((code, index) => ({ code, label: ['支付宝', '微信支付', 'USDT-BEP20'][index], enabled: false, configured: true, initiated: 100, successful: 90, exceptions: 10, amount: 123456.78 })),
     todos: Array.from({ length: 8 }, (_, index) => ({ label: ['待处理订单', '待人工交付', '自动发货失败', '库存不足订单', '支付回调失败', '对账异常', '待处理充值', '低库存商品'][index], value: index, href: '/admin/orders' })),
     salesRank: ranks, amountRank: ranks, lowStock: [], soldOut: [], recentProducts: [], staleProducts: [],
-    recentOrders: [{ order_no: 'JL_SYNTHETIC_VERY_LONG_IDENTIFIER_123456', customer_email: 'synthetic-long-name@example.invalid', total_amount: 18.90, payment_status: 'paid', status: 'completed', created_at: '2026-10-10T08:00:00Z' }],
-    recentRecharges: [{ recharge_no: 'RC_SYNTHETIC_123456789', user_email: 'synthetic@example.invalid', amount: 1, channel_name: '微信支付', status: 'pending', created_at: '2026-10-10T08:00:00Z' }],
+    recentOrders: [{ id: 'synthetic-order', order_no: 'JL_SYNTHETIC_VERY_LONG_IDENTIFIER_123456', customer_email: 'synthetic-long-name@example.invalid', product_name: 'Synthetic Product', total_amount: 18.90, payment_status: 'paid', status: 'completed', delivery_type: 'automatic', paid_at: '2026-10-10T08:00:00Z', created_at: '2026-10-10T08:00:00Z', updated_at: '2026-10-10T08:00:00Z' }],
+    recentRecharges: [{ id: 'synthetic-recharge', recharge_no: 'RC_SYNTHETIC_123456789', user_email: 'synthetic@example.invalid', amount: 1, channel_name: '微信支付', channel_code: 'wechat', status: 'pending', created_at: '2026-10-10T08:00:00Z' }],
     userOverview: [{ label: '总用户', value: 1200 }], visitorStats: [{ label: '今日', visitors: 100, views: 200 }],
     systemStatuses: [{ label: '数据库', value: '正常', tone: 'success' }],
+    rawSeries: {
+      orders: [{ id: 'synthetic-order', order_no: 'JL_SYNTHETIC_VERY_LONG_IDENTIFIER_123456', customer_email: 'synthetic-long-name@example.invalid', product_name: 'Synthetic Product', total_amount: 18.90, payment_status: 'paid', status: 'completed', delivery_type: 'automatic', paid_at: '2026-10-10T08:00:00Z', created_at: '2026-10-10T08:00:00Z', updated_at: '2026-10-10T08:00:00Z' }],
+      recharges: [{ id: 'synthetic-recharge', recharge_no: 'RC_SYNTHETIC_123456789', user_email: 'synthetic@example.invalid', amount: 1, channel_name: '微信支付', channel_code: 'wechat', status: 'pending', created_at: '2026-10-10T08:00:00Z' }],
+      visits: [{ visit_date: '2026-10-10', visitor_key: 'synthetic-visitor', page_path: '/products/synthetic-product' }],
+      users: [{ id: 'synthetic-user', role: 'customer', created_at: '2026-10-10T08:00:00Z' }],
+      sessions: [],
+      channelConfigs: [],
+      sessionsFailed: false,
+      orderItems: [],
+      products: [],
+      fetchedSince: '2026-10-01T00:00:00Z',
+    },
   };
 }
 
 export function renderDashboard(state = 'loaded') {
   const data = state === 'loaded' ? dashboardFixture() : null;
-  const ui = loadDashboardUi([data, state === 'loading', state === 'error' ? '控制台数据加载失败，请稍后重试。' : '', '7', '2026/10/10 16:00:00']);
+  const dateFilter = { preset: 'today', from: new Date('2026-10-10T00:00:00Z'), to: new Date('2026-10-10T00:00:00Z') };
+  const ui = loadDashboardUi([
+    data,
+    state === 'loading',
+    state === 'error' ? '控制台数据加载失败，请稍后重试。' : '',
+    '7',
+    dateFilter,
+    null,
+    '2026/10/10 16:00:00',
+  ]);
   return renderToStaticMarkup(ui.default());
 }

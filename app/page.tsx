@@ -106,7 +106,7 @@ function HeroCarousel() {
   }, []);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm">
+    <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm xl:h-full">
       <div
         className={cn(
           "flex h-full w-[200%]",

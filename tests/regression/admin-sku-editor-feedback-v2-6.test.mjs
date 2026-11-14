@@ -33,13 +33,16 @@ test("SKU save validates rows, excludes blank draft, and submits one atomic work
   assert.match(page, /skuEditsDirty \|\| isProductDirty/);
 });
 test("single-SKU compatibility routes retain server-side summary while workspace uses one RPC", () => {
-  for (const name of ["app/api/admin/products/[id]/skus/route.ts", "app/api/admin/products/[id]/skus/[skuId]/route.ts"]) {
-    const route = file(name);
-    assert.match(route, /requireCatalogAdmin/);
-    assert.match(route, /auditCatalogAction/);
-    assert.match(route, /await syncSkuProductSummary\(service, params\.id\)/);
-    assert.doesNotMatch(route, /\.rpc\(/);
-  }
+  const collectionRoute = file("app/api/admin/products/[id]/skus/route.ts");
+  assert.match(collectionRoute, /requireCatalogAdmin/);
+  assert.match(collectionRoute, /auditCatalogAction/);
+  assert.match(collectionRoute, /await syncSkuProductSummary\(service, id\)/);
+  assert.doesNotMatch(collectionRoute, /\.rpc\(/);
+  const itemRoute = file("app/api/admin/products/[id]/skus/[skuId]/route.ts");
+  assert.match(itemRoute, /requireCatalogAdmin/);
+  assert.match(itemRoute, /auditCatalogAction/);
+  assert.match(itemRoute, /await syncSkuProductSummary\(service, params\.id\)/);
+  assert.doesNotMatch(itemRoute, /\.rpc\(/);
   const workspace = file("app/api/admin/products/[id]/skus/workspace/route.ts");
   assert.equal(workspace.match(/service\.rpc\("admin_save_product_sku_workspace"/g)?.length, 1);
   const summary = file("lib/products/sku-summary.ts");
