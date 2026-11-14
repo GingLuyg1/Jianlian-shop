@@ -14,9 +14,9 @@ concurrency:
 
 jobs:
   upgrade-and-verify:
-    if: "github.event_name == 'workflow_dispatch' || github.event.head_commit.message != 'fix(security): upgrade Next.js to 15.5.29'"
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'fix(security): upgrade Next.js 15.5.29')
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,42 +30,32 @@ jobs:
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund next@15.5.29 eslint-config-next@15.5.29
       - name: Install exact lockfile
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Verify security version and source gates
+      - name: Migrate all Next 15 async request APIs
+        run: npx --yes @next/codemod@15.5.29 next-async-request-api .
+      - name: Scan dynamic routes and source safety gates
         shell: bash
         run: |
-          test "$(node -p "require('./node_modules/next/package.json').version")" = "15.5.29"
-          node <<'NODE'
-          const fs = require("node:fs");
-          const path = require("node:path");
-          const extensions = new Set([".ts", ".tsx", ".js", ".mjs"]);
-          const matches = [];
-          function scan(target) {
-            if (!fs.existsSync(target)) return;
-            if (fs.statSync(target).isDirectory()) {
-              for (const name of fs.readdirSync(target)) scan(path.join(target, name));
-              return;
-            }
-            if (!extensions.has(path.extname(target))) return;
-            const content = fs.readFileSync(target, "utf8");
-            if (/^\s*["']use server["']\s*;?\s*$/m.test(content)) matches.push(target);
-          }
-          for (const target of ["app", "lib", "middleware.ts"]) scan(target);
-          if (matches.length) {
-            console.error("Unexpected Server Actions directives:", matches.join(", "));
-            process.exit(1);
-          }
-          NODE
+          mkdir -p .next15-security
+          find app -type f \( -name '*\[*.ts' -o -name '*\[*.tsx' \) | sort > .next15-security/dynamic-files.txt || true
+          find app -type f \( -path '*/route.ts' -o -path '*/page.tsx' -o -path '*/layout.tsx' \) | grep '\\[' | sort >> .next15-security/dynamic-files.txt || true
+          sort -u .next15-security/dynamic-files.txt -o .next15-security/dynamic-files.txt
+          test "$(wc -l < .next15-security/dynamic-files.txt)" -ge 52
+          if grep -R -n --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' -E '^\s*["'"']use server["'"']\s*;?\s*$' app lib middleware.ts; then exit 1; fi
+          if git diff --unified=0 | grep -E '^\\+.*(@ts-ignore|@ts-expect-error|\\bany\\b)' ; then exit 1; fi
           grep -q 'unoptimized: true' next.config.js
+      - name: Verify security version
+        run: test "$(node -p "require('./node_modules/next/package.json').version")" = "15.5.29"
       - name: Typecheck
         run: npm run typecheck
       - name: Production build
         run: npm run build
-      - name: Commit generated dependency upgrade
+      - name: Commit generated dependency and compatibility upgrade
         shell: bash
         run: |
-          if git diff --quiet -- package.json package-lock.json; then echo 'No dependency diff produced'; exit 1; fi
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'No upgrade diff produced'; exit 1; }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json package-lock.json
-          git commit -m 'fix(security): upgrade Next.js to 15.5.29'
+          git commit -m 'fix(security): upgrade Next.js 15.5.29 async APIs'
           git push origin HEAD:codex/auth-next15-security-20261113
