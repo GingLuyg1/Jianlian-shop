@@ -2,7 +2,7 @@
 import { statusLabel } from '@/lib/admin/display-labels';
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   ArrowUpDown,
@@ -780,7 +780,7 @@ export default function AdminDashboardPage() {
     setProductPage(1);
   }, [dateFilter, productSortBy, productSortOrder, productPageSize]);
 
-  const refreshInFlight = useRef(false);
+  const refreshInFlight = useMemo(() => ({ current: false }), []);
   const loadDashboard = useCallback(async (sinceDate?: Date, quiet = false) => {
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
