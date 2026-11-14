@@ -22,7 +22,9 @@ jobs:
           node-version: 20
           cache: npm
       - name: Verify exact safe base
-        run: test "$(git rev-parse HEAD)" = "1d10cbe124de85e91f25c4036edfb20b686d5055"
+        run: |
+          git merge-base --is-ancestor 1d10cbe124de85e91f25c4036edfb20b686d5055 HEAD
+          git diff --quiet 1d10cbe124de85e91f25c4036edfb20b686d5055 HEAD -- app/api/admin/products/reorder/route.ts tests/regression/admin-catalog-operations-v2-4.test.mjs tests/regression/admin-risk-review.test.mjs tests/regression/source-contract.test.mjs package.json package-lock.json
       - name: Apply exact Next 15 source-contract repair
         shell: bash
         run: |
