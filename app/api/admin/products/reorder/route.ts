@@ -1,2 +1,5 @@
-export { /* @next-codemod-error `POST` export is re-exported. Check if this component uses `params` or `searchParams`*/
-POST } from "../../catalog/products/reorder/route";
+import { POST as reorderCatalogProducts } from "../../catalog/products/reorder/route";
+
+export function POST(request: Request) {
+  return reorderCatalogProducts(request);
+}
