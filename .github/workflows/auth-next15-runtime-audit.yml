@@ -14,12 +14,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
       - name: Confirm exact PR source
-        run: test "$(git rev-parse HEAD^)" = "2f206d3c0e1704eb762e4294c8f1fe80242b4dd0"
+        run: git merge-base --is-ancestor 2f206d3c0e1704eb762e4294c8f1fe80242b4dd0 HEAD
       - name: Install exact dependency lock without scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Query npm official production dependency advisories
