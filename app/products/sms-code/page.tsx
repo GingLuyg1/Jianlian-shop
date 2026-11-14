@@ -1,4 +1,4 @@
-import SmsCodeMallContent from "@/components/products/SmsCodeMallContent";
+import { redirect } from "next/navigation";
 import { productCategoryMetadata } from "@/lib/product-category-metadata";
 
 export const metadata = productCategoryMetadata({
@@ -8,5 +8,5 @@ export const metadata = productCategoryMetadata({
 });
 
 export default function SmsCodePage() {
-  return <SmsCodeMallContent />;
+  redirect("/");
 }

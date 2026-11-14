@@ -112,24 +112,24 @@ const keyPoints = [
 
 export default function FAQPage() {
   return (
-    <PublicLayout contentClassName="h-[calc(100dvh-87px)] max-w-none overflow-y-auto px-4 py-3 md:px-6">
-      <div className="mx-auto grid h-full max-w-[1500px] gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="space-y-5">
+    <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none overflow-y-auto px-4 py-3 lg:h-[calc(100dvh-87px)] md:px-6">
+      <div className="mx-auto grid max-w-[1500px] gap-4 lg:h-full md:gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="space-y-4 md:space-y-5">
           <Card className="overflow-hidden border-orange-100 bg-orange-50">
-            <CardContent className="p-6 md:p-8">
+            <CardContent className="p-5 md:p-8">
               <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-primary">
                 常见问题
               </div>
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-950">
+              <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-950 md:mt-4 md:text-3xl">
                 购买、交付、售后问题集中说明
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground">
+              <p className="mt-2.5 max-w-3xl text-sm leading-6 text-muted-foreground md:mt-3 md:leading-7">
                 如果商品详情页和本页说明不一致，请以商品详情页为准。不确定时先联系在线客服确认。
               </p>
             </CardContent>
           </Card>
 
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-4 md:gap-5 lg:grid-cols-2">
             {faqGroups.map((group) => {
               const Icon = group.icon;
               return (

@@ -44,6 +44,7 @@ import RechargeWalletIllustration from "@/components/account/RechargeWalletIllus
 import RecordLoadingPlaceholder from "@/components/account/RecordLoadingPlaceholder";
 import { accountRecordPreload, AccountRecordsError } from "@/lib/account/record-preload";
 import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import channelGridStyles from "./RechargeChannelGrid.module.css";
 import { usePaymentCardTilt } from "@/hooks/use-payment-card-tilt";
 
@@ -69,6 +70,7 @@ const CHANNEL_PRESENTATION = [
 
 export default function AccountRechargeContent() {
   const channelTilt = usePaymentCardTilt();
+  const { isMobile } = useMobileStorefront();
   const router = useRouter();
   const recordIdentity = useAccountRecordIdentity();
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>(() => peekPublicRechargeChannels() ?? []);
@@ -297,15 +299,15 @@ export default function AccountRechargeContent() {
   };
 
   return (
-    <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none px-4 py-3 md:px-6">
-      <div data-testid="recharge-layout" className={cn("mx-auto flex w-full max-w-[1540px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden", publicMainPanelHeightClassName)}>
+    <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none px-4 py-3 md:px-6", isMobile && "!px-3")}>
+      <div data-testid="recharge-layout" className={cn("mx-auto flex w-full max-w-[1540px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden", publicMainPanelHeightClassName, isMobile && "!h-auto !min-h-0 !overflow-visible !gap-3")}>
             <Card data-testid="recharge-notice-glass" className={cn(channelGridStyles.noticeGlass, "shrink-0 rounded-2xl")}>
-              <CardContent className="p-4 sm:p-5">
+              <CardContent className="p-3.5 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2"><Info className="h-4 w-4 text-primary" /><h2 className="text-[18px] font-semibold leading-6 whitespace-nowrap">充值须知</h2></div>
+                  <div className="flex items-center gap-2"><Info className="h-4 w-4 text-primary" /><h2 className="text-base font-semibold leading-6 whitespace-nowrap sm:text-[18px]">充值须知</h2></div>
                   <button type="button" onClick={openPublicSupport} className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-orange-200/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-primary shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><Headphones className="h-3.5 w-3.5" /> 在线客服 <ArrowUpRight className="h-3 w-3" /></button>
                 </div>
-                <div className="mt-4 grid gap-3 text-xs leading-5 text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="mt-3 grid grid-cols-2 gap-2.5 text-xs leading-5 text-slate-500 sm:mt-4 sm:gap-3 xl:grid-cols-4">
                   <Notice icon={FileText} title="付款说明"><span className="block">收款页无法显示，请关闭代理后重试。</span><span className="block">二维码超限，请关闭支付页重新获取。</span></Notice>
                   <Notice icon={WalletCards} title="到账与异常"><span className="block">支付成功后，等待1分钟再刷新页面。</span><span className="block">未到账，请发付款截图及用户名给客服。</span></Notice>
                   <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔上限2000元。</span><span className="block">超额请联系客服，USDT无限制。</span></Notice>
@@ -313,13 +315,13 @@ export default function AccountRechargeContent() {
                 </div>
               </CardContent>
             </Card>
-        <div className="grid min-w-0 flex-1 gap-4 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,calc((100%_-_1rem)/3.1_-_38px))] md:overflow-hidden">
-          <div data-testid="recharge-form-panel" className="min-w-0 md:min-h-0 md:overflow-hidden">
-            <Card className={cn(channelGridStyles.formGlass, "flex h-full min-w-0 flex-col overflow-hidden rounded-2xl md:overflow-y-auto")}>
-              <div className={cn(channelGridStyles.hero, "relative flex min-h-[112px] shrink-0 items-center gap-4 px-5 py-6 sm:px-6")}>
-                <span data-testid="recharge-header-icon" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 ring-1 ring-inset ring-orange-100"><Wallet className="h-6 w-6" strokeWidth={1.7} /></span>
-                <div className="relative z-10 min-w-0 sm:pr-32"><h1 className="text-xl font-bold tracking-tight sm:text-2xl">账户充值</h1><p className="mt-1.5 text-xs leading-5 text-slate-500">请选择可用渠道，填写充值金额，付款信息以创建后的充值单为准。</p></div>
-                <RechargeWalletIllustration />
+        <div className={cn("grid min-w-0 flex-1 gap-4 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,calc((100%_-_1rem)/3.1_-_38px))] md:overflow-hidden", isMobile && "!grid-cols-1 !h-auto !overflow-visible !gap-3")}>
+          <div data-testid="recharge-form-panel" className={cn("min-w-0 md:min-h-0 md:overflow-hidden", isMobile && "!h-auto !overflow-visible")}>
+            <Card className={cn(channelGridStyles.formGlass, "flex h-full min-w-0 flex-col overflow-hidden rounded-2xl md:overflow-y-auto", isMobile && "!h-auto !overflow-visible")}>
+              <div className={cn(channelGridStyles.hero, "relative flex min-h-[88px] shrink-0 items-center gap-3.5 px-4 py-4 sm:min-h-[112px] sm:gap-4 sm:px-6 sm:py-6", isMobile && "!min-h-0 !px-3.5 !py-3.5")}>
+                <span data-testid="recharge-header-icon" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 ring-1 ring-inset ring-orange-100 sm:h-12 sm:w-12"><Wallet className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={1.7} /></span>
+                <div className={cn("relative z-10 min-w-0", !isMobile && "sm:pr-32")}><h1 className="text-lg font-bold tracking-tight sm:text-2xl">账户充值</h1><p className="mt-1 text-xs leading-5 text-slate-500">请选择可用渠道，填写充值金额，付款信息以创建后的充值单为准。</p></div>
+                {!isMobile ? <RechargeWalletIllustration /> : null}
               </div>
               <CardContent className={cn(channelGridStyles.container, "flex min-w-0 flex-1 flex-col p-4 sm:p-6")}>
 
@@ -383,7 +385,7 @@ export default function AccountRechargeContent() {
                 {!channelsLoading ? <button data-payment-channel="unavailable" type="button" disabled className={cn(channelGridStyles.channelCard, "relative flex h-[84px] min-w-0 cursor-not-allowed items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-100/70 pl-[13px] pr-2.5 text-left text-slate-400")}><span className="absolute right-2 top-2 h-3.5 w-3.5 rounded-full border border-slate-300" /><span data-channel-icon className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-slate-200/70"><LockKeyhole className="h-[23px] w-[23px]" /></span><span className="min-w-0"><span className="block whitespace-nowrap text-[14px] font-semibold leading-5 sm:text-[16px] sm:leading-[22px]">暂未开放</span><span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px]">敬请期待</span></span></button> : null}
               </div>
 
-              <div className="order-3 mt-8 flex flex-col border-t border-border/70 pt-6 md:mt-auto md:pt-8">
+              <div className={cn("order-3 mt-8 flex flex-col border-t border-border/70 pt-6 md:mt-auto md:pt-8", isMobile && "!mt-5 !pt-4")}>
                 <label className="mb-1.5 block text-sm font-medium">
                   <span className="text-red-500">*</span>充值金额
                 </label>
@@ -448,8 +450,8 @@ export default function AccountRechargeContent() {
             </Card>
           </div>
 
-          <Card data-testid="recharge-history-panel" className="flex min-w-0 flex-col rounded-[20px] border-[#eaded2] bg-[#fffdfb] shadow-[0_6px_24px_-20px_rgba(91,62,38,0.35)] md:min-h-0 md:overflow-hidden">
-          <CardContent className="flex min-w-0 flex-1 flex-col p-3.5 md:min-h-0 md:overflow-hidden">
+          <Card data-testid="recharge-history-panel" className={cn("flex min-w-0 flex-col rounded-[20px] border-[#eaded2] bg-[#fffdfb] shadow-[0_6px_24px_-20px_rgba(91,62,38,0.35)] md:min-h-0 md:overflow-hidden", isMobile && "!h-auto !overflow-visible")}>
+          <CardContent className={cn("flex min-w-0 flex-1 flex-col p-3.5 md:min-h-0 md:overflow-hidden", isMobile && "!h-auto !overflow-visible")}>
             <RechargeRecordTabs value={historyTab} onChange={setHistoryTab} />
             <div id="recharge-history-content" role="tabpanel" aria-labelledby="recharge-history-tab" hidden={historyTab !== "recharges"} className={cn("min-w-0 flex-1 flex-col md:min-h-0", historyTab === "recharges" ? "flex" : "hidden")}>
             <RechargeRecords
@@ -490,7 +492,7 @@ export default function AccountRechargeContent() {
 }
 
 function Notice({ icon: Icon, title, children, className }: { icon: LucideIcon; title: string; children: ReactNode; className?: string }) {
-  return <div data-testid="recharge-notice-item" className={cn(channelGridStyles.noticeItem, "min-w-0 p-3", className)}><div className="mb-2 flex items-center gap-2.5"><span className={cn(channelGridStyles.noticeIcon, "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-orange-500")}><Icon className="h-[18px] w-[18px]" /></span><h3 className="font-semibold text-slate-800">{title}</h3></div><div>{children}</div></div>;
+  return <div data-testid="recharge-notice-item" className={cn(channelGridStyles.noticeItem, "min-w-0 p-2.5 sm:p-3", className)}><div className="mb-1.5 flex items-center gap-2 sm:mb-2 sm:gap-2.5"><span className={cn(channelGridStyles.noticeIcon, "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-orange-500 sm:h-8 sm:w-8 sm:rounded-xl")}><Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" /></span><h3 className="text-xs font-semibold text-slate-800 sm:text-sm">{title}</h3></div><div className="text-[11px] leading-4 sm:text-xs sm:leading-5">{children}</div></div>;
 }
 
 function SummaryItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {

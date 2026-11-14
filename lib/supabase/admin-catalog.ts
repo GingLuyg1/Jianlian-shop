@@ -359,6 +359,43 @@ export function isCategoryEnabled(category: AdminCategory) {
   return category.status !== "inactive";
 }
 
+function filterOutRetiredAdminCategories(categories: AdminCategory[]) {
+  const retiredIds = new Set(
+    categories
+      .filter((category) => {
+        const slug = category.slug.trim().toLowerCase();
+        const name = category.name.trim().toLowerCase();
+        return slug === "sms-code" || slug === "sms-codes" || name.includes("接码");
+      })
+      .map((category) => category.id)
+  );
+  if (retiredIds.size === 0) return categories;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const category of categories) {
+      if (category.parent_id && retiredIds.has(category.parent_id) && !retiredIds.has(category.id)) {
+        retiredIds.add(category.id);
+        changed = true;
+      }
+    }
+  }
+  return categories.filter((category) => !retiredIds.has(category.id));
+}
+
+function isRetiredSmsProduct(product: AdminProduct) {
+  const slug = product.slug.trim().toLowerCase();
+  const name = product.name.trim().toLowerCase();
+  const metaCategory = String(product.metadata?.category ?? product.metadata?.category_slug ?? "").trim().toLowerCase();
+  return (
+    slug === "sms-code" ||
+    slug.startsWith("sms-code-") ||
+    metaCategory === "sms-code" ||
+    metaCategory === "sms-codes" ||
+    name.includes("接码")
+  );
+}
+
 export async function listCategories(client?: SupabaseClient) {
   const supabase = getClient(client);
   const { data, error } = await supabase
@@ -372,7 +409,9 @@ export async function listCategories(client?: SupabaseClient) {
     throw new Error(getErrorMessage(error, "分类读取失败，请检查权限或网络"));
   }
 
-  return ((data ?? []) as Array<Record<string, unknown>>).map(normalizeCategory);
+  return filterOutRetiredAdminCategories(
+    ((data ?? []) as Array<Record<string, unknown>>).map(normalizeCategory)
+  );
 }
 
 export async function createCategory(payload: CategoryPayload) {
@@ -456,9 +495,11 @@ export async function listProducts({
     data?: { products?: Array<Record<string, unknown>>; count?: number; query_count?: number };
   }>(`/api/admin/products?${params.toString()}`);
   const products = result.products ?? result.data?.products ?? [];
-  const count = Number(result.count ?? result.data?.count ?? products.length);
+  const normalizedProducts = products.map(normalizeProduct).filter((product) => !isRetiredSmsProduct(product));
+  const removedCount = products.length - normalizedProducts.length;
+  const count = Math.max(0, Number(result.count ?? result.data?.count ?? products.length) - removedCount);
   return {
-    products: products.map(normalizeProduct),
+    products: normalizedProducts,
     count: Number.isFinite(count) ? count : 0,
     queryCount: normalizeNumber(result.query_count ?? result.data?.query_count, 1),
   };

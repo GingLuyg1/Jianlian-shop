@@ -213,7 +213,6 @@ function fallbackConfigs(): PaymentChannelConfig[] {
   return PAYMENT_CHANNELS.map((channel, index) => {
     const provider = defaultProvider(channel.id);
     const currency = channel.id.startsWith("usdt")
-      || channel.id === "binance_pay"
       ? "USDT"
       : "CNY";
 

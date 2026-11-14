@@ -74,7 +74,6 @@ function fallbackChannels(): PaymentChannelConfig[] {
   return PAYMENT_CHANNELS.map((item, index) => {
     const provider = defaultProvider(item.id);
     const currency = item.id.startsWith("usdt")
-      || item.id === "binance_pay"
       ? "USDT"
       : "CNY";
 

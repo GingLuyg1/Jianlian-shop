@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
 import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
 import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-query-cache";
@@ -35,7 +36,6 @@ const menuItems = [
   { label: "礼品卡 / 充值卡", href: "/products/gift-cards", icon: Gift },
   { label: "数字账号", href: "/products/digital-accounts", icon: KeyRound },
   { label: "AI会员充值", href: "/products/ai-membership", icon: Sparkles },
-  { label: "接码服务", href: "/products/sms-code", icon: MessageCircle },
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
   { label: "推广赚钱", href: "/promotion", icon: Share2 },
   { label: "我的订单", href: "/account/orders", icon: ClipboardList },
@@ -55,6 +55,7 @@ type PublicSidebarProps = {
 export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg = false }: PublicSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { isMobile } = useMobileStorefront();
   const { visibleHrefs, confirmed, status, rows } = useVisibleStorefrontCategoryHrefs();
   useEffect(() => {
     if (!rows) return;
@@ -125,6 +126,7 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
       styles.panel,
       "fixed z-40 hidden w-[var(--storefront-sidebar-width)] flex-col",
       mobileNavigationUntilLg ? "lg:flex" : "md:flex",
+      isMobile && "!hidden",
     )}>
       <div className={styles.brand}>
         <Link

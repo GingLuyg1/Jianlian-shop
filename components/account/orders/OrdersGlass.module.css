@@ -96,6 +96,32 @@
     border-radius: 24px;
   }
 }
+:global(html[data-mobile-preview="true"]) .list { border: 0; background: transparent; box-shadow: none; }
+:global(html[data-mobile-preview="true"]) .list table { display: block; min-width: 0; width: 100%; }
+:global(html[data-mobile-preview="true"]) .list thead { display: none; }
+:global(html[data-mobile-preview="true"]) .list tbody { display: grid; gap: 12px; }
+:global(html[data-mobile-preview="true"]) .list tbody > tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 8px;
+  padding: 14px;
+  border: 1px solid #eddfd0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fff, #fffaf3);
+  box-shadow: inset 0 1px 0 #fff, 0 5px 15px -13px #98714c;
+}
+:global(html[data-mobile-preview="true"]) .list td { display: block; height: auto; min-width: 0; padding: 0; text-align: left; }
+:global(html[data-mobile-preview="true"]) .list td::before { content: attr(data-label); display: block; margin-bottom: 4px; color: #9b8775; font-size: 11px; line-height: 1.4; }
+:global(html[data-mobile-preview="true"]) .list td:nth-child(1),
+:global(html[data-mobile-preview="true"]) .list td:nth-child(2),
+:global(html[data-mobile-preview="true"]) .list td:nth-child(5),
+:global(html[data-mobile-preview="true"]) .list td:nth-child(6),
+:global(html[data-mobile-preview="true"]) .list td:nth-child(7) { grid-column: 1 / -1; }
+:global(html[data-mobile-preview="true"]) .list td:nth-child(2) > div { max-width: 100%; margin: 0; }
+:global(html[data-mobile-preview="true"]) .list td:nth-child(1) button { padding-left: 0; justify-content: flex-start; }
+:global(html[data-mobile-preview="true"]) .list td:last-child::before { content: none; }
+:global(html[data-mobile-preview="true"]) .list td:last-child > div { justify-content: flex-end; }
+:global(html[data-mobile-preview="true"]) .list td:last-child button { float: right; }
 @media (prefers-reduced-motion: reduce) {
   .overlay[data-state], .detailDialog[data-state], .queryDialog[data-state] { animation: none; }
   .list tbody > tr { transition: none; }

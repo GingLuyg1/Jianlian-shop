@@ -143,6 +143,7 @@ function renderRecharge(channel, options = {}) {
     "@/lib/payments/online-payment-policy.mjs": onlinePolicy,
     "@/lib/account/record-presentation": { rechargeCreditedCny: () => "—", rechargeDisplayNumber: () => "000000" },
     "@/hooks/use-payment-card-tilt": { usePaymentCardTilt: () => ({}) },
+    "@/hooks/use-mobile-storefront": { useMobileStorefront: () => ({ isMobile: false, mobilePreview: false, showToggle: false, toggleMobilePreview: () => {} }) },
     "next/link": { default: box, __esModule: true },
     "next/navigation": { useRouter: () => ({ push: noNetwork }) },
     sonner: { toast: { error: noNetwork } },

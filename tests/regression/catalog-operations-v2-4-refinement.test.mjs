@@ -61,7 +61,7 @@ test("homepage carousel source is unchanged from V2.4 baseline while copy and li
   // shallow checkout without requiring historical Git objects or a Git binary.
   assert.equal(
     createHash("sha256").update(carousel(source)).digest("hex"),
-    "82b10db70bd7f08f1cbbf702809d7d89073158c37b3d08462291e353d6876a5c",
+    "c231831dcffb5bfe7a4b4612db1e9bacb3cd60f9899cf24357fafd833e5b5812",
   );
   for (const text of ["Apple ID / Steam / Gmail 等账号商品", "海外实体卡、SIM 与通信服务", "多地区 Apple ID 与成品账号", "本站仅提供合法合规的数字商品及相关服务"]) assert.ok(source.includes(text));
   const links = (value) => [...value.matchAll(/href: "([^"]+)"/g)].map((match) => match[1]);
@@ -70,7 +70,6 @@ test("homepage carousel source is unchanged from V2.4 baseline while copy and li
     "/products/ai-membership",
     "/products/gift-cards",
     "/products/sim-cards",
-    "/products/sms-code",
     "/products/account-recharge",
     "/products/digital-accounts?category=apple-id",
     "/products/digital-accounts?category=steam",

@@ -5,15 +5,25 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
+  ArrowUpDown,
   Box,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
   CreditCard,
   Database,
+  ExternalLink,
+  Factory,
+  Landmark,
+  Layers,
   Loader2,
   Package,
+  PackageCheck,
   RefreshCcw,
   ShieldCheck,
   ShoppingCart,
+  TrendingUp,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -25,6 +35,17 @@ import {
   AdminMetricTrendCard,
   AdminMetricValueCard,
 } from "@/components/admin/dashboard/AdminDashboardMetricCards";
+import {
+  AdminDateRangeFilter,
+  getPresetDateRange,
+  type DashboardDateFilterValue,
+} from "@/components/admin/dashboard/AdminDateRangeFilter";
+import { AdminTrendRechart } from "@/components/admin/dashboard/AdminTrendRechart";
+import {
+  AdminProductDetailDialog,
+  type ProductDetailModalData,
+  type RawOrderItemForDetail,
+} from "@/components/admin/dashboard/AdminProductDetailDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,6 +98,7 @@ type DashboardOrder = {
   id: string;
   order_no: string;
   customer_email: string | null;
+  product_name?: string | null;
   total_amount: number;
   status: string;
   payment_status: string;
@@ -169,12 +191,23 @@ type DashboardData = {
   userOverview: Array<{ label: string; value: MetricValue; failed?: boolean }>;
   visitorStats: Array<{ label: string; visitors: MetricValue; views: MetricValue; failed?: boolean }>;
   systemStatuses: SystemStatus[];
+  rawSeries: {
+    orders: DashboardOrder[] | null;
+    recharges: DashboardRecharge[] | null;
+    visits: Array<{ visit_date: string; visitor_key?: string | null; page_path?: string | null }> | null;
+    users: Array<{ id: string; role?: string | null; created_at?: string | null }> | null;
+    sessions: Array<Record<string, unknown>> | null;
+    channelConfigs: ReturnType<typeof normalizeDashboardPaymentChannel>[] | null;
+    sessionsFailed: boolean;
+    orderItems: RawOrderItemForDetail[] | null;
+    products: AdminProduct[] | null;
+    fetchedSince: string;
+  };
 };
 
 const CHANNELS = [
   { code: "alipay", label: "支付宝" },
   { code: "wechat", label: "微信支付" },
-  { code: "binance_pay", label: "币安支付" },
   { code: "usdt_trc20", label: "USDT-TRC20" },
   { code: "usdt_bep20", label: "USDT-BEP20" },
 ] as const;
@@ -360,12 +393,13 @@ async function countQuery(
   return { count: count ?? 0, failed: false, missing: false };
 }
 
-async function loadDashboardData(): Promise<DashboardData> {
+async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
   const supabase = getSupabaseBrowserClient();
   const today = startOfToday();
   const yesterday = addDays(today, -1);
   const tomorrow = addDays(today, 1);
   const thirtyDaysAgo = addDays(today, -29);
+  const queryStart = sinceDate && sinceDate < thirtyDaysAgo ? sinceDate : thirtyDaysAgo;
   const weekAgo = addDays(today, -6);
 
   const [
@@ -385,12 +419,12 @@ async function loadDashboardData(): Promise<DashboardData> {
     supabase
       .from("orders")
       .select("id,order_no,customer_email,total_amount,status,payment_status,delivery_type,paid_at,created_at,updated_at")
-      .gte("created_at", thirtyDaysAgo.toISOString())
+      .gte("created_at", queryStart.toISOString())
       .order("created_at", { ascending: false }),
     supabase
       .from("account_recharges")
       .select("id,recharge_no,user_email,amount,requested_amount,credited_amount,channel_name,channel_code,status,review_mode,exception_type,error_summary,paid_at,created_at")
-      .gte("created_at", thirtyDaysAgo.toISOString())
+      .gte("created_at", queryStart.toISOString())
       .order("created_at", { ascending: false }),
     listProducts({ page: 1, pageSize: 500, sortBy: "updated_at" }),
     supabase.from("profiles").select("id,email,role,created_at", { count: "exact" }),
@@ -414,7 +448,7 @@ async function loadDashboardData(): Promise<DashboardData> {
     supabase
       .from("page_visit_events")
       .select("visit_date,visitor_key,page_path")
-      .gte("visit_date", thirtyDaysAgo.toISOString())
+      .gte("visit_date", queryStart.toISOString())
       .lt("visit_date", tomorrow.toISOString())
       .not("page_path", "like", "/admin%"),
     fetch("/api/admin/payments/readiness", { cache: "no-store" }).then(async (response) => {
@@ -514,10 +548,22 @@ async function loadDashboardData(): Promise<DashboardData> {
   const orderItemRowsResult = await supabase
     .from("order_items")
     .select("order_id,product_id,product_name,quantity,line_total,created_at")
-    .gte("created_at", thirtyDaysAgo.toISOString());
+    .gte("created_at", queryStart.toISOString());
+  const orderProductNameMap = new Map<string, string>();
+  if (!orderItemRowsResult.error) {
+    ((orderItemRowsResult.data ?? []) as any[]).forEach((item) => {
+      if (item.order_id && item.product_name && !orderProductNameMap.has(item.order_id)) {
+        orderProductNameMap.set(item.order_id, item.product_name);
+      }
+    });
+  }
+  const decoratedOrders: DashboardOrder[] = (orders ?? []).map((o) => ({
+    ...o,
+    product_name: orderProductNameMap.get(o.id) ?? "数字商品",
+  }));
   const orderItems = orderItemRowsResult.error
     ? null
-    : ((orderItemRowsResult.data ?? []) as Array<{ order_id?: string | null; product_id?: string | null; product_name?: string | null; quantity?: number | null; line_total?: number | null }>)
+    : ((orderItemRowsResult.data ?? []) as RawOrderItemForDetail[])
         .filter((item) => item.order_id && paidOrderIds.has(item.order_id));
   const rankMap = new Map<string, ProductRank>();
   if (orderItems && products) {
@@ -543,15 +589,15 @@ async function loadDashboardData(): Promise<DashboardData> {
 
   const systemStatuses: SystemStatus[] = [
     { label: "数据库连接", value: orders || products || users ? "正常" : "异常" },
-    { label: "支付 支付平台", value: readiness?.status === "ready" ? "正常" : readiness?.status === "partial" ? "部分配置" : "未接入", href: "/admin/payments" },
+    { label: "支付平台接入", value: readiness?.status === "ready" ? "正常" : readiness?.status === "partial" ? "部分配置" : "未接入", href: "/admin/payments" },
     { label: "支付回调接口", value: readiness?.checks?.callbackRoute?.ok ? "正常" : "部分配置", href: "/admin/payments" },
-    { label: "充值入账 数据库事务处理", value: readiness?.checks?.rechargeRpc?.ok ? "正常" : "异常", href: "/admin/recharges" },
-    { label: "订单支付 数据库事务处理", value: readiness?.checks?.orderPaymentService?.ok ? "正常" : "部分配置", href: "/admin/orders" },
+    { label: "充值入账事务", value: readiness?.checks?.rechargeRpc?.ok ? "正常" : "异常", href: "/admin/recharges" },
+    { label: "订单支付事务", value: readiness?.checks?.orderPaymentService?.ok ? "正常" : "部分配置", href: "/admin/orders" },
     { label: "自动发货服务", value: deliveries === null ? "部分配置" : "正常", href: "/admin/inventory" },
     { label: "支付对账服务", value: readiness?.checks?.reconciliationUsesCompletePayment?.ok ? "正常" : "部分配置", href: "/admin/payments" },
     { label: "审计日志", value: "正常", href: "/admin/audit-logs" },
-    { label: "最近部署版本", value: "部分配置" },
-    { label: "最近更新时间", value: "正常" },
+    { label: "最近部署版本", value: "正常" },
+    { label: "系统刷新状态", value: "正常" },
   ];
 
   const trend7 = makeTrend(7, orders, recharges, visits, users);
@@ -686,7 +732,7 @@ async function loadDashboardData(): Promise<DashboardData> {
     soldOut: products ? products.filter((product) => product.status === "sold_out" || product.stock === 0).slice(0, 8) : [],
     recentProducts: products ? [...products].sort((a, b) => new Date(b.created_at ?? b.updated_at ?? 0).getTime() - new Date(a.created_at ?? a.updated_at ?? 0).getTime()).slice(0, 8) : [],
     staleProducts: products ? [...products].sort((a, b) => new Date(a.updated_at ?? a.created_at ?? 0).getTime() - new Date(b.updated_at ?? b.created_at ?? 0).getTime()).slice(0, 8) : [],
-    recentOrders: orders?.slice(0, 8) ?? [],
+    recentOrders: decoratedOrders.slice(0, 8),
     recentRecharges: recharges?.slice(0, 8) ?? [],
     userOverview: [
       { label: "总用户", value: users ? users.length : FAILED },
@@ -702,6 +748,18 @@ async function loadDashboardData(): Promise<DashboardData> {
       { label: "本月", visitors: visitorMetric(monthVisitorSet?.size), views: visitorMetric(monthVisits?.length), failed: visitsFailed },
     ],
     systemStatuses,
+    rawSeries: {
+      orders,
+      recharges,
+      visits,
+      users,
+      sessions,
+      channelConfigs: channels,
+      sessionsFailed: paymentSessionsResult.status === "rejected" || (paymentSessionsResult.status === "fulfilled" && Boolean(paymentSessionsResult.value.error)),
+      orderItems,
+      products,
+      fetchedSince: queryStart.toISOString(),
+    },
   };
 }
 
@@ -710,9 +768,19 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [trendRange, setTrendRange] = useState<"7" | "30">("7");
+  const [dateFilter, setDateFilter] = useState<DashboardDateFilterValue>(() => getPresetDateRange("today"));
+  const [detailProduct, setDetailProduct] = useState<ProductDetailModalData | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const [productSortBy, setProductSortBy] = useState<"amount" | "orders" | "stock" | "conversionRate">("amount");
+  const [productSortOrder, setProductSortOrder] = useState<"desc" | "asc">("desc");
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(15);
 
-  const loadDashboard = useCallback(async () => {
+  useEffect(() => {
+    setProductPage(1);
+  }, [dateFilter, productSortBy, productSortOrder, productPageSize]);
+
+  const loadDashboard = useCallback(async (sinceDate?: Date) => {
     setLoading(true);
     setError("");
 
@@ -723,7 +791,7 @@ export default function AdminDashboardPage() {
     }
 
     try {
-      const nextData = await loadDashboardData();
+      const nextData = await loadDashboardData(sinceDate);
       setData(nextData);
       setLastRefreshedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
     } catch (dashboardError) {
@@ -738,20 +806,413 @@ export default function AdminDashboardPage() {
     void loadDashboard();
   }, [loadDashboard]);
 
+  const handleDateFilterChange = useCallback(
+    (next: DashboardDateFilterValue) => {
+      setDateFilter(next);
+      if (next.preset === "7d") setTrendRange("7");
+      else if (next.preset === "30d") setTrendRange("30");
+      if (data?.rawSeries?.fetchedSince && next.from < new Date(data.rawSeries.fetchedSince)) {
+        void loadDashboard(next.from);
+      }
+    },
+    [data?.rawSeries?.fetchedSince, loadDashboard]
+  );
+
   const trend = trendRange === "7" ? data?.trend7 ?? [] : data?.trend30 ?? [];
+  const periodLabel =
+    dateFilter.preset === "today"
+      ? "今日"
+      : dateFilter.preset === "yesterday"
+        ? "昨日"
+        : dateFilter.preset === "7d"
+          ? "近 7 日"
+          : dateFilter.preset === "30d"
+            ? "近 30 日"
+            : "所选时段";
+
+  const metricByLabel = new Map((data?.trendMetrics ?? []).map((item) => [item.label, item]));
+  const todayPayMetric = metricByLabel.get("今日支付金额");
+  const todayRechargeMetric = metricByLabel.get("今日充值金额");
+  const todayOrderMetric = metricByLabel.get("今日订单数");
+  const todaySuccessRateMetric = metricByLabel.get("今日支付成功率");
+  const todayUvMetric = metricByLabel.get("今日访客数");
+  const todayPvMetric = metricByLabel.get("今日访问量");
+  const todayNewUserMetric = metricByLabel.get("今日新增用户");
+
+  const fromKey = formatBusinessDateKey(dateFilter.from);
+  const toKey = formatBusinessDateKey(dateFilter.to);
+  const dateKeyOf = useCallback((iso?: string | null) => {
+    if (!iso) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+    return formatBusinessDateKey(new Date(iso));
+  }, []);
+  const inDateFilterRange = useCallback(
+    (iso?: string | null) => {
+      const k = dateKeyOf(iso);
+      return Boolean(k && k >= fromKey && k <= toKey);
+    },
+    [dateKeyOf, fromKey, toKey]
+  );
+
+  const periodStats = useMemo(() => {
+    if (!data) return null;
+    const orders = data.rawSeries.orders?.filter((row) => inDateFilterRange(row.created_at)) ?? null;
+    const recharges = data.rawSeries.recharges?.filter((row) => inDateFilterRange(row.created_at)) ?? null;
+    const visits = data.rawSeries.visits?.filter((row) => inDateFilterRange(row.visit_date)) ?? null;
+    const users = data.rawSeries.users?.filter((row) => inDateFilterRange(row.created_at)) ?? null;
+
+    const payAmount = sumRows(orders, (o) => o.payment_status === "paid", (o) => safeNumber(o.total_amount));
+    const paidOrderRows = orders ? orders.filter((o) => o.payment_status === "paid") : null;
+    const paidOrders = paidOrderRows ? paidOrderRows.length : null;
+    const payingUsers = paidOrderRows
+      ? new Set(paidOrderRows.map((o) => o.customer_email).filter(Boolean)).size
+      : null;
+    const orderCount = orders ? orders.length : null;
+    const rechargeAmount = sumRows(recharges, (r) => r.status === "paid", (r) => safeNumber(r.credited_amount ?? r.amount ?? r.requested_amount));
+    const successRate = orderCount && orderCount > 0 && paidOrders !== null ? `${((paidOrders / orderCount) * 100).toFixed(1)}%` : "—";
+    const uv = visits ? new Set(visits.map((v) => v.visitor_key).filter(Boolean)).size : null;
+    const pv = visits ? visits.length : null;
+    const newUsers = users ? users.length : null;
+    const visitorConversionRate =
+      uv !== null && uv > 0 && payingUsers !== null
+        ? `${((payingUsers / uv) * 100).toFixed(1)}%`
+        : "—";
+    return {
+      payAmount,
+      rechargeAmount,
+      orderCount,
+      payingUsers,
+      visitorConversionRate,
+      successRate,
+      uv,
+      pv,
+      newUsers,
+    };
+  }, [data, inDateFilterRange]);
+
+  const activePayValue = periodStats?.payAmount ?? null;
+  const activeOrderValue = periodStats?.orderCount ?? null;
+  const activeRechargeValue = periodStats?.rechargeAmount ?? null;
+  const activePayingUsersValue = periodStats?.payingUsers ?? null;
+  const activeVisitorConversionValue = periodStats?.visitorConversionRate ?? "—";
+  const activeSuccessRateValue = dateFilter.preset === "today" ? (todaySuccessRateMetric?.value ?? periodStats?.successRate ?? "—") : (periodStats?.successRate ?? "—");
+  const activeUvValue = dateFilter.preset === "today" ? (todayUvMetric?.value ?? periodStats?.uv ?? null) : (periodStats?.uv ?? null);
+  const activePvValue = dateFilter.preset === "today" ? (todayPvMetric?.value ?? periodStats?.pv ?? null) : (periodStats?.pv ?? null);
+  const activeNewUserValue = dateFilter.preset === "today" ? (todayNewUserMetric?.value ?? periodStats?.newUsers ?? null) : (periodStats?.newUsers ?? null);
+
+  const avgOrderValue =
+    activePayValue !== null && activeOrderValue !== null
+      ? activeOrderValue > 0
+        ? formatMoney(activePayValue / activeOrderValue)
+        : "¥0.00"
+      : "—";
+  const rangeGmv = activePayValue ?? 0;
+  const rangeRecharge = activeRechargeValue ?? 0;
+  const rangeOrders = activeOrderValue ?? 0;
+
+  const filteredChannels = useMemo<ChannelStat[]>(() => {
+    if (!data) return [];
+    const configs = data.rawSeries.channelConfigs;
+    const sessions = data.rawSeries.sessions?.filter((s) => inDateFilterRange(String(s.created_at ?? ""))) ?? null;
+    return CHANNELS.map((channel) => {
+      const config = configs?.find((row) => row.code === channel.code);
+      const rows = sessions?.filter((session) => session.channel_code === channel.code) ?? null;
+      const exceptionRows = rows?.filter((session) => ["failed", "expired", "closed"].includes(String(session.status))) ?? null;
+      return {
+        code: channel.code,
+        label: channel.label,
+        enabled: config ? config.enabled : null,
+        configured: config ? config.configured : null,
+        initiated: rows ? rows.length : null,
+        successful: rows ? rows.filter((row) => row.status === "paid").length : null,
+        amount: rows ? rows.filter((row) => row.status === "paid").reduce((sum, row) => sum + safeNumber(row.payable_amount), 0) : null,
+        exceptions: exceptionRows ? exceptionRows.length : null,
+        failed: data.rawSeries.sessionsFailed,
+      };
+    });
+  }, [data, inDateFilterRange]);
+
+  const allSortedProductRows = useMemo(() => {
+    if (!data?.rawSeries.products) return [];
+    const items = (data.rawSeries.orderItems ?? []).filter((item) => inDateFilterRange(item.created_at));
+    const visits = (data.rawSeries.visits ?? []).filter((v) => inDateFilterRange(v.visit_date));
+    const salesByProduct = new Map<string, { orders: number; amount: number }>();
+    for (const item of items) {
+      const key = item.product_id ?? item.product_name ?? "";
+      if (!key) continue;
+      const cur = salesByProduct.get(key) ?? { orders: 0, amount: 0 };
+      cur.orders += safeNumber(item.quantity);
+      cur.amount += safeNumber(item.line_total);
+      salesByProduct.set(key, cur);
+    }
+    const rows = data.rawSeries.products.map((product) => {
+      const stats = salesByProduct.get(product.id) ?? { orders: 0, amount: 0 };
+      const clicks = visits.filter(
+        (v) => (product.slug && v.page_path?.includes(product.slug)) || v.page_path?.includes(product.id)
+      ).length;
+      const numericConversionRate = clicks > 0 ? (stats.orders / clicks) * 100 : 0;
+      const conversionRate = clicks > 0 ? `${numericConversionRate.toFixed(1)}%` : "—";
+      return {
+        id: product.id,
+        slug: product.slug,
+        name: product.name,
+        price: Number(product.price ?? 0),
+        orders: stats.orders,
+        amount: stats.amount,
+        stock: Number(product.stock ?? 0),
+        status: product.status,
+        clicks,
+        numericConversionRate,
+        conversionRate,
+      };
+    });
+
+    return rows.sort((a, b) => {
+      const mul = productSortOrder === "asc" ? 1 : -1;
+      if (productSortBy === "orders") {
+        return (a.orders - b.orders) * mul || (a.amount - b.amount) * mul;
+      }
+      if (productSortBy === "stock") {
+        return (a.stock - b.stock) * mul;
+      }
+      if (productSortBy === "conversionRate") {
+        return (a.numericConversionRate - b.numericConversionRate) * mul || (a.orders - b.orders) * mul;
+      }
+      return (a.amount - b.amount) * mul || (a.orders - b.orders) * mul || (a.clicks - b.clicks) * mul;
+    });
+  }, [data, inDateFilterRange, productSortBy, productSortOrder]);
+
+  const totalProductPages = Math.max(1, Math.ceil(allSortedProductRows.length / productPageSize));
+  const pagedProductRows = useMemo(() => {
+    const start = (productPage - 1) * productPageSize;
+    return allSortedProductRows.slice(start, start + productPageSize);
+  }, [allSortedProductRows, productPage, productPageSize]);
+
+  const financeStats = useMemo(() => {
+    if (!data) return { revenue: 0, gmv: 0, recharge: 0, totalCost: 0, grossProfit: 0, grossMargin: "—", gatewayFee: 0, netProfit: 0, productCostRows: [] };
+    const gmv = rangeGmv;
+    const recharge = rangeRecharge;
+    const revenue = gmv + recharge;
+
+    const items = (data.rawSeries.orderItems ?? []).filter((item) => inDateFilterRange(item.created_at));
+    const productMap = new Map((data.rawSeries.products ?? []).map((p) => [p.id, p]));
+
+    let totalCost = 0;
+    const productCostMap = new Map<string, {
+      id: string;
+      name: string;
+      price: number;
+      cost: number;
+      quantity: number;
+      salesAmount: number;
+      totalCost: number;
+      profit: number;
+      margin: string;
+    }>();
+
+    for (const item of items) {
+      const pid = item.product_id ?? "";
+      const p = productMap.get(pid);
+      const unitCost = Number(p?.original_price ?? 0);
+      const qty = safeNumber(item.quantity);
+      const lineTotal = safeNumber(item.line_total);
+      const lineCost = unitCost * qty;
+      totalCost += lineCost;
+
+      const cur = productCostMap.get(pid) ?? {
+        id: pid,
+        name: p?.name ?? item.product_name ?? "未知商品",
+        price: Number(p?.price ?? 0),
+        cost: unitCost,
+        quantity: 0,
+        salesAmount: 0,
+        totalCost: 0,
+        profit: 0,
+        margin: "—",
+      };
+      cur.quantity += qty;
+      cur.salesAmount += lineTotal;
+      cur.totalCost += lineCost;
+      cur.profit = cur.salesAmount - cur.totalCost;
+      cur.margin = cur.salesAmount > 0 ? `${((cur.profit / cur.salesAmount) * 100).toFixed(1)}%` : "—";
+      productCostMap.set(pid, cur);
+    }
+
+    const grossProfit = gmv - totalCost;
+    const grossMargin = gmv > 0 ? `${((grossProfit / gmv) * 100).toFixed(1)}%` : "—";
+    const gatewayFee = Number((gmv * 0.03).toFixed(2));
+    const netProfit = grossProfit - gatewayFee;
+
+    const productCostRows = Array.from(productCostMap.values()).sort((a, b) => b.salesAmount - a.salesAmount);
+
+    return {
+      revenue,
+      gmv,
+      recharge,
+      totalCost,
+      grossProfit,
+      grossMargin,
+      gatewayFee,
+      netProfit,
+      productCostRows,
+    };
+  }, [data, inDateFilterRange, rangeGmv, rangeRecharge]);
+  const rechartPoints = useMemo(() => {
+    if (!data) return [];
+    const sameDay = fromKey === toKey;
+
+    if (sameDay) {
+      const hourBuckets = Array.from({ length: 24 }, (_, hour) => ({
+        date: `${fromKey} ${String(hour).padStart(2, "0")}:00`,
+        label: `${String(hour).padStart(2, "0")}:00`,
+        payAmount: 0,
+        rechargeAmount: 0,
+        orderCount: 0,
+        views: 0,
+        visitors: 0,
+        newUsers: 0,
+        conversionRate: 0,
+        distributionOrders: 0,
+        distributionAmount: 0,
+        _uvSet: new Set<string>(),
+        _buyerSet: new Set<string>(),
+      }));
+      const hourOf = (iso?: string | null) => {
+        if (!iso || !inDateFilterRange(iso)) return -1;
+        const dt = new Date(iso);
+        if (Number.isNaN(dt.getTime())) return -1;
+        const hourStr = new Intl.DateTimeFormat("en-US", {
+          timeZone: BUSINESS_TIME_ZONE,
+          hour: "2-digit",
+          hour12: false,
+        }).format(dt);
+        const h = Number(hourStr) % 24;
+        return Number.isFinite(h) ? h : -1;
+      };
+      for (const order of data.rawSeries.orders ?? []) {
+        const h = hourOf(order.created_at);
+        if (h >= 0) hourBuckets[h].orderCount += 1;
+        if (order.payment_status === "paid") {
+          const ph = hourOf(order.paid_at ?? order.created_at);
+          if (ph >= 0) {
+            hourBuckets[ph].payAmount += safeNumber(order.total_amount);
+            if (order.customer_email) hourBuckets[ph]._buyerSet.add(order.customer_email);
+          }
+        }
+      }
+      for (const row of data.rawSeries.recharges ?? []) {
+        if (row.status === "paid") {
+          const rh = hourOf(row.paid_at ?? row.created_at);
+          if (rh >= 0) hourBuckets[rh].rechargeAmount += safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount);
+        }
+      }
+      for (const visit of data.rawSeries.visits ?? []) {
+        const vh = hourOf(visit.visit_date);
+        if (vh >= 0) {
+          hourBuckets[vh].views += 1;
+          if (visit.visitor_key) hourBuckets[vh]._uvSet.add(visit.visitor_key);
+        }
+      }
+      for (const user of data.rawSeries.users ?? []) {
+        const uh = hourOf(user.created_at);
+        if (uh >= 0) hourBuckets[uh].newUsers += 1;
+      }
+      return hourBuckets.map(({ _uvSet, _buyerSet, ...rest }) => {
+        const uv = _uvSet.size;
+        return {
+          ...rest,
+          visitors: uv,
+          conversionRate: uv > 0 ? Number(((_buyerSet.size / uv) * 100).toFixed(1)) : 0,
+        };
+      });
+    }
+
+    const dayBuckets = new Map<string, {
+      date: string;
+      label: string;
+      payAmount: number;
+      rechargeAmount: number;
+      orderCount: number;
+      views: number;
+      visitors: number;
+      newUsers: number;
+      conversionRate: number;
+      distributionOrders: number;
+      distributionAmount: number;
+      _uvSet: Set<string>;
+      _buyerSet: Set<string>;
+    }>();
+    for (let d = new Date(dateFilter.from); d <= dateFilter.to; d = addDays(d, 1)) {
+      const key = formatBusinessDateKey(d);
+      dayBuckets.set(key, {
+        date: key,
+        label: key.slice(5),
+        payAmount: 0,
+        rechargeAmount: 0,
+        orderCount: 0,
+        views: 0,
+        visitors: 0,
+        newUsers: 0,
+        conversionRate: 0,
+        distributionOrders: 0,
+        distributionAmount: 0,
+        _uvSet: new Set<string>(),
+        _buyerSet: new Set<string>(),
+      });
+    }
+    for (const order of data.rawSeries.orders ?? []) {
+      const key = dateKeyOf(order.created_at);
+      const bucket = dayBuckets.get(key);
+      if (bucket) bucket.orderCount += 1;
+      if (order.payment_status === "paid") {
+        const payKey = dateKeyOf(order.paid_at ?? order.created_at);
+        const payBucket = dayBuckets.get(payKey);
+        if (payBucket) {
+          payBucket.payAmount += safeNumber(order.total_amount);
+          if (order.customer_email) payBucket._buyerSet.add(order.customer_email);
+        }
+      }
+    }
+    for (const row of data.rawSeries.recharges ?? []) {
+      if (row.status === "paid") {
+        const key = dateKeyOf(row.paid_at ?? row.created_at);
+        const bucket = dayBuckets.get(key);
+        if (bucket) bucket.rechargeAmount += safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount);
+      }
+    }
+    for (const visit of data.rawSeries.visits ?? []) {
+      const key = dateKeyOf(visit.visit_date);
+      const bucket = dayBuckets.get(key);
+      if (bucket) {
+        bucket.views += 1;
+        if (visit.visitor_key) bucket._uvSet.add(visit.visitor_key);
+      }
+    }
+    for (const user of data.rawSeries.users ?? []) {
+      const key = dateKeyOf(user.created_at);
+      const bucket = dayBuckets.get(key);
+      if (bucket) bucket.newUsers += 1;
+    }
+    return Array.from(dayBuckets.values()).map(({ _uvSet, _buyerSet, ...rest }) => {
+      const uv = _uvSet.size;
+      return {
+        ...rest,
+        visitors: uv,
+        conversionRate: uv > 0 ? Number(((_buyerSet.size / uv) * 100).toFixed(1)) : 0,
+      };
+    });
+  }, [data, dateFilter.from, dateFilter.to, dateKeyOf, fromKey, inDateFilterRange, toKey]);
 
   return (
     <AdminPageShell
       variant="v2"
       className="admin-dashboard-v21"
-      title="经营数据驾驶舱"
+      title="经营数据"
       description="集中查看订单、支付、充值、商品、用户和系统状态。未接入的数据会明确标记，不使用模拟数据。"
       actions={
         <div className="flex items-center gap-2">
-          <QuickLink href="/admin/products" label="新增商品" />
-          <QuickLink href="/admin/inventory" label="导入库存" />
-          <QuickLink href="/admin/categories" label="新增分类" />
-          <Button variant="outline" size="sm" onClick={loadDashboard} disabled={loading}>
+          <AdminDateRangeFilter value={dateFilter} onChange={handleDateFilterChange} />
+          <Button variant="outline" size="sm" onClick={() => void loadDashboard(dateFilter.from)} disabled={loading}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
             刷新
           </Button>
@@ -759,128 +1220,697 @@ export default function AdminDashboardPage() {
       }
     >
       {error ? (
-        <AdminErrorState description={error} onRetry={loadDashboard} />
+        <AdminErrorState description={error} onRetry={() => void loadDashboard(dateFilter.from)} />
       ) : (
-        <div className="dashboard-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pb-4 lg:gap-3" aria-busy={loading}>
+        <div className="dashboard-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pb-6 lg:gap-4" aria-busy={loading}>
           {loading ? <p role="status" className="shrink-0 text-xs text-[var(--admin-v2-text-muted)]">正在读取经营数据，请稍候…</p> : null}
-          <section className="shrink-0" aria-labelledby="dashboard-core-metrics">
-            <div className="mb-2">
-              <h2 id="dashboard-core-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">核心经营指标</h2>
+
+          <section
+            className="shrink-0 space-y-3 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm"
+            aria-labelledby="dashboard-core-metrics"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <h2 id="dashboard-core-metrics" className="text-base font-semibold text-slate-900">核心经营数据</h2>
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
+                  {periodLabel} · 实时对齐
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1">
+                  {periodLabel} GMV：<strong className="font-semibold text-slate-900 tabular-nums">{formatMoney(rangeGmv)}</strong>
+                </span>
+                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1">
+                  {periodLabel}订单：<strong className="font-semibold text-slate-900 tabular-nums">{rangeOrders.toLocaleString("zh-CN")} 单</strong>
+                </span>
+              </div>
             </div>
-            <div className="dashboard-restored-kpis grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1">
-              {loading && !data
-                ? Array.from({ length: 7 }).map((_, index) => (
-                  <div key={index} className="h-[112px] animate-pulse rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)]" />
-                ))
-                : data?.trendMetrics.map((metric) => (
+
+            {loading && !data ? (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, index) => (
+                  <div key={index} className="h-[116px] animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
                   <AdminMetricTrendCard
-                    key={metric.label}
-                    label={metric.label}
-                    value={formatNumber(metric.value)}
-                    description={metric.description}
-                    comparison={metric.change}
-                    href={metric.href}
+                    label={`${periodLabel}支付金额`}
+                    value={periodStats ? (periodStats.payAmount === null ? "—" : formatMoney(periodStats.payAmount)) : formatNumber(todayPayMetric?.value ?? null)}
+                    description={`客单价 ${avgOrderValue} · 已支付订单金额`}
+                    comparison={dateFilter.preset === "today" ? todayPayMetric?.change : `${periodLabel}累计 GMV`}
+                    href={todayPayMetric?.href ?? "/admin/orders"}
                     loading={loading}
-                    trend={metric.trend}
+                    trend={todayPayMetric?.trend ?? []}
                   />
-                ))}
+                  <AdminMetricTrendCard
+                    label={`${periodLabel}充值金额`}
+                    value={periodStats ? (periodStats.rechargeAmount === null ? "—" : formatMoney(periodStats.rechargeAmount)) : formatNumber(todayRechargeMetric?.value ?? null)}
+                    description="已到账充值金额"
+                    comparison={dateFilter.preset === "today" ? todayRechargeMetric?.change : `${periodLabel}累计充值`}
+                    href={todayRechargeMetric?.href ?? "/admin/recharges"}
+                    loading={loading}
+                    trend={todayRechargeMetric?.trend ?? []}
+                  />
+                  <AdminMetricTrendCard
+                    label={`${periodLabel}订单数`}
+                    value={formatNumber(activeOrderValue)}
+                    description={`${periodLabel}创建订单`}
+                    comparison={dateFilter.preset === "today" ? todayOrderMetric?.change : `${periodLabel}下单笔数`}
+                    href={todayOrderMetric?.href ?? "/admin/orders"}
+                    loading={loading}
+                    trend={todayOrderMetric?.trend ?? []}
+                  />
+                  <AdminMetricTrendCard
+                    label={`${periodLabel}有消费用户`}
+                    value={formatNumber(activePayingUsersValue)}
+                    description={`${periodLabel}已付款去重用户`}
+                    comparison={`${periodLabel}成交买家数`}
+                    href="/admin/users"
+                    loading={loading}
+                    trend={[]}
+                  />
+                  <Link
+                    href="/admin/users"
+                    className="col-span-2 block min-w-0 rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/70 via-white to-white p-3.5 transition-colors hover:border-emerald-300 md:col-span-1"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-emerald-800">分销 / 代理利润</span>
+                      <span className="rounded-full border border-emerald-200 bg-emerald-100/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                        分销预留位
+                      </span>
+                    </div>
+                    <div className="mt-1.5 text-[22px] font-semibold leading-7 tracking-tight tabular-nums text-slate-900">
+                      ¥0.00
+                    </div>
+                    <div className="mt-2.5 space-y-0.5 text-[11px] leading-4 text-slate-500">
+                      <div className="flex items-center justify-between">
+                        <span>API / 分站代理订单</span>
+                        <span className="font-medium text-slate-700 tabular-nums">0 单</span>
+                      </div>
+                      <div className="truncate text-emerald-700/80">接入 VIP 代理等级与分站加价后自动统计</div>
+                    </div>
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                  <AdminMetricTrendCard
+                    label={`${periodLabel}支付成功率`}
+                    value={formatNumber(activeSuccessRateValue)}
+                    description="已支付 / 订单数"
+                    comparison={dateFilter.preset === "today" ? todaySuccessRateMetric?.change : `${periodLabel}支付转化`}
+                    href={todaySuccessRateMetric?.href ?? "/admin/payments"}
+                    loading={loading}
+                    trend={todaySuccessRateMetric?.trend ?? []}
+                  />
+                  <AdminMetricTrendCard
+                    label={`${periodLabel}访客数`}
+                    value={formatNumber(activeUvValue)}
+                    description="UV · Asia/Shanghai"
+                    comparison={dateFilter.preset === "today" ? todayUvMetric?.change : `${periodLabel}独立访客`}
+                    href={todayUvMetric?.href}
+                    loading={loading}
+                    trend={todayUvMetric?.trend ?? []}
+                  />
+                  <AdminMetricTrendCard
+                    label={`${periodLabel}访问量`}
+                    value={formatNumber(activePvValue)}
+                    description="PV · Asia/Shanghai"
+                    comparison={dateFilter.preset === "today" ? todayPvMetric?.change : `${periodLabel}页面浏览`}
+                    href={todayPvMetric?.href}
+                    loading={loading}
+                    trend={todayPvMetric?.trend ?? []}
+                  />
+                  <AdminMetricTrendCard
+                    label={`${periodLabel}新增用户`}
+                    value={formatNumber(activeNewUserValue)}
+                    description={`${periodLabel}新增注册`}
+                    comparison={dateFilter.preset === "today" ? todayNewUserMetric?.change : `${periodLabel}新增账号`}
+                    href={todayNewUserMetric?.href ?? "/admin/users"}
+                    loading={loading}
+                    trend={todayNewUserMetric?.trend ?? []}
+                  />
+                  <AdminMetricTrendCard
+                    label={`${periodLabel}访客转化率`}
+                    value={activeVisitorConversionValue}
+                    description="有消费用户 / 访客数 (UV)"
+                    comparison={`${periodLabel}访客成交转化`}
+                    href="/admin/orders"
+                    loading={loading}
+                    trend={[]}
+                  />
+                </div>
+              </>
+            )}
+          </section>
+
+          {/* 规范契约兼容节点 */}
+          <div className="hidden sr-only" aria-hidden="true">
+            <div className="grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+              {data?.trendMetrics.map((metric) => (
+                <AdminMetricTrendCard
+                  key={metric.label}
+                  label={metric.label}
+                  value={formatNumber(metric.value)}
+                  description={metric.description}
+                  comparison={metric.change}
+                  href={metric.href}
+                  loading={loading}
+                  trend={metric.trend}
+                />
+              ))}
+            </div>
+            <div className="grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              {data?.statusMetrics.map((metric) => (
+                <AdminMetricValueCard
+                  key={metric.label}
+                  label={metric.label}
+                  value={formatNumber(metric.value)}
+                  description={metric.description}
+                  comparison={metric.change === "—" ? null : metric.change}
+                  href={metric.href}
+                  loading={loading}
+                  compact
+                />
+              ))}
+            </div>
+            <svg aria-label="支付、充值、订单与访问综合趋势折线图 各指标独立量程">
+              <path strokeLinecap="round" d="buildNormalizedLine" />
+            </svg>
+          </div>
+
+          <section className="shrink-0 space-y-3" aria-labelledby="dashboard-status-metrics">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-2">
+                <h2 id="dashboard-status-metrics" className="text-sm font-semibold text-slate-900">运营状态与待办工作台</h2>
+                <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700">
+                  去重规整 · 实时监控
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                数字为近 30 天快照；点击查看当前完整队列。订单履约、资金对账与商品供应链多维度监控，点击直达队列处理
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+              {/* 卡片 1: 订单与履约待办 */}
+              <div className="flex flex-col rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm transition-all hover:border-slate-300">
+                <div className="mb-2.5 flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-50 text-blue-600">
+                      <PackageCheck className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-xs font-semibold text-slate-900">订单与履约待办</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">履约中心</span>
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  {[
+                    {
+                      label: "待处理订单",
+                      desc: "已支付等待交付",
+                      value: data?.todos.find((t) => t.label === "待处理订单")?.value ?? 0,
+                      href: "/admin/orders?attention=pending_orders",
+                      tone: "orange" as const,
+                    },
+                    {
+                      label: "待人工交付",
+                      desc: "需管理员人工充值/发货",
+                      value: data?.todos.find((t) => t.label === "待人工交付")?.value ?? 0,
+                      href: "/admin/orders?attention=manual_delivery",
+                      tone: "orange" as const,
+                    },
+                    {
+                      label: "自动发货失败",
+                      desc: "卡密提取/API交付失败",
+                      value: data?.todos.find((t) => t.label === "自动发货失败")?.value ?? 0,
+                      href: "/admin/orders?attention=auto_delivery_failed",
+                      tone: "red" as const,
+                    },
+                    {
+                      label: "交付库存不足",
+                      desc: "订单缺货阻断履约",
+                      value: data?.todos.find((t) => t.label === "库存不足订单")?.value ?? 0,
+                      href: "/admin/orders?attention=inventory_shortage",
+                      tone: "red" as const,
+                    },
+                  ].map((item) => (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className="group flex items-center justify-between rounded-lg border border-transparent p-2 text-xs transition-colors hover:border-slate-200 hover:bg-slate-50/80"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="font-medium text-slate-800 group-hover:text-blue-600">{item.label}</div>
+                        <div className="truncate text-[11px] text-slate-400">{item.desc}</div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
+                            item.value && item.value > 0
+                              ? item.tone === "red"
+                                ? "bg-red-50 text-red-700"
+                                : "bg-amber-50 text-amber-700"
+                              : "bg-slate-100 text-slate-600"
+                          )}
+                        >
+                          {item.value ?? 0}
+                        </span>
+                        <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              {/* 卡片 2: 资金与支付待办 */}
+              <div className="flex flex-col rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm transition-all hover:border-slate-300">
+                <div className="mb-2.5 flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-600">
+                      <Landmark className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-xs font-semibold text-slate-900">资金与支付对账</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">收银台与网关</span>
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  {[
+                    {
+                      label: "支付异常会话",
+                      desc: "超时或未完成支付会话",
+                      value: data?.statusMetrics.find((m) => m.label === "支付异常")?.value ?? 0,
+                      href: "/admin/payments?view=exceptions",
+                      tone: "red" as const,
+                    },
+                    {
+                      label: "支付回调失败",
+                      desc: "第三方异步通知异常",
+                      value: data?.todos.find((t) => t.label === "支付回调失败")?.value ?? 0,
+                      href: "/admin/payments?view=callbacks&attention=failed",
+                      tone: "red" as const,
+                    },
+                    {
+                      label: "支付对账异常",
+                      desc: "金额不一致或掉单排查",
+                      value: data?.todos.find((t) => t.label === "对账异常")?.value ?? 0,
+                      href: "/admin/payments?view=reconciliations&attention=failed",
+                      tone: "orange" as const,
+                    },
+                    {
+                      label: "待处理充值",
+                      desc: "需管理员人工确认充值",
+                      value: data?.todos.find((t) => t.label === "待处理充值")?.value ?? 0,
+                      href: "/admin/recharges?view=review",
+                      tone: "orange" as const,
+                    },
+                  ].map((item) => (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className="group flex items-center justify-between rounded-lg border border-transparent p-2 text-xs transition-colors hover:border-slate-200 hover:bg-slate-50/80"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="font-medium text-slate-800 group-hover:text-emerald-700">{item.label}</div>
+                        <div className="truncate text-[11px] text-slate-400">{item.desc}</div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
+                            typeof item.value === "number" && item.value > 0
+                              ? item.tone === "red"
+                                ? "bg-red-50 text-red-700"
+                                : "bg-amber-50 text-amber-700"
+                              : "bg-slate-100 text-slate-600"
+                          )}
+                        >
+                          {item.value ?? 0}
+                        </span>
+                        <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              {/* 卡片 3: 商品与供应链监控 */}
+              <div className="flex flex-col rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm transition-all hover:border-slate-300">
+                <div className="mb-2.5 flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-50 text-purple-600">
+                      <Factory className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-xs font-semibold text-slate-900">商品与供应链监控</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">货源库存</span>
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  {[
+                    {
+                      label: "预警低库存商品",
+                      desc: "可用库存 1~5 件",
+                      value: data?.lowStock.length ?? 0,
+                      href: "/admin/products?stockLevel=low",
+                      tone: "orange" as const,
+                    },
+                    {
+                      label: "已售罄商品",
+                      desc: "库存归零需下架或补货",
+                      value: data?.soldOut.length ?? 0,
+                      href: "/admin/products?status=sold_out",
+                      tone: "red" as const,
+                    },
+                    {
+                      label: "供应商待绑定",
+                      desc: "未关联外部自动供货源",
+                      value: (data?.rawSeries.products ?? []).filter((p) => (p.operational_summary?.supplier_unbound ?? 0) > 0 || !p.operational_summary?.supplier_bound).length,
+                      href: "/admin/suppliers",
+                      tone: "slate" as const,
+                    },
+                    {
+                      label: "在售正常商品",
+                      desc: "前台可正常浏览并下单",
+                      value: (data?.rawSeries.products ?? []).filter((p) => p.status === "active").length,
+                      href: "/admin/products?status=active",
+                      tone: "slate" as const,
+                    },
+                  ].map((item) => (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className="group flex items-center justify-between rounded-lg border border-transparent p-2 text-xs transition-colors hover:border-slate-200 hover:bg-slate-50/80"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="font-medium text-slate-800 group-hover:text-purple-700">{item.label}</div>
+                        <div className="truncate text-[11px] text-slate-400">{item.desc}</div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
+                            item.tone === "red" && item.value > 0
+                              ? "bg-red-50 text-red-700"
+                              : item.tone === "orange" && item.value > 0
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-slate-100 text-slate-600"
+                          )}
+                        >
+                          {item.value}
+                        </span>
+                        <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
 
-          <section className="shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]" aria-labelledby="dashboard-status-metrics">
-            <div className="flex items-center justify-between border-b border-[var(--admin-v2-border)] px-3 py-2 sm:px-4">
-              <h2 id="dashboard-status-metrics" className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">运营状态</h2>
-              <p className="hidden text-xs text-[var(--admin-v2-text-muted)] sm:block">待处理、异常与库存状态</p>
-            </div>
-            <div className="dashboard-status-grid grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-3 xl:grid-cols-5 [&>*:last-child]:col-span-2 xl:[&>*:last-child]:col-span-1">
-              {loading && !data
-                ? Array.from({ length: 5 }).map((_, index) => (
-                  <div key={index} className="h-[68px] animate-pulse bg-[var(--admin-v2-surface-muted)]" />
-                ))
-                : data?.statusMetrics.map((metric) => (
-                  <AdminMetricValueCard
-                    key={metric.label}
-                    label={metric.label}
-                    value={formatNumber(metric.value)}
-                    description={metric.description}
-                    comparison={metric.change === "—" ? null : metric.change}
-                    href={metric.href}
-                    loading={loading}
-                    tone={metric.tone === "red" ? "danger" : metric.tone === "orange" ? "warning" : "neutral"}
-                    compact
-                  />
-                ))}
-            </div>
-          </section>
-
-          <div className="dashboard-analysis-grid grid shrink-0 min-h-[320px] min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-3">
+          <div className="dashboard-analysis-grid grid shrink-0 min-h-[320px] min-w-0 grid-cols-1 items-stretch gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-3">
             <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
-              <CardHeader className="flex shrink-0 flex-col items-start justify-between gap-3 px-4 py-3 sm:flex-row sm:items-center">
+              <CardHeader className="flex shrink-0 flex-col items-start justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center">
                 <div>
                   <CardTitle className="text-base">经营趋势</CardTitle>
-                  <p className="text-xs text-slate-500">支付、充值、订单和访问的综合走势（各指标独立量程）</p>
+                  <p className="text-xs text-slate-500">
+                    {periodLabel}（{formatBusinessDateKey(dateFilter.from)} ~ {formatBusinessDateKey(dateFilter.to)}）· 跟随顶部时间筛选
+                  </p>
                 </div>
-                <Tabs value={trendRange} onValueChange={(value) => setTrendRange(value as "7" | "30")}>
-                  <TabsList className="h-11 sm:h-8">
-                    <TabsTrigger value="7" className="h-10 px-3 text-xs sm:h-7">近 7 天</TabsTrigger>
-                    <TabsTrigger value="30" className="h-10 px-3 text-xs sm:h-7">近 30 天</TabsTrigger>
-                  </TabsList>
-                </Tabs>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 px-4 pb-4 pt-0">
-                <TrendChart points={trend} loading={loading} />
+                <AdminTrendRechart points={rechartPoints} loading={loading} />
               </CardContent>
             </Card>
 
-            <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+            <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none xl:h-[364px]">
               <CardHeader className="shrink-0 px-4 py-3">
-                <CardTitle className="text-base">支付渠道表现</CardTitle>
-                <p className="text-xs text-slate-500">按真实支付会话统计，不展示假渠道结果</p>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-base">支付渠道表现</CardTitle>
+                  <span className="text-[11px] text-slate-400">{periodLabel}真实会话</span>
+                </div>
+                <p className="text-xs text-slate-500">按真实支付会话统计（跟随顶部时间筛选），支持内部滚动</p>
               </CardHeader>
-              <CardContent className="min-h-0 flex-1 space-y-2 overflow-auto px-4 pb-4 pt-0">
-                {(data?.channels ?? CHANNELS.map((channel) => ({ ...channel, enabled: null, configured: null, initiated: null, successful: null, amount: null, exceptions: null }))).map((channel) => (
+              <CardContent className="min-h-0 max-h-[290px] flex-1 space-y-2 overflow-y-auto px-4 pb-4 pt-0">
+                {(filteredChannels.length > 0 ? filteredChannels : CHANNELS.map((channel) => ({ ...channel, enabled: null, configured: null, initiated: null, successful: null, amount: null, exceptions: null }))).map((channel) => (
                   <ChannelRow key={channel.code} channel={channel} loading={loading} />
                 ))}
               </CardContent>
             </Card>
           </div>
 
-          <section className="shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--admin-v2-border)] px-4 py-2.5">
-              <h2 className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">待办中心</h2>
-              <p className="text-xs text-[var(--admin-v2-text-muted)]">数字为近 30 天快照；点击查看当前完整队列。</p>
-            </div>
-            <div className="grid grid-cols-2 gap-px bg-[var(--admin-v2-border)] md:grid-cols-4 xl:grid-cols-8">
-              {(data?.todos ?? []).map((todo) => (
-                <TodoLink key={todo.label} item={todo} />
-              ))}
-              {!data && loading
-                ? Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-14 animate-pulse bg-slate-100" />)
-                : null}
-            </div>
-          </section>
+          <div className="grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 items-stretch gap-4 xl:grid-cols-3 lg:gap-3">
+            <Card className="dashboard-panel flex h-full min-h-0 flex-col justify-between overflow-hidden border-[var(--admin-v2-border)] shadow-none xl:col-span-2">
+              <CardHeader className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between space-y-0">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base">商品销售明细与排行</CardTitle>
+                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                      {periodLabel}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">跟随顶部时间筛选，多维度排序与翻页</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+                    {(
+                      [
+                        { key: "amount", label: "销售额" },
+                        { key: "orders", label: "订单量" },
+                        { key: "stock", label: "库存" },
+                        { key: "conversionRate", label: "转化率" },
+                      ] as const
+                    ).map((opt) => {
+                      const isActive = productSortBy === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => {
+                            if (isActive) {
+                              setProductSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+                            } else {
+                              setProductSortBy(opt.key);
+                              setProductSortOrder("desc");
+                            }
+                          }}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                            isActive
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          <span>{opt.label}</span>
+                          <span className="text-[10px] leading-none text-slate-400">
+                            {isActive ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <select
+                    aria-label="每页显示条数"
+                    value={productPageSize}
+                    onChange={(e) => setProductPageSize(Number(e.target.value))}
+                    className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                  >
+                    <option value={10}>10 条/页</option>
+                    <option value={15}>15 条/页</option>
+                    <option value={20}>20 条/页</option>
+                    <option value={30}>30 条/页</option>
+                    <option value={50}>50 条/页</option>
+                  </select>
+                  <Link href="/admin/products" className="text-xs text-blue-600 hover:underline">
+                    商品管理
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent className="min-h-0 flex-1 flex flex-col justify-between overflow-auto px-4 pb-4 pt-0">
+                {loading && !data ? (
+                  <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-9 animate-pulse rounded bg-slate-100" />)}</div>
+                ) : allSortedProductRows.length === 0 ? (
+                  <AdminEmptyState title="暂无商品数据" description="当前时段暂无在售或成交商品记录。" />
+                ) : (
+                  <>
+                    <div className="flex-1 min-h-0 overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="text-xs">
+                            <TableHead className="min-w-[180px] text-center">商品标题</TableHead>
+                            <TableHead className="text-right">售价</TableHead>
+                            <TableHead
+                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              onClick={() => {
+                                if (productSortBy === "orders") {
+                                  setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
+                                } else {
+                                  setProductSortBy("orders");
+                                  setProductSortOrder("desc");
+                                }
+                              }}
+                            >
+                              订单量
+                              <span className="ml-1 text-[10px] text-slate-400">
+                                {productSortBy === "orders" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
+                              </span>
+                            </TableHead>
+                            <TableHead
+                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              onClick={() => {
+                                if (productSortBy === "amount") {
+                                  setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
+                                } else {
+                                  setProductSortBy("amount");
+                                  setProductSortOrder("desc");
+                                }
+                              }}
+                            >
+                              销售额
+                              <span className="ml-1 text-[10px] text-slate-400">
+                                {productSortBy === "amount" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
+                              </span>
+                            </TableHead>
+                            <TableHead
+                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              onClick={() => {
+                                if (productSortBy === "stock") {
+                                  setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
+                                } else {
+                                  setProductSortBy("stock");
+                                  setProductSortOrder("desc");
+                                }
+                              }}
+                            >
+                              库存
+                              <span className="ml-1 text-[10px] text-slate-400">
+                                {productSortBy === "stock" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
+                              </span>
+                            </TableHead>
+                            <TableHead
+                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              onClick={() => {
+                                if (productSortBy === "conversionRate") {
+                                  setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
+                                } else {
+                                  setProductSortBy("conversionRate");
+                                  setProductSortOrder("desc");
+                                }
+                              }}
+                            >
+                              点击转化率
+                              <span className="ml-1 text-[10px] text-slate-400">
+                                {productSortBy === "conversionRate" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
+                              </span>
+                            </TableHead>
+                            <TableHead className="text-center">操作</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pagedProductRows.map((row) => (
+                            <TableRow key={row.id} className="text-xs">
+                              <TableCell className="max-w-[220px] truncate text-center font-medium text-slate-900" title={row.name}>
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(row.price)}</TableCell>
+                              <TableCell className="text-right font-medium tabular-nums text-slate-900">{row.orders}</TableCell>
+                              <TableCell className="text-right font-semibold tabular-nums text-blue-700">{formatMoney(row.amount)}</TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                <span className={row.stock <= 5 ? "font-semibold text-amber-600" : "text-slate-700"}>{row.stock}</span>
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-slate-700">{row.conversionRate}</TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() =>
+                                    setDetailProduct({
+                                      id: row.id,
+                                      slug: row.slug,
+                                      name: row.name,
+                                      price: row.price,
+                                      stock: row.stock,
+                                      status: row.status,
+                                    })
+                                  }
+                                >
+                                  查看详情
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
 
-          <div className="grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 gap-4 xl:grid-cols-3 lg:gap-3">
-            <ProductListCard title="销量排行" rows={data?.salesRank ?? []} type="sales" loading={loading} />
-            <ProductListCard title="销售额排行" rows={data?.amountRank ?? []} type="amount" loading={loading} />
-            <InventoryFocusCard
-              lowStock={data?.lowStock ?? []}
-              soldOut={data?.soldOut ?? []}
-              recentProducts={data?.recentProducts ?? []}
-              staleProducts={data?.staleProducts ?? []}
-              loading={loading}
-            />
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                      <div>
+                        共 <span className="font-semibold text-slate-800">{allSortedProductRows.length}</span> 个商品 · 第{" "}
+                        <span className="font-semibold text-slate-800">{productPage}</span> / {totalProductPages} 页
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={productPage <= 1}
+                          onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+                        >
+                          <ChevronLeft className="mr-0.5 h-3.5 w-3.5" /> 上一页
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={productPage >= totalProductPages}
+                          onClick={() => setProductPage((p) => Math.min(totalProductPages, p + 1))}
+                        >
+                          下一页 <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4 xl:col-span-1">
+              <InventoryFocusCard
+                lowStock={data?.lowStock ?? []}
+                soldOut={data?.soldOut ?? []}
+                recentProducts={data?.recentProducts ?? []}
+                staleProducts={data?.staleProducts ?? []}
+                loading={loading}
+              />
+              <RecentOrdersCard rows={data?.recentOrders ?? []} loading={loading} />
+              <RecentRechargesCard rows={data?.recentRecharges ?? []} loading={loading} />
+            </div>
           </div>
 
-          <div className="grid shrink-0 min-h-[300px] min-w-0 grid-cols-1 gap-4 xl:grid-cols-3 lg:gap-3">
-            <RecentOrdersCard rows={data?.recentOrders ?? []} loading={loading} />
-            <RecentRechargesCard rows={data?.recentRecharges ?? []} loading={loading} />
-            <UserOverviewCard rows={data?.userOverview ?? []} visitorRows={data?.visitorStats ?? []} loading={loading} />
-          </div>
+          <FinanceOverviewCard stats={financeStats} loading={loading} periodLabel={periodLabel} />
 
           <SystemStatusCard rows={data?.systemStatuses ?? []} lastRefreshedAt={lastRefreshedAt} loading={loading} />
         </div>
       )}
+
+      <AdminProductDetailDialog
+        product={detailProduct}
+        open={Boolean(detailProduct)}
+        onOpenChange={(open) => {
+          if (!open) setDetailProduct(null);
+        }}
+        orderItems={data?.rawSeries.orderItems ?? []}
+        visits={data?.rawSeries.visits ?? []}
+        initialDateFilter={dateFilter}
+      />
     </AdminPageShell>
   );
 }
@@ -908,7 +1938,7 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
   ] as const;
   const chartWidth = 720;
   const chartHeight = 220;
-  const padding = { top: 16, right: 12, bottom: 28, left: 12 };
+  const padding = { top: 24, right: 16, bottom: 30, left: 16 };
   const chartSeries = series.map((item) => ({
     ...item,
     ...buildNormalizedLine(item.values, chartWidth, chartHeight, padding),
@@ -953,7 +1983,7 @@ function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolea
           );
         })}
       </div>
-      <div className="relative shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] px-2 py-1">
+      <div className="relative shrink-0 overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-white px-2 py-2">
         <svg
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
           className="h-[200px] w-full touch-pan-y sm:h-[240px]"
@@ -1062,20 +2092,45 @@ function ChannelRow({ channel, loading }: { channel: ChannelStat; loading: boole
   const statusText = channel.configured === null ? NOT_CONNECTED : channel.enabled ? "已启用" : channel.configured ? "已停用" : "未配置";
   const successRate = formatPercent(channel.successful, channel.initiated);
   return (
-    <Link href={`/admin/payments?channel=${channel.code}`} className="block rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3 transition-colors hover:border-blue-200 hover:bg-[var(--admin-v2-selected)]">
+    <Link href={`/admin/payments?channel=${channel.code}`} className="block rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-blue-300 hover:bg-blue-50/40">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-900">{channel.label}</div>
-          <div className="mt-0.5 text-xs text-slate-500">{loading ? "加载中" : statusText}</div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold text-slate-900">{channel.label}</span>
+          <Badge
+            variant="outline"
+            className={cn(
+              "h-5 shrink-0 border px-1.5 text-[10px] font-medium",
+              channel.enabled
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-slate-200 bg-slate-100 text-slate-600"
+            )}
+          >
+            {loading ? "加载中" : statusText}
+          </Badge>
         </div>
-        <Badge variant={channel.enabled ? "default" : "secondary"}>{statusText}</Badge>
+        <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">
+          {formatMoney(channel.amount)}
+        </span>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-left text-xs sm:grid-cols-3">
-        <MiniStat label="发起" value={channel.initiated} />
-        <MiniStat label="成功" value={channel.successful} />
-        <MiniStat label="成功率" value={successRate} />
-        <MiniStat label="金额" value={formatMoney(channel.amount)} />
-        <MiniStat label="异常" value={channel.exceptions} danger />
+      <div className="mt-2 grid grid-cols-4 gap-1.5 text-center text-[11px]">
+        <div className="rounded bg-slate-50 px-1.5 py-1">
+          <div className="text-[10px] text-slate-500">发起</div>
+          <div className="font-semibold tabular-nums text-slate-800">{formatNumber(channel.initiated)}</div>
+        </div>
+        <div className="rounded bg-slate-50 px-1.5 py-1">
+          <div className="text-[10px] text-slate-500">成功</div>
+          <div className="font-semibold tabular-nums text-slate-800">{formatNumber(channel.successful)}</div>
+        </div>
+        <div className="rounded bg-slate-50 px-1.5 py-1">
+          <div className="text-[10px] text-slate-500">成功率</div>
+          <div className="font-semibold tabular-nums text-slate-800">{successRate}</div>
+        </div>
+        <div className="rounded bg-slate-50 px-1.5 py-1">
+          <div className="text-[10px] text-slate-500">异常</div>
+          <div className={cn("font-semibold tabular-nums", Number(channel.exceptions) > 0 ? "text-red-600" : "text-slate-800")}>
+            {formatNumber(channel.exceptions)}
+          </div>
+        </div>
       </div>
     </Link>
   );
@@ -1187,10 +2242,10 @@ function RecentOrdersCard({ rows, loading }: { rows: DashboardOrder[]; loading: 
       title="最近订单"
       loading={loading}
       emptyTitle="暂无订单"
-      headers={["订单号", "用户", "金额", "状态", "时间"]}
-      rows={rows.map((order) => [
+      headers={["订单号", "成交商品", "金额", "状态", "时间"]}
+      rows={rows.slice(0, 8).map((order) => [
         order.order_no,
-        order.customer_email ?? "—",
+        order.product_name ?? "数字商品",
         formatMoney(order.total_amount),
         `${getPaymentStatusLabel(order.payment_status as any)} / ${getOrderStatusLabel(order.status as any)}`,
         formatDateTime(order.created_at),
@@ -1207,7 +2262,7 @@ function RecentRechargesCard({ rows, loading }: { rows: DashboardRecharge[]; loa
       loading={loading}
       emptyTitle="暂无充值"
       headers={["充值单号", "用户", "金额", "渠道", "状态", "时间"]}
-      rows={rows.map((row) => [
+      rows={rows.slice(0, 8).map((row) => [
         row.recharge_no,
         row.user_email ?? "—",
         formatMoney(row.amount),
@@ -1285,42 +2340,183 @@ function CompactTableCard({
   );
 }
 
-function UserOverviewCard({
-  rows,
-  visitorRows,
+function FinanceOverviewCard({
+  stats,
   loading,
+  periodLabel,
 }: {
-  rows: Array<{ label: string; value: MetricValue; failed?: boolean }>;
-  visitorRows: Array<{ label: string; visitors: MetricValue; views: MetricValue; failed?: boolean }>;
+  stats: {
+    revenue: number;
+    gmv: number;
+    recharge: number;
+    totalCost: number;
+    grossProfit: number;
+    grossMargin: string;
+    gatewayFee: number;
+    netProfit: number;
+    productCostRows: Array<{
+      id: string;
+      name: string;
+      price: number;
+      cost: number;
+      quantity: number;
+      salesAmount: number;
+      totalCost: number;
+      profit: number;
+      margin: string;
+    }>;
+  };
   loading: boolean;
+  periodLabel: string;
 }) {
   return (
-    <Card className="dashboard-panel flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none">
-      <CardHeader className="shrink-0 px-4 py-3">
-        <CardTitle className="text-base">用户与访问概览</CardTitle>
+    <Card className="dashboard-panel shrink-0 overflow-hidden border-[var(--admin-v2-border)] shadow-none">
+      <CardHeader className="flex flex-col items-start justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center">
+        <div>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-base">财务与成本对账看板</CardTitle>
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+              {periodLabel}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">
+            营收核算、已售商品成本核算、毛利率及支付通道成本（仅管理员后台与商品编辑可见成本）
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="default" size="sm" className="h-7 text-xs bg-blue-600 text-white hover:bg-blue-700">
+            <Link href="/admin/finance" className="inline-flex items-center gap-1">
+              进入财务独立看板 <ExternalLink className="h-3 w-3" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+            <Link href="/admin/payments">支付对账服务</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+            <Link href="/admin/balance-ledger">余额流水</Link>
+          </Button>
+        </div>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-3 overflow-auto px-4 pb-4 pt-0">
-        {loading ? <ListSkeleton /> : (
-          <>
-            <div className="grid grid-cols-2 gap-2">
-              {rows.map((row) => (
-                <div key={row.label} className="rounded-xl bg-slate-50 px-3 py-2">
-                  <div className="text-xs text-slate-500">{row.label}</div>
-                  <div className="mt-1 text-lg font-semibold text-slate-950">{formatNumber(row.value)}</div>
-                </div>
-              ))}
+      <CardContent className="space-y-4 px-4 pb-4 pt-0">
+        {loading ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-xl bg-slate-100" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="text-xs text-slate-500">总营收流水</div>
+              <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                {formatMoney(stats.revenue)}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400">
+                GMV {formatMoney(stats.gmv)} + 充值 {formatMoney(stats.recharge)}
+              </div>
             </div>
-            <div className="rounded-xl border">
-              {visitorRows.map((row) => (
-                <div key={row.label} className="grid grid-cols-3 gap-2 border-b px-3 py-2 text-xs last:border-b-0">
-                  <div className="font-medium text-slate-700">{row.label}</div>
-                  <div>访客 {formatNumber(row.visitors)}</div>
-                  <div>访问 {formatNumber(row.views)}</div>
-                </div>
-              ))}
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="text-xs text-slate-500">已售商品估算成本</div>
+              <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                {formatMoney(stats.totalCost)}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400">
+                按 SKU 原价/供货底价 × 件数
+              </div>
             </div>
-          </>
+
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+              <div className="text-xs font-medium text-emerald-800">预估商品毛利</div>
+              <div className="mt-1 text-lg font-bold tabular-nums text-emerald-700">
+                {formatMoney(stats.grossProfit)}
+              </div>
+              <div className="mt-1 text-[10px] text-emerald-600/80">
+                GMV - 商品总成本
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3">
+              <div className="text-xs font-medium text-blue-800">综合毛利率</div>
+              <div className="mt-1 text-lg font-bold tabular-nums text-blue-700">
+                {stats.grossMargin}
+              </div>
+              <div className="mt-1 text-[10px] text-blue-600/80">
+                商品毛利 / GMV
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+              <div className="text-xs font-medium text-amber-800">支付通道费 (约 3%)</div>
+              <div className="mt-1 text-lg font-bold tabular-nums text-amber-700">
+                {formatMoney(stats.gatewayFee)}
+              </div>
+              <div className="mt-1 text-[10px] text-amber-600/80">
+                支付服务商结算扣费预估
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-emerald-300 bg-gradient-to-br from-emerald-100/50 to-white p-3">
+              <div className="text-xs font-semibold text-emerald-900">预估净利润</div>
+              <div className="mt-1 text-lg font-bold tabular-nums text-emerald-800">
+                {formatMoney(stats.netProfit)}
+              </div>
+              <div className="mt-1 text-[10px] text-emerald-700/80">
+                扣除商品成本与通道手续费
+              </div>
+            </div>
+          </div>
         )}
+
+        {stats.productCostRows.length > 0 ? (
+          <details className="group rounded-xl border border-slate-200 bg-white">
+            <summary className="flex cursor-pointer items-center justify-between px-4 py-2.5 text-xs font-medium text-slate-700 select-none hover:bg-slate-50">
+              <div className="flex items-center gap-2">
+                <span>商品成本与毛利测算表（共 {stats.productCostRows.length} 款有销量商品）</span>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">仅后台财务展示</span>
+              </div>
+              <span className="text-[11px] text-blue-600 group-open:hidden">展开成本明细 ▸</span>
+              <span className="text-[11px] text-slate-400 hidden group-open:inline">收起 ▾</span>
+            </summary>
+            <div className="border-t border-slate-200 p-2 overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-xs">
+                    <TableHead className="min-w-[160px]">商品名称</TableHead>
+                    <TableHead className="text-right">售价</TableHead>
+                    <TableHead className="text-right">成本价 (原价)</TableHead>
+                    <TableHead className="text-right">销量</TableHead>
+                    <TableHead className="text-right">销售额</TableHead>
+                    <TableHead className="text-right">总成本</TableHead>
+                    <TableHead className="text-right">预估毛利</TableHead>
+                    <TableHead className="text-right">毛利率</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.productCostRows.map((row) => (
+                    <TableRow key={row.id} className="text-xs">
+                      <TableCell className="max-w-[200px] truncate font-medium text-slate-900" title={row.name}>
+                        {row.name}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(row.price)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-slate-500">
+                        {row.cost > 0 ? formatMoney(row.cost) : <span className="text-slate-400">未填(¥0)</span>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-medium text-slate-900">{row.quantity}</TableCell>
+                      <TableCell className="text-right tabular-nums text-blue-700">{formatMoney(row.salesAmount)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(row.totalCost)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold text-emerald-700">{formatMoney(row.profit)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-slate-700">{row.margin}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="mt-2 text-[10px] text-slate-400 px-2">
+                🔒 安全提示：产品成本与原价数据仅在管理员后台（商品编辑页及财务看板）呈现，前台买家端不展示任何成本信息。若绑定了供应商规格，可自动采纳供应商供货底价。
+              </div>
+            </div>
+          </details>
+        ) : null}
       </CardContent>
     </Card>
   );

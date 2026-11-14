@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { Button } from "@/components/ui/button";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ import { AccountEmailContext } from "@/components/account/AccountEmailContext";
 export default function AccountShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { isMobile } = useMobileStorefront();
   const [checking, setChecking] = useState(true);
   const [ordersLoginRequired, setOrdersLoginRequired] = useState(false);
   const isOrdersPage = pathname === "/account/orders";
@@ -53,9 +55,9 @@ export default function AccountShell({ children }: { children: ReactNode }) {
     const htmlOverflow = document.documentElement.style.overflow;
 
     const syncViewportOverflow = () => {
-      const overflow = desktopQuery.matches ? "hidden" : bodyOverflow;
+      const overflow = desktopQuery.matches && !isMobile ? "hidden" : bodyOverflow;
       document.body.style.overflow = overflow;
-      document.documentElement.style.overflow = desktopQuery.matches ? "hidden" : htmlOverflow;
+      document.documentElement.style.overflow = desktopQuery.matches && !isMobile ? "hidden" : htmlOverflow;
     };
 
     syncViewportOverflow();
@@ -66,7 +68,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
       document.body.style.overflow = bodyOverflow;
       document.documentElement.style.overflow = htmlOverflow;
     };
-  }, []);
+  }, [isMobile]);
 
   useEffect(() => {
     let active = true;
@@ -209,7 +211,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   if (pathname === "/account/orders") {
     return (
       <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
-        <div className={`mx-auto flex w-full max-w-[1640px] flex-col gap-3 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
+        <div className={cn(`mx-auto flex w-full max-w-[1640px] flex-col gap-3 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !overflow-visible")}>
           {emailNotice}
           {children}
         </div>
@@ -219,11 +221,11 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
   return (
     <PublicLayout contentClassName="w-full max-w-none px-4 py-3 md:px-6">
-      <div className={`mx-auto flex w-full max-w-[1640px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
+      <div className={cn(`mx-auto flex w-full max-w-[1640px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !overflow-visible")}>
         {emailNotice}
 
-        <div className={`${center.workspace} grid min-w-0 flex-1 grid-cols-1 gap-5 overflow-visible md:min-h-0 md:grid-cols-[248px_minmax(0,1fr)] md:overflow-hidden`}>
-          <aside className={`${glass.surface} ${center.panel} ${center.nav} sidebar-scroll hidden h-full min-h-0 flex-col overflow-y-auto p-3 md:flex`}>
+        <div className={cn(`${center.workspace} grid min-w-0 flex-1 grid-cols-1 gap-5 overflow-visible md:min-h-0 md:grid-cols-[248px_minmax(0,1fr)] md:overflow-hidden`, isMobile && "!grid-cols-1 !gap-3 !overflow-visible")}>
+          <aside className={cn(`${glass.surface} ${center.panel} ${center.nav} sidebar-scroll hidden h-full min-h-0 flex-col overflow-y-auto p-3 md:flex`, isMobile && "!hidden")}>
             <AccountIdentity />
             <AccountNav pathname={pathname || "/account"} />
             <button
@@ -236,7 +238,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
             </button>
           </aside>
 
-          <div className="min-w-0 md:hidden">
+          <div className={cn("min-w-0 md:hidden", isMobile && "!block")}>
             <div className={`${glass.surface} ${center.panel} overflow-hidden p-2`}>
               <AccountIdentity compact />
               <div className="flex gap-2 overflow-x-auto">
@@ -253,7 +255,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <main ref={contentRef} className={`${center.content} ${center.contentFrame} min-w-0 overflow-visible md:min-h-0 md:overflow-y-auto`}><AccountEmailContext.Provider value={email}>{children}</AccountEmailContext.Provider></main>
+          <main ref={contentRef} className={cn(`${center.content} ${center.contentFrame} min-w-0 overflow-visible md:min-h-0 md:overflow-y-auto`, isMobile && "!h-auto !overflow-visible")}><AccountEmailContext.Provider value={email}>{children}</AccountEmailContext.Provider></main>
         </div>
       </div>
     </PublicLayout>
