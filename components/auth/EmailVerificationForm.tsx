@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,15 @@ type Props = {
 
 export default function EmailVerificationForm({ email, busy, onVerify, onResend, onBack }: Props) {
   const [code, setCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   return (
     <form
@@ -40,8 +49,8 @@ export default function EmailVerificationForm({ email, busy, onVerify, onResend,
         验证并继续
       </Button>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="ghost" disabled={busy} onClick={() => { setCode(""); void onResend(); }}>
-          重新发送
+        <Button type="button" variant="ghost" disabled={busy || resendCooldown > 0} onClick={() => { setCode(""); setResendCooldown(60); void onResend(); }}>
+          {resendCooldown > 0 ? `重新发送 (${resendCooldown}s)` : "重新发送"}
         </Button>
         <Button type="button" variant="ghost" disabled={busy} onClick={onBack}>
           更换邮箱
