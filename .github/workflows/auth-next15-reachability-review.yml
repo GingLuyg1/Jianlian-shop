@@ -1,0 +1,57 @@
+name: Auth Next 15 high advisory source reachability review
+on:
+  push:
+    branches: [codex/auth-next15-runtime-audit-20261114]
+    paths: [.github/workflows/auth-next15-reachability-review.yml]
+permissions:
+  contents: read
+jobs:
+  source-review:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2f206d3c0e1704eb762e4294c8f1fe80242b4dd0
+      - name: Confirm pinned code and emit source usage evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "2f206d3c0e1704eb762e4294c8f1fe80242b4dd0"
+          node <<'NODE'
+          const fs = require('node:fs'), path = require('node:path');
+          const roots = ['app', 'lib', 'components', 'hooks', 'scripts', 'next.config.js', 'postcss.config.js'];
+          const extensions = /\.(?:ts|tsx|js|jsx|mjs|cjs)$/;
+          const terms = {
+            zod_import: /(?:from\s*['"]zod['"]|require\(['"]zod['"]\))/g,
+            zod_collection: /(?:z\.|zod\.)array\s*\(|(?:z\.|zod\.)record\s*\(/g,
+            zod_parse: /\.(?:parse|safeParse|parseAsync|safeParseAsync)\s*\(/g,
+            postcss_import: /(?:from\s*['"]postcss['"]|require\(['"]postcss['"]\)|postcss\s*\()/g,
+            css_sourcemap: /(?:sourceMappingURL|prev\s*:\s*|sourceMap\s*:)/g,
+            request_limits: /(?:checkRequestSize|MAX_[A-Z_]*(?:SIZE|LENGTH|COUNT|ITEMS)|content-length)/g,
+            unsafe_markers: /@next-codemod-(?:error|ignore)/g
+          };
+          const files=[];
+          const scan=(p)=>{
+            if(!fs.existsSync(p))return;
+            const st=fs.statSync(p);
+            if(st.isDirectory()){for(const x of fs.readdirSync(p))scan(path.join(p,x));return;}
+            if(extensions.test(p))files.push(p);
+          };
+          roots.forEach(scan);
+          console.log('REVIEW_SHA='+process.env.GITHUB_SHA);
+          console.log('SOURCE_FILES='+files.length);
+          for(const [label,re] of Object.entries(terms)){
+            let found=0;
+            for(const f of files){
+              const s=fs.readFileSync(f,'utf8'), a=[...s.matchAll(re)];
+              if(a.length){found+=a.length; console.log(label.toUpperCase()+'='+f+':'+a.length);}
+            }
+            console.log(label.toUpperCase()+'_TOTAL='+found);
+          }
+          const pkg=JSON.parse(fs.readFileSync('package-lock.json','utf8')).packages;
+          for(const name of ['next','react','postcss','zod','browserslist','lodash','nanoid','brace-expansion','minimatch','picomatch']){
+            const nodes=Object.keys(pkg).filter(k=>k==='node_modules/'+name||k.endsWith('/node_modules/'+name));
+            console.log('LOCK_'+name+'='+JSON.stringify(nodes.map(x=>({path:x,version:pkg[x].version,dev:!!pkg[x].dev}))));
+          }
+          NODE
