@@ -1844,7 +1844,6 @@ function ProductFormDialog({
                   className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900"
                   onClick={() => {
                     skuManagerRef.current?.reload?.();
-                    setSkuRefreshKey((k) => k + 1);
                   }}
                 >
                   <RefreshCw className="mr-1 h-3 w-3" />
