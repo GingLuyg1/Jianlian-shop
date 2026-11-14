@@ -5,21 +5,23 @@ import {
 } from "../../catalog/products/[productId]/route";
 
 type RouteContext = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
-function toCatalogContext(context: RouteContext) {
-  return { params: { productId: context.params.id } };
+export async function GET(request: Request, props: RouteContext) {
+  const params = await props.params;
+  const { id } = await params;
+  return getProduct(request, { params: Promise.resolve({ productId: id }) });
 }
 
-export function GET(request: Request, context: RouteContext) {
-  return getProduct(request, toCatalogContext(context));
+export async function PATCH(request: Request, props: RouteContext) {
+  const params = await props.params;
+  const { id } = await params;
+  return patchProduct(request, { params: Promise.resolve({ productId: id }) });
 }
 
-export function PATCH(request: Request, context: RouteContext) {
-  return patchProduct(request, toCatalogContext(context));
-}
-
-export function DELETE(request: Request, context: RouteContext) {
-  return deleteProduct(request, toCatalogContext(context));
+export async function DELETE(request: Request, props: RouteContext) {
+  const params = await props.params;
+  const { id } = await params;
+  return deleteProduct(request, { params: Promise.resolve({ productId: id }) });
 }

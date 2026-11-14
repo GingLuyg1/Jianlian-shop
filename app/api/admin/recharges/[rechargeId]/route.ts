@@ -4,7 +4,8 @@ import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
-export async function GET(request: Request, { params }: { params: { rechargeId: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ rechargeId: string }> }) {
+  const params = await props.params;
   const admin = await getServerAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
   try {

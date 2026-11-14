@@ -16,7 +16,7 @@ import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/se
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type RouteContext = {
-  params: { productId: string };
+  params: Promise<{ productId: string }>;
 };
 
 type ProductStatus = "draft" | "active" | "inactive" | "sold_out";
@@ -55,7 +55,8 @@ function getStatusSaveFailure(error: unknown) {
   return { status: 500, code: "PRODUCT_STATUS_UPDATE_FAILED", message: "商品状态更新失败，请稍后重试" };
 }
 
-export async function POST(request: Request, { params }: RouteContext) {
+export async function POST(request: Request, props: RouteContext) {
+  const params = await props.params;
   const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;

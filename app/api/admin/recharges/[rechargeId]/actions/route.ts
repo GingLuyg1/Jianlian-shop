@@ -20,10 +20,8 @@ const ACTIONS = new Set<RechargeReviewAction>([
   "retry_credit",
 ]);
 
-export async function POST(
-  request: Request,
-  { params }: { params: { rechargeId: string } },
-) {
+export async function POST(request: Request, props: { params: Promise<{ rechargeId: string }> }) {
+  const params = await props.params;
   const admin = await getServerAdminContext();
   if (!admin.ok) {
     const attempted = await request.clone().json().catch(() => null);
