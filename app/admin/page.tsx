@@ -1359,8 +1359,7 @@ export default function AdminDashboardPage() {
                     value={activeVisitorConversionValue}
                     description="有消费用户 / 访客数 (UV)"
                     comparison={`${periodLabel}访客成交转化`}
-                    minRows={8}
-      href="/admin/orders"
+                    href="/admin/orders"
                     loading={loading}
                     trend={[]}
                   />
@@ -2214,6 +2213,7 @@ function RecentOrdersCard({ rows, loading }: { rows: DashboardOrder[]; loading: 
         `${getPaymentStatusLabel(order.payment_status as any)} / ${getOrderStatusLabel(order.status as any)}`,
         formatDateTime(order.created_at),
       ])}
+      minRows={8}
       href="/admin/orders"
     />
   );
@@ -2245,6 +2245,7 @@ function CompactTableCard({
   emptyTitle,
   headers,
   rows,
+  minRows = 0,
   href,
 }: {
   title: string;
@@ -2252,6 +2253,7 @@ function CompactTableCard({
   emptyTitle: string;
   headers: string[];
   rows: string[][];
+  minRows?: number;
   href: string;
 }) {
   return (
