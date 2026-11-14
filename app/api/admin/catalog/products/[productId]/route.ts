@@ -94,7 +94,8 @@ function getProductSaveFailure(error: unknown, fallback = "商品保存失败，
 }
 
 
-export async function GET(request: Request, { params }: RouteContext) {
+export async function GET(request: Request, props: RouteContext) {
+  const params = await props.params;
   const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
@@ -133,7 +134,8 @@ export async function GET(request: Request, { params }: RouteContext) {
   return response;
 }
 
-export async function PATCH(request: Request, { params }: RouteContext) {
+export async function PATCH(request: Request, props: RouteContext) {
+  const params = await props.params;
   const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
@@ -305,7 +307,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   return response;
 }
 
-export async function DELETE(request: Request, { params }: RouteContext) {
+export async function DELETE(request: Request, props: RouteContext) {
+  const params = await props.params;
   const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
