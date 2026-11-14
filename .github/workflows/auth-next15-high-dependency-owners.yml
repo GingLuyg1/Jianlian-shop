@@ -1,0 +1,41 @@
+name: Auth Next15 high dependency owners read-only
+on:
+  push:
+    branches: [codex/auth-next15-runtime-audit-20261114]
+    paths: [.github/workflows/auth-next15-high-dependency-owners.yml]
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2f206d3c0e1704eb762e4294c8f1fe80242b4dd0
+      - name: Show high advisory owners without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "2f206d3c0e1704eb762e4294c8f1fe80242b4dd0"
+          npm ci --ignore-scripts --no-audit --no-fund >/dev/null 2>&1
+          node <<'NODE'
+          const fs=require('fs'),path=require('path'),cp=require('child_process');
+          const packages=JSON.parse(fs.readFileSync('package-lock.json','utf8')).packages;
+          const root=JSON.parse(fs.readFileSync('package.json','utf8'));
+          const high=['brace-expansion','browserslist','cross-spawn','flatted','glob','js-yaml','lodash','minimatch','nanoid','picomatch','postcss','source-map-js','zod'];
+          const roots=['app','lib','components','hooks','scripts','middleware.ts','next.config.js','next.config.mjs','postcss.config.js','postcss.config.mjs','tailwind.config.js','tailwind.config.ts'];
+          const sourceFiles=[];
+          function visit(p){if(!fs.existsSync(p))return;const s=fs.statSync(p);if(s.isDirectory()){for(const n of fs.readdirSync(p))visit(path.join(p,n));return}if(/\.(?:ts|tsx|mjs|cjs|js|jsx)$/.test(p))sourceFiles.push(p);}
+          roots.forEach(visit);
+          console.log('SOURCE_FILES='+sourceFiles.length);
+          for(const name of high){
+            const locs=Object.entries(packages).filter(([k,v])=>k.startsWith('node_modules/')&&(k==='node_modules/'+name||k.endsWith('/node_modules/'+name))&&!v.dev).map(([k,v])=>k+'@'+v.version);
+            const found=[];
+            const pat=new RegExp('(?:from\\s*["\\\x27]|require\\(\\s*["\\\x27]|import\\(\\s*["\\\x27])'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?:["\\\x27]|/)');
+            for(const f of sourceFiles){let s=fs.readFileSync(f,'utf8');if(pat.test(s))found.push(f)}
+            console.log('PKG='+name+'; DIRECT_ROOT='+(Object.prototype.hasOwnProperty.call(root.dependencies||{},name)?'runtime':Object.prototype.hasOwnProperty.call(root.devDependencies||{},name)?'dev':'no')+'; INSTALLED='+locs.join(',')+'; SOURCE_REFERENCES='+found.slice(0,12).join(',')+'; SOURCE_COUNT='+found.length);
+            const p=cp.spawnSync('npm',['explain',name,'--json'],{encoding:'utf8',maxBuffer:3*1024*1024});
+            if(p.status===0){try{const a=JSON.parse(p.stdout);for(const d of a.slice(0,8)){let deps=(d.dependents||[]).slice(0,8).map(x=>(x.from?.name||x.name||'unknown')+':'+(x.type||''));console.log('EXPLAIN='+name+' '+d.location+' <= '+deps.join(','));}}catch(e){console.log('EXPLAIN_PARSE_ERROR='+name)}}else console.log('EXPLAIN_UNAVAILABLE='+name);
+          }
+          NODE
