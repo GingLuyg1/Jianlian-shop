@@ -510,5 +510,5 @@
  .admin-dashboard-v21 .dashboard-sales-grid > div { min-width:0; }
  .admin-dashboard-v21 .dashboard-sales-grid > div > .dashboard-panel { height:auto; }
  .admin-dashboard-v21 .dashboard-sales-grid > div > .dashboard-panel > div:last-child { flex:initial; }
- .admin-dashboard-v21 .dashboard-aligned-columns > .dashboard-panel { height:374px; }
+ .admin-dashboard-v21 .dashboard-aligned-columns > .dashboard-panel { height:384px; }
 }
