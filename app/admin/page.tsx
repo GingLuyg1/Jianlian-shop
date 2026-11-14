@@ -1692,7 +1692,7 @@ export default function AdminDashboardPage() {
               <CardHeader className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between space-y-0">
                 <div>
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-base">商品销售明细与排行</CardTitle>
+                    <CardTitle className="text-base">商品详情</CardTitle>
                     <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
                       {periodLabel}
                     </span>
@@ -1717,21 +1717,21 @@ export default function AdminDashboardPage() {
                   </Link>
                 </div>
               </CardHeader>
-              <CardContent className="min-h-0 flex-1 flex flex-col justify-between overflow-auto px-4 pb-4 pt-0">
+              <CardContent className="min-h-0 flex-1 flex flex-col justify-between overflow-visible px-4 pb-4 pt-0">
                 {loading && !data ? (
                   <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-9 animate-pulse rounded bg-slate-100" />)}</div>
                 ) : allSortedProductRows.length === 0 ? (
                   <AdminEmptyState title="暂无商品数据" description="当前时段暂无在售或成交商品记录。" />
                 ) : (
                   <>
-                    <div className="flex-1 min-h-0 overflow-x-auto">
+                    <div className="min-w-0 overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="text-xs">
                             <TableHead className="min-w-[180px] text-center">商品标题</TableHead>
-                            <TableHead className="text-right">售价</TableHead>
+                            <TableHead className="text-center">售价</TableHead>
                             <TableHead
-                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              className="cursor-pointer text-center select-none transition-colors hover:text-slate-900"
                               onClick={() => {
                                 if (productSortBy === "orders") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1747,7 +1747,7 @@ export default function AdminDashboardPage() {
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              className="cursor-pointer text-center select-none transition-colors hover:text-slate-900"
                               onClick={() => {
                                 if (productSortBy === "amount") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1763,7 +1763,7 @@ export default function AdminDashboardPage() {
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              className="cursor-pointer text-center select-none transition-colors hover:text-slate-900"
                               onClick={() => {
                                 if (productSortBy === "stock") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1779,7 +1779,7 @@ export default function AdminDashboardPage() {
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              className="cursor-pointer text-center select-none transition-colors hover:text-slate-900"
                               onClick={() => {
                                 if (productSortBy === "conversionRate") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1800,7 +1800,7 @@ export default function AdminDashboardPage() {
                         <TableBody>
                           {pagedProductRows.map((row) => (
                             <TableRow key={row.id} className="text-xs">
-                              <TableCell className="max-w-[220px] truncate text-center font-medium text-slate-900" title={row.name}>
+                              <TableCell className="max-w-[220px] truncate text-left font-medium text-slate-900" title={row.name}>
                                 {row.name}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(row.price)}</TableCell>
@@ -2479,7 +2479,7 @@ function FinanceOverviewCard({
                 <TableHeader>
                   <TableRow className="text-xs">
                     <TableHead className="min-w-[160px]">商品名称</TableHead>
-                    <TableHead className="text-right">售价</TableHead>
+                    <TableHead className="text-center">售价</TableHead>
                     <TableHead className="text-right">成本价 (原价)</TableHead>
                     <TableHead className="text-right">销量</TableHead>
                     <TableHead className="text-right">销售额</TableHead>
