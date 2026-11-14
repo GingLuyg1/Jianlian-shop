@@ -18,7 +18,10 @@ function text(value: unknown, max = 200) { return typeof value === "string" && v
 function money(value: unknown, optional = false) { if (optional && (value === null || value === "" || value === undefined)) return null; const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : undefined; }
 function integer(value: unknown) { const n = Number(value); return Number.isSafeInteger(n) && n >= 0 ? n : undefined; }
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> };
+
+export async function GET(_request: Request, props: RouteContext) {
+  const { id } = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
@@ -30,8 +33,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   ) as "id,slug,stock,metadata,delivery_type";
   const [schemaReadiness, skuResult, productResult] = await Promise.all([
     inspectCatalogSkuSchema(service),
-    service.from("product_skus").select(skuFields).eq("product_id", params.id).order("sort_order").order("created_at"),
-    service.from("products").select(productFields).eq("id", params.id).maybeSingle(),
+    service.from("product_skus").select(skuFields).eq("product_id", id).order("sort_order").order("created_at"),
+    service.from("products").select(productFields).eq("id", id).maybeSingle(),
   ]);
   if (skuResult.error && schemaReadiness.ready) return json({ error: "SKU 读取失败", requestId }, 500);
   if (productResult.error || !productResult.data) return json({ error: "商品不存在", requestId }, 404);
@@ -53,7 +56,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   });
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, props: RouteContext) {
+  const { id } = await props.params;
   const requestId = randomUUID();
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
@@ -73,10 +77,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const status = text(body?.status, 20);
   const deliveryType = body?.delivery_type === null || body?.delivery_type === "" || body?.delivery_type === undefined ? null : text(body.delivery_type, 40);
   if (!title || !code || price === undefined || originalPrice === undefined || stock === undefined || sortOrder === undefined || !status || !STATUSES.has(status) || (deliveryType !== null && !DELIVERY_TYPES.has(deliveryType))) return json({ error: "SKU 参数无效", requestId }, 400);
-  const payload = { product_id: params.id, sku_title: title, sku_code: code, combination_key: code.toLowerCase(), price, original_price: originalPrice, stock, status, sort_order: sortOrder, delivery_type: deliveryType, image_url: text(body?.image_url, 2000), metadata: {} };
-  const { data: product, error: productError } = await service.from("products").select("id,delivery_type").eq("id", params.id).maybeSingle();
+  const payload = { product_id: id, sku_title: title, sku_code: code, combination_key: code.toLowerCase(), price, original_price: originalPrice, stock, status, sort_order: sortOrder, delivery_type: deliveryType, image_url: text(body?.image_url, 2000), metadata: {} };
+  const { data: product, error: productError } = await service.from("products").select("id,delivery_type").eq("id", id).maybeSingle();
   if (productError || !product) return json({ error: "商品不存在", code: "PRODUCT_NOT_FOUND", requestId }, 404);
-  const categoryError = await readSkuCategoryError(service, params.id, [status]);
+  const categoryError = await readSkuCategoryError(service, id, [status]);
   if (categoryError) return json({ error: categoryError, code: "SKU_CATEGORY_NOT_PUBLISHABLE", requestId }, 409);
   if (isAutomaticSkuActivation(null, status, product, payload)) {
     const readiness = await readSkuActivationReadiness(service, product, payload);
@@ -85,7 +89,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const { data, error } = await service.from("product_skus").insert(payload).select(SKU_FIELDS).single();
   if (error || !data) return json({ error: error?.code === "23505" ? "SKU Code 已存在" : "SKU 新增失败", requestId }, error?.code === "23505" ? 409 : 500);
   await auditCatalogAction({ request, user: admin.user, action: "create_product_sku", module: "products", targetType: "product_sku", targetId: data.id, targetLabel: title, result: "success", afterSummary: data });
-  try { await syncSkuProductSummary(service, params.id); }
+  try { await syncSkuProductSummary(service, id); }
   catch { return json({ sku: data, error: "SKU 已新增，但商品汇总失败，请刷新后重试保存该 SKU", requestId }, 500); }
   return json({ sku: data, requestId }, 201);
 }
