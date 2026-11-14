@@ -1,0 +1,15 @@
+.page { container: account-security / inline-size; }
+.settingsGrid { display:grid; min-width:0; grid-template-columns:minmax(0,1fr); align-items:start; gap:20px; }
+.emailSteps { display:grid; min-width:0; grid-template-columns:minmax(0,1fr); gap:12px; }
+.sectionHeading { display:flex; min-width:0; align-items:center; gap:12px; }
+.sectionHint { margin-top:4px; font-size:12px; line-height:1.6; color:#8b7b6d; }
+@container account-security (min-width:680px) {
+  .emailSteps { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@container account-security (min-width:900px) {
+  .settingsGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .emailSteps { grid-template-columns:minmax(0,1fr); }
+}
+@container account-security (min-width:1180px) {
+  .emailSteps { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

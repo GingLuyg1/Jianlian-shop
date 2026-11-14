@@ -1,18 +1,20 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, ShieldCheck, Mail, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
+import security from "@/components/account/AccountSecurity.module.css";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
+import BoundEmailChange from "@/components/auth/BoundEmailChange";
 import { getSafeAuthErrorMessage, isEmailFormatValid } from "@/lib/auth/password-policy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -113,14 +115,17 @@ export default function AccountSecurityPage() {
   }
 
   return (
-    <Card data-account-page="/account/security" data-account-ready={true} aria-busy={false} className={`${glass.surface} ${styles.panel} ${styles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden`}>
+    <Card data-account-page="/account/security" data-account-ready={true} aria-busy={false} className={`${glass.surface} ${styles.panel} ${styles.page} ${security.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden`}>
       <CardHeader className={`${glass.hero} ${styles.pageHeader}`}>
-        <CardTitle className="text-xl">账号安全</CardTitle>
-        <p className="text-sm text-muted-foreground">修改密码前需要重新验证当前密码。</p>
+        <div className="flex items-center gap-3"><span className={`${glass.icon} h-12 w-12`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><CardTitle className="text-xl">账号安全</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">管理邮箱验证与登录密码，保护你的账户。</p></div></div>
       </CardHeader>
       <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className={security.settingsGrid}>
         <EmailBinding />
-        <form onSubmit={handleSubmit} className={`${styles.formGroup} flex w-full max-w-xl flex-col gap-5`}>
+        <form onSubmit={handleSubmit} className={`${styles.formGroup} flex w-full min-w-0 flex-col gap-5`}>
+          <div className={security.sectionHeading}><span className={`${glass.icon} h-10 w-10`}><KeyRound className="h-4 w-4" aria-hidden="true" /></span><div><h2 className="font-semibold">登录密码</h2>
+          <p className={security.sectionHint}>修改密码前需要重新验证当前密码。</p></div></div>
 
           <PasswordField
             id="currentPassword"
@@ -160,6 +165,7 @@ export default function AccountSecurityPage() {
             </Button>
           </div>
         </form>
+        </div>
       </CardContent>
     </Card>
   );
@@ -262,10 +268,11 @@ function EmailBinding() {
   }
 
   return (
-    <section className="mb-6 max-w-xl space-y-3 border-b pb-5" aria-label="邮箱绑定">
-      <h2 className="font-semibold">邮箱绑定</h2>
+    <section className={`${styles.formGroup} w-full min-w-0 space-y-5`} aria-label="邮箱绑定">
+      <div className={security.sectionHeading}><span className={`${glass.icon} h-10 w-10`}><Mail className="h-4 w-4" aria-hidden="true" /></span><div><h2 className="font-semibold">邮箱安全</h2><p className={security.sectionHint}>查看绑定邮箱或完成安全验证。</p></div></div>
+      {!account && !error && <div role="status" aria-label="读取邮箱绑定状态" className="space-y-2 motion-safe:animate-pulse"><span className="block h-3 w-24 rounded bg-orange-100/70" /><span className="block h-4 w-48 max-w-full rounded bg-orange-100/50" /></div>}
       {account?.email ? (
-        <p className="break-all text-sm text-muted-foreground">{account.email}</p>
+        <BoundEmailChange account={{ id: account.id, email: account.email }} onUpdated={email => setAccount({ id: account.id, email })} />
       ) : pendingEmail ? (
         <EmailVerificationForm
           email={pendingEmail}
