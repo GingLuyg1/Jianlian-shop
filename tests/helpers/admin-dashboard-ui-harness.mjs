@@ -27,7 +27,10 @@ export function loadDashboardUi(initialStates, onStateChange = () => {}) {
       if (name.startsWith('@/lib/supabase/')) return fakeClient;
       if (name.endsWith('dashboard-payment-schema.mjs')) return {};
       if (isDashboard && name === 'react') return { ...React, useEffect: () => {}, useCallback: fn => fn, useState: value => {
-        if (stateIndex >= initialStates.length) return React.useState(value);
+        if (stateIndex >= initialStates.length) {
+          const index = stateIndex++;
+          return [value, update => onStateChange(index, typeof update === 'function' ? update(value) : update)];
+        }
         const index = stateIndex++;
         return [initialStates[index], update => onStateChange(index, typeof update === 'function' ? update(initialStates[index]) : update)];
       } };
