@@ -505,6 +505,10 @@
  .admin-dashboard-v21 .dashboard-aligned-columns,
  .admin-dashboard-v21 .dashboard-sales-grid { grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap:16px; }
  .admin-dashboard-v21 .dashboard-sales-grid > .dashboard-panel { grid-column:auto; }
- .admin-dashboard-v21 .dashboard-fixed-card { height:480px; }
- .admin-dashboard-v21 .dashboard-aligned-columns > .dashboard-panel { height:364px; }
+ .admin-dashboard-v21 .dashboard-fixed-card { height:auto; }
+ .admin-dashboard-v21 .dashboard-sales-grid > .dashboard-panel { height:auto; contain:size; min-height:0; align-self:stretch; }
+ .admin-dashboard-v21 .dashboard-sales-grid > div { min-width:0; }
+ .admin-dashboard-v21 .dashboard-sales-grid > div > .dashboard-panel { height:auto; }
+ .admin-dashboard-v21 .dashboard-sales-grid > div > .dashboard-panel > div:last-child { flex:initial; }
+ .admin-dashboard-v21 .dashboard-aligned-columns > .dashboard-panel { height:374px; }
 }
