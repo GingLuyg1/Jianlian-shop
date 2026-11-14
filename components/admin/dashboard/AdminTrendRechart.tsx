@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
   CartesianGrid,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -64,6 +63,17 @@ export function AdminTrendRechart({
   points: DashboardTrendPoint[];
   loading: boolean;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(640);
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const measure = () => { const width = node.clientWidth - 16; if (width > 0) setChartWidth(width); };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loading, points.length]);
   const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(["payAmount", "orderCount"]);
 
   if (loading) {
@@ -142,9 +152,8 @@ export function AdminTrendRechart({
         <span className="text-[11px] text-slate-400">支持多选对比，再次点击取消</span>
       </div>
 
-      <div className="h-[240px] w-full rounded-lg border border-slate-200 bg-white p-2 pt-3">
-        <ResponsiveContainer width="100%" height={240} minWidth={0}>
-          <AreaChart data={chartData} margin={{ top: 8, right: hasCount || hasPercent ? 8 : 12, left: 0, bottom: 0 }}>
+      <div ref={containerRef} className="h-[240px] min-w-0 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-2 pt-3">
+          <AreaChart width={chartWidth} height={220} data={chartData} margin={{ top: 8, right: hasCount || hasPercent ? 8 : 12, left: 0, bottom: 0 }}>
             <defs>
               {SERIES.map((item) => (
                 <linearGradient key={item.key} id={`adminTrendFill-${item.key}`} x1="0" y1="0" x2="0" y2="1">
@@ -221,13 +230,13 @@ export function AdminTrendRechart({
                 yAxisId={item.yAxisId}
                 stroke={item.color}
                 strokeWidth={2}
+                isAnimationActive={false}
                 dot={chartData.length === 1 ? { r: 4 } : false}
                 fill={`url(#adminTrendFill-${item.key})`}
                 activeDot={{ r: 4, strokeWidth: 0, fill: item.color }}
               />
             ))}
           </AreaChart>
-        </ResponsiveContainer>
       </div>
     </div>
   );

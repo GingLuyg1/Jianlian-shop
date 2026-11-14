@@ -2,7 +2,7 @@
 import { statusLabel } from '@/lib/admin/display-labels';
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowUpDown,
@@ -780,13 +780,17 @@ export default function AdminDashboardPage() {
     setProductPage(1);
   }, [dateFilter, productSortBy, productSortOrder, productPageSize]);
 
-  const loadDashboard = useCallback(async (sinceDate?: Date) => {
-    setLoading(true);
+  const refreshInFlight = useRef(false);
+  const loadDashboard = useCallback(async (sinceDate?: Date, quiet = false) => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    if (!quiet) setLoading(true);
     setError("");
 
     if (!hasSupabaseConfig()) {
       setError("Supabase 未配置，暂时无法读取控制台数据。");
       setLoading(false);
+      refreshInFlight.current = false;
       return;
     }
 
@@ -798,6 +802,7 @@ export default function AdminDashboardPage() {
       console.error("[AdminDashboard] load failed", dashboardError);
       setError("控制台数据加载失败，请稍后重试。");
     } finally {
+      refreshInFlight.current = false;
       setLoading(false);
     }
   }, []);
@@ -805,6 +810,13 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") void loadDashboard(dateFilter.from, true); };
+    const timer = window.setInterval(refresh, 30000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [dateFilter.from, loadDashboard]);
 
   const handleDateFilterChange = useCallback(
     (next: DashboardDateFilterValue) => {
@@ -2205,13 +2217,13 @@ function RecentOrdersCard({ rows, loading }: { rows: DashboardOrder[]; loading: 
       title="最近订单"
       loading={loading}
       emptyTitle="暂无订单"
-      headers={["订单号", "成交商品", "金额", "状态", "时间"]}
+      headers={["订单号", "成交商品", "金额", "时间", "状态"]}
       rows={rows.slice(0, 8).map((order) => [
         order.order_no,
         order.product_name ?? "数字商品",
         formatMoney(order.total_amount),
-        `${getPaymentStatusLabel(order.payment_status as any)} / ${getOrderStatusLabel(order.status as any)}`,
         formatDateTime(order.created_at),
+        `${getPaymentStatusLabel(order.payment_status as any)} / ${getOrderStatusLabel(order.status as any)}`,
       ])}
       minRows={8}
       href="/admin/orders"
@@ -2225,14 +2237,14 @@ function RecentRechargesCard({ rows, loading }: { rows: DashboardRecharge[]; loa
       title="最近充值"
       loading={loading}
       emptyTitle="暂无充值"
-      headers={["充值单号", "用户", "金额", "渠道", "状态", "时间"]}
+      headers={["充值单号", "用户", "金额", "渠道", "时间", "状态"]}
       rows={rows.slice(0, 8).map((row) => [
         row.recharge_no,
         row.user_email ?? "—",
         formatMoney(row.amount),
         row.channel_name ?? row.channel_code ?? "—",
-        statusLabel(row.status),
         formatDateTime(row.created_at),
+        statusLabel(row.status),
       ])}
       href="/admin/recharges"
     />
