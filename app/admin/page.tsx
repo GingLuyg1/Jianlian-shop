@@ -796,7 +796,19 @@ export default function AdminDashboardPage() {
 
     try {
       const nextData = await loadDashboardData(sinceDate);
-      setData(nextData);
+      // Match the canonical admin order list, independent of the trend date range.
+      const response = await fetch("/api/admin/orders?page=1&pageSize=7&sortBy=created_at&sortDirection=desc", { cache: "no-store" });
+      if (!response.ok) throw new Error("RECENT_ORDERS_UNAVAILABLE");
+      const recent = await response.json() as { orders?: Array<DashboardOrder & { items?: Array<{ product_name?: string }> }> };
+      if (!Array.isArray(recent.orders)) throw new Error("RECENT_ORDERS_INVALID");
+      const rechargeResult = await getSupabaseBrowserClient().from("account_recharges")
+        .select("id,recharge_no,user_email,amount,channel_name,channel_code,status,created_at")
+        .order("created_at", { ascending: false }).limit(7);
+      if (rechargeResult.error) throw new Error("RECENT_RECHARGES_UNAVAILABLE");
+      setData({ ...nextData,
+        recentOrders: recent.orders.slice(0, 7).map(order => ({ ...order, product_name: order.items?.map(item => item.product_name).filter(Boolean).join("、") || order.product_name || "数字商品" })),
+        recentRecharges: (rechargeResult.data ?? []) as DashboardRecharge[],
+      });
       setLastRefreshedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
     } catch (dashboardError) {
       console.error("[AdminDashboard] load failed", dashboardError);
@@ -2217,15 +2229,15 @@ function RecentOrdersCard({ rows, loading }: { rows: DashboardOrder[]; loading: 
       title="最近订单"
       loading={loading}
       emptyTitle="暂无订单"
-      headers={["订单号", "成交商品", "金额", "时间", "状态"]}
-      rows={rows.slice(0, 8).map((order) => [
+      headers={["时间", "订单号", "成交商品", "金额", "状态"]}
+      rows={rows.slice(0, 7).map((order) => [
+        formatDateTime(order.created_at),
         order.order_no,
         order.product_name ?? "数字商品",
         formatMoney(order.total_amount),
-        formatDateTime(order.created_at),
         `${getPaymentStatusLabel(order.payment_status as any)} / ${getOrderStatusLabel(order.status as any)}`,
       ])}
-      minRows={8}
+      minRows={7}
       href="/admin/orders"
     />
   );
@@ -2237,13 +2249,14 @@ function RecentRechargesCard({ rows, loading }: { rows: DashboardRecharge[]; loa
       title="最近充值"
       loading={loading}
       emptyTitle="暂无充值"
-      headers={["充值单号", "用户", "金额", "渠道", "时间", "状态"]}
-      rows={rows.slice(0, 8).map((row) => [
+      headers={["时间", "充值单号", "用户", "金额", "渠道", "状态"]}
+      minRows={7}
+      rows={rows.slice(0, 7).map((row) => [
+        formatDateTime(row.created_at),
         row.recharge_no,
         row.user_email ?? "—",
         formatMoney(row.amount),
         row.channel_name ?? row.channel_code ?? "—",
-        formatDateTime(row.created_at),
         statusLabel(row.status),
       ])}
       href="/admin/recharges"
@@ -2282,7 +2295,7 @@ function CompactTableCard({
         ) : (
           <>
           <div className="space-y-3 md:hidden">
-            {rows.slice(0, 8).map((row, index) => <dl key={`${title}-mobile-${index}`} className="rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3">
+            {rows.slice(0, 7).map((row, index) => <dl key={`${title}-mobile-${index}`} className="rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] p-3">
               {row.map((cell, cellIndex) => <div key={headers[cellIndex]} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 py-1 text-sm">
                 <dt className="text-[var(--admin-v2-text-muted)]">{headers[cellIndex]}</dt>
                 <dd className="min-w-0 break-all text-[var(--admin-v2-text-primary)]">{cell}</dd>
@@ -2299,7 +2312,7 @@ function CompactTableCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.slice(0, 8).map((row, index) => (
+              {rows.slice(0, 7).map((row, index) => (
                 <TableRow key={`${title}-${index}`}>
                   {row.map((cell, cellIndex) => (
                     <TableCell key={`${title}-${index}-${cellIndex}`} title={cell} className="h-9 max-w-[160px] truncate whitespace-nowrap py-2 text-xs">

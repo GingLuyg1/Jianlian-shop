@@ -1,17 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
+import { init, use } from "echarts/core";
+import { LineChart } from "echarts/charts";
+import { GridComponent, TooltipComponent, AriaComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import { cn } from "@/lib/utils";
+
+// Apache ECharts (Apache-2.0): https://github.com/apache/echarts
+use([LineChart, GridComponent, TooltipComponent, AriaComponent, CanvasRenderer]);
 
 export type DashboardTrendPoint = {
   date: string;
@@ -56,188 +54,45 @@ const SERIES: ReadonlyArray<{
   { key: "distributionAmount", label: "分销金额", color: "#f43f5e", unit: "money", yAxisId: "money" },
 ];
 
-export function AdminTrendRechart({
-  points,
-  loading,
-}: {
-  points: DashboardTrendPoint[];
-  loading: boolean;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [chartWidth, setChartWidth] = useState(640);
+
+export function AdminTrendRechart({ points, loading }: { points: DashboardTrendPoint[]; loading: boolean }) {
+  const host = useRef<HTMLDivElement>(null);
+  const [selected, setSelected] = useState<TrendMetricKey[]>(["payAmount", "orderCount"]);
   useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-    const measure = () => { const width = node.clientWidth - 16; if (width > 0) setChartWidth(width); };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [loading, points.length]);
-  const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(["payAmount", "orderCount"]);
-
-  if (loading) {
-    return (
-      <div className="h-[250px] animate-pulse rounded-lg bg-[var(--admin-v2-surface-muted)]" />
-    );
-  }
-
-  if (points.length === 0) {
-    return (
-      <AdminEmptyState
-        title="暂无趋势数据"
-        description="有真实订单、充值或访问记录后会显示趋势。"
-      />
-    );
-  }
-
-  const toggleMetric = (key: TrendMetricKey) => {
-    setSelectedMetrics((current) => {
-      if (current.includes(key)) {
-        if (current.length === 1) return current;
-        return current.filter((item) => item !== key);
-      }
-      return [...current, key];
+    if (loading || !host.current || points.length === 0) return;
+    const chart = init(host.current, undefined, { renderer: "canvas" });
+    chart.setOption({
+      animation: false,
+      aria: { enabled: true },
+      tooltip: { trigger: "axis", renderMode: "richText" },
+      grid: { left: 56, right: 48, top: 20, bottom: 32, containLabel: true },
+      xAxis: { type: "category", data: points.map(p => p.label), boundaryGap: false },
+      yAxis: [
+        { type: "value", name: "金额", position: "left" },
+        { type: "value", name: "数量 / %", position: "right", minInterval: 1 },
+      ],
+      series: SERIES.filter(item => selected.includes(item.key)).map(item => ({
+        name: item.label, type: "line", smooth: false, connectNulls: false,
+        showSymbol: points.length === 1, symbolSize: 7,
+        yAxisIndex: item.unit === "money" ? 0 : 1,
+        itemStyle: { color: item.color }, lineStyle: { width: 2 },
+        data: points.map(point => point[item.key] ?? null),
+      })),
     });
-  };
-
-  const activeSeries = SERIES.filter((item) => selectedMetrics.includes(item.key));
-  const hasMoney = activeSeries.some((item) => item.yAxisId === "money");
-  const hasCount = activeSeries.some((item) => item.yAxisId === "count");
-  const hasPercent = activeSeries.some((item) => item.yAxisId === "percent");
-
-  const chartData = points.map((point) => ({
-    label: point.label,
-    date: point.date,
-    payAmount: point.payAmount ?? 0,
-    rechargeAmount: point.rechargeAmount ?? 0,
-    orderCount: point.orderCount ?? 0,
-    visitors: point.visitors ?? 0,
-    views: point.views ?? 0,
-    newUsers: point.newUsers ?? 0,
-    conversionRate: point.conversionRate ?? 0,
-    distributionOrders: point.distributionOrders ?? 0,
-    distributionAmount: point.distributionAmount ?? 0,
-  }));
-
-  return (
-    <div className="flex min-w-0 flex-col">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-1.5" aria-label="经营趋势指标">
-          {SERIES.map((item) => {
-            const active = selectedMetrics.includes(item.key);
-            return (
-              <button
-                key={item.key}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleMetric(item.key)}
-                className={cn(
-                  "inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors",
-                  active
-                    ? "border-slate-300 bg-white text-slate-900 shadow-sm"
-                    : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200/70 hover:text-slate-700"
-                )}
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: active ? item.color : "#cbd5e1" }}
-                  aria-hidden="true"
-                />
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-        <span className="text-[11px] text-slate-400">支持多选对比，再次点击取消</span>
-      </div>
-
-      <div ref={containerRef} className="h-[240px] min-w-0 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-2 pt-3">
-          <AreaChart width={chartWidth} height={220} data={chartData} margin={{ top: 8, right: hasCount || hasPercent ? 8 : 12, left: 0, bottom: 0 }}>
-            <defs>
-              {SERIES.map((item) => (
-                <linearGradient key={item.key} id={`adminTrendFill-${item.key}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={item.color} stopOpacity={0.18} />
-                  <stop offset="95%" stopColor={item.color} stopOpacity={0.01} />
-                </linearGradient>
-              ))}
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 11, fill: "#64748b" }}
-              axisLine={false}
-              tickLine={false}
-              minTickGap={20}
-            />
-            {hasMoney ? (
-              <YAxis
-                yAxisId="money"
-                tick={{ fontSize: 11, fill: "#64748b" }}
-                axisLine={false}
-                tickLine={false}
-                width={48}
-                tickFormatter={(val: number) => `¥${val}`}
-              />
-            ) : null}
-            {hasCount ? (
-              <YAxis
-                yAxisId="count"
-                orientation={hasMoney ? "right" : "left"}
-                tick={{ fontSize: 11, fill: "#64748b" }}
-                axisLine={false}
-                tickLine={false}
-                width={38}
-                allowDecimals={false}
-              />
-            ) : null}
-            {hasPercent ? (
-              <YAxis
-                yAxisId="percent"
-                orientation={hasMoney || hasCount ? "right" : "left"}
-                hide={hasMoney && hasCount}
-                tick={{ fontSize: 11, fill: "#64748b" }}
-                axisLine={false}
-                tickLine={false}
-                width={40}
-                tickFormatter={(val: number) => `${val}%`}
-              />
-            ) : null}
-            <Tooltip
-              contentStyle={{
-                borderRadius: "8px",
-                border: "1px solid #e2e8f0",
-                fontSize: "12px",
-                boxShadow: "0 4px 12px rgba(15, 23, 42, 0.08)",
-              }}
-              formatter={(value: number, name: string) => {
-                const s = SERIES.find((item) => item.key === name);
-                if (!s) return [String(value), name];
-                if (s.unit === "money") return [`¥${Number(value).toFixed(2)}`, s.label];
-                if (s.unit === "percent") return [`${Number(value).toFixed(1)}%`, s.label];
-                return [`${Math.trunc(Number(value)).toLocaleString("zh-CN")}`, s.label];
-              }}
-              labelFormatter={(_, payload) =>
-                payload?.[0]?.payload?.date ? String(payload[0].payload.date) : ""
-              }
-            />
-            {activeSeries.map((item) => (
-              <Area
-                key={item.key}
-                type="monotone"
-                dataKey={item.key}
-                name={item.key}
-                yAxisId={item.yAxisId}
-                stroke={item.color}
-                strokeWidth={2}
-                isAnimationActive={false}
-                dot={chartData.length === 1 ? { r: 4 } : false}
-                fill={`url(#adminTrendFill-${item.key})`}
-                activeDot={{ r: 4, strokeWidth: 0, fill: item.color }}
-              />
-            ))}
-          </AreaChart>
-      </div>
+    const observer = new ResizeObserver(() => chart.resize());
+    observer.observe(host.current);
+    return () => { observer.disconnect(); chart.dispose(); };
+  }, [points, selected, loading]);
+  if (loading) return <div className="h-[260px] animate-pulse rounded-lg bg-slate-100" />;
+  if (!points.length) return <AdminEmptyState title="暂无趋势数据" description="有真实记录后显示趋势。" />;
+  return <div className="min-w-0">
+    <div className="mb-3 flex flex-wrap gap-1.5" aria-label="经营趋势指标">
+      {SERIES.map(item => <button key={item.key} type="button" aria-pressed={selected.includes(item.key)}
+        onClick={() => setSelected(current => current.includes(item.key) ? (current.length === 1 ? current : current.filter(key => key !== item.key)) : [...current, item.key])}
+        className={cn("inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs", selected.includes(item.key) ? "border-slate-300 bg-white text-slate-900" : "border-transparent bg-slate-100 text-slate-500")}>
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}
+      </button>)}
     </div>
-  );
+    <div ref={host} data-testid="dashboard-echarts" role="img" aria-label="经营趋势曲线图" className="w-full min-w-0 rounded-lg border border-slate-200 bg-white" style={{ height: 250 }} />
+  </div>;
 }
