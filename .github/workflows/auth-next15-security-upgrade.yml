@@ -34,7 +34,27 @@ jobs:
         shell: bash
         run: |
           test "$(node -p "require('./node_modules/next/package.json').version")" = "15.5.29"
-          ! grep -R -n --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' -E '^\\s*["'"']use server["'"']\\s*;?\\s*$' app lib middleware.ts
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const extensions = new Set([".ts", ".tsx", ".js", ".mjs"]);
+          const matches = [];
+          function scan(target) {
+            if (!fs.existsSync(target)) return;
+            if (fs.statSync(target).isDirectory()) {
+              for (const name of fs.readdirSync(target)) scan(path.join(target, name));
+              return;
+            }
+            if (!extensions.has(path.extname(target))) return;
+            const content = fs.readFileSync(target, "utf8");
+            if (/^\s*["']use server["']\s*;?\s*$/m.test(content)) matches.push(target);
+          }
+          for (const target of ["app", "lib", "middleware.ts"]) scan(target);
+          if (matches.length) {
+            console.error("Unexpected Server Actions directives:", matches.join(", "));
+            process.exit(1);
+          }
+          NODE
           grep -q 'unoptimized: true' next.config.js
       - name: Typecheck
         run: npm run typecheck
