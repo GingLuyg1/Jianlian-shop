@@ -1,0 +1,67 @@
+name: Auth Next 15 readonly production dependency audit
+
+on:
+  push:
+    branches: [codex/auth-next15-runtime-audit-20261114]
+    paths: [.github/workflows/auth-next15-runtime-audit.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-dependency-audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Confirm exact PR source
+        run: test "$(git rev-parse HEAD^)" = "2f206d3c0e1704eb762e4294c8f1fe80242b4dd0"
+      - name: Install exact dependency lock without scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Query npm official production dependency advisories
+        shell: bash
+        run: npm audit --omit=dev --json > "$RUNNER_TEMP/runtime-audit.json" || true
+      - name: Print redacted authoritative runtime risk report
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          let report;
+          try {
+            report = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'runtime-audit.json'), 'utf8'));
+          } catch {
+            console.log('AUDIT_STATUS=UNAVAILABLE');
+            process.exit(1);
+          }
+          const meta = report.metadata?.vulnerabilities;
+          if (!meta || !Number.isInteger(meta.total) || !report.vulnerabilities) {
+            console.log('AUDIT_STATUS=UNAVAILABLE');
+            console.log('AUDIT_REASON=' + String(report.error?.code || 'missing_official_results').slice(0, 100));
+            process.exit(1);
+          }
+          console.log('AUDIT_STATUS=AVAILABLE');
+          console.log('PRODUCTION_VULNERABILITIES=' + JSON.stringify(meta));
+          const rank = { critical: 0, high: 1, moderate: 2, low: 3, info: 4 };
+          for (const [name, vuln] of Object.entries(report.vulnerabilities).sort((a, b) => (rank[a[1].severity] ?? 9) - (rank[b[1].severity] ?? 9))) {
+            const via = (vuln.via || []).filter(x => x && typeof x === 'object').map(x => ({
+              title: String(x.title || '').slice(0, 160),
+              url: String(x.url || '').slice(0, 350),
+              severity: x.severity,
+              range: x.range
+            }));
+            console.log('RUNTIME_PACKAGE=' + JSON.stringify({
+              name, severity: vuln.severity, isDirect: vuln.isDirect, range: vuln.range,
+              via, nodes: (vuln.nodes || []).slice(0, 8), fixAvailable: vuln.fixAvailable
+            }));
+          }
+          if (meta.critical > 0 || meta.high > 0) {
+            console.log('RUNTIME_SECURITY_GATE=NO_GO');
+            process.exit(2);
+          }
+          console.log('RUNTIME_SECURITY_GATE=HIGH_CRITICAL_CLEAR');
+          NODE
