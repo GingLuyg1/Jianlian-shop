@@ -1,0 +1,66 @@
+name: Auth Next 15 isolated regression repair
+
+on:
+  push:
+    branches: [codex/auth-next15-security-20261113]
+    paths: [.github/workflows/auth-next15-regression-repair.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  targeted-regression-and-lock:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/auth-next15-security-20261113
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Verify exact safe base
+        run: test "$(git rev-parse HEAD)" = "1d10cbe124de85e91f25c4036edfb20b686d5055"
+      - name: Apply exact Next 15 source-contract repair
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          
+          def strict_replace(path, before, after, count=1):
+              f = Path(path)
+              with f.open("r", encoding="utf-8", newline="") as stream:
+                  text = stream.read()
+              found = text.count(before)
+              if found != count:
+                  raise RuntimeError(f"SOURCE_MISMATCH {path}: found {found}, expected {count}")
+              with f.open("w", encoding="utf-8", newline="") as stream:
+                  stream.write(text.replace(before, after))
+              print(f"REPAIRED {path}: {found}")
+          
+          strict_replace("app/api/admin/products/reorder/route.ts", "export { /* @next-codemod-error `POST` export is re-exported. Check if this component uses `params` or `searchParams`*/\nPOST } from \"../../catalog/products/reorder/route\";\n", "import { POST as reorderCatalogProducts } from \"../../catalog/products/reorder/route\";\n\nexport function POST(request: Request) {\n  return reorderCatalogProducts(request);\n}\n", 1)
+          strict_replace("tests/regression/admin-catalog-operations-v2-4.test.mjs", "  assert.match(alias, /export \\{ POST \\}/);", "  assert.match(alias, /import \\{ POST as reorderCatalogProducts \\} from \"\\.\\.\\/\\.\\.\\/catalog\\/products\\/reorder\\/route\"/);\n  assert.match(alias, /export function POST\\(request: Request\\)[\\s\\S]*return reorderCatalogProducts\\(request\\)/);\n  assert.doesNotMatch(alias, /@next-codemod-error/);", 1)
+          strict_replace("tests/regression/admin-risk-review.test.mjs", "  assert.match(detail, /if \\(!isValidRiskEventId\\(context\\.params\\.id\\)\\)/);", "  assert.match(detail, /params: Promise<\\{ id: string \\}>/);\n  assert.match(detail, /if \\(!isValidRiskEventId\\(\\(await context\\.params\\)\\.id\\)\\)/);", 1)
+          strict_replace("tests/regression/source-contract.test.mjs", "deliverDigitalOrder\\(serviceClient, context\\.params\\.orderId, \"admin_retry\"\\)", "deliverDigitalOrder\\(serviceClient, \\(await context\\.params\\)\\.orderId, \"admin_retry\"\\)", 3)
+          strict_replace("tests/regression/source-contract.test.mjs", "eq\\(\"business_id\", context\\.params\\.orderId\\)", "eq\\(\"business_id\", \\(await context\\.params\\)\\.orderId\\)", 1)
+          strict_replace("tests/regression/source-contract.test.mjs", "  assert.match(deliveryRoute, /p_order_no: context\\.params\\.orderNo/);", "  assert.match(deliveryRoute, /const \\{ orderNo \\} = await context\\.params/);\n  assert.match(deliveryRoute, /p_order_no: orderNo/);", 1)
+          strict_replace("tests/regression/source-contract.test.mjs", "id: row\\.delivery_id \\?\\? `\\$\\{context\\.params\\.orderNo\\}:\\$\\{index\\}`", "id: row\\.delivery_id \\?\\? `\\$\\{orderNo\\}:\\$\\{index\\}`", 1)
+          PY
+      - name: Pin compatible TypeScript ESLint declaration parser
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-dev --save-exact @typescript-eslint/parser@6.21.0
+      - name: Install from exact lockfile
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate the affected regression tests
+        run: node --test tests/regression/admin-catalog-operations-v2-4.test.mjs tests/regression/admin-risk-review.test.mjs tests/regression/source-contract.test.mjs tests/unit/eslint-declaration-parser.test.mjs
+      - name: Publish only validated repair to isolated branch
+        shell: bash
+        run: |
+          git add app/api/admin/products/reorder/route.ts tests/regression/admin-catalog-operations-v2-4.test.mjs tests/regression/admin-risk-review.test.mjs tests/regression/source-contract.test.mjs package.json package-lock.json
+          git diff --cached --check
+          git diff --cached --quiet && { echo "NO_PATCH"; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(next15): preserve source security tests and declaration parser"
+          git push origin HEAD:codex/auth-next15-security-20261113
