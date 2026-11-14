@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Clipboard, ClipboardList, Home, RefreshCw } from "lucide-react";
@@ -50,6 +50,14 @@ function formatShippingAddress(order: OrderRecord) {
 }
 
 export default function OrderSuccessPage() {
+  return (
+    <Suspense fallback={<div role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">订单页面加载中...</div>}>
+      <OrderSuccessPageContent />
+    </Suspense>
+  );
+}
+
+function OrderSuccessPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const orderNo = searchParams.get("order_no") || searchParams.get("orderNo") || "";

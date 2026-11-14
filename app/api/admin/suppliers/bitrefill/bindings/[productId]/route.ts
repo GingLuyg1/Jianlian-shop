@@ -24,7 +24,8 @@ function sameOrigin(request: Request) {
       request.headers.get("sec-fetch-site") !== "cross-site";
   } catch { return false; }
 }
-export async function POST(request: Request, { params }: { params: { productId: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ productId: string }> }) {
+  const params = await props.params;
   const admin = await getServerSuperAdminContext();
   const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status, headers });

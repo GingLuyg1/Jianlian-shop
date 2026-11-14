@@ -36,7 +36,9 @@ test("category workspace reserves equal compact category panels and safe sortabl
 test("reorder endpoint validates exact category membership, integer order, audit and cache", () => {
   const route = file("app/api/admin/catalog/products/reorder/route.ts");
   const alias = file("app/api/admin/products/reorder/route.ts");
-  assert.match(alias, /export \{ POST \}/);
+  assert.match(alias, /import \{ POST as reorderCatalogProducts \} from "\.\.\/\.\.\/catalog\/products\/reorder\/route"/);
+  assert.match(alias, /export function POST\(request: Request\)[\s\S]*return reorderCatalogProducts\(request\)/);
+  assert.doesNotMatch(alias, /@next-codemod-error/);
   assert.match(route, /requireCatalogAdmin\(requestId\)/);
   assert.match(route, /checkRateLimit\("admin_write"/);
   assert.match(route, /Number\.isSafeInteger\(item\.sortOrder\)/);

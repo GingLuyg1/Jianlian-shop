@@ -37,7 +37,8 @@ function validateTemplateForPublish(template: Record<string, any>) {
   return validation.ok ? { ok: true as const } : validation;
 }
 
-export async function GET(request: NextRequest, { params }: { params: { templateId: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ templateId: string }> }) {
+  const params = await props.params;
   const ctx = await requireSuperAdmin(request);
   if (!ctx.ok) return ctx.response;
   const { data, error } = await ctx.service.from("email_templates").select("*").eq("id", params.templateId).maybeSingle();
@@ -46,7 +47,8 @@ export async function GET(request: NextRequest, { params }: { params: { template
   return json({ template: data });
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { templateId: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ templateId: string }> }) {
+  const params = await props.params;
   const ctx = await requireSuperAdmin(request);
   if (!ctx.ok) return ctx.response;
   try {

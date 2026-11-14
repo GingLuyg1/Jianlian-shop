@@ -8,7 +8,8 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: { requestId: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ requestId: string }> }) {
+  const params = await props.params;
   const safeRequestId = validateRequestId(params.requestId);
   if (!safeRequestId) {
     const response = NextResponse.json({ error: "Request ID 不合法或过长。" }, { status: 400 });

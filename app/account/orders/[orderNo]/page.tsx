@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Clipboard, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -57,7 +57,8 @@ function getSafeOrderActionMessage(payload: OrderActionResponse | null | undefin
   return fallback;
 }
 
-export default function AccountOrderDetailPage({ params }: { params: { orderNo: string } }) {
+export default function AccountOrderDetailPage() {
+  const params = useParams<{ orderNo: string }>();
   const router = useRouter();
   const orderNo = decodeURIComponent(params.orderNo);
   const [order, setOrder] = useState<OrderRecord | null>(null);

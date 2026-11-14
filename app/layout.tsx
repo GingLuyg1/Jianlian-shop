@@ -1,6 +1,5 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { Suspense } from "react";
 
 import PageViewTracker from "@/components/analytics/PageViewTracker";
@@ -12,8 +11,6 @@ import {
   SITE_NAME,
   websiteJsonLd,
 } from "@/lib/seo";
-
-const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
   ...buildPageMetadata({
@@ -40,7 +37,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body className={inter.className}>
+      <body>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -56,3 +53,4 @@ export default function RootLayout({
     </html>
   );
 }
+

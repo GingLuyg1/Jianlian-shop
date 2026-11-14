@@ -18,7 +18,8 @@ async function readSmallJson(path: string) {
     return JSON.parse(buffer.subarray(0, bytesRead).toString('utf8'));
   } catch { return null; } finally { await file?.close(); }
 }
-export async function GET(request: Request, { params }: { params: { workspace: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ workspace: string }> }) {
+  const params = await props.params;
   const kind = params.workspace;
   if (!['worker', 'ledger', 'supplier-queue'].includes(kind)) return NextResponse.json({ error: '工作台不存在' }, { status: 404 });
   const auth = kind === 'ledger' ? await requireApiSuperAdmin() : await requireApiAdmin();

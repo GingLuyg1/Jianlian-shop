@@ -8,7 +8,8 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request, { params }: { params: { productId: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ productId: string }> }) {
+  const params = await props.params;
   const requestId = randomUUID();
   const admin = await getServerAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message, requestId }, { status: admin.status });

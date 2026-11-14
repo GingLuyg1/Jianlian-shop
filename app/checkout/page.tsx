@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  Suspense,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -196,6 +197,14 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
 }
 
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">结算页面加载中...</div>}>
+      <CheckoutPageContent />
+    </Suspense>
+  );
+}
+
+function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { settings } = usePublicSettings();

@@ -7,6 +7,7 @@ APP_NAME=jianlian-shop
 SMOKE_PORT=3002
 PRODUCTION_PORT=3001
 ENV_SOURCE="$REPO/.env.local"
+CANDIDATE_ENV_OVERLAY="${JIANLIAN_CANDIDATE_ENV_OVERLAY:-}"
 MIN_FREE_KB="${JIANLIAN_MIN_FREE_KB:-3145728}"
 MIN_FREE_INODES="${JIANLIAN_MIN_FREE_INODES:-150000}"
 
@@ -26,6 +27,7 @@ KNOWN_OPTIONAL_ENV=(
   CNY_USDT_RATE_TTL_SECONDS USDT_AMOUNT_SCALE BSC_EXPLORER_BASE_URL
   EMAIL_PROVIDER MAIL_PROVIDER EMAIL_FROM MAIL_FROM RESEND_API_KEY POSTMARK_SERVER_TOKEN
   EMAIL_CUSTOM_ENDPOINT EMAIL_WORKER_SECRET PAYMENT_RECONCILIATION_SECRET INTERNAL_API_SECRET
+  NEXT_PUBLIC_GOOGLE_AUTH_ENABLED AUTH_OAUTH_INTENT_SECRET
   DATA_CONSISTENCY_SCAN_SECRET MONITORING_WEBHOOK_URL ALERT_WEBHOOK_URL
   APP_VERSION GIT_COMMIT BUILD_TIME APP_ENV
 )
@@ -232,9 +234,30 @@ assert_persistent_env_matches_current() {
 }
 
 assert_release_env_matches_source() {
-  local release_env="$1"
+  local release_env="$1" base_env source_env
   [[ -f "$ENV_SOURCE" && ! -L "$ENV_SOURCE" ]] || die "persistent Production environment source must be a regular file"
-  [[ "$(sha256sum "$ENV_SOURCE" | awk '{print $1}')" == "$(sha256sum "$release_env" | awk '{print $1}')" ]] || die "release environment differs from persistent Production source; prepare and smoke again"
+  if [[ -z "$CANDIDATE_ENV_OVERLAY" ]]; then
+    [[ "$(sha256sum "$ENV_SOURCE" | awk '{print $1}')" == "$(sha256sum "$release_env" | awk '{print $1}')" ]] || die "release environment differs from persistent Production source; prepare and smoke again"
+    return 0
+  fi
+  base_env="$(mktemp)"
+  source_env="$(mktemp)"
+  trap 'rm -f "$base_env" "$source_env"' RETURN
+  grep -Ev '^[[:space:]]*(NEXT_PUBLIC_GOOGLE_AUTH_ENABLED|AUTH_OAUTH_INTENT_SECRET)[[:space:]]*=' "$release_env" >"$base_env"
+  grep -Ev '^[[:space:]]*(NEXT_PUBLIC_GOOGLE_AUTH_ENABLED|AUTH_OAUTH_INTENT_SECRET)[[:space:]]*=' "$ENV_SOURCE" >"$source_env"
+  cmp -s "$source_env" "$base_env" || die "candidate base environment differs from persistent Production source"
+}
+
+apply_candidate_env_overlay() {
+  local target="$1" overlay="$CANDIDATE_ENV_OVERLAY"
+  [[ -n "$overlay" ]] || return 0
+  [[ -f "$overlay" && ! -L "$overlay" ]] || die "candidate environment overlay is missing"
+  [[ "$(stat -c '%a' "$overlay")" == 600 ]] || die "candidate environment overlay permissions must be 600"
+  grep -Eq '^NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=(true|false)$' "$overlay" || die "candidate overlay must declare Google flag"
+  grep -Eq '^AUTH_OAUTH_INTENT_SECRET=[^[:space:]]+$' "$overlay" || die "candidate overlay must declare signing secret"
+  cat "$overlay" >>"$target/.env.production.local"
+  chmod 600 "$target/.env.production.local"
+  status CANDIDATE_ENV_OVERLAY APPLIED
 }
 
 ensure_env_source() {
@@ -346,6 +369,7 @@ import_prebuilt() {
   target="$(release_path_for_sha "$sha")"
   git -C "$REPO" worktree add --detach "$target" "$sha"
   install -m 600 -- "$ENV_SOURCE" "$target/.env.production.local"
+  apply_candidate_env_overlay "$target"
   python3 "$REPO/scripts/release-artifact.py" extract --repo "$REPO" --sha "$sha" --required-main "$required_main" \
     --archive "$archive" --archive-sha256 "$archive_hash" --identity "$identity" --identity-sha256 "$identity_hash" \
     --target "$target" || die "prebuilt import failed; incomplete release retained, PM2 unchanged"
@@ -465,6 +489,7 @@ prepare() {
   target="$(release_path_for_sha "$sha")"
   git -C "$REPO" worktree add --detach "$target" "$sha"
   install -m 600 -- "$ENV_SOURCE" "$target/.env.production.local"
+  apply_candidate_env_overlay "$target"
   (cd "$target" && npm ci)
   write_prepare_marker "$sha" "$target"
   build_log="$RELEASE_ROOT/.jianlian-build-$sha.log"
@@ -604,3 +629,4 @@ case "$command" in
   cleanup) sha="$(full_sha "${1:-}")"; cleanup_releases "$sha" "${2:-}" "${3:-}" ;;
   *) usage; exit 2 ;;
 esac
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
+import { getSafeAuthErrorMessage, isEmailFormatValid } from "@/lib/auth/password-policy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type SecurityForm = {
@@ -117,6 +119,7 @@ export default function AccountSecurityPage() {
         <p className="text-sm text-muted-foreground">修改密码前需要重新验证当前密码。</p>
       </CardHeader>
       <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <EmailBinding />
         <form onSubmit={handleSubmit} className={`${styles.formGroup} flex w-full max-w-xl flex-col gap-5`}>
 
           <PasswordField
@@ -159,6 +162,138 @@ export default function AccountSecurityPage() {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+function EmailBinding() {
+  const [account, setAccount] = useState<{ id: string; email?: string } | null>(null);
+  const [email, setEmail] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function loadAccount() {
+      try {
+        const { data, error: userError } = await getSupabaseBrowserClient().auth.getUser();
+        if (userError || !data.user) throw new Error("ACCOUNT_UNAVAILABLE");
+        if (active) setAccount({ id: data.user.id, email: data.user.email });
+      } catch {
+        if (active) setError("暂时无法读取邮箱绑定状态。");
+      }
+    }
+    void loadAccount();
+    return () => { active = false; };
+  }, []);
+
+  async function sendCode(address: string, resend = false) {
+    if (busy || !account || account.email) return;
+    if (!isEmailFormatValid(address)) {
+      setError("请输入正确的邮箱地址。");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || user?.id !== account.id || user.email) {
+        setError("账户状态已变化，请刷新页面后重试。");
+        return;
+      }
+      const { error: sendError } = resend
+        ? await supabase.auth.resend({ type: "email_change", email: address })
+        : await supabase.auth.updateUser({ email: address });
+      if (sendError) {
+        setError(getSafeAuthErrorMessage(sendError, "验证码发送失败，请稍后重试。"));
+        return;
+      }
+      setPendingEmail(address);
+      if (resend) setMessage("验证码已重新发送，请使用最新一封邮件。");
+    } catch {
+      setError("验证码发送失败，请稍后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyCode(code: string) {
+    if (busy || !account || account.email || !pendingEmail) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data: current, error: currentError } = await supabase.auth.getUser();
+      if (currentError || current.user?.id !== account.id || current.user.email) {
+        setError("账户状态已变化，请刷新页面后重试。");
+        return;
+      }
+      const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({
+        email: pendingEmail,
+        token: code,
+        type: "email_change",
+      });
+      if (verifyError) {
+        setError(getSafeAuthErrorMessage(verifyError, "验证码无效或已过期，请重新获取。"));
+        return;
+      }
+      if (verified.session && verified.user?.id !== account.id) {
+        await supabase.auth.signOut({ scope: "local" });
+        setError("无法确认验证码所属账号，请重新登录。");
+        return;
+      }
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || user?.id !== account.id || user.email?.toLowerCase() !== pendingEmail || !user.email_confirmed_at) {
+        setError("暂时无法确认邮箱绑定，请刷新后查看绑定状态。");
+        return;
+      }
+      setAccount({ id: user.id, email: user.email });
+      setPendingEmail("");
+      setMessage("邮箱已绑定。");
+    } catch {
+      setError("暂时无法验证邮箱，请稍后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mb-6 max-w-xl space-y-3 border-b pb-5" aria-label="邮箱绑定">
+      <h2 className="font-semibold">邮箱绑定</h2>
+      {account?.email ? (
+        <p className="break-all text-sm text-muted-foreground">{account.email}</p>
+      ) : pendingEmail ? (
+        <EmailVerificationForm
+          email={pendingEmail}
+          busy={busy}
+          onVerify={verifyCode}
+          onResend={() => sendCode(pendingEmail, true)}
+          onBack={() => { setPendingEmail(""); setError(""); setMessage(""); }}
+        />
+      ) : account ? (
+        <form className="space-y-3" onSubmit={(event) => {
+          event.preventDefault();
+          void sendCode(email.trim().toLowerCase());
+        }}>
+          <Label htmlFor="binding-email">要绑定的邮箱</Label>
+          <Input
+            id="binding-email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+          <Button type="submit" disabled={busy}>发送验证码</Button>
+        </form>
+      ) : null}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+    </section>
   );
 }
 

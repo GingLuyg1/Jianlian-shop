@@ -9,7 +9,8 @@ function json(data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, init);
 }
 
-export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ jobId: string }> }) {
+  const params = await props.params;
   const admin = await getServerSuperAdminContext();
   if (!admin.ok) return json({ error: admin.message }, { status: admin.status });
   const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_delivery_retry"));

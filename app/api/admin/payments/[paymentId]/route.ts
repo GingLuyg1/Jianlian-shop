@@ -24,9 +24,9 @@ import type { AdminBep20OverpaymentWallet } from "@/lib/payments/admin-payment-t
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     paymentId: string;
-  };
+  }>;
 };
 
 function normalizeCallback(row: Record<string, unknown>): AdminPaymentCallback {
@@ -47,7 +47,8 @@ function normalizeCallback(row: Record<string, unknown>): AdminPaymentCallback {
   };
 }
 
-export async function GET(request: Request, { params }: RouteContext) {
+export async function GET(request: Request, props: RouteContext) {
+  const params = await props.params;
   const admin = await getServerAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({
@@ -212,7 +213,8 @@ export async function GET(request: Request, { params }: RouteContext) {
   }
 }
 
-export async function PATCH(request: Request, { params }: RouteContext) {
+export async function PATCH(request: Request, props: RouteContext) {
+  const params = await props.params;
   const admin = await getServerSuperAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({

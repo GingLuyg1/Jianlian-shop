@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
 export function hasSupabaseServerConfig() {
@@ -15,20 +15,23 @@ export function getSupabaseServerClient() {
     );
   }
 
-  const cookieStore = cookies();
+  // Next.js 15 resolves request cookies asynchronously; the SSR adapter
+  // supports Promise-returning cookie methods without changing call sites.
+  const cookieStore = (cookies() as unknown as UnsafeUnwrappedCookies);
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+        async getAll() {
+          return (await cookieStore).getAll();
         },
-        setAll(cookiesToSet) {
+        async setAll(cookiesToSet) {
           try {
+            const store = await cookieStore;
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+              store.set(name, value, options);
             });
           } catch {
             // Server Components cannot set cookies. Middleware handles refresh.

@@ -11,7 +11,7 @@ const RISK_STATUSES = new Set(["normal", "watch", "high_risk", "blocked"]);
 const ADJUSTMENT_TYPES = new Set(["increase", "decrease", "compensation", "refund", "correction", "other"]);
 const DIRECTIONS = new Set(["credit", "debit"]);
 
-type RouteContext = { params: { userId: string } };
+type RouteContext = { params: Promise<{ userId: string }> };
 
 type ActionBody = {
   action?: string;
@@ -40,7 +40,7 @@ export async function POST(request: Request, context: RouteContext) {
   const body = (await request.json().catch(() => null)) as ActionBody | null;
   if (!body) return json({ error: "请求参数不正确。" }, { status: 400 });
 
-  const userId = context.params.userId;
+  const userId = (await context.params).userId;
   if (!isUuid(userId)) return json({ error: "用户编号格式无效。" }, { status: 400 });
   const action = String(body.action ?? "").trim();
   const reason = String(body.reason ?? "").trim();

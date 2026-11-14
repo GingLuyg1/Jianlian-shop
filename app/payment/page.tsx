@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { copyWithFeedback } from "@/lib/ui/copy-feedback";
@@ -439,6 +439,14 @@ function LocalAddressQr({ value }: { value: string }) {
 }
 
 export default function PaymentPage() {
+  return (
+    <Suspense fallback={<div role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">支付页面加载中...</div>}>
+      <PaymentPageContent />
+    </Suspense>
+  );
+}
+
+function PaymentPageContent() {
   const searchParams = useSearchParams();
   const rechargeNo = searchParams.get("recharge")?.trim() ?? "";
   const orderNo = searchParams.get("order") || searchParams.get("order_no") || "";

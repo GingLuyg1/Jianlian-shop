@@ -5,18 +5,19 @@ import { buildPageMetadata, getSeoProduct, productJsonLd, SITE_NAME } from "@/li
 
 type ProductRouteProps = {
   children: React.ReactNode;
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 type ProductRouteContext = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 function isIndexableProduct(status: string) {
   return status === "active" || status === "sold_out";
 }
 
-export async function generateMetadata({ params }: ProductRouteContext): Promise<Metadata> {
+export async function generateMetadata(props: ProductRouteContext): Promise<Metadata> {
+  const params = await props.params;
   const product = await getSeoProduct(params.id).catch(() => null);
   if (!product || !isIndexableProduct(product.status)) {
     return buildPageMetadata({
@@ -40,7 +41,13 @@ export async function generateMetadata({ params }: ProductRouteContext): Promise
   });
 }
 
-export default async function ProductDetailLayout({ children, params }: ProductRouteProps) {
+export default async function ProductDetailLayout(props: ProductRouteProps) {
+  const params = await props.params;
+
+  const {
+    children
+  } = props;
+
   const product = await getSeoProduct(params.id).catch(() => null);
   if (!product || !isIndexableProduct(product.status)) notFound();
 
