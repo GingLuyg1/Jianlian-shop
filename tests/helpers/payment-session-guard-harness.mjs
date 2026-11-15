@@ -157,6 +157,17 @@ export function harness({ data = fixture(), backend, beforeReserve = async () =>
     "@/lib/risk/risk-service":risk,"@/lib/security/rate-limit":security,
   });
   const amounts=loadTs("lib/payments/channels.ts", {"@/lib/i18n/money":{formatCurrency:String}});
+  const rechargeCreation={
+    findExistingRecharge: async (supabase,userId,clientRequestId) => {
+      const {data:row}=await supabase.from("account_recharges").select("recharge_no,status,amount,requested_amount,fee_amount,payable_amount,expires_at").eq("user_id",userId).eq("client_request_id",clientRequestId).in("status",["pending","waiting_payment","submitted","reviewing","approved","processing","failed","rejected","succeeded","paid"]).order("created_at",{ascending:false}).limit(1).maybeSingle();
+      return row ? {rechargeNo:String(row.recharge_no),status:row.status,amount:Number(row.requested_amount??row.amount),fee:Number(row.fee_amount??0),payableAmount:Number(row.payable_amount),expiresAt:row.expires_at,reused:true} : null;
+    },
+    insertRecharge: async (supabase,input) => {
+      const rechargeNo="RC_TEST_"+randomUUID();
+      const {error}=await supabase.from("account_recharges").insert({recharge_no:rechargeNo,user_id:input.userId,user_email:input.userEmail,channel:input.channel.code,channel_code:input.channel.code,channel_name:input.channel.name,provider:input.channel.provider,currency:input.channel.currency,amount:input.amount,requested_amount:input.amount,fee_amount:input.fee,payable_amount:input.payableAmount,status:"pending",client_request_id:input.clientRequestId,expires_at:input.expiresAt});
+      if(error) throw error; return rechargeNo;
+    },
+  };
   const rechargeRoute=loadTs("app/api/recharges/route.ts", {
     "node:crypto":{randomUUID},"next/server":response,"@/lib/payments/channels":amounts,
     "@/lib/payments/recharge-api-failure.mjs":rechargeFailure,"@/lib/payments/liuhaoyi-limits.mjs":limits,
@@ -169,6 +180,7 @@ export function harness({ data = fixture(), backend, beforeReserve = async () =>
     "@/lib/risk/risk-service":risk,"@/lib/security/rate-limit":security,
     "@/lib/supabase/server":{hasSupabaseServerConfig:()=>true,getSupabaseServerClient:()=>client},
     "@/lib/supabase/service-role":{getSupabaseServiceRoleClient:()=>client},"@/lib/users/account-guard":guard,
+    "@/lib/payments/recharge-creation-service":rechargeCreation,
     "@/lib/recharges/status-machine":{parseRechargeStatusStrict:s=>s},
   });
   const input={businessType:"recharge",businessNo:data.account_recharges[0]?.recharge_no??"RC_TEST_GUARD",channelCode:data.payment_channels[0].code,userId:uid,clientIp:"127.0.0.1"};
