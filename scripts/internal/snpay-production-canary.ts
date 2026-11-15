@@ -84,7 +84,6 @@ async function main() {
     userId: business.userId,
     clientIp: "127.0.0.1",
     clientDevice: "pc",
-    canaryLogicalKey: logicalKey(channel),
   });
   console.log(JSON.stringify({ ok: true, duplicate: false, channel, amount: FIXED_AMOUNT, logicalKey: logicalKey(channel), sessionNo: session.sessionNo, status: session.status, paymentUrl: session.paymentUrl ?? null, qrCodeUrl: session.qrCodeUrl ?? null, qrCodeValue: session.qrCodeValue ?? null }));
 }

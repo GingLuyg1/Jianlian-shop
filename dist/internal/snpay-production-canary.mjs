@@ -1735,9 +1735,6 @@ async function createPaymentSession(input) {
   if (mode === "internal_canary" && process.env.SNPAY_CANARY_EXECUTION !== "YES") {
     throw new PaymentSessionError("CANARY_EXECUTION_NOT_AUTHORIZED", "\u672A\u83B7\u5F97\u672C\u5730 canary \u6267\u884C\u6388\u6743");
   }
-  if (mode === "public" && input.canaryLogicalKey) {
-    throw new PaymentSessionError("PAYMENT_MODE_INVALID", "\u516C\u5171\u652F\u4ED8\u8DEF\u5F84\u4E0D\u63A5\u53D7 canary \u6807\u8BC6");
-  }
   const businessType = normalizeBusinessType(input.businessType);
   const business = await loadBusinessRecord(service, businessType, input.businessNo, input.userId);
   if (businessType === "order") ensureBusinessCanCreatePayment(business);
@@ -1861,7 +1858,7 @@ async function createPaymentSession(input) {
       wallet_address: providerResult.walletAddress ?? null,
       provider_order_no: providerResult.providerOrderNo ?? null,
       expires_at: expiresAt,
-      metadata: input.canaryLogicalKey ? { initializing: false, canaryLogicalKey: input.canaryLogicalKey, ...providerResult.metadata ?? {} } : { initializing: false, ...providerResult.metadata ?? {} },
+      metadata: { initializing: false, ...providerResult.metadata ?? {} },
       last_error: null
     }).eq("session_no", sessionNo).in("status", ACTIVE_SESSION_STATUSES2).select(sessionResponseSelect).single();
     if (error) throw error;
@@ -2230,8 +2227,7 @@ async function main() {
     channelCode: channel,
     userId: business.userId,
     clientIp: "127.0.0.1",
-    clientDevice: "pc",
-    canaryLogicalKey: logicalKey(channel)
+    clientDevice: "pc"
   });
   console.log(JSON.stringify({ ok: true, duplicate: false, channel, amount: FIXED_AMOUNT, logicalKey: logicalKey(channel), sessionNo: session.sessionNo, status: session.status, paymentUrl: session.paymentUrl ?? null, qrCodeUrl: session.qrCodeUrl ?? null, qrCodeValue: session.qrCodeValue ?? null }));
 }

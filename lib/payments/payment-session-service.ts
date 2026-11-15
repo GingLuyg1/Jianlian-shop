@@ -49,7 +49,6 @@ export type CreatePaymentSessionInput = {
   clientDevice?: PaymentClientDevice;
   /** Internal server-only canary context. Public callers must omit this. */
   mode?: "public" | "internal_canary";
-  canaryLogicalKey?: string;
 };
 
 export type PaymentSessionResponse = {
@@ -111,9 +110,6 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
   }
   if (mode === "internal_canary" && process.env.SNPAY_CANARY_EXECUTION !== "YES") {
     throw new PaymentSessionError("CANARY_EXECUTION_NOT_AUTHORIZED", "未获得本地 canary 执行授权");
-  }
-  if (mode === "public" && input.canaryLogicalKey) {
-    throw new PaymentSessionError("PAYMENT_MODE_INVALID", "公共支付路径不接受 canary 标识");
   }
   const businessType = normalizeBusinessType(input.businessType);
   const business = await loadBusinessRecord(service, businessType, input.businessNo, input.userId);
@@ -259,9 +255,7 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
         wallet_address: providerResult.walletAddress ?? null,
         provider_order_no: providerResult.providerOrderNo ?? null,
         expires_at: expiresAt,
-        metadata: input.canaryLogicalKey
-          ? { initializing: false, canaryLogicalKey: input.canaryLogicalKey, ...(providerResult.metadata ?? {}) }
-          : { initializing: false, ...(providerResult.metadata ?? {}) },
+        metadata: { initializing: false, ...(providerResult.metadata ?? {}) },
         last_error: null,
       })
       .eq("session_no", sessionNo)
