@@ -116,7 +116,7 @@ test("USDT-BEP20 normalization remains unchanged", () => {
 });
 
 test("recharge creation and payment-session creation pin the normalized channel provider", () => {
-  const rechargeRoute = source("app/api/recharges/route.ts");
+  const rechargeRoute = source("lib/payments/recharge-creation-service.ts");
   const paymentSessionService = source("lib/payments/payment-session-service.ts");
   const providerContracts = source("lib/payments/provider-contracts.mjs");
   const normalized = normalizeChannelRow(channelRow());

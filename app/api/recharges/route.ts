@@ -42,25 +42,14 @@ import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/sec
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
-import { parseRechargeStatusStrict } from "@/lib/recharges/status-machine";
+import { findExistingRecharge, insertRecharge } from "@/lib/payments/recharge-creation-service";
 
 export const dynamic = "force-dynamic";
 
 const rechargeSelect =
   "recharge_no,provider,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,expires_at,matched_at,match_method,status,created_at,paid_at,completed_at,review_reason,error_summary";
 const allowedCreateKeys = new Set(["channel", "payment_method", "amount", "currency", "customer_note", "client_request_id", "clientRequestId"]);
-const reusableRechargeStatuses = [
-  "pending",
-  "waiting_payment",
-  "submitted",
-  "reviewing",
-  "approved",
-  "processing",
-  "failed",
-  "rejected",
-  "succeeded",
-  "paid",
-];
+
 
 export async function GET(request: Request) {
   const context = await requireUser();
@@ -449,138 +438,6 @@ export async function POST(request: Request) {
   }
 }
 
-async function findExistingRecharge(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
-  userId: string,
-  clientRequestId: string
-) {
-  const { data, error } = await supabase
-    .from("account_recharges")
-    .select("recharge_no,status,amount,requested_amount,fee_amount,payable_amount,requested_cny_amount,expected_usdt_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,expires_at")
-    .eq("user_id", userId)
-    .eq("client_request_id", clientRequestId)
-    .in("status", reusableRechargeStatuses)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    if (isMissingClientRequestColumn(error)) return null;
-    throw error;
-  }
-  if (!data) return null;
-  const status = parseRechargeStatusStrict(data.status);
-  if (!status) throw new Error("invalid recharge status");
-  return {
-    rechargeNo: String(data.recharge_no ?? ""),
-    status,
-    amount: finiteNumber(data.requested_amount ?? data.amount),
-    fee: finiteNumber(data.fee_amount),
-    payableAmount: finiteNumber(data.payable_amount),
-    requestedCnyAmount: data.requested_cny_amount ? String(data.requested_cny_amount) : null,
-    expectedUsdtAmount: data.expected_usdt_amount ? String(data.expected_usdt_amount) : null,
-    lockedMarketRate: data.locked_market_rate ? String(data.locked_market_rate) : null,
-    lockedSettlementRate: data.locked_settlement_rate ? String(data.locked_settlement_rate) : null,
-    rateSource: data.rate_source ? String(data.rate_source) : null,
-    rateEffectiveDate: data.rate_effective_date ? String(data.rate_effective_date) : null,
-    expiresAt: data.expires_at ? String(data.expires_at) : null,
-    reused: true,
-  };
-}
-
-async function insertRecharge(
-  serviceClient: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>,
-  input: {
-    rechargeId: string | null;
-    createdAt: string | null;
-    expiresAt: string | null;
-    userId: string;
-    userEmail: string | null;
-    channel: PaymentChannel;
-    amount: number;
-    fee: number;
-    payableAmount: number;
-    clientRequestId: string;
-    customerNote: string;
-    rateSnapshot: {
-      requestedCnyAmount: string;
-      expectedUsdtAmount: string;
-      marketRate: string;
-      settlementRate: string;
-      source: string;
-      effectiveDate: string;
-      effectiveAt: string;
-    } | null;
-  }
-) {
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const rechargeNo = generateRechargeNo();
-    const row = {
-      ...(input.rechargeId ? { id: input.rechargeId } : {}),
-      ...(input.createdAt ? { created_at: input.createdAt } : {}),
-      recharge_no: rechargeNo,
-      user_id: input.userId,
-      user_email: input.userEmail,
-      channel: input.channel.code,
-      channel_code: input.channel.code,
-      channel_name: input.channel.name,
-      provider: input.channel.provider,
-      currency: input.rateSnapshot ? "CNY" : input.channel.currency,
-      network: input.channel.networkLabel ?? null,
-      amount: input.rateSnapshot?.requestedCnyAmount ?? input.amount,
-      requested_amount: input.rateSnapshot?.requestedCnyAmount ?? input.amount,
-      fee_amount: input.rateSnapshot ? "0.00" : input.fee,
-      payable_amount: input.rateSnapshot?.requestedCnyAmount ?? input.payableAmount,
-      received_amount: 0,
-      credited_amount: 0,
-      status: input.channel.reviewMode === "manual" ? "waiting_payment" : "pending",
-      client_request_id: input.clientRequestId,
-      payment_method: input.channel.code,
-      review_mode: input.channel.reviewMode ?? "provider",
-      customer_note: input.customerNote || null,
-      user_note: input.customerNote || null,
-      expires_at: input.expiresAt,
-      ...(input.rateSnapshot ? {
-        settlement_currency: "USDT",
-        requested_cny_amount: input.rateSnapshot.requestedCnyAmount,
-        expected_usdt_amount: input.rateSnapshot.expectedUsdtAmount,
-        actual_received_usdt: null,
-        credited_cny_amount: null,
-        locked_market_rate: input.rateSnapshot.marketRate,
-        locked_settlement_rate: input.rateSnapshot.settlementRate,
-        rate_source: input.rateSnapshot.source,
-        rate_effective_date: input.rateSnapshot.effectiveDate,
-        rate_effective_at: input.rateSnapshot.effectiveAt,
-        rate_locked_at: new Date().toISOString(),
-        payment_address: input.channel.manualPayment?.payment_address ?? null,
-        payment_token_contract: input.channel.manualPayment?.token_contract ?? null,
-      } : {}),
-    };
-
-    const insertResult = await serviceClient.from("account_recharges").insert(row);
-    if (!insertResult.error) return rechargeNo;
-
-    if (!input.rateSnapshot && isMissingClientRequestColumn(insertResult.error)) {
-      const retryRow = { ...row };
-      delete (retryRow as Partial<typeof row>).client_request_id;
-      const retry = await serviceClient.from("account_recharges").insert(retryRow);
-      if (!retry.error) return rechargeNo;
-      lastError = retry.error;
-    } else {
-      lastError = insertResult.error;
-    }
-
-    if ((lastError as { code?: string }).code === "23505") {
-      const existing = await findExistingRecharge(serviceClient, input.userId, input.clientRequestId);
-      if (existing?.rechargeNo) return existing.rechargeNo;
-      continue;
-    }
-    break;
-  }
-  throw lastError ?? new Error("Recharge creation failed");
-}
-
 async function requireUser() {
   if (!hasSupabaseServerConfig()) {
     return { ok: false as const, response: NextResponse.json({ error: "Recharge service is unavailable.", code: "RECHARGE_LIST_READ_FAILED" }, { status: 503 }) };
@@ -661,3 +518,4 @@ function isMissingClientRequestColumn(error: unknown) {
   const message = getPaymentErrorMessage(error, "");
   return /client_request_id|42703|schema cache/i.test(message);
 }
+
