@@ -1861,11 +1861,7 @@ async function createPaymentSession(input) {
       wallet_address: providerResult.walletAddress ?? null,
       provider_order_no: providerResult.providerOrderNo ?? null,
       expires_at: expiresAt,
-      metadata: {
-        initializing: false,
-        ...input.canaryLogicalKey ? { canaryLogicalKey: input.canaryLogicalKey } : {},
-        ...providerResult.metadata ?? {}
-      },
+      metadata: input.canaryLogicalKey ? { initializing: false, canaryLogicalKey: input.canaryLogicalKey, ...providerResult.metadata ?? {} } : { initializing: false, ...providerResult.metadata ?? {} },
       last_error: null
     }).eq("session_no", sessionNo).in("status", ACTIVE_SESSION_STATUSES2).select(sessionResponseSelect).single();
     if (error) throw error;
