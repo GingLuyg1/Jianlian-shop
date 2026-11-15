@@ -4185,9 +4185,10 @@ test("BEP20 phase 1 private tables and legacy completion RPC use least-privilege
 
 test("client privilege hardening phase 1 removes the redundant authenticated recharge update", () => {
   const route = file("app/api/recharges/route.ts");
+  const creation = file("lib/payments/recharge-creation-service.ts");
 
   assert.match(
-    route,
+    creation,
     /status:\s*input\.channel\.reviewMode\s*===\s*"manual"\s*\?\s*"waiting_payment"\s*:\s*"pending"/,
   );
   assert.match(
@@ -4198,8 +4199,8 @@ test("client privilege hardening phase 1 removes the redundant authenticated rec
     route,
     /\.from\("account_recharges"\)\.update\(\{\s*status:\s*"waiting_payment"\s*\}\)/,
   );
-  assert.match(route, /const retryRow = \{ \.\.\.row \}/);
-  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(retryRow\)/);
+  assert.match(creation, /const retryRow = \{ \.\.\.row \}/);
+  assert.match(creation, /serviceClient\.from\("account_recharges"\)\.insert\(retryRow\)/);
 });
 
 test("client privilege hardening phase 1 migration is ACL-only and preserves the exact matrix", () => {
@@ -4371,37 +4372,36 @@ test("client privilege hardening phase 1 postcheck is catalog-only and complete"
 
 test("account recharge creation fails closed and writes with the standard service-role client", () => {
   const route = file("app/api/recharges/route.ts");
+  const creation = file("lib/payments/recharge-creation-service.ts");
 
   assert.match(route, /import \{ getSupabaseServiceRoleClient \} from "@\/lib\/supabase\/service-role";/);
-  assert.match(
-    route,
-    /const serviceClient = getSupabaseServiceRoleClient\(\);[\s\S]{0,300}if \(!serviceClient\) \{[\s\S]{0,100}paymentFailure\(null, "service"\)/,
-  );
+  assert.match(route, /const serviceClient = getSupabaseServiceRoleClient\(\);/);
+  assert.match(route, /if \(!serviceClient\) \{[\s\S]{0,160}paymentFailure\(null, "service"\)/);
   const failureHelper = file("lib/payments/recharge-api-failure.mjs");
   assert.match(failureHelper, /RECHARGE_SERVICE_UNAVAILABLE/);
   assert.match(failureHelper, /status:\s*503/);
   assert.match(route, /insertRecharge\(serviceClient,\s*\{/);
   assert.doesNotMatch(route, /insertRecharge\(context\.supabase,\s*\{/);
   assert.match(
-    route,
-    /async function insertRecharge\(\s*serviceClient: NonNullable<ReturnType<typeof getSupabaseServiceRoleClient>>/,
+    creation,
+    /export async function insertRecharge\(\s*serviceClient: SupabaseClient/,
   );
-  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(row\)/);
-  assert.match(route, /serviceClient\.from\("account_recharges"\)\.insert\(retryRow\)/);
+  assert.match(creation, /serviceClient\.from\("account_recharges"\)\.insert\(row\)/);
+  assert.match(creation, /serviceClient\.from\("account_recharges"\)\.insert\(retryRow\)/);
   assert.doesNotMatch(
     route,
     /if \(!serviceClient\)[\s\S]{0,800}(?:context\.supabase|supabase)\.from\("account_recharges"\)\.insert/,
   );
   assert.match(
-    route,
+    creation,
     /status:\s*input\.channel\.reviewMode\s*===\s*"manual"\s*\?\s*"waiting_payment"\s*:\s*"pending"/,
   );
   assert.doesNotMatch(
     route,
     /\.from\("account_recharges"\)\.update\(\{\s*status:\s*"waiting_payment"\s*\}\)/,
   );
-  assert.match(route, /delete \(retryRow as Partial<typeof row>\)\.client_request_id/);
-  assert.match(route, /code\?: string \}\)\.code === "23505"/);
+  assert.match(creation, /delete retryRow\.client_request_id/);
+  assert.match(creation, /code\?: string \}\)\??\.code === "23505"/);
 });
 
 test("account recharge list exposes only stable safe diagnostics", () => {
