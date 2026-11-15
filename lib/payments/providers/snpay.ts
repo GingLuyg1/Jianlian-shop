@@ -20,7 +20,7 @@ import {
   SnpayCoreError,
 } from "@/lib/payments/providers/snpay-core.mjs";
 
-const DEFAULT_API_BASE = "https://www.snpay.cn";
+const DEFAULT_API_BASE = "https://api.snpay.cn";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export class SnpayProviderError extends Error {
