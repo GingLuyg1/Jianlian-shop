@@ -203,7 +203,8 @@ test("post-commit admin audit failure is uncertain; atomic credit is not repeate
   assert.equal(h.rpcCalls.length, 1); assert.ok(h.audits.some(x => x.result === "partial"));
 }));
 
-test("signed delayed callback AFTER manual credit traverses canonical callback service without another credit", async () => harness({}, async h => {
+for (const method of ["POST", "GET", "GET_REORDERED", "GET_INVALID", "GET_EMPTY"]) {
+test(`${method} callback traverses canonical handler without duplicate or invalid credit`, async () => harness({}, async h => {
   assert.equal((await h.call()).status, 200);
   const before = structuredClone(h.data), callbackLogs = [];
   let completionCalls = 0;
@@ -245,15 +246,29 @@ test("signed delayed callback AFTER manual credit traverses canonical callback s
   payload.sign = core.createSnpaySignature(payload, keys.privateKey);
   const oldInfo = console.info; console.info = () => {};
   try {
-    const response = await callback.handlePaymentCallback(new Request("https://site.example.invalid/api/payments/callback/alipay", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
-    }), "alipay");
-    assert.equal(response.status, 200);
-    assert.equal(await response.text(), "success");
+    if (method === "GET_INVALID") payload.sign = "invalid";
+    const entries = Object.entries(payload);
+    if (method === "GET_REORDERED") entries.reverse();
+    const query = method === "GET_EMPTY" ? "" : new URLSearchParams(entries).toString();
+    const request = method === "POST"
+      ? new Request("https://site.example.invalid/api/payments/callback/alipay", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
+      : new Request("https://site.example.invalid/api/payments/callback/alipay?" + query);
+    const response = await callback.handlePaymentCallback(request, "alipay");
+    assert.equal(response.status, ["GET_INVALID", "GET_EMPTY"].includes(method) ? 400 : 200);
+    if (response.status === 200) assert.equal(await response.text(), "success");
   } finally { console.info = oldInfo; }
   assert.equal(completionCalls, 0); assert.deepEqual(h.data, before);
-  assert.equal(callbackLogs[0].signature_result, "success"); assert.equal(callbackLogs[0].process_result, "duplicate");
+  if (method === "GET_INVALID") {
+    assert.equal(callbackLogs[0].signature_result, "failed");
+    assert.equal(callbackLogs[0].process_result, "signature_failed");
+  } else if (method === "GET_EMPTY") {
+    assert.equal(callbackLogs[0].process_result, "business_not_found");
+  } else {
+    assert.equal(callbackLogs[0].signature_result, "success");
+    assert.equal(callbackLogs[0].process_result, "duplicate");
+  }
 }));
+}
 
 test("UI demands reason+confirmation; normal expiry gates and ordinary approve remain terminal", () => {
   const ui = readFileSync(new URL("components/admin/payments/AdminPaymentRecordsPage.tsx", ROOT), "utf8");
