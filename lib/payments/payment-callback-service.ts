@@ -52,8 +52,11 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
     httpStatus: 503,
   });
 
-  const rawBody = await request.text();
-  const payload = request.method === "GET" ? Object.fromEntries(url.searchParams.entries()) : safeJson(rawBody);
+  const requestBody = await request.text();
+  // SNPAY sends browser-style GET notifications. Verify the exact query-string
+  // form for GET; POST callbacks continue to use the untouched HTTP body.
+  const providerRawInput = request.method === "GET" ? url.searchParams.toString() : requestBody;
+  const payload = request.method === "GET" ? Object.fromEntries(url.searchParams.entries()) : safeJson(requestBody);
   let logId: string | null = null;
   let callbackProvider: PaymentProvider | null = null;
 
@@ -79,7 +82,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
 
     // Candidate extraction is deliberately untrusted. Form callbacks need the raw body
     // only to locate the persisted session/provider before provider-specific verification.
-    const sessionNoCandidate = callbackSessionNoCandidate(payload ?? rawBody);
+    const sessionNoCandidate = callbackSessionNoCandidate(payload ?? providerRawInput);
     if (!sessionNoCandidate) {
       await updateCallbackLog(service, logId, "business_not_found", "SESSION_ID_MISSING");
       return observedResponse(response({ error: "支付会话编号缺失" }, 400), observation, { processResult: "business_not_found", httpStatus: 400 });
@@ -97,13 +100,13 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
     const context: ProviderCallbackContext = {
       channelCode,
       provider: session.provider as PaymentProviderCode,
-      rawBody,
+      rawBody: providerRawInput,
       headers: request.headers,
       requestUrl: request.url,
     };
     observation.provider = String(session.provider);
     callbackProvider = resolveProviderForExistingSession(session);
-    const verified = await callbackProvider.verifyCallback(rawBody, context);
+    const verified = await callbackProvider.verifyCallback(providerRawInput, context);
     if (!verified) {
       await updateCallbackLog(service, logId, "signature_failed", "回调验签失败或 Provider 未配置", {
         signature_result: "failed",
@@ -117,7 +120,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
     observation.signatureResult = "success";
     await updateCallbackLog(service, logId, "verified", null, { signature_result: "success" });
 
-    const parsedRaw = (await callbackProvider.parseCallback(payload ?? rawBody, context)) as ProviderParsedCallback;
+    const parsedRaw = (await callbackProvider.parseCallback(payload ?? providerRawInput, context)) as ProviderParsedCallback;
     const parsed = { ...parsedRaw, status: normalizeProviderPaymentStatus(parsedRaw.status) };
     observation.sessionNo = parsed.sessionNo ?? null;
     await updateCallbackLog(service, logId, "parsed", null, {
