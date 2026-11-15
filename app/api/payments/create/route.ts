@@ -94,6 +94,7 @@ export async function POST(request: Request) {
       userId: context.user.id,
       clientIp: getPaymentClientIp(request),
       clientDevice: derivePaymentClientDevice(request.headers.get("user-agent")),
+      mode: "public",
     });
     return NextResponse.json(session, { status: 201 });
   } catch (error) {

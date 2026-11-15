@@ -47,6 +47,9 @@ export type CreatePaymentSessionInput = {
   userId: string;
   clientIp?: string | null;
   clientDevice?: PaymentClientDevice;
+  /** Internal server-only canary context. Public callers must omit this. */
+  mode?: "public" | "internal_canary";
+  canaryLogicalKey?: string;
 };
 
 export type PaymentSessionResponse = {
@@ -102,6 +105,16 @@ type ReservedSession = {
 
 export async function createPaymentSession(input: CreatePaymentSessionInput): Promise<PaymentSessionResponse> {
   const service = getRequiredServiceClient();
+  const mode = input.mode ?? "public";
+  if (mode !== "public" && mode !== "internal_canary") {
+    throw new PaymentSessionError("PAYMENT_MODE_INVALID", "支付执行模式无效");
+  }
+  if (mode === "internal_canary" && process.env.SNPAY_CANARY_EXECUTION !== "YES") {
+    throw new PaymentSessionError("CANARY_EXECUTION_NOT_AUTHORIZED", "未获得本地 canary 执行授权");
+  }
+  if (mode === "public" && input.canaryLogicalKey) {
+    throw new PaymentSessionError("PAYMENT_MODE_INVALID", "公共支付路径不接受 canary 标识");
+  }
   const businessType = normalizeBusinessType(input.businessType);
   const business = await loadBusinessRecord(service, businessType, input.businessNo, input.userId);
   if (businessType === "order") ensureBusinessCanCreatePayment(business);
@@ -150,7 +163,10 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
     throw new PaymentSessionError("SESSION_EXPIRED", "原支付会话已过期，不能创建替代支付单");
   }
 
-  const channel = await loadEnabledChannel(service, channelCode);
+  const channel = await loadEnabledChannel(service, channelCode, mode === "internal_canary");
+  if (mode === "internal_canary" && (channel.provider !== "snpay" || !["alipay", "wechat"].includes(channel.code))) {
+    throw new PaymentSessionError("CANARY_CHANNEL_INVALID", "内部 canary 仅允许 SNPAY 支付宝或微信");
+  }
   if (businessType === "recharge" && business.provider && channel.provider !== business.provider) {
     throw new PaymentSessionError("SESSION_IDENTITY_CONFLICT", "支付渠道与原充值单不一致，请联系客服。");
   }
@@ -243,7 +259,11 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
         wallet_address: providerResult.walletAddress ?? null,
         provider_order_no: providerResult.providerOrderNo ?? null,
         expires_at: expiresAt,
-        metadata: { initializing: false, ...(providerResult.metadata ?? {}) },
+        metadata: {
+          initializing: false,
+          ...(input.canaryLogicalKey ? { canaryLogicalKey: input.canaryLogicalKey } : {}),
+          ...(providerResult.metadata ?? {}),
+        },
         last_error: null,
       })
       .eq("session_no", sessionNo)
@@ -643,21 +663,33 @@ function normalizeChannelCode(value: string | null | undefined) {
   return channelCode;
 }
 
-async function loadEnabledChannel(service: SupabaseClient, code: string | null | undefined): Promise<PaymentChannel> {
+async function loadEnabledChannel(service: SupabaseClient, code: string | null | undefined, allowDisabledCanary = false): Promise<PaymentChannel> {
   const channelCode = normalizeChannelCode(code);
 
-  const { data, error } = await service
+  let query = service
     .from("payment_channels")
     .select("channel,code,enabled,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,sort_order,configured,provider_config,public_config")
-    .or(`code.eq.${channelCode},channel.eq.${channelCode}`)
-    .eq("enabled", true)
-    .maybeSingle();
+    .or(`code.eq.${channelCode},channel.eq.${channelCode}`);
+  if (!allowDisabledCanary) query = query.eq("enabled", true);
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   const channel = data ? normalizeChannelRow(data as Record<string, unknown>) : null;
-  if (!channel || !channel.enabled) throw new PaymentSessionError("CHANNEL_DISABLED", "支付渠道未启用或不存在");
+  const canaryBypass = allowDisabledCanary
+    && process.env.SNPAY_CANARY_EXECUTION === "YES"
+    && channel?.provider === "snpay"
+    && ["alipay", "wechat"].includes(channel.code);
+  if (!channel || (!channel.enabled && !canaryBypass)) throw new PaymentSessionError("CHANNEL_DISABLED", "支付渠道未启用或不存在");
 
   channel.configured = data?.configured === true || hasProviderConfig(data?.provider_config);
   return channel;
+}
+
+/** Server-only adapter entrypoint; never import this from a route or client module. */
+export async function createPaymentSessionForInternalCanary(input: Omit<CreatePaymentSessionInput, "mode">) {
+  if (process.env.SNPAY_CANARY_EXECUTION !== "YES") {
+    throw new PaymentSessionError("CANARY_EXECUTION_NOT_AUTHORIZED", "未获得本地 canary 执行授权");
+  }
+  return createPaymentSession({ ...input, mode: "internal_canary" });
 }
 
 function toSessionResponse(row: Record<string, unknown>): PaymentSessionResponse {
