@@ -1,3 +1,6 @@
+// scripts/internal/snpay-production-canary.ts
+import { readFile, stat } from "node:fs/promises";
+
 // lib/payments/payment-errors.ts
 function getSafeErrorMessage(error, fallback = "\u64CD\u4F5C\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5") {
   if (error instanceof Error && error.message) return error.message;
@@ -1541,6 +1544,29 @@ function getSafePublicManualPaymentForRow(row, input = {}) {
   return getSafePublicManualPayment(input);
 }
 
+// lib/recharges/status-machine.ts
+var RECHARGE_STATUS_VALUES = [
+  "pending",
+  "waiting_payment",
+  "submitted",
+  "reviewing",
+  "approved",
+  "processing",
+  "succeeded",
+  "failed",
+  "rejected",
+  "cancelled",
+  "expired"
+];
+var LEGACY_STATUS_MAP = { paid: "succeeded", closed: "cancelled" };
+function parseRechargeStatusStrict(value) {
+  if (typeof value !== "string") return null;
+  const status = value.trim().toLowerCase();
+  if (!status) return null;
+  if (status in LEGACY_STATUS_MAP) return LEGACY_STATUS_MAP[status];
+  return RECHARGE_STATUS_VALUES.includes(status) ? status : null;
+}
+
 // lib/payments/recharge-utils.ts
 function normalizeChannelRow(row) {
   const code = getCanonicalPaymentChannelCode(row);
@@ -2161,75 +2187,557 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// lib/i18n/config.ts
+var DEFAULT_LOCALE = "zh-CN";
+var DEFAULT_SUPPORTED_LOCALES = ["zh-CN"];
+var DEFAULT_CURRENCY = "CNY";
+var DEFAULT_BUSINESS_TIMEZONE = "Asia/Shanghai";
+var DEFAULT_DATE_FORMAT = "yyyy-MM-dd";
+var DEFAULT_TIME_FORMAT = "HH:mm:ss";
+var DEFAULT_I18N_CONFIG = {
+  defaultLocale: DEFAULT_LOCALE,
+  supportedLocales: [...DEFAULT_SUPPORTED_LOCALES],
+  defaultCurrency: DEFAULT_CURRENCY,
+  businessTimezone: DEFAULT_BUSINESS_TIMEZONE,
+  dateFormat: DEFAULT_DATE_FORMAT,
+  timeFormat: DEFAULT_TIME_FORMAT
+};
+
+// lib/payments/channels.ts
+var PAYMENT_CHANNELS = [
+  {
+    channel_code: "alipay",
+    code: "alipay",
+    display_name: "\u652F\u4ED8\u5B9D",
+    name: "\u652F\u4ED8\u5B9D",
+    currency: "CNY",
+    minimum_amount: 10,
+    minimumAmount: 10,
+    fee_rate: 0,
+    feeRate: 0,
+    status: "active",
+    enabled: true,
+    configured: false,
+    provider: "liuhaoyi",
+    sort_order: 10,
+    iconSrc: "/assets/alipay-icon.jpg",
+    description: "\u9002\u5408\u4EBA\u6C11\u5E01\u4F59\u989D\u5145\u503C\uFF0C\u5230\u8D26\u524D\u9700\u7B49\u5F85\u6E20\u9053\u56DE\u8C03\u786E\u8BA4\u3002"
+  },
+  {
+    channel_code: "wechat",
+    code: "wechat",
+    display_name: "\u5FAE\u4FE1\u652F\u4ED8",
+    name: "\u5FAE\u4FE1\u652F\u4ED8",
+    currency: "CNY",
+    minimum_amount: 10,
+    minimumAmount: 10,
+    fee_rate: 0,
+    feeRate: 0,
+    status: "active",
+    enabled: true,
+    configured: false,
+    provider: "liuhaoyi",
+    sort_order: 20,
+    iconSrc: "/assets/wechat-pay-icon.jpg",
+    description: "\u9002\u5408\u4EBA\u6C11\u5E01\u4F59\u989D\u5145\u503C\uFF0C\u5230\u8D26\u524D\u9700\u7B49\u5F85\u6E20\u9053\u56DE\u8C03\u786E\u8BA4\u3002"
+  },
+  {
+    channel_code: "binance_pay",
+    code: "binance_pay",
+    display_name: "\u5E01\u5B89\u8F6C\u8D26",
+    name: "\u5E01\u5B89\u8F6C\u8D26",
+    currency: "USDT",
+    minimum_amount: 1,
+    minimumAmount: 1,
+    fee_rate: 0,
+    feeRate: 0,
+    status: "active",
+    enabled: true,
+    configured: false,
+    provider: "binance",
+    sort_order: 30,
+    iconSrc: "/assets/binance-pay-icon.jpg",
+    description: "\u9884\u7559 Binance Pay \u94FE\u8DEF\uFF0C\u5F53\u524D\u672A\u914D\u7F6E\u771F\u5B9E\u4EE3\u6536\u53C2\u6570\u3002"
+  },
+  {
+    channel_code: "usdt_trc20",
+    code: "usdt_trc20",
+    display_name: "USDT-TRC20",
+    name: "USDT-TRC20",
+    currency: "USDT",
+    network: "TRC20",
+    networkLabel: "TRON",
+    minimum_amount: 1,
+    minimumAmount: 1,
+    fee_rate: 0,
+    feeRate: 0,
+    status: "active",
+    enabled: true,
+    configured: false,
+    provider: "crypto_address",
+    sort_order: 40,
+    iconSrc: "/assets/usdt-trc20-icon.jpg",
+    description: "TRON \u7F51\u7EDC\u6536\u6B3E\u5730\u5740\u9884\u7559\uFF0C\u672A\u914D\u7F6E\u524D\u4E0D\u4F1A\u8FD4\u56DE\u5730\u5740\u3002"
+  },
+  {
+    channel_code: "usdt_bep20",
+    code: "usdt_bep20",
+    display_name: "USDT-BEP20",
+    name: "USDT-BEP20",
+    currency: "USDT",
+    network: "BEP20",
+    networkLabel: "BSC",
+    minimum_amount: 1,
+    minimumAmount: 1,
+    fee_rate: 0,
+    feeRate: 0,
+    status: "active",
+    enabled: true,
+    configured: false,
+    provider: "crypto_address",
+    sort_order: 50,
+    iconSrc: "/assets/usdt-bep20-icon.jpg",
+    description: "BSC \u7F51\u7EDC\u6536\u6B3E\u5730\u5740\u9884\u7559\uFF0C\u672A\u914D\u7F6E\u524D\u4E0D\u4F1A\u8FD4\u56DE\u5730\u5740\u3002"
+  }
+].sort((a, b) => a.sort_order - b.sort_order);
+function getCurrencyDecimals(currency) {
+  return currency === "USDT" ? 6 : 2;
+}
+function normalizeRechargeAmount(value, currency) {
+  const decimals = getCurrencyDecimals(currency);
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+function calculateRechargeAmounts(channel, rawAmount) {
+  const amount = normalizeRechargeAmount(Number.isFinite(rawAmount) ? rawAmount : 0, channel.currency);
+  const fee = normalizeRechargeAmount(amount * channel.feeRate, channel.currency);
+  const payableAmount = normalizeRechargeAmount(amount + fee, channel.currency);
+  return {
+    amount,
+    fee,
+    payableAmount,
+    arrivalAmount: amount,
+    currency: channel.currency,
+    decimals: getCurrencyDecimals(channel.currency)
+  };
+}
+
+// lib/risk/risk-service.ts
+import { createHash as createHash2, randomUUID } from "crypto";
+var RISK_RULES = {
+  ACCOUNT_RECENTLY_CREATED_HIGH_VALUE: { rule_code: "ACCOUNT_RECENTLY_CREATED_HIGH_VALUE", enabled: true, weight: 35, window_seconds: 86400, threshold: 1 },
+  ACCOUNT_RESTRICTED_HIGH_RISK_ACTION: { rule_code: "ACCOUNT_RESTRICTED_HIGH_RISK_ACTION", enabled: true, weight: 70, window_seconds: 300, threshold: 1 },
+  ORDER_UNPAID_BURST: { rule_code: "ORDER_UNPAID_BURST", enabled: true, weight: 35, window_seconds: 900, threshold: 5 },
+  ORDER_LARGE_QUANTITY: { rule_code: "ORDER_LARGE_QUANTITY", enabled: true, weight: 30, window_seconds: 300, threshold: 50 },
+  ORDER_SKU_REPEATED_RESERVATION: { rule_code: "ORDER_SKU_REPEATED_RESERVATION", enabled: true, weight: 30, window_seconds: 1800, threshold: 3 },
+  PAYMENT_SESSION_BURST: { rule_code: "PAYMENT_SESSION_BURST", enabled: true, weight: 35, window_seconds: 900, threshold: 6 },
+  PAYMENT_CHANNEL_SWITCHING: { rule_code: "PAYMENT_CHANNEL_SWITCHING", enabled: true, weight: 25, window_seconds: 1800, threshold: 3 },
+  PAYMENT_DUPLICATE_PROVIDER_TRADE: { rule_code: "PAYMENT_DUPLICATE_PROVIDER_TRADE", enabled: true, weight: 95, window_seconds: 86400, threshold: 1 },
+  RECHARGE_REQUEST_BURST: { rule_code: "RECHARGE_REQUEST_BURST", enabled: true, weight: 35, window_seconds: 1800, threshold: 5 },
+  RECHARGE_DUPLICATE_CLIENT_REQUEST: { rule_code: "RECHARGE_DUPLICATE_CLIENT_REQUEST", enabled: true, weight: 45, window_seconds: 86400, threshold: 1 },
+  REFUND_REQUEST_BURST: { rule_code: "REFUND_REQUEST_BURST", enabled: true, weight: 40, window_seconds: 86400, threshold: 3 },
+  REFUND_RATIO_HIGH: { rule_code: "REFUND_RATIO_HIGH", enabled: true, weight: 35, window_seconds: 2592e3, threshold: 1 },
+  REFUND_DELIVERED_DIGITAL: { rule_code: "REFUND_DELIVERED_DIGITAL", enabled: true, weight: 30, window_seconds: 2592e3, threshold: 1 },
+  SOURCE_SHARED_BY_ACCOUNTS: { rule_code: "SOURCE_SHARED_BY_ACCOUNTS", enabled: true, weight: 20, window_seconds: 86400, threshold: 3 }
+};
+async function evaluateRisk(input) {
+  const requestId = normalizeRequestId(input.requestId);
+  try {
+    const matchedRules = await matchRiskRules(input);
+    const riskScore = Math.min(100, matchedRules.reduce((sum, rule) => sum + rule.weight, 0));
+    const riskLevel = scoreToLevel(riskScore, matchedRules);
+    const recommendedAction = actionForLevel(riskLevel, input.businessType);
+    const result = {
+      risk_level: riskLevel,
+      risk_score: riskScore,
+      matched_rules: matchedRules,
+      recommended_action: recommendedAction,
+      review_required: recommendedAction === "require_review",
+      expires_at: ["temporarily_block", "require_review"].includes(recommendedAction) ? new Date(Date.now() + 30 * 60 * 1e3).toISOString() : null,
+      request_id: requestId
+    };
+    if (matchedRules.length > 0) {
+      const event = await recordRiskEvent(input.supabase, {
+        ...result,
+        request_id: requestId,
+        business_type: input.businessType,
+        business_id: input.businessId ?? null,
+        user_id: input.userId ?? null,
+        source_hash: buildSourceHash(input.request),
+        summary: matchedRules.map((rule) => rule.summary).join("; "),
+        metadata: sanitizeRiskMetadata(input.riskContext)
+      });
+      result.event_id = event.eventId;
+    }
+    return result;
+  } catch {
+    if (input.failClosed) {
+      return {
+        risk_level: "high",
+        risk_score: 80,
+        matched_rules: [{ ...RISK_RULES.ACCOUNT_RESTRICTED_HIGH_RISK_ACTION, summary: "\u98CE\u9669\u670D\u52A1\u5F02\u5E38\uFF0C\u9AD8\u98CE\u9669\u4E1A\u52A1\u8FDB\u5165\u4EBA\u5DE5\u5BA1\u6838" }],
+        recommended_action: "require_review",
+        review_required: true,
+        expires_at: new Date(Date.now() + 30 * 60 * 1e3).toISOString(),
+        request_id: requestId
+      };
+    }
+    return {
+      risk_level: "low",
+      risk_score: 0,
+      matched_rules: [],
+      recommended_action: "allow_with_monitoring",
+      review_required: false,
+      expires_at: null,
+      request_id: requestId
+    };
+  }
+}
+function evaluateRechargeRisk(input) {
+  return evaluateRisk({ ...input, businessType: "recharge", failClosed: true });
+}
+function shouldBlockRisk(result) {
+  if (result.recommended_action === "deny") return "\u5F53\u524D\u64CD\u4F5C\u547D\u4E2D\u9AD8\u98CE\u9669\u89C4\u5219\uFF0C\u5DF2\u88AB\u62D2\u7EDD\uFF0C\u8BF7\u8054\u7CFB\u5BA2\u670D\u5904\u7406\u3002";
+}
+async function matchRiskRules(input) {
+  const hits = [];
+  const quantity = finiteNumber3(input.quantity);
+  const amount = finiteNumber3(input.orderAmount);
+  const accountAgeSeconds = input.accountCreatedAt ? Math.max(0, (Date.now() - new Date(input.accountCreatedAt).getTime()) / 1e3) : null;
+  if (input.userId) {
+    const profile = await loadProfile(input.supabase, input.userId);
+    if (profile?.risk_status && ["high_risk", "blocked"].includes(profile.risk_status)) {
+      addHit(hits, "ACCOUNT_RESTRICTED_HIGH_RISK_ACTION", "\u53D7\u9650\u8D26\u6237\u7EE7\u7EED\u8C03\u7528\u9AD8\u98CE\u9669\u63A5\u53E3");
+    }
+  }
+  if (amount >= 1e3 && accountAgeSeconds != null && accountAgeSeconds < RISK_RULES.ACCOUNT_RECENTLY_CREATED_HIGH_VALUE.window_seconds) {
+    addHit(hits, "ACCOUNT_RECENTLY_CREATED_HIGH_VALUE", "\u65B0\u8D26\u6237\u7ACB\u5373\u53D1\u8D77\u9AD8\u91D1\u989D\u64CD\u4F5C");
+  }
+  if (input.businessType === "order") {
+    if (quantity >= RISK_RULES.ORDER_LARGE_QUANTITY.threshold) addHit(hits, "ORDER_LARGE_QUANTITY", "\u5F02\u5E38\u5927\u6570\u91CF\u4E0B\u5355");
+    const unpaid = await boundedCount(input.supabase, {
+      table: "orders",
+      userId: input.userId,
+      statuses: ["pending_payment"],
+      windowSeconds: RISK_RULES.ORDER_UNPAID_BURST.window_seconds
+    });
+    if (unpaid >= RISK_RULES.ORDER_UNPAID_BURST.threshold) addHit(hits, "ORDER_UNPAID_BURST", "\u77ED\u65F6\u95F4\u521B\u5EFA\u5927\u91CF\u672A\u652F\u4ED8\u8BA2\u5355");
+    if (input.skuId) {
+      const skuCount = await boundedCount(input.supabase, {
+        table: "order_items",
+        column: "sku_id",
+        value: input.skuId,
+        windowSeconds: RISK_RULES.ORDER_SKU_REPEATED_RESERVATION.window_seconds
+      });
+      if (skuCount >= RISK_RULES.ORDER_SKU_REPEATED_RESERVATION.threshold) addHit(hits, "ORDER_SKU_REPEATED_RESERVATION", "\u540C\u4E00 SKU \u88AB\u91CD\u590D\u9884\u7559");
+    }
+  }
+  if (input.businessType === "payment") {
+    const sessions = await boundedCount(input.supabase, {
+      table: "payment_sessions",
+      userId: input.userId,
+      windowSeconds: RISK_RULES.PAYMENT_SESSION_BURST.window_seconds
+    });
+    if (sessions >= RISK_RULES.PAYMENT_SESSION_BURST.threshold) addHit(hits, "PAYMENT_SESSION_BURST", "\u9891\u7E41\u521B\u5EFA\u652F\u4ED8\u4F1A\u8BDD");
+  }
+  if (input.businessType === "recharge") {
+    const recharges = await boundedCount(input.supabase, {
+      table: "account_recharges",
+      userId: input.userId,
+      statuses: ["pending", "processing"],
+      windowSeconds: RISK_RULES.RECHARGE_REQUEST_BURST.window_seconds
+    });
+    if (recharges >= RISK_RULES.RECHARGE_REQUEST_BURST.threshold) addHit(hits, "RECHARGE_REQUEST_BURST", "\u77ED\u65F6\u95F4\u5927\u91CF\u5145\u503C\u7533\u8BF7");
+  }
+  if (input.businessType === "refund") {
+    const refunds = await boundedCount(input.supabase, {
+      table: "refund_requests",
+      userId: input.userId,
+      windowSeconds: RISK_RULES.REFUND_REQUEST_BURST.window_seconds
+    });
+    if (refunds >= RISK_RULES.REFUND_REQUEST_BURST.threshold) addHit(hits, "REFUND_REQUEST_BURST", "\u77ED\u65F6\u95F4\u591A\u6B21\u9000\u6B3E\u7533\u8BF7");
+    if (input.riskContext?.deliveryDelivered === true) addHit(hits, "REFUND_DELIVERED_DIGITAL", "\u5DF2\u4EA4\u4ED8\u6570\u5B57\u5546\u54C1\u7533\u8BF7\u9000\u6B3E");
+  }
+  return hits;
+}
+async function boundedCount(supabase, query) {
+  const createdColumn = query.createdColumn ?? "created_at";
+  let builder = supabase.from(query.table).select("id", { count: "exact", head: true }).gte(createdColumn, new Date(Date.now() - query.windowSeconds * 1e3).toISOString());
+  if (query.userId) builder = builder.eq("user_id", query.userId);
+  if (query.column && query.value) builder = builder.eq(query.column, query.value);
+  if (query.statuses?.length) builder = builder.in("status", query.statuses);
+  const { count, error } = await builder.limit(500);
+  if (error) return 0;
+  return Math.min(count ?? 0, 500);
+}
+async function loadProfile(supabase, userId) {
+  const { data, error } = await supabase.from("profiles").select("id,risk_status,account_status,created_at").eq("id", userId).maybeSingle();
+  if (error) return null;
+  return data;
+}
+function addHit(hits, code, summary) {
+  const rule = RISK_RULES[code];
+  if (!rule.enabled) return;
+  hits.push({ rule_code: code, weight: rule.weight, window_seconds: rule.window_seconds, threshold: rule.threshold, summary });
+}
+function scoreToLevel(score, hits) {
+  if (hits.some((hit) => hit.rule_code === "PAYMENT_DUPLICATE_PROVIDER_TRADE")) return "critical";
+  if (score >= 80) return "critical";
+  if (score >= 55) return "high";
+  if (score >= 25) return "medium";
+  return "low";
+}
+function actionForLevel(level, businessType) {
+  if (level === "critical") return "deny";
+  if (level === "high") return ["refund", "delivery"].includes(businessType) ? "require_review" : "temporarily_block";
+  if (level === "medium") return "allow_with_monitoring";
+  return "allow";
+}
+async function recordRiskEvent(supabase, input) {
+  const writer = getSupabaseServiceRoleClient() ?? supabase;
+  const fingerprint = createHash2("sha256").update([input.user_id ?? "anonymous", input.business_type, input.business_id ?? "none", input.matched_rules.map((rule) => rule.rule_code).sort().join(",")].join("|")).digest("hex");
+  const primaryRule = input.matched_rules[0]?.rule_code ?? "SOURCE_SHARED_BY_ACCOUNTS";
+  const row = {
+    fingerprint,
+    rule_code: primaryRule,
+    risk_level: input.risk_level,
+    risk_score: input.risk_score,
+    recommended_action: input.recommended_action,
+    business_type: input.business_type,
+    business_id: input.business_id,
+    user_id: input.user_id,
+    request_id: input.request_id,
+    source_hash: input.source_hash,
+    summary: input.summary.slice(0, 500),
+    metadata: input.metadata,
+    status: input.review_required ? "pending" : "open",
+    expires_at: input.expires_at,
+    last_seen_at: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const { data, error } = await writer.from("risk_events").upsert(row, { onConflict: "fingerprint" }).select("id").maybeSingle();
+  if (error) {
+    if (isRiskSchemaMissing(error)) return { ok: false, eventId: null, schemaMissing: true };
+    throw error;
+  }
+  return { ok: true, eventId: typeof data?.id === "string" ? data.id : null, schemaMissing: false };
+}
+function buildSourceHash(request) {
+  if (!request) return null;
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+  const ua = request.headers.get("user-agent") ?? "";
+  const seed = `${forwarded.slice(0, 64)}|${summarizeUserAgent(ua)}`;
+  return createHash2("sha256").update(seed).digest("hex");
+}
+function summarizeUserAgent(value) {
+  if (!value) return null;
+  return value.replace(/\s+/g, " ").slice(0, 120);
+}
+function sanitizeRiskMetadata(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const output = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (/password|token|secret|key|authorization|cookie|content|callback|payload/i.test(key)) continue;
+    if (typeof raw === "string") output[key] = raw.slice(0, 160);
+    else if (typeof raw === "number" || typeof raw === "boolean" || raw == null) output[key] = raw;
+  }
+  return output;
+}
+function normalizeRequestId(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text && text.length <= 160 ? text : randomUUID();
+}
+function finiteNumber3(value) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function isRiskSchemaMissing(error) {
+  const message = error && typeof error === "object" && "message" in error ? String(error.message ?? "") : String(error ?? "");
+  const code = error && typeof error === "object" && "code" in error ? String(error.code ?? "") : "";
+  return /risk_events|risk_reviews|schema cache|Could not find the table/i.test(message) || ["42P01", "42703", "PGRST205"].includes(code);
+}
+
+// lib/users/account-guard.ts
+var AccountRestrictionError = class extends Error {
+  constructor(message, code = "ACCOUNT_RESTRICTED", status = 403) {
+    super(message);
+    this.name = "AccountRestrictionError";
+    this.code = code;
+    this.status = status;
+  }
+};
+function getErrorMessage(error, fallback = "\u8D26\u6237\u72B6\u6001\u6821\u9A8C\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5") {
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
+async function assertUserBusinessAllowed(supabase, userId, action) {
+  const { data, error } = await supabase.rpc("check_user_business_allowed", {
+    p_user_id: userId,
+    p_action: action
+  });
+  if (error) {
+    if (/check_user_business_allowed|schema cache|PGRST|42883/i.test(getErrorMessage(error, ""))) {
+      return;
+    }
+    throw new AccountRestrictionError(getErrorMessage(error), "ACCOUNT_CHECK_FAILED", 500);
+  }
+  const result = data;
+  if (result && result.allowed === false) {
+    throw new AccountRestrictionError(result.message || "\u8D26\u6237\u5F53\u524D\u6682\u4E0D\u80FD\u6267\u884C\u8BE5\u64CD\u4F5C\uFF0C\u8BF7\u8054\u7CFB\u5BA2\u670D\u3002", "ACCOUNT_RESTRICTED", 403);
+  }
+}
+
+// lib/payments/account-recharge-expiry.mjs
+var ACCOUNT_RECHARGE_EXPIRY_MINUTES = 10;
+var ACCOUNT_RECHARGE_EXPIRY_MS = ACCOUNT_RECHARGE_EXPIRY_MINUTES * 60 * 1e3;
+function createAccountRechargeExpiryWindow(now = /* @__PURE__ */ new Date()) {
+  const createdAtMs = new Date(now).getTime();
+  if (!Number.isFinite(createdAtMs)) throw new TypeError("Invalid recharge creation time");
+  return {
+    createdAt: new Date(createdAtMs).toISOString(),
+    expiresAt: new Date(createdAtMs + ACCOUNT_RECHARGE_EXPIRY_MS).toISOString()
+  };
+}
+
+// lib/payments/recharge-creation-service.ts
+async function prepareCanaryRecharge(input) {
+  await assertUserBusinessAllowed(input.service, input.userId, "create_recharge");
+  const existing = await findExistingRecharge(input.service, input.userId, input.logicalKey);
+  if (existing && ["pending", "waiting_payment", "processing"].includes(existing.status)) return { ...existing, created: false };
+  if (existing) throw new Error("CANARY_RECHARGE_DUPLICATE_NON_PAYABLE");
+  const { data, error } = await input.service.from("payment_channels").select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order").or(`code.eq.${input.channelCode},channel.eq.${input.channelCode}`).eq("configured", true).maybeSingle();
+  if (error) throw error;
+  const channel = data ? normalizeChannelRow(data) : null;
+  if (!channel || channel.provider !== "snpay" || channel.code !== input.channelCode || channel.currency !== "CNY") throw new Error("CANARY_CHANNEL_NOT_CONFIGURED");
+  const amount = 1;
+  const summary = calculateRechargeAmounts(channel, amount);
+  if (channel.feeRate !== 0 || summary.fee !== 0 || summary.payableAmount !== amount) throw new Error("CANARY_SNPAY_FEE_CONFIGURATION_INVALID");
+  const caps = getPaymentProviderCapabilities(channel.provider);
+  if (!providerSupportsChannel(caps, channel.code, channel.currency) || !providerAmountWithinLimits(caps, channel, amount)) throw new Error("CANARY_AMOUNT_UNSUPPORTED");
+  const risk = await evaluateRechargeRisk({ supabase: input.service, request: new Request("https://jianlian.shop/internal/snpay-canary"), userId: input.userId, businessId: input.logicalKey, requestId: input.logicalKey, orderAmount: amount, currency: "CNY", paymentChannel: channel.code, riskContext: { provider: channel.provider, payable_amount: amount } });
+  if (shouldBlockRisk(risk) || risk.recommended_action === "require_review") throw new Error("CANARY_RISK_BLOCKED");
+  const window = createAccountRechargeExpiryWindow();
+  const rechargeNo = await insertRecharge(input.service, { rechargeId: null, createdAt: window.createdAt, expiresAt: window.expiresAt, userId: input.userId, userEmail: input.userEmail, channel, amount, fee: 0, payableAmount: amount, clientRequestId: input.logicalKey, customerNote: "SNPAY production canary", rateSnapshot: null });
+  return { rechargeNo, status: "pending", amount, payableAmount: amount, expiresAt: window.expiresAt, created: true };
+}
+var REUSABLE_RECHARGE_STATUSES = ["pending", "waiting_payment", "submitted", "reviewing", "approved", "processing", "failed", "rejected", "succeeded", "paid"];
+async function findExistingRecharge(supabase, userId, clientRequestId) {
+  const { data, error } = await supabase.from("account_recharges").select("recharge_no,status,amount,requested_amount,fee_amount,payable_amount,requested_cny_amount,expected_usdt_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,expires_at").eq("user_id", userId).eq("client_request_id", clientRequestId).in("status", [...REUSABLE_RECHARGE_STATUSES]).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) {
+    if (isMissingClientRequestColumn(error)) return null;
+    throw error;
+  }
+  if (!data) return null;
+  const status = parseRechargeStatusStrict(data.status);
+  if (!status) throw new Error("invalid recharge status");
+  return { rechargeNo: String(data.recharge_no ?? ""), status, amount: finiteNumber4(data.requested_amount ?? data.amount), fee: finiteNumber4(data.fee_amount), payableAmount: finiteNumber4(data.payable_amount), requestedCnyAmount: data.requested_cny_amount ? String(data.requested_cny_amount) : null, expectedUsdtAmount: data.expected_usdt_amount ? String(data.expected_usdt_amount) : null, lockedMarketRate: data.locked_market_rate ? String(data.locked_market_rate) : null, lockedSettlementRate: data.locked_settlement_rate ? String(data.locked_settlement_rate) : null, rateSource: data.rate_source ? String(data.rate_source) : null, rateEffectiveDate: data.rate_effective_date ? String(data.rate_effective_date) : null, expiresAt: data.expires_at ? String(data.expires_at) : null, reused: true };
+}
+async function insertRecharge(serviceClient, input) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const rechargeNo = generateRechargeNo();
+    const row = { ...input.rechargeId ? { id: input.rechargeId } : {}, ...input.createdAt ? { created_at: input.createdAt } : {}, recharge_no: rechargeNo, user_id: input.userId, user_email: input.userEmail, channel: input.channel.code, channel_code: input.channel.code, channel_name: input.channel.name, provider: input.channel.provider, currency: input.rateSnapshot ? "CNY" : input.channel.currency, network: input.channel.networkLabel ?? null, amount: input.rateSnapshot?.requestedCnyAmount ?? input.amount, requested_amount: input.rateSnapshot?.requestedCnyAmount ?? input.amount, fee_amount: input.rateSnapshot ? "0.00" : input.fee, payable_amount: input.rateSnapshot?.requestedCnyAmount ?? input.payableAmount, received_amount: 0, credited_amount: 0, status: input.channel.reviewMode === "manual" ? "waiting_payment" : "pending", client_request_id: input.clientRequestId, payment_method: input.channel.code, review_mode: input.channel.reviewMode ?? "provider", customer_note: input.customerNote || null, user_note: input.customerNote || null, expires_at: input.expiresAt, ...input.rateSnapshot ? { settlement_currency: "USDT", requested_cny_amount: input.rateSnapshot.requestedCnyAmount, expected_usdt_amount: input.rateSnapshot.expectedUsdtAmount, locked_market_rate: input.rateSnapshot.marketRate, locked_settlement_rate: input.rateSnapshot.settlementRate, rate_source: input.rateSnapshot.source, rate_effective_date: input.rateSnapshot.effectiveDate, rate_effective_at: input.rateSnapshot.effectiveAt, rate_locked_at: (/* @__PURE__ */ new Date()).toISOString(), payment_address: input.channel.manualPayment?.payment_address ?? null, payment_token_contract: input.channel.manualPayment?.token_contract ?? null } : {} };
+    const result = await serviceClient.from("account_recharges").insert(row);
+    if (!result.error) return rechargeNo;
+    lastError = result.error;
+    if (isMissingClientRequestColumn(result.error)) {
+      const retryRow = { ...row };
+      delete retryRow.client_request_id;
+      const retry = await serviceClient.from("account_recharges").insert(retryRow);
+      if (!retry.error) return rechargeNo;
+      lastError = retry.error;
+    }
+    if (lastError?.code === "23505") {
+      const existing = await findExistingRecharge(serviceClient, input.userId, input.clientRequestId);
+      if (existing?.rechargeNo) return existing.rechargeNo;
+      continue;
+    }
+    break;
+  }
+  throw lastError ?? new Error("Recharge creation failed");
+}
+function generateRechargeNo() {
+  const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/\D/g, "").slice(0, 14);
+  return `RC${stamp}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+function finiteNumber4(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function isMissingClientRequestColumn(error) {
+  return /client_request_id|42703|schema cache/i.test(getSafeErrorMessage(error, ""));
+}
+
 // scripts/internal/snpay-production-canary.ts
 var FIXED_AMOUNT = 1;
 var CHANNELS = ["alipay", "wechat"];
 function fail(message) {
   throw new Error(message);
 }
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const channel = args.find((arg) => !arg.startsWith("--"));
-  if (!channel || !CHANNELS.includes(channel)) fail("CANARY_CHANNEL_INVALID");
-  return { channel, dryRun: args.includes("--dry-run") };
-}
-function requiredEnv(name) {
-  const value = process.env[name]?.trim();
-  if (!value) fail(`${name}_MISSING`);
-  return value;
-}
 function logicalKey(channel) {
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(/* @__PURE__ */ new Date()).replaceAll("-", "");
   return `SNPAY-PROD-CANARY-${date}-${channel.toUpperCase()}`;
 }
-async function loadCanaryBusiness(channel) {
-  const userId = requiredEnv("SNPAY_CANARY_USER_ID");
-  const rechargeNo = requiredEnv(`SNPAY_CANARY_RECHARGE_NO_${channel.toUpperCase()}`);
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const channel = args.find((arg) => !arg.startsWith("--"));
+  if (!channel || !CHANNELS.includes(channel)) fail("CANARY_CHANNEL_INVALID");
+  const mode = args.includes("--dry-run") ? "dry-run" : args.includes("--prepare") ? "prepare" : args.includes("--execute") ? "execute" : "execute";
+  return { channel, mode };
+}
+async function actor() {
+  const path = process.env.SNPAY_CANARY_ACTOR_FILE?.trim();
+  if (!path) fail("CANARY_ACTOR_FILE_MISSING");
+  const file = await stat(path);
+  if (process.platform !== "win32" && ((file.mode & 63) !== 0 || file.uid !== 0)) fail("CANARY_ACTOR_FILE_PERMISSIONS_INVALID");
+  const raw = await readFile(path, "utf8");
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    fail("CANARY_ACTOR_FILE_INVALID");
+  }
+  const userId = typeof parsed === "object" && parsed && typeof parsed.userId === "string" ? parsed.userId.trim() : "";
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) fail("CANARY_ACTOR_INVALID");
   const service = getSupabaseServiceRoleClient();
   if (!service) fail("SERVICE_ROLE_NOT_CONFIGURED");
-  const { data, error } = await service.from("account_recharges").select("id,recharge_no,user_id,status,requested_amount,amount,payable_amount,fee_amount,currency,channel_code,provider").eq("recharge_no", rechargeNo).maybeSingle();
-  if (error) throw error;
-  if (!data || String(data.user_id) !== userId) fail("CANARY_ACTOR_OR_RECHARGE_NOT_FOUND");
-  const amount = Number(data.requested_amount ?? data.amount);
-  if (amount !== FIXED_AMOUNT || Number(data.payable_amount) !== FIXED_AMOUNT || Number(data.fee_amount ?? 0) !== 0) fail("CANARY_AMOUNT_NOT_FIXED_1_CNY");
-  if (String(data.currency ?? "CNY") !== "CNY") fail("CANARY_CURRENCY_INVALID");
-  if (!CHANNELS.includes(String(data.channel_code ?? ""))) fail("CANARY_RECHARGE_CHANNEL_INVALID");
-  if (String(data.channel_code) !== channel) fail("CANARY_RECHARGE_CHANNEL_MISMATCH");
-  if (String(data.provider ?? "") !== "snpay") fail("CANARY_PROVIDER_MISMATCH");
-  if (!["pending", "waiting_payment", "processing"].includes(String(data.status))) fail("CANARY_RECHARGE_NOT_PAYABLE");
-  return { userId, rechargeNo: String(data.recharge_no), service };
+  const { data, error } = await service.from("profiles").select("id,email,account_status,risk_status").eq("id", userId).maybeSingle();
+  if (error || !data || String(data.account_status ?? "active") !== "active" || String(data.risk_status ?? "normal") !== "normal") fail("CANARY_ACTOR_NOT_ELIGIBLE");
+  return { service, userId, userEmail: String(data.email ?? "") };
 }
-async function existingSession(service, rechargeNo, channel, key) {
+async function existingSession(service, rechargeNo, channel) {
   if (!service) return null;
-  const { data, error } = await service.from("payment_sessions").select("session_no,status,provider_order_no,payment_url,qr_code_url,channel_code,business_no,metadata").eq("business_type", "recharge").eq("business_no", rechargeNo).eq("channel_code", channel).in("status", ["pending", "processing", "paid", "failed", "expired", "closed"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const { data, error } = await service.from("payment_sessions").select("session_no,status,provider_order_no,payment_url,qr_code_url,channel_code,business_no").eq("business_type", "recharge").eq("business_no", rechargeNo).eq("channel_code", channel).order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw error;
   return data;
 }
 async function main() {
-  const { channel, dryRun } = parseArgs();
+  const { channel, mode } = parseArgs();
   if (process.env.SNPAY_CANARY_EXECUTION !== "YES") fail("CANARY_EXECUTION_NOT_AUTHORIZED");
   if (process.env.SNPAY_API_BASE?.trim() !== "https://api.snpay.cn") fail("SNPAY_API_BASE_INVALID");
-  if (dryRun) {
-    const business2 = await loadCanaryBusiness(channel);
-    const existing2 = await existingSession(business2.service, business2.rechargeNo, channel, logicalKey(channel));
-    console.log(JSON.stringify({ ok: true, dryRun: true, channel, amount: FIXED_AMOUNT, logicalKey: logicalKey(channel), duplicate: Boolean(existing2), existingStatus: existing2?.status ?? null }));
+  const a = await actor();
+  const key = logicalKey(channel);
+  const existing = await findExistingRecharge(a.service, a.userId, key);
+  if (mode === "dry-run") {
+    console.log(JSON.stringify({ ok: true, mode, channel, amount: FIXED_AMOUNT, logicalKey: key, recharge: existing?.rechargeNo ?? null, paymentSessionCount: 0 }));
     return;
   }
-  const business = await loadCanaryBusiness(channel);
-  const existing = await existingSession(business.service, business.rechargeNo, channel, logicalKey(channel));
-  if (existing) {
-    console.log(JSON.stringify({ ok: true, duplicate: true, channel, amount: FIXED_AMOUNT, logicalKey: logicalKey(channel), sessionNo: existing.session_no, status: existing.status, paymentUrl: existing.payment_url ?? null, qrCodeUrl: existing.qr_code_url ?? null }));
+  if (mode === "prepare") {
+    const prepared = await prepareCanaryRecharge({ service: a.service, userId: a.userId, userEmail: a.userEmail, channelCode: channel, logicalKey: key });
+    console.log(JSON.stringify({ ok: true, mode, channel, amount: FIXED_AMOUNT, logicalKey: key, rechargeNo: prepared.rechargeNo, status: prepared.status, paymentSessionCount: 0 }));
     return;
   }
-  const session = await createPaymentSessionForInternalCanary({
-    businessType: "recharge",
-    businessNo: business.rechargeNo,
-    channelCode: channel,
-    userId: business.userId,
-    clientIp: "127.0.0.1",
-    clientDevice: "pc"
-  });
-  console.log(JSON.stringify({ ok: true, duplicate: false, channel, amount: FIXED_AMOUNT, logicalKey: logicalKey(channel), sessionNo: session.sessionNo, status: session.status, paymentUrl: session.paymentUrl ?? null, qrCodeUrl: session.qrCodeUrl ?? null, qrCodeValue: session.qrCodeValue ?? null }));
+  if (!existing) fail("CANARY_RECHARGE_NOT_PREPARED");
+  const session = await existingSession(a.service, existing.rechargeNo, channel);
+  if (session) {
+    console.log(JSON.stringify({ ok: true, duplicate: true, channel, amount: FIXED_AMOUNT, logicalKey: key, sessionNo: session.session_no, status: session.status, paymentUrl: session.payment_url ?? null, qrCodeUrl: session.qr_code_url ?? null }));
+    return;
+  }
+  const created = await createPaymentSessionForInternalCanary({ businessType: "recharge", businessNo: existing.rechargeNo, channelCode: channel, userId: a.userId, clientIp: "127.0.0.1", clientDevice: "pc" });
+  console.log(JSON.stringify({ ok: true, duplicate: false, channel, amount: FIXED_AMOUNT, logicalKey: key, sessionNo: created.sessionNo, status: created.status, paymentUrl: created.paymentUrl ?? null, qrCodeUrl: created.qrCodeUrl ?? null, qrCodeValue: created.qrCodeValue ?? null }));
 }
 main().catch((error) => {
   const code = error instanceof PaymentSessionError ? error.code : "CANARY_FAILED";

@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 
 const artifact = "dist/internal/snpay-production-canary.mjs";
 const source = await readFile("scripts/internal/snpay-production-canary.ts", "utf8");
+const creation = await readFile("lib/payments/recharge-creation-service.ts", "utf8");
 const route = await readFile("app/api/payments/create/route.ts", "utf8");
 
 test("public route is hard-coded to public mode", () => {
@@ -15,6 +16,12 @@ test("public route is hard-coded to public mode", () => {
 test("canary source has fixed amount and no direct provider call", () => {
   assert.match(source, /const FIXED_AMOUNT = 1/);
   assert.doesNotMatch(source, /createSnpayClient|\.createPayment\(/);
+});
+
+test("prepare reuses shared recharge service and has no provider/session call", () => {
+  assert.match(source, /prepareCanaryRecharge/);
+  assert.match(creation, /export async function prepareCanaryRecharge/);
+  assert.doesNotMatch(creation, /createPaymentSession|createSnpayClient/);
 });
 
 test("execution gate and invalid channel reject before any write", () => {
