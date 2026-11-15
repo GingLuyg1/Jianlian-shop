@@ -223,6 +223,9 @@ test("payment callbacks use provider verification and complete-payment service, 
   assert.match(service, /parseCallback/);
   assert.match(service, /completePayment\(/);
   assert.doesNotMatch(route, /request\.json\(\)/);
+  assert.match(service, /const requestBody = await request\.text\(\)/);
+  assert.match(service, /const providerRawInput = request\.method === "GET" \? url\.searchParams\.toString\(\) : requestBody/);
+  assert.match(service, /rawBody: providerRawInput/);
 });
 
 test("payment provider placeholders must not simulate success or fake payment artifacts", () => {

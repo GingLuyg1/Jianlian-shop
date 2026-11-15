@@ -400,6 +400,25 @@ test("valid signed callback verifies before parsing paid evidence", () => {
   assert.equal(parsed.sessionNo, "PS_TEST_12345678");
 });
 
+test("GET callback query-string input verifies and parses independent of parameter order", () => {
+  const { value } = client();
+  const body = formBody(callbackPayload());
+  assert.equal(value.verifyCallback(body, { channelCode: "alipay" }), true);
+  assert.equal(value.parseCallback(body, { channelCode: "alipay" }).status, "paid");
+  const reordered = new URLSearchParams([...new URLSearchParams(body).entries()].reverse()).toString();
+  assert.equal(value.verifyCallback(reordered, { channelCode: "alipay" }), true);
+  assert.equal(value.parseCallback(reordered, { channelCode: "alipay" }).sessionNo, "PS_TEST_12345678");
+});
+
+test("GET callback invalid signature is rejected without a trusted parse", () => {
+  const { value } = client();
+  const payload = callbackPayload();
+  payload.sign = `${payload.sign.slice(0, -2)}aa`;
+  const query = formBody(payload);
+  assert.equal(value.verifyCallback(query, { channelCode: "alipay" }), false);
+  assert.throws(() => value.parseCallback(query, { channelCode: "alipay" }), { code: "SNPAY_CALLBACK_SIGNATURE_INVALID" });
+});
+
 test("callback signature failure is fail closed", () => {
   const { value } = client();
   const payload = callbackPayload();

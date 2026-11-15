@@ -52,8 +52,11 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
     httpStatus: 503,
   });
 
-  const rawBody = await request.text();
-  const payload = request.method === "GET" ? Object.fromEntries(url.searchParams.entries()) : safeJson(rawBody);
+  const requestBody = await request.text();
+  // SNPAY sends browser-style GET notifications. Verify the exact query-string
+  // form for GET; POST callbacks continue to use the untouched HTTP body.
+  const providerRawInput = request.method === "GET" ? url.searchParams.toString() : requestBody;
+  const payload = request.method === "GET" ? Object.fromEntries(url.searchParams.entries()) : safeJson(requestBody);
   let logId: string | null = null;
   let callbackProvider: PaymentProvider | null = null;
 
@@ -97,7 +100,7 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
     const context: ProviderCallbackContext = {
       channelCode,
       provider: session.provider as PaymentProviderCode,
-      rawBody,
+      rawBody: providerRawInput,
       headers: request.headers,
       requestUrl: request.url,
     };
