@@ -74,7 +74,12 @@ export async function runSnpayOrderDbMatrix({sql,uid}) {
  const fakeDaju={getProduct:async()=>({id:45,isAuto:true,stock:10,minQty:1,maxQty:10,price:'1',requiredInputs:[]}),
   purchase:async()=>{purchases++;await new Promise(r=>setTimeout(r,5));return{orderCode:'CI-SUPPLIER-ONE',delivered:['CI-FAKE-CARD-NOT-REAL'],unitPrice:'1',totalPrice:'1'};},getOrder:()=>{throw Error('UNEXPECTED_SUPPLIER_QUERY');}};
  const daju=loadTs('lib/providers/daju/fulfillment.ts',{'./client':{createDajuClient:()=>fakeDaju},'./fulfillment-candidate.mjs':candidate,'./fulfillment-core.mjs':dajuCore,'./mapper.mjs':mapper,'./protocol.mjs':protocol});
- const router=loadTs('lib/providers/core/supplier-router.ts',{'../daju/fulfillment':daju,'./supplier-router-core.mjs':routerCore});
+ const router=loadTs('lib/providers/core/supplier-router.ts',{
+  '../daju/fulfillment':daju,
+  '../bitrefill/pin-runtime.mjs':{getBitrefillPinHandler:()=>null},
+  '../bitrefill/production-server':{ensureBitrefillProductionRuntime:()=>{}},
+  './supplier-router-core.mjs':routerCore
+ });
  const delivery=loadTs('lib/delivery/delivery-service.ts',{'@/lib/providers/core/supplier-router':router,'./local-stock-priority.mjs':local});
  const forbidden=()=>{throw Error('EXTERNAL_NETWORK_FORBIDDEN');};
  const complete=loadTs('lib/payments/complete-payment-service.ts',{'@/lib/delivery/delivery-service':delivery,'@/lib/payments/payment-errors':{getSafeErrorMessage:()=> 'CI_ERROR'},'@/lib/supabase/service-role':{getSupabaseServiceRoleClient:forbidden}});

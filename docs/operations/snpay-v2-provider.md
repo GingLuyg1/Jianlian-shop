@@ -26,7 +26,7 @@ Formal runtime secrets must be independent from `/etc/jianlian/snpay-readonly/`.
 Required configuration names:
 
 - `SNPAY_MERCHANT_ID`
-- `SNPAY_API_BASE` (expected Production value: `https://www.snpay.cn`)
+- `SNPAY_API_BASE` (expected Production value: `https://api.snpay.cn`)
 - `SNPAY_PRIVATE_KEY_FILE`
 - `SNPAY_PLATFORM_PUBLIC_KEY_FILE`
 - `SNPAY_SITE_URL`

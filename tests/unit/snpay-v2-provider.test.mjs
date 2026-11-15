@@ -100,7 +100,7 @@ function client(options = {}) {
     mock,
     value: createSnpayClient({
       merchantId: TEST_MERCHANT_ID,
-      apiBaseUrl: "https://www.snpay.cn",
+      apiBaseUrl: "https://api.snpay.cn",
       merchantPrivateKey: merchantKeys.privateKey,
       platformPublicKey: platformKeys.publicKey,
       fetchImpl: mock.fetchImpl,
@@ -210,7 +210,7 @@ test("unsafe script payment URL is rejected", () => {
 test("minimal official create response returns a signed entry and captured provider order, not paid evidence", async () => {
   const { value, mock } = client();
   const result = await value.createPayment(createInput);
-  assert.equal(mock.calls[0].url, "https://www.snpay.cn/api/pay/create");
+  assert.equal(mock.calls[0].url, "https://api.snpay.cn/api/pay/create");
   assert.equal(result.providerOrderNo, "SN_TEST_123");
   assert.equal(result.paymentType, "redirect");
   assert.deepEqual(Object.keys(result.payload).sort(), ["code", "trade_no", "pay_type", "pay_info", "timestamp", "sign", "sign_type"].sort());
@@ -316,7 +316,7 @@ test("create still rejects business errors and invalid signed timestamps", async
 test("paid query requires verified business response and normalizes paid", async () => {
   const { value, mock } = client();
   const result = await value.queryPayment(queryInput);
-  assert.equal(mock.calls[0].url, "https://www.snpay.cn/api/pay/query");
+  assert.equal(mock.calls[0].url, "https://api.snpay.cn/api/pay/query");
   assert.equal(result.paid, true);
   assert.equal(result.status, "paid");
   assert.equal(result.paidAt, "2026-10-06T02:59:00.000Z");
