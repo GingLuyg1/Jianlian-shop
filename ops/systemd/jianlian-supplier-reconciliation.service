@@ -1,0 +1,15 @@
+[Unit]
+Description=Jianlian supplier reconciliation worker (GET-only)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/www/jianlian-shop
+EnvironmentFile=/www/jianlian-shop/.env.production.local
+Environment=SUPPLIER_RECONCILIATION_ENABLED=true
+Environment=SUPPLIER_AUTO_PURCHASE_ENABLED=false
+ExecStart=/usr/bin/node /www/jianlian-shop/scripts/ops/supplier-reconciliation-worker.mjs
+NoNewPrivileges=true
+PrivateTmp=true
+
