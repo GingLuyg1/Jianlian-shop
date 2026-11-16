@@ -1,15 +1,22 @@
 [Unit]
 Description=Jianlian supplier reconciliation worker (GET-only)
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 User=root
+Group=root
 WorkingDirectory=/www/jianlian-shop
-EnvironmentFile=/www/jianlian-shop/.env.production.local
+# Provision separately as root:root 0600; never commit runtime credentials.
+EnvironmentFile=/etc/jianlian/supplier-reconciliation.env
 Environment=SUPPLIER_RECONCILIATION_ENABLED=true
 Environment=SUPPLIER_AUTO_PURCHASE_ENABLED=false
-ExecStart=/usr/bin/node /www/jianlian-shop/scripts/ops/supplier-reconciliation-worker.mjs
+TimeoutStartSec=90s
+ReadWritePaths=/run/lock
+ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-supplier-reconciliation.lock /bin/sh -c ': "$${JIANLIAN_RELEASE_DIR:?release directory required}"; export SUPPLIER_RECONCILIATION_ENABLED=true SUPPLIER_AUTO_PURCHASE_ENABLED=false; exec /usr/bin/node "$$JIANLIAN_RELEASE_DIR/scripts/ops/supplier-reconciliation-worker.mjs"'
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
-
+ProtectSystem=strict
+ProtectHome=true

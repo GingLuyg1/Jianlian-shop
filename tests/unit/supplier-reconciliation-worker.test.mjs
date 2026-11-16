@@ -83,3 +83,37 @@ test("systemd runtime forces reconciliation-only mode", async () => {
   assert.match(service, /Type=oneshot/);
   assert.match(timer, /OnUnitActiveSec=5min/);
 });
+
+test("systemd pins actual code to release env and uses a dedicated root-only env contract", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const service = await readFile("ops/systemd/jianlian-supplier-reconciliation.service", "utf8");
+  const exec = service.split(/\r?\n/).find(line => line.startsWith("ExecStart="));
+  assert.match(exec, /\$\$JIANLIAN_RELEASE_DIR\/scripts\/ops\/supplier-reconciliation-worker\.mjs/);
+  assert.match(exec, /\$\$\{JIANLIAN_RELEASE_DIR:\?/);
+  assert.doesNotMatch(exec, /\/www\/jianlian-shop\/scripts\//);
+  assert.match(service, /^EnvironmentFile=\/etc\/jianlian\/supplier-reconciliation\.env$/m);
+  assert.doesNotMatch(service, /\.env\.production\.local/);
+  assert.match(service, /root:root 0600/);
+  // Enforce the purchase guard at execution even if a runtime env has stale flags.
+  assert.match(exec, /export SUPPLIER_RECONCILIATION_ENABLED=true SUPPLIER_AUTO_PURCHASE_ENABLED=false;/);
+});
+
+test("systemd uses a nonblocking stable flock and bounded hardened runtime", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const service = await readFile("ops/systemd/jianlian-supplier-reconciliation.service", "utf8");
+  assert.match(service, /^ExecStart=\/usr\/bin\/flock -n -E 0 \/run\/lock\/jianlian-supplier-reconciliation\.lock /m);
+  for (const line of ["User=root", "Group=root", "Type=oneshot", "ReadWritePaths=/run/lock", "UMask=0077", "NoNewPrivileges=true", "PrivateTmp=true", "ProtectSystem=strict", "ProtectHome=true", "After=network-online.target", "Wants=network-online.target"]) {
+    assert.ok(service.split(/\r?\n/).includes(line), line);
+  }
+  const timeout = Number(service.match(/^TimeoutStartSec=(\d+)s$/m)?.[1]);
+  assert.ok(timeout > 0 && timeout <= 120);
+  assert.equal(service.match(/^ReadWritePaths=/gm)?.length, 1);
+});
+
+test("timer remains declarative without execution or auto-install commands", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const timer = await readFile("ops/systemd/jianlian-supplier-reconciliation.timer", "utf8");
+  assert.match(timer, /^OnBootSec=2min$/m);
+  assert.match(timer, /^OnUnitActiveSec=5min$/m);
+  assert.doesNotMatch(timer, /Exec(?:Start|Stop)|systemctl|enable\s+--now|sudo|\binstall\s+-/i);
+});
