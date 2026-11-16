@@ -34,6 +34,11 @@ test("unit allocation never mixes order items; mixed durable allocation rejected
 test("default production-like configuration never POSTs",async()=>{const f=fixture();await assert.rejects(purchaseDajuV2({db:f.db,client:f.client,candidate:f.candidate,env:{}}));assert.equal(f.posts(),0);});
 test("whole-order cap includes other frozen Daju item costs",async()=>{const f=fixture({aggregateCap:true});await assert.rejects(f.run(),/ORDER_CAP/);assert.equal(f.posts(),0);});
 test("frozen semantic drift on a paid-order replay fails closed",async()=>{const f=fixture();await f.run();f.candidate.binding.maxUnitCost="6.00";await assert.rejects(f.run(),/SEMANTIC_DRIFT/);assert.equal(f.posts(),1);});
+test("semantic replay survives PostgreSQL numeric JSON representation",async()=>{
+  const f=fixture();await f.run();const items=f.db.items;
+  f.db.items=async()=> (await items()).map(x=>({...x,quoted_unit_cost:Number(x.quoted_unit_cost),max_unit_cost:Number(x.max_unit_cost)}));
+  await f.run();assert.equal(f.posts(),1);assert.equal(f.deliveries(),1);
+});
 test("duplicate concurrent GET reconciliation delivers once without new POST",async()=>{
   const f=fixture({timeout:true});await f.run();Object.assign(f.attempt(),{status:"EXTERNAL_CREATED",external_invoice_id:"order-code"});
   await Promise.all([1,2].map(()=>reconcileDajuAttempt({db:f.db,client:{getOrder:f.client.getOrder},attempt:f.attempt()})));
