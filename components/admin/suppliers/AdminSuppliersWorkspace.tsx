@@ -59,8 +59,8 @@ type SupplierProduct = {
 
 type SupplierProductDetail = SupplierProduct & {
   description?: string | null;
-  minQty: number;
-  maxQty: number;
+  minQty: number | null;
+  maxQty: number | null;
   requiredInputs?: unknown;
   skuVariants?: unknown;
 };
@@ -629,11 +629,11 @@ export default function AdminSuppliersWorkspace() {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded-lg border border-slate-100 p-2.5">
                   <span className="text-slate-400">最小起购量：</span>
-                  <span className="font-medium text-slate-800">{detail.minQty}</span>
+                  <span className="font-medium text-slate-800">{detail.minQty ?? "—"}</span>
                 </div>
                 <div className="rounded-lg border border-slate-100 p-2.5">
                   <span className="text-slate-400">最大采购量：</span>
-                  <span className="font-medium text-slate-800">{detail.maxQty}</span>
+                  <span className="font-medium text-slate-800">{detail.maxQty ?? "—"}</span>
                 </div>
               </div>
 
