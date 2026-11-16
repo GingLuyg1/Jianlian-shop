@@ -73,7 +73,7 @@ test("two identical expired callbacks reuse one reconciliation without crediting
 
   const expiredBranch = callback.slice(
     callback.indexOf("if (expiredRechargePayment) {", callback.indexOf("if (session.status")),
-    callback.indexOf('const transition = assertPaymentStatusTransition(session.status, "paid")'),
+    callback.indexOf('const transition = assertPaymentStatusTransition(session.status, "paid",'),
   );
   assert.match(expiredBranch, /result: "manual_review"/);
   assert.match(expiredBranch, /differenceType: "provider_paid_local_unpaid"/);

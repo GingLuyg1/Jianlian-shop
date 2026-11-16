@@ -77,7 +77,7 @@ test("disabled or changed current channel settings cannot replace the historical
 test("expired paid recharge callback records manual review before completion", () => {
   const expiredBranch = callbackService.slice(
     callbackService.indexOf("if (expiredRechargePayment) {", callbackService.indexOf("if (session.status")),
-    callbackService.indexOf("const transition = assertPaymentStatusTransition(session.status, \"paid\")"),
+    callbackService.indexOf("const transition = assertPaymentStatusTransition(session.status, \"paid\","),
   );
   assert.match(expiredBranch, /differenceType: "provider_paid_local_unpaid"/);
   assert.match(expiredBranch, /result: "manual_review"/);
