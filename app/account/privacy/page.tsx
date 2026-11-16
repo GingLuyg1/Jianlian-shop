@@ -8,6 +8,8 @@ import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
 
 import { Button } from "@/components/ui/button";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
+import { cn } from "@/lib/utils";
 
 type PrivacySummary = {
   profile?: { email?: string | null; displayName?: string | null; accountStatus?: string | null; riskStatus?: string | null; createdAt?: string | null };
@@ -33,6 +35,7 @@ function makeClientRequestId(prefix: string) {
 }
 
 export default function AccountPrivacyPage() {
+  const { isMobile } = useMobileStorefront();
   const [summary, setSummary] = useState<PrivacySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -224,10 +227,10 @@ export default function AccountPrivacyPage() {
                       </ul>
                     </div>
                   ) : null}
-                  <div className="mt-4 flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)_auto] sm:items-center">
+                  <div className={cn("mt-4 flex flex-col gap-3", !isMobile && "sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)_auto] sm:items-center")}>
                     <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="注销原因或补充说明" />
                     <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20" value={confirmText} onChange={(event) => setConfirmText(event.target.value)} placeholder="输入：确认注销" />
-                    <Button className="w-full shrink-0 sm:w-auto" variant="destructive" onClick={requestDeletion} disabled={requesting}>
+                    <Button className={cn("w-full shrink-0", !isMobile && "sm:w-auto")} variant="destructive" onClick={requestDeletion} disabled={requesting}>
                       <Trash2 className="mr-2 h-4 w-4" />
                       {requesting ? "提交中..." : "提交注销申请"}
                     </Button>
@@ -236,7 +239,7 @@ export default function AccountPrivacyPage() {
               </div>
             </section>
 
-            <section className="grid gap-4 md:grid-cols-2">
+            <section className={cn("grid gap-4", !isMobile && "md:grid-cols-2")}>
               <div className="rounded-xl border p-5">
                 <h2 className="text-lg font-semibold">数据保留说明</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-500">账号注销后，订单、支付、余额流水、退款、交付摘要和审计记录会保留用于财务核对、争议处理和安全审计；邮箱、昵称、头像、电话和常用地址会匿名化。</p>

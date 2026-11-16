@@ -127,7 +127,7 @@ export default function AdminUsersPage() {
 
   return (
     <AdminPageShell variant="v2" title="用户管理" description="只读查询用户资料、账户摘要、关联业务、风险记录和后台审计历史。" actions={<Button className="h-11 sm:h-9" variant="outline" onClick={() => void loadUsers()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}>
-      <AdminListStats className="flex flex-nowrap overflow-x-auto gap-2.5 pb-1">
+      <AdminListStats className="!grid !grid-cols-3 md:!grid-cols-5 xl:!grid-cols-9 w-full divide-x divide-slate-100">
         <AdminListStat label="当前结果" value={count} />
         <AdminListStat label="本页正常账户" value={pageSummary.active} />
         <AdminListStat label="本页风险账户" value={pageSummary.risk} tone={pageSummary.risk ? "warning" : "neutral"} />

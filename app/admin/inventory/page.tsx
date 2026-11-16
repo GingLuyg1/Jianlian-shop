@@ -3,7 +3,7 @@ import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labe
 
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Ban, Copy, Eye, FileText, Loader2, PackageCheck, RefreshCw, RotateCcw, Trash2, Upload, X } from "lucide-react";
+import { AlertCircle, Ban, Check, ChevronsUpDown, Copy, Eye, FileText, Loader2, PackageCheck, RefreshCw, RotateCcw, Search, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -152,7 +153,8 @@ async function readJson<T>(response: Response, fallback: string): Promise<T> {
 export default function AdminInventoryPage() {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState("all");
+  const [primaryCatId, setPrimaryCatId] = useState("all");
+  const [secondaryCatId, setSecondaryCatId] = useState("all");
   const [summaryRows, setSummaryRows] = useState<InventorySummary[]>([]);
   const [batchRows, setBatchRows] = useState<InventoryBatch[]>([]);
   const [itemRows, setItemRows] = useState<InventoryItem[]>([]);
@@ -222,10 +224,22 @@ export default function AdminInventoryPage() {
     }
   }, [loadBatches, loadCategories, loadProducts, loadSummary, view]);
 
+  const primaryCategories = useMemo(() => categories.filter((c) => c.level === 1), [categories]);
+  const secondaryCategories = useMemo(() => {
+    if (primaryCatId === "all") return categories.filter((c) => c.level === 2);
+    return categories.filter((c) => c.level === 2 && c.parent_id === primaryCatId);
+  }, [categories, primaryCatId]);
+
   const filteredProductIds = useMemo(() => {
-    if (selectedCategoryId === "all") return null;
-    return new Set(products.filter((p) => p.category_id === selectedCategoryId).map((p) => p.id));
-  }, [products, selectedCategoryId]);
+    if (primaryCatId === "all" && secondaryCatId === "all") return null;
+    if (secondaryCatId !== "all") {
+      return new Set(products.filter((p) => p.category_id === secondaryCatId).map((p) => p.id));
+    }
+    const matchingCatIds = new Set(
+      categories.filter((c) => c.id === primaryCatId || c.parent_id === primaryCatId).map((c) => c.id)
+    );
+    return new Set(products.filter((p) => matchingCatIds.has(p.category_id)).map((p) => p.id));
+  }, [categories, primaryCatId, products, secondaryCatId]);
 
   const displayedSummaryRows = useMemo(() => {
     if (!filteredProductIds) return summaryRows;
@@ -392,16 +406,23 @@ export default function AdminInventoryPage() {
                 </Button>
               </div>
             </div>
-            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(180px,1.2fr)_160px_140px_84px]">
+            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(180px,1.2fr)_140px_140px_130px_72px]">
               <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); setBatchPage(1); }} placeholder="搜索商品、批次号或文件名" />
-              <Select value={selectedCategoryId} onValueChange={(value) => { setSelectedCategoryId(value); setPage(1); }}>
-                <SelectTrigger><SelectValue placeholder="商品分类" /></SelectTrigger>
+              <Select value={primaryCatId} onValueChange={(value) => { setPrimaryCatId(value); setSecondaryCatId("all"); setPage(1); }}>
+                <SelectTrigger><SelectValue placeholder="一级分类" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">全部分类</SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.level === 2 ? `└─ ${cat.name}` : cat.name}
-                    </SelectItem>
+                  <SelectItem value="all">全部一级分类</SelectItem>
+                  {primaryCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={secondaryCatId} onValueChange={(value) => { setSecondaryCatId(value); setPage(1); }}>
+                <SelectTrigger><SelectValue placeholder="二级分类" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部二级分类</SelectItem>
+                  {secondaryCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -413,7 +434,7 @@ export default function AdminInventoryPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" onClick={() => { setSearch(""); setStatus("all"); setSelectedCategoryId("all"); setPage(1); setBatchPage(1); }}>重置</Button>
+              <Button variant="outline" onClick={() => { setSearch(""); setStatus("all"); setPrimaryCatId("all"); setSecondaryCatId("all"); setPage(1); setBatchPage(1); }}>重置</Button>
             </div>
           </CardHeader>
 
@@ -521,12 +542,16 @@ export default function AdminInventoryPage() {
           <CardContent className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
             <div className="space-y-1.5">
               <Label>商品</Label>
-              <Select value={importProductId} onValueChange={(value) => { setImportProductId(value); setPreview(null); setImportResult(null); setImportValidation(null); }}>
-                <SelectTrigger><SelectValue placeholder="选择商品" /></SelectTrigger>
-                <SelectContent>
-                  {importableProducts.map((product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableProductSelect
+                products={importableProducts}
+                value={importProductId}
+                onChange={(value) => {
+                  setImportProductId(value);
+                  setPreview(null);
+                  setImportResult(null);
+                  setImportValidation(null);
+                }}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>内容类型</Label>
@@ -759,4 +784,75 @@ function BatchStatusBadge({ status }: { status: string }) {
     : status === "partial_failed" ? "bg-amber-50 text-amber-700 border-amber-200"
     : "bg-red-50 text-red-700 border-red-200";
   return <Badge variant="outline" className={cn("whitespace-nowrap", tone)}>{BATCH_STATUS_LABELS[status] ?? adminUnknownStatusLabel(status)}</Badge>;
+}
+
+function SearchableProductSelect({
+  products,
+  value,
+  onChange,
+}: {
+  products: { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selectedProduct = products.find((p) => p.id === value);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return products;
+    const lower = query.toLowerCase();
+    return products.filter((p) => p.name.toLowerCase().includes(lower));
+  }, [products, query]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-left"
+        >
+          <span className="truncate">{selectedProduct ? selectedProduct.name : "选择商品..."}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[320px] p-2" align="start">
+        <div className="flex items-center border-b px-2 pb-2">
+          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+          <input
+            className="flex h-8 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            placeholder="输入商品关键词搜索..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+          />
+        </div>
+        <div className="mt-2 max-h-60 overflow-y-auto space-y-1">
+          {filtered.length === 0 ? (
+            <p className="p-3 text-center text-xs text-muted-foreground">未找到匹配的商品</p>
+          ) : (
+            filtered.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                className={cn(
+                  "flex w-full items-center justify-between rounded px-2.5 py-1.5 text-xs text-left transition hover:bg-slate-100",
+                  product.id === value && "bg-orange-50 font-semibold text-primary"
+                )}
+                onClick={() => {
+                  onChange(product.id);
+                  setOpen(false);
+                }}
+              >
+                <span className="truncate">{product.name}</span>
+                {product.id === value ? <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }

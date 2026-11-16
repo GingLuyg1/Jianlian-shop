@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import TutorialImage from "./TutorialImage";
 import tutorial from "./TutorialsGlass.module.css";
 import selection from "@/components/ui/SelectionMotion.module.css";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
+import { cn } from "@/lib/utils";
 
 export const appleChapters = [
   ["apple-product", "商品说明"], ["apple-id-formats", "交付格式"], ["apple-store-login", "App Store 登录"],
@@ -64,6 +66,7 @@ export function AppleIdContents() {
 }
 
 export default function AppleIdTutorial() {
+  const { isMobile } = useMobileStorefront();
   return <div className={`${tutorial.appleArticle} space-y-6`}>
     <section aria-labelledby="apple-product" className={`${tutorial.appleCard} p-5 sm:p-6`}>
       <GuideHeading number="01" id="apple-product">商品说明</GuideHeading>
@@ -82,9 +85,9 @@ export default function AppleIdTutorial() {
         {formats.map(({ title, description, fields, example, hasOrderNotes }) => <article key={title} className={`${tutorial.appleCard} p-5 sm:p-6`}>
           <h3 className="font-semibold text-slate-900">{title}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-          <ol aria-label={`${title}字段顺序`} className="mt-4 flex flex-wrap gap-2 sm:grid sm:grid-cols-3 xl:grid-cols-6">
-            {fields.map((field, index) => <li key={field} className="flex min-w-[125px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700 sm:min-w-0 sm:flex-initial">
-              <span className={`${tutorial.appleBadge} h-5 w-5 shrink-0`}>{index + 1}</span><span className="whitespace-nowrap">{field}</span>
+          <ol aria-label={`${title}字段顺序`} className={cn("mt-4 grid gap-2", isMobile ? "!grid-cols-2" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-6")}>
+            {fields.map((field, index) => <li key={field} className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700">
+              <span className={`${tutorial.appleBadge} h-5 w-5 shrink-0`}>{index + 1}</span><span className="truncate">{field}</span>
             </li>)}
           </ol>
           <p className="mt-4 text-xs font-medium text-slate-500">格式示例 · 虚构账号</p>
@@ -156,6 +159,5 @@ export default function AppleIdTutorial() {
         <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">账号锁定、非活跃或 App Store 账户停用</summary><p className="mt-2">按屏幕提示选择对应的 <button type="button" onClick={() => scrollToChapter("apple-account-recovery")} className="text-primary underline">Apple 账户恢复入口</button>。</p></details>
       </div>
     </section>
-    <p className="px-2 text-xs text-slate-500">步骤配图来源：大橘 Apple ID 使用教程。</p>
   </div>;
 }

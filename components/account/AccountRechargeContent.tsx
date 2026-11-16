@@ -307,7 +307,7 @@ export default function AccountRechargeContent() {
                   <div className="flex items-center gap-2"><Info className="h-4 w-4 text-primary" /><h2 className="text-base font-semibold leading-6 whitespace-nowrap sm:text-[18px]">充值须知</h2></div>
                   <button type="button" onClick={openPublicSupport} className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-orange-200/70 bg-white/80 px-3 py-1.5 text-xs font-medium text-primary shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><Headphones className="h-3.5 w-3.5" /> 在线客服 <ArrowUpRight className="h-3 w-3" /></button>
                 </div>
-                <div className={cn("mt-3 grid gap-2.5 text-xs leading-5 text-slate-500 sm:mt-4 sm:gap-3 xl:grid-cols-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
+                <div className={cn("mt-3 grid gap-2.5 text-xs leading-5 text-slate-500 sm:mt-4 sm:gap-3", isMobile ? "!grid-cols-1" : "grid-cols-2 xl:grid-cols-4")}>
                   <Notice icon={FileText} title="付款说明"><span className="block">收款页无法显示，请关闭代理后重试。</span><span className="block">二维码超限，请关闭支付页重新获取。</span></Notice>
                   <Notice icon={WalletCards} title="到账与异常"><span className="block">支付成功后，等待1分钟再刷新页面。</span><span className="block">未到账，请发付款截图及用户名给客服。</span></Notice>
                   <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔上限2000元。</span><span className="block">超额请联系客服，USDT无限制。</span></Notice>
@@ -431,14 +431,14 @@ export default function AccountRechargeContent() {
                 <label className="mt-3 block text-sm font-medium">充值备注（可选）</label>
                 <div className="relative mt-1.5"><Input value={customerNote} maxLength={100} onChange={(event) => { setCustomerNote(event.target.value.slice(0, 100)); clientRequestIdRef.current = null; }} placeholder="填写必要的付款说明，最多 100 字" className="h-11 pr-16" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{customerNote.length}/100</span></div>
 
-                <div data-testid="recharge-summary" className={cn("mt-4 flex flex-col gap-4 rounded-2xl bg-gradient-to-r from-orange-50/80 to-orange-50/40 p-3.5 sm:p-4 xl:flex-row xl:items-center xl:justify-between", isMobile && "!gap-3.5")}>
+                <div data-testid="recharge-summary" className={cn("mt-4 flex flex-col gap-3.5 rounded-2xl bg-gradient-to-r from-orange-50/80 to-orange-50/40 p-3.5 sm:p-4", !isMobile && "xl:flex-row xl:items-center xl:justify-between")}>
                   <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-orange-200/60 text-xs text-slate-500">
-                    <SummaryItem icon={FileText} label={externalBuyerFee && summary?.fee === 0 ? "平台手续费（3%）" : "手续费"} value={feeDisplay} />
-                    <SummaryItem icon={Clock3} label="预计应付" value={payableDisplay} />
-                    <SummaryItem icon={WalletCards} label="预计到账金额" value={arrivalDisplay} />
+                    <SummaryItem icon={FileText} label={externalBuyerFee && summary?.fee === 0 ? "平台手续费（3%）" : "手续费"} value={feeDisplay} isMobile={isMobile} />
+                    <SummaryItem icon={Clock3} label="预计应付" value={payableDisplay} isMobile={isMobile} />
+                    <SummaryItem icon={WalletCards} label="预计到账金额" value={arrivalDisplay} isMobile={isMobile} />
                   </div>
                   <Button
-                    className="h-12 w-full shrink-0 rounded-xl bg-gradient-to-r from-orange-400 to-orange-600 px-6 text-sm shadow-md shadow-orange-200/60 xl:w-auto"
+                    className={cn("h-12 w-full shrink-0 rounded-xl bg-gradient-to-r from-orange-400 to-orange-600 px-6 text-sm shadow-md shadow-orange-200/60", !isMobile && "xl:w-auto")}
                     disabled={!canSubmit}
                     onClick={createRecharge}
                   >
@@ -495,8 +495,16 @@ function Notice({ icon: Icon, title, children, className }: { icon: LucideIcon; 
   return <div data-testid="recharge-notice-item" className={cn(channelGridStyles.noticeItem, "min-w-0 p-2.5 sm:p-3", className)}><div className="mb-1.5 flex items-center gap-2 sm:mb-2 sm:gap-2.5"><span className={cn(channelGridStyles.noticeIcon, "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-orange-500 sm:h-8 sm:w-8 sm:rounded-xl")}><Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" /></span><h3 className="text-xs font-semibold text-slate-800 sm:text-sm">{title}</h3></div><div className="text-[11px] leading-4 sm:text-xs sm:leading-5">{children}</div></div>;
 }
 
-function SummaryItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
-  return <div className="flex min-w-0 flex-col gap-2 px-2 first:pl-0 sm:flex-row sm:items-center sm:gap-3"><Icon className="hidden h-6 w-6 shrink-0 text-orange-500 lg:block" /><div className="min-w-0"><div className="text-[11px] leading-4">{label}</div><div data-summary-value className="mt-1 break-words text-sm font-semibold text-slate-900 sm:text-base">{value}</div></div></div>;
+function SummaryItem({ icon: Icon, label, value, isMobile }: { icon: LucideIcon; label: string; value: string; isMobile?: boolean }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 px-2 first:pl-0 sm:flex-row sm:items-center sm:gap-2.5">
+      {!isMobile ? <Icon className="hidden h-5 w-5 shrink-0 text-orange-500 lg:block" /> : null}
+      <div className="min-w-0">
+        <div className="text-[11px] leading-4 text-slate-500">{label}</div>
+        <div data-summary-value className="mt-0.5 break-words text-sm font-semibold text-slate-900 sm:text-base">{value}</div>
+      </div>
+    </div>
+  );
 }
 
 function createClientRequestId() {

@@ -326,6 +326,56 @@ html[data-mobile-preview="true"] [data-wheel-container="secondary"]::-webkit-scr
   grid-template-columns: minmax(0, 1fr) !important;
 }
 
+/* Prevent fixed header and body offset shift when Radix Sheet scroll-locks body */
+body[data-scroll-locked],
+html[data-scroll-locked] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Mobile Touch interaction: remove sticky hover, use active scale feedback */
+@media (hover: none), (pointer: coarse) {
+  button:hover, a:hover {
+    transform: none !important;
+  }
+  button:active, a:active {
+    transform: scale(0.97) !important;
+    transition: transform 60ms ease-out !important;
+  }
+}
+
+html[data-mobile-preview="true"] button:hover,
+html[data-mobile-preview="true"] a:hover {
+  transform: none !important;
+}
+html[data-mobile-preview="true"] button:active,
+html[data-mobile-preview="true"] a:active {
+  transform: scale(0.97) !important;
+  transition: transform 60ms ease-out !important;
+}
+
+/* Mobile studio 390px frame overrides for Account Recharge */
+html[data-mobile-preview="true"] [data-testid="recharge-notice-glass"] .grid,
+[data-mobile-active="true"] [data-testid="recharge-notice-glass"] .grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html[data-mobile-preview="true"] [data-testid="recharge-summary"],
+[data-mobile-active="true"] [data-testid="recharge-summary"] {
+  flex-direction: column !important;
+  align-items: stretch !important;
+}
+
+html[data-mobile-preview="true"] [data-testid="recharge-summary"] > button,
+[data-mobile-active="true"] [data-testid="recharge-summary"] > button {
+  width: 100% !important;
+}
+
+html[data-mobile-preview="true"] [data-testid="recharge-summary"] svg,
+[data-mobile-active="true"] [data-testid="recharge-summary"] svg {
+  display: none !important;
+}
+
 /* Hide desktop-only hero decorative card in mobile preview or viewport < 1280px so it never overlaps hero text */
 html[data-mobile-preview="true"] .hero-visual-desktop {
   display: none !important;

@@ -360,13 +360,15 @@ function SupabaseMallContentInner({
     productRequestIdRef.current = requestId;
 
     async function loadProducts() {
-      setIsLoadingProducts(true);
-      setCountReadyKey("");
+      if (products.length === 0) {
+        setIsLoadingProducts(true);
+        setCountReadyKey("");
+        setLoadedProductKey("");
+        setLoadedCategoryId("");
+        setProducts([]);
+        setTotal(0);
+      }
       setProductError("");
-      setLoadedProductKey("");
-      setLoadedCategoryId("");
-      setProducts([]);
-      setTotal(0);
       try {
         const primaryCategoryId = currentCategory.level === 1 ? currentCategory.id : currentCategory.parent_id ?? "";
         const secondaryCategoryId = currentCategory.level === 2 ? currentCategory.id : "";
@@ -826,15 +828,15 @@ function ProductPanel({
   return (
     <Card data-testid="storefront-product-list" data-catalog-route={pageRoute} data-catalog-page-ready={resultReady && !error ? "true" : "false"} aria-busy={isLoading} className="min-h-0 overflow-hidden lg:h-full">
       <CardContent className={productPanelContentClassName}>
-        <div ref={productListTopRef} className="mb-3 flex flex-col justify-between gap-2.5 sm:gap-3 xl:flex-row xl:items-start">
-          <div className="flex min-w-0 items-center justify-between gap-2 xl:block">
+        <div ref={productListTopRef} className={cn("mb-3 flex flex-col justify-between gap-2.5 sm:gap-3", !isMobile && "xl:flex-row xl:items-start")}>
+          <div className={cn("flex min-w-0 items-center justify-between gap-2", !isMobile && "xl:block")}>
             <h1 className={cn("min-h-7 truncate text-lg font-bold sm:text-xl", resultReady && "catalog-title-enter")}>{resultReady ? activeCategory.name : ""}</h1>
-            <div data-testid="catalog-product-result-bar" className="flex min-h-4 shrink-0 items-center gap-1.5 text-xs text-muted-foreground xl:mt-1.5 xl:gap-2">
+            <div data-testid="catalog-product-result-bar" className={cn("flex min-h-4 shrink-0 items-center gap-1.5 text-xs text-muted-foreground", !isMobile && "xl:mt-1.5 xl:gap-2")}>
               <span data-testid="catalog-product-result-dot" className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
-              <span>{`当前结果 ${resultText} 个商品`}</span>
+              <span>{`当前 ${resultText} 个商品`}</span>
             </div>
           </div>
-          <div className="flex w-full gap-2 xl:w-[760px]">
+          <div className={cn("flex w-full gap-2", !isMobile && "xl:w-[760px]")}>
             <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7d6355] sm:left-4" />
               <Input

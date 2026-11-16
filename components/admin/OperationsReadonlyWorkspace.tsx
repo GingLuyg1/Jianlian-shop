@@ -98,39 +98,53 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
   return <AdminPageShell variant="v2" title={title} description={kind === 'ledger' ? '查看全部历史余额流水，不提供调账或删除。' : kind === 'worker' ? workerHelpText : '这里只用于查看自动采购进度，不能在这里重新采购或强制完成。'}
     actions={<Button variant="outline" onClick={() => setRevision(v => v + 1)} disabled={loading}>刷新</Button>}>
     <AdminListSurface>
-      {kind !== 'worker' && <div className="grid shrink-0 grid-cols-1 gap-2.5 border-b p-3 sm:grid-cols-2 lg:grid-cols-4 items-center">
-        <Input
-          aria-label="搜索"
-          placeholder={kind === 'ledger' ? '邮箱 / 用户名 / 用户ID / 流水号' : '搜索商品 / 分类 / 订单号 / 采购任务号'}
-          value={filters.q ?? ''}
-          onChange={e => change('q', e.target.value)}
-        />
-        {kind === 'supplier-queue' && categories.length > 0 ? (
-          <select
-            aria-label="商品分类"
-            className="min-h-11 rounded-md border border-input bg-background px-3 text-sm"
-            value={filters.category_id ?? ''}
-            onChange={e => change('category_id', e.target.value)}
-          >
-            <option value="">全部商品分类</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        ) : null}
-        <select aria-label="状态" className="min-h-11 rounded-md border border-input bg-background px-3 text-sm" value={filters.status ?? ''} onChange={e => change('status', e.target.value)}>
-          <option value="">全部状态</option>{(kind === 'ledger' ? ['pending','completed','failed','cancelled'] : ['pending','processing','retryable_failed','permanent_failed','completed','uncertain','needs_input']).map(s => <option key={s} value={s}>{kind === 'ledger' ? statusLabel(s) : supplierStatusLabel(s)}</option>)}
-        </select>
-        <div className="flex items-center">
-          <AdminDateRangeFilter value={dateRange} onChange={onDateRangeChange} />
+      {kind !== 'worker' && <div className="border-b p-3.5 space-y-3 bg-slate-50/50">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-1 flex-wrap items-center gap-2.5 min-w-[320px]">
+            <div className="min-w-[240px] flex-1 max-w-md">
+              <Input
+                aria-label="搜索"
+                placeholder={kind === 'ledger' ? '邮箱 / 用户名 / 用户ID / 流水号' : '搜索商品 / 订单号 / 采购任务号'}
+                value={filters.q ?? ''}
+                onChange={e => change('q', e.target.value)}
+              />
+            </div>
+            {kind === 'supplier-queue' && categories.length > 0 ? (
+              <select
+                aria-label="商品分类"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={filters.category_id ?? ''}
+                onChange={e => change('category_id', e.target.value)}
+              >
+                <option value="">全部商品分类</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : null}
+            <select
+              aria-label="状态"
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+              value={filters.status ?? ''}
+              onChange={e => change('status', e.target.value)}
+            >
+              <option value="">全部状态</option>
+              {(kind === 'ledger' ? ['pending','completed','failed','cancelled'] : ['pending','processing','retryable_failed','permanent_failed','completed','uncertain','needs_input']).map(s => (
+                <option key={s} value={s}>{kind === 'ledger' ? statusLabel(s) : supplierStatusLabel(s)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex shrink-0 items-center">
+            <AdminDateRangeFilter value={dateRange} onChange={onDateRangeChange} />
+          </div>
         </div>
-        {kind === 'ledger' && <>
-          <select aria-label="业务类型" className="min-h-11 rounded-md border px-3" value={filters.business_type ?? ''} onChange={e => change('business_type', e.target.value)}><option value="">全部业务类型</option>{ledgerBusinessOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-          <select aria-label="方向" className="min-h-11 rounded-md border px-3" value={filters.direction ?? ''} onChange={e => change('direction', e.target.value)}><option value="">全部方向</option><option value="credit">余额增加</option><option value="debit">余额扣减</option></select>
-          <select aria-label="币种" className="min-h-11 rounded-md border px-3" value={filters.currency ?? ''} onChange={e => change('currency', e.target.value)}><option value="">全部币种</option><option value="CNY">人民币（CNY）</option><option value="USDT">USDT</option></select>
-          <div className="flex gap-2"><Input aria-label="最小金额" placeholder="最小金额" value={filters.min_amount ?? ''} onChange={e => change('min_amount', e.target.value)} /><Input aria-label="最大金额" placeholder="最大金额" value={filters.max_amount ?? ''} onChange={e => change('max_amount', e.target.value)} /></div>
-        </>}
-        <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-4">{operationsDateFilterHelp}</p>
+        {kind === 'ledger' && <div className="flex flex-wrap gap-2.5">
+          <select aria-label="业务类型" className="h-10 rounded-md border px-3 text-sm" value={filters.business_type ?? ''} onChange={e => change('business_type', e.target.value)}><option value="">全部业务类型</option>{ledgerBusinessOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+          <select aria-label="方向" className="h-10 rounded-md border px-3 text-sm" value={filters.direction ?? ''} onChange={e => change('direction', e.target.value)}><option value="">全部方向</option><option value="credit">余额增加</option><option value="debit">余额扣减</option></select>
+          <select aria-label="币种" className="h-10 rounded-md border px-3 text-sm" value={filters.currency ?? ''} onChange={e => change('currency', e.target.value)}><option value="">全部币种</option><option value="CNY">人民币（CNY）</option><option value="USDT">USDT</option></select>
+          <div className="flex gap-2"><Input aria-label="最小金额" placeholder="最小金额" className="h-10 w-28" value={filters.min_amount ?? ''} onChange={e => change('min_amount', e.target.value)} /><Input aria-label="最大金额" placeholder="最大金额" className="h-10 w-28" value={filters.max_amount ?? ''} onChange={e => change('max_amount', e.target.value)} /></div>
+        </div>}
+        <p className="text-xs text-slate-400">{operationsDateFilterHelp}</p>
       </div>}
       <AdminTableViewport>
         {loading ? <p role="status" className="p-6">正在读取…</p> : error ? <div role="alert" className="p-6 text-red-700">{error}<Button variant="outline" className="ml-3" onClick={() => setRevision(v => v + 1)}>重试读取</Button></div>

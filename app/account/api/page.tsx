@@ -82,7 +82,7 @@ export default function AccountApiPage() {
       </div>
 
       <div role="tabpanel" id={`account-api-panel-${activeTab}`} aria-labelledby={`account-api-tab-${activeTab}`} tabIndex={0} className="min-w-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        {activeTab === "overview" ? <div className="grid min-w-0 gap-4 xl:grid-cols-2"><UnavailableSection title="最近调用" icon={Activity} columns={["接口", "状态", "时间"]} message="接口调用暂未开放" /><UnavailableSection title="最近 API 订单" icon={ReceiptText} columns={["商品", "金额", "状态"]} message="API 订单暂未开放" /></div>
+        {activeTab === "overview" ? <div className={cn("grid min-w-0 gap-4", isMobile ? "!grid-cols-1" : "xl:grid-cols-2")}><UnavailableSection title="最近调用" icon={Activity} columns={["接口", "状态", "时间"]} message="接口调用暂未开放" /><UnavailableSection title="最近 API 订单" icon={ReceiptText} columns={["商品", "金额", "状态"]} message="API 订单暂未开放" /></div>
           : activeTab === "calls" ? <UnavailableSection title="调用记录" icon={Activity} columns={["接口", "状态", "时间"]} message="调用记录暂未开放" />
           : activeTab === "orders" ? <UnavailableSection title="API 订单" icon={ReceiptText} columns={["商品", "金额", "状态"]} message="API 订单暂未开放" />
           : <UnavailableSection title="安全设置" icon={ShieldCheck} message="API 安全设置暂未开放" />}

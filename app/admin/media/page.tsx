@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, CheckCircle2, Copy, ImageIcon, RefreshCcw, RefreshCw, Search, Upload } from "lucide-react";
+import { CheckCircle2, Copy, ImageIcon, RefreshCcw, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -212,20 +212,20 @@ export default function AdminMediaPage() {
     }
   }
 
-  async function archiveAsset(asset: MediaAsset) {
-    if (!window.confirm("确认归档这个未引用资源？归档前会再次检查业务引用。")) return;
+  async function deleteAsset(asset: MediaAsset) {
+    if (!window.confirm(`确定要直接删除媒体文件“${asset.original_name || asset.storage_path}”吗？删除后将无法恢复。`)) return;
     try {
       const response = await fetch("/api/admin/media", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetId: asset.id, action: "archive" }),
+        body: JSON.stringify({ assetId: asset.id, action: "delete" }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "归档失败");
-      toast.success("资源已归档");
+      if (!response.ok) throw new Error(payload.error || "删除失败");
+      toast.success("资源已直接删除");
       await loadAssets();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "归档失败");
+      toast.error(err instanceof Error ? err.message : "删除失败");
     }
   }
 
@@ -331,7 +331,7 @@ export default function AdminMediaPage() {
                       <div className="flex justify-center gap-2 whitespace-nowrap">
                         <Button variant="outline" size="icon" onClick={() => reconcileSingleAsset(asset)} title="检测数据库实际引用并校准状态"><CheckCircle2 className="h-4 w-4 text-sky-600" /></Button>
                         <Button variant="outline" size="icon" onClick={() => copyUrl(asset)} title="复制地址"><Copy className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon" onClick={() => archiveAsset(asset)} disabled={asset.status === "active"} title={asset.status === "active" ? "使用中资源不可归档" : "归档未引用资源"}><Archive className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon" className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => deleteAsset(asset)} title="直接删除媒体文件"><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </td>
                   </tr>
