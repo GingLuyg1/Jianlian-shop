@@ -16,7 +16,7 @@ test("unified Bitrefill and KuajingZy admin entries remain read-only", () => {
   assert.match(ui, /code: "kuajingzy"/);
   assert.match(bitrefill, /purchaseEnabled: false/);
   assert.match(kuajingzy, /purchaseEnabled: false/);
-  assert.match(registry, /purchase: "release_gated"/);
+  assert.match(registry, /purchase: false[\s\S]*productionWiring: "release_gated"/);
   assert.match(registry, /kuajingzy:[\s\S]*purchase: false/);
 
   assert.doesNotMatch(combined, /\.purchase\s*\(/);
