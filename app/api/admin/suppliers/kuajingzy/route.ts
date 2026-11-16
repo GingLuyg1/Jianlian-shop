@@ -30,6 +30,9 @@ function mapProduct(raw: unknown) {
     { domain: "mall", items: [raw] },
     { provenance: "authenticated_catalog", fieldMap: { stock: "stock", deliveryMethod: "delivery" } },
   ).items[0];
+  if (!normalized.identityComplete || !normalized.productId || !normalized.name) {
+    throw new Error("KUAJINGZY_CATALOG_ITEM_IDENTITY_UNVERIFIED");
+  }
   const stockValue = normalized.observed.stock?.value;
   return {
     id: normalized.productId,
@@ -116,8 +119,8 @@ export async function GET(request: Request) {
           ...mapProduct(items[0]),
           isSku: false,
           description: null,
-          minQty: 1,
-          maxQty: 1,
+          minQty: null,
+          maxQty: null,
           specs: [],
           skuVariants: [],
           requiredInputs: [],
