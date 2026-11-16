@@ -22,9 +22,11 @@ test("supplier operations UI uses existing admin APIs without changing fulfillme
   assert.match(supplierWorkspace, /<AdminPageShell/);
 
   assert.match(uiRegistry, /adminEndpoint: "\/api\/admin\/suppliers\/daju"/);
+  assert.match(uiRegistry, /adminEndpoint: "\/api\/admin\/suppliers\/bitrefill"/);
+  assert.match(uiRegistry, /adminEndpoint: "\/api\/admin\/suppliers\/kuajingzy"/);
   assert.match(supplierWorkspace, /activeSupplier\.adminEndpoint}\?resource=balance/);
   assert.match(supplierWorkspace, /activeSupplier\.adminEndpoint}\?resource=products/);
-  assert.match(supplierWorkspace, /activeSupplier\.adminEndpoint}\?resource=product&id=\$\{productId\}/);
+  assert.match(supplierWorkspace, /activeSupplier\.adminEndpoint}\?resource=product&id=\$\{encodeURIComponent\(String\(productId\)\)\}/);
   assert.match(supplierWorkspace, /supplierUiRegistry\.map/);
   assert.doesNotMatch(browserSources, /ai\.hanfolk\.xyz/i);
   assert.doesNotMatch(browserSources, /X-API-Key|DAJU_API_KEY|process\.env/i);
