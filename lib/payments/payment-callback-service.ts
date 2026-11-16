@@ -212,7 +212,13 @@ export async function handlePaymentCallback(request: Request, routeChannel?: str
       return observedResponse(providerResponse(callbackProvider, { ok: true, message: latePaymentMessage }, { ok: true, manualReview: true }), observation, { processResult: "processing_failed", httpStatus: 200 });
     }
 
-    const transition = assertPaymentStatusTransition(session.status, "paid");
+    const allowExpiredRechargeRecovery = parsed.status === "paid"
+      && String(session.business_type) === "recharge"
+      && String(session.status) === "expired"
+      && !expiredRechargePayment;
+    const transition = assertPaymentStatusTransition(session.status, "paid", {
+      allowReconciliationRecovery: allowExpiredRechargeRecovery,
+    });
     if (!transition.ok) {
       await updateCallbackLog(service, logId, "processing_failed", transition.message);
       await recordCallbackReconciliationIssue(service, {
