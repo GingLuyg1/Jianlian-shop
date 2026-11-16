@@ -18,3 +18,7 @@ export type DajuClient = {
   purchase(input: DajuPurchaseInput): Promise<DajuOrder>;
   getOrder(orderCode: string): Promise<DajuOrder>;
 };
+
+export type DajuV2Client = Omit<DajuClient, "purchase"> & {
+  purchase(input: DajuPurchaseInput): Promise<Pick<DajuOrder, "orderCode">>;
+};

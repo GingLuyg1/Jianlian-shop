@@ -26,6 +26,17 @@ const handler=load("lib/providers/daju/fulfillment.ts",{"./client":client,"./pur
 const router=load("lib/providers/core/supplier-router.ts",{"../daju/fulfillment":handler,"./supplier-router-core.mjs":routerCore,"../bitrefill/pin-runtime.mjs":{getBitrefillPinHandler:()=>null},"../bitrefill/production-server":{ensureBitrefillProductionRuntime(){throw Error("BITREFILL_NOT_ALLOWED")}}});
 const delivery=load("lib/delivery/delivery-service.ts",{"@/lib/providers/core/supplier-router":router,"./local-stock-priority.mjs":local});
 
+test("V2 purchase reference returns before any implicit GET",async()=>{
+  const requests=[];
+  const c=clientCore.createDajuHttpClient({baseUrl:"https://supplier.example.invalid",apiKey:"TEST_ONLY",durableReferenceOnly:true,fetchImpl:async(url,init)=>{
+    requests.push({url,method:init.method});
+    return new Response(JSON.stringify({order:{order_code:"reference-only",request_id:"jianlian:order:item"}}),{status:200});
+  }});
+  const result=await c.purchase({productId:10,quantity:1,requestId:"jianlian:order:item"});
+  assert.equal(result.orderCode,"reference-only");
+  assert.equal(requests.length,1);assert.equal(requests[0].method,"POST");
+});
+
 test("ordinary Daju client cannot grant legacy generic code purchase authority",async()=>{
   const key=process.env.DAJU_API_KEY;process.env.DAJU_API_KEY="TEST_ONLY_NOT_A_REAL_KEY";
   let dispatched=0;

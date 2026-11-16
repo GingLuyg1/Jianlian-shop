@@ -2,7 +2,7 @@ import "server-only";
 
 import { createDajuHttpClient, DajuClientCoreError } from "./client-core.mjs";
 import { DajuApiError } from "./errors";
-import type { DajuClient } from "./types";
+import type { DajuClient, DajuV2Client } from "./types";
 import { DAJU_V2_PURCHASE } from "./purchase-capability.mjs";
 import { purchasePolicy } from "./purchase-v2.mjs";
 
@@ -14,7 +14,9 @@ export function getDajuConfiguration() {
   return { baseUrl, apiKey, configured: Boolean(apiKey) } as const;
 }
 
-export function createDajuClient(input?: { fetchImpl?: typeof fetch; timeoutMs?: number; purchaseCapability?: symbol }): DajuClient {
+export function createDajuClient(input: { fetchImpl?: typeof fetch; timeoutMs?: number; purchaseCapability: typeof DAJU_V2_PURCHASE }): DajuV2Client;
+export function createDajuClient(input?: { fetchImpl?: typeof fetch; timeoutMs?: number }): DajuClient;
+export function createDajuClient(input?: { fetchImpl?: typeof fetch; timeoutMs?: number; purchaseCapability?: symbol }): DajuClient | DajuV2Client {
   const configuration = getDajuConfiguration();
   if (!configuration.configured) {
     throw new DajuApiError({ kind: "configuration", code: "DAJU_CONFIGURATION_MISSING", message: "大橘AI供应商尚未配置" });
@@ -30,7 +32,7 @@ export function createDajuClient(input?: { fetchImpl?: typeof fetch; timeoutMs?:
       if (input?.purchaseCapability !== DAJU_V2_PURCHASE) throw new Error("DAJU_V2_REQUIRED");
       const orderId = request.requestId.split(":")[1];
       purchasePolicy(process.env, orderId);
-      return client.purchase(request);
+      return createDajuHttpClient({baseUrl:configuration.baseUrl,apiKey:configuration.apiKey,fetchImpl:input?.fetchImpl,timeoutMs:input?.timeoutMs,durableReferenceOnly:true}).purchase(request);
     } };
   } catch (error) {
     if (error instanceof DajuClientCoreError) {
