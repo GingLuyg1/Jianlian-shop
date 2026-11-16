@@ -15,7 +15,8 @@ test("supplier capability registry exposes integrated providers without widening
   assert.equal(canSupplierAutoPurchase("daju"), true);
 
   assert.equal(bitrefill.capabilities.catalog, true);
-  assert.equal(bitrefill.capabilities.purchase, "release_gated");
+  assert.equal(bitrefill.capabilities.purchase, false);
+  assert.equal(bitrefill.capabilities.productionWiring, "release_gated");
   assert.equal(canSupplierAutoPurchase("bitrefill"), false);
 
   assert.equal(kuajingzy.capabilities.catalog, true);
