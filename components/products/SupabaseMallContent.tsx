@@ -606,23 +606,15 @@ function CategoryPanel({
     minScale: WHEEL_CONFIG.secondaryMinScale,
   });
   return (
-    <Card data-testid="storefront-secondary-categories" data-catalog-secondary-route={pageRoute} data-catalog-secondary-ready={!isLoading && !error && !showPlaceholder ? "true" : "false"} data-placeholder-phase={placeholderPhase} className="relative min-h-0 overflow-hidden lg:h-full">
-      <CardContent className="h-full min-h-0 p-3">
-        <div className={categoryPanelInnerClassName}>
+    <Card data-testid="storefront-secondary-categories" data-catalog-secondary-route={pageRoute} data-catalog-secondary-ready={!isLoading && !error && !showPlaceholder ? "true" : "false"} data-placeholder-phase={placeholderPhase} className={cn("relative min-h-0 overflow-hidden lg:h-full", isMobile && "!h-auto !border-orange-100/80 !shadow-xs !rounded-2xl sticky top-[58px] self-start max-h-[calc(100dvh-70px)] overflow-y-auto")}>
+      <CardContent className={cn("h-full min-h-0 p-3", isMobile && "!p-1")}>
+        <div className={cn(categoryPanelInnerClassName, isMobile && "!bg-transparent")}>
           {isMobile && categories.length > 0 ? (
-            <div className="mb-1.5 flex items-center justify-between px-1.5 pt-1">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                <LayoutGrid className="h-3.5 w-3.5 text-primary" />
-                <span>分类直达 ({categories.length})</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMobileExpanded((prev) => !prev)}
-                className="inline-flex items-center gap-1 rounded-lg border border-orange-200/80 bg-white px-2 py-1 text-[11px] font-medium text-primary shadow-sm"
-              >
-                <span>{mobileExpanded ? "收起列表" : "展开全部"}</span>
-                <ChevronDown className={cn("h-3 w-3 transition-transform", mobileExpanded && "rotate-180")} />
-              </button>
+            <div className="mb-1 flex flex-col items-center gap-0.5 border-b border-orange-100/80 pb-1 text-center">
+              <span className="text-[10px] font-bold text-slate-600">分类直达</span>
+              <span className="rounded-full bg-orange-100/80 px-1.5 py-0.2 text-[9px] font-semibold text-primary">
+                {categories.length}
+              </span>
             </div>
           ) : null}
           <div
@@ -631,30 +623,28 @@ function CategoryPanel({
             className={cn(
               categoryListScrollClassName,
               "relative",
-              isMobile && !mobileExpanded && "!flex !gap-2 !overflow-x-auto !overflow-y-hidden !space-y-0",
-              isMobile && mobileExpanded && "!grid !grid-cols-2 !gap-2 !overflow-visible !space-y-0"
+              isMobile && "!flex !flex-col !gap-1.5 !overflow-y-auto !overflow-x-hidden !space-y-0 !p-0.5"
             )}
           >
             {error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                分类读取失败。<button type="button" className="ml-2 font-semibold underline" onClick={onRetry}>重试</button>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-center text-xs text-red-700">
+                失败 <button type="button" className="font-semibold underline" onClick={onRetry}>重试</button>
               </div>
             ) : categories.length === 0 && !isLoading ? (
-              <div className="rounded-xl border border-dashed bg-white p-5 text-center text-sm text-muted-foreground">
-                暂无二级分类
+              <div className="rounded-xl border border-dashed bg-white p-3 text-center text-xs text-muted-foreground">
+                暂无分类
               </div>
             ) : categories.length > 0 ? categories.map((category, index) => (
-              <div key={category.id} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && mobileExpanded && "!shrink !w-full")}>
+              <div key={category.id} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && "!w-full")}>
                 <div className={animatedInitialRows.current || isMobile ? undefined : "catalog-enter-item"} style={animatedInitialRows.current || isMobile ? undefined : { animationDelay: `${Math.min(index * 30, 200)}ms` }}>
                   <CategoryButton
                     category={category}
                     active={visualSelectionId === category.id}
                     disabled={disabled}
                     isMobile={isMobile}
-                    mobileExpanded={mobileExpanded}
+                    mobileExpanded={false}
                     onIntent={() => onPrefetchCategory(category)}
                     onClick={() => {
-                      if (isMobile && mobileExpanded) setMobileExpanded(false);
                       centerItem(category.id);
                       onSelectCategory(category);
                     }}
@@ -662,7 +652,7 @@ function CategoryPanel({
                 </div>
               </div>
             )) : null}
-            {!mobileExpanded ? (
+            {!isMobile && !mobileExpanded ? (
               <SecondarySlidingIndicator containerRef={containerRef} activeId={selectedCategoryId} ready={selectionReady && !error} layoutKey={categories.map((category) => category.id).join(",")} />
             ) : null}
             {showPlaceholder ? (
@@ -709,6 +699,52 @@ function CategoryButton({
 }) {
   const Icon = category.displayIcon ? iconMap[category.displayIcon] : KeyRound;
 
+  if (isMobile) {
+    return (
+      <button
+        onMouseEnter={onIntent}
+        onFocus={onIntent}
+        type="button"
+        aria-pressed={active}
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          interactiveButtonClass,
+          "flex w-full flex-col items-center justify-center rounded-xl p-1 text-center transition-colors [-webkit-tap-highlight-color:transparent]",
+          active
+            ? "border border-orange-300 bg-orange-50 font-bold text-primary shadow-xs"
+            : "border border-transparent bg-white/70 text-slate-700 hover:bg-slate-50"
+        )}
+      >
+        {category.displayCode ? (
+          <span aria-hidden="true" className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-bold tracking-wide", active ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
+            {category.displayCode}
+          </span>
+        ) : category.displayImage ? (
+          <img
+            src={category.displayImage}
+            alt={category.name}
+            onError={(event) => setProductImageFallback(event.currentTarget)}
+            className={cn(
+              "h-7 w-7 shrink-0 rounded-lg bg-white object-cover",
+              active ? "ring-2 ring-primary" : "ring-1 ring-slate-200"
+            )}
+          />
+        ) : (
+          <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", active ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
+            <Icon className="h-4 w-4" />
+          </div>
+        )}
+        <span className={cn(
+          "mt-1 line-clamp-2 w-full break-words text-center text-[10px] leading-tight",
+          active ? "font-bold text-primary" : "font-medium text-slate-700"
+        )}>
+          {category.name}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <button
       onMouseEnter={onIntent}
@@ -721,16 +757,14 @@ function CategoryButton({
         interactiveButtonClass,
         selectionMotion.item,
         "flex items-center justify-between rounded-xl px-3 py-2 text-left disabled:cursor-default lg:w-full lg:px-3.5 lg:py-3 [-webkit-tap-highlight-color:transparent]",
-        isMobile && "!px-2.5 !py-2",
-        isMobile && mobileExpanded && "!w-full",
         active
-          ? cn("border border-transparent bg-transparent text-primary", isMobile && mobileExpanded && "!border-orange-300 !bg-orange-50/90")
+          ? "border border-transparent bg-transparent text-primary"
           : "border border-slate-100 bg-white/80 text-foreground lg:bg-transparent"
       )}
     >
       <div className="flex min-w-0 items-center gap-2 lg:gap-3">
         {category.displayCode ? (
-          <span aria-hidden="true" className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-bold tracking-wide text-primary lg:h-11 lg:w-11 lg:rounded-xl lg:text-sm", isMobile && "!h-7 !w-7 !text-xs")}>{category.displayCode}</span>
+          <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-bold tracking-wide text-primary lg:h-11 lg:w-11 lg:rounded-xl lg:text-sm">{category.displayCode}</span>
         ) : category.displayImage ? (
           <img
             src={category.displayImage}
@@ -738,18 +772,17 @@ function CategoryButton({
             onError={(event) => setProductImageFallback(event.currentTarget)}
             className={cn(
               "h-8 w-8 shrink-0 rounded-lg bg-white object-cover lg:h-11 lg:w-11 lg:rounded-xl",
-              isMobile && "!h-7 !w-7",
               active ? "ring-2 ring-primary/25" : "ring-1 ring-slate-200"
             )}
           />
         ) : (
-          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg lg:h-11 lg:w-11 lg:rounded-xl", isMobile && "!h-7 !w-7", active ? "bg-primary/15" : "bg-primary/10")}>
-            <Icon className={cn("h-4 w-4 text-primary lg:h-6 lg:w-6", isMobile && "!h-4 !w-4")} />
+          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg lg:h-11 lg:w-11 lg:rounded-xl", active ? "bg-primary/15" : "bg-primary/10")}>
+            <Icon className="h-4 w-4 text-primary lg:h-6 lg:w-6" />
           </div>
         )}
-        <div className={cn("line-clamp-2 break-words text-left text-xs sm:text-sm font-semibold leading-tight lg:text-base", isMobile && "!text-[12px]", isMobile && mobileExpanded ? "max-w-[110px]" : "max-w-[130px]")}>{category.name}</div>
+        <div className="line-clamp-2 break-words text-left text-xs sm:text-sm font-semibold leading-tight lg:text-base max-w-[130px]">{category.name}</div>
       </div>
-      <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block", isMobile && "!hidden")} />
+      <ChevronRight className="hidden h-5 w-5 shrink-0 lg:block" />
     </button>
   );
 }
