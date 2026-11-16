@@ -203,7 +203,7 @@ export default function AdminSuppliersWorkspace() {
       const response = await fetch(`${activeSupplier.adminEndpoint}?resource=product&id=${encodeURIComponent(String(productId))}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商商品详情读取失败");
-      setDetail(payload.product as DajuProductDetail);
+      setDetail(payload.product as SupplierProductDetail);
     } catch (error) {
       setDetailError(
         error && typeof error === "object" && "message" in error
