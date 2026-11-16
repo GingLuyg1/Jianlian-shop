@@ -34,12 +34,12 @@ function seed(itemId,rootId,req) {q(`insert into public.order_items(id,order_id,
 q(`insert into public.orders(id,order_no,user_id,payment_status,status) values('${order}','SYNTHETIC-${order}','${user}','paid','paid')`);
 seed(item,root,request);
 const units=[{fulfillment_request_id:root,order_item_id:item,unit_index:1,frozen_product_id:"10",frozen_package_id:null,frozen_currency:"CNY",frozen_face_value:null,quoted_unit_cost:"0.50",max_unit_cost:"1.00"}];
-const claim=JSON.parse(trusted(`select public.internal_supplier_purchase_claim('daju',${quote(request)},'${"a".repeat(64)}',${quote(JSON.stringify(units))}::jsonb)`));
-const id=claim.attempt_id;
-assert.equal(claim.result,"CLAIMED");
 const otherItem=randomUUID(),otherRoot=randomUUID();seed(otherItem,otherRoot,`jianlian:${order}:${otherItem}`);
 const mixed=[...units,{...units[0],fulfillment_request_id:otherRoot,order_item_id:otherItem}];
 assert.throws(()=>trusted(`select public.internal_supplier_purchase_claim('daju','mixed-test','${"b".repeat(64)}',${quote(JSON.stringify(mixed))}::jsonb)`),/DAJU_SINGLE_ORDER_ITEM_REQUIRED/);
+const claim=JSON.parse(trusted(`select public.internal_supplier_purchase_claim('daju',${quote(request)},'${"a".repeat(64)}',${quote(JSON.stringify(units))}::jsonb)`));
+const id=claim.attempt_id;
+assert.equal(claim.result,"CLAIMED");
 trusted(`select public.internal_supplier_purchase_transition('${id}','CLAIMED','SUBMITTING');select public.internal_supplier_purchase_transition('${id}','SUBMITTING','EXTERNAL_CREATED','synthetic-provider-order')`);
 const fp="c".repeat(64);
 const deliver=`select public.internal_supplier_purchase_deliver_daju_attempt('${id}',${quote(request)},'${token}','${fp}','SYNTHETIC_PRIVATE_SECRET')`;
