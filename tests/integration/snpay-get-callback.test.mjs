@@ -40,14 +40,25 @@ async function harness(_scenario, work) {
   finally {for (const k of names) {if (prior[k] === undefined) delete process.env[k]; else process.env[k] = prior[k];}}
 }
 
-for (const method of ["POST", "GET", "GET_REORDERED", "GET_INVALID", "GET_EMPTY"]) {
+for (const method of ["POST", "GET", "GET_REORDERED", "GET_INVALID", "GET_EMPTY", "EXPIRED_IN", "EXPIRED_LATE", "EXPIRED_MISSING", "EXPIRED_INVALID", "FAILED", "CLOSED", "PENDING"]) {
 test(`${method} callback traverses canonical handler without duplicate or invalid credit`, async () => harness({}, async h => {
 
+  const scenario = method.startsWith("EXPIRED") || ["FAILED","CLOSED","PENDING"].includes(method);
+  const completes = ["EXPIRED_IN", "PENDING"].includes(method);
+  if (scenario) {
+    h.data.sessions[0].status = method.startsWith("EXPIRED") ? "expired" : method.toLowerCase();
+    h.data.recharge.status = h.data.sessions[0].status;
+    h.data.balance = 32.20; h.data.ledger = [];
+    if (method.startsWith("EXPIRED")) {
+      h.data.sessions[0].expires_at = new Date(Date.now()-10000).toISOString();
+      h.data.recharge.expires_at = h.data.sessions[0].expires_at;
+    }
+  }
   const before = structuredClone(h.data), callbackLogs = [];
   let completionCalls = 0;
   const callbackClient = {
     from(table) {
-      assert.ok(["payment_sessions", "account_recharges", "payment_callback_logs"].includes(table));
+      assert.ok(["payment_sessions", "account_recharges", "payment_callback_logs", "payment_reconciliations"].includes(table));
       const rows = table === "payment_sessions" ? h.data.sessions
         : table === "account_recharges" ? [h.data.recharge] : callbackLogs;
       let patch = null, allowed = () => true;
@@ -55,6 +66,7 @@ test(`${method} callback traverses canonical handler without duplicate or invali
         in(_column, statuses) { allowed = x => statuses.includes(x.status); return b; },
         insert(value) { assert.equal(table, "payment_callback_logs"); callbackLogs.push({ id: "log-test", ...value }); return b; },
         update(value) { patch = value; return b; },
+        upsert() { return b; },
         maybeSingle: async () => ({ data: rows[0], error: null }),
         single: async () => ({ data: rows[0], error: null }),
         then(resolve) {
@@ -68,9 +80,9 @@ test(`${method} callback traverses canonical handler without duplicate or invali
   const callback = load("lib/payments/payment-callback-service.ts", {
     "@/lib/payments/callback-session-bootstrap.mjs": bootstrap,
     "@/lib/payments/callback-observability.mjs": observations,
-    "@/lib/payments/complete-payment-service": { completePayment: () => { completionCalls++; throw Error("DUPLICATE_CREDIT_FORBIDDEN"); } },
+    "@/lib/payments/complete-payment-service": { completePayment: () => { completionCalls++; assert.equal(completes,true); h.data.sessions[0].status="paid"; h.data.recharge.status="paid"; return {ok:true,idempotent:false,businessType:"recharge",businessId:"r-test"}; } },
     "@/lib/payments/payment-errors": { getSafeErrorMessage: () => "safe_error" },
-    "@/lib/payments/payment-status-machine": { assertPaymentStatusTransition: () => { throw Error("UNEXPECTED_TRANSITION"); } },
+    "@/lib/payments/payment-status-machine": load("lib/payments/payment-status-machine.ts", {}),
     "@/lib/payments/providers": {
       isPaymentChannelCode: c => c === "alipay", normalizeProviderPaymentStatus: s => s,
       resolveProviderForExistingSession: () => h.provider,
@@ -80,6 +92,9 @@ test(`${method} callback traverses canonical handler without duplicate or invali
   const payload = { pid: "900001", timestamp: String(Math.floor(Date.now()/1000)), sign_type: "RSA",
     out_trade_no: "PS_TEST_12345678", trade_no: "SN_TEST_123", type: "alipay", money: "1.00",
     trade_status: "TRADE_SUCCESS", endtime: new Date(Date.now()-30000).toISOString().replace(/\.\d{3}Z$/, "Z") };
+  if (method === "EXPIRED_LATE") payload.endtime = new Date(Date.now()-1000).toISOString().replace(/\.\d{3}Z$/, "Z");
+  if (method === "EXPIRED_MISSING") delete payload.endtime;
+  if (method === "EXPIRED_INVALID") payload.endtime = "invalid-time";
   payload.sign = core.createSnpaySignature(payload, keys.privateKey);
   const oldInfo = console.info; console.info = () => {};
   try {
@@ -91,11 +106,17 @@ test(`${method} callback traverses canonical handler without duplicate or invali
       ? new Request("https://site.example.invalid/api/payments/callback/alipay", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
       : new Request("https://site.example.invalid/api/payments/callback/alipay?" + query);
     const response = await callback.handlePaymentCallback(request, "alipay");
-    assert.equal(response.status, ["GET_INVALID", "GET_EMPTY"].includes(method) ? 400 : 200);
+    assert.equal(response.status, ["GET_INVALID", "GET_EMPTY", "FAILED", "CLOSED", "EXPIRED_INVALID", "EXPIRED_MISSING"].includes(method) ? 400 : 200);
     if (response.status === 200) assert.equal(await response.text(), "success");
   } finally { console.info = oldInfo; }
-  assert.equal(completionCalls, 0); assert.deepEqual(h.data, before);
-  if (method === "GET_INVALID") {
+  assert.equal(completionCalls, completes ? 1 : 0);
+  if (!completes && !scenario) assert.deepEqual(h.data, before);
+  if (!completes) { assert.equal(h.data.balance,before.balance); assert.deepEqual(h.data.ledger,before.ledger); assert.equal(h.data.sessions[0].status,before.sessions[0].status); }
+  else assert.equal(h.data.sessions[0].status,"paid");
+  if (scenario) {
+    if (completes) assert.equal(callbackLogs[0].process_result,"success");
+    else assert.ok(["processing_failed","signature_failed"].includes(callbackLogs[0].process_result));
+  } else if (method === "GET_INVALID") {
     assert.equal(callbackLogs[0].signature_result, "failed");
     assert.equal(callbackLogs[0].process_result, "signature_failed");
   } else if (method === "GET_EMPTY") {
