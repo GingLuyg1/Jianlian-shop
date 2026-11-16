@@ -606,12 +606,12 @@ function CategoryPanel({
     minScale: WHEEL_CONFIG.secondaryMinScale,
   });
   return (
-    <Card data-testid="storefront-secondary-categories" data-catalog-secondary-route={pageRoute} data-catalog-secondary-ready={!isLoading && !error && !showPlaceholder ? "true" : "false"} data-placeholder-phase={placeholderPhase} className={cn("relative min-h-0 overflow-hidden lg:h-full", isMobile && "!h-auto !border-orange-100/80 !shadow-xs !rounded-2xl sticky top-[58px] self-start max-h-[calc(100dvh-70px)] overflow-y-auto")}>
+    <Card data-testid="storefront-secondary-categories" data-catalog-secondary-route={pageRoute} data-catalog-secondary-ready={!isLoading && !error && !showPlaceholder ? "true" : "false"} data-placeholder-phase={placeholderPhase} className={cn("relative min-h-0 overflow-hidden lg:h-full", isMobile && "!border-orange-100/80 !shadow-xs !rounded-2xl sticky top-[58px] self-start min-h-[calc(100dvh-72px)] overflow-y-auto")}>
       <CardContent className={cn("h-full min-h-0 p-3", isMobile && "!p-1")}>
         <div className={cn(categoryPanelInnerClassName, isMobile && "!bg-transparent")}>
           {isMobile && categories.length > 0 ? (
             <div className="mb-1 flex flex-col items-center gap-0.5 border-b border-orange-100/80 pb-1 text-center">
-              <span className="text-[10px] font-bold text-slate-600">分类直达</span>
+              <span className="text-[10px] font-bold text-slate-600">分类</span>
               <span className="rounded-full bg-orange-100/80 px-1.5 py-0.2 text-[9px] font-semibold text-primary">
                 {categories.length}
               </span>
@@ -859,7 +859,7 @@ function ProductPanel({
   const resultText = resultReady ? String(total) : "/";
 
   return (
-    <Card data-testid="storefront-product-list" data-catalog-route={pageRoute} data-catalog-page-ready={resultReady && !error ? "true" : "false"} aria-busy={isLoading} className="min-h-0 overflow-hidden lg:h-full">
+    <Card data-testid="storefront-product-list" data-catalog-route={pageRoute} data-catalog-page-ready={resultReady && !error ? "true" : "false"} aria-busy={isLoading} className={cn("min-h-0 overflow-hidden lg:h-full", isMobile && "min-h-[calc(100dvh-72px)] !rounded-2xl")}>
       <CardContent className={productPanelContentClassName}>
         <div ref={productListTopRef} className={cn("mb-3 flex flex-col justify-between gap-2.5 sm:gap-3", !isMobile && "xl:flex-row xl:items-start")}>
           <div className={cn("flex min-w-0 items-center justify-between gap-2", !isMobile && "xl:block")}>

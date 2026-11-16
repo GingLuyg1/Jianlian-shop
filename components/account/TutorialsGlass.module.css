@@ -9,6 +9,7 @@
 .topicList[data-topic=apple-id] { --topic-index:2; }
 .topicList[data-topic=giffgaff] { --topic-index:3; }
 .topicList[data-topic=haha-sim] { --topic-index:4; }
+.topicList[data-topic=one-nz] { --topic-index:5; }
 .topicIndicator { width:100%; height:var(--topic-height); transform:translateY(calc(var(--topic-index) * (var(--topic-height) + var(--topic-gap)))); }
 .navItem { display:flex; width:100%; height:var(--topic-height); min-width:0; align-items:center; gap:10px; border-radius:18px; padding:0 12px; color:#665749; }
 .navItem[aria-current=true] { color:#ac5624; font-weight:600; }
@@ -31,6 +32,8 @@
 .subtopics .contentsLink[aria-current=page] { color:#ac5624; font-weight:600; }
 .subtopicIndicator { left:9px; width:calc(100% - 9px); height:36px; border-radius:12px; transform:translateY(0); }
 .subtopics[data-guide=keeper] .subtopicIndicator { transform:translateY(36px); }
+.subtopics[data-guide=binding] .subtopicIndicator { transform:translateY(36px); }
+.subtopics[data-guide=rates] .subtopicIndicator { transform:translateY(72px); }
 .chevron { width:15px; height:15px; transition:transform 240ms cubic-bezier(.22,1,.36,1); }
 [aria-expanded=true] > span > .chevron { transform:rotate(180deg); }
 .appleArticle { padding:12px 0 4px; }
