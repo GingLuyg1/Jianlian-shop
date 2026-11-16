@@ -7,5 +7,5 @@ export function getKuajingZyReadonlyRuntime() {
   if (!apiKey || process.env.NODE_DEBUG || process.env.NODE_DEBUG_NATIVE) {
     throw new Error("KUAJINGZY_READONLY_NOT_CONFIGURED");
   }
-  return createKuajingZyReadonlyClient({ apiKey, fetchImpl: fetch });
+  return createKuajingZyReadonlyClient({ apiKey, fetchImpl: fetch, onDiagnostics: undefined });
 }
