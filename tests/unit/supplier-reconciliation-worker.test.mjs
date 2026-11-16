@@ -8,25 +8,30 @@ function fixture({ status = "DELIVERED", queryError = false, attempts, rpcError 
   let selected;
   const rows = attempts ?? [{ id: "test-attempt", supplier: "daju", status: "EXTERNAL_CREATED", external_invoice_id: "test-order" }];
   const builder = {
-    select(fields) { assert.equal(fields, "id,supplier,status,external_invoice_id"); return this; },
+    select(fields) { assert.equal(fields, "id,supplier,status,external_invoice_id,logical_request_key"); return this; },
     in(field, values) { assert.equal(field, "status"); selected = values; return this; },
     async limit(n) { assert.equal(n, 100); return { data: rows, error: readError }; },
   };
   const service = {
-    from(table) { assert.equal(table, "supplier_purchase_attempts"); return builder; },
+    from(table) {
+      if (table === "supplier_purchase_attempts") return builder;
+      const b={then(resolve){return Promise.resolve({data:[{fulfillment_request_id:"root"}],error:null}).then(resolve)},select(){return b},eq(){return b},order:async()=>({data:[{order_item_id:"item",fulfillment_request_id:"root",frozen_product_id:"10",frozen_package_id:null,frozen_currency:"CNY",quoted_unit_cost:"1",max_unit_cost:"2"}],error:null}),single:async()=>({data:{request_id:"key",attempt_token:"token"},error:null})};
+      return b;
+    },
     async rpc(name, args) {
+      if (name === "internal_supplier_purchase_deliver_daju_attempt") return { data:{ok:true}, error:rpcError };
       assert.equal(name, "internal_supplier_purchase_record_evidence");
       assert.ok(allowed.includes(args.p_status));
       assert.match(args.p_result_class, /^[A-Z][A-Z0-9_]{0,99}$/);
       assert.match(args.p_safe_fingerprint, /^[0-9a-f]{64}$/);
       assert.deepEqual(Object.keys(args).sort(), ["p_attempt_id", "p_external_order_row_id", "p_status", "p_result_class", "p_safe_fingerprint", "p_checked_at"].sort());
-      calls.push(args); return { error: rpcError };
+      calls.push(args); return { data:{result:"RECORDED"}, error: rpcError };
     },
   };
   return { calls, queries, selected: () => selected, run: () => runSupplierReconciliation({ service, getOrder: async code => {
     queries.push(code);
     if (queryError) throw Error("SENSITIVE_ERROR_SENTINEL");
-    return { status, delivered: "SECRET_DELIVERY_SENTINEL", raw: { apiKey: "SECRET_KEY_SENTINEL" } };
+    return { status, orderCode:code, requestId:rows.find(x=>x.external_invoice_id===code)?.logical_request_key, productId:10,sku:null,quantity:1,unitPrice:"1",totalPrice:"1",delivered:["SECRET_DELIVERY_SENTINEL"], raw: { apiKey: "SECRET_KEY_SENTINEL" } };
   } }) };
 }
 
@@ -36,7 +41,7 @@ for (const [raw, expected] of Object.entries({ DELIVERED: "DELIVERED", SUCCEEDED
     const f = fixture({ status: raw });
     assert.equal(await f.run(), 1);
     assert.equal(f.calls[0].p_status, expected);
-    assert.equal(f.calls[0].p_result_class, expected === "DELIVERED" ? "PROVIDER_SUCCESS" : "PROVIDER_STATE");
+    assert.equal(f.calls[0].p_result_class, expected === "DELIVERED" ? "DAJU_AUTHORITATIVE_DELIVERED" : "PROVIDER_STATE");
     assert.doesNotMatch(JSON.stringify(f.calls), /SENTINEL|delivered|apiKey/);
   });
 }
@@ -70,13 +75,13 @@ test("Daju root reconciliation uses external_invoice_id only and skips missing p
 });
 test("read/RPC failures stop safely without exposing error contents", async () => {
   const f = fixture({ readError: true }); await assert.rejects(f.run(), /SUPPLIER_RECONCILIATION_READ_FAILED/); assert.equal(f.queries.length, 0);
-  await assert.rejects(fixture({ rpcError: true }).run(), /SUPPLIER_RECONCILIATION_EVIDENCE_WRITE_FAILED/);
+  await assert.rejects(fixture({ rpcError: true }).run(), /DAJU_V2_RPC_FAILED/);
 });
 
 
 test("worker source never calls provider purchase", async () => {
   const fs = await import("node:fs/promises");
-  const source = await fs.readFile("scripts/ops/supplier-reconciliation-worker.mjs", "utf8") + await fs.readFile("scripts/ops/supplier-reconciliation-runtime.mjs", "utf8");
+  const source = await fs.readFile("scripts/ops/supplier-reconciliation-worker.mjs", "utf8") + await fs.readFile("scripts/ops/supplier-reconciliation-runtime.mjs", "utf8") + await fs.readFile("lib/providers/daju/purchase-v2-store.mjs", "utf8");
   assert.match(source, /getOrder\(orderCode\)/);
   assert.doesNotMatch(source, /\.purchase\(/);
   assert.match(source, /SUPPLIER_AUTO_PURCHASE_ENABLED/);

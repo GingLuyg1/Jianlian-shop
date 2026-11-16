@@ -1,0 +1,43 @@
+name: Daju V2 isolated purchase-disabled contracts
+on:
+  pull_request:
+    paths:
+      - 'lib/providers/daju/**'
+      - 'scripts/ops/supplier-reconciliation*'
+      - 'scripts/ci/daju-v2-real-db.mjs'
+      - 'tests/integration/daju-v2*'
+      - 'supabase/migrations/*daju_v2*'
+      - '.github/workflows/daju-v2-isolated.yml'
+permissions:
+  contents: read
+jobs:
+  atomic-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jianlian_bitrefill_v13_db5_20261116
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CI: 'true'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: jianlian_bitrefill_v13_db5_20261116
+      SUPPLIER_AUTO_PURCHASE_ENABLED: 'false'
+      DAJU_AUTO_PURCHASE_MODE: disabled
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Runtime mocked-provider contracts
+        run: node --test tests/integration/daju-v2-orchestration.test.mjs
+      - name: Real disposable PostgreSQL delivery RPC
+        run: node scripts/ci/daju-v2-real-db.mjs

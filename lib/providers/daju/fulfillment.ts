@@ -3,6 +3,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createDajuClient } from "./client";
+import { purchaseDajuV2 } from "./purchase-v2.mjs";
+import { createDajuV2Store } from "./purchase-v2-store.mjs";
+import { DAJU_V2_PURCHASE } from "./purchase-capability.mjs";
 import { classifyDajuFulfillmentCandidate } from "./fulfillment-candidate.mjs";
 import { fulfillDajuCandidates, reconcileDajuExistingCandidate } from "./fulfillment-core.mjs";
 import {
@@ -172,12 +175,17 @@ export async function fulfillDajuOrderWithSupabase(service: SupabaseClient, orde
   if (candidates.length === 0) {
     return { handled: 0, fulfilled: 0, failed: 0, uncertain: 0, needsInput: 0 } satisfies DajuFulfillmentSummary;
   }
-  return fulfillDajuOrderItems({
-    store: { ...store, loadCandidates: async () => candidates },
-    client: createDajuClient(),
-    orderId,
-    triggerSource,
-  });
+  const summary = { handled: candidates.length, fulfilled: 0, failed: 0, uncertain: 0, needsInput: 0 };
+  const db = createDajuV2Store(service, store, triggerSource);
+  const client = createDajuClient({purchaseCapability: DAJU_V2_PURCHASE});
+  for (const candidate of candidates) {
+    try {
+      const result = await purchaseDajuV2({db,client,candidate});
+      if (result.fulfilled) summary.fulfilled++;
+      else summary.uncertain++;
+    } catch { summary.failed++; }
+  }
+  return summary;
 }
 
 export async function reconcileDajuExistingOrderWithSupabase(input: {
