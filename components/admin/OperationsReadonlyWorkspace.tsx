@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { format } from 'date-fns';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import { AdminListPagination, AdminListSurface, AdminTableViewport } from '@/components/admin/v2/AdminList';
+import { AdminDateRangeFilter, type DashboardDateFilterValue, getPresetDateRange } from '@/components/admin/dashboard/AdminDateRangeFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { listPagination } from '@/lib/admin/list-pagination.mjs';
@@ -65,6 +67,30 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
       .finally(() => { if (version.current === requestVersion) setLoading(false); });
     return () => { version.current++; controller.abort(); };
   }, [kind, filters, page, revision]);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [dateRange, setDateRange] = useState<DashboardDateFilterValue>(() => getPresetDateRange('7d'));
+
+  useEffect(() => {
+    if (kind === 'supplier-queue') {
+      fetch('/api/admin/inventory?mode=categories', { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((body) => {
+          if (Array.isArray(body?.data)) setCategories(body.data);
+        })
+        .catch(() => {});
+    }
+  }, [kind]);
+
+  const onDateRangeChange = (next: DashboardDateFilterValue) => {
+    setDateRange(next);
+    setFilters((old) => ({
+      ...old,
+      start: format(next.from, 'yyyy-MM-dd'),
+      end: format(next.to, 'yyyy-MM-dd'),
+    }));
+    setPage(1);
+  };
+
   const change = (key: string, next: string) => { setFilters(old => ({ ...old, [key]: next })); setPage(1); };
   const columns = kind === 'ledger' ? ledgerColumns : queueColumns;
   const title = kind === 'worker' ? '自动任务运行状态' : kind === 'ledger' ? '全历史余额流水' : '供应商自动采购任务';
@@ -72,13 +98,32 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
   return <AdminPageShell variant="v2" title={title} description={kind === 'ledger' ? '查看全部历史余额流水，不提供调账或删除。' : kind === 'worker' ? workerHelpText : '这里只用于查看自动采购进度，不能在这里重新采购或强制完成。'}
     actions={<Button variant="outline" onClick={() => setRevision(v => v + 1)} disabled={loading}>刷新</Button>}>
     <AdminListSurface>
-      {kind !== 'worker' && <div className="grid shrink-0 grid-cols-1 gap-2 border-b p-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Input aria-label="搜索" placeholder={kind === 'ledger' ? '邮箱 / 用户名 / 用户ID / 流水号' : '订单号 / 采购任务号 / 上游平台订单号'} value={filters.q ?? ''} onChange={e => change('q', e.target.value)} />
-        <select aria-label="状态" className="min-h-11 rounded-md border px-3" value={filters.status ?? ''} onChange={e => change('status', e.target.value)}>
+      {kind !== 'worker' && <div className="grid shrink-0 grid-cols-1 gap-2.5 border-b p-3 sm:grid-cols-2 lg:grid-cols-4 items-center">
+        <Input
+          aria-label="搜索"
+          placeholder={kind === 'ledger' ? '邮箱 / 用户名 / 用户ID / 流水号' : '搜索商品 / 分类 / 订单号 / 采购任务号'}
+          value={filters.q ?? ''}
+          onChange={e => change('q', e.target.value)}
+        />
+        {kind === 'supplier-queue' && categories.length > 0 ? (
+          <select
+            aria-label="商品分类"
+            className="min-h-11 rounded-md border border-input bg-background px-3 text-sm"
+            value={filters.category_id ?? ''}
+            onChange={e => change('category_id', e.target.value)}
+          >
+            <option value="">全部商品分类</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        ) : null}
+        <select aria-label="状态" className="min-h-11 rounded-md border border-input bg-background px-3 text-sm" value={filters.status ?? ''} onChange={e => change('status', e.target.value)}>
           <option value="">全部状态</option>{(kind === 'ledger' ? ['pending','completed','failed','cancelled'] : ['pending','processing','retryable_failed','permanent_failed','completed','uncertain','needs_input']).map(s => <option key={s} value={s}>{kind === 'ledger' ? statusLabel(s) : supplierStatusLabel(s)}</option>)}
         </select>
-        <Input aria-label="开始日期（范围见说明）" type="date" value={filters.start ?? ''} onChange={e => change('start', e.target.value)} />
-        <Input aria-label="结束日期（范围见说明）" type="date" value={filters.end ?? ''} onChange={e => change('end', e.target.value)} />
+        <div className="flex items-center">
+          <AdminDateRangeFilter value={dateRange} onChange={onDateRangeChange} />
+        </div>
         {kind === 'ledger' && <>
           <select aria-label="业务类型" className="min-h-11 rounded-md border px-3" value={filters.business_type ?? ''} onChange={e => change('business_type', e.target.value)}><option value="">全部业务类型</option>{ledgerBusinessOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
           <select aria-label="方向" className="min-h-11 rounded-md border px-3" value={filters.direction ?? ''} onChange={e => change('direction', e.target.value)}><option value="">全部方向</option><option value="credit">余额增加</option><option value="debit">余额扣减</option></select>

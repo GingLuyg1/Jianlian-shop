@@ -224,10 +224,10 @@ export default function AccountPrivacyPage() {
                       </ul>
                     </div>
                   ) : null}
-                  <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,180px)_auto]">
-                    <input className="rounded-lg border px-3 py-2 text-sm" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="注销原因或补充说明" />
-                    <input className="rounded-lg border px-3 py-2 text-sm" value={confirmText} onChange={(event) => setConfirmText(event.target.value)} placeholder="输入：确认注销" />
-                    <Button variant="destructive" onClick={requestDeletion} disabled={requesting}>
+                  <div className="mt-4 flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)_auto] sm:items-center">
+                    <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="注销原因或补充说明" />
+                    <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20" value={confirmText} onChange={(event) => setConfirmText(event.target.value)} placeholder="输入：确认注销" />
+                    <Button className="w-full shrink-0 sm:w-auto" variant="destructive" onClick={requestDeletion} disabled={requesting}>
                       <Trash2 className="mr-2 h-4 w-4" />
                       {requesting ? "提交中..." : "提交注销申请"}
                     </Button>

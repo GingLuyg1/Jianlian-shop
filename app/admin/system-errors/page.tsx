@@ -93,11 +93,41 @@ export default function AdminSystemErrorsPage() {
     finally { setSaving(false); }
   }
 
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const timer = setInterval(() => {
+      void load();
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, load]);
+
   const pages = Math.max(1, Math.ceil(count / pageSize));
   const reset = () => { setLevel(""); setCategory(""); setStatus(""); setRequestId(""); setBusinessId(""); setStartAt(""); setEndAt(""); setPage(1); };
 
   return (
-    <AdminPageShell variant="v2" title="异常中心" description="查看经过脱敏聚合的系统异常，并使用现有接口记录调查、解决或忽略状态。" actions={<Button className="h-11 sm:h-9" variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}>
+    <AdminPageShell
+      variant="v2"
+      title="异常中心"
+      description="实时查看经过脱敏聚合的系统异常，并记录调查、解决或忽略状态。"
+      actions={(
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={autoRefresh ? "default" : "outline"}
+            onClick={() => setAutoRefresh((v) => !v)}
+            title={autoRefresh ? "点击关闭自动刷新" : "开启后每 30 秒自动拉取最新异常"}
+          >
+            {autoRefresh ? "● 实时轮询中 (30s)" : "开启实时刷新"}
+          </Button>
+          <Button className="h-11 sm:h-9" variant="outline" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
+            {loading ? "刷新中..." : "刷新"}
+          </Button>
+        </div>
+      )}
+    >
       <AdminListSurface>
         <AdminFilterBar className="grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
           <FilterSelect value={level} onChange={(value) => { setLevel(value); setPage(1); }} label="全部级别" options={levels} />

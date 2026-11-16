@@ -3,7 +3,7 @@ import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labe
 
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Ban, Eye, FileText, Loader2, PackageCheck, RefreshCw, RotateCcw, Upload, X } from "lucide-react";
+import { AlertCircle, Ban, Copy, Eye, FileText, Loader2, PackageCheck, RefreshCw, RotateCcw, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +26,15 @@ type InventoryProduct = {
   slug: string;
   delivery_type: string | null;
   status: string | null;
+  category_id?: string | null;
+};
+
+type CategoryOption = {
+  id: string;
+  name: string;
+  slug: string;
+  level: number;
+  parent_id?: string | null;
 };
 
 type InventorySummary = {
@@ -142,6 +151,8 @@ async function readJson<T>(response: Response, fallback: string): Promise<T> {
 
 export default function AdminInventoryPage() {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [summaryRows, setSummaryRows] = useState<InventorySummary[]>([]);
   const [batchRows, setBatchRows] = useState<InventoryBatch[]>([]);
   const [itemRows, setItemRows] = useState<InventoryItem[]>([]);
@@ -168,9 +179,16 @@ export default function AdminInventoryPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const pageSize = 20;
-  const summaryTotal = summaryRows[0]?.total_rows ?? 0;
-  const batchTotal = batchRows[0]?.total_rows ?? 0;
-  const itemTotal = itemRows[0]?.total_rows ?? 0;
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/inventory?mode=categories", { cache: "no-store" });
+      const payload = await readJson<{ data: CategoryOption[] }>(response, "分类列表加载失败");
+      setCategories(payload.data ?? []);
+    } catch {
+      // 分类加载失败降级
+    }
+  }, []);
 
   const loadProducts = useCallback(async () => {
     const response = await fetch("/api/admin/inventory?mode=products", { cache: "no-store" });
@@ -196,13 +214,27 @@ export default function AdminInventoryPage() {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadProducts(), view === "summary" ? loadSummary() : loadBatches()]);
+      await Promise.all([loadCategories(), loadProducts(), view === "summary" ? loadSummary() : loadBatches()]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "库存数据加载失败");
     } finally {
       setLoading(false);
     }
-  }, [loadBatches, loadProducts, loadSummary, view]);
+  }, [loadBatches, loadCategories, loadProducts, loadSummary, view]);
+
+  const filteredProductIds = useMemo(() => {
+    if (selectedCategoryId === "all") return null;
+    return new Set(products.filter((p) => p.category_id === selectedCategoryId).map((p) => p.id));
+  }, [products, selectedCategoryId]);
+
+  const displayedSummaryRows = useMemo(() => {
+    if (!filteredProductIds) return summaryRows;
+    return summaryRows.filter((row) => filteredProductIds.has(row.product_id));
+  }, [summaryRows, filteredProductIds]);
+
+  const summaryTotal = displayedSummaryRows[0]?.total_rows ?? displayedSummaryRows.length;
+  const batchTotal = batchRows[0]?.total_rows ?? 0;
+  const itemTotal = itemRows[0]?.total_rows ?? 0;
 
   useEffect(() => {
     void loadData();
@@ -360,8 +392,19 @@ export default function AdminInventoryPage() {
                 </Button>
               </div>
             </div>
-            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(220px,1fr)_180px_96px]">
+            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(180px,1.2fr)_160px_140px_84px]">
               <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); setBatchPage(1); }} placeholder="搜索商品、批次号或文件名" />
+              <Select value={selectedCategoryId} onValueChange={(value) => { setSelectedCategoryId(value); setPage(1); }}>
+                <SelectTrigger><SelectValue placeholder="商品分类" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部分类</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.level === 2 ? `└─ ${cat.name}` : cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); setBatchPage(1); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -370,7 +413,7 @@ export default function AdminInventoryPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" onClick={() => { setSearch(""); setStatus("all"); setPage(1); setBatchPage(1); }}>重置</Button>
+              <Button variant="outline" onClick={() => { setSearch(""); setStatus("all"); setSelectedCategoryId("all"); setPage(1); setBatchPage(1); }}>重置</Button>
             </div>
           </CardHeader>
 
@@ -396,9 +439,9 @@ export default function AdminInventoryPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {summaryRows.length === 0 ? (
-                      <TableRow><TableCell colSpan={7} className="h-72"><AdminEmptyState title="暂无库存" description="导入数字库存后会显示在这里。" /></TableCell></TableRow>
-                    ) : summaryRows.map((row) => (
+                    {displayedSummaryRows.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="h-72"><AdminEmptyState title="暂无库存" description="未找到符合分类或搜索条件的数字库存。" /></TableCell></TableRow>
+                    ) : displayedSummaryRows.map((row) => (
                       <TableRow key={row.product_id}>
                         <TableCell>
                           <div className="font-medium text-slate-900">{row.product_name}</div>
@@ -524,22 +567,25 @@ export default function AdminInventoryPage() {
         </Card>
       </div>
 
-      <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
-        <SheetContent className="flex w-full flex-col sm:max-w-3xl">
-          <SheetHeader>
-            <SheetTitle>{selectedBatch ? "批次详情" : "库存明细"}</SheetTitle>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 space-y-4 overflow-auto py-4">
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden p-6">
+          <DialogHeader className="shrink-0 border-b pb-3">
+            <DialogTitle className="text-lg font-semibold">{selectedBatch ? "批次详情与卡密明细" : "商品数字库存明细"}</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              集中查看卡密脱敏内容、状态分布、关联订单号与生命周期记录。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2">
             {selectedProduct ? (
-              <div className="rounded-xl border bg-slate-50 p-4">
+              <div className="rounded-xl border bg-slate-50/80 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <div className="font-semibold text-slate-950">{selectedBatch?.batch_name || selectedProduct.product_name}</div>
-                    <div className="mt-1 text-sm text-slate-500">{selectedBatch?.batch_no || selectedProduct.product_slug}</div>
+                    <div className="text-base font-semibold text-slate-950">{selectedBatch?.batch_name || selectedProduct.product_name}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">{selectedBatch?.batch_no || selectedProduct.product_slug}</div>
                   </div>
                   {selectedBatch ? <BatchStatusBadge status={selectedBatch.import_status} /> : null}
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+                <div className="mt-3.5 grid grid-cols-2 gap-2.5 text-sm md:grid-cols-4">
                   <Stat label="总数量" value={selectedBatch?.total_count ?? selectedProduct.total_count} />
                   <Stat label="可用" value={selectedBatch?.available_count ?? selectedProduct.available_count} />
                   <Stat label="已预留" value={selectedBatch?.reserved_count ?? selectedProduct.reserved_count} />
@@ -565,8 +611,10 @@ export default function AdminInventoryPage() {
               {selectedProduct ? (
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => void (selectedBatch ? openBatchItems(selectedBatch) : openProductItems(selectedProduct))}
                 >
+                  <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", itemsLoading && "animate-spin")} />
                   重新加载
                 </Button>
               ) : null}
@@ -576,7 +624,7 @@ export default function AdminInventoryPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>脱敏内容</TableHead>
+                      <TableHead>脱敏内容 / 卡密</TableHead>
                       <TableHead className="text-center">状态</TableHead>
                       <TableHead>批次</TableHead>
                       <TableHead>关联订单</TableHead>
@@ -588,22 +636,52 @@ export default function AdminInventoryPage() {
                       <TableRow><TableCell colSpan={5} className="h-48 text-center text-sm text-slate-500">暂无库存明细</TableCell></TableRow>
                     ) : itemRows.map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell className="font-mono text-xs">{item.masked_content}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="max-w-[200px] truncate" title={item.masked_content}>{item.masked_content}</span>
+                            <button
+                              type="button"
+                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              title="复制卡密摘要"
+                              onClick={() => {
+                                navigator.clipboard.writeText(item.masked_content);
+                                toast.success("已复制卡密摘要");
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-center"><InventoryStatusBadge status={item.status} /></TableCell>
                         <TableCell>{item.batch_no ?? "—"}</TableCell>
                         <TableCell>{item.order_id ?? "—"}</TableCell>
                         <TableCell className="text-center">
-                          <div className="flex justify-center gap-2 whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                             {item.status === "available" ? (
-                              <Button size="sm" variant="outline" className="text-red-600" disabled={submitting} onClick={() => {
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" disabled={submitting} onClick={() => {
                                 if (window.confirm("确定禁用这条未交付库存吗？")) void updateInventory({ action: "disable_item", inventory_id: item.id });
-                              }}><Ban className="mr-1 h-3.5 w-3.5" />禁用</Button>
+                              }}><Ban className="mr-1 h-3 w-3" />禁用</Button>
                             ) : null}
                             {item.status === "disabled" ? (
-                              <Button size="sm" variant="outline" disabled={submitting} onClick={() => {
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" disabled={submitting} onClick={() => {
                                 if (window.confirm("确定恢复这条未交付且未预留库存吗？")) void updateInventory({ action: "restore_item", inventory_id: item.id });
-                              }}><RotateCcw className="mr-1 h-3.5 w-3.5" />恢复</Button>
+                              }}><RotateCcw className="mr-1 h-3 w-3" />恢复</Button>
                             ) : null}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                              disabled={submitting || ["reserved", "delivered"].includes(item.status)}
+                              title={["reserved", "delivered"].includes(item.status) ? "已预留或已交付的卡密条目不可删除" : "删除此卡密"}
+                              onClick={() => {
+                                if (window.confirm("确定要删除这条库存记录吗？删除后不可恢复。")) {
+                                  void updateInventory({ action: "delete_item", inventory_id: item.id });
+                                }
+                              }}
+                            >
+                              <Trash2 className="mr-1 h-3 w-3" />
+                              删除
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -612,10 +690,10 @@ export default function AdminInventoryPage() {
                 </Table>
               )}
             </div>
-            <div className="text-xs text-slate-500">共 {itemTotal} 条明细。完整库存内容默认不展示，已交付库存不可恢复为可用。</div>
+            <div className="text-xs text-slate-500">共 {itemTotal} 条明细。完整库存内容默认不展示，已交付库存不可恢复或删除。</div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </AdminPageShell>
   );
 }

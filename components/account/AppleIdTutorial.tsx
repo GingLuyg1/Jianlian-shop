@@ -82,9 +82,9 @@ export default function AppleIdTutorial() {
         {formats.map(({ title, description, fields, example, hasOrderNotes }) => <article key={title} className={`${tutorial.appleCard} p-5 sm:p-6`}>
           <h3 className="font-semibold text-slate-900">{title}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-          <ol aria-label={`${title}字段顺序`} className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-            {fields.map((field, index) => <li key={field} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700">
-              <span className={`${tutorial.appleBadge} h-5 w-5`}>{index + 1}</span>{field}
+          <ol aria-label={`${title}字段顺序`} className="mt-4 flex flex-wrap gap-2 sm:grid sm:grid-cols-3 xl:grid-cols-6">
+            {fields.map((field, index) => <li key={field} className="flex min-w-[125px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700 sm:min-w-0 sm:flex-initial">
+              <span className={`${tutorial.appleBadge} h-5 w-5 shrink-0`}>{index + 1}</span><span className="whitespace-nowrap">{field}</span>
             </li>)}
           </ol>
           <p className="mt-4 text-xs font-medium text-slate-500">格式示例 · 虚构账号</p>

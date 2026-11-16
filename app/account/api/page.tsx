@@ -10,6 +10,8 @@ import { useAccountEmail } from "@/components/account/AccountEmailContext";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
 import { Button } from "@/components/ui/button";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
+import { cn } from "@/lib/utils";
 
 const tabs = [
   { value: "overview", label: "概览" },
@@ -21,6 +23,7 @@ type ApiTab = (typeof tabs)[number]["value"];
 
 export default function AccountApiPage() {
   const email = useAccountEmail();
+  const { isMobile } = useMobileStorefront();
   const [activeTab, setActiveTab] = useState<ApiTab>("overview");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -39,7 +42,7 @@ export default function AccountApiPage() {
 
       <AccountInformation email={email || null} loading={false} />
 
-      <div className={styles.apiTop}>
+      <div className={cn(styles.apiTop, isMobile && "!grid-cols-1")}>
         <section className={`${glass.surface} ${styles.panel} p-5 sm:p-6`} aria-labelledby="api-credentials-title">
           <div className="mb-5 flex items-center justify-between gap-3"><h2 id="api-credentials-title" className="flex items-center gap-2 text-base font-semibold"><KeyRound className="h-4 w-4 text-primary" aria-hidden="true" />我的凭证</h2><span className={styles.pill}>暂未开放</span></div>
           <label htmlFor="account-api-key" className="sr-only">API Key</label>
@@ -56,7 +59,7 @@ export default function AccountApiPage() {
         </section>
       </div>
 
-      <div className={styles.apiStats}>
+      <div className={cn(styles.apiStats, isMobile && "!grid-cols-2")}>
         <div className={`${glass.inset} ${styles.stat}`}><p className="flex items-center gap-2 text-xs text-slate-500"><WalletCards className="h-4 w-4 text-primary" aria-hidden="true" />账户余额</p><Link href="/account" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline">查看余额<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></Link><p className="mt-2 text-xs text-slate-400">以账户概览为准</p></div>
         {[
           { label: "今日调用", icon: Activity },

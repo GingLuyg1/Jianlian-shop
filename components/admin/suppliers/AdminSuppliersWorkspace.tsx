@@ -496,7 +496,7 @@ export default function AdminSuppliersWorkspace() {
                                   {product.title}
                                 </div>
                                 <div className="text-[11px] text-slate-400">
-                                  {product.isAuto ? "自动交付" : "手动处理"} · 排序ID: {product.sortId ?? "—"}
+                                  {product.isAuto ? "自动交付" : "手动处理"} · 上游编号: #{product.id}
                                 </div>
                               </div>
                             </div>
@@ -615,9 +615,7 @@ export default function AdminSuppliersWorkspace() {
               {detail.skuVariants && Object.keys(detail.skuVariants).length > 0 ? (
                 <div>
                   <div className="text-xs font-semibold text-slate-900 mb-1.5">商品规格子项数据</div>
-                  <pre className="max-h-48 overflow-auto rounded-xl bg-slate-900 p-3 text-[11px] text-slate-100 font-mono">
-                    {JSON.stringify(detail.skuVariants, null, 2)}
-                  </pre>
+                  <SupplierSkuVariantsTable variants={detail.skuVariants} />
                 </div>
               ) : null}
 
@@ -634,5 +632,52 @@ export default function AdminSuppliersWorkspace() {
         </SheetContent>
       </Sheet>
     </AdminPageShell>
+  );
+}
+
+function SupplierSkuVariantsTable({ variants }: { variants: unknown }) {
+  const list = Array.isArray(variants) ? variants : [];
+  if (list.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+      <div className="border-b bg-slate-50/80 px-3 py-2 text-xs font-semibold text-slate-800">
+        供应商 SKU 规格列表（共 {list.length} 个规格）
+      </div>
+      <div className="max-h-60 overflow-y-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-slate-50 text-slate-500 sticky top-0 border-b">
+            <tr>
+              <th className="px-3 py-2">规格名称</th>
+              <th className="px-3 py-2">SKU 编码</th>
+              <th className="px-3 py-2 text-right">进价</th>
+              <th className="px-3 py-2 text-center">库存</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {list.map((item: any, idx: number) => {
+              const title = item.title || item.name || item.spec_name || item.sku_name || `规格 #${idx + 1}`;
+              const sku = item.sku || item.sku_id || item.code || item.id || "—";
+              const price = item.price != null ? `¥${Number(item.price).toFixed(2)}` : "—";
+              const stock = item.stock != null ? Number(item.stock) : null;
+              return (
+                <tr key={String(sku) + idx} className="hover:bg-slate-50/60">
+                  <td className="px-3 py-2 font-medium text-slate-900">{title}</td>
+                  <td className="px-3 py-2 font-mono text-slate-500">{sku}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-emerald-600 tabular-nums">{price}</td>
+                  <td className="px-3 py-2 text-center">
+                    {stock !== null ? (
+                      <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-medium", stock > 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600")}>
+                        {stock > 0 ? `${stock} 件` : "缺货"}
+                      </span>
+                    ) : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

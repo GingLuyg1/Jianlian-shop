@@ -273,6 +273,46 @@ export async function scanMediaReferences(client: SupabaseClient, asset: MediaAs
   return refs;
 }
 
+export async function reconcileMediaAssetStatus(client: SupabaseClient, asset: MediaAssetRow) {
+  const refs = await scanMediaReferences(client, asset);
+  const isActuallyUsed = refs.length > 0;
+  let newStatus = asset.status;
+
+  if (!isActuallyUsed && asset.status === "active") {
+    newStatus = "unused";
+  } else if (isActuallyUsed && asset.status === "unused") {
+    newStatus = "active";
+  }
+
+  if (newStatus !== asset.status) {
+    try {
+      await client.from("media_assets").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", asset.id);
+    } catch {
+      // 容错降级
+    }
+  }
+
+  return { ...asset, status: newStatus, references: refs };
+}
+
+export async function reconcileAllMediaAssets(client: SupabaseClient) {
+  const { data: assets } = await client.from("media_assets").select("*").is("deleted_at", null);
+  if (!assets || !assets.length) return { updatedCount: 0 };
+  let updatedCount = 0;
+  for (const asset of assets) {
+    const refs = await scanMediaReferences(client, asset);
+    const isActuallyUsed = refs.length > 0;
+    if (!isActuallyUsed && asset.status === "active") {
+      await client.from("media_assets").update({ status: "unused", updated_at: new Date().toISOString() }).eq("id", asset.id);
+      updatedCount++;
+    } else if (isActuallyUsed && asset.status === "unused") {
+      await client.from("media_assets").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", asset.id);
+      updatedCount++;
+    }
+  }
+  return { updatedCount };
+}
+
 export async function updateMediaAssetStatus(client: SupabaseClient, assetId: string, status: "active" | "unused" | "archived" | "deleted" | "failed") {
   const { data, error } = await client.from("media_assets").update({ status, updated_at: new Date().toISOString() }).eq("id", assetId).select("*").single();
   if (error) throw new Error(mediaInitError(error));

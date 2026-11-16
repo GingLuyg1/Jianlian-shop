@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, Copy, ImageIcon, RefreshCcw, Search, Upload } from "lucide-react";
+import { Archive, CheckCircle2, Copy, ImageIcon, RefreshCcw, RefreshCw, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -175,6 +175,43 @@ export default function AdminMediaPage() {
     }
   }
 
+  const [reconciling, setReconciling] = useState(false);
+
+  async function reconcileAll() {
+    setReconciling(true);
+    try {
+      const response = await fetch("/api/admin/media", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reconcile_all" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "校准失败");
+      toast.success(`校准完成！已更新 ${payload.updatedCount ?? 0} 个资源的实际使用状态。`);
+      await loadAssets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "校准失败");
+    } finally {
+      setReconciling(false);
+    }
+  }
+
+  async function reconcileSingleAsset(asset: MediaAsset) {
+    try {
+      const response = await fetch("/api/admin/media", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assetId: asset.id, action: "reconcile" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "检测失败");
+      toast.success(`状态已核对并同步为：${statusLabel(payload.asset.status)}`);
+      await loadAssets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "检测失败");
+    }
+  }
+
   async function archiveAsset(asset: MediaAsset) {
     if (!window.confirm("确认归档这个未引用资源？归档前会再次检查业务引用。")) return;
     try {
@@ -198,9 +235,15 @@ export default function AdminMediaPage() {
       title="媒体资源"
       description="集中上传、筛选和维护商品、商品规格、分类及站点使用的图片资源。"
       actions={(
-        <Button variant="outline" onClick={loadAssets} disabled={loading}>
-          <RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> 刷新
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={reconcileAll} disabled={reconciling || loading} title="扫描全库商品、规格和分类的图片实际引用，自动校正已切图但残留'使用中'的资源">
+            <RefreshCw className={`mr-2 h-4 w-4 ${reconciling ? "animate-spin" : ""}`} />
+            {reconciling ? "正在校准..." : "校准使用状态"}
+          </Button>
+          <Button variant="outline" onClick={loadAssets} disabled={loading}>
+            <RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> 刷新
+          </Button>
+        </div>
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
@@ -286,6 +329,7 @@ export default function AdminMediaPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-center">{formatDate(asset.created_at)}</td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex justify-center gap-2 whitespace-nowrap">
+                        <Button variant="outline" size="icon" onClick={() => reconcileSingleAsset(asset)} title="检测数据库实际引用并校准状态"><CheckCircle2 className="h-4 w-4 text-sky-600" /></Button>
                         <Button variant="outline" size="icon" onClick={() => copyUrl(asset)} title="复制地址"><Copy className="h-4 w-4" /></Button>
                         <Button variant="outline" size="icon" onClick={() => archiveAsset(asset)} disabled={asset.status === "active"} title={asset.status === "active" ? "使用中资源不可归档" : "归档未引用资源"}><Archive className="h-4 w-4" /></Button>
                       </div>

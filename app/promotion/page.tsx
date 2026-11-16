@@ -322,8 +322,8 @@ export default function PromotionPage() {
           </div>
         )}
 
-        <div className="grid min-w-0 shrink-0 gap-3.5 xl:grid-cols-[1.08fr_1fr]">
-          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]")}>
+        <div className={cn("grid min-w-0 shrink-0 gap-3.5 xl:grid-cols-[1.08fr_1fr]", isMobile && "!grid-cols-1")}>
+          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]", isMobile && "!p-3.5 !min-h-0")}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-[22px] font-bold leading-tight text-slate-950">推广链接</h1>
@@ -363,7 +363,7 @@ export default function PromotionPage() {
             </div>
           </section>
 
-          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]")}>
+          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]", isMobile && "!p-3.5 !min-h-0")}>
             <div className="mb-2 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广数据</h2>
@@ -379,7 +379,7 @@ export default function PromotionPage() {
               </button>
             </div>
 
-            <div className="mt-2 grid min-w-0 grid-cols-2 gap-2.5 xl:grid-cols-3">
+            <div className={cn("mt-2 grid min-w-0 grid-cols-2 gap-2.5 xl:grid-cols-3", isMobile && "!grid-cols-2 !gap-2")}>
               {stats.map((item) => (
                 <StatCard key={item.label} {...item} />
               ))}

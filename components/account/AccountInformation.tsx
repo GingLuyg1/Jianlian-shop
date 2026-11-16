@@ -2,8 +2,12 @@ import { KeyRound, Mail, ShieldCheck, Smartphone, Store } from "lucide-react";
 
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
+import { cn } from "@/lib/utils";
 
 export default function AccountInformation({ email, loading }: { email: string | null; loading: boolean }) {
+  const { isMobile } = useMobileStorefront();
+
   return (
     <div className="grid min-w-0 gap-4" data-testid="account-information">
       <section className={`${glass.surface} ${styles.panel} ${styles.information}`} aria-labelledby="account-information-title">
@@ -14,7 +18,7 @@ export default function AccountInformation({ email, loading }: { email: string |
           </div>
           <span className={styles.pill}>安全资料</span>
         </header>
-        <dl className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <dl className={cn("grid min-w-0 gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4", isMobile && "!grid-cols-2 !gap-2.5")}>
           {[
             { label: "商户 ID", icon: Store },
             { label: "商户密钥", icon: KeyRound },

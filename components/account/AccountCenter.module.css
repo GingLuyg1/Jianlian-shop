@@ -128,6 +128,9 @@
 :global(html[data-mobile-preview="true"]) .pageHeader { padding: 16px; }
 :global(html[data-mobile-preview="true"]) .balanceHero { padding: 16px; }
 :global(html[data-mobile-preview="true"]) .formGroup { padding: 14px; }
+:global(html[data-mobile-preview="true"]) .apiTop { grid-template-columns: minmax(0, 1fr) !important; }
+:global(html[data-mobile-preview="true"]) .apiStats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+:global(html[data-mobile-preview="true"]) .informationItem { padding: 12px !important; }
 @media (prefers-reduced-motion: reduce) { .navLink, .apiTab, .navIndicator[data-ready=true] { transition: none; } }
 @media (prefers-reduced-transparency: reduce) { .panel, .contentFrame, .contentFrame .panel { background: #fffcf7; -webkit-backdrop-filter: none; backdrop-filter: none; } }
 @supports not (backdrop-filter: blur(1px)) { .panel { background-color: #fffcf7; } }

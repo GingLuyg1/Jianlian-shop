@@ -1505,7 +1505,13 @@ export default function AdminDashboardPage() {
                         >
                           {item.value ?? 0}
                         </span>
-                        <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                        {item.value && item.value > 0 ? (
+                          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                            去处理
+                          </span>
+                        ) : (
+                          <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                        )}
                       </div>
                     </Link>
                   ))}
@@ -1576,7 +1582,13 @@ export default function AdminDashboardPage() {
                         >
                           {item.value ?? 0}
                         </span>
-                        <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                        {typeof item.value === "number" && item.value > 0 ? (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 transition-colors group-hover:bg-emerald-600 group-hover:text-white">
+                            去处理
+                          </span>
+                        ) : (
+                          <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                        )}
                       </div>
                     </Link>
                   ))}
@@ -1647,7 +1659,13 @@ export default function AdminDashboardPage() {
                         >
                           {item.value}
                         </span>
-                        <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                        {item.tone !== "slate" && typeof item.value === "number" && item.value > 0 ? (
+                          <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-800 transition-colors group-hover:bg-purple-600 group-hover:text-white">
+                            去处理
+                          </span>
+                        ) : (
+                          <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                        )}
                       </div>
                     </Link>
                   ))}
