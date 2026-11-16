@@ -1386,8 +1386,6 @@ function ProductDialog({
     </ModalFrame>
   );
 }
-  );
-}
 
 function ModalFrame({
   children,
