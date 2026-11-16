@@ -92,11 +92,12 @@ export async function GET(request: Request) {
       }
 
       const result = await client.collectMallCatalog({ search: q, limit: 50 });
-      const items = (result.items ?? result.partial?.items ?? []).slice(0, 50);
+      const allItems = "items" in result ? result.items : result.partial.items;
+      const items = allItems.slice(0, 50);
       return json({
         supplier: "跨境资源网",
         products: items.map(mapProduct),
-        complete: result.complete === true && (result.items?.length ?? 0) <= 50,
+        complete: "items" in result && result.complete === true && allItems.length <= 50,
         status: result.status,
         purchaseEnabled: false,
         requestId,
@@ -109,7 +110,7 @@ export async function GET(request: Request) {
         return json({ error: "供应商商品 ID 无效", code: "KUAJINGZY_PRODUCT_ID_INVALID", requestId }, 400);
       }
       const result = await client.collectMallCatalog({ itemId: id, limit: 1 });
-      const items = result.items ?? result.partial?.items ?? [];
+      const items = "items" in result ? result.items : result.partial.items;
       if (items.length !== 1 || String(items[0]?.id ?? "") !== id) {
         return json({ error: "供应商商品不存在或身份未确认", code: "KUAJINGZY_PRODUCT_NOT_FOUND", requestId }, 404);
       }
