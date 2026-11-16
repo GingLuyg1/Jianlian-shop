@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { purchaseDajuV2, frozenUnits, reconcileDajuAttempt, money } from "../../lib/providers/daju/purchase-v2.mjs";
+import { createDajuV2Store } from "../../lib/providers/daju/purchase-v2-store.mjs";
 
 function fixture(options={}) {
   const candidate={orderId:"order-one",orderItemId:"item-one",quantity:1,binding:{productId:10,sku:null,maxUnitCost:"5.00",inputsMapping:{}},orderFields:{}};
@@ -33,6 +34,11 @@ test("EXTERNAL_CREATED recovery only GETs, records evidence then private deliver
 test("unit allocation never mixes order items; mixed durable allocation rejected",async()=>{const f=fixture();f.candidate.quantity=2;const u=frozenUnits(f.candidate,"root","4.00");assert.deepEqual(u.map(x=>x.unit_index),[1,2]);assert.equal(new Set(u.map(x=>x.order_item_id)).size,1);await assert.rejects(reconcileDajuAttempt({db:{items:async()=>[{...u[0]},{...u[1],order_item_id:"other"}]},client:{},attempt:{id:"x",status:"EXTERNAL_CREATED",external_invoice_id:"id"}}),/MIXED/);});
 test("default production-like configuration never POSTs",async()=>{const f=fixture();await assert.rejects(purchaseDajuV2({db:f.db,client:f.client,candidate:f.candidate,env:{}}));assert.equal(f.posts(),0);});
 test("whole-order cap includes other frozen Daju item costs",async()=>{const f=fixture({aggregateCap:true});await assert.rejects(f.run(),/ORDER_CAP/);assert.equal(f.posts(),0);});
+test("canary order cannot fan out into two Daju item purchases",async()=>{
+  const item={quantity:1,product_snapshot:{supplier_binding:{fulfillment_source:"supplier",supplier:"daju",supplier_product_id:10,supplier_max_unit_cost:"1"}}};
+  const service={from(){const b={select(){return b},eq:async()=>({data:[item,item],error:null})};return b;}};
+  await assert.rejects(createDajuV2Store(service).orderCost("order"),/CANARY_SINGLE_ITEM/);
+});
 test("frozen semantic drift on a paid-order replay fails closed",async()=>{const f=fixture();await f.run();f.candidate.binding.maxUnitCost="6.00";await assert.rejects(f.run(),/SEMANTIC_DRIFT/);assert.equal(f.posts(),1);});
 test("semantic replay survives PostgreSQL numeric JSON representation",async()=>{
   const f=fixture();await f.run();const items=f.db.items;
