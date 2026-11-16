@@ -61,8 +61,8 @@ type SupplierProductDetail = SupplierProduct & {
   description?: string | null;
   minQty: number | null;
   maxQty: number | null;
-  requiredInputs?: unknown;
-  skuVariants?: unknown;
+  requiredInputs?: Record<string, unknown> | readonly unknown[] | null;
+  skuVariants?: Record<string, unknown> | readonly unknown[] | null;
 };
 
 function formatSupplierMoney(value: string | null | undefined, currency?: string | null) {
