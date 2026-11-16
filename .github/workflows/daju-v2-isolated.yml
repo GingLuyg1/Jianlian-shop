@@ -30,7 +30,6 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: postgres
       PGDATABASE: jianlian_bitrefill_v13_db5_20261116
-      PG_CONTAINER: ${{ job.services.postgres.id }}
       SUPPLIER_AUTO_PURCHASE_ENABLED: 'false'
       DAJU_AUTO_PURCHASE_MODE: disabled
     steps:
@@ -41,4 +40,6 @@ jobs:
       - name: Runtime mocked-provider contracts
         run: node --test tests/integration/daju-v2-orchestration.test.mjs
       - name: Real disposable PostgreSQL delivery RPC
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
         run: node scripts/ci/daju-v2-real-db.mjs
