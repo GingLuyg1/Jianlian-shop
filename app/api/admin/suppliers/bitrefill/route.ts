@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { getPersonalCatalogManager } from "@/lib/providers/bitrefill/catalog-server";
+import type { CatalogProduct } from "@/lib/providers/bitrefill/catalog-management.mjs";
 import { createBitrefillMcpReadonlyClient } from "@/lib/providers/bitrefill/mcp-readonly-client.mjs";
 
 export const dynamic = "force-dynamic";
@@ -25,18 +26,13 @@ function readonlyMcp() {
   });
 }
 
-function mapProduct(product: {
-  id: string;
-  name: string;
-  currency: string;
-  available: boolean;
-  packages: Array<{ packageId: string; faceValue: string; valueLabel: string | null; catalogPrice: string | null }>;
-}) {
+function mapProduct(product: CatalogProduct) {
   const first = product.packages[0];
+  const displayPrice = first?.catalogPrice ?? first?.faceValue;
   return {
     id: product.id,
     title: product.name,
-    price: first?.catalogPrice ?? first?.faceValue ?? "0",
+    price: displayPrice === null || displayPrice === undefined ? "0" : String(displayPrice),
     currency: product.currency,
     stock: product.available ? 1 : 0,
     sales: 0,
