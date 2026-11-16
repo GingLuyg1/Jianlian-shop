@@ -26,6 +26,13 @@ const handler=load("lib/providers/daju/fulfillment.ts",{"./client":client,"./pur
 const router=load("lib/providers/core/supplier-router.ts",{"../daju/fulfillment":handler,"./supplier-router-core.mjs":routerCore,"../bitrefill/pin-runtime.mjs":{getBitrefillPinHandler:()=>null},"../bitrefill/production-server":{ensureBitrefillProductionRuntime(){throw Error("BITREFILL_NOT_ALLOWED")}}});
 const delivery=load("lib/delivery/delivery-service.ts",{"@/lib/providers/core/supplier-router":router,"./local-stock-priority.mjs":local});
 
+test("ordinary Daju client cannot grant legacy generic code purchase authority",async()=>{
+  const key=process.env.DAJU_API_KEY;process.env.DAJU_API_KEY="TEST_ONLY_NOT_A_REAL_KEY";
+  let dispatched=0;
+  try {const c=client.createDajuClient({fetchImpl:async()=>{dispatched++;throw Error("NETWORK_FORBIDDEN")}});await assert.rejects(c.purchase({productId:10,quantity:1,requestId:"jianlian:order:item"}),/DAJU_V2_REQUIRED/);assert.equal(dispatched,0);}
+  finally {if(key===undefined)delete process.env.DAJU_API_KEY;else process.env.DAJU_API_KEY=key;}
+});
+
 for(const [master,mode,allow] of [["false","disabled","order"],[undefined,undefined,undefined],["true","disabled","order"],["true","canary","wrong"]]) {
 test(`real delivery/router/Daju chain blocks master=${master} mode=${mode}`,async()=>{
   const names=["SUPPLIER_AUTO_PURCHASE_ENABLED","DAJU_AUTO_PURCHASE_MODE","DAJU_AUTO_PURCHASE_CANARY_ORDER_ID","DAJU_AUTO_PURCHASE_MAX_ORDER_CNY","DAJU_API_KEY"];

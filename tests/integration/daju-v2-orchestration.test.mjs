@@ -31,3 +31,16 @@ test("external ID commit uncertainty is not retried",async()=>{const f=fixture({
 test("EXTERNAL_CREATED recovery only GETs, records evidence then private delivery",async()=>{const f=fixture();await f.run();f.attempt().status="EXTERNAL_CREATED";const count=f.posts();await reconcileDajuAttempt({db:f.db,client:{getOrder:f.client.getOrder},attempt:f.attempt()});assert.equal(f.posts(),count);assert.equal(f.evidence.at(-1).status,"DELIVERED");});
 test("unit allocation never mixes order items; mixed durable allocation rejected",async()=>{const f=fixture();f.candidate.quantity=2;const u=frozenUnits(f.candidate,"root","4.00");assert.deepEqual(u.map(x=>x.unit_index),[1,2]);assert.equal(new Set(u.map(x=>x.order_item_id)).size,1);await assert.rejects(reconcileDajuAttempt({db:{items:async()=>[{...u[0]},{...u[1],order_item_id:"other"}]},client:{},attempt:{id:"x",status:"EXTERNAL_CREATED",external_invoice_id:"id"}}),/MIXED/);});
 test("default production-like configuration never POSTs",async()=>{const f=fixture();await assert.rejects(purchaseDajuV2({db:f.db,client:f.client,candidate:f.candidate,env:{}}));assert.equal(f.posts(),0);});
+test("frozen semantic drift on a paid-order replay fails closed",async()=>{const f=fixture();await f.run();f.candidate.binding.maxUnitCost="6.00";await assert.rejects(f.run(),/SEMANTIC_DRIFT/);assert.equal(f.posts(),1);});
+test("duplicate concurrent GET reconciliation delivers once without new POST",async()=>{
+  const f=fixture({timeout:true});await f.run();Object.assign(f.attempt(),{status:"EXTERNAL_CREATED",external_invoice_id:"order-code"});
+  await Promise.all([1,2].map(()=>reconcileDajuAttempt({db:f.db,client:{getOrder:f.client.getOrder},attempt:f.attempt()})));
+  assert.equal(f.posts(),1);assert.equal(f.deliveries(),1);
+});
+test("recovery rejects mismatched identity/cost and absent private delivery",async()=>{
+  for(const patch of [{productId:99},{unitPrice:"9.00"},{sku:"other"},{requestId:"other"},{delivered:[]}]){
+    const f=fixture({timeout:true});await f.run();Object.assign(f.attempt(),{status:"EXTERNAL_CREATED",external_invoice_id:"order-code"});
+    await reconcileDajuAttempt({db:f.db,client:{getOrder:async()=>({...await f.client.getOrder(),...patch})},attempt:f.attempt()});
+    assert.equal(f.deliveries(),0);assert.equal(f.evidence.at(-1).status,"UNKNOWN");
+  }
+});
