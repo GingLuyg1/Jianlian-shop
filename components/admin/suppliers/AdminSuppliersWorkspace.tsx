@@ -36,8 +36,42 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { DajuBalance, DajuProduct, DajuProductDetail } from "@/lib/providers/daju/types";
 import { cn } from "@/lib/utils";
+
+type SupplierBalance = {
+  balance: string;
+  name?: string;
+  totalSpent?: string | null;
+  totalOrders?: number | null;
+  currency?: string | null;
+};
+
+type SupplierProduct = {
+  id: string | number;
+  title: string;
+  price: string;
+  currency?: string | null;
+  stock: number;
+  sales: number;
+  isAuto: boolean;
+  sortId?: string | number | null;
+};
+
+type SupplierProductDetail = SupplierProduct & {
+  description?: string | null;
+  minQty: number;
+  maxQty: number;
+  requiredInputs?: unknown;
+  skuVariants?: unknown;
+};
+
+function formatSupplierMoney(value: string | null | undefined, currency?: string | null) {
+  if (!value) return "—";
+  if (!currency || currency === "CNY") return `¥${value}`;
+  if (currency === "USD") return `${value}`;
+  if (currency === "EUR") return `€${value}`;
+  return `${currency} ${value}`;
+}
 
 type SupplierError = {
   message: string;
@@ -89,7 +123,7 @@ function SupplierErrorDetails({ error }: { error: SupplierError }) {
 export default function AdminSuppliersWorkspace() {
   const [activeSupplierCode, setActiveSupplierCode] = useState(supplierUiRegistry[0]?.code ?? "");
   const activeSupplier = supplierUiRegistry.find((supplier) => supplier.code === activeSupplierCode) ?? supplierUiRegistry[0];
-  const [balance, setBalance] = useState<DajuBalance | null>(null);
+  const [balance, setBalance] = useState<SupplierBalance | null>(null);
   const [detection, setDetection] = useState<DetectionState>({ status: "idle", checkedAt: null, error: null });
   const [activeArea, setActiveArea] = useState<"overview" | "products">("overview");
 
@@ -100,12 +134,12 @@ export default function AdminSuppliersWorkspace() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const [products, setProducts] = useState<DajuProduct[]>([]);
+  const [products, setProducts] = useState<SupplierProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsLoaded, setProductsLoaded] = useState(false);
   const [productsError, setProductsError] = useState<SupplierError | null>(null);
 
-  const [detail, setDetail] = useState<DajuProductDetail | null>(null);
+  const [detail, setDetail] = useState<SupplierProductDetail | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<SupplierError | null>(null);
@@ -116,7 +150,7 @@ export default function AdminSuppliersWorkspace() {
       const response = await fetch(`${activeSupplier.adminEndpoint}?resource=balance`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商连接检测失败");
-      setBalance(payload.balance as DajuBalance);
+      setBalance(payload.balance as SupplierBalance);
       setDetection({ status: "connected", checkedAt: new Date().toISOString(), error: null });
     } catch (error) {
       const nextError =
@@ -160,13 +194,13 @@ export default function AdminSuppliersWorkspace() {
     if (activeArea === "products" && !productsLoaded) void loadProducts();
   }, [activeArea, loadProducts, productsLoaded]);
 
-  async function openProductDetail(productId: number) {
+  async function openProductDetail(productId: string | number) {
     setDetailOpen(true);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(true);
     try {
-      const response = await fetch(`${activeSupplier.adminEndpoint}?resource=product&id=${productId}`, { cache: "no-store" });
+      const response = await fetch(`${activeSupplier.adminEndpoint}?resource=product&id=${encodeURIComponent(String(productId))}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商商品详情读取失败");
       setDetail(payload.product as DajuProductDetail);
@@ -316,23 +350,23 @@ export default function AdminSuppliersWorkspace() {
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
                     <div className="text-xs text-slate-500">供货商可用余额</div>
                     <div className="mt-1.5 text-2xl font-bold tabular-nums text-slate-950">
-                      {balance ? `¥${balance.balance}` : "—"}
+                      {balance ? formatSupplierMoney(balance.balance, balance.currency) : "—"}
                     </div>
-                    <div className="mt-1 text-[11px] text-slate-400">采购代扣额度</div>
+                    <div className="mt-1 text-[11px] text-slate-400">供应商只读余额</div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <div className="text-xs text-slate-500">累计采购消费</div>
+                    <div className="text-xs text-slate-500">累计采购消费（如可用）</div>
                     <div className="mt-1.5 text-2xl font-bold tabular-nums text-slate-950">
-                      {balance?.totalSpent ? `¥${balance.totalSpent}` : "—"}
+                      {balance?.totalSpent ? formatSupplierMoney(balance.totalSpent, balance.currency) : "—"}
                     </div>
                     <div className="mt-1 text-[11px] text-slate-400">上游接口历史账单</div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <div className="text-xs text-slate-500">累计采购订单</div>
+                    <div className="text-xs text-slate-500">累计采购订单（如可用）</div>
                     <div className="mt-1.5 text-2xl font-bold tabular-nums text-slate-950">
-                      {balance ? `${balance.totalOrders} 单` : "—"}
+                      {balance?.totalOrders !== null && balance?.totalOrders !== undefined ? `${balance.totalOrders} 单` : "—"}
                     </div>
                     <div className="mt-1 text-[11px] text-slate-400">成功发货笔数</div>
                   </div>
@@ -361,7 +395,7 @@ export default function AdminSuppliersWorkspace() {
                 ) : null}
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="text-xs font-semibold text-slate-900">支持的自动化能力</div>
+                  <div className="text-xs font-semibold text-slate-900">当前接入能力</div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {activeSupplier.capabilities.map((cap) => (
                       <span
@@ -374,7 +408,7 @@ export default function AdminSuppliersWorkspace() {
                     ))}
                   </div>
                   <p className="mt-3 text-xs leading-relaxed text-slate-400">
-                    💡 提示：本站采用标准契约分层架构，商品下单后自动匹配对应供应商 API 完成代扣代发，支持在商品规格设置中随时解除或绑定。
+                    供应商能力按渠道独立门禁。目录可读不代表真实采购已开启；只有通过对应发布门禁的渠道才允许自动采购与私密交付。
                   </p>
                 </div>
               </CardContent>
@@ -476,7 +510,7 @@ export default function AdminSuppliersWorkspace() {
                       <TableRow className="text-xs">
                         <TableHead className="min-w-[200px]">供应商商品信息</TableHead>
                         <TableHead className="text-center">编号 ID</TableHead>
-                        <TableHead className="text-right">供货单价</TableHead>
+                        <TableHead className="text-right">目录展示价</TableHead>
                         <TableHead className="text-right">当前库存</TableHead>
                         <TableHead className="text-right">历史销量</TableHead>
                         <TableHead className="text-center">交付类型</TableHead>
@@ -502,7 +536,7 @@ export default function AdminSuppliersWorkspace() {
                             </div>
                           </TableCell>
                           <TableCell className="text-center font-mono tabular-nums text-slate-600">{product.id}</TableCell>
-                          <TableCell className="text-right font-semibold tabular-nums text-slate-900">¥{product.price}</TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums text-slate-900">{formatSupplierMoney(product.price, product.currency)}</TableCell>
                           <TableCell className="text-right tabular-nums">
                             <span className={product.stock <= 0 ? "font-semibold text-red-600" : "text-slate-700"}>
                               {product.stock}
@@ -583,7 +617,7 @@ export default function AdminSuppliersWorkspace() {
                 <h3 className="font-bold text-slate-950">{detail.title}</h3>
                 <div className="mt-1 text-xs font-mono text-slate-500">供应商商品编号：{detail.id}</div>
                 <div className="mt-2.5 flex flex-wrap gap-3 text-xs">
-                  <span className="font-semibold text-slate-900">供货底价：¥{detail.price}</span>
+                  <span className="font-semibold text-slate-900">目录展示价：{formatSupplierMoney(detail.price, detail.currency)}</span>
                   <span className="text-slate-600">库存：{detail.stock}</span>
                   <span className="text-slate-600">总销量：{detail.sales}</span>
                   <span className={detail.isAuto ? "text-emerald-700 font-medium" : "text-slate-500"}>
