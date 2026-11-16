@@ -512,6 +512,19 @@ function createClientRequestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getRechargeStatusBadge(status: string, expired: boolean) {
+  if (expired || status === "expired") {
+    return <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">已过期</span>;
+  }
+  if (status === "succeeded" || status === "paid") {
+    return <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">已完成</span>;
+  }
+  if (["failed", "rejected", "cancelled", "closed"].includes(status)) {
+    return <span className="shrink-0 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">已失败</span>;
+  }
+  return <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">进行中</span>;
+}
+
 function RecordLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 items-start justify-between gap-3">
@@ -552,7 +565,7 @@ function RechargeRecords({ records, loading, loadingCount, error, page, count, n
           return <div key={record.rechargeNo} className="min-w-0 rounded-2xl border border-[#eee4d9] bg-white p-4 text-sm shadow-[0_2px_10px_-8px_rgba(91,62,38,0.25)]">
             <div className="mb-3 flex items-center justify-between gap-3">
               <button type="button" className="min-w-0 truncate rounded-md font-semibold text-slate-800 underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-primary" title={`完整订单编号：${record.rechargeNo}`} aria-label={`订单编号 ${rechargeDisplayNumber(record.rechargeNo)}，复制完整编号`} onClick={() => void copyRechargeNo(record.rechargeNo)}>订单编号 {rechargeDisplayNumber(record.rechargeNo)}</button>
-              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">订单状态 · {rechargeStatusLabel(status)}</span>
+              {getRechargeStatusBadge(String(record.status), Boolean(expired))}
             </div>
             <dl className="grid gap-2 text-muted-foreground">
               <RecordLine label="支付渠道" value={record.channelName} />

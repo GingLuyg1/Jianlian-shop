@@ -181,7 +181,7 @@ export default function AccountPrivacyPage() {
           <div className="h-64 animate-pulse rounded-xl bg-orange-50" />
         ) : (
           <div className="space-y-5">
-            <section className="grid gap-3 md:grid-cols-4">
+            <section className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-2 md:grid-cols-4")}>
               {[
                 ["订单", counts.orders],
                 ["充值", counts.recharges],
@@ -236,17 +236,6 @@ export default function AccountPrivacyPage() {
                     </Button>
                   </div>
                 </div>
-              </div>
-            </section>
-
-            <section className={cn("grid gap-4", !isMobile && "md:grid-cols-2")}>
-              <div className="rounded-xl border p-5">
-                <h2 className="text-lg font-semibold">数据保留说明</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">账号注销后，订单、支付、余额流水、退款、交付摘要和审计记录会保留用于财务核对、争议处理和安全审计；邮箱、昵称、头像、电话和常用地址会匿名化。</p>
-              </div>
-              <div className="rounded-xl border p-5">
-                <h2 className="text-lg font-semibold">登录设备与通知</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">登录设备管理与通知偏好暂未开放。现有账户登录与安全保护保持有效。</p>
               </div>
             </section>
 

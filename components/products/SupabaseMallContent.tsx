@@ -747,7 +747,7 @@ function CategoryButton({
             <Icon className={cn("h-4 w-4 text-primary lg:h-6 lg:w-6", isMobile && "!h-4 !w-4")} />
           </div>
         )}
-        <div className={cn("truncate whitespace-nowrap text-sm font-semibold lg:text-base", isMobile && "!text-[13px]", isMobile && mobileExpanded ? "max-w-[110px]" : "max-w-[130px]")}>{category.name}</div>
+        <div className={cn("line-clamp-2 break-words text-left text-xs sm:text-sm font-semibold leading-tight lg:text-base", isMobile && "!text-[12px]", isMobile && mobileExpanded ? "max-w-[110px]" : "max-w-[130px]")}>{category.name}</div>
       </div>
       <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block", isMobile && "!hidden")} />
     </button>

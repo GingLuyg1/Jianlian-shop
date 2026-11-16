@@ -149,16 +149,16 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
       </SheetTrigger>
       <SheetContent
         side="left"
-        style={{ width: expandedSecondaries.length > 0 ? "328px" : "160px" }}
+        style={{ width: expandedSecondaries.length > 0 ? "360px" : "180px" }}
         className={cn(
-          "flex h-full max-w-none flex-row p-0 transition-[width] duration-200",
+          "flex h-full max-w-none flex-row p-0 transition-[width] duration-200 ease-out",
           expandedSecondaries.length > 0
-            ? "w-[328px]"
-            : "w-[var(--storefront-sidebar-width,160px)]"
+            ? "w-[360px]"
+            : "w-[180px]"
         )}
       >
         <SheetTitle className="sr-only">导航菜单</SheetTitle>
-        <div className="flex h-full w-[var(--storefront-sidebar-width,160px)] shrink-0 flex-col">
+        <div className="flex h-full w-[180px] min-w-[180px] max-w-[180px] shrink-0 flex-col">
           <div className="flex shrink-0 items-center border-b border-border px-2.5 py-3.5 pr-7">
             <div className="flex min-w-0 items-center gap-2">
               <img
@@ -258,7 +258,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
         {expandedSecondaries.length > 0 ? (
           <div
             data-testid="mobile-menu-secondary-panel"
-            className="flex h-full w-[168px] shrink-0 flex-col border-l border-border bg-background"
+            className="flex h-full w-[180px] min-w-[180px] max-w-[180px] shrink-0 flex-col border-l border-border bg-background animate-in fade-in-0 slide-in-from-left-2 duration-150"
           >
             <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-3.5 pr-8">
               <div className="min-w-0">
@@ -296,7 +296,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                         }}
                         className={cn(
                           selectionMotion.item,
-                          "flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-2 text-[12px] transition-colors duration-150",
+                          "flex items-center gap-1.5 rounded-md px-2 py-2 text-[12px] transition-colors duration-150",
                           subActive
                             ? "border border-primary/20 bg-primary/10 font-medium text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -317,7 +317,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                             <KeyRound className="h-3.5 w-3.5" />
                           </span>
                         )}
-                        <span className="min-w-0 flex-1 truncate">{sub.name}</span>
+                        <span className="min-w-0 flex-1 line-clamp-2 text-left leading-tight">{sub.name}</span>
                       </Link>
                     </li>
                   );

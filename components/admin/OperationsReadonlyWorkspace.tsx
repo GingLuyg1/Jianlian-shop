@@ -67,8 +67,18 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
       .finally(() => { if (version.current === requestVersion) setLoading(false); });
     return () => { version.current++; controller.abort(); };
   }, [kind, filters, page, revision]);
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; parent_id?: string | null; level?: number }>>([]);
+  const [selectedPrimaryId, setSelectedPrimaryId] = useState<string>("");
   const [dateRange, setDateRange] = useState<DashboardDateFilterValue>(() => getPresetDateRange('7d'));
+
+  const primaryCategories = useMemo(
+    () => categories.filter((c) => !c.parent_id || c.level === 1),
+    [categories]
+  );
+  const secondaryCategories = useMemo(() => {
+    if (!selectedPrimaryId) return [];
+    return categories.filter((c) => c.parent_id === selectedPrimaryId);
+  }, [categories, selectedPrimaryId]);
 
   useEffect(() => {
     if (kind === 'supplier-queue') {
@@ -110,17 +120,39 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
               />
             </div>
             {kind === 'supplier-queue' && categories.length > 0 ? (
-              <select
-                aria-label="商品分类"
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                value={filters.category_id ?? ''}
-                onChange={e => change('category_id', e.target.value)}
-              >
-                <option value="">全部商品分类</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <>
+                <select
+                  aria-label="一级分类"
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={selectedPrimaryId}
+                  onChange={(e) => {
+                    const nextPrimary = e.target.value;
+                    setSelectedPrimaryId(nextPrimary);
+                    change('category_id', nextPrimary);
+                  }}
+                >
+                  <option value="">全部一级分类</option>
+                  {primaryCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  aria-label="二级分类"
+                  disabled={!selectedPrimaryId || secondaryCategories.length === 0}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={filters.category_id !== selectedPrimaryId ? (filters.category_id ?? '') : ''}
+                  onChange={(e) => {
+                    const nextSec = e.target.value;
+                    change('category_id', nextSec || selectedPrimaryId);
+                  }}
+                >
+                  <option value="">{selectedPrimaryId ? '全部二级分类' : '请先选择一级分类'}</option>
+                  {secondaryCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </>
             ) : null}
             <select
               aria-label="状态"

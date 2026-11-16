@@ -68,6 +68,20 @@ export function AppleIdContents() {
 export default function AppleIdTutorial() {
   const { isMobile } = useMobileStorefront();
   return <div className={`${tutorial.appleArticle} space-y-6`}>
+    {isMobile ? (
+      <div className="sticky top-0 z-30 -mx-1 -mt-2 mb-4 flex gap-1.5 overflow-x-auto border-b border-orange-100 bg-[#fffaf5]/95 px-2 py-2.5 backdrop-blur-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {appleChapters.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => scrollToChapter(id)}
+            className="inline-flex shrink-0 items-center rounded-lg border border-orange-200/80 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition-colors active:bg-orange-50 active:text-primary"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    ) : null}
     <section aria-labelledby="apple-product" className={`${tutorial.appleCard} p-5 sm:p-6`}>
       <GuideHeading number="01" id="apple-product">商品说明</GuideHeading>
       <p className="mt-3 text-sm leading-7 text-slate-600">Apple ID 也叫 Apple 账户。App Store、iCloud 和其他 Apple 服务的可用范围取决于账号类型和商品说明。</p>
@@ -82,18 +96,54 @@ export default function AppleIdTutorial() {
         <Link href="/account/orders" className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800">查看我的订单</Link>
       </div>
       <div className="space-y-4">
-        {formats.map(({ title, description, fields, example, hasOrderNotes }) => <article key={title} className={`${tutorial.appleCard} p-5 sm:p-6`}>
-          <h3 className="font-semibold text-slate-900">{title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-          <ol aria-label={`${title}字段顺序`} className={cn("mt-4 grid gap-2", isMobile ? "!grid-cols-2" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-6")}>
-            {fields.map((field, index) => <li key={field} className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700">
-              <span className={`${tutorial.appleBadge} h-5 w-5 shrink-0`}>{index + 1}</span><span className="truncate">{field}</span>
-            </li>)}
-          </ol>
-          <p className="mt-4 text-xs font-medium text-slate-500">格式示例 · 虚构账号</p>
-          <code className="mt-2 block rounded-lg bg-slate-100/80 p-3 text-xs leading-6 text-slate-700 [overflow-wrap:anywhere]">{example}</code>
-          {hasOrderNotes ? <p className="mt-2 text-xs leading-5 text-slate-500">生日后如有地区或已购备注，仅用于核对订单。</p> : null}
-        </article>)}
+        {formats.map(({ title, description, fields, example, hasOrderNotes }) => {
+          const exampleParts = example.split("----");
+          return (
+            <article key={title} className={`${tutorial.appleCard} p-5 sm:p-6`}>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold text-slate-900">{title}</h3>
+                <span className="rounded-md bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-primary">
+                  共 {fields.length} 段信息
+                </span>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+
+              {/* Numbered field sequence */}
+              <div className="mt-3">
+                <div className="text-xs font-medium text-slate-500 mb-1.5">字段顺序对照：</div>
+                <ol aria-label={`${title}字段顺序`} className={cn("grid gap-1.5", isMobile ? "!grid-cols-2" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-6")}>
+                  {fields.map((field, index) => (
+                    <li key={field} className="flex min-w-0 items-center gap-1.5 rounded-lg border border-orange-100 bg-orange-50/30 px-2.5 py-1.5 text-xs text-slate-700">
+                      <span className={`${tutorial.appleBadge} h-4 w-4 text-[10px] shrink-0`}>{index + 1}</span>
+                      <span className="truncate font-medium">{field}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {/* Formatted breakdown example for mobile, raw block for desktop */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+                  <span>示例对照（虚构数据）</span>
+                  <span className="text-[11px] text-slate-400">以订单实际卡密为准</span>
+                </div>
+                {isMobile ? (
+                  <div className="mt-2 space-y-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 text-xs">
+                    {exampleParts.map((part, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-2.5 py-1.5">
+                        <span className="shrink-0 text-slate-400 font-medium">{fields[idx] || `附加信息 ${idx + 1}`}</span>
+                        <span className="font-mono text-xs font-semibold text-slate-800 break-all text-right">{part}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <code className="mt-2 block rounded-lg bg-slate-100/80 p-3 text-xs leading-6 text-slate-700 [overflow-wrap:anywhere]">{example}</code>
+                )}
+                {hasOrderNotes ? <p className="mt-2 text-xs leading-5 text-slate-500">生日后如有地区或已购备注，仅用于核对订单。</p> : null}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
     <section aria-labelledby="apple-store-login" className={`${tutorial.appleCard} p-5 sm:p-6`}>

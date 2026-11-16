@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { SettingsProvider, usePublicSettings } from "@/components/settings/SettingsProvider";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import MobileMenu from "./MobileMenu";
+import MobileTopBarAuth from "./MobileTopBarAuth";
 import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
 import RouteLoadingIndicator from "./RouteLoadingIndicator";
@@ -121,46 +122,42 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       <div
         data-testid="mobile-top-brand-bar"
         className={cn(
-          "fixed top-0 left-0 right-0 z-50 flex items-center gap-3 border-b border-border bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm",
+          "fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 border-b border-border bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm",
           mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
           isMobile && "!flex",
           mobilePreview && "mx-auto w-full max-w-[390px] border-x border-orange-200/80",
         )}
       >
-        <MobileMenu onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <MobileMenu onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
           <img
             src="/assets/jianlian-brand-logo.png"
             alt="Jianlian"
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0 rounded-md object-cover"
+            width={28}
+            height={28}
+            className="h-7 w-7 shrink-0 rounded-md object-cover"
           />
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold leading-tight">{settings.site_name || "Jianlian"}</div>
-            <div className="truncate text-[10px] leading-tight text-muted-foreground">{subtitle}</div>
+            <div className="truncate text-[13px] font-bold leading-tight text-slate-900">{settings.site_name || "Jianlian"}</div>
+            <div className="truncate text-[9px] leading-tight text-muted-foreground">{subtitle}</div>
           </div>
         </div>
-        {showToggle ? (
-          <button
-            type="button"
-            data-testid="mobile-preview-header-toggle"
-            onClick={toggleMobilePreview}
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-            title={mobilePreview ? "点击切回全宽窗口" : "点击切换为 390px 手机尺寸预览"}
-          >
-            {mobilePreview ? <Monitor className="h-3.5 w-3.5 text-primary" /> : <Smartphone className="h-3.5 w-3.5 text-primary" />}
-            <span>{mobilePreview ? "全宽" : "手机"}</span>
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={openSupport}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-orange-200/80 bg-orange-50/70 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-orange-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          <Headphones className="h-3.5 w-3.5 shrink-0" />
-          <span>客服</span>
-        </button>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          {showToggle ? (
+            <button
+              type="button"
+              data-testid="mobile-preview-header-toggle"
+              onClick={toggleMobilePreview}
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-1.5 text-[10px] font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+              title={mobilePreview ? "点击切回全宽窗口" : "点击切换为 390px 手机尺寸预览"}
+            >
+              {mobilePreview ? <Monitor className="h-3 w-3 text-primary" /> : <Smartphone className="h-3 w-3 text-primary" />}
+              <span>{mobilePreview ? "全宽" : "手机"}</span>
+            </button>
+          ) : null}
+          <MobileTopBarAuth />
+        </div>
       </div>
       <div
         aria-hidden="true"
@@ -207,6 +204,23 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
           </button>
         </div>
       ) : null}
+
+      {/* Floating customer service FAB for mobile */}
+      <button
+        type="button"
+        onClick={openSupport}
+        data-testid="floating-support-btn"
+        className={cn(
+          "fixed bottom-5 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
+          isMobile && "!flex",
+          mobilePreview && "right-[calc(50%-180px)]",
+        )}
+        aria-label="在线客服"
+        title="在线客服"
+      >
+        <Headphones className="h-5 w-5" />
+      </button>
 
       <Dialog open={supportOpen} onOpenChange={setSupportOpen}>
         <DialogContent onCloseAutoFocus={(event) => {

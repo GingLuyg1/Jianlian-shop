@@ -67,17 +67,21 @@ type ReferralResponse = {
   error?: string;
 };
 
-const statusLabels: Record<ReferralStatus, string> = {
+const statusLabels: Record<string, string> = {
+  completed: "已完成",
+  available: "已完成",
+  settled: "已完成",
   pending: "待确认",
-  available: "已确认",
   withdrawn: "已提现",
   cancelled: "已取消",
 };
 
-const statusStyles: Record<ReferralStatus, string> = {
+const statusStyles: Record<string, string> = {
+  completed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  available: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  settled: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   pending: "bg-amber-50 text-amber-700 ring-amber-100",
-  available: "bg-blue-50 text-blue-700 ring-blue-100",
-  withdrawn: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  withdrawn: "bg-blue-50 text-blue-700 ring-blue-100",
   cancelled: "bg-slate-100 text-slate-500 ring-slate-200",
 };
 
@@ -414,19 +418,19 @@ export default function PromotionPage() {
           <div className={cn(glass.table, "min-h-0 flex-1 overflow-hidden rounded-2xl")}>
             <div className="h-full overflow-auto">
               <div className={cn("space-y-2.5 p-3 md:hidden", isMobile && "!block")}>
-                {(data?.records?.length ? data.records : [
+                {((data?.records?.length ? data.records.filter((r) => r.status === "available" || r.status === ("settled" as unknown) || r.status === ("completed" as unknown)) : [
                   { id: "sample-1", referredUser: "vip_user***@gmail.com", orderAmount: 200, commissionAmount: 10, status: "settled" as const, paidAt: new Date().toISOString() },
-                  { id: "sample-2", referredUser: "crypto_***@163.com", orderAmount: 500, commissionAmount: 25, status: "pending" as const, paidAt: new Date(Date.now() - 86400000).toISOString() }
-                ]).map((record) => (
+                  { id: "sample-2", referredUser: "crypto_***@163.com", orderAmount: 500, commissionAmount: 25, status: "settled" as const, paidAt: new Date(Date.now() - 86400000).toISOString() }
+                ])).map((record) => (
                   <div key={record.id} className="rounded-xl border border-orange-100/80 bg-white p-3.5 text-xs shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold text-slate-900">{record.referredUser}</span>
-                      <span className={cn("inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1", statusStyles[record.status])}>
-                        {statusLabels[record.status]}
+                      <span className={cn("inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1", statusStyles[record.status] || "bg-emerald-50 text-emerald-700 ring-emerald-200")}>
+                        {statusLabels[record.status] || "已完成"}
                       </span>
                     </div>
                     <div className="mt-2.5 grid grid-cols-2 gap-2 text-slate-500">
-                      <div>充值金额：<span className="font-medium tabular-nums text-slate-800">{formatMoney(record.orderAmount)}</span></div>
+                      <div>订单金额：<span className="font-medium tabular-nums text-slate-800">{formatMoney(record.orderAmount)}</span></div>
                       <div>佣金变动：<span className="font-semibold tabular-nums text-orange-600">{formatMoney(record.commissionAmount)}</span></div>
                     </div>
                     <div className="mt-1.5 text-[11px] tabular-nums text-slate-400">支付时间：{formatDateTime(record.paidAt)}</div>
@@ -438,16 +442,16 @@ export default function PromotionPage() {
                   <tr>
                     <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">用户名</th>
                     <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">支付时间</th>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">充值金额</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">订单金额</th>
                     <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">佣金变动</th>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">付款状态</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">订单状态</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(data?.records?.length ? data.records : [
+                  {((data?.records?.length ? data.records.filter((r) => r.status === "available" || r.status === ("settled" as unknown) || r.status === ("completed" as unknown)) : [
                     { id: "sample-1", referredUser: "vip_user***@gmail.com", orderAmount: 200, commissionAmount: 10, status: "settled" as const, paidAt: new Date().toISOString() },
-                    { id: "sample-2", referredUser: "crypto_***@163.com", orderAmount: 500, commissionAmount: 25, status: "pending" as const, paidAt: new Date(Date.now() - 86400000).toISOString() }
-                  ]).map((record) => (
+                    { id: "sample-2", referredUser: "crypto_***@163.com", orderAmount: 500, commissionAmount: 25, status: "settled" as const, paidAt: new Date(Date.now() - 86400000).toISOString() }
+                  ])).map((record) => (
                     <tr key={record.id} className="h-11 text-slate-700 transition hover:bg-orange-50/40">
                       <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-medium text-slate-900">{record.referredUser}</td>
                       <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatDateTime(record.paidAt)}</td>
@@ -456,8 +460,8 @@ export default function PromotionPage() {
                         {formatMoney(record.commissionAmount)}
                       </td>
                       <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center">
-                        <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1", statusStyles[record.status])}>
-                          {statusLabels[record.status]}
+                        <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1", statusStyles[record.status] || "bg-emerald-50 text-emerald-700 ring-emerald-200")}>
+                          {statusLabels[record.status] || "已完成"}
                         </span>
                       </td>
                     </tr>
