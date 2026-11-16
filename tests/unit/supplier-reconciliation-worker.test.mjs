@@ -6,9 +6,9 @@ const allowed = ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "REFUNDED", "UN
 function fixture({ status = "DELIVERED", queryError = false, attempts, rpcError = false, readError = false } = {}) {
   const calls = [], queries = [];
   let selected;
-  const rows = attempts ?? [{ id: "test-attempt", supplier: "daju", status: "EXTERNAL_CREATED", external_order_id: "test-order" }];
+  const rows = attempts ?? [{ id: "test-attempt", supplier: "daju", status: "EXTERNAL_CREATED", external_invoice_id: "test-order" }];
   const builder = {
-    select() { return this; },
+    select(fields) { assert.equal(fields, "id,supplier,status,external_invoice_id"); return this; },
     in(field, values) { assert.equal(field, "status"); selected = values; return this; },
     async limit(n) { assert.equal(n, 100); return { data: rows, error: readError }; },
   };
@@ -49,7 +49,7 @@ test("query failure emits UNKNOWN/QUERY_FAILED without provider error contents",
   assert.doesNotMatch(JSON.stringify(f.calls), /SENSITIVE_ERROR/);
 });
 test("scan accepts only EXTERNAL_CREATED/RECONCILING, excludes crash-recovery states", async () => {
-  const attempts = ["SUBMITTING", "UNCERTAIN", "EXTERNAL_CREATED", "RECONCILING"].map(status => ({ id: status, supplier: "daju", status, external_order_id: status }));
+  const attempts = ["SUBMITTING", "UNCERTAIN", "EXTERNAL_CREATED", "RECONCILING"].map(status => ({ id: status, supplier: "daju", status, external_invoice_id: status }));
   const f = fixture({ attempts }); assert.equal(await f.run(), 2);
   assert.deepEqual(f.selected(), ["EXTERNAL_CREATED", "RECONCILING"]);
   assert.deepEqual(f.queries, ["EXTERNAL_CREATED", "RECONCILING"]);
@@ -57,6 +57,16 @@ test("scan accepts only EXTERNAL_CREATED/RECONCILING, excludes crash-recovery st
 test("empty candidate set finishes with zero queries/evidence", async () => {
   const f = fixture({ attempts: [] }); assert.equal(await f.run(), 0);
   assert.deepEqual(f.calls, []); assert.deepEqual(f.queries, []);
+});
+test("Daju root reconciliation uses external_invoice_id only and skips missing provider identity", async () => {
+  const attempts = [
+    { id: "missing", supplier: "daju", status: "EXTERNAL_CREATED", external_invoice_id: null },
+    { id: "known", supplier: "daju", status: "RECONCILING", external_invoice_id: "daju-order-1" },
+  ];
+  const f = fixture({ attempts });
+  assert.equal(await f.run(), 1);
+  assert.deepEqual(f.queries, ["daju-order-1"]);
+  assert.equal(f.calls[0].p_attempt_id, "known");
 });
 test("read/RPC failures stop safely without exposing error contents", async () => {
   const f = fixture({ readError: true }); await assert.rejects(f.run(), /SUPPLIER_RECONCILIATION_READ_FAILED/); assert.equal(f.queries.length, 0);

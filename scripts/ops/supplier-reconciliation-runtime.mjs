@@ -17,14 +17,14 @@ export function normalizeSupplierStatus(value) {
 export async function runSupplierReconciliation({ service, getOrder }) {
   const { data: attempts, error } = await service
     .from("supplier_purchase_attempts")
-    .select("id,supplier,status,external_invoice_id,external_order_id")
+    .select("id,supplier,status,external_invoice_id")
     .in("status", [...attemptStates])
     .limit(100);
   if (error) throw new Error("SUPPLIER_RECONCILIATION_READ_FAILED");
   let checked = 0;
   for (const attempt of attempts ?? []) {
     if (!attemptStates.includes(attempt.status) || attempt.supplier !== "daju") continue;
-    const orderCode = attempt.external_order_id ?? attempt.external_invoice_id;
+    const orderCode = attempt.external_invoice_id;
     if (!orderCode) continue;
     let status = "UNKNOWN";
     let resultClass = "QUERY_FAILED";
