@@ -5,7 +5,7 @@
 ## Bitrefill
 
 - 复用现有 Personal API / MCP、目录、采购持久化、私密交付和 Production runtime 代码。
-- 统一 capability registry 标记为 `release_gated`，因此 `canSupplierAutoPurchase("bitrefill")` 仍为 false。
+- 统一 capability registry 保持 `purchase:false`，并用 `productionWiring:"release_gated"` 单独描述已接代码；`canSupplierAutoPurchase("bitrefill")` 仍为 false。
 - 新增统一 super-admin 只读入口，用现有 Personal API 读取目录，用 MCP allowlist 读取余额。
 - 不修改 `REAL_BITREFILL_PURCHASE_ENABLED`，不增加 env-only 绕过。
 
