@@ -57,6 +57,19 @@ test("recovery rejects mismatched identity/cost and absent private delivery",asy
     assert.equal(f.deliveries(),0);assert.equal(f.evidence.at(-1).status,"UNKNOWN");
   }
 });
+test("recovery tolerates omitted provider echo fields and post-submit price movement within frozen max",async()=>{
+  const f=fixture({timeout:true});await f.run();Object.assign(f.attempt(),{status:"EXTERNAL_CREATED",external_invoice_id:"order-code"});
+  await reconcileDajuAttempt({db:f.db,client:{getOrder:async()=>({
+    ...await f.client.getOrder(),
+    requestId:null,
+    productId:null,
+    sku:null,
+    unitPrice:"4.50",
+    totalPrice:"4.50",
+  })},attempt:f.attempt()});
+  assert.equal(f.deliveries(),1);
+  assert.equal(f.evidence.at(-1).status,"DELIVERED");
+});
 
 for (const stage of ["freshError","balanceError"]) test(`CLAIMED crash at ${stage} resumes through fresh checks exactly once`,async()=>{
  const options={[stage]:true};const f=fixture(options);await assert.rejects(f.run());assert.equal(f.attempt().status,"CLAIMED");options[stage]=false;
