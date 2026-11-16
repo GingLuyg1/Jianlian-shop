@@ -914,7 +914,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
   const priceText = hasSkus && maxPrice > minPrice
-    ? `${currencySymbol}${minPrice.toFixed(2)}-${currencySymbol}${maxPrice.toFixed(2)}`
+    ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   return (
@@ -966,7 +966,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
   const hasSkus = Boolean(product.metadata?.hasSkus);
   const hasStock = stock > 0 && product.stockStatus !== "out-of-stock";
   const priceText = hasSkus && maxPrice > minPrice
-    ? `${currencySymbol}${minPrice.toFixed(2)}-${currencySymbol}${maxPrice.toFixed(2)}`
+    ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   if (isMobile) {
@@ -1070,7 +1070,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
         {showStock ? (
           <div
             className={cn(
-              "hidden min-w-[96px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold md:flex",
+              "hidden min-w-[90px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold md:flex",
               hasStock ? "text-green-600" : "text-red-500"
             )}
           >
@@ -1078,12 +1078,16 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">{stock}</span>
           </div>
         ) : null}
+        <div className="hidden min-w-[80px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold text-[#9a552b] md:flex">
+          <span>销量</span>
+          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-[#9a552b]">{salesCount}</span>
+        </div>
         {product.originalPrice ? (
           <div className="hidden shrink-0 text-sm text-muted-foreground line-through lg:block">
             {currencySymbol}{Number(product.originalPrice).toFixed(2)}
           </div>
         ) : null}
-        <div className=" shrink-0 text-right text-base font-bold text-orange-600 sm:min-w-[92px] sm:text-center sm:text-lg">
+        <div className="shrink-0 text-right text-base font-bold text-orange-600 min-w-[120px] sm:min-w-[140px] sm:text-right pr-2">
           {hasStock ? priceText : "已售罄"}
         </div>
       </div>

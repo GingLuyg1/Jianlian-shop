@@ -333,25 +333,18 @@ html[data-scroll-locked] {
   margin-right: 0 !important;
 }
 
-/* Mobile Touch interaction: remove sticky hover, use active scale feedback */
+/* Mobile Touch interaction: disable hover animations and eliminate touch scale jitter */
 @media (hover: none), (pointer: coarse) {
-  button:hover, a:hover {
+  button:hover, a:hover, button:active, a:active {
     transform: none !important;
-  }
-  button:active, a:active {
-    transform: scale(0.97) !important;
-    transition: transform 60ms ease-out !important;
   }
 }
 
 html[data-mobile-preview="true"] button:hover,
-html[data-mobile-preview="true"] a:hover {
-  transform: none !important;
-}
+html[data-mobile-preview="true"] a:hover,
 html[data-mobile-preview="true"] button:active,
 html[data-mobile-preview="true"] a:active {
-  transform: scale(0.97) !important;
-  transition: transform 60ms ease-out !important;
+  transform: none !important;
 }
 
 /* Mobile studio 390px frame overrides for Account Recharge */

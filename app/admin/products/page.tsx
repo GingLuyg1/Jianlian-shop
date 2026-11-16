@@ -989,11 +989,11 @@ export default function AdminProductsPage() {
             <CardHeader className="shrink-0 px-4 py-2.5">
               <div className="flex min-h-10 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                 <CardTitle className="text-base">商品列表</CardTitle>
-                <div className={cn(glass.tableTools, glass.filters)}>
-                  <span className={cn(glass.count, "self-start px-2.5 py-1 text-xs tabular-nums lg:self-center")}>当前结果 {productCount} 条</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={cn(glass.count, "px-2.5 py-1 text-xs tabular-nums")}>当前结果 {productCount} 条</span>
 
-                  <div className={glass.filterActions}>
-                    <Button variant="outline" size="sm" onClick={resetProductFilters}>重置</Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={resetProductFilters}>重置</Button>
                     <button
                       type="button"
                       className={glass.moreFilters}

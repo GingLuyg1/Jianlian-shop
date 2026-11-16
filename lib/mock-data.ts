@@ -88,6 +88,29 @@ export const smsCodeServiceTotalStock = Object.values(
 export const products: Product[] = [
   // 国际电话卡
   {
+    id: "sim-nz-001",
+    name: "One NZ 新西兰电话卡（原沃达丰）",
+    category: "sim-cards",
+    categoryLabel: "国际电话卡",
+    description: "新西兰 One NZ 实体电话卡，0月租、免实名、国内免费接收短信、直连移动/联通5G漫游",
+    price: 98.0,
+    currency: "CNY",
+    stockStatus: "in-stock",
+    stockLabel: "库存充足",
+    processingTime: "顺丰包邮发货",
+    deliveryMethod: "physical",
+    deliveryLabel: "快递发货",
+    productType: "physical",
+    listingStatus: "active",
+    detail: "新西兰 One NZ（原 Vodafone NZ）预付费 SIM 实体卡。核心特性：1. 0 月租，平时不消费无任何月租成本；2. 国内免费接收短信，接入中国移动/联通 5G 漫游；3. 免实名认证，保护隐私；4. 每年充值 10 NZD 自动延期 12 个月保号；5. 支持 OpenAI / ChatGPT、TikTok、Telegram、WhatsApp、Google 等海内外平台注册。注意事项：国内插卡务必关闭数据漫游防扣费；iPhone 提示激活 iMessage / FaceTime 务必选取消。",
+    purchaseNotes: "1. 购买后提供快递单号发货，三合一免剪卡适配所有主流机型。2. 收到卡片后请先仔细阅读配套教程再插卡。3. 如需大客户批量拿卡或协助充值保号，请联系在线客服。",
+    faq: [
+      { question: "国内如何激活查本机号？", answer: "插卡后关闭数据漫游，发短信「mytype」至「521」即可免费自动收到本机号码短信。" },
+      { question: "国内真的免费接收短信吗？", answer: "是的，只要关闭数据漫游、不拨打电话，在国内漫游接收验证码完全免费。" },
+      { question: "如何长期保号？", answer: "在 One NZ 官网每年充值 10 纽币（NZD），账户有效期自动延期 360 天。" },
+    ],
+  },
+  {
     id: "sim-001",
     name: "GiffGaff 白卡",
     category: "sim-cards",

@@ -341,75 +341,46 @@ export default function HomePage() {
         </div>
 
         <section className={cn("grid min-h-0 gap-3 md:gap-4 xl:grid-cols-[1fr_330px]", isMobile && "!grid-cols-1")}>
-          {isMobile && mobileCategoryTree.length > 0 ? (
+          {isMobile && mobileSecondaryItems.length > 0 ? (
             <div data-testid="mobile-secondary-direct-grid" className="rounded-2xl border border-orange-200/80 bg-white p-3.5 shadow-sm">
               <div className="mb-2.5 flex items-center justify-between gap-2">
                 <div>
                   <h2 className="text-base font-bold text-slate-950">分类直达</h2>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    左侧选主类目，右侧选对应商品子类
+                    点击任意子分类直接进入对应商品列表
                   </p>
                 </div>
                 <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
                   共 {mobileSecondaryItems.length} 项
                 </span>
               </div>
-              <div className="flex gap-2 min-h-[160px]">
-                {/* Left column: Level 1 category options */}
-                <div className="flex w-[100px] shrink-0 flex-col gap-1 border-r border-orange-100 pr-1.5">
-                  {mobileCategoryTree.map((cat, idx) => {
-                    const active = idx === activeMobilePrimaryIndex;
-                    const Icon = cat.icon;
-                    return (
-                      <button
-                        key={cat.primaryId}
-                        type="button"
-                        onClick={() => setActiveMobilePrimaryIndex(idx)}
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-lg px-2 py-2 text-left text-xs font-medium transition-colors",
-                          active
-                            ? "bg-orange-50 font-bold text-primary ring-1 ring-orange-200"
-                            : "text-slate-600 hover:bg-slate-50"
-                        )}
-                      >
-                        <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-primary" : "text-slate-400")} />
-                        <span className="truncate flex-1 text-[11px] leading-tight">{cat.primaryName}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Right column: Level 2 category items for active primary */}
-                <div className="flex-1 min-w-0 pl-1">
-                  <div className="grid grid-cols-2 gap-2">
-                    {(mobileCategoryTree[activeMobilePrimaryIndex]?.items ?? []).map((item) => (
-                      <Link
-                        key={item.id}
-                        href={item.targetUrl}
-                        className="flex items-center gap-2 rounded-xl border border-orange-100/70 bg-orange-50/20 p-2 transition-colors hover:bg-orange-50/60"
-                      >
-                        {item.code ? (
-                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-[10px] font-bold text-primary">
-                            {item.code}
-                          </span>
-                        ) : item.image ? (
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="h-7 w-7 shrink-0 rounded-lg bg-white object-cover ring-1 ring-slate-200/80"
-                          />
-                        ) : (
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                            <KeyRound className="h-3.5 w-3.5" />
-                          </span>
-                        )}
-                        <span className="min-w-0 flex-1 line-clamp-2 text-left text-xs font-semibold leading-tight text-slate-900">
-                          {item.name}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
+              <div className="grid grid-cols-3 gap-2">
+                {mobileSecondaryItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={item.targetUrl}
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-100 bg-orange-50/25 px-2 py-2.5 text-center transition-colors hover:border-primary/30 hover:bg-orange-50/60"
+                  >
+                    {item.code ? (
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-bold text-primary">
+                        {item.code}
+                      </span>
+                    ) : item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="h-8 w-8 shrink-0 rounded-lg bg-white object-cover ring-1 ring-slate-200/80"
+                      />
+                    ) : (
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <KeyRound className="h-4 w-4" />
+                      </span>
+                    )}
+                    <span className="w-full truncate text-xs font-semibold text-slate-900">
+                      {item.name}
+                    </span>
+                  </Link>
+                ))}
               </div>
             </div>
           ) : null}

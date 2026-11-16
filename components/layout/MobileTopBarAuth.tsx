@@ -128,10 +128,10 @@ export default function MobileTopBarAuth() {
 
   if (user) {
     return (
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1">
         <Link
           href="/products/account-recharge"
-          className="inline-flex h-7 items-center gap-1 rounded-lg border border-orange-200/80 bg-orange-50/70 px-2 text-[11px] font-semibold text-primary transition-colors hover:bg-orange-100/70"
+          className="inline-flex h-7 items-center gap-0.5 rounded-lg border border-orange-200/80 bg-orange-50/70 px-1.5 text-[11px] font-semibold text-primary transition-colors hover:bg-orange-100/70"
           title="账户余额"
         >
           <CreditCard className="h-3 w-3 shrink-0" />
@@ -143,7 +143,7 @@ export default function MobileTopBarAuth() {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 max-w-[130px] justify-between rounded-lg border-slate-200 bg-white px-2 text-[11px] font-medium text-slate-700 shadow-none hover:bg-slate-50"
+              className="h-7 max-w-[85px] sm:max-w-[110px] justify-between rounded-lg border-slate-200 bg-white px-1.5 text-[11px] font-medium text-slate-700 shadow-none hover:bg-slate-50"
             >
               <span className="truncate">{getDisplayName(user)}</span>
               <ChevronDown className="ml-0.5 h-3 w-3 shrink-0 text-slate-400" />
