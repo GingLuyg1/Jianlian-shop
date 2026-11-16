@@ -30,6 +30,7 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: postgres
       PGDATABASE: jianlian_bitrefill_v13_db5_20261116
+      PG_CONTAINER: ${{ job.services.postgres.id }}
       SUPPLIER_AUTO_PURCHASE_ENABLED: 'false'
       DAJU_AUTO_PURCHASE_MODE: disabled
     steps:

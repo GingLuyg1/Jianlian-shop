@@ -7,9 +7,12 @@ import { repoOutcomeDefinition } from "../../tests/support/supplier-v13-local-fi
 assert.equal(process.env.PGHOST,"127.0.0.1");
 assert.equal(process.env.PGDATABASE,"jianlian_bitrefill_v13_db5_20261116");
 assert.equal(process.env.CI,"true");
+assert.match(process.env.PG_CONTAINER ?? "", /^[0-9a-f]{12,64}$/);
 assert.ok(!process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.DAJU_API_KEY);
 function q(sql) {
-  const x=spawnSync("psql",["-X","-v","ON_ERROR_STOP=1","-Atq"],{input:sql,encoding:"utf8"});
+  // Connect on the disposable container's loopback so the shared fixture's
+  // existing server-side loopback guard stays intact (no guard relaxation).
+  const x=spawnSync("docker",["exec","-i","--env","PGPASSWORD",process.env.PG_CONTAINER,"psql","-h","127.0.0.1","-U","postgres","-d",process.env.PGDATABASE,"-X","-v","ON_ERROR_STOP=1","-Atq"],{input:sql,encoding:"utf8"});
   if(x.status!==0) throw Error(x.stderr); return x.stdout.trim();
 }
 const data=q("select current_setting('data_directory')");
