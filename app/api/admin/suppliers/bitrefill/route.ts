@@ -16,7 +16,7 @@ function json(body: unknown, status = 200) {
 
 function readonlyMcp() {
   const apiKey = process.env.BITREFILL_API_KEY;
-  if (process.env.BITREFILL_AUTH_MODE !== "personal" || !apiKey) {
+  if ((process.env.BITREFILL_AUTH_MODE && process.env.BITREFILL_AUTH_MODE !== "personal") || !apiKey) {
     throw new Error("BITREFILL_READONLY_BALANCE_NOT_CONFIGURED");
   }
   return createBitrefillMcpReadonlyClient({
@@ -113,8 +113,8 @@ export async function GET(request: Request) {
           ...mapProduct(result.product),
           isSku: result.product.packages.length > 1,
           description: null,
-          minQty: 1,
-          maxQty: 1,
+          minQty: null,
+          maxQty: null,
           specs: [],
           skuVariants: result.product.packages.map((entry) => ({
             packageId: entry.packageId,
