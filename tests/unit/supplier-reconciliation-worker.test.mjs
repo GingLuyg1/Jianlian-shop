@@ -1,0 +1,134 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { normalizeSupplierStatus, runSupplierReconciliation } from "../../scripts/ops/supplier-reconciliation-runtime.mjs";
+
+const allowed = ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "REFUNDED", "UNKNOWN"];
+function fixture({ status = "DELIVERED", queryError = false, attempts, rpcError = false, readError = false } = {}) {
+  const calls = [], queries = [];
+  let selected;
+  const rows = attempts ?? [{ id: "test-attempt", supplier: "daju", status: "EXTERNAL_CREATED", external_invoice_id: "test-order" }];
+  const builder = {
+    select(fields) { assert.equal(fields, "id,supplier,status,external_invoice_id,logical_request_key"); return this; },
+    in(field, values) { assert.equal(field, "status"); selected = values; return this; },
+    async limit(n) { assert.equal(n, 100); return { data: rows, error: readError }; },
+  };
+  const service = {
+    from(table) {
+      if (table === "supplier_purchase_attempts") return builder;
+      const b={then(resolve){return Promise.resolve({data:[{fulfillment_request_id:"root"}],error:null}).then(resolve)},select(){return b},eq(){return b},order:async()=>({data:[{order_item_id:"item",fulfillment_request_id:"root",frozen_product_id:"10",frozen_package_id:null,frozen_currency:"CNY",quoted_unit_cost:"1",max_unit_cost:"2"}],error:null}),single:async()=>({data:{request_id:"key",attempt_token:"token"},error:null})};
+      return b;
+    },
+    async rpc(name, args) {
+      if (name === "internal_supplier_purchase_deliver_daju_attempt") return { data:{ok:true}, error:rpcError };
+      assert.equal(name, "internal_supplier_purchase_record_evidence");
+      assert.ok(allowed.includes(args.p_status));
+      assert.match(args.p_result_class, /^[A-Z][A-Z0-9_]{0,99}$/);
+      assert.match(args.p_safe_fingerprint, /^[0-9a-f]{64}$/);
+      assert.deepEqual(Object.keys(args).sort(), ["p_attempt_id", "p_external_order_row_id", "p_status", "p_result_class", "p_safe_fingerprint", "p_checked_at"].sort());
+      calls.push(args); return { data:{result:"RECORDED"}, error: rpcError };
+    },
+  };
+  return { calls, queries, selected: () => selected, run: () => runSupplierReconciliation({ service, getOrder: async code => {
+    queries.push(code);
+    if (queryError) throw Error("SENSITIVE_ERROR_SENTINEL");
+    return { status, orderCode:code, requestId:rows.find(x=>x.external_invoice_id===code)?.logical_request_key, productId:10,sku:null,quantity:1,unitPrice:"1",totalPrice:"1",delivered:["SECRET_DELIVERY_SENTINEL"], raw: { apiKey: "SECRET_KEY_SENTINEL" } };
+  } }) };
+}
+
+for (const [raw, expected] of Object.entries({ DELIVERED: "DELIVERED", SUCCEEDED: "DELIVERED", COMPLETED: "DELIVERED", PENDING: "PENDING", CREATED: "PENDING", WAITING: "PENDING", PROCESSING: "PROCESSING", IN_PROGRESS: "PROCESSING", FAILED: "FAILED", REJECTED: "FAILED", CANCELLED: "FAILED", CANCELED: "FAILED", REFUNDED: "REFUNDED", unrecognized: "UNKNOWN" })) {
+  test(`${raw} normalizes to RPC ${expected} with uppercase result class`, async () => {
+    assert.equal(normalizeSupplierStatus(raw), expected);
+    const f = fixture({ status: raw });
+    assert.equal(await f.run(), 1);
+    assert.equal(f.calls[0].p_status, expected);
+    assert.equal(f.calls[0].p_result_class, expected === "DELIVERED" ? "DAJU_AUTHORITATIVE_DELIVERED" : "PROVIDER_STATE");
+    assert.doesNotMatch(JSON.stringify(f.calls), /SENTINEL|delivered|apiKey/);
+  });
+}
+test("non-string and prototype names fail closed to UNKNOWN", () => {
+  for (const x of [null, undefined, {}, 1, "constructor", "__proto__"]) assert.equal(normalizeSupplierStatus(x), "UNKNOWN");
+});
+test("query failure emits UNKNOWN/QUERY_FAILED without provider error contents", async () => {
+  const f = fixture({ queryError: true }); assert.equal(await f.run(), 1);
+  assert.equal(f.calls[0].p_status, "UNKNOWN"); assert.equal(f.calls[0].p_result_class, "QUERY_FAILED");
+  assert.doesNotMatch(JSON.stringify(f.calls), /SENSITIVE_ERROR/);
+});
+test("scan accepts only EXTERNAL_CREATED/RECONCILING, excludes crash-recovery states", async () => {
+  const attempts = ["SUBMITTING", "UNCERTAIN", "EXTERNAL_CREATED", "RECONCILING"].map(status => ({ id: status, supplier: "daju", status, external_invoice_id: status }));
+  const f = fixture({ attempts }); assert.equal(await f.run(), 2);
+  assert.deepEqual(f.selected(), ["EXTERNAL_CREATED", "RECONCILING"]);
+  assert.deepEqual(f.queries, ["EXTERNAL_CREATED", "RECONCILING"]);
+});
+test("empty candidate set finishes with zero queries/evidence", async () => {
+  const f = fixture({ attempts: [] }); assert.equal(await f.run(), 0);
+  assert.deepEqual(f.calls, []); assert.deepEqual(f.queries, []);
+});
+test("Daju root reconciliation uses external_invoice_id only and skips missing provider identity", async () => {
+  const attempts = [
+    { id: "missing", supplier: "daju", status: "EXTERNAL_CREATED", external_invoice_id: null },
+    { id: "known", supplier: "daju", status: "RECONCILING", external_invoice_id: "daju-order-1" },
+  ];
+  const f = fixture({ attempts });
+  assert.equal(await f.run(), 1);
+  assert.deepEqual(f.queries, ["daju-order-1"]);
+  assert.equal(f.calls[0].p_attempt_id, "known");
+});
+test("read/RPC failures stop safely without exposing error contents", async () => {
+  const f = fixture({ readError: true }); await assert.rejects(f.run(), /SUPPLIER_RECONCILIATION_READ_FAILED/); assert.equal(f.queries.length, 0);
+  await assert.rejects(fixture({ rpcError: true }).run(), /DAJU_V2_RPC_FAILED/);
+});
+
+
+test("worker source never calls provider purchase", async () => {
+  const fs = await import("node:fs/promises");
+  const source = await fs.readFile("scripts/ops/supplier-reconciliation-worker.mjs", "utf8") + await fs.readFile("scripts/ops/supplier-reconciliation-runtime.mjs", "utf8") + await fs.readFile("lib/providers/daju/purchase-v2-store.mjs", "utf8");
+  assert.match(source, /getOrder\(orderCode\)/);
+  assert.doesNotMatch(source, /\.purchase\(/);
+  assert.match(source, /SUPPLIER_AUTO_PURCHASE_ENABLED/);
+  assert.match(source, /SUPPLIER_RECONCILIATION_ENABLED/);
+  assert.match(source, /internal_supplier_purchase_record_evidence/);
+});
+
+test("systemd runtime forces reconciliation-only mode", async () => {
+  const fs = await import("node:fs/promises");
+  const service = await fs.readFile("ops/systemd/jianlian-supplier-reconciliation.service", "utf8");
+  const timer = await fs.readFile("ops/systemd/jianlian-supplier-reconciliation.timer", "utf8");
+  assert.match(service, /SUPPLIER_RECONCILIATION_ENABLED=true/);
+  assert.match(service, /SUPPLIER_AUTO_PURCHASE_ENABLED=false/);
+  assert.match(service, /Type=oneshot/);
+  assert.match(timer, /OnUnitActiveSec=5min/);
+});
+
+test("systemd pins actual code to release env and uses a dedicated root-only env contract", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const service = await readFile("ops/systemd/jianlian-supplier-reconciliation.service", "utf8");
+  const exec = service.split(/\r?\n/).find(line => line.startsWith("ExecStart="));
+  assert.match(exec, /\$\$JIANLIAN_RELEASE_DIR\/scripts\/ops\/supplier-reconciliation-worker\.mjs/);
+  assert.match(exec, /\$\$\{JIANLIAN_RELEASE_DIR:\?/);
+  assert.doesNotMatch(exec, /\/www\/jianlian-shop\/scripts\//);
+  assert.match(service, /^EnvironmentFile=\/etc\/jianlian\/supplier-reconciliation\.env$/m);
+  assert.doesNotMatch(service, /\.env\.production\.local/);
+  assert.match(service, /root:root 0600/);
+  // Enforce the purchase guard at execution even if a runtime env has stale flags.
+  assert.match(exec, /export SUPPLIER_RECONCILIATION_ENABLED=true SUPPLIER_AUTO_PURCHASE_ENABLED=false;/);
+});
+
+test("systemd uses a nonblocking stable flock and bounded hardened runtime", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const service = await readFile("ops/systemd/jianlian-supplier-reconciliation.service", "utf8");
+  assert.match(service, /^ExecStart=\/usr\/bin\/flock -n -E 0 \/run\/lock\/jianlian-supplier-reconciliation\.lock /m);
+  for (const line of ["User=root", "Group=root", "Type=oneshot", "ReadWritePaths=/run/lock", "UMask=0077", "NoNewPrivileges=true", "PrivateTmp=true", "ProtectSystem=strict", "ProtectHome=true", "After=network-online.target", "Wants=network-online.target"]) {
+    assert.ok(service.split(/\r?\n/).includes(line), line);
+  }
+  const timeout = Number(service.match(/^TimeoutStartSec=(\d+)s$/m)?.[1]);
+  assert.ok(timeout > 0 && timeout <= 120);
+  assert.equal(service.match(/^ReadWritePaths=/gm)?.length, 1);
+});
+
+test("timer remains declarative without execution or auto-install commands", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const timer = await readFile("ops/systemd/jianlian-supplier-reconciliation.timer", "utf8");
+  assert.match(timer, /^OnBootSec=2min$/m);
+  assert.match(timer, /^OnUnitActiveSec=5min$/m);
+  assert.doesNotMatch(timer, /Exec(?:Start|Stop)|systemctl|enable\s+--now|sudo|\binstall\s+-/i);
+});
