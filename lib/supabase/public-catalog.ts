@@ -417,10 +417,14 @@ export function mapPublicProductToProduct(
     typeof (row as PublicCatalogProductRow).max_price === "number"
       ? Number((row as PublicCatalogProductRow).max_price)
       : row.price;
+  const rawMetadata = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : null;
+  const metaSales = rawMetadata?.sales_count ?? rawMetadata?.salesCount;
   const salesCount =
     typeof (row as PublicCatalogProductRow).sales_count === "number"
       ? Math.max(0, Number((row as PublicCatalogProductRow).sales_count))
-      : 0;
+      : typeof metaSales === "number" || typeof metaSales === "string"
+        ? Math.max(0, Number(metaSales) || 0)
+        : 0;
   const stockStatus: StockStatus =
     row.status === "sold_out" || effectiveStock <= 0
       ? "out-of-stock"

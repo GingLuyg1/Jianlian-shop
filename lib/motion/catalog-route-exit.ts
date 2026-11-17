@@ -63,7 +63,7 @@ export function clearCatalogRoutePending() {
 
 /** A superseded route may commit after a newer click. Keep its products inert. */
 export function rebaseCatalogRoutePending(pathname: string) {
-  if (!pendingRoute || pendingRoute.target === pathname || !isCatalogCategoryPath(pathname)) return false;
+  if (!pendingRoute || pendingRoute.target.split("?")[0] === pathname || !isCatalogCategoryPath(pathname)) return false;
   publishPendingRoute({ source: pathname, target: pendingRoute.target });
   return true;
 }

@@ -1627,7 +1627,7 @@ export default function AdminDashboardPage() {
                       desc: "未关联外部自动供货源",
                       value: (data?.rawSeries.products ?? []).filter((p) => (p.operational_summary?.supplier_unbound ?? 0) > 0 || !p.operational_summary?.supplier_bound).length,
                       href: "/admin/suppliers",
-                      tone: "slate" as const,
+                      tone: "purple" as const,
                     },
                     {
                       label: "在售正常商品",

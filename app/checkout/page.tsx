@@ -19,6 +19,7 @@ import Link from "next/link";
 import {
   CreditCard,
   Gift,
+  HelpCircle,
   ArrowRight,
   BookOpen,
   CheckCircle2,
@@ -2378,8 +2379,8 @@ function GptRechargeDetails({ product }: { product: Product }) {
     },
     {
       num: "4",
-      title: "秒级处理开通会员",
-      desc: "上游系统全自动充值处理，一般 1-3 分钟内即刻生效，登录 ChatGPT 刷新即可点亮会员权益。",
+      title: "处理开通会员",
+      desc: "系统全自动充值处理，一般 1-3 分钟内即刻生效，登录 Chat GPT 刷新即可点亮会员权益。",
     },
   ];
 
@@ -2482,6 +2483,64 @@ function GptRechargeDetails({ product }: { product: Product }) {
         subtitle="查阅 ChatGPT 账号安全防封、海外节点选择、多设备登录与保号指南"
         actionText="查阅教程"
       />
+
+      {/* 常见问题 FAQ */}
+      <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2">
+          <HelpCircle className="h-5 w-5 text-orange-500" />
+          <h3 className="text-base font-bold text-slate-900">❓ 常见问题 FAQ</h3>
+        </div>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q1：怎么完成充值？</h4>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
+              打开兑换站{" "}
+              <a
+                href="https://cdk-card.dajuai.us/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+              >
+                https://cdk-card.dajuai.us/
+              </a>
+              ，先验证 CDK，再提交 Session。Session 获取方式：网页登录 ChatGPT 后访问{" "}
+              <a
+                href="https://chatgpt.com/api/auth/session"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+              >
+                https://chatgpt.com/api/auth/session
+              </a>
+              ，复制返回的全部 JSON 或 accessToken。
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q2：有账单可以查吗？</h4>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
+              有。正规卡充，带官方账单。可在 GPT 官网下载：左下角头像 → 设置 → 账单 → 查看。
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q3：质保多久？掉订阅怎么处理？</h4>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
+              充值成功后质保 30 天订阅。质保期内掉订阅，按天数退赔。
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q4：充值未到账怎么办？</h4>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs leading-5 text-slate-600 sm:text-sm">
+              <li>网页版刷新网页，查看右下角头像下方有没有出现相应权益</li>
+              <li>在 Jianlian.shop 我的订单里查询充值订单卡密，到兑换站查询充值账号是否有误</li>
+              <li>自查左下角头像 → 设置 → 账单 → 查看。有没有相对应的充值记录</li>
+              <li>自查后没有请联系人工客服，协助查询</li>
+            </ol>
+          </div>
+        </div>
+      </section>
 
       {/* 售后与注意事项 */}
       <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">

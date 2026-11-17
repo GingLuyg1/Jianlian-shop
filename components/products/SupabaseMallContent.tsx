@@ -33,7 +33,7 @@ import { forgetPublicProductPage, getPublicProductPage, peekPublicProductPage, p
 import { useProgressiveWheelMotion } from "@/hooks/use-progressive-wheel-motion";
 import { WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 import { findVisibleStorefrontPrimaryCategory, storefrontCategoryPaths } from "@/lib/catalog/visible-storefront-category-routes";
-import { getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
+import { clearCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
 import {
   findPrimaryCategory,
   getChildCategories,
@@ -129,12 +129,20 @@ function SupabaseMallContentInner({
   const pathname = usePathname();
   const router = useRouter();
   const pendingRoute = useSyncExternalStore(subscribeCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending);
-  const routePending = pendingRoute?.source === pathname && pendingRoute.target !== pathname ? pendingRoute : null;
+  const routeTargetBase = pendingRoute?.target ? pendingRoute.target.split("?")[0] : "";
+  const routePending = pendingRoute?.source === pathname && routeTargetBase !== pathname ? pendingRoute : null;
   const searchParams = useSearchParams();
   const routeSearch = searchParams.toString();
   const [localParams, setLocalParams] = useState(() => new URLSearchParams(routeSearch));
   const { settings } = usePublicSettings();
   const { isMobile } = useMobileStorefront();
+
+  useEffect(() => {
+    const pending = getCatalogRoutePending();
+    if (pending && pending.target.split("?")[0] === pathname) {
+      clearCatalogRoutePending();
+    }
+  }, [pathname]);
   const categorySnapshot = usePublicCategorySnapshot();
   useSyncExternalStore(subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion);
   const [activeCategory, setActiveCategory] = useState<DisplayCategory | null>(null);
@@ -891,7 +899,7 @@ function ProductPanel({
 
         {routePendingTarget ? (
           <div data-testid="catalog-route-pending" role="status" aria-label="商品区域加载中" className="min-h-[260px] flex-1 overflow-auto px-1 py-1 text-sm text-slate-700 lg:min-h-0 lg:px-1.5">
-            {routeStalled ? <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3"><p className="font-medium">目标分类仍在加载。</p><button type="button" className="mt-2 font-semibold text-primary underline" onClick={() => window.location.assign(routePendingTarget)}>重试加载目标分类</button></div> : null}
+            {routeStalled ? <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3"><p className="font-medium">目标分类仍在加载。</p><button type="button" className="mt-2 font-semibold text-primary underline" onClick={() => { clearCatalogRoutePending(); window.location.assign(routePendingTarget); }}>重试加载目标分类</button></div> : null}
             {placeholderPhase === "visible" ? <ProductLoadingPlaceholder knownCount={knownRouteProductCount} /> : null}
           </div>
         ) : error ? (

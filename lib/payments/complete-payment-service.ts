@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
+import { recordOrderProductSales } from "@/lib/orders/product-sales-service";
 import type { PaymentCurrency } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -46,6 +47,9 @@ export async function completePayment(
 
   const result = normalizeResult(data);
   if (result.businessType === "order") {
+    recordOrderProductSales(service, result.businessId).catch((err) =>
+      console.error("Failed to record product sales:", err)
+    );
     try {
       await deliverDigitalOrder(service, result.businessId, input.source);
     } catch (deliveryError) {

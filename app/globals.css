@@ -215,10 +215,9 @@ body:has([data-storefront-ui]) [role="dialog"]:not([class*="inset-y-0"]) {
 /* Catalog motion only: wrappers keep the approved cards and layout unchanged. */
 @media (min-width: 1024px) {
   .catalog-wheel-item {
-    transform: translate3d(0, 0, 0) scale(var(--wheel-scale, 1));
-    opacity: var(--wheel-opacity, 1);
-    transform-origin: center center;
-    will-change: transform, opacity;
+    transform: none !important;
+    opacity: 1 !important;
+    will-change: auto;
   }
 }
 

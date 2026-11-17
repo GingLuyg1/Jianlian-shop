@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Edit, GripVertical, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";

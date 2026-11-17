@@ -86,7 +86,8 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   const router = useRouter();
   useEffect(() => {
     const pending = getCatalogRoutePending();
-    if (!pending || pending.target === pathname) {
+    const targetPath = pending?.target ? pending.target.split("?")[0] : "";
+    if (!pending || targetPath === pathname) {
       clearCatalogRoutePending();
     } else if (rebaseCatalogRoutePending(pathname)) {
       router.replace(pending.target, { scroll: false });
@@ -113,7 +114,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       data-mobile-active={isMobile ? "true" : undefined}
       style={{ maxWidth: previewWidth ? `${previewWidth}px` : undefined }}
       className={cn(
-        viewportLocked && !isMobile ? "h-dvh overflow-hidden" : "min-h-screen overflow-x-hidden",
+        viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen overflow-x-clip" : "min-h-screen overflow-x-hidden",
         "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:268px] lg:[--storefront-sidebar-width:248px]",
         !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:268px] md:[--storefront-sidebar-width:248px]",
         isMobile && "[--storefront-content-padding-x:12px] lg:[--storefront-main-offset:0px]",
@@ -245,16 +246,16 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
       ) : null}
 
-      {/* Floating customer service FAB for mobile: square with rounded corners */}
+      {/* Floating customer service FAB for mobile: bottom-4 left-4 (left and bottom margins symmetric 16px) */}
       <button
         type="button"
         onClick={openSupport}
         data-testid="floating-support-btn"
         className={cn(
-          "fixed bottom-5 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          "fixed bottom-4 left-4 z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
           mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
           isMobile && "!flex",
-          mobilePreview && previewWidth && `right-[calc(50%-${previewWidth / 2 - 16}px)]`,
+          mobilePreview && previewWidth && `left-[calc(50%-${previewWidth / 2 - 16}px)]`,
         )}
         aria-label="在线客服"
         title="在线客服"

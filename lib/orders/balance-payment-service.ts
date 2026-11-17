@@ -7,6 +7,7 @@ import {
   getDeliveryErrorMessage,
   type DeliveryInternalStage,
 } from "@/lib/delivery/delivery-service";
+import { recordOrderProductSales } from "@/lib/orders/product-sales-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { runPostPaymentDelivery, type PostPaymentDeliveryStage } from "@/lib/orders/post-payment-delivery.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -58,6 +59,9 @@ export async function payOrderWithBalance(
   if (error) throw error;
 
   const result = normalizeBalancePaymentResult(data, input.orderId);
+  recordOrderProductSales(service, result.orderId).catch((err) =>
+    console.error("Failed to record product sales for balance payment:", err)
+  );
   try {
     input.onLifecycleStage?.({ stage: "BALANCE_PAYMENT_COMPLETED", error: null });
   } catch {
