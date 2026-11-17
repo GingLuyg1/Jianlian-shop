@@ -1,6 +1,8 @@
 -- Synthetic disposable PostgreSQL only; never execute against a hosted database.
 do $$ begin
- if current_database()<>'kuajingzy_freeze_isolated' or inet_server_addr()<>'127.0.0.1'::inet then
+ -- The runner connects only to localhost; a Docker service sees its bridge address.
+ if current_database()<>'kuajingzy_freeze_isolated' or not coalesce(
+   inet_server_addr()='127.0.0.1'::inet or inet_server_addr()<<'172.16.0.0/12'::inet, false) then
    raise exception 'DISPOSABLE_DATABASE_REQUIRED';
  end if;
 end $$;
