@@ -610,10 +610,10 @@ function CategoryPanel({
       <CardContent className={cn("h-full min-h-0 p-3", isMobile && "!p-1")}>
         <div className={cn(categoryPanelInnerClassName, isMobile && "!bg-transparent")}>
           {isMobile && categories.length > 0 ? (
-            <div className="mb-1 flex flex-col items-center gap-0.5 border-b border-orange-100/80 pb-1 text-center">
+            <div className="mb-1.5 flex items-center justify-center gap-1 border-b border-orange-100/80 pb-1.5 text-center">
               <span className="text-[10px] font-bold text-slate-600">分类</span>
               <span className="rounded-full bg-orange-100/80 px-1.5 py-0.2 text-[9px] font-semibold text-primary">
-                {categories.length}
+                ({categories.length})
               </span>
             </div>
           ) : null}

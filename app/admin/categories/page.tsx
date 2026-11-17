@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Edit, GripVertical, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { invalidatePublicCategories } from "@/lib/catalog/public-category-snapshot";
 import {
   createCategory,
   createProduct,
@@ -124,7 +125,7 @@ function emptyProductForm(rootId = "", categoryId = ""): ProductForm {
 }
 
 function sortCategories(a: AdminCategory, b: AdminCategory) {
-  return a.sort_order - b.sort_order || a.name.localeCompare(b.name);
+  return (a.sort_order ?? 0) - (b.sort_order ?? 0) || (a.name || "").localeCompare(b.name || "");
 }
 
 function slugify(value: string) {
@@ -227,6 +228,14 @@ function isValidImagePath(value: string) {
 }
 
 export default function AdminCategoriesPage() {
+  return (
+    <Suspense fallback={<AdminTableSkeleton rows={8} />}>
+      <AdminCategoriesPageInner />
+    </Suspense>
+  );
+}
+
+function AdminCategoriesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [categories, setCategories] = useState<AdminCategory[]>([]);
@@ -421,6 +430,16 @@ export default function AdminCategoriesPage() {
       const saved = categoryForm.id ? await updateCategory(categoryForm.id, payload) : await createCategory(payload);
       setNotice(categoryForm.id ? "分类已保存" : "分类已新增");
       setCategoryForm(null);
+      setCategories((prev) => {
+        const index = prev.findIndex((c) => c.id === saved.id);
+        if (index >= 0) {
+          const next = [...prev];
+          next[index] = saved;
+          return next;
+        }
+        return [...prev, saved];
+      });
+      void invalidatePublicCategories().catch(() => undefined);
       await loadCategories();
       if (saved.level === 1) selectRoot(saved.id);
       if (saved.level === 2) {
@@ -1139,7 +1158,11 @@ function CategoryDialog({
               placeholder="请输入分类展示名称"
               onChange={(event) => {
                 const name = event.target.value;
-                onUpdate({ ...form, name, slug: form.slug || slugify(name) });
+                onUpdate({
+                  ...form,
+                  name,
+                  slug: form.id ? form.slug : (form.slug || slugify(name)),
+                });
               }}
             />
           </Field>
