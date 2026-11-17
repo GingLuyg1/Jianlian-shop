@@ -1,0 +1,35 @@
+name: KuajingZY atomic binding freeze
+on:
+  pull_request:
+jobs:
+  isolated-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: synthetic-local-ci-only
+          POSTGRES_DB: kuajingzy_freeze_isolated
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      KJ_PGHOST: 127.0.0.1
+      KJ_PGPORT: "5432"
+      KJ_PGDATABASE: kuajingzy_freeze_isolated
+      KJ_PGUSER: postgres
+      PGPASSWORD: synthetic-local-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Existing RPC with anchored candidate and synthetic transactions
+        run: node tests/support/kuajingzy-binding-freeze-pg.mjs
