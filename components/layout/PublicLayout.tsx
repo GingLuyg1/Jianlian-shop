@@ -114,7 +114,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       data-mobile-active={isMobile ? "true" : undefined}
       style={{ maxWidth: previewWidth ? `${previewWidth}px` : undefined }}
       className={cn(
-        viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen overflow-x-clip" : "min-h-screen overflow-x-hidden",
+        viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen !overflow-visible" : "min-h-screen overflow-x-hidden",
         "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:268px] lg:[--storefront-sidebar-width:248px]",
         !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:268px] md:[--storefront-sidebar-width:248px]",
         isMobile && "[--storefront-content-padding-x:12px] lg:[--storefront-main-offset:0px]",
@@ -246,16 +246,20 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
       ) : null}
 
-      {/* Floating customer service FAB for mobile: bottom-4 left-4 (left and bottom margins symmetric 16px) */}
+      {/* Floating customer service FAB for mobile: 左侧，距边缘 20px (不贴边、不被截断) */}
       <button
         type="button"
         onClick={openSupport}
         data-testid="floating-support-btn"
+        style={
+          mobilePreview && previewWidth
+            ? { left: `calc(50% - ${previewWidth / 2}px + 20px)`, bottom: "24px" }
+            : { left: "20px", bottom: "24px" }
+        }
         className={cn(
-          "fixed bottom-4 left-4 z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          "fixed z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
           mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
           isMobile && "!flex",
-          mobilePreview && previewWidth && `left-[calc(50%-${previewWidth / 2 - 16}px)]`,
         )}
         aria-label="在线客服"
         title="在线客服"

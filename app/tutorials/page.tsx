@@ -22,7 +22,6 @@ import PublicLayout from "@/components/layout/PublicLayout";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import BinanceTutorial from "@/components/account/BinanceTutorial";
@@ -127,10 +126,14 @@ function ScrollProgressFab({
       type="button"
       onClick={scrollToTop}
       data-testid="tutorial-scroll-top-btn"
+      style={
+        mobilePreview && previewWidth
+          ? { right: `calc(50% - ${previewWidth / 2}px + 20px)`, bottom: "24px" }
+          : { right: "20px", bottom: "24px" }
+      }
       className={cn(
-        "fixed bottom-4 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-slate-800 shadow-lg shadow-slate-900/10 border border-orange-200/80 backdrop-blur-md transition-all active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        "fixed z-40 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-slate-800 shadow-lg shadow-slate-900/10 border border-orange-200/80 backdrop-blur-md transition-all active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         scrollProgress > 2 ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none",
-        mobilePreview && previewWidth && `right-[calc(50%-${previewWidth / 2 - 16}px)]`,
       )}
       aria-label="回到顶部"
       title={`已阅读 ${Math.round(scrollProgress)}%，点击回到顶部`}
@@ -198,9 +201,9 @@ export default function TutorialsPage() {
   const showGiffgaff = matchingTopics.length > 0 && topic.id === "giffgaff";
   const showOneNz = matchingTopics.length > 0 && topic.id === "one-nz";
   const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
-  return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName="max-w-none px-4 py-3 md:px-6">
-    <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!grid-cols-1 !h-auto !gap-3 !overflow-visible" : ""}`}>
-      <aside data-testid="tutorial-navigation" className={cn(glass.surface, styles.panel, tutorial.navigation, isMobile && "!max-h-none !overflow-visible !p-2.5 sticky top-[53px] z-30 bg-white/95 backdrop-blur-md shadow-xs border-b border-orange-100/90 -mx-4 px-4")}>
+  return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={isMobile ? "max-w-none !pt-0.5 !px-3 pb-6" : "max-w-none px-4 py-3 md:px-6"}>
+    <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!block !h-auto !space-y-3 !overflow-visible" : ""}`}>
+      <aside data-testid="tutorial-navigation" className={cn(glass.surface, styles.panel, tutorial.navigation, isMobile && "!max-h-none !overflow-visible !p-2 !sticky !top-[53px] !z-30 bg-white/95 backdrop-blur-md shadow-xs border-b border-orange-100/90 -mx-3 px-3 mt-0 rounded-b-2xl")}>
         {isMobile ? (
           <div className="space-y-2">
             {/* 一级教程分类胶囊栏 (横向滚动 + 右侧展开全部按钮，悬浮置顶冻结) */}
@@ -232,17 +235,68 @@ export default function TutorialsPage() {
                 })}
               </div>
 
-              {/* 右侧展开全部按钮 */}
+              {/* 右侧展开全部/收起按钮 */}
               <button
                 type="button"
-                onClick={() => setExpandAllOpen(true)}
+                onClick={() => setExpandAllOpen(!expandAllOpen)}
                 className="inline-flex shrink-0 items-center gap-1 rounded-full border border-orange-200/90 bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold text-primary shadow-2xs hover:bg-orange-50 active:scale-95 transition-all"
-                title="展开全部教程分类"
+                title={expandAllOpen ? "收起教程分类" : "展开全部教程分类"}
               >
-                <span>展开全部</span>
-                <ChevronDown className="h-3 w-3 text-primary" />
+                <span>{expandAllOpen ? "收起" : "展开全部"}</span>
+                <ChevronDown className={cn("h-3 w-3 text-primary transition-transform duration-200", expandAllOpen && "rotate-180")} />
               </button>
             </div>
+
+            {/* 展开全部在内容框内展开 (手风琴折叠面板，非弹窗) */}
+            {expandAllOpen ? (
+              <div className="rounded-2xl border border-orange-200/80 bg-orange-50/30 p-2.5 shadow-2xs animate-in fade-in-50 duration-150">
+                <div className="mb-2 flex items-center justify-between border-b border-orange-100/80 pb-1.5">
+                  <span className="text-[11px] font-bold text-slate-700">全部教程分类 (点击切换)</span>
+                  <button
+                    type="button"
+                    onClick={() => setExpandAllOpen(false)}
+                    className="text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    收起 ∧
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {tutorialTopics.map(({ id, label, icon: Icon, description }) => {
+                    const current = topic.id === id && matchingTopics.length > 0;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          setSelected(id);
+                          setSearch("");
+                          if (id === "giffgaff") setGiffgaffTreeOpen(true);
+                          if (id === "one-nz") setOneNzTreeOpen(true);
+                          setExpandAllOpen(false);
+                          resetScroll();
+                        }}
+                        className={cn(
+                          "flex flex-col items-start gap-1 rounded-xl border p-2 text-left transition-all active:scale-95",
+                          current
+                            ? "border-primary/60 bg-white font-semibold text-primary shadow-2xs ring-1 ring-primary/40"
+                            : "border-slate-100 bg-white/80 text-slate-700 hover:bg-white"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 w-full">
+                          <Icon className={cn("h-3.5 w-3.5 shrink-0", current ? "text-primary" : "text-slate-500")} />
+                          <span className="text-xs font-bold truncate">{label}</span>
+                        </div>
+                        {description ? (
+                          <span className="line-clamp-1 text-[10px] text-slate-500 leading-tight">
+                            {description}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             {/* 如果当前分类是 Apple ID，显示二级章节小药丸 */}
             {topic.id === "apple-id" ? (
@@ -401,53 +455,7 @@ export default function TutorialsPage() {
       </section>
     </div>
 
-    {/* 移动端展开全部教程分类弹窗 */}
-    <Dialog open={expandAllOpen} onOpenChange={setExpandAllOpen}>
-      <DialogContent className="max-h-[80dvh] w-[calc(100%-32px)] max-w-[420px] overflow-y-auto rounded-2xl border-slate-200 bg-white p-5 shadow-xl sm:rounded-2xl">
-        <DialogHeader className="flex-row items-center justify-between space-y-0 text-left">
-          <DialogTitle className="text-base font-bold text-slate-900">全部教程分类</DialogTitle>
-        </DialogHeader>
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
-          {tutorialTopics.map(({ id, label, icon: Icon, description }) => {
-            const current = topic.id === id && matchingTopics.length > 0;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setSelected(id);
-                  setSearch("");
-                  if (id === "giffgaff") setGiffgaffTreeOpen(true);
-                  if (id === "one-nz") setOneNzTreeOpen(true);
-                  setExpandAllOpen(false);
-                  resetScroll();
-                }}
-                className={cn(
-                  "flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-all active:scale-95",
-                  current
-                    ? "border-primary/60 bg-orange-50/90 shadow-2xs ring-1 ring-primary/40"
-                    : "border-slate-100 bg-slate-50/60 hover:bg-orange-50/40"
-                )}
-              >
-                <div className="flex items-center gap-1.5 w-full">
-                  <Icon className={cn("h-4 w-4 shrink-0", current ? "text-primary" : "text-slate-600")} />
-                  <span className={cn("text-xs font-bold truncate", current ? "text-primary" : "text-slate-900")}>
-                    {label}
-                  </span>
-                </div>
-                {description ? (
-                  <span className="line-clamp-1 text-[10px] text-slate-500">
-                    {description}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    {/* 教程专用回到顶部环形进度浮动按钮 */}
+    {/* 教程专用回到顶部环形进度浮动按钮 (右侧，不与左侧客服重叠) */}
     <ScrollProgressFab isMobile={isMobile} previewWidth={previewWidth} mobilePreview={mobilePreview} />
   </PublicLayout></div>;
 }

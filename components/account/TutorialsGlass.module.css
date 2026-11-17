@@ -60,8 +60,8 @@
 .questionBadge { background:#fff1df; color:#a75523; }
 .answerBadge { background:#eff5f9; color:#456883; }
 @media(max-width:1023px) {
-  .workspace { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:10px; height:auto; }
-  .navigation { max-height:none; padding:12px; }
+  .workspace { display:block; height:auto; }
+  .navigation { max-height:none; padding:12px; overflow:visible !important; }
   .topicList { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; min-width:0; max-width:100%; margin-top:10px; overflow:visible; padding-bottom:0; }
   .treeItem { grid-column:1/-1; }
   .topicIndicator { display:none; }
