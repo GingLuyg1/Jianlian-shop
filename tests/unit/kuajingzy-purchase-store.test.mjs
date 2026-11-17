@@ -25,3 +25,61 @@ test('historical pre-attempt root fails closed; marked exact root resumes',async
  root.trigger_source='kuajingzy_v1:test';assert.equal((await db.root(c,key)).attempt_token,'token');
  root.provider_order_code='already_created';await assert.rejects(db.root(c,key),/MANUAL_REVIEW/);
 });
+
+
+function balanceFinancialFixture({paymentMethod='balance',evidencePatch={}}={}) {
+ const c=syntheticCandidate(),now=Date.parse('2026-11-18T00:00:00.000Z'),seen=[],verifiedCalls=[];
+ const binding={fulfillment_source:'supplier',supplier:'kuajingzy',
+  website_product_id:c.binding.websiteProductId,website_sku_id:c.binding.websiteSkuId,
+  supplier_product_id:c.binding.productId,supplier_sku:c.binding.sku,supplier_currency:'CNY',
+  supplier_max_unit_cost:c.binding.maxUnitCost,supplier_min_unit_profit:c.binding.minUnitProfit,
+  supplier_min_margin_bps:c.binding.minMarginBps,supplier_auto_purchase_enabled:c.binding.enabled};
+ const order={id:c.orderId,payment_status:'paid',payment_method:paymentMethod,status:'paid',currency:'CNY',total_amount:'1.000000'};
+ const item={id:c.orderItemId,order_id:c.orderId,product_id:c.binding.websiteProductId,sku_id:c.binding.websiteSkuId,
+  quantity:1,line_total:'1.000000',delivery_type:'automatic',delivery_status:'pending',
+  product_snapshot:{supplier_binding:binding}};
+ const service={from(table){seen.push(table);const b={
+  select(){return b;},eq(){return b;},order(){return b;},single(){return b;},
+  then(resolve){return Promise.resolve({data:table==='orders'?order:[item],error:null}).then(resolve);}
+ };return b;}};
+ const verifiedCosts=async orderId=>{verifiedCalls.push(orderId);return {
+  source:'verified_payment_costs',orderId,settlementKind:'balance_ledger',
+  settlementId:'00000000-0000-4000-8000-000000000099',transactionNo:'BT_SYNTHETIC',
+  provider:'internal_balance',currency:'CNY',paymentFee:'0.000000',otherFees:'0.000000',
+  costScope:'order_settlement_only',checkedAt:new Date(now).toISOString(),...evidencePatch};};
+ return {c,service,seen,verifiedCalls,verifiedCosts,clock:()=>now};
+}
+
+test('paid balance candidate consumes balance-ledger merchant cost evidence without payment_sessions',async()=>{
+ const f=balanceFinancialFixture();
+ const db=createKuajingZyPurchaseStore(f.service,{verifiedCosts:f.verifiedCosts,clock:f.clock});
+ const rows=await db.loadCandidates(f.c.orderId);
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].financials.paymentFee,'0.000000');
+ assert.equal(rows[0].financials.otherFees,'0.000000');
+ assert.deepEqual(f.verifiedCalls,[f.c.orderId]);
+ assert(!f.seen.includes('payment_sessions'));
+});
+
+test('unsupported payment method and malformed balance-ledger evidence fail closed',async()=>{
+ const external=balanceFinancialFixture({paymentMethod:'alipay'});
+ await assert.rejects(
+  createKuajingZyPurchaseStore(external.service,{verifiedCosts:external.verifiedCosts,clock:external.clock}).loadCandidates(external.c.orderId),
+  /VERIFIED_PAYMENT_METHOD_UNSUPPORTED/
+ );
+ assert.equal(external.verifiedCalls.length,0);
+ for(const evidencePatch of [
+  {settlementKind:'payment_session'},
+  {provider:'external'},
+  {costScope:'funding_and_settlement'},
+  {paymentFee:'0.010000'},
+  {otherFees:'0.010000'},
+  {checkedAt:'2000-01-01T00:00:00.000Z'}
+ ]) {
+  const f=balanceFinancialFixture({evidencePatch});
+  await assert.rejects(
+   createKuajingZyPurchaseStore(f.service,{verifiedCosts:f.verifiedCosts,clock:f.clock}).loadCandidates(f.c.orderId),
+   /VERIFIED_PAYMENT_COST_EVIDENCE_REQUIRED/
+  );
+ }
+});
