@@ -3,8 +3,10 @@
 # KuajingZY wiring V1: review only, disabled
 
 No Production deployment, database mutation, purchase or activation is authorized
-by this PR. DATABASE_MIGRATION_REQUIRED=NO: existing generic supplier RPCs and
-immutable V1.3 units can represent this contract without parallel state tables.
+by this PR. This PR adds no new migration or parallel state table. PR #142 has
+merged the candidate create_order_with_item KuajingZY atomic binding-freeze
+migration into main, but that migration has NOT been executed in Production.
+PR #143 has merged the read-only balance-ledger merchant-cost adapter.
 
 First-party contract: https://888.kuajing.one/pc/#api-docs, captured 2026-11-17.
 POST /api/open/v1/orders/mall, Bearer authorization, application/json, required
@@ -55,28 +57,25 @@ digital_delivery_secrets and fulfillment refresh and is idempotent per order ite
 Attempt success follows private commit; crash there repeats GET/idempotent private
 RPC, never purchase. Count/identity/money/refund/duplicate/HTML failures prevent delivery.
 
-## Activation blockers: do not mislabel this PR ready to enable
+## Activation status: implementation prerequisites merged, activation still closed
 
-1. Current Production create_order_with_item has no KuajingZY binding/policy
-   freeze entry. Existing JSON schema can express it; this PR does not change
-   checkout/payment SQL or introduce a speculative migration. A separately
-   reviewed trusted entry must freeze website_product_id, website_sku_id,
-   fulfillment_source=supplier, supplier=kuajingzy, supplier_product_id,
-   nullable string supplier_sku, supplier_currency=CNY, supplier_max_unit_cost,
-   positive supplier_min_unit_profit, supplier_min_margin_bps and boolean
-   supplier_auto_purchase_enabled. Missing fields fail closed; never patch old orders.
-2. Production still needs an approved merchant-cost accounting adapter. Server
-   runtime accepts verifiedCosts; the ordinary router intentionally supplies none.
-   It must return source verified_payment_costs, matching order/session IDs,
-   currency CNY, actual known paymentFee/otherFees and fresh checkedAt.
-   No browser values, customer payment_sessions.fee_amount or assumed zero.
-   Paid principal is allocated conservatively by line totals; full known order
-   costs are charged per candidate. Missing paid session/cost evidence, low
-   profit/margin or excessive frozen cost blocks POST. Balance-only/no-session
-   payments need verified accounting support before being eligible.
-3. Supplier resale permission and approved thresholds remain external decisions.
-   No daily budget or reservation system is added or claimed.
+1. PR #142 is merged into main and provides the fail-closed candidate Migration
+   that atomically freezes KuajingZY binding/policy inside create_order_with_item.
+   It has NOT been executed in Production. Until separately reviewed and applied,
+   Production orders cannot acquire a KuajingZY frozen binding.
+2. PR #143 is merged into main. The Production runtime now consumes
+   getVerifiedMerchantCostsForOrder for balance-paid orders. Evidence is the real
+   completed order_payment debit in balance_transactions, with
+   settlementKind=balance_ledger, provider=internal_balance,
+   costScope=order_settlement_only and exact zero order-settlement fee. No
+   paymentSessionId is invented. Alipay/WeChat/USDT remain fail-closed for
+   KuajingZY auto purchase until their merchant-cost evidence is implemented.
+3. Supplier resale permission, approved product pricing/margin thresholds,
+   Production Migration execution, product creation/binding, and a separate
+   reviewed release-gate change remain activation decisions.
 
+KUAJINGZY_PURCHASE_RELEASE_ENABLED remains false, registry purchase remains false,
+and all environment/binding gates remain closed by default.
 READY_FOR_CODE_REVIEW does not mean READY_TO_ENABLE_AUTO_PURCHASE.
 
 ## Outlook post-merge proposal: DO NOT EXECUTE
