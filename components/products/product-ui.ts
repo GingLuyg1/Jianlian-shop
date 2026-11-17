@@ -23,10 +23,10 @@ export const compactSearchWrapperClassName =
   "flex w-full gap-3 md:w-[520px]";
 
 export const compactSearchInputClassName =
-  "h-11 rounded-lg border-[#ead9cc] bg-[#fffaf6] pl-11 text-base text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25";
+  "h-10 sm:h-11 rounded-lg border-[#ead9cc] bg-[#fffaf6] pl-9 sm:pl-11 text-xs sm:text-base text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25";
 
 export const compactSearchButtonClassName =
-  "h-11 w-[104px] rounded-lg bg-[#df7334] text-base font-medium hover:bg-[#d7672a]";
+  "h-10 sm:h-11 w-16 sm:w-[104px] shrink-0 rounded-lg bg-[#df7334] text-xs sm:text-base font-medium hover:bg-[#d7672a]";
 
 export const productListFiveRowsClassName =
   "scroll-fade-y h-[470px] min-h-0 w-full shrink-0 space-y-2.5 overflow-y-auto px-1.5 py-1 pr-2 sidebar-scroll";

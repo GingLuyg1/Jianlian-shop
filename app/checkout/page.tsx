@@ -15,11 +15,18 @@ import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
+import Link from "next/link";
 import {
   CreditCard,
   Gift,
+  HelpCircle,
+  ArrowRight,
+  BookOpen,
   CheckCircle2,
   Clock3,
+  Download,
+  ExternalLink,
+  Globe,
   KeyRound,
   MessageCircle,
   Minus,
@@ -27,6 +34,8 @@ import {
   ChevronDown,
   Plus,
   RefreshCcw,
+  ShieldAlert,
+  Truck,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -168,6 +177,7 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
     categoryLabel: "商品详情",
     description: row.short_description ?? row.description ?? "",
     price: Number(row.price ?? 0),
+    image: row.image_url || undefined,
     imageUrl: row.image_url,
     originalPrice: row.original_price,
     stock,
@@ -1339,7 +1349,11 @@ function ProductDetailCard({
         </div>
 
         {loading ? <ProductDetailSkeleton /> : family === "chatgpt" ? (
-          <GptRechargeDetails product={product} />
+          product.name.includes("成品") || product.id === "946a345e-c0a1-4a6b-a172-f994c6af2194" ? (
+            <GptPremadeAccountDetails product={product} />
+          ) : (
+            <GptRechargeDetails product={product} />
+          )
         ) : family === "grok" ? (
           <GrokRechargeDetails product={product} />
         ) : family === "claude" ? (
@@ -1352,6 +1366,8 @@ function ProductDetailCard({
           <AppleGiftCardDetails product={product} />
         ) : product.id.startsWith("dig-apple-id-") ? (
           <AppleIdDetails product={product} />
+        ) : product.id === "sim-nz-001" || product.name.toLowerCase().includes("one nz") ? (
+          <OneNzProductDetails product={product} />
         ) : (
           <div className="mt-8 w-full">
             <h2 className="mb-3 text-base font-semibold">商品详情</h2>
@@ -1888,6 +1904,452 @@ function AppleIdDetails({ product }: { product: Product }) {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function OneNzProductDetails({ product }: { product: Product }) {
+  const highlights = [
+    {
+      icon: Smartphone,
+      title: "0 月租 · 零持有成本",
+      text: "不打电话、不发短信即完全 0 月租，平时持有无需缴纳任何日常费用。",
+    },
+    {
+      icon: CheckCircle2,
+      title: "国内免费接收短信",
+      text: "国内接入中国移动/联通 5G/4G 漫游，接收海内外平台验证码完全免费。",
+    },
+    {
+      icon: Globe,
+      title: "海外高权重原生号",
+      text: "021 开头真实海外手机号（非 VoIP），秒过 OpenAI、Claude、TikTok、TG 等各大平台风控。",
+    },
+    {
+      icon: ShieldCheck,
+      title: "无需实名认证",
+      text: "海外实体预付费 SIM 卡，保护个人隐私安全，收到即可插卡使用。",
+    },
+    {
+      icon: Truck,
+      title: "默认包邮（如需加急联系客服）",
+      text: "国内现货默认包邮直达，妥善包装防静电防折弯保护芯片安全，如需顺丰加急请联系客服。",
+    },
+    {
+      icon: Clock3,
+      title: "每年 10 NZD 轻松保号",
+      text: "新卡一年有效期，后续每年充值 10 纽币自动顺延 360 天，余额留存永久有效。",
+    },
+  ];
+
+  const rules = [
+    ["商品规格", "One NZ 新西兰预付费实体三合一 SIM 卡（支持标准大卡、Micro、Nano 卡槽）"],
+    ["交付方式", "默认包邮发货（如需加急联系客服；下单后请正确填写收货人、联系电话及详细收件地址）"],
+    ["漫游网络", "国内自动漫游接入中国移动或中国联通 5G / 4G 信号"],
+    ["号码格式", "新西兰本土手机号码段（+64 21 xxx xxxx）"],
+    ["保号规则", "新卡含 360 天有效期；后续每年充值 10 纽币可顺延 360 天（支持本站客服代充秒到账）"],
+    ["售后说明", "物理 SIM 卡一经拆封插卡激活后不支持无理由退换，发货前均经严格质检验真"],
+  ];
+
+  const steps = [
+    ["第一步：下单收件", "提交订单并填写准确的收件信息，等待快递包邮送达（如需加急请联系在线客服）。"],
+    ["第二步：关闭数据漫游", "【极度重要】插卡前务必在手机设置中确认【关闭数据漫游】，避免后台流量偷跑产生高额漫游费。"],
+    ["第三步：插卡选网", "取出 Nano SIM 卡插入全网通手机卡槽，等待接入中国移动或中国联通信号。"],
+    ["第四步：获取本机号码", "新建短信发送内容「mytype」至号码「521」，系统将在数秒内免费回复您的本机号码。"],
+    ["第五步：注册绑定 App", "下载官方 App 或访问官网绑定号码，随时查询余额、流量及号码有效期。"],
+  ];
+
+  return (
+    <div className="mt-8 w-full space-y-5">
+      {/* Hero Section */}
+      <section className="overflow-hidden rounded-2xl border border-orange-200 bg-white">
+        <div className="relative bg-gradient-to-br from-orange-500 via-orange-600 to-amber-700 px-6 py-8 text-white">
+          <div className="inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold">
+            One NZ | 新西兰原生 SIM 卡 (物理卡)
+          </div>
+          <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-3xl">
+            {product.name}
+          </h2>
+          <p className="mt-2 text-sm font-semibold text-orange-50 sm:text-base">
+            0 月租 · 免费收短信 · 移动/联通 5G 漫游 · 免实名认证 · 默认包邮（如需加急联系客服）
+          </p>
+          <p className="mt-4 max-w-3xl text-xs leading-6 text-orange-50/90 sm:text-sm sm:leading-7">
+            新西兰第一大运营商（前身 Vodafone NZ）原生实体手机卡，真实三大运营商移动号码段（021 开头）。
+            接入国内移动/联通优质 5G 漫游，接收全球各类应用及银行验证码完全免费。每年充值 10 纽币即可顺延 360 天有效期。
+          </p>
+        </div>
+
+        {/* Highlights */}
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          {highlights.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.title}
+                className="rounded-xl border border-orange-100 bg-orange-50/40 p-4 text-center"
+              >
+                <Icon className="mx-auto h-7 w-7 text-orange-700" />
+                <div className="mt-2 text-sm font-semibold text-slate-950">
+                  {item.title}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {item.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Critical Warnings Notice */}
+      <section className="rounded-2xl border border-red-200 bg-red-50/70 p-5 text-slate-800">
+        <div className="flex items-start gap-3">
+          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+          <div className="space-y-2 text-xs leading-5 sm:text-sm sm:leading-6">
+            <div className="text-sm font-bold text-red-800 sm:text-base">
+              新手插卡必看：两大防扣费重要提醒！
+            </div>
+            <p>
+              <strong>1. 严禁开启手机「数据漫游」：</strong>国际数据漫游费用昂贵（约 11.5 NZD/MB），手机后台即使推送几 KB 流量也可能触发扣费。在国内接收短信完全不需要开数据，请务必在手机设置中关闭数据漫游！
+            </p>
+            <p>
+              <strong>2. iPhone 提示激活 iMessage / FaceTime 务必点击【取消】：</strong>插卡后若 iOS 弹出激活收费提示，请果断点击取消。点取消完全不影响接收短信，若点确认激活则会向海外苹果服务器发送扣费国际短信。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Product Specs & Rules */}
+      <section className="rounded-2xl border border-orange-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <ShieldCheck className="h-5 w-5 text-orange-700" />
+          商品说明与交付规格
+        </h3>
+        <div className="mt-4 space-y-3">
+          {rules.map(([label, text]) => (
+            <div
+              key={String(label)}
+              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3 text-xs leading-5 sm:text-sm sm:leading-6"
+            >
+              <span className="font-semibold text-slate-950">{label}：</span>
+              <span className="text-slate-600">{text}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Quick Setup Steps */}
+      <section className="rounded-2xl border border-orange-200 bg-white p-5">
+        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+          <CheckCircle2 className="h-5 w-5 text-orange-700" />
+          激活与使用流程
+        </h3>
+        <div className="mt-4 space-y-3">
+          {steps.map(([title, text]) => (
+            <div
+              key={String(title)}
+              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3"
+            >
+              <div className="text-sm font-semibold text-slate-950">
+                {title}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm sm:leading-6">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Link to Full Graphic Tutorial */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-orange-200/90 bg-gradient-to-r from-orange-50 via-white to-orange-50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-bold text-slate-950 sm:text-base">需要更详尽的插卡激活、App 绑定与资费保号指南？</div>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+            本站为您整理了全套高清步骤截图与排错技巧，支持一步一步对照操作。
+          </p>
+        </div>
+        <Link
+          href="/tutorials?topic=one-nz"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#df7334] px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#d7672a] sm:text-sm"
+        >
+          <span>查看完整图文教程</span>
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function GptPremadeAccountDetails({ product }: { product: Product }) {
+  const accountHighlights = [
+    {
+      icon: Sparkles,
+      title: "Plus 尊享权益",
+      desc: "包含 GPT-4o / GPT-4 / o1 全模型使用权，DALL-E 3 绘图、高级数据分析及联网搜索能力。",
+    },
+    {
+      icon: ShieldCheck,
+      title: "官方纯正成品号",
+      desc: "质保 1 天（稳定批次部分已存活 20 天+），纯正一手海外家宽独享注册，发货即用。",
+    },
+    {
+      icon: Zap,
+      title: "独立独享交付",
+      desc: "交付独享账号、密码以及配套邮箱，一人一号，可自行绑定手机号与修改密码。",
+    },
+    {
+      icon: Clock3,
+      title: "自动秒级发货",
+      desc: "下单后系统自动分配卡密账号并展示在订单页面，无需繁琐等待人工发货。",
+    },
+  ];
+
+  const specs = [
+    ["商品名称", product.name],
+    ["账号规格", "ChatGPT Plus 官方订阅独享成品号（含配套邮箱及初始登录凭证）"],
+    ["质保服务", "首发激活质保 24 小时（部分批次已稳定存活 20 天以上；正常使用不滥用 API 可长久续费）"],
+    ["交付格式", "账号/邮箱 ---- 密码 ---- 2FA 动态密钥 ---- 辅助邮箱密码"],
+    ["网络环境要求", "必须使用正规、纯净的海外节点（如美区、新加坡、日本等住宅或正规代理），切忌香港/大陆/频繁变动节点"],
+    ["推荐配置", "配合指纹浏览器独立环境或无痕浏览器窗口使用，杜绝多账号共用同一浏览器缓存导致风控关联"],
+  ];
+
+  return (
+    <div className="mt-8 w-full space-y-6">
+      {/* 1. 第一栏：产品介绍和特点 */}
+      <section className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-teal-500/10 p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100/80 px-3 py-1 text-xs font-semibold text-emerald-800">
+            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+            官方独享 · 独立成品
+          </span>
+          <span className="text-xs font-semibold text-emerald-700">自动发货 · 质保 24 小时</span>
+        </div>
+        <h2 className="mt-3 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+          {product.name}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          已开通 ChatGPT Plus 会员服务，独享账号直接上手使用。纯手工家宽环境注册，无共享风险，支持修改密码与长期保号。
+        </p>
+
+        {/* 亮点卡片网格 */}
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {accountHighlights.map((item, idx) => {
+            const Icon = item.icon;
+            return (
+              <div key={idx} className="flex items-start gap-3 rounded-xl border border-white/80 bg-white/70 p-3.5 shadow-sm backdrop-blur-sm">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">{item.title}</div>
+                  <div className="mt-0.5 text-xs leading-5 text-slate-500">{item.desc}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 2. 第二栏：商品详细规格与交付标准 */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <h3 className="text-base font-bold text-slate-900">商品详细规格与交付标准</h3>
+        <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-100 text-xs sm:text-sm">
+          {specs.map(([label, value], i) => (
+            <div key={i} className="flex flex-col gap-1 p-3.5 sm:flex-row sm:items-center sm:gap-4">
+              <span className="w-28 shrink-0 font-semibold text-slate-500">{label}</span>
+              <span className="font-medium text-slate-800">{value}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 3. 第三栏：发货格式说明 */}
+      <section className="rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2 text-emerald-800">
+          <KeyRound className="h-5 w-5 text-emerald-600" />
+          <h3 className="text-base font-bold text-slate-900">独享交付标准与发货格式说明</h3>
+        </div>
+        <p className="mt-1 text-xs text-slate-600 sm:text-sm">
+          下单完成后，系统自动生成卡密。标准发货内容包含 4 段关键信息（以四个横杠 ---- 分隔）：
+        </p>
+
+        <div className="mt-3 overflow-x-auto rounded-xl border border-emerald-200 bg-white/95 p-3.5 font-mono text-xs text-slate-800 shadow-inner">
+          <div className="text-slate-400">// 独享成品号标准交付格式</div>
+          <div className="mt-1 font-semibold text-emerald-700">
+            user_example@gmail.com ---- Passwd1234 ---- 3H5HRIM7SZHRFSJ22YMHO ---- EmailPasswd
+          </div>
+          <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 sm:grid-cols-4">
+            <div>① 账号/登录邮箱</div>
+            <div>② 登录初始密码</div>
+            <div>③ 2FA 动态安全密钥</div>
+            <div>④ 辅助邮箱初始密码</div>
+          </div>
+        </div>
+
+        <div className="mt-3.5 flex flex-wrap items-center gap-3 text-xs text-emerald-800">
+          <span className="inline-flex items-center gap-1 font-medium">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+            一人一号独立独享
+          </span>
+          <span className="inline-flex items-center gap-1 font-medium">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+            支持修改密码与改绑 2FA
+          </span>
+          <span className="inline-flex items-center gap-1 font-medium">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+            绝无二次销售或共享合租
+          </span>
+        </div>
+      </section>
+
+      {/* 4. 第四栏：质保服务 */}
+      <section className="rounded-2xl border border-sky-200/90 bg-gradient-to-br from-sky-50 via-blue-50/40 to-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-sky-600" />
+          <h3 className="text-base font-bold text-slate-900">24 小时首发包换服务承诺</h3>
+        </div>
+        <p className="mt-1 text-xs text-slate-600 sm:text-sm">
+          本站所售成品号均为正规纯净一手注册，为您提供放心的售后质保保障：
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-2xs">
+            <div className="text-xs font-bold text-sky-900">密码/账号异常包换</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">
+              收号 24 小时内首次登录若提示密码错误或邮箱不存在，联系客服即刻换新。
+            </div>
+          </div>
+          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-2xs">
+            <div className="text-xs font-bold text-sky-900">2FA 验证码异常包换</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">
+              若提供的 2FA 密钥计算验证码无法通过系统校验，质保期内无条件更换新凭证。
+            </div>
+          </div>
+          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-2xs">
+            <div className="text-xs font-bold text-sky-900">首次登录风控包换</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">
+              在合规海外网络环境下，若首登发现账号在交付前已被官方注销，补发全新账号。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. 第五栏：教程直达引导横幅 (简单清爽，查阅教程) */}
+      <ChatGptGuideHeroBanner actionText="查阅教程" />
+
+      {/* 6. 第六栏：注意事项 */}
+      <section className="rounded-2xl border border-amber-200/80 bg-amber-50/40 p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="h-5 w-5 text-amber-600" />
+          <h3 className="text-base font-bold text-slate-900">注意事项</h3>
+        </div>
+        <p className="mt-1 text-xs text-slate-600 sm:text-sm">
+          OpenAI 封号 99% 源于「黑名单节点 IP 污染」与「多账号同一浏览器指纹混用」，请严格遵守以下防封规范：
+        </p>
+
+        <div className="mt-4 space-y-3">
+          <div className="rounded-xl border border-amber-100 bg-white/90 p-3.5 text-xs sm:text-sm">
+            <strong className="text-amber-900">1. 节点纯净度是生命线：</strong>
+            <span className="text-slate-600">
+              绝不使用公共免费节点或低质万人挤机房节点。推荐美、日、新等合规优质住宅或正规小众节点，切忌短时间内在不同国家地区频繁跳跃漂移！
+            </span>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-white/90 p-3.5 text-xs sm:text-sm">
+            <strong className="text-amber-900">2. 指纹浏览器独立环境隔离：</strong>
+            <span className="text-slate-600">
+              严禁在同一普通浏览器窗口下同时登录多个账号！推荐使用防关联指纹浏览器（如 AdsPower、Hubstudio）或 Chrome 独立 Profile 专属配置独立使用。
+            </span>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-white/90 p-3.5 text-xs sm:text-sm">
+            <strong className="text-amber-900">3. 新号前 24 小时平稳过渡：</strong>
+            <span className="text-slate-600">
+              首次登录后建议先进行常规轻量提问（正常对话 2-3 轮），切忌刚拿到就立即挂载高并发批量自动化脚本或尝试极端敏感提问。
+            </span>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-white/90 p-3.5 text-xs sm:text-sm">
+            <strong className="text-amber-900">4. 遇抽检接码使用实体 SIM 卡：</strong>
+            <span className="text-slate-600">
+              若遇到 OpenAI 官方抽检短信验证，切勿使用公共免费临时虚拟接码平台。可搭配本站真实海外实体 SIM 卡（如英国 giffgaff、新西兰 One NZ）0 月租高信誉接码。
+            </span>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 pt-1">
+              <a
+                href="https://chatgpt.com/zh-Hans-CN/download/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-slate-800"
+              >
+                <Download className="h-3 w-3" />
+                <span>官方客户端下载</span>
+              </a>
+              <Link
+                href="/products/sim-cards"
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-amber-600"
+              >
+                <Smartphone className="h-3 w-3" />
+                <span>选购国际 SIM 卡接码</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. 第七栏：成品号常见疑问与售后速查 (FAQ) */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <h3 className="text-base font-bold text-slate-900">成品号常见疑问与售后速查 (FAQ)</h3>
+        <div className="mt-4 space-y-3 text-xs leading-6 text-slate-600 sm:text-sm">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5">
+            <div className="font-bold text-slate-900">Q: 账号是永久的吗？能改成我自己的邮箱吗？</div>
+            <div className="mt-1 text-slate-600">
+              交付的是独立独享账号与配套邮箱。OpenAI 官方目前不支持直接更改主登录邮箱，但您可以完全修改登录密码、绑定个人独享 2FA 密钥以及绑定您自己的手机号，实现 100% 独享安全控制权。
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5">
+            <div className="font-bold text-slate-900">Q: 为什么有时打开页面提示 "Access denied" (403)？</div>
+            <div className="mt-1 text-slate-600">
+              这是 OpenAI 云盾风控系统对您当前代理节点 IP 的临时拦截，与账号本身无关。请切换至纯净优质的海外住宅代理节点，或开启浏览器无痕窗口重新刷新即可正常访问。
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5">
+            <div className="font-bold text-slate-900">Q: Plus 质保到期后，下个月还能继续充值续费吗？</div>
+            <div className="mt-1 text-slate-600">
+              完全可以！到期后可在本站选购「ChatGPT 会员充值」卡密或使用正规海外卡直接续费，所有历史会话、自定义 GPTs 及配置均完整保留。
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChatGptGuideHeroBanner({
+  title = "需要 ChatGPT 详细图文操作与保号指引？",
+  subtitle = "含首登验码、修改密码、2FA 密钥换绑、剔除陌生设备及全套防封养号核心指南",
+  actionText = "查阅教程",
+}: {
+  title?: string;
+  subtitle?: string;
+  actionText?: string;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-900 p-5 text-white shadow-md sm:p-6 border border-slate-800">
+      <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/20 border border-primary/30 text-primary">
+            <BookOpen className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-white sm:text-lg">{title}</h4>
+            <p className="mt-1 text-xs text-slate-300 sm:text-sm">{subtitle}</p>
+          </div>
+        </div>
+        <Link
+          href="/tutorials?topic=chatgpt-guide"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-primary/90 sm:text-sm"
+        >
+          <span>{actionText}</span>
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
     </div>
   );
 }
@@ -2564,6 +3026,10 @@ function DetailMetric({
 }
 
 function getProductImage(product: Product) {
+  const customImg = product.image || (product as any).imageUrl || (product as any).image_url;
+  if (customImg && typeof customImg === "string" && customImg.trim()) {
+    return customImg.trim();
+  }
   const name = product.name.toLowerCase();
   if (
     product.id === GPT_RECHARGE_PRODUCT_ID ||
@@ -2616,7 +3082,8 @@ function getProductImage(product: Product) {
   }
   if (product.category === "gift-cards") return "/assets/apple-gift-card-icon.jpg";
   if (name.includes("ultra")) return "/assets/ultra-mobile-icon.svg";
-  if (product.category === "sim-cards") return "/assets/sim-uk-icon.png";
+  if (name.includes("one nz") || name.includes("onenz") || product.id === "sim-nz-001") return "/assets/one-nz-card.png";
+  if (product.category === "sim-cards") return "/assets/giffgaff-icon.svg";
   return null;
 }
 

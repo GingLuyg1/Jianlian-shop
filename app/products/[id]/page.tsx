@@ -595,57 +595,55 @@ export default function ProductDetailPage() {
                   ) : null}
 
                   {hasSkus && skus.length >= 2 ? (
-                    <div>
-                      <div className="mb-2 text-sm font-medium">商品规格</div>
-                      <div className="grid gap-2">
-                        {skus.map((sku, index) => {
-                          const disabled =
-                            sku.status !== FRONTEND_ACTIVE_PRODUCT_STATUS || Number(sku.stock ?? 0) <= 0;
-                          const active = sku.id === selectedSkuId;
+                    <>
+                      <div>
+                        <div className="mb-2 text-sm font-medium">商品规格</div>
+                        <div className="grid gap-2">
+                          {skus.map((sku, index) => {
+                            const disabled =
+                              sku.status !== FRONTEND_ACTIVE_PRODUCT_STATUS || Number(sku.stock ?? 0) <= 0;
+                            const active = sku.id === selectedSkuId;
 
-                          return (
-                            <button
-                              key={sku.id}
-                              type="button"
-                              disabled={disabled || submitting}
-                              onClick={() => {
-                                setSelectedSkuId(sku.id);
-                                setQuantity(1);
-                                setSubmitError("");
-                              }}
-                              className={cn(
-                                "rounded-xl border px-3 py-2 text-left transition",
-                                active
-                                  ? "border-primary bg-orange-50 text-primary shadow-sm"
-                                  : "border-orange-100 bg-white hover:border-primary/50",
-                                disabled ? "cursor-not-allowed opacity-50" : ""
-                              )}
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="font-semibold">{getSkuLabel(sku, index)}</span>
-                                <span>{formatPrice(settings.currency_symbol, sku.price)}</span>
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                库存：{Number(sku.stock ?? 0)}
-                                {disabled ? "，暂不可购买" : ""}
-                              </div>
-                            </button>
-                          );
-                        })}
+                            return (
+                              <button
+                                key={sku.id}
+                                type="button"
+                                disabled={disabled || submitting}
+                                onClick={() => {
+                                  setSelectedSkuId(sku.id);
+                                  setQuantity(1);
+                                  setSubmitError("");
+                                }}
+                                className={cn(
+                                  "rounded-xl border px-3 py-2 text-left transition",
+                                  active
+                                    ? "border-primary bg-orange-50 text-primary shadow-sm"
+                                    : "border-orange-100 bg-white hover:border-primary/50",
+                                  disabled ? "cursor-not-allowed opacity-50" : ""
+                                )}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="font-semibold">{getSkuLabel(sku, index)}</span>
+                                  <span>{formatPrice(settings.currency_symbol, sku.price)}</span>
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  库存：{Number(sku.stock ?? 0)}
+                                  {disabled ? "，暂不可购买" : ""}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-2 text-sm text-muted-foreground">
-                      单规格商品，可直接下单。
-                    </div>
-                  )}
 
-                  <div className="flex items-center justify-between rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-2 text-sm">
-                    <span className="text-muted-foreground">商品单价</span>
-                    <span className="text-xl font-black text-primary">
-                      {formatPrice(settings.currency_symbol, unitPrice)}
-                    </span>
-                  </div>
+                      <div className="flex items-center justify-between rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-2 text-sm">
+                        <span className="text-muted-foreground">规格单价</span>
+                        <span className="text-xl font-black text-primary">
+                          {formatPrice(settings.currency_symbol, unitPrice)}
+                        </span>
+                      </div>
+                    </>
+                  ) : null}
 
                   <div>
                     <div className="mb-2 text-sm font-medium">购买数量</div>

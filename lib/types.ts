@@ -42,6 +42,7 @@ export interface Product {
   description: string;                   // 简短说明
   price: number;                         // 价格
   imageUrl?: string | null;
+  image?: string | null;
   originalPrice?: number | null;
   stock?: number;
   sortOrder?: number;

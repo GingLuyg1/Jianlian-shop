@@ -11,6 +11,7 @@ export const fallbackCategoriesByPath: Record<string, StorefrontFallbackCategory
   "/products/sim-cards": [
     { slug: "uk", name: "英国", icon: "phone", aliases: ["giffgaff"] },
     { slug: "us", name: "美国", icon: "phone", aliases: ["ultra-mobile"] },
+    { slug: "nz", name: "新西兰", icon: "phone", aliases: ["one-nz", "onenz", "vodafone", "new-zealand"] },
     { slug: "jp", name: "日本", icon: "phone" },
     { slug: "kr", name: "韩国", icon: "phone" },
   ],

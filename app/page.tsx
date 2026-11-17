@@ -16,6 +16,7 @@ import {
   Sparkles,
   Timer,
   Wallet,
+  type LucideIcon,
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
@@ -244,23 +245,34 @@ export default function HomePage() {
     const categoryHref = item.href.split("?")[0];
     return !isCatalogCategoryHref(categoryHref) || visibleCategoryHrefs.has(categoryHref);
   });
-  const mobileSecondaryItems = useMemo(() => {
+  const [activeMobilePrimaryIndex, setActiveMobilePrimaryIndex] = useState(0);
+
+  const mobileCategoryTree = useMemo(() => {
     if (!categoryRows) return [];
-    const items: Array<{
-      id: string;
-      name: string;
-      parentName: string;
-      targetUrl: string;
-      image?: string;
-      code?: string;
+    const tree: Array<{
+      path: string;
+      primaryId: string;
+      primaryName: string;
+      icon: LucideIcon;
+      items: Array<{
+        id: string;
+        name: string;
+        targetUrl: string;
+        image?: string;
+        code?: string;
+      }>;
     }> = [];
-    for (const path of storefrontCategoryPaths) {
-      const primary = findVisibleStorefrontPrimaryCategory(path, categoryRows);
+
+    for (const card of categoryCards) {
+      if (!isCatalogCategoryHref(card.href) || !visibleCategoryHrefs.has(card.href)) continue;
+      const primary = findVisibleStorefrontPrimaryCategory(card.href, categoryRows);
       if (!primary) continue;
-      const visuals = fallbackCategoriesByPath[path] ?? [];
-      const queryKey = path === "/products/sim-cards" || path === "/products/sms-code" ? "country" : "category";
+      const visuals = fallbackCategoriesByPath[card.href] ?? [];
+      const queryKey = card.href === "/products/sim-cards" ? "country" : "category";
       const children = getChildCategories(categoryRows, primary.id);
-      for (const child of children) {
+      if (children.length === 0) continue;
+
+      const subItems = children.map((child) => {
         const normalizedSlug = normalizeText(child.slug);
         const normalizedName = normalizeText(child.name);
         const visual = visuals.find((v) => {
@@ -269,18 +281,30 @@ export default function HomePage() {
             (alias) => alias === normalizedSlug || normalizedName.includes(alias) || alias.includes(normalizedName)
           );
         });
-        items.push({
+        return {
           id: child.id,
           name: child.name,
-          parentName: primary.name,
-          targetUrl: `${path}?${queryKey}=${encodeURIComponent(child.slug)}`,
+          targetUrl: `${card.href}?${queryKey}=${encodeURIComponent(child.slug)}`,
           image: visual?.image,
-          code: path === "/products/sim-cards" ? simRegionCode(child.slug, child.name) : undefined,
-        });
-      }
+          code: card.href === "/products/sim-cards" ? simRegionCode(child.slug, child.name) : undefined,
+        };
+      });
+
+      tree.push({
+        path: card.href,
+        primaryId: primary.id,
+        primaryName: card.title,
+        icon: card.icon,
+        items: subItems,
+      });
     }
-    return items;
-  }, [categoryRows]);
+
+    return tree;
+  }, [categoryRows, visibleCategoryHrefs]);
+
+  const mobileSecondaryItems = useMemo(() => {
+    return mobileCategoryTree.flatMap((cat) => cat.items);
+  }, [mobileCategoryTree]);
 
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;

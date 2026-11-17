@@ -33,7 +33,7 @@ import { forgetPublicProductPage, getPublicProductPage, peekPublicProductPage, p
 import { useProgressiveWheelMotion } from "@/hooks/use-progressive-wheel-motion";
 import { WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 import { findVisibleStorefrontPrimaryCategory, storefrontCategoryPaths } from "@/lib/catalog/visible-storefront-category-routes";
-import { getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
+import { clearCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
 import {
   findPrimaryCategory,
   getChildCategories,
@@ -129,12 +129,20 @@ function SupabaseMallContentInner({
   const pathname = usePathname();
   const router = useRouter();
   const pendingRoute = useSyncExternalStore(subscribeCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending);
-  const routePending = pendingRoute?.source === pathname && pendingRoute.target !== pathname ? pendingRoute : null;
+  const routeTargetBase = pendingRoute?.target ? pendingRoute.target.split("?")[0] : "";
+  const routePending = pendingRoute?.source === pathname && routeTargetBase !== pathname ? pendingRoute : null;
   const searchParams = useSearchParams();
   const routeSearch = searchParams.toString();
   const [localParams, setLocalParams] = useState(() => new URLSearchParams(routeSearch));
   const { settings } = usePublicSettings();
   const { isMobile } = useMobileStorefront();
+
+  useEffect(() => {
+    const pending = getCatalogRoutePending();
+    if (pending && pending.target.split("?")[0] === pathname) {
+      clearCatalogRoutePending();
+    }
+  }, [pathname]);
   const categorySnapshot = usePublicCategorySnapshot();
   useSyncExternalStore(subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion);
   const [activeCategory, setActiveCategory] = useState<DisplayCategory | null>(null);
@@ -360,13 +368,15 @@ function SupabaseMallContentInner({
     productRequestIdRef.current = requestId;
 
     async function loadProducts() {
-      setIsLoadingProducts(true);
-      setCountReadyKey("");
+      if (products.length === 0) {
+        setIsLoadingProducts(true);
+        setCountReadyKey("");
+        setLoadedProductKey("");
+        setLoadedCategoryId("");
+        setProducts([]);
+        setTotal(0);
+      }
       setProductError("");
-      setLoadedProductKey("");
-      setLoadedCategoryId("");
-      setProducts([]);
-      setTotal(0);
       try {
         const primaryCategoryId = currentCategory.level === 1 ? currentCategory.id : currentCategory.parent_id ?? "";
         const secondaryCategoryId = currentCategory.level === 2 ? currentCategory.id : "";
@@ -604,23 +614,15 @@ function CategoryPanel({
     minScale: WHEEL_CONFIG.secondaryMinScale,
   });
   return (
-    <Card data-testid="storefront-secondary-categories" data-catalog-secondary-route={pageRoute} data-catalog-secondary-ready={!isLoading && !error && !showPlaceholder ? "true" : "false"} data-placeholder-phase={placeholderPhase} className="relative min-h-0 overflow-hidden lg:h-full">
-      <CardContent className="h-full min-h-0 p-3">
-        <div className={categoryPanelInnerClassName}>
+    <Card data-testid="storefront-secondary-categories" data-catalog-secondary-route={pageRoute} data-catalog-secondary-ready={!isLoading && !error && !showPlaceholder ? "true" : "false"} data-placeholder-phase={placeholderPhase} className={cn("relative min-h-0 overflow-hidden lg:h-full", isMobile && "!border-orange-100/80 !shadow-xs !rounded-2xl sticky top-[58px] self-start min-h-[calc(100dvh-72px)] overflow-y-auto")}>
+      <CardContent className={cn("h-full min-h-0 p-3", isMobile && "!p-1")}>
+        <div className={cn(categoryPanelInnerClassName, isMobile && "!bg-transparent")}>
           {isMobile && categories.length > 0 ? (
-            <div className="mb-1.5 flex items-center justify-between px-1.5 pt-1">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                <LayoutGrid className="h-3.5 w-3.5 text-primary" />
-                <span>分类直达 ({categories.length})</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMobileExpanded((prev) => !prev)}
-                className="inline-flex items-center gap-1 rounded-lg border border-orange-200/80 bg-white px-2 py-1 text-[11px] font-medium text-primary shadow-sm"
-              >
-                <span>{mobileExpanded ? "收起列表" : "展开全部"}</span>
-                <ChevronDown className={cn("h-3 w-3 transition-transform", mobileExpanded && "rotate-180")} />
-              </button>
+            <div className="mb-1.5 flex items-center justify-center gap-1 border-b border-orange-100/80 pb-1.5 text-center">
+              <span className="text-[10px] font-bold text-slate-600">分类</span>
+              <span className="rounded-full bg-orange-100/80 px-1.5 py-0.2 text-[9px] font-semibold text-primary">
+                ({categories.length})
+              </span>
             </div>
           ) : null}
           <div
@@ -629,30 +631,28 @@ function CategoryPanel({
             className={cn(
               categoryListScrollClassName,
               "relative",
-              isMobile && !mobileExpanded && "!flex !gap-2 !overflow-x-auto !overflow-y-hidden !space-y-0",
-              isMobile && mobileExpanded && "!grid !grid-cols-2 !gap-2 !overflow-visible !space-y-0"
+              isMobile && "!flex !flex-col !gap-1.5 !overflow-y-auto !overflow-x-hidden !space-y-0 !p-0.5"
             )}
           >
             {error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                分类读取失败。<button type="button" className="ml-2 font-semibold underline" onClick={onRetry}>重试</button>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-center text-xs text-red-700">
+                失败 <button type="button" className="font-semibold underline" onClick={onRetry}>重试</button>
               </div>
             ) : categories.length === 0 && !isLoading ? (
-              <div className="rounded-xl border border-dashed bg-white p-5 text-center text-sm text-muted-foreground">
-                暂无二级分类
+              <div className="rounded-xl border border-dashed bg-white p-3 text-center text-xs text-muted-foreground">
+                暂无分类
               </div>
             ) : categories.length > 0 ? categories.map((category, index) => (
-              <div key={category.id} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && mobileExpanded && "!shrink !w-full")}>
+              <div key={category.id} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && "!w-full")}>
                 <div className={animatedInitialRows.current || isMobile ? undefined : "catalog-enter-item"} style={animatedInitialRows.current || isMobile ? undefined : { animationDelay: `${Math.min(index * 30, 200)}ms` }}>
                   <CategoryButton
                     category={category}
                     active={visualSelectionId === category.id}
                     disabled={disabled}
                     isMobile={isMobile}
-                    mobileExpanded={mobileExpanded}
+                    mobileExpanded={false}
                     onIntent={() => onPrefetchCategory(category)}
                     onClick={() => {
-                      if (isMobile && mobileExpanded) setMobileExpanded(false);
                       centerItem(category.id);
                       onSelectCategory(category);
                     }}
@@ -660,7 +660,7 @@ function CategoryPanel({
                 </div>
               </div>
             )) : null}
-            {!mobileExpanded ? (
+            {!isMobile && !mobileExpanded ? (
               <SecondarySlidingIndicator containerRef={containerRef} activeId={selectedCategoryId} ready={selectionReady && !error} layoutKey={categories.map((category) => category.id).join(",")} />
             ) : null}
             {showPlaceholder ? (
@@ -707,6 +707,52 @@ function CategoryButton({
 }) {
   const Icon = category.displayIcon ? iconMap[category.displayIcon] : KeyRound;
 
+  if (isMobile) {
+    return (
+      <button
+        onMouseEnter={onIntent}
+        onFocus={onIntent}
+        type="button"
+        aria-pressed={active}
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          interactiveButtonClass,
+          "flex w-full flex-col items-center justify-center rounded-xl p-1 text-center transition-colors [-webkit-tap-highlight-color:transparent]",
+          active
+            ? "border border-orange-300 bg-orange-50 font-bold text-primary shadow-xs"
+            : "border border-transparent bg-white/70 text-slate-700 hover:bg-slate-50"
+        )}
+      >
+        {category.displayCode ? (
+          <span aria-hidden="true" className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-bold tracking-wide", active ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
+            {category.displayCode}
+          </span>
+        ) : category.displayImage ? (
+          <img
+            src={category.displayImage}
+            alt={category.name}
+            onError={(event) => setProductImageFallback(event.currentTarget)}
+            className={cn(
+              "h-7 w-7 shrink-0 rounded-lg bg-white object-cover",
+              active ? "ring-2 ring-primary" : "ring-1 ring-slate-200"
+            )}
+          />
+        ) : (
+          <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", active ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
+            <Icon className="h-4 w-4" />
+          </div>
+        )}
+        <span className={cn(
+          "mt-1 line-clamp-2 w-full break-words text-center text-[10px] leading-tight",
+          active ? "font-bold text-primary" : "font-medium text-slate-700"
+        )}>
+          {category.name}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <button
       onMouseEnter={onIntent}
@@ -719,16 +765,14 @@ function CategoryButton({
         interactiveButtonClass,
         selectionMotion.item,
         "flex items-center justify-between rounded-xl px-3 py-2 text-left disabled:cursor-default lg:w-full lg:px-3.5 lg:py-3 [-webkit-tap-highlight-color:transparent]",
-        isMobile && "!px-2.5 !py-2",
-        isMobile && mobileExpanded && "!w-full",
         active
-          ? cn("border border-transparent bg-transparent text-primary", isMobile && mobileExpanded && "!border-orange-300 !bg-orange-50/90")
+          ? "border border-transparent bg-transparent text-primary"
           : "border border-slate-100 bg-white/80 text-foreground lg:bg-transparent"
       )}
     >
       <div className="flex min-w-0 items-center gap-2 lg:gap-3">
         {category.displayCode ? (
-          <span aria-hidden="true" className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-bold tracking-wide text-primary lg:h-11 lg:w-11 lg:rounded-xl lg:text-sm", isMobile && "!h-7 !w-7 !text-xs")}>{category.displayCode}</span>
+          <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-bold tracking-wide text-primary lg:h-11 lg:w-11 lg:rounded-xl lg:text-sm">{category.displayCode}</span>
         ) : category.displayImage ? (
           <img
             src={category.displayImage}
@@ -736,18 +780,17 @@ function CategoryButton({
             onError={(event) => setProductImageFallback(event.currentTarget)}
             className={cn(
               "h-8 w-8 shrink-0 rounded-lg bg-white object-cover lg:h-11 lg:w-11 lg:rounded-xl",
-              isMobile && "!h-7 !w-7",
               active ? "ring-2 ring-primary/25" : "ring-1 ring-slate-200"
             )}
           />
         ) : (
-          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg lg:h-11 lg:w-11 lg:rounded-xl", isMobile && "!h-7 !w-7", active ? "bg-primary/15" : "bg-primary/10")}>
-            <Icon className={cn("h-4 w-4 text-primary lg:h-6 lg:w-6", isMobile && "!h-4 !w-4")} />
+          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg lg:h-11 lg:w-11 lg:rounded-xl", active ? "bg-primary/15" : "bg-primary/10")}>
+            <Icon className="h-4 w-4 text-primary lg:h-6 lg:w-6" />
           </div>
         )}
-        <div className={cn("truncate whitespace-nowrap text-sm font-semibold lg:text-base", isMobile && "!text-[13px]", isMobile && mobileExpanded ? "max-w-[110px]" : "max-w-[130px]")}>{category.name}</div>
+        <div className="line-clamp-2 break-words text-left text-xs sm:text-sm font-semibold leading-tight lg:text-base max-w-[130px]">{category.name}</div>
       </div>
-      <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block", isMobile && "!hidden")} />
+      <ChevronRight className="hidden h-5 w-5 shrink-0 lg:block" />
     </button>
   );
 }
@@ -824,17 +867,17 @@ function ProductPanel({
   const resultText = resultReady ? String(total) : "/";
 
   return (
-    <Card data-testid="storefront-product-list" data-catalog-route={pageRoute} data-catalog-page-ready={resultReady && !error ? "true" : "false"} aria-busy={isLoading} className="min-h-0 overflow-hidden lg:h-full">
+    <Card data-testid="storefront-product-list" data-catalog-route={pageRoute} data-catalog-page-ready={resultReady && !error ? "true" : "false"} aria-busy={isLoading} className={cn("min-h-0 overflow-hidden lg:h-full", isMobile && "min-h-[calc(100dvh-72px)] !rounded-2xl")}>
       <CardContent className={productPanelContentClassName}>
-        <div ref={productListTopRef} className="mb-3 flex flex-col justify-between gap-2.5 sm:gap-3 xl:flex-row xl:items-start">
-          <div className="flex min-w-0 items-center justify-between gap-2 xl:block">
+        <div ref={productListTopRef} className={cn("mb-3 flex flex-col justify-between gap-2.5 sm:gap-3", !isMobile && "xl:flex-row xl:items-start")}>
+          <div className={cn("flex min-w-0 items-center justify-between gap-2", !isMobile && "xl:block")}>
             <h1 className={cn("min-h-7 truncate text-lg font-bold sm:text-xl", resultReady && "catalog-title-enter")}>{resultReady ? activeCategory.name : ""}</h1>
-            <div data-testid="catalog-product-result-bar" className="flex min-h-4 shrink-0 items-center gap-1.5 text-xs text-muted-foreground xl:mt-1.5 xl:gap-2">
+            <div data-testid="catalog-product-result-bar" className={cn("flex min-h-4 shrink-0 items-center gap-1.5 text-xs text-muted-foreground", !isMobile && "xl:mt-1.5 xl:gap-2")}>
               <span data-testid="catalog-product-result-dot" className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
-              <span>{`当前结果 ${resultText} 个商品`}</span>
+              <span>{`当前 ${resultText} 个商品`}</span>
             </div>
           </div>
-          <div className="flex w-full gap-2 xl:w-[760px]">
+          <div className={cn("flex w-full gap-2", !isMobile && "xl:w-[760px]")}>
             <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7d6355] sm:left-4" />
               <Input
@@ -856,7 +899,7 @@ function ProductPanel({
 
         {routePendingTarget ? (
           <div data-testid="catalog-route-pending" role="status" aria-label="商品区域加载中" className="min-h-[260px] flex-1 overflow-auto px-1 py-1 text-sm text-slate-700 lg:min-h-0 lg:px-1.5">
-            {routeStalled ? <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3"><p className="font-medium">目标分类仍在加载。</p><button type="button" className="mt-2 font-semibold text-primary underline" onClick={() => window.location.assign(routePendingTarget)}>重试加载目标分类</button></div> : null}
+            {routeStalled ? <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3"><p className="font-medium">目标分类仍在加载。</p><button type="button" className="mt-2 font-semibold text-primary underline" onClick={() => { clearCatalogRoutePending(); window.location.assign(routePendingTarget); }}>重试加载目标分类</button></div> : null}
             {placeholderPhase === "visible" ? <ProductLoadingPlaceholder knownCount={knownRouteProductCount} /> : null}
           </div>
         ) : error ? (
@@ -912,7 +955,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
   const priceText = hasSkus && maxPrice > minPrice
-    ? `${currencySymbol}${minPrice.toFixed(2)}-${currencySymbol}${maxPrice.toFixed(2)}`
+    ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   return (
@@ -931,11 +974,6 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
           <div className="hidden shrink-0 items-center gap-2 text-sm text-slate-600 md:flex">
             {product.stockStatus === "out-of-stock" ? "暂时缺货" : product.stockStatus === "low-stock" ? "低库存" : "有库存"}
             <span className={stock > 0 ? "text-green-600" : "text-slate-400"}>{stock}</span>
-          </div>
-        ) : null}
-        {product.originalPrice ? (
-          <div className="hidden shrink-0 text-sm text-muted-foreground line-through lg:block">
-            {currencySymbol}{Number(product.originalPrice).toFixed(2)}
           </div>
         ) : null}
         <div className="shrink-0 text-lg font-bold text-orange-600">
@@ -964,7 +1002,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
   const hasSkus = Boolean(product.metadata?.hasSkus);
   const hasStock = stock > 0 && product.stockStatus !== "out-of-stock";
   const priceText = hasSkus && maxPrice > minPrice
-    ? `${currencySymbol}${minPrice.toFixed(2)}-${currencySymbol}${maxPrice.toFixed(2)}`
+    ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
   if (isMobile) {
@@ -1020,11 +1058,6 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {product.originalPrice ? (
-              <span className="text-xs text-muted-foreground line-through">
-                {currencySymbol}{Number(product.originalPrice).toFixed(2)}
-              </span>
-            ) : null}
             <span className="text-base font-extrabold text-orange-600">
               {hasStock ? priceText : "已售罄"}
             </span>
@@ -1068,7 +1101,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
         {showStock ? (
           <div
             className={cn(
-              "hidden min-w-[96px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold md:flex",
+              "hidden min-w-[90px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold md:flex",
               hasStock ? "text-green-600" : "text-red-500"
             )}
           >
@@ -1076,12 +1109,11 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">{stock}</span>
           </div>
         ) : null}
-        {product.originalPrice ? (
-          <div className="hidden shrink-0 text-sm text-muted-foreground line-through lg:block">
-            {currencySymbol}{Number(product.originalPrice).toFixed(2)}
-          </div>
-        ) : null}
-        <div className=" shrink-0 text-right text-base font-bold text-orange-600 sm:min-w-[92px] sm:text-center sm:text-lg">
+        <div className="hidden min-w-[80px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold text-[#9a552b] md:flex">
+          <span>销量</span>
+          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-[#9a552b]">{salesCount}</span>
+        </div>
+        <div className="shrink-0 text-right text-base font-bold text-orange-600 min-w-[120px] sm:min-w-[140px] sm:text-right pr-2">
           {hasStock ? priceText : "已售罄"}
         </div>
       </div>

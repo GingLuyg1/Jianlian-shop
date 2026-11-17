@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Edit, GripVertical, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { invalidatePublicCategories } from "@/lib/catalog/public-category-snapshot";
 import {
   createCategory,
   createProduct,
@@ -122,7 +123,7 @@ function emptyProductForm(rootId = "", categoryId = ""): ProductForm {
 }
 
 function sortCategories(a: AdminCategory, b: AdminCategory) {
-  return a.sort_order - b.sort_order || a.name.localeCompare(b.name);
+  return (a.sort_order ?? 0) - (b.sort_order ?? 0) || (a.name || "").localeCompare(b.name || "");
 }
 
 function slugify(value: string) {
@@ -225,6 +226,14 @@ function isValidImagePath(value: string) {
 }
 
 export default function AdminCategoriesPage() {
+  return (
+    <Suspense fallback={<AdminTableSkeleton rows={8} />}>
+      <AdminCategoriesPageInner />
+    </Suspense>
+  );
+}
+
+function AdminCategoriesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [categories, setCategories] = useState<AdminCategory[]>([]);
@@ -414,6 +423,16 @@ export default function AdminCategoriesPage() {
       const saved = categoryForm.id ? await updateCategory(categoryForm.id, payload) : await createCategory(payload);
       setNotice(categoryForm.id ? "分类已保存" : "分类已新增");
       setCategoryForm(null);
+      setCategories((prev) => {
+        const index = prev.findIndex((c) => c.id === saved.id);
+        if (index >= 0) {
+          const next = [...prev];
+          next[index] = saved;
+          return next;
+        }
+        return [...prev, saved];
+      });
+      void invalidatePublicCategories().catch(() => undefined);
       await loadCategories();
       if (saved.level === 1) selectRoot(saved.id);
       if (saved.level === 2) {
@@ -1064,10 +1083,9 @@ function CategoryCard({
             {isCategoryEnabled(category) ? "启用" : "停用"}
           </Badge>
         </div>
-        <div className="mt-1 truncate text-xs text-slate-500" title={`${category.slug} · sort ${category.sort_order} · ${count} 项`}>
-          {category.slug} · sort {category.sort_order} · {count} 项
+        <div className="mt-1 truncate text-xs text-slate-500">
+          {category.level === 1 ? `${count} 个二级分类` : `${count} 个商品`}
         </div>
-        {category.description ? <p className="mt-2 truncate text-xs text-slate-500" title={category.description}>{category.description}</p> : null}
       </button>
       </div>
       <div data-category-actions className="mt-3 flex flex-nowrap items-center gap-1.5">
@@ -1120,14 +1138,23 @@ function CategoryDialog({
           <Field label="分类名称" error={errors.name} required>
             <Input
               value={form.name}
+              placeholder="请输入分类展示名称"
               onChange={(event) => {
                 const name = event.target.value;
-                onUpdate({ ...form, name, slug: form.slug || slugify(name) });
+                onUpdate({
+                  ...form,
+                  name,
+                  slug: form.id ? form.slug : (form.slug || slugify(name)),
+                });
               }}
             />
           </Field>
-          <Field label="分类标识" error={errors.slug} required>
-            <Input value={form.slug} onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })} />
+          <Field label="分类标识（英文唯一编号，自动生成）" error={errors.slug} required>
+            <Input
+              value={form.slug}
+              placeholder="category-slug"
+              onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })}
+            />
           </Field>
           <Field label="分类级别" required>
             <select
@@ -1155,12 +1182,6 @@ function CategoryDialog({
               </select>
             </Field>
           ) : null}
-          <Field label="图标">
-            <Input value={form.icon} onChange={(event) => onUpdate({ ...form, icon: event.target.value })} />
-          </Field>
-          <Field label="排序" error={errors.sort_order} required>
-            <Input type="number" step="1" value={form.sort_order} onChange={(event) => onUpdate({ ...form, sort_order: event.target.value })} />
-          </Field>
           <Field label="启用状态">
             <select
               value={form.is_active ? "1" : "0"}
@@ -1170,9 +1191,6 @@ function CategoryDialog({
               <option value="1">启用</option>
               <option value="0">停用</option>
             </select>
-          </Field>
-          <Field label="描述" className="sm:col-span-2">
-            <Textarea rows={3} value={form.description} onChange={(event) => onUpdate({ ...form, description: event.target.value })} />
           </Field>
         </div>
         <DialogActions saving={saving} onClose={onClose} />
