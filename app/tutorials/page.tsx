@@ -203,7 +203,7 @@ export default function TutorialsPage() {
   const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={isMobile ? "max-w-none !pt-2 !px-3 pb-6" : "max-w-none px-4 py-3 md:px-6"}>
     <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!block !h-auto !space-y-3 !overflow-visible" : ""}`}>
-      <aside data-testid="tutorial-navigation" className={cn(glass.surface, styles.panel, tutorial.navigation, isMobile && "!max-h-none !overflow-visible !p-2 !sticky !top-[60px] !z-30 bg-white/95 backdrop-blur-md shadow-xs border border-orange-100/90 rounded-2xl")}>
+      <aside data-testid="tutorial-navigation" className={cn(glass.surface, styles.panel, tutorial.navigation, isMobile && "!max-h-none !overflow-visible !p-2 !sticky !top-[65px] !z-30 bg-white/95 backdrop-blur-md shadow-xs border border-orange-100/90 rounded-2xl")}>
         {isMobile ? (
           <div className="space-y-2">
             {/* 一级教程分类胶囊栏 (横向滚动 + 右侧展开全部按钮，悬浮置顶冻结) */}
