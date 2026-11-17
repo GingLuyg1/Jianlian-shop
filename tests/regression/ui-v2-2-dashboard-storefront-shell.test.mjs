@@ -52,7 +52,8 @@ test("Storefront shell shares responsive sidebar and main offset tokens", () => 
   assert.match(layout, /md:ml-\[var\(--storefront-main-offset\)\]/);
   assert.match(layout, /paddingInline: "var\(--storefront-content-padding-x\)"/);
   assert.match(sidebar, /w-\[var\(--storefront-sidebar-width\)\]/);
-  assert.match(mobile, /w-\[var\(--storefront-sidebar-width,160px\)\]/);
+  assert.match(mobile, /w-\[185px\]/);
+  assert.match(mobile, /!w-\[370px\]/);
   assert.match(topbar, /px-\[var\(--storefront-content-padding-x\)\]/);
   assert.doesNotMatch(layout + sidebar, /md:ml-\[270px\]|w-\[270px\]|translate-x-\[|pr-\[270px\]/);
 });

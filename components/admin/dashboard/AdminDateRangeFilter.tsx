@@ -44,9 +44,11 @@ const PRESETS: Array<{ key: Exclude<DashboardDatePreset, "custom">; label: strin
 export function AdminDateRangeFilter({
   value,
   onChange,
+  size = "default",
 }: {
   value: DashboardDateFilterValue;
   onChange: (next: DashboardDateFilterValue) => void;
+  size?: "sm" | "default";
 }) {
   const [open, setOpen] = React.useState(false);
   const [draftRange, setDraftRange] = React.useState<DateRange | undefined>({
@@ -63,9 +65,14 @@ export function AdminDateRangeFilter({
       ? `${format(value.from, "yyyy-MM-dd")} ~ ${format(value.to, "yyyy-MM-dd")}`
       : `${format(value.from, "MM-dd")} ~ ${format(value.to, "MM-dd")}`;
 
+  const isDefaultSize = size === "default";
+
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="时间范围筛选">
-      <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
+      <div className={cn(
+        "inline-flex items-center rounded-lg border border-slate-200 bg-white shadow-sm",
+        isDefaultSize ? "h-10 p-1" : "h-8 p-0.5"
+      )}>
         {PRESETS.map((item) => {
           const active = value.preset === item.key;
           return (
@@ -75,7 +82,8 @@ export function AdminDateRangeFilter({
               onClick={() => onChange(getPresetDateRange(item.key))}
               style={active ? { backgroundColor: "#1d4ed8", color: "#ffffff" } : undefined}
               className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                "rounded-md font-medium transition-colors",
+                isDefaultSize ? "h-8 px-2.5 text-xs" : "px-2.5 py-1 text-xs",
                 active
                   ? "shadow-sm"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
@@ -92,13 +100,14 @@ export function AdminDateRangeFilter({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size={isDefaultSize ? "default" : "sm"}
             className={cn(
-              "h-8 gap-1.5 rounded-lg border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50",
+              "gap-1.5 rounded-lg border-slate-200 bg-white px-3 font-medium text-slate-700 hover:bg-slate-50",
+              isDefaultSize ? "h-10 text-sm" : "h-8 text-xs",
               value.preset === "custom" && "border-blue-300 bg-blue-50/70 text-blue-700"
             )}
           >
-            <CalendarIcon className="h-3.5 w-3.5 text-slate-500" />
+            <CalendarIcon className="h-4 w-4 text-slate-500" />
             <span className="tabular-nums">{customLabel}</span>
           </Button>
         </PopoverTrigger>

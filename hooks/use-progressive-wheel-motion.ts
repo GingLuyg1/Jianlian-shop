@@ -38,13 +38,11 @@ export function useProgressiveWheelMotion({ activeId, contentKey, resetKey, minS
       const animate = container.scrollHeight > container.clientHeight + 1;
       const viewportHeight = container.clientHeight;
       const progress = (container.scrollTop / Math.max(1, container.scrollHeight - viewportHeight));
-      // Read layout for every row before writing styles, avoiding read/write thrash.
-      const values = items.map((item) => animate
-        ? wheelVisual(item.offsetTop - container.scrollTop + item.offsetHeight / 2, viewportHeight, progress, item.dataset.wheelItem === activeId, minScale)
-        : { scale: 1, opacity: 1 });
+      // Wheel progressive scaling disabled as requested - keep constant scale and opacity
+      const values = items.map(() => ({ scale: 1, opacity: 1 }));
       items.forEach((item, index) => {
-        item.style.setProperty("--wheel-scale", values[index].scale.toFixed(4));
-        item.style.setProperty("--wheel-opacity", values[index].opacity.toFixed(4));
+        item.style.setProperty("--wheel-scale", "1");
+        item.style.setProperty("--wheel-opacity", "1");
       });
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(render); };

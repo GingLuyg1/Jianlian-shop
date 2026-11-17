@@ -19,7 +19,7 @@ test("checkout keeps a compact purchase column and aligns product detail surface
   assert.match(checkout, /lg:\[scrollbar-gutter:stable_both-edges\]/);
   assert.doesNotMatch(checkout, /mt-3 max-w-2xl text-sm leading-relaxed/);
   assert.doesNotMatch(checkout, /mt-8 grid max-w-2xl/);
-  assert.equal((checkout.match(/<div className="mt-8 w-full space-y-5">/g) ?? []).length, 7);
+  assert.equal((checkout.match(/<div className="mt-8 w-full space-y-5">/g) ?? []).length, 8);
   assert.doesNotMatch(checkout, /mt-8 max-w-(?:3xl|4xl)/);
 
   const paymentIndex = checkout.indexOf("支付方式");
@@ -54,7 +54,7 @@ test("storefront floating sidebar reserves its desktop footprint and retains com
   assert.match(productUi, /productListFiveRowsClassName =\s*\r?\n\s*"[^"]*w-full[^"]*px-1\.5 py-1 pr-2[^"]*"/);
   assert.doesNotMatch(productUi, /w-\[calc\(100%-18px\)\]/);
   assert.match(productUi, /categoryPanelInnerClassName =\s*\r?\n\s*"[^"]*to-white"/);
-  assert.match(file("components/products/SupabaseMallContent.tsx"), /<Card data-testid="storefront-secondary-categories"[^\r\n]*>\s*<CardContent className="h-full min-h-0 p-3">/);
+  assert.match(file("components/products/SupabaseMallContent.tsx"), /<Card data-testid="storefront-secondary-categories"[^\r\n]*>\s*<CardContent className=\{cn\("h-full min-h-0 p-3", isMobile && "!p-1"\)\}>/);
   assert.match(productUi, /productPanelContentClassName =\s*\r?\n\s*"[^"]*p-4"/);
   assert.match(productUi, /compactProductRowClassName =\s*\r?\n\s*"[^"]*px-5 py-\[11px\][^"]*"/);
   assert.match(productDetail, /lg:grid-cols-\[minmax\(0,1fr\)_386px\]/);

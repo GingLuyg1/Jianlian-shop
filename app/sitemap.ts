@@ -8,7 +8,6 @@ const staticRoutes = [
   "/products/ai-membership",
   "/products/gift-cards",
   "/products/sim-cards",
-  "/products/sms-code",
   "/products/account-recharge",
   "/faq",
   "/tutorials",
