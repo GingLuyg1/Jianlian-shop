@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import { ChevronDown, ListFilter, MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";

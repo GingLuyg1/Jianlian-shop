@@ -31,7 +31,7 @@ export async function recordOrderProductSales(
     }
 
     let updatedCount = 0;
-    for (const [productId, addQty] of productQtyMap.entries()) {
+    for (const [productId, addQty] of Array.from(productQtyMap.entries())) {
       // 查询商品当前 metadata 和销量
       const { data: prod, error: prodError } = await supabase
         .from("products")

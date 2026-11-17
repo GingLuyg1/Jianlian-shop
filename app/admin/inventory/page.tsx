@@ -238,7 +238,7 @@ export default function AdminInventoryPage() {
     const matchingCatIds = new Set(
       categories.filter((c) => c.id === primaryCatId || c.parent_id === primaryCatId).map((c) => c.id)
     );
-    return new Set(products.filter((p) => matchingCatIds.has(p.category_id)).map((p) => p.id));
+    return new Set(products.filter((p) => Boolean(p.category_id && matchingCatIds.has(p.category_id))).map((p) => p.id));
   }, [categories, primaryCatId, products, secondaryCatId]);
 
   const displayedSummaryRows = useMemo(() => {

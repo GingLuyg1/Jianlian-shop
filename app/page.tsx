@@ -16,6 +16,7 @@ import {
   Sparkles,
   Timer,
   Wallet,
+  type LucideIcon,
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
