@@ -2095,21 +2095,14 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
     ["商品名称", product.name],
     ["账号规格", "ChatGPT Plus 官方订阅独享成品号（含配套邮箱及初始登录凭证）"],
     ["质保服务", "首发激活质保 24 小时（部分批次已稳定存活 20 天以上；正常使用不滥用 API 可长久续费）"],
-    ["交付格式", "账号/邮箱 ---- 密码 ---- 邮箱密码（或专属登录 Session/Token）"],
+    ["交付格式", "账号/邮箱 ---- 密码 ---- 2FA 动态密钥 ---- 辅助邮箱密码"],
     ["网络环境要求", "必须使用正规、纯净的海外节点（如美区、新加坡、日本等住宅或正规代理），切忌香港/大陆/频繁变动节点"],
     ["推荐配置", "配合指纹浏览器独立环境或无痕浏览器窗口使用，杜绝多账号共用同一浏览器缓存导致风控关联"],
   ];
 
-  const tips = [
-    "收到账号后请第一时间检查 Plus 订阅状态及到期时间。",
-    "首次登录建议使用纯净节点，并固定使用同国家/地区节点，避免短时间内跨国漂移导致风控触发验证。",
-    "如遇 OpenAI 官方提示验证手机号，请使用本站提供的海外真实实体 SIM 卡接码验证，严禁使用劣质免费公共接码平台。",
-    "请遵循 OpenAI 官方服务协议，请勿使用高频自动化爬虫脚本或滥用并发调用，避免触发官方封号审查。",
-  ];
-
   return (
     <div className="mt-8 w-full space-y-6">
-      {/* 头部品牌横幅 */}
+      {/* 1. 第一栏：产品介绍和特点 */}
       <section className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-teal-500/10 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100/80 px-3 py-1 text-xs font-semibold text-emerald-800">
@@ -2144,54 +2137,7 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
         </div>
       </section>
 
-      {/* 客户端下载与接码辅助 */}
-      <section className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-sky-50/50 p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500 text-white">
-            <Download className="h-4 w-4" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-slate-900">ChatGPT 官方客户端下载与接码辅助</h3>
-            <p className="text-xs text-slate-500">下载安装官方桌面/移动应用，以及应对 OpenAI 手机接码验证指引</p>
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-xl border border-sky-100 bg-white/90 p-4 text-xs leading-6 text-slate-600 sm:text-sm">
-          <p>
-            需要使用 ChatGPT 客户端时，可前往官方页面下载安装支持 Windows、macOS 及移动端的官方程序。
-            首次登录或更换设备时，OpenAI 偶尔可能提示需要国外手机号接收短信验证码（接码）完成环境校验。
-          </p>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2.5 pt-1">
-            <a
-              href="https://chatgpt.com/zh-Hans-CN/download/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>官方下载 ChatGPT 客户端</span>
-              <ExternalLink className="h-3 w-3 opacity-70" />
-            </a>
-
-            <Link
-              href="/products/sim-cards"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-600"
-            >
-              <Smartphone className="h-3.5 w-3.5" />
-              <span>购买国际 SIM 卡产品接码</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-
-          <div className="mt-3.5 rounded-lg border border-amber-200/70 bg-amber-50/70 p-3 text-xs text-amber-800">
-            <span className="font-semibold text-amber-900">接码提示：</span>
-            没有可用的国外手机号时，推荐购买本站国际 SIM 卡（如英国 giffgaff、新西兰 One NZ 实体卡），支持国内永久 0 月租免费接收验证码短信，一卡多用，比临时虚拟接码平台更安全防风控！
-          </div>
-        </div>
-      </section>
-
-      {/* 详细规格表 */}
+      {/* 2. 第二栏：商品详细规格与交付标准 */}
       <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
         <h3 className="text-base font-bold text-slate-900">商品详细规格与交付标准</h3>
         <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-100 text-xs sm:text-sm">
@@ -2204,17 +2150,14 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
         </div>
       </section>
 
-      {/* 教程直达引导横幅 (图2样式黑金卡片，直达教程) */}
-      <ChatGptGuideHeroBanner />
-
-      {/* 核心交付规范与发货格式卡片 */}
+      {/* 3. 第三栏：发货格式说明 */}
       <section className="rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-2 text-emerald-800">
           <KeyRound className="h-5 w-5 text-emerald-600" />
           <h3 className="text-base font-bold text-slate-900">独享交付标准与发货格式说明</h3>
         </div>
         <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-          下单完成后，系统秒级自动生成卡密。标准发货内容包含 4 段关键信息（以四个横杠 ---- 分隔）：
+          下单完成后，系统自动生成卡密。标准发货内容包含 4 段关键信息（以四个横杠 ---- 分隔）：
         </p>
 
         <div className="mt-3 overflow-x-auto rounded-xl border border-emerald-200 bg-white/95 p-3.5 font-mono text-xs text-slate-800 shadow-inner">
@@ -2246,7 +2189,7 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
         </div>
       </section>
 
-      {/* 24 小时首登质保与包换服务承诺 */}
+      {/* 4. 第四栏：质保服务 */}
       <section className="rounded-2xl border border-sky-200/90 bg-gradient-to-br from-sky-50 via-blue-50/40 to-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-sky-600" />
@@ -2257,35 +2200,38 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-xs">
+          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-2xs">
             <div className="text-xs font-bold text-sky-900">密码/账号异常包换</div>
             <div className="mt-1 text-xs leading-5 text-slate-500">
               收号 24 小时内首次登录若提示密码错误或邮箱不存在，联系客服即刻换新。
             </div>
           </div>
-          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-xs">
+          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-2xs">
             <div className="text-xs font-bold text-sky-900">2FA 验证码异常包换</div>
             <div className="mt-1 text-xs leading-5 text-slate-500">
               若提供的 2FA 密钥计算验证码无法通过系统校验，质保期内无条件更换新凭证。
             </div>
           </div>
-          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-xs">
+          <div className="rounded-xl border border-sky-100 bg-white/90 p-3.5 shadow-2xs">
             <div className="text-xs font-bold text-sky-900">首次登录风控包换</div>
             <div className="mt-1 text-xs leading-5 text-slate-500">
-              在合规海外网络环境下，若首登发现账号在交付前已被官方注销，秒级补发全新账号。
+              在合规海外网络环境下，若首登发现账号在交付前已被官方注销，补发全新账号。
             </div>
           </div>
         </div>
       </section>
 
-      {/* 安全防封四项军规 */}
+      {/* 5. 第五栏：教程直达引导横幅 (简单清爽，查阅教程) */}
+      <ChatGptGuideHeroBanner actionText="查阅教程" />
+
+      {/* 6. 第六栏：注意事项 */}
       <section className="rounded-2xl border border-amber-200/80 bg-amber-50/40 p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-2">
           <ShieldAlert className="h-5 w-5 text-amber-600" />
-          <h3 className="text-base font-bold text-slate-900">账号安全防封与长久存活四大军规</h3>
+          <h3 className="text-base font-bold text-slate-900">注意事项</h3>
         </div>
         <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-          OpenAI 封号 99% 源于「黑名单节点 IP 污染」与「多账号同一浏览器指纹混用」，严格遵守以下规范可长久稳定保号：
+          OpenAI 封号 99% 源于「黑名单节点 IP 污染」与「多账号同一浏览器指纹混用」，请严格遵守以下防封规范：
         </p>
 
         <div className="mt-4 space-y-3">
@@ -2312,11 +2258,29 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
             <span className="text-slate-600">
               若遇到 OpenAI 官方抽检短信验证，切勿使用公共免费临时虚拟接码平台。可搭配本站真实海外实体 SIM 卡（如英国 giffgaff、新西兰 One NZ）0 月租高信誉接码。
             </span>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 pt-1">
+              <a
+                href="https://chatgpt.com/zh-Hans-CN/download/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-slate-800"
+              >
+                <Download className="h-3 w-3" />
+                <span>官方客户端下载</span>
+              </a>
+              <Link
+                href="/products/sim-cards"
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-amber-600"
+              >
+                <Smartphone className="h-3 w-3" />
+                <span>选购国际 SIM 卡接码</span>
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 常见疑问速查 FAQ */}
+      {/* 7. 第七栏：成品号常见疑问与售后速查 (FAQ) */}
       <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
         <h3 className="text-base font-bold text-slate-900">成品号常见疑问与售后速查 (FAQ)</h3>
         <div className="mt-4 space-y-3 text-xs leading-6 text-slate-600 sm:text-sm">
@@ -2347,7 +2311,7 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
 function ChatGptGuideHeroBanner({
   title = "需要 ChatGPT 详细图文操作与保号指引？",
   subtitle = "含首登验码、修改密码、2FA 密钥换绑、剔除陌生设备及全套防封养号核心指南",
-  actionText = "查阅官方实战教程",
+  actionText = "查阅教程",
 }: {
   title?: string;
   subtitle?: string;
@@ -2390,38 +2354,32 @@ function GptRechargeDetails({ product }: { product: Product }) {
       title: "打开兑换站验证卡密",
       desc: "访问官方兑换系统，在「充值提交」输入框粘贴卡密，先点击【验证 CDK】确认卡密状态。",
       link: {
-        text: "访问卡密兑换站 (https://cdk-card.dajuai.us/)",
+        text: "访问卡密兑换站",
         url: "https://cdk-card.dajuai.us/",
       },
     },
     {
       num: "3",
-      title: "提交待充值账号",
-      desc: "卡密验证通过后，按页面提示输入您需要开通 Plus / Pro 的 ChatGPT 账号信息并确认提交。",
+      title: "获取 Session 提交充值",
+      desc: (
+        <>
+          网页端登录你的免费版 ChatGPT 账号后，打开{" "}
+          <a
+            href="https://chatgpt.com/api/auth/session"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+          >
+            获取 Session
+          </a>
+          ，复制页面返回的全部 JSON（也可只复制 accessToken），粘贴到兑换站并确认提交。
+        </>
+      ),
     },
     {
       num: "4",
       title: "秒级处理开通会员",
       desc: "上游系统全自动充值处理，一般 1-3 分钟内即刻生效，登录 ChatGPT 刷新即可点亮会员权益。",
-    },
-  ];
-
-  const checkList = [
-    {
-      title: "兼容账号类型",
-      desc: "支持免费注册的普通账号、历史曾开过 Plus 现已到期变回 Free 的老号直接充值。",
-    },
-    {
-      title: "订阅状态自检",
-      desc: "当前若已有未到期的 Plus 订阅，请勿提前充值！请等待当前账单周期完全结束变回 Free 后再操作。",
-    },
-    {
-      title: "第三方快捷登录自检",
-      desc: "使用 Google 或 Apple 快捷登录的账号，建议在 OpenAI 设置中绑定独立邮箱密码后再进行卡密充值。",
-    },
-    {
-      title: "海外网络环境",
-      desc: "请确保在纯净海外网络环境（严禁香港、大陆等不支持地区节点）下登录使用。",
     },
   ];
 
@@ -2449,36 +2407,25 @@ function GptRechargeDetails({ product }: { product: Product }) {
 
       {/* 兑换流程 4 步 */}
       <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-white">
-              <Zap className="h-4 w-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">🧾 4 步极简自助充值兑换流程</h3>
-              <p className="text-xs text-slate-500">直连官方自动兑换站，卡密验证后 1-3 分钟全自动开通</p>
-            </div>
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-white">
+            <Zap className="h-4 w-4" />
           </div>
-          <a
-            href="https://cdk-card.dajuai.us/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden items-center gap-1 text-xs font-semibold text-primary hover:underline sm:inline-flex"
-          >
-            <span>打开兑换站</span>
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+          <div>
+            <h3 className="text-base font-bold text-slate-900">🧾 4 步极简自助充值兑换流程</h3>
+            <p className="text-xs text-slate-500">直连官方自动兑换站，卡密验证后 1-3 分钟全自动开通</p>
+          </div>
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {steps.map((st) => (
             <div key={st.num} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white shadow-xs">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white shadow-2xs">
                 {st.num}
               </span>
               <div className="min-w-0 flex-1">
                 <h4 className="text-xs font-bold text-slate-900 sm:text-sm">{st.title}</h4>
-                <p className="mt-1 text-xs leading-5 text-slate-600">{st.desc}</p>
+                <div className="mt-1 text-xs leading-5 text-slate-600">{st.desc}</div>
                 {st.link ? (
                   <a
                     href={st.link.url}
@@ -2497,33 +2444,43 @@ function GptRechargeDetails({ product }: { product: Product }) {
       </section>
 
       {/* 下单前自检清单 */}
-      <section className="rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50 via-teal-50/30 to-white p-5 shadow-sm sm:p-6">
+      <section className="rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50/60 via-orange-50/30 to-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-          <h3 className="text-base font-bold text-slate-900">✅ 使用范围（下单前请自检清单）</h3>
+          <CheckCircle2 className="h-5 w-5 text-amber-600" />
+          <h3 className="text-base font-bold text-slate-900">✅ 使用范围（下单前请自检）</h3>
         </div>
-        <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-          为确保您的充值秒级顺利到账，请在下单前逐项核对您的账号状态：
+        <p className="mt-1 text-xs text-rose-600 font-semibold sm:text-sm">
+          不满足条件请不要提交，本商品不可覆盖已有订阅：
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {checkList.map((item, idx) => (
-            <div key={idx} className="rounded-xl border border-emerald-100 bg-white/90 p-3.5 shadow-xs">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 sm:text-sm">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                <span>{item.title}</span>
-              </div>
-              <p className="mt-1 text-xs leading-5 text-slate-600">{item.desc}</p>
+          <div className="rounded-xl border border-emerald-200/80 bg-white/95 p-4 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 sm:text-sm">
+              <span className="text-emerald-600 font-black">✔</span>
+              <span>仅限免费版账号</span>
             </div>
-          ))}
+            <p className="mt-1.5 text-xs leading-5 text-slate-600">
+              当前必须是没有任何订阅的免费版 ChatGPT 账号，或卡付充值到期的账号（免费账号均可正常开通；iOS 全区充值可覆盖，卡付不可覆盖）。
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-rose-200/80 bg-white/95 p-4 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-rose-800 sm:text-sm">
+              <span className="text-rose-600 font-black">✘</span>
+              <span>不可覆盖已有订阅</span>
+            </div>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600">
+              账号当前已有 Go、Plus、Pro 或其他有效订阅，不能用本商品覆盖或升级。提交了也不会按覆盖处理。
+            </p>
+          </div>
         </div>
       </section>
 
       {/* 教程直达横幅 */}
       <ChatGptGuideHeroBanner
         title="需要账户保号与使用环境配置指导？"
-        subtitle="查阅 ChatGPT 账号安全防封、海外节点选择、多设备登录与保号全攻略"
-        actionText="查阅保号指南"
+        subtitle="查阅 ChatGPT 账号安全防封、海外节点选择、多设备登录与保号指南"
+        actionText="查阅教程"
       />
 
       {/* 售后与注意事项 */}

@@ -78,8 +78,8 @@ const serviceRules = [
 ];
 
 const tutorialTopics = [
-  { id: "required", label: "使用必读", title: "使用必读", description: "下单前了解商品规则、购买流程与交付说明。", icon: BookOpen, keywords: ["购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])] },
-  { id: "binance", label: "币安教程", title: "币安 · USDT 交易教程", description: "下载安装、注册买币，以及使用 BSC（BEP20）转账充值。", icon: BinanceWireframeIcon, keywords: ["Binance", "BEP20", "安卓", "iPhone", "Apple", "注册", "邀请码", "JIANLIAN", "购买 USDT", "提现", "支付", "收款地址", "网络手续费"] },
+  { id: "required", label: "使用必读", title: "使用必读", description: "", icon: BookOpen, keywords: ["购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])] },
+  { id: "binance", label: "币安教程", title: "币安 · USDT 交易教程", description: "", icon: BinanceWireframeIcon, keywords: ["Binance", "BEP20", "安卓", "iPhone", "Apple", "注册", "邀请码", "JIANLIAN", "购买 USDT", "提现", "支付", "收款地址", "网络手续费"] },
   { id: "apple-id", label: "Apple ID", title: "Apple ID 使用教程", description: "", icon: AppleWireframeIcon, keywords: ["苹果 ID", "苹果ID", "卡密", "密保", "生日", "格式 A", "格式 B", "格式 C", "iCloud", ...appleChapters.map(([, label]) => label)] },
   { id: "giffgaff", label: "Giffgaff", title: "Giffgaff 教程", description: "", icon: GiffgaffWireframeIcon, keywords: ["英国", "SIM", "激活", "保号", "移动数据", "漫游", "120KB", "流量", "余额", "eSIM", "实体卡"] },
   { id: "haha-sim", label: "Haha SIM", title: "Haha SIM 实体卡激活与保号教程", description: "首次插卡、漫游设置、官方 App、故障排查与实名登记。", icon: HahaSimWireframeIcon, keywords: ["Haha", "haha SIM", "haha Travel", "实体卡", "激活", "数据漫游", "ICCID", "短信", "APN", "实名", "保号", "香港", "中港澳"] },
@@ -127,7 +127,7 @@ export default function TutorialsPage() {
         {isMobile ? (
           <div className="space-y-2">
             {/* 一级教程分类胶囊栏 (横向滚动，悬浮置顶冻结) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5 touch-pan-x">
               {tutorialTopics.map(({ id, label, icon: Icon }) => {
                 const current = topic.id === id && matchingTopics.length > 0;
                 return (
@@ -154,9 +154,56 @@ export default function TutorialsPage() {
               })}
             </div>
 
+            {/* 如果当前分类是 Apple ID，显示二级章节小药丸 */}
+            {topic.id === "apple-id" ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2 touch-pan-x">
+                {appleChapters.map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => {
+                      const heading = document.getElementById(id);
+                      heading?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    className="inline-flex shrink-0 items-center rounded-lg border border-orange-200/60 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-2xs transition-colors active:bg-orange-50 active:text-primary"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {/* 如果当前分类是 Chat Gpt，显示二级小药丸 */}
+            {topic.id === "chatgpt-guide" ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2 touch-pan-x">
+                {[
+                  { guide: "login", label: "登录与 2FA 验证" },
+                  { guide: "security", label: "改密与安全设置" },
+                  { guide: "rebind", label: "设备与 2FA 换绑" },
+                  { guide: "protection", label: "防封与保号指南" },
+                ].map((item) => (
+                  <button
+                    key={item.guide}
+                    type="button"
+                    onClick={() => {
+                      setChatgptGuide(item.guide as any);
+                      resetScroll();
+                    }}
+                    className={`inline-flex shrink-0 items-center rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      chatgptGuide === item.guide
+                        ? "bg-primary text-white font-semibold"
+                        : "bg-white text-slate-600 border border-orange-200/60"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             {/* 如果当前分类有子章节 (Giffgaff)，显示二级小药丸 */}
             {topic.id === "giffgaff" ? (
-              <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2">
+              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2 touch-pan-x">
                 {[
                   { guide: "activation", label: "实体卡激活与使用" },
                   { guide: "keeper", label: "保号助手" },
@@ -182,7 +229,7 @@ export default function TutorialsPage() {
 
             {/* 如果当前分类是 One NZ，显示二级小药丸 */}
             {topic.id === "one-nz" ? (
-              <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2">
+              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2 touch-pan-x">
                 {[
                   { guide: "activation", label: "新手插卡与防扣费" },
                   { guide: "binding", label: "App 注册绑定与查询" },

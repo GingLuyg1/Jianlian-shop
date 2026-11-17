@@ -968,11 +968,6 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
             <span className={stock > 0 ? "text-green-600" : "text-slate-400"}>{stock}</span>
           </div>
         ) : null}
-        {product.originalPrice ? (
-          <div className="hidden shrink-0 text-sm text-muted-foreground line-through lg:block">
-            {currencySymbol}{Number(product.originalPrice).toFixed(2)}
-          </div>
-        ) : null}
         <div className="shrink-0 text-lg font-bold text-orange-600">
           {product.stockStatus === "out-of-stock" ? "已售罄" : priceText}
         </div>
@@ -1055,11 +1050,6 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {product.originalPrice ? (
-              <span className="text-xs text-muted-foreground line-through">
-                {currencySymbol}{Number(product.originalPrice).toFixed(2)}
-              </span>
-            ) : null}
             <span className="text-base font-extrabold text-orange-600">
               {hasStock ? priceText : "已售罄"}
             </span>
@@ -1115,11 +1105,6 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
           <span>销量</span>
           <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-[#9a552b]">{salesCount}</span>
         </div>
-        {product.originalPrice ? (
-          <div className="hidden shrink-0 text-sm text-muted-foreground line-through lg:block">
-            {currencySymbol}{Number(product.originalPrice).toFixed(2)}
-          </div>
-        ) : null}
         <div className="shrink-0 text-right text-base font-bold text-orange-600 min-w-[120px] sm:min-w-[140px] sm:text-right pr-2">
           {hasStock ? priceText : "已售罄"}
         </div>
