@@ -7,11 +7,9 @@ import { createKuajingZyPurchaseStore } from "./purchase-store.mjs";
 import { fulfillKuajingZyCandidate, reconcileKuajingZyAttempt, createKuajingZyRequestId } from "./fulfillment-core.mjs";
 import { zeroSupplierSummary } from "../core/supplier-router-core.mjs";
 import type { SupplierFulfillmentSummary } from "../core/types";
+import { getVerifiedMerchantCostsForOrder, type VerifiedBalanceMerchantCosts } from "../../payments/verified-merchant-costs";
 
-type VerifiedCosts = (input: {orderId:string;paymentSessionId:string;provider:string}) => Promise<{
-  source:"verified_payment_costs";orderId:string;paymentSessionId:string;currency:"CNY";
-  paymentFee:string;otherFees:string;checkedAt:string;
-}>;
+type VerifiedCosts = (orderId:string) => Promise<VerifiedBalanceMerchantCosts>;
 
 // Pricing is observed through ONE bounded reader; no clone/tee, no raw log and
 // no mutation of the strictly GET-only readonly-client.
@@ -91,7 +89,8 @@ export function createKuajingZyProductionRuntime(input: {
     async fulfillPaidOrder(orderId:string,triggerSource:string):Promise<SupplierFulfillmentSummary> {
       const summary=zeroSupplierSummary();
       if(!enabled())return summary; // no credentials, network or DB writes
-      const db=createKuajingZyPurchaseStore(input.service,{verifiedCosts:input.verifiedCosts,triggerSource});
+      const verifiedCosts=input.verifiedCosts ?? ((targetOrderId:string)=>getVerifiedMerchantCostsForOrder(input.service,targetOrderId));
+      const db=createKuajingZyPurchaseStore(input.service,{verifiedCosts,triggerSource});
       const candidates=await db.loadCandidates(orderId);
       const client=createKuajingZyServerClient(env,input.fetchImpl??fetch);
       for(const candidate of candidates) {
