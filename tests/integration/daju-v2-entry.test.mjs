@@ -23,7 +23,7 @@ function load(file,imports) {
 const errors=load("lib/providers/daju/errors.ts",{});
 const client=load("lib/providers/daju/client.ts",{"./client-core.mjs":clientCore,"./errors":errors,"./purchase-capability.mjs":cap,"./purchase-v2.mjs":v2});
 const handler=load("lib/providers/daju/fulfillment.ts",{"./client":client,"./purchase-v2.mjs":v2,"./purchase-v2-store.mjs":store,"./purchase-capability.mjs":cap,"./fulfillment-candidate.mjs":candidate,"./fulfillment-core.mjs":compatibility,"./mapper.mjs":mapper,"./protocol.mjs":protocol});
-const router=load("lib/providers/core/supplier-router.ts",{"../daju/fulfillment":handler,"./supplier-router-core.mjs":routerCore,"../bitrefill/pin-runtime.mjs":{getBitrefillPinHandler:()=>null},"../bitrefill/production-server":{ensureBitrefillProductionRuntime(){throw Error("BITREFILL_NOT_ALLOWED")}}});
+const router=load("lib/providers/core/supplier-router.ts",{"../daju/fulfillment":handler,"../kuajingzy/fulfillment":{fulfillKuajingZyOrderWithSupabase(){throw Error("KUAJINGZY_NOT_ALLOWED_IN_DAJU_REGRESSION")}},"./supplier-router-core.mjs":routerCore,"../bitrefill/pin-runtime.mjs":{getBitrefillPinHandler:()=>null},"../bitrefill/production-server":{ensureBitrefillProductionRuntime(){throw Error("BITREFILL_NOT_ALLOWED")}}});
 const delivery=load("lib/delivery/delivery-service.ts",{"@/lib/providers/core/supplier-router":router,"./local-stock-priority.mjs":local});
 
 test("V2 purchase reference returns before any implicit GET",async()=>{

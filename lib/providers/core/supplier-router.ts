@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fulfillDajuOrderWithSupabase } from "../daju/fulfillment";
+import { fulfillKuajingZyOrderWithSupabase } from "../kuajingzy/fulfillment";
 import { getBitrefillPinHandler } from "../bitrefill/pin-runtime.mjs";
 import { ensureBitrefillProductionRuntime } from "../bitrefill/production-server";
 import {
@@ -18,6 +19,7 @@ type SupplierFulfillmentHandler = (
 
 const SUPPLIER_REGISTRY: Readonly<Record<string, SupplierFulfillmentHandler>> = {
   daju: fulfillDajuOrderWithSupabase,
+  kuajingzy: fulfillKuajingZyOrderWithSupabase,
 };
 
 export { collectFrozenSupplierCodes } from "./supplier-router-core.mjs";
