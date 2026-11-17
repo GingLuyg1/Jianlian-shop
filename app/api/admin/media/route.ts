@@ -8,6 +8,8 @@ import {
   mediaInitError,
   normalizeMediaPurpose,
   normalizeOwnerType,
+  reconcileAllMediaAssets,
+  reconcileMediaAssetStatus,
   scanMediaReferences,
   updateMediaAssetStatus,
   uploadMediaAsset,
@@ -103,18 +105,61 @@ export async function PATCH(request: Request) {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const assetId = String(body.assetId ?? "").trim();
     const action = String(body.action ?? "").trim();
+
+    if (action === "reconcile_all") {
+      const summary = await reconcileAllMediaAssets(supabase);
+      await writeAdminAuditLog({
+        request,
+        admin: { id: admin.user.id, email: admin.user.email },
+        action: "media_reconcile_all",
+        module: "system",
+        targetType: "media_asset",
+        result: "success",
+        metadata: summary,
+      });
+      return json({ success: true, ...summary });
+    }
+
     if (!assetId) return json({ error: "缺少媒体资源 ID。" }, { status: 400 });
 
     const { data: asset, error } = await supabase.from("media_assets").select("*").eq("id", assetId).maybeSingle();
     if (error) throw error;
     if (!asset) return json({ error: "媒体资源不存在。" }, { status: 404 });
 
-    const references = await scanMediaReferences(supabase, asset);
-    if ((action === "archive" || action === "delete") && references.length > 0) {
-      return json({ error: "该资源仍被业务引用，不能归档或删除。", references }, { status: 409 });
+    if (action === "reconcile") {
+      const reconciled = await reconcileMediaAssetStatus(supabase, asset);
+      return json({ asset: reconciled, references: reconciled.references });
     }
 
-    const nextStatus = action === "delete" ? "deleted" : action === "archive" ? "archived" : action === "mark_unused" ? "unused" : null;
+    if (action === "delete") {
+      try {
+        if (asset.bucket && asset.storage_path) {
+          await supabase.storage.from(asset.bucket).remove([asset.storage_path]);
+        }
+      } catch {}
+      await supabase.from("media_assets").delete().eq("id", assetId);
+
+      await writeAdminAuditLog({
+        request,
+        admin: { id: admin.user.id, email: admin.user.email },
+        action: "media_delete",
+        module: "system",
+        targetType: "media_asset",
+        targetId: assetId,
+        targetLabel: String(asset.original_name ?? asset.storage_path ?? assetId),
+        result: "success",
+        beforeSummary: { status: asset.status, bucket: asset.bucket, storagePath: asset.storage_path },
+      });
+
+      return json({ success: true, deleted: true });
+    }
+
+    const references = await scanMediaReferences(supabase, asset);
+    if (action === "archive" && references.length > 0) {
+      return json({ error: "该资源仍被业务引用，不能归档。", references }, { status: 409 });
+    }
+
+    const nextStatus = action === "archive" ? "archived" : action === "mark_unused" ? "unused" : null;
     if (!nextStatus) return json({ error: "不支持的媒体操作。" }, { status: 400 });
     const updated = await updateMediaAssetStatus(supabase, assetId, nextStatus);
 

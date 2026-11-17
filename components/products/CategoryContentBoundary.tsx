@@ -11,7 +11,10 @@ export default function CategoryContentBoundary({ children }: { children: ReactN
   return (
     <div
       data-testid="storefront-category-layout"
-      className={cn(mallShellClassName, isMobile && "!grid-cols-1 !h-auto !overflow-visible !gap-3")}
+      className={cn(
+        mallShellClassName,
+        isMobile && "!grid-cols-[76px_minmax(0,1fr)] !items-stretch min-h-[calc(100dvh-72px)] !overflow-visible !gap-2"
+      )}
     >
       {children}
     </div>

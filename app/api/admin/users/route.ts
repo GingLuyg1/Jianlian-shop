@@ -82,6 +82,7 @@ export async function GET(request: Request) {
 
     const compatibility = await loadUserManagementCompatibility(admin.supabase);
     const pageUsers = profileResult.rows.map(normalizeProfile);
+    const balanceStats = await loadBalanceStats(supabase);
 
     return json({
       users: pageUsers,
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
       pageSize,
       filters: { accountStatus, riskStatus, role, sort },
       schemaReady: profileResult.schemaReady && compatibility.schemaReady,
+      balanceStats,
       errors: compactErrors({
         userManagement: compatibility.error,
       }),
@@ -210,4 +212,35 @@ function textOrNull(value: unknown) {
 function finiteNumber(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function loadBalanceStats(supabase: any) {
+  try {
+    const now = Date.now();
+    const { data } = await supabase.from("profiles").select("balance,created_at").gt("balance", 0);
+    if (!data) return null;
+    let total = 0;
+    let b30 = 0;
+    let b90 = 0;
+    let b180 = 0;
+    let b360 = 0;
+    for (const r of data) {
+      const b = Number(r.balance || 0);
+      total += b;
+      const created = r.created_at ? new Date(r.created_at).getTime() : now;
+      if (created <= now - 30 * 86400000) b30 += b;
+      if (created <= now - 90 * 86400000) b90 += b;
+      if (created <= now - 180 * 86400000) b180 += b;
+      if (created <= now - 360 * 86400000) b360 += b;
+    }
+    return {
+      totalBalance: total,
+      balance30d: b30,
+      balance90d: b90,
+      balance180d: b180,
+      balance360d: b360,
+    };
+  } catch {
+    return null;
+  }
 }

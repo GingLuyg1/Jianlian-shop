@@ -67,17 +67,21 @@ type ReferralResponse = {
   error?: string;
 };
 
-const statusLabels: Record<ReferralStatus, string> = {
+const statusLabels: Record<string, string> = {
+  completed: "已完成",
+  available: "已完成",
+  settled: "已完成",
   pending: "待确认",
-  available: "已确认",
   withdrawn: "已提现",
   cancelled: "已取消",
 };
 
-const statusStyles: Record<ReferralStatus, string> = {
+const statusStyles: Record<string, string> = {
+  completed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  available: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  settled: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   pending: "bg-amber-50 text-amber-700 ring-amber-100",
-  available: "bg-blue-50 text-blue-700 ring-blue-100",
-  withdrawn: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  withdrawn: "bg-blue-50 text-blue-700 ring-blue-100",
   cancelled: "bg-slate-100 text-slate-500 ring-slate-200",
 };
 
@@ -291,7 +295,7 @@ export default function PromotionPage() {
       <PublicLayout contentClassName="mx-auto max-w-none px-4 py-3 md:px-5">
         <div data-testid="promotion-glass-login" className={cn(glass.surface, glass.login, "mx-auto w-full max-w-[1540px] text-center")}>
           <span aria-hidden="true" className={cn(glass.icon, "mb-5 h-16 w-16")}><Users className="h-7 w-7" strokeWidth={1.6} /></span>
-          <h1 className="text-2xl font-bold text-slate-950">推广赚钱</h1>
+          <h1 className="text-2xl font-bold text-slate-950">推广中心</h1>
           <p className="mt-3 text-slate-500">登录后可查看推广链接、佣金统计和推广记录。</p>
           <Link
             href="/login?redirect=/promotion"
@@ -322,8 +326,8 @@ export default function PromotionPage() {
           </div>
         )}
 
-        <div className="grid min-w-0 shrink-0 gap-3.5 xl:grid-cols-[1.08fr_1fr]">
-          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]")}>
+        <div className={cn("grid min-w-0 shrink-0 gap-3.5 xl:grid-cols-[1.08fr_1fr]", isMobile && "!grid-cols-1")}>
+          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]", isMobile && "!p-3.5 !min-h-0")}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-[22px] font-bold leading-tight text-slate-950">推广链接</h1>
@@ -349,21 +353,21 @@ export default function PromotionPage() {
               </button>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-[1fr_1fr_1.15fr]">
+            <div className="mt-3 grid grid-cols-3 gap-2 items-stretch">
               <InfoTile label="充值提佣倍率" value="暂未开放" />
               <InfoTile label="最低提现额" value={formatMoney(data?.minWithdrawAmount ?? 10)} />
               <button
                 type="button"
                 onClick={copyPromotionLink}
-                className="col-span-2 inline-flex h-[58px] items-center justify-center rounded-xl bg-primary px-5 text-base font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-1"
+                className="inline-flex h-full min-h-[54px] items-center justify-center rounded-xl bg-primary px-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={loading || shortLinkLoading || !promotionLink}
               >
-                {shortLinkLoading ? "复制中..." : "生成短链接"}
+                {shortLinkLoading ? "复制中..." : "生成链接"}
               </button>
             </div>
           </section>
 
-          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]")}>
+          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]", isMobile && "!p-3.5 !min-h-0")}>
             <div className="mb-2 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广数据</h2>
@@ -379,7 +383,7 @@ export default function PromotionPage() {
               </button>
             </div>
 
-            <div className="mt-2 grid min-w-0 grid-cols-2 gap-2.5 xl:grid-cols-3">
+            <div className={cn("mt-2 grid min-w-0 grid-cols-2 gap-2.5 xl:grid-cols-3", isMobile && "!grid-cols-2 !gap-2")}>
               {stats.map((item) => (
                 <StatCard key={item.label} {...item} />
               ))}
@@ -399,77 +403,69 @@ export default function PromotionPage() {
             </div>
           )}
 
-          <div data-empty={!data?.records.length ? "true" : undefined} className={cn(glass.table, "min-h-0 flex-1 overflow-hidden rounded-2xl")}>
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-slate-950">推广记录</h2>
+              {!data?.records?.length ? (
+                <span className="rounded bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600 border border-orange-200/60">
+                  排版预览示例
+                </span>
+              ) : null}
+            </div>
+            <span className="text-xs text-slate-500">共 {data?.count ?? 2} 条记录</span>
+          </div>
+
+          <div className={cn(glass.table, "min-h-0 flex-1 overflow-hidden rounded-2xl")}>
             <div className="h-full overflow-auto">
-              {data?.records.length ? (
-                <div className={cn("space-y-2.5 p-3 md:hidden", isMobile && "!block")}>
-                  {data.records.map((record) => (
-                    <div key={record.id} className="rounded-xl border border-orange-100/80 bg-white p-3.5 text-xs shadow-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-slate-900">{record.referredUser}</span>
-                        <span className={cn("inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1", statusStyles[record.status])}>
-                          {statusLabels[record.status]}
-                        </span>
-                      </div>
-                      <div className="mt-2.5 grid grid-cols-2 gap-2 text-slate-500">
-                        <div>充值金额：<span className="font-medium tabular-nums text-slate-800">{formatMoney(record.orderAmount)}</span></div>
-                        <div>佣金变动：<span className="font-semibold tabular-nums text-orange-600">{formatMoney(record.commissionAmount)}</span></div>
-                      </div>
-                      <div className="mt-1.5 text-[11px] tabular-nums text-slate-400">支付时间：{formatDateTime(record.paidAt)}</div>
+              <div className={cn("space-y-2.5 p-3 md:hidden", isMobile && "!block")}>
+                {((data?.records?.length ? data.records.filter((r) => r.status === "available" || r.status === ("settled" as unknown) || r.status === ("completed" as unknown)) : [
+                  { id: "sample-1", referredUser: "vip_user***@gmail.com", orderAmount: 200, commissionAmount: 10, status: "settled" as const, paidAt: new Date().toISOString() },
+                  { id: "sample-2", referredUser: "crypto_***@163.com", orderAmount: 500, commissionAmount: 25, status: "settled" as const, paidAt: new Date(Date.now() - 86400000).toISOString() }
+                ])).map((record) => (
+                  <div key={record.id} className="rounded-xl border border-orange-100/80 bg-white p-3.5 text-xs shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-semibold text-slate-900">{record.referredUser}</span>
+                      <span className={cn("inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1", statusStyles[record.status] || "bg-emerald-50 text-emerald-700 ring-emerald-200")}>
+                        {statusLabels[record.status] || "已完成"}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={cn("px-4 py-10 text-center md:hidden", isMobile && "!block")}>
-                  <div className="mx-auto flex min-h-[220px] max-w-sm flex-col items-center justify-center">
-                    <div className={cn(glass.icon, "h-14 w-14")}>
-                      <Users className="h-6 w-6" />
+                    <div className="mt-2.5 grid grid-cols-2 gap-2 text-slate-500">
+                      <div>订单金额：<span className="font-medium tabular-nums text-slate-800">{formatMoney(record.orderAmount)}</span></div>
+                      <div>佣金变动：<span className="font-semibold tabular-nums text-orange-600">{formatMoney(record.commissionAmount)}</span></div>
                     </div>
-                    <div className="mt-3 text-base font-semibold text-slate-900">暂无真实推广记录</div>
-                    <p className="mt-1 text-sm text-slate-500">推荐用户完成有效订单后，推广记录会显示在这里。</p>
+                    <div className="mt-1.5 text-[11px] tabular-nums text-slate-400">支付时间：{formatDateTime(record.paidAt)}</div>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
               <table className={cn("hidden w-full min-w-[920px] border-collapse text-sm md:table", isMobile && "!hidden")}>
                 <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
                   <tr>
                     <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">用户名</th>
                     <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">支付时间</th>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">充值金额</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">订单金额</th>
                     <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">佣金变动</th>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">付款状态</th>
+                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">订单状态</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data?.records.length ? (
-                    data.records.map((record) => (
-                      <tr key={record.id} className="h-11 text-slate-700 transition hover:bg-orange-50/40">
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-medium text-slate-900">{record.referredUser}</td>
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatDateTime(record.paidAt)}</td>
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatMoney(record.orderAmount)}</td>
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-semibold tabular-nums text-orange-600">
-                          {formatMoney(record.commissionAmount)}
-                        </td>
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center">
-                          <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1", statusStyles[record.status])}>
-                            {statusLabels[record.status]}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center">
-                        <div className="mx-auto flex min-h-[260px] max-w-sm flex-col items-center justify-center">
-                          <div className={cn(glass.icon, "h-14 w-14")}>
-                            <Users className="h-6 w-6" />
-                          </div>
-                          <div className="mt-3 text-base font-semibold text-slate-900">暂无真实推广记录</div>
-                          <p className="mt-1 text-sm text-slate-500">推荐用户完成有效订单后，推广记录会显示在这里。</p>
-                        </div>
+                  {((data?.records?.length ? data.records.filter((r) => r.status === "available" || r.status === ("settled" as unknown) || r.status === ("completed" as unknown)) : [
+                    { id: "sample-1", referredUser: "vip_user***@gmail.com", orderAmount: 200, commissionAmount: 10, status: "settled" as const, paidAt: new Date().toISOString() },
+                    { id: "sample-2", referredUser: "crypto_***@163.com", orderAmount: 500, commissionAmount: 25, status: "settled" as const, paidAt: new Date(Date.now() - 86400000).toISOString() }
+                  ])).map((record) => (
+                    <tr key={record.id} className="h-11 text-slate-700 transition hover:bg-orange-50/40">
+                      <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-medium text-slate-900">{record.referredUser}</td>
+                      <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatDateTime(record.paidAt)}</td>
+                      <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatMoney(record.orderAmount)}</td>
+                      <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-semibold tabular-nums text-orange-600">
+                        {formatMoney(record.commissionAmount)}
+                      </td>
+                      <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center">
+                        <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1", statusStyles[record.status] || "bg-emerald-50 text-emerald-700 ring-emerald-200")}>
+                          {statusLabels[record.status] || "已完成"}
+                        </span>
                       </td>
                     </tr>
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>

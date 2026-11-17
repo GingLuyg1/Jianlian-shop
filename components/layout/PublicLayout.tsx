@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Clock3, Copy, ExternalLink, Headphones, Mail, Monitor, Send, Smartphone } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { SettingsProvider, usePublicSettings } from "@/components/settings/SettingsProvider";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import MobileMenu from "./MobileMenu";
+import MobileTopBarAuth from "./MobileTopBarAuth";
 import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
 import RouteLoadingIndicator from "./RouteLoadingIndicator";
@@ -84,7 +86,8 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   const router = useRouter();
   useEffect(() => {
     const pending = getCatalogRoutePending();
-    if (!pending || pending.target === pathname) {
+    const targetPath = pending?.target ? pending.target.split("?")[0] : "";
+    if (!pending || targetPath === pathname) {
       clearCatalogRoutePending();
     } else if (rebaseCatalogRoutePending(pathname)) {
       router.replace(pending.target, { scroll: false });
@@ -98,7 +101,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
     return () => window.removeEventListener("popstate", onPopstate);
   }, [pathname]);
   const { settings } = usePublicSettings();
-  const { isMobile, mobilePreview, showToggle, toggleMobilePreview } = useMobileStorefront();
+  const { isMobile, previewWidth, mobilePreview, showToggle, setMobilePreviewSize, cycleMobilePreviewSize } = useMobileStorefront();
   const pagePlacement = pathname === "/" ? "home" : pathname.startsWith("/checkout") ? "checkout" : pathname.startsWith("/account") ? "account" : null;
   const pageAnnouncement = pagePlacement ? settings.announcements?.find((item) => item.placement === pagePlacement) : undefined;
   const globalAnnouncement = settings.announcements?.find((item) => item.placement === "global_top");
@@ -106,13 +109,18 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
 
   return (
-    <div data-storefront-ui data-mobile-active={isMobile ? "true" : undefined} className={cn(
-      viewportLocked && !isMobile ? "h-dvh overflow-hidden" : "min-h-screen overflow-x-hidden",
-      "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:268px] lg:[--storefront-sidebar-width:248px]",
-      !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:268px] md:[--storefront-sidebar-width:248px]",
-      isMobile && "[--storefront-content-padding-x:12px] lg:[--storefront-main-offset:0px]",
-      mobilePreview && "mx-auto w-full max-w-[390px] border-x border-orange-200/80 shadow-[0_0_0_1px_rgba(214,180,148,0.45),0_20px_50px_-12px_rgba(89,56,30,0.28)]",
-    )}>
+    <div
+      data-storefront-ui
+      data-mobile-active={isMobile ? "true" : undefined}
+      style={{ maxWidth: previewWidth ? `${previewWidth}px` : undefined }}
+      className={cn(
+        viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen !overflow-visible" : "min-h-screen overflow-x-hidden",
+        "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:268px] lg:[--storefront-sidebar-width:248px]",
+        !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:268px] md:[--storefront-sidebar-width:248px]",
+        isMobile && "[--storefront-content-padding-x:12px] lg:[--storefront-main-offset:0px]",
+        mobilePreview && "mx-auto w-full border-x border-orange-200/80 shadow-[0_0_0_1px_rgba(214,180,148,0.45),0_20px_50px_-12px_rgba(89,56,30,0.28)]",
+      )}
+    >
       <Suspense fallback={null}>
         <RouteLoadingIndicator />
       </Suspense>
@@ -120,47 +128,46 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
 
       <div
         data-testid="mobile-top-brand-bar"
+        style={{ maxWidth: previewWidth ? `${previewWidth}px` : undefined }}
         className={cn(
-          "fixed top-0 left-0 right-0 z-50 flex items-center gap-3 border-b border-border bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm",
+          "fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-1.5 border-b border-border bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur-sm",
           mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
           isMobile && "!flex",
-          mobilePreview && "mx-auto w-full max-w-[390px] border-x border-orange-200/80",
+          mobilePreview && "mx-auto w-full border-x border-orange-200/80",
         )}
       >
-        <MobileMenu onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <img
-            src="/assets/jianlian-brand-logo.png"
-            alt="Jianlian"
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0 rounded-md object-cover"
-          />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold leading-tight">{settings.site_name || "Jianlian"}</div>
-            <div className="truncate text-[10px] leading-tight text-muted-foreground">{subtitle}</div>
-          </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <MobileMenu onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
+          <Link href="/" className="flex shrink-0 items-center gap-1.5">
+            <img
+              src="/assets/jianlian-brand-logo.png"
+              alt="Jianlian"
+              width={26}
+              height={26}
+              className="h-6.5 w-6.5 shrink-0 rounded-md object-cover"
+            />
+            <div className="shrink-0">
+              <div className="whitespace-nowrap text-[13px] font-black leading-tight text-slate-900">{settings.site_name || "Jianlian"}</div>
+              <div className="whitespace-nowrap text-[9px] leading-tight text-muted-foreground">{subtitle}</div>
+            </div>
+          </Link>
         </div>
-        {showToggle ? (
-          <button
-            type="button"
-            data-testid="mobile-preview-header-toggle"
-            onClick={toggleMobilePreview}
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-            title={mobilePreview ? "点击切回全宽窗口" : "点击切换为 390px 手机尺寸预览"}
-          >
-            {mobilePreview ? <Monitor className="h-3.5 w-3.5 text-primary" /> : <Smartphone className="h-3.5 w-3.5 text-primary" />}
-            <span>{mobilePreview ? "全宽" : "手机"}</span>
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={openSupport}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-orange-200/80 bg-orange-50/70 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-orange-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          <Headphones className="h-3.5 w-3.5 shrink-0" />
-          <span>客服</span>
-        </button>
+
+        <div className="flex shrink-0 items-center gap-1">
+          {showToggle ? (
+            <button
+              type="button"
+              data-testid="mobile-preview-header-toggle"
+              onClick={cycleMobilePreviewSize}
+              className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-lg border border-orange-200 bg-orange-50/70 px-1.5 text-[10px] font-semibold text-primary transition-colors hover:bg-orange-100"
+              title="点击在 390px 标屏 / 430px 大屏 / 360px 小屏 / 全宽 之间切换"
+            >
+              {mobilePreview ? <Smartphone className="h-3 w-3" /> : <Monitor className="h-3 w-3" />}
+              <span>{previewWidth ? `${previewWidth}px` : "全宽"}</span>
+            </button>
+          ) : null}
+          <MobileTopBarAuth />
+        </div>
       </div>
       <div
         aria-hidden="true"
@@ -185,28 +192,80 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
       </main>
 
+      {/* Floating preview controls on localhost / preview */}
       {showToggle ? (
-        <div className="fixed bottom-4 right-4 z-50">
+        <div className="fixed bottom-4 left-4 z-50 flex items-center gap-1 rounded-2xl border border-orange-200/90 bg-white/95 p-1 shadow-xl shadow-slate-900/10 backdrop-blur-md">
+          <span className="flex items-center gap-1 px-1.5 text-[11px] font-bold text-slate-500">
+            <Smartphone className="h-3.5 w-3.5 text-primary" />
+            <span className="hidden sm:inline">视口</span>
+          </span>
           <button
             type="button"
-            data-testid="mobile-preview-toggle"
-            onClick={toggleMobilePreview}
-            className="flex items-center gap-2 rounded-full border border-orange-300/90 bg-slate-900/95 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-slate-900/25 transition-transform active:scale-95"
-          >
-            {mobilePreview ? (
-              <>
-                <Monitor className="h-4 w-4 text-orange-400" />
-                <span>退出手机尺寸 (当前 390px)</span>
-              </>
-            ) : (
-              <>
-                <Smartphone className="h-4 w-4 text-orange-400" />
-                <span>切换手机尺寸预览 (390px)</span>
-              </>
+            onClick={() => setMobilePreviewSize(360)}
+            className={cn(
+              "rounded-xl px-2 py-1 text-xs font-semibold transition-colors",
+              previewWidth === 360 ? "bg-primary text-white shadow-sm" : "text-slate-600 hover:bg-orange-50"
             )}
+            title="360px 小屏适配"
+          >
+            360 小屏
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobilePreviewSize(390)}
+            className={cn(
+              "rounded-xl px-2 py-1 text-xs font-semibold transition-colors",
+              previewWidth === 390 ? "bg-primary text-white shadow-sm" : "text-slate-600 hover:bg-orange-50"
+            )}
+            title="390px 标屏适配 (iPhone 12/13/14)"
+          >
+            390 标屏
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobilePreviewSize(430)}
+            className={cn(
+              "rounded-xl px-2 py-1 text-xs font-semibold transition-colors",
+              previewWidth === 430 ? "bg-primary text-white shadow-sm" : "text-slate-600 hover:bg-orange-50"
+            )}
+            title="430px 大屏适配 (iPhone Pro Max)"
+          >
+            430 大屏
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobilePreviewSize(null)}
+            className={cn(
+              "rounded-xl px-2 py-1 text-xs font-semibold transition-colors",
+              previewWidth === null ? "bg-slate-800 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+            )}
+            title="恢复桌面全宽"
+          >
+            全宽
           </button>
         </div>
       ) : null}
+
+      {/* Floating customer service FAB for mobile: 左侧，距边缘 20px (不贴边、不被截断) */}
+      <button
+        type="button"
+        onClick={openSupport}
+        data-testid="floating-support-btn"
+        style={
+          mobilePreview && previewWidth
+            ? { left: `calc(50% - ${previewWidth / 2}px + 20px)`, bottom: "24px" }
+            : { left: "20px", bottom: "24px" }
+        }
+        className={cn(
+          "fixed z-40 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
+          isMobile && "!flex",
+        )}
+        aria-label="在线客服"
+        title="在线客服"
+      >
+        <Headphones className="h-5 w-5" />
+      </button>
 
       <Dialog open={supportOpen} onOpenChange={setSupportOpen}>
         <DialogContent onCloseAutoFocus={(event) => {

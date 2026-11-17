@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { checkAdminIpAccess } from "@/lib/security/admin-ip-guard";
 
 function isStaticAssetPath(pathname: string) {
   return (
@@ -77,6 +78,17 @@ export async function middleware(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    // Admin IP whitelist guard
+    if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/admin")) {
+      const ipCheck = checkAdminIpAccess(request);
+      if (!ipCheck.allowed) {
+        return new NextResponse(ipCheck.message, {
+          status: 403,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      }
+    }
 
     // Only the orders page shell is public so it can render its sign-in cover.
     // All order data APIs and every other protected account/admin route retain authentication.

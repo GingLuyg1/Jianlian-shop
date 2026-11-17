@@ -87,9 +87,19 @@ export async function GET(request: Request) {
     if (mode === "products") {
       const { data, error } = await admin.supabase
         .from("products")
-        .select("id,name,slug,delivery_type,status")
+        .select("id,name,slug,delivery_type,status,category_id")
         .in("delivery_type", ["automatic", "auto", "card", "account"])
         .order("name", { ascending: true });
+
+      if (error) throw error;
+      return NextResponse.json({ data: data ?? [] });
+    }
+
+    if (mode === "categories") {
+      const { data, error } = await admin.supabase
+        .from("categories")
+        .select("id,name,slug,parent_id,level,is_active,sort_order")
+        .order("sort_order", { ascending: true });
 
       if (error) throw error;
       return NextResponse.json({ data: data ?? [] });
@@ -365,6 +375,33 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ data });
     }
 
+    if (action === "delete_item") {
+      const { data: item, error: fetchErr } = await admin.supabase
+        .from("digital_inventory")
+        .select("id, status, product_id")
+        .eq("id", inventoryId)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!item) return jsonError("库存条目不存在或已被删除", 404);
+      if (["reserved", "delivered"].includes(item.status)) {
+        return jsonError("已预留或已交付的卡密条目不可删除，以确保订单履约与售后记录完整", 400);
+      }
+      const { error: delErr } = await admin.supabase
+        .from("digital_inventory")
+        .delete()
+        .eq("id", inventoryId);
+      if (delErr) throw delErr;
+      await writeAdminAuditLog({
+        action: "delete_inventory_item",
+        module: "inventory",
+        targetType: "digital_inventory",
+        targetId: inventoryId,
+        result: "success",
+        metadata: { remark },
+      });
+      return NextResponse.json({ success: true, id: inventoryId });
+    }
+
     const { data, error } = await admin.supabase.rpc("admin_disable_digital_inventory", {
       p_inventory_id: inventoryId,
       p_remark: remark || null,
@@ -389,6 +426,41 @@ export async function PATCH(request: Request) {
       result: "failed",
       errorMessage: getInventoryAuditError(error),
     });
+    return jsonError(failure.message, failure.status);
+  }
+}
+
+export async function DELETE(request: Request) {
+  const admin = await getServerAdminContext();
+  if (!admin.ok) return jsonError(admin.message, admin.status);
+  try {
+    const inventoryId = getSearchParam(request, "id") || (await request.json().catch(() => ({}))).id;
+    if (!inventoryId) return jsonError("缺少库存 ID");
+    const { data: item, error: fetchErr } = await admin.supabase
+      .from("digital_inventory")
+      .select("id, status, product_id")
+      .eq("id", inventoryId)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!item) return jsonError("库存条目不存在或已被删除", 404);
+    if (["reserved", "delivered"].includes(item.status)) {
+      return jsonError("已预留或已交付的卡密条目不可删除，以确保订单履约与售后记录完整", 400);
+    }
+    const { error: delErr } = await admin.supabase
+      .from("digital_inventory")
+      .delete()
+      .eq("id", inventoryId);
+    if (delErr) throw delErr;
+    await writeAdminAuditLog({
+      action: "delete_inventory_item",
+      module: "inventory",
+      targetType: "digital_inventory",
+      targetId: inventoryId,
+      result: "success",
+    });
+    return NextResponse.json({ success: true, id: inventoryId });
+  } catch (error) {
+    const failure = getInventoryStatusError(error);
     return jsonError(failure.message, failure.status);
   }
 }

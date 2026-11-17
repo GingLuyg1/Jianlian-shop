@@ -2,18 +2,23 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-const STORAGE_KEY = "jianlian:mobile-preview";
+const STORAGE_KEY = "jianlian:mobile-preview-width";
+
+export type MobilePreviewSize = 360 | 390 | 430 | null;
 
 type MobilePreviewState = {
-  /** Whether the 390px mobile preview frame is explicitly active */
+  /** Active simulated width (360, 390, 430), or null if desktop full width */
+  previewWidth: MobilePreviewSize;
+  /** Whether mobile preview frame is active */
   mobilePreview: boolean;
-  /** Whether the floating preview toggle button should be shown (localhost / preview) */
+  /** Whether preview toggle should be shown (localhost / preview) */
   showToggle: boolean;
   /** Whether the actual browser window is narrower than desktop (< 1024px) */
   compactViewport: boolean;
 };
 
 const SERVER_STATE: MobilePreviewState = {
+  previewWidth: null,
   mobilePreview: false,
   showToggle: false,
   compactViewport: false,
@@ -27,13 +32,28 @@ function emit() {
   listeners.forEach((listener) => listener());
 }
 
-function syncDocumentAttribute(active: boolean) {
+function syncDocumentAttribute(width: MobilePreviewSize) {
   if (typeof document === "undefined") return;
-  if (active) {
+  if (width !== null) {
     document.documentElement.dataset.mobilePreview = "true";
+    document.documentElement.style.setProperty("--mobile-preview-width", `${width}px`);
   } else {
     delete document.documentElement.dataset.mobilePreview;
+    document.documentElement.style.removeProperty("--mobile-preview-width");
   }
+}
+
+function parseWidthValue(raw: string | null): MobilePreviewSize | undefined {
+  if (raw === "360" || raw === "390" || raw === "430") {
+    return Number(raw) as 360 | 390 | 430;
+  }
+  if (raw === "0" || raw === "false" || raw === "none" || raw === "full") {
+    return null;
+  }
+  if (raw === "1" || raw === "true") {
+    return 390;
+  }
+  return undefined;
 }
 
 function initClientState() {
@@ -46,38 +66,36 @@ function initClientState() {
     hostname === "127.0.0.1" ||
     hostname.endsWith(".local");
   const params = new URLSearchParams(window.location.search);
-  const queryOverride = params.get("mobilePreview");
+  const queryOverride = parseWidthValue(params.get("mobilePreview") ?? params.get("previewWidth"));
 
-  let stored: string | null = null;
+  let stored: MobilePreviewSize | undefined = undefined;
   try {
-    stored = window.localStorage.getItem(STORAGE_KEY);
+    const rawStored = window.localStorage.getItem(STORAGE_KEY);
+    stored = parseWidthValue(rawStored);
   } catch {
-    stored = null;
+    stored = undefined;
   }
 
-  let mobilePreview = false;
-  if (queryOverride === "1" || queryOverride === "true") {
-    mobilePreview = true;
-  } else if (queryOverride === "0" || queryOverride === "false") {
-    mobilePreview = false;
-  } else if (stored === "1") {
-    mobilePreview = true;
-  } else if (stored === "0") {
-    mobilePreview = false;
+  let previewWidth: MobilePreviewSize = null;
+  if (queryOverride !== undefined) {
+    previewWidth = queryOverride;
+  } else if (stored !== undefined) {
+    previewWidth = stored;
   } else if (isLocal) {
-    // Default to 390px mobile preview on localhost so the user can immediately inspect the mobile UI
-    mobilePreview = true;
+    // Default to 390px mainstream phone preview on localhost
+    previewWidth = 390;
   }
 
   const compactViewport = window.innerWidth < 1024;
-  const showToggle = isLocal || queryOverride !== null || stored !== null;
+  const showToggle = isLocal || queryOverride !== undefined || stored !== undefined;
 
   clientState = {
-    mobilePreview,
+    previewWidth,
+    mobilePreview: previewWidth !== null,
     showToggle,
     compactViewport,
   };
-  syncDocumentAttribute(mobilePreview);
+  syncDocumentAttribute(previewWidth);
 
   const handleResize = () => {
     const nextCompact = window.innerWidth < 1024;
@@ -107,15 +125,16 @@ function getServerSnapshot(): MobilePreviewState {
   return SERVER_STATE;
 }
 
-export function setMobilePreview(next: boolean) {
+export function setMobilePreviewSize(next: MobilePreviewSize) {
   initClientState();
   clientState = {
     ...clientState,
-    mobilePreview: next,
+    previewWidth: next,
+    mobilePreview: next !== null,
     showToggle: true,
   };
   try {
-    window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+    window.localStorage.setItem(STORAGE_KEY, next !== null ? String(next) : "0");
   } catch {
     // Ignore storage errors
   }
@@ -123,9 +142,28 @@ export function setMobilePreview(next: boolean) {
   emit();
 }
 
+export function setMobilePreview(next: boolean) {
+  setMobilePreviewSize(next ? 390 : null);
+}
+
+export function cycleMobilePreviewSize() {
+  initClientState();
+  const current = clientState.previewWidth;
+  let next: MobilePreviewSize = null;
+  if (current === 390) next = 430;
+  else if (current === 430) next = 360;
+  else if (current === 360) next = null;
+  else next = 390;
+  setMobilePreviewSize(next);
+}
+
 export function toggleMobilePreview() {
   initClientState();
-  setMobilePreview(!clientState.mobilePreview);
+  if (clientState.previewWidth !== null) {
+    setMobilePreviewSize(null);
+  } else {
+    setMobilePreviewSize(390);
+  }
 }
 
 export function useMobileStorefront() {
@@ -134,21 +172,26 @@ export function useMobileStorefront() {
 
   useEffect(() => {
     setHydrated(true);
-    syncDocumentAttribute(snapshot.mobilePreview);
-  }, [snapshot.mobilePreview]);
+    syncDocumentAttribute(snapshot.previewWidth);
+  }, [snapshot.previewWidth]);
 
+  const previewWidth = hydrated ? snapshot.previewWidth : null;
   const mobilePreview = hydrated ? snapshot.mobilePreview : false;
   const compactViewport = hydrated ? snapshot.compactViewport : false;
   const showToggle = hydrated ? snapshot.showToggle : false;
 
   return {
-    /** True when either the 390px preview toggle is ON or the screen width is < 1024px */
+    /** True when either a mobile preview frame is active or the screen width is < 1024px */
     isMobile: mobilePreview || compactViewport,
-    /** True specifically when the 390px phone frame preview is active */
+    /** Current simulated mobile width (360, 390, 430) or null */
+    previewWidth,
+    /** True specifically when any mobile phone frame preview is active */
     mobilePreview,
-    /** True when the floating preview switch button should render */
+    /** True when the floating preview switch controls should render */
     showToggle,
     setMobilePreview,
+    setMobilePreviewSize,
+    cycleMobilePreviewSize,
     toggleMobilePreview,
   };
 }

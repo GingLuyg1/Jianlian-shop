@@ -2,8 +2,12 @@ import { KeyRound, Mail, ShieldCheck, Smartphone, Store } from "lucide-react";
 
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
+import { cn } from "@/lib/utils";
 
 export default function AccountInformation({ email, loading }: { email: string | null; loading: boolean }) {
+  const { isMobile } = useMobileStorefront();
+
   return (
     <div className="grid min-w-0 gap-4" data-testid="account-information">
       <section className={`${glass.surface} ${styles.panel} ${styles.information}`} aria-labelledby="account-information-title">
@@ -14,7 +18,7 @@ export default function AccountInformation({ email, loading }: { email: string |
           </div>
           <span className={styles.pill}>安全资料</span>
         </header>
-        <dl className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <dl className={cn("grid min-w-0 gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4", isMobile && "!grid-cols-2 !gap-2.5")}>
           {[
             { label: "商户 ID", icon: Store },
             { label: "商户密钥", icon: KeyRound },
@@ -33,14 +37,15 @@ export default function AccountInformation({ email, loading }: { email: string |
           </div>
         </dl>
       </section>
-      <section className={`${glass.inset} ${styles.panel} ${styles.securityNote}`} aria-labelledby="account-security-note">
-        <span className={`${glass.icon} h-10 w-10`}><ShieldCheck className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" /></span>
-        <div className="min-w-0"><h2 id="account-security-note" className="text-sm font-semibold text-slate-800">安全提示</h2>
-          <ul className="mt-2 list-disc space-y-2 pl-4 text-xs leading-5 text-slate-500">
-            <li>请勿向他人泄露登录密码、验证码或密钥。</li>
-            <li>请妥善保管登录邮箱，以便接收账户通知和找回账号。</li>
-            <li>发现异常订单或账户活动，请及时联系在线客服。</li>
-          </ul>
+      <section className={cn(glass.inset, styles.panel, styles.securityNote, isMobile && "!p-3.5 !gap-2.5")} aria-labelledby="account-security-note">
+        <span className={cn(glass.icon, "h-9 w-9 shrink-0 sm:h-10 sm:w-10")}><ShieldCheck className="h-4 w-4 text-primary sm:h-5 sm:w-5" strokeWidth={1.6} aria-hidden="true" /></span>
+        <div className="min-w-0 flex-1">
+          <h2 id="account-security-note" className="text-sm font-semibold text-slate-800">安全提示</h2>
+          <div className="mt-2 space-y-1.5 text-xs text-slate-600">
+            <div className="flex items-start gap-1.5"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400" /><span>请勿向他人泄露登录密码、验证码或密钥。</span></div>
+            <div className="flex items-start gap-1.5"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400" /><span>请妥善保管登录邮箱，以便接收账户通知和找回账号。</span></div>
+            <div className="flex items-start gap-1.5"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400" /><span>发现异常订单或账户活动，请及时联系在线客服。</span></div>
+          </div>
         </div>
       </section>
     </div>

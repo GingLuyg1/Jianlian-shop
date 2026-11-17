@@ -39,7 +39,21 @@ type AdminUserRow = {
   createdAt: string | null; updatedAt: string | null;
   lastLoginAt: string | null; statusReason: string | null; riskReason: string | null;
 };
-type UserListResponse = { users?: AdminUserRow[]; count?: number; schemaReady?: boolean; errors?: Record<string, string>; error?: string };
+type BalanceStats = {
+  totalBalance: number;
+  balance30d: number;
+  balance90d: number;
+  balance180d: number;
+  balance360d: number;
+};
+type UserListResponse = {
+  users?: AdminUserRow[];
+  count?: number;
+  schemaReady?: boolean;
+  errors?: Record<string, string>;
+  error?: string;
+  balanceStats?: BalanceStats | null;
+};
 
 function useDebouncedValue(value: string, delay = 300) {
   const [debounced, setDebounced] = useState(value);
@@ -57,6 +71,7 @@ export default function AdminUsersPage() {
   const [error, setError] = useState("");
   const [schemaReady, setSchemaReady] = useState(true);
   const [partialErrors, setPartialErrors] = useState<Record<string, string>>({});
+  const [balanceStats, setBalanceStats] = useState<BalanceStats | null>(null);
   const [search, setSearch] = useState(initial.get("search") ?? "");
   const [status, setStatus] = useState(normalizeFilter(initial.get("status"), ACCOUNT_LABELS));
   const [role, setRole] = useState(normalizeFilter(initial.get("role"), ROLE_LABELS));
@@ -86,6 +101,7 @@ export default function AdminUsersPage() {
       if (!response.ok) throw new Error(payload.error || "用户列表加载失败。");
       setUsers(payload.users ?? []); setCount(payload.count ?? 0);
       setSchemaReady(payload.schemaReady !== false); setPartialErrors(payload.errors ?? {});
+      if (payload.balanceStats) setBalanceStats(payload.balanceStats);
     } catch (loadError) {
       setUsers([]); setCount(0); setError(loadError instanceof Error ? loadError.message : "用户列表加载失败。");
     } finally { setLoading(false); }
@@ -111,11 +127,16 @@ export default function AdminUsersPage() {
 
   return (
     <AdminPageShell variant="v2" title="用户管理" description="只读查询用户资料、账户摘要、关联业务、风险记录和后台审计历史。" actions={<Button className="h-11 sm:h-9" variant="outline" onClick={() => void loadUsers()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}>
-      <AdminListStats>
+      <AdminListStats className="!grid !grid-cols-3 md:!grid-cols-5 xl:!grid-cols-9 w-full divide-x divide-slate-100">
         <AdminListStat label="当前结果" value={count} />
         <AdminListStat label="本页正常账户" value={pageSummary.active} />
         <AdminListStat label="本页风险账户" value={pageSummary.risk} tone={pageSummary.risk ? "warning" : "neutral"} />
         <AdminListStat label="本页余额合计" value={money(pageSummary.balance)} />
+        <AdminListStat label="站内余额" value={balanceStats ? money(balanceStats.totalBalance) : "—"} />
+        <AdminListStat label="30天+余额" value={balanceStats ? money(balanceStats.balance30d) : "—"} />
+        <AdminListStat label="90天+余额" value={balanceStats ? money(balanceStats.balance90d) : "—"} />
+        <AdminListStat label="180天+余额" value={balanceStats ? money(balanceStats.balance180d) : "—"} />
+        <AdminListStat label="360天+余额" value={balanceStats ? money(balanceStats.balance360d) : "—"} />
       </AdminListStats>
       {!schemaReady ? <Notice>用户管理关键字段或 数据库事务处理 兼容合同尚未就绪；当前仅显示可以安全读取的资料。</Notice> : null}
       {Object.keys(partialErrors).length ? <Notice>部分用户管理能力检查失败：{Object.values(partialErrors).join("、")}</Notice> : null}

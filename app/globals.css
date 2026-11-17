@@ -215,10 +215,9 @@ body:has([data-storefront-ui]) [role="dialog"]:not([class*="inset-y-0"]) {
 /* Catalog motion only: wrappers keep the approved cards and layout unchanged. */
 @media (min-width: 1024px) {
   .catalog-wheel-item {
-    transform: translate3d(0, 0, 0) scale(var(--wheel-scale, 1));
-    opacity: var(--wheel-opacity, 1);
-    transform-origin: center center;
-    will-change: transform, opacity;
+    transform: none !important;
+    opacity: 1 !important;
+    will-change: auto;
   }
 }
 
@@ -324,6 +323,49 @@ html[data-mobile-preview="true"] [data-wheel-container="secondary"]::-webkit-scr
 /* Force single-column stacking inside 390px mobile tutorial content so sm:/md:/lg: grids don't squeeze text */
 [data-storefront-ui][data-mobile-active="true"] [data-testid="tutorial-content"] .grid:not(.grid-cols-2) {
   grid-template-columns: minmax(0, 1fr) !important;
+}
+
+/* Prevent fixed header and body offset shift when Radix Sheet scroll-locks body */
+body[data-scroll-locked],
+html[data-scroll-locked] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Mobile Touch interaction: disable hover animations and eliminate touch scale jitter */
+@media (hover: none), (pointer: coarse) {
+  button:hover, a:hover, button:active, a:active {
+    transform: none !important;
+  }
+}
+
+html[data-mobile-preview="true"] button:hover,
+html[data-mobile-preview="true"] a:hover,
+html[data-mobile-preview="true"] button:active,
+html[data-mobile-preview="true"] a:active {
+  transform: none !important;
+}
+
+/* Mobile studio 390px frame overrides for Account Recharge */
+html[data-mobile-preview="true"] [data-testid="recharge-notice-glass"] .grid,
+[data-mobile-active="true"] [data-testid="recharge-notice-glass"] .grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html[data-mobile-preview="true"] [data-testid="recharge-summary"],
+[data-mobile-active="true"] [data-testid="recharge-summary"] {
+  flex-direction: column !important;
+  align-items: stretch !important;
+}
+
+html[data-mobile-preview="true"] [data-testid="recharge-summary"] > button,
+[data-mobile-active="true"] [data-testid="recharge-summary"] > button {
+  width: 100% !important;
+}
+
+html[data-mobile-preview="true"] [data-testid="recharge-summary"] svg,
+[data-mobile-active="true"] [data-testid="recharge-summary"] svg {
+  display: none !important;
 }
 
 /* Hide desktop-only hero decorative card in mobile preview or viewport < 1280px so it never overlaps hero text */
