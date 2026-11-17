@@ -26,8 +26,16 @@ import GiffgaffTutorial from "@/components/account/GiffgaffTutorial";
 import GiffgaffActivationTutorial from "@/components/account/GiffgaffActivationTutorial";
 import HahaSimTutorial from "@/components/account/HahaSimTutorial";
 import OneNzTutorial, { type OneNzSection } from "@/components/account/OneNzTutorial";
-import ChatGptAccountGuideTutorial from "@/components/account/ChatGptAccountGuideTutorial";
+import ChatGptAccountGuideTutorial, { type ChatGptTutorialSection } from "@/components/account/ChatGptAccountGuideTutorial";
 import AppleIdTutorial, { appleChapters } from "@/components/account/AppleIdTutorial";
+import {
+  AppleWireframeIcon,
+  BinanceWireframeIcon,
+  ChatGptWireframeIcon,
+  GiffgaffWireframeIcon,
+  HahaSimWireframeIcon,
+  OneNzWireframeIcon,
+} from "@/components/icons/TutorialBrandWireframeIcons";
 import sidebar from "@/components/layout/SidebarSlidingList.module.css";
 import selection from "@/components/ui/SelectionMotion.module.css";
 import glass from "@/components/account/AccountGlass.module.css";
@@ -71,12 +79,12 @@ const serviceRules = [
 
 const tutorialTopics = [
   { id: "required", label: "使用必读", title: "使用必读", description: "下单前了解商品规则、购买流程与交付说明。", icon: BookOpen, keywords: ["购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])] },
-  { id: "binance", label: "币安教程", title: "币安 · USDT 交易教程", description: "下载安装、注册买币，以及使用 BSC（BEP20）转账充值。", icon: CreditCard, keywords: ["Binance", "BEP20", "安卓", "iPhone", "Apple", "注册", "邀请码", "JIANLIAN", "购买 USDT", "提现", "支付", "收款地址", "网络手续费"] },
-  { id: "apple-id", label: "Apple ID", title: "Apple ID 使用教程", description: "", icon: ShieldCheck, keywords: ["苹果 ID", "苹果ID", "卡密", "密保", "生日", "格式 A", "格式 B", "格式 C", "iCloud", ...appleChapters.map(([, label]) => label)] },
-  { id: "giffgaff", label: "Giffgaff", title: "Giffgaff 教程", description: "", icon: ShieldCheck, keywords: ["英国", "SIM", "激活", "保号", "移动数据", "漫游", "120KB", "流量", "余额", "eSIM", "实体卡"] },
-  { id: "haha-sim", label: "Haha SIM", title: "Haha SIM 实体卡激活与保号教程", description: "首次插卡、漫游设置、官方 App、故障排查与实名登记。", icon: Smartphone, keywords: ["Haha", "haha SIM", "haha Travel", "实体卡", "激活", "数据漫游", "ICCID", "短信", "APN", "实名", "保号", "香港", "中港澳"] },
-  { id: "one-nz", label: "One NZ", title: "One NZ 新西兰电话卡激活与保号教程", description: "0月租、免费收短信、国内5G漫游防扣费与保号指南", icon: Smartphone, keywords: ["One NZ", "OneNZ", "新西兰", "Vodafone", "沃达丰", "激活", "0月租", "短信免费", "mytype", "521", "充值保号", "iMessage", "关闭数据漫游"] },
-  { id: "chatgpt-guide", label: "GPT 保号", title: "ChatGPT 成品号保号与防封指南", description: "网络环境选择、防封禁核心策略、客户端下载与接码解封技巧", icon: Bot, keywords: ["ChatGPT", "Plus", "成品号", "保号", "Codex", "客户端下载", "防封", "403", "接码", "短信验证", "节点", "Access Denied"] },
+  { id: "binance", label: "币安教程", title: "币安 · USDT 交易教程", description: "下载安装、注册买币，以及使用 BSC（BEP20）转账充值。", icon: BinanceWireframeIcon, keywords: ["Binance", "BEP20", "安卓", "iPhone", "Apple", "注册", "邀请码", "JIANLIAN", "购买 USDT", "提现", "支付", "收款地址", "网络手续费"] },
+  { id: "apple-id", label: "Apple ID", title: "Apple ID 使用教程", description: "", icon: AppleWireframeIcon, keywords: ["苹果 ID", "苹果ID", "卡密", "密保", "生日", "格式 A", "格式 B", "格式 C", "iCloud", ...appleChapters.map(([, label]) => label)] },
+  { id: "giffgaff", label: "Giffgaff", title: "Giffgaff 教程", description: "", icon: GiffgaffWireframeIcon, keywords: ["英国", "SIM", "激活", "保号", "移动数据", "漫游", "120KB", "流量", "余额", "eSIM", "实体卡"] },
+  { id: "haha-sim", label: "Haha SIM", title: "Haha SIM 实体卡激活与保号教程", description: "首次插卡、漫游设置、官方 App、故障排查与实名登记。", icon: HahaSimWireframeIcon, keywords: ["Haha", "haha SIM", "haha Travel", "实体卡", "激活", "数据漫游", "ICCID", "短信", "APN", "实名", "保号", "香港", "中港澳"] },
+  { id: "one-nz", label: "One NZ", title: "One NZ 新西兰电话卡激活与保号教程", description: "0月租、免费收短信、国内5G漫游防扣费与保号指南", icon: OneNzWireframeIcon, keywords: ["One NZ", "OneNZ", "新西兰", "Vodafone", "沃达丰", "激活", "0月租", "短信免费", "mytype", "521", "充值保号", "iMessage", "关闭数据漫游"] },
+  { id: "chatgpt-guide", label: "Chat Gpt", title: "ChatGPT 综合使用与保号教程", description: "账号登录、2FA 安全验证、密码管理、陌生设备剔除与防封禁指南", icon: ChatGptWireframeIcon, keywords: ["ChatGPT", "Plus", "成品号", "保号", "Codex", "客户端下载", "防封", "403", "接码", "短信验证", "节点", "Access Denied", "2FA", "改密", "安全设置"] },
 ] as const;
 
 export default function TutorialsPage() {
@@ -87,6 +95,7 @@ export default function TutorialsPage() {
   const [giffgaffGuide, setGiffgaffGuide] = useState<"activation" | "keeper">("activation");
   const [oneNzTreeOpen, setOneNzTreeOpen] = useState(false);
   const [oneNzGuide, setOneNzGuide] = useState<OneNzSection>("activation");
+  const [chatgptGuide, setChatgptGuide] = useState<ChatGptTutorialSection>("login");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -174,10 +183,10 @@ export default function TutorialsPage() {
         </div>
       </aside>
       <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content} ${isMobile ? "!overflow-visible" : ""}`}>
-        <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}><div key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : ""}`} className={tutorial.topicEnter}><h1 className="text-lg font-semibold text-slate-900 sm:text-xl">{showGiffgaff ? "Giffgaff" : showOneNz ? `One NZ · ${oneNzGuide === "activation" ? "新手激活与防扣费" : oneNzGuide === "binding" ? "App 注册绑定与查询" : "国内漫游资费与保号"}` : topic.title}</h1>{topic.description && <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm sm:leading-6">{topic.description}</p>}</div></header>
+        <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}><div key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : ""}`} className={tutorial.topicEnter}><h1 className="text-lg font-semibold text-slate-900 sm:text-xl">{showGiffgaff ? "Giffgaff" : showOneNz ? `One NZ · ${oneNzGuide === "activation" ? "新手激活与防扣费" : oneNzGuide === "binding" ? "App 注册绑定与查询" : "国内漫游资费与保号"}` : topic.id === "chatgpt-guide" ? `Chat Gpt · ${chatgptGuide === "login" ? "登录与 2FA 验证" : chatgptGuide === "security" ? "改密与安全设置" : chatgptGuide === "rebind" ? "设备与 2FA 换绑" : "防封与保号指南"}` : topic.title}</h1>{topic.description && <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm sm:leading-6">{topic.description}</p>}</div></header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
-          <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : ""}` : "empty"} className={tutorial.topicEnter}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial /> : <div className="space-y-7">
+          <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : ""}` : "empty"} className={tutorial.topicEnter}>
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : <div className="space-y-7">
             <section aria-labelledby="tutorial-service-title">
               <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">

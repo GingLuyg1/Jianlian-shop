@@ -65,11 +65,32 @@ export function AdminTrendRechart({ points, loading }: { points: DashboardTrendP
       animation: false,
       aria: { enabled: true },
       tooltip: { trigger: "axis", renderMode: "richText" },
-      grid: { left: 56, right: 48, top: 20, bottom: 32, containLabel: true },
-      xAxis: { type: "category", data: points.map(p => p.label), boundaryGap: false },
+      grid: { left: 56, right: 56, top: 38, bottom: 28, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: points.map(p => p.label),
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: "#e2e8f0" } },
+        axisLabel: { color: "#64748b", fontSize: 11 },
+      },
       yAxis: [
-        { type: "value", name: "金额", position: "left" },
-        { type: "value", name: "数量 / %", position: "right", minInterval: 1 },
+        {
+          type: "value",
+          name: "金额 (元)",
+          position: "left",
+          nameTextStyle: { color: "#64748b", fontSize: 11, padding: [0, 0, 6, 0] },
+          axisLabel: { color: "#64748b", fontSize: 11 },
+          splitLine: { lineStyle: { strokeDasharray: [3, 4], color: "#f1f5f9" } },
+        },
+        {
+          type: "value",
+          name: "数量 / %",
+          position: "right",
+          minInterval: 1,
+          nameTextStyle: { color: "#64748b", fontSize: 11, padding: [0, 0, 6, 0] },
+          axisLabel: { color: "#64748b", fontSize: 11 },
+          splitLine: { show: false },
+        },
       ],
       series: SERIES.filter(item => selected.includes(item.key)).map(item => ({
         name: item.label, type: "line", smooth: false, connectNulls: false,
@@ -83,16 +104,16 @@ export function AdminTrendRechart({ points, loading }: { points: DashboardTrendP
     observer.observe(host.current);
     return () => { observer.disconnect(); chart.dispose(); };
   }, [points, selected, loading]);
-  if (loading) return <div className="h-[260px] animate-pulse rounded-lg bg-slate-100" />;
+  if (loading) return <div className="h-[270px] animate-pulse rounded-lg bg-slate-100" />;
   if (!points.length) return <AdminEmptyState title="暂无趋势数据" description="有真实记录后显示趋势。" />;
-  return <div className="min-w-0">
-    <div className="mb-3 flex flex-wrap gap-1.5" aria-label="经营趋势指标">
+  return <div className="flex h-full min-w-0 flex-col">
+    <div className="mb-2 flex flex-wrap gap-1.5" aria-label="经营趋势指标">
       {SERIES.map(item => <button key={item.key} type="button" aria-pressed={selected.includes(item.key)}
         onClick={() => setSelected(current => current.includes(item.key) ? (current.length === 1 ? current : current.filter(key => key !== item.key)) : [...current, item.key])}
         className={cn("inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs", selected.includes(item.key) ? "border-slate-300 bg-white text-slate-900" : "border-transparent bg-slate-100 text-slate-500")}>
         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}
       </button>)}
     </div>
-    <div ref={host} data-testid="dashboard-echarts" role="img" aria-label="经营趋势曲线图" className="w-full min-w-0 rounded-lg border border-slate-200 bg-white" style={{ height: 250 }} />
+    <div ref={host} data-testid="dashboard-echarts" role="img" aria-label="经营趋势曲线图" className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 bg-white" style={{ minHeight: 260 }} />
   </div>;
 }

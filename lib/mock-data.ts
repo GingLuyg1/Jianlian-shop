@@ -95,6 +95,7 @@ export const products: Product[] = [
     description: "新西兰 One NZ 实体电话卡，0月租、免实名、国内免费接收短信、直连移动/联通5G漫游",
     price: 98.0,
     currency: "CNY",
+    image: "/assets/one-nz-card.png",
     stockStatus: "in-stock",
     stockLabel: "库存充足",
     processingTime: "默认包邮（如需加急联系客服）",

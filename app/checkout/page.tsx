@@ -2202,6 +2202,9 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
         </div>
       </section>
 
+      {/* 实战图文操作指南 */}
+      <GptOperationsIllustratedGuide />
+
       {/* 保号与防封关键指南 */}
       <section className="rounded-2xl border border-amber-200/80 bg-amber-50/40 p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-2">
@@ -2230,6 +2233,143 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
   );
 }
 
+function GptOperationsIllustratedGuide() {
+  const [activeTab, setActiveTab] = useState<"login" | "pwd" | "2fa" | "devices">("login");
+
+  return (
+    <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-base font-bold text-slate-900 sm:text-lg">ChatGPT 操作与安全实战图文指引</h3>
+          <p className="text-xs text-slate-500">含登录验码、修改密码、2FA 换绑与剔除设备保姆级教程</p>
+        </div>
+        <Link
+          href="/tutorials?topic=chatgpt-guide"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+        >
+          <span>查看完整教程</span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      {/* Tabs */}
+      <div className="mt-4 flex gap-1.5 overflow-x-auto rounded-xl border border-slate-100 bg-slate-50 p-1">
+        {[
+          { id: "login", label: "一、登录教程" },
+          { id: "pwd", label: "二、修改密码" },
+          { id: "2fa", label: "三、修改 2FA 密钥" },
+          { id: "devices", label: "四、踢出陌生设备" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id as any)}
+            className={cn(
+              "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+              activeTab === tab.id
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-900"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="mt-4 space-y-4 text-xs sm:text-sm">
+        {activeTab === "login" && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-amber-200/70 bg-amber-50/60 p-3 text-xs leading-5 text-amber-900">
+              <strong>登录步骤概述：</strong> 访问官网输入邮箱 → 填入初始密码 → 在线 2FA 工具获取 6 位时效验证码 → 回填验证码即刻完成登录。
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 1：输入交付的邮箱账号</span>
+                <img src="/assets/tutorials/chatgpt/gpt-login-email.png" alt="输入邮箱" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 2：输入初始登录密码</span>
+                <img src="/assets/tutorials/chatgpt/gpt-login-password.png" alt="输入密码" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 3：2FA 密钥获取 6 位动态验证码</span>
+                <img src="/assets/tutorials/chatgpt/gpt-2fa-get-code.jpg" alt="获取2FA动态码" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 4：填入动态验证码登录成功</span>
+                <img src="/assets/tutorials/chatgpt/gpt-2fa-verify-code.png" alt="填入动态码" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "pwd" && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-sky-200/70 bg-sky-50/60 p-3 text-xs leading-5 text-sky-900">
+              <strong>改密步骤概述：</strong> 左下角进入 Settings → 账户安全与登录 → 密码 → 输入原密码验证本人 → 设置新密码并通过 2FA 确认。
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 1：左下角菜单进入 Settings 设置</span>
+                <img src="/assets/tutorials/chatgpt/gpt-settings-entry.png" alt="设置入口" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 2：账户安全与登录点击密码</span>
+                <img src="/assets/tutorials/chatgpt/gpt-security-password-entry.jpg" alt="密码设置" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 3：验证当前原密码</span>
+                <img src="/assets/tutorials/chatgpt/gpt-verify-current-pwd.jpg" alt="验证原密码" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 4：设置自定义新密码并确认</span>
+                <img src="/assets/tutorials/chatgpt/gpt-set-new-pwd.jpg" alt="设置新密码" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "2fa" && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-emerald-200/70 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900">
+              <strong>修改 2FA 密钥：</strong> 将初始在线 2FA 关闭移除，再重新开启并使用个人手机 Google Authenticator 扫码绑定，实现个人设备独享动态码。
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 1：关闭 Authenticator app 并确认移除</span>
+                <img src="/assets/tutorials/chatgpt/gpt-mfa-toggle-off.jpg" alt="关闭MFA" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 2：重新开启，扫码或录入新 2FA 密钥</span>
+                <img src="/assets/tutorials/chatgpt/gpt-2fa-rebind-1.png" alt="绑定新2FA" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "devices" && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-purple-200/70 bg-purple-50/60 p-3 text-xs leading-5 text-purple-900">
+              <strong>踢出陌生设备：</strong> 在「活跃会话」中查看所有已连接设备，点击全部退出登录，下线任何历史会话，确保仅本人设备在线。
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 1：进入活跃会话列表</span>
+                <img src="/assets/tutorials/chatgpt/gpt-logout-devices-1.png" alt="活跃会话" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <span className="font-semibold text-slate-700">步骤 2：点击全部退出登录剔除陌生会话</span>
+                <img src="/assets/tutorials/chatgpt/gpt-logout-devices-2.png" alt="退出所有设备" className="max-h-[220px] w-full rounded-lg object-contain bg-white" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function GptRechargeDetails({ product }: { product: Product }) {
   const sections = [
     ["服务亮点 / SERVICE HIGHLIGHTS", "按所选商品提供兑换信息，请核对商品名称和说明后下单。"],
@@ -2245,6 +2385,10 @@ function GptRechargeDetails({ product }: { product: Product }) {
         <p className="mt-2 text-sm leading-7 text-slate-600">{product.description || "请核对所选商品内容，按照兑换页面提示操作。"}</p>
       </section>
       <ChatGptRechargeMethodComparison />
+
+      {/* 实战图文操作指南 */}
+      <GptOperationsIllustratedGuide />
+
       {sections.map(([title, description]) => (
         <section key={title} className="rounded-2xl border border-border bg-white p-5">
           <h3 className="text-base font-bold text-slate-950">{title}</h3>
@@ -2254,9 +2398,9 @@ function GptRechargeDetails({ product }: { product: Product }) {
       <section className="rounded-2xl border border-border bg-white p-5">
         <h3 className="text-base font-bold">使用方法</h3>
         <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-7 text-slate-600">
-          <li>核对 {product.name} 并完成下单，查看订单中的交付信息。</li>
-          <li>如收到兑换卡密，前往 <RechargeLink href="https://aikkcc.com/" />，按页面提示提交卡密及所需账户信息。</li>
-          <li>完成后核对账户状态；遇到问题请保留订单与兑换结果联系在线客服。</li>
+          <li>核对 {product.name} 并完成下单，在订单详情中查看交付信息。</li>
+          <li>按照上方图文指引登录 ChatGPT 官网，并第一时间修改密码与绑定个人 2FA 验证器。</li>
+          <li>遇到任何疑问或验证异常，请保留订单详情随时联系本站在线客服处理。</li>
         </ol>
       </section>
     </div>
@@ -2902,6 +3046,9 @@ function DetailMetric({
 }
 
 function getProductImage(product: Product) {
+  if (product.image && typeof product.image === "string" && product.image.trim()) {
+    return product.image;
+  }
   const name = product.name.toLowerCase();
   if (
     product.id === GPT_RECHARGE_PRODUCT_ID ||
@@ -2954,8 +3101,8 @@ function getProductImage(product: Product) {
   }
   if (product.category === "gift-cards") return "/assets/apple-gift-card-icon.jpg";
   if (name.includes("ultra")) return "/assets/ultra-mobile-icon.svg";
-  if (name.includes("one nz") || name.includes("onenz") || product.id === "sim-nz-001") return "/assets/sim-nz-icon.svg";
-  if (product.category === "sim-cards") return "/assets/sim-uk-icon.png";
+  if (name.includes("one nz") || name.includes("onenz") || product.id === "sim-nz-001") return "/assets/one-nz-card.png";
+  if (product.category === "sim-cards") return "/assets/giffgaff-icon.svg";
   return null;
 }
 
