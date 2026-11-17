@@ -103,11 +103,30 @@ export default function ChatGptAccountGuideTutorial({
 
 // ── 章节一：登录与 2FA 验证 ─────────────────────────────────
 function LoginSection() {
-  const loginSteps = [
+  const loginSteps: Array<{
+    num: string;
+    title: string;
+    desc: React.ReactNode;
+    image: string;
+    note: string;
+  }> = [
     {
       num: "1",
       title: "进入官网并输入账号邮箱",
-      desc: "在纯净海外网络环境下打开 ChatGPT 官网（https://chatgpt.com），点击「Log in」登录按钮，在输入框填入订单交付格式中的【邮箱地址】，点击「Continue」继续。",
+      desc: (
+        <>
+          在纯净海外网络环境下打开{" "}
+          <a
+            href="https://chatgpt.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+          >
+            ChatGPT 官网
+          </a>
+          ，点击「Log in」登录按钮，在输入框填入订单交付格式中的【邮箱地址】，点击「Continue」继续。
+        </>
+      ),
       image: "/assets/tutorials/chatgpt/gpt-login-email.png",
       note: "提示：切勿点击 Google / Apple 授权快捷登录，请直接在下方文本框输入交付的独立邮箱。",
     },
@@ -121,7 +140,29 @@ function LoginSection() {
     {
       num: "3",
       title: "在线获取 2FA 动态验证码",
-      desc: "复制交付格式中的【2FA 密钥】，打开在线双重身份验证器（如 2fa.live 或 2fa.run 等网页版验证器，也可使用 Google Authenticator App），将 2FA 密钥粘贴到输入框中。",
+      desc: (
+        <>
+          复制交付格式中的【2FA 密钥】，打开在线双重身份验证器（如{" "}
+          <a
+            href="https://2fa.live"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+          >
+            2fa.live
+          </a>{" "}
+          或{" "}
+          <a
+            href="https://2fa.run"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+          >
+            2fa.run
+          </a>{" "}
+          等网页版验证器，也可使用 Google Authenticator App），将 2FA 密钥粘贴到输入框中。
+        </>
+      ),
       image: "/assets/tutorials/chatgpt/gpt-2fa-input-key.jpg",
       note: "2FA 密钥通常为 32-64 位的纯英文字母与数字组合，一人一密钥。",
     },

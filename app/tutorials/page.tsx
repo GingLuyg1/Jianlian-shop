@@ -123,34 +123,94 @@ export default function TutorialsPage() {
   const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName="max-w-none px-4 py-3 md:px-6">
     <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!grid-cols-1 !h-auto !gap-3" : ""}`}>
-      <aside data-testid="tutorial-navigation" className={`${glass.surface} ${styles.panel} ${tutorial.navigation} ${isMobile ? "!max-h-none !p-3 sticky top-[53px] z-30 bg-white/95 backdrop-blur-md shadow-xs border-b border-orange-100/90" : ""}`}>
+      <aside data-testid="tutorial-navigation" className={`${glass.surface} ${styles.panel} ${tutorial.navigation} ${isMobile ? "!max-h-none !p-2.5 sticky top-[53px] z-30 bg-white/95 backdrop-blur-md shadow-xs border-b border-orange-100/90" : ""}`}>
         {isMobile ? (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <BookOpen className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0">
-                <div className="text-[11px] text-muted-foreground">当前浏览教程</div>
-                <div className="truncate text-sm font-bold text-slate-900">
-                  {topic.label}{topic.id === "giffgaff" ? ` · ${giffgaffGuide === "activation" ? "激活与使用" : "保号助手"}` : topic.id === "one-nz" ? ` · ${oneNzGuide === "activation" ? "新手激活与防扣费" : oneNzGuide === "binding" ? "App 注册绑定与查询" : "国内漫游资费与保号"}` : ""}
-                </div>
-              </div>
+          <div className="space-y-2">
+            {/* 一级教程分类胶囊栏 (横向滚动，悬浮置顶冻结) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5">
+              {tutorialTopics.map(({ id, label, icon: Icon }) => {
+                const current = topic.id === id && matchingTopics.length > 0;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => {
+                      setSelected(id);
+                      setSearch("");
+                      if (id === "giffgaff") setGiffgaffTreeOpen(true);
+                      if (id === "one-nz") setOneNzTreeOpen(true);
+                      resetScroll();
+                    }}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                      current
+                        ? "bg-slate-900 text-white shadow-xs"
+                        : "bg-orange-50/70 text-slate-700 hover:bg-orange-100/80"
+                    }`}
+                  >
+                    <Icon className={`h-3.5 w-3.5 shrink-0 ${current ? "text-orange-400" : "text-slate-500"}`} />
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
             </div>
-            <button
-              type="button"
-              data-testid="tutorial-mobile-nav-toggle"
-              onClick={() => setMobileNavOpen((prev) => !prev)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-orange-200/80 bg-orange-50/80 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm"
-            >
-              <span>{mobileNavOpen ? "收起目录" : "切换教程目录"}</span>
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mobileNavOpen ? "rotate-180" : ""}`} aria-hidden="true" />
-            </button>
+
+            {/* 如果当前分类有子章节 (Giffgaff)，显示二级小药丸 */}
+            {topic.id === "giffgaff" ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2">
+                {[
+                  { guide: "activation", label: "实体卡激活与使用" },
+                  { guide: "keeper", label: "保号助手" },
+                ].map((item) => (
+                  <button
+                    key={item.guide}
+                    type="button"
+                    onClick={() => {
+                      setGiffgaffGuide(item.guide as any);
+                      resetScroll();
+                    }}
+                    className={`inline-flex shrink-0 items-center rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      giffgaffGuide === item.guide
+                        ? "bg-primary text-white font-semibold"
+                        : "bg-white text-slate-600 border border-orange-200/60"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {/* 如果当前分类是 One NZ，显示二级小药丸 */}
+            {topic.id === "one-nz" ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2">
+                {[
+                  { guide: "activation", label: "新手插卡与防扣费" },
+                  { guide: "binding", label: "App 注册绑定与查询" },
+                  { guide: "rates", label: "国内漫游资费与保号" },
+                ].map((item) => (
+                  <button
+                    key={item.guide}
+                    type="button"
+                    onClick={() => {
+                      setOneNzGuide(item.guide as any);
+                      resetScroll();
+                    }}
+                    className={`inline-flex shrink-0 items-center rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      oneNzGuide === item.guide
+                        ? "bg-primary text-white font-semibold"
+                        : "bg-white text-slate-600 border border-orange-200/60"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : (
           <label htmlFor="tutorial-search" className="text-sm font-semibold text-slate-900">搜索商品教程</label>
         )}
-        <div className={isMobile && !mobileNavOpen ? "hidden" : "mt-3 border-t border-orange-100/70 pt-3 lg:border-0 lg:pt-0"}>
+        <div className={isMobile ? "hidden" : "mt-3 border-t border-orange-100/70 pt-3 lg:border-0 lg:pt-0"}>
           {isMobile ? <label htmlFor="tutorial-search" className="sr-only">搜索商品教程</label> : null}
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" aria-hidden="true" /><Input id="tutorial-search" value={search} onChange={event => { setSearch(event.target.value); resetScroll(); }} placeholder="输入商品 / 教程关键词" className="h-11 rounded-xl border-orange-100 bg-white/80 pl-9" /></div>
           <nav aria-label="使用教程分类" className={`${tutorial.topicList} ${isMobile ? "!grid !grid-cols-2 !gap-2 !mt-2.5" : ""}`} data-topic={topic.id}>

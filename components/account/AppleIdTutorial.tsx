@@ -68,20 +68,21 @@ export function AppleIdContents() {
 export default function AppleIdTutorial() {
   const { isMobile } = useMobileStorefront();
   return <div className={`${tutorial.appleArticle} space-y-6`}>
-    {isMobile ? (
-      <div className="sticky top-0 z-30 -mx-1 -mt-2 mb-4 flex gap-1.5 overflow-x-auto border-b border-orange-100 bg-[#fffaf5]/95 px-2 py-2.5 backdrop-blur-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    {/* 粘性胶囊导航栏 (与图9/One NZ统一药丸设计，悬浮置顶冻结) */}
+    <div className="sticky top-0 z-20 -mx-1 -mt-1 mb-4 rounded-2xl border border-orange-200/80 bg-white/95 p-2 shadow-xs backdrop-blur-md">
+      <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {appleChapters.map(([id, label]) => (
           <button
             key={id}
             type="button"
             onClick={() => scrollToChapter(id)}
-            className="inline-flex shrink-0 items-center rounded-lg border border-orange-200/80 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition-colors active:bg-orange-50 active:text-primary"
+            className="inline-flex shrink-0 items-center rounded-full bg-orange-50/80 px-3.5 py-1.5 text-xs font-semibold text-slate-700 transition-all hover:bg-orange-100 active:bg-slate-900 active:text-white"
           >
             {label}
           </button>
         ))}
       </div>
-    ) : null}
+    </div>
     <section aria-labelledby="apple-product" className={`${tutorial.appleCard} p-5 sm:p-6`}>
       <GuideHeading number="01" id="apple-product">商品说明</GuideHeading>
       <p className="mt-3 text-sm leading-7 text-slate-600">Apple ID 也叫 Apple 账户。App Store、iCloud 和其他 Apple 服务的可用范围取决于账号类型和商品说明。</p>

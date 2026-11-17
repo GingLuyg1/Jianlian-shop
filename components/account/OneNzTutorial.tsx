@@ -138,6 +138,35 @@ export default function OneNzTutorial({
 }: OneNzTutorialProps) {
   return (
     <article className="min-w-0 space-y-7 text-sm leading-7 text-slate-600" aria-label="One NZ 电话卡激活与保号教程">
+      {/* 顶部粘性胶囊导航栏 (图9/图3药丸设计，悬浮置顶冻结) */}
+      <div className="sticky top-0 z-20 -mx-1 -mt-1 mb-2 rounded-2xl border border-orange-200/80 bg-white/95 p-2 shadow-xs backdrop-blur-md">
+        <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[
+            { id: "activation" as const, label: "新手插卡与防扣费", icon: KeyRound },
+            { id: "binding" as const, label: "App 注册绑定与查询", icon: Smartphone },
+            { id: "rates" as const, label: "漫游资费与长期保号", icon: ShieldCheck },
+          ].map((sec) => {
+            const Icon = sec.icon;
+            const active = activeSection === sec.id;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => onSelectSection?.(sec.id)}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all ${
+                  active
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "bg-orange-50/70 text-slate-700 hover:bg-orange-100/80"
+                }`}
+              >
+                <Icon className={`h-3.5 w-3.5 ${active ? "text-orange-400" : "text-slate-500"}`} />
+                <span>{sec.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Hero Section */}
       <section className={tutorial.guideHero}>
         <span className="inline-flex items-center gap-2 font-semibold text-[#9f5327]">
@@ -150,43 +179,6 @@ export default function OneNzTutorial({
         <p className="mt-2 max-w-3xl">
           新西兰三大主流运营商之一，原生高信誉海外手机号段，免实名认证，国内漫游直连中国移动/中国联通 5G，海内外优质服务注册神器。
         </p>
-
-        {/* Section Navigation Tabs */}
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onSelectSection?.("activation")}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-              activeSection === "activation"
-                ? "bg-primary text-white shadow-sm"
-                : "border border-orange-200 bg-white text-slate-700 hover:bg-orange-50"
-            }`}
-          >
-            1. 新手插卡与防扣费
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectSection?.("binding")}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-              activeSection === "binding"
-                ? "bg-primary text-white shadow-sm"
-                : "border border-orange-200 bg-white text-slate-700 hover:bg-orange-50"
-            }`}
-          >
-            2. App 注册绑定与查询 (图文)
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectSection?.("rates")}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-              activeSection === "rates"
-                ? "bg-primary text-white shadow-sm"
-                : "border border-orange-200 bg-white text-slate-700 hover:bg-orange-50"
-            }`}
-          >
-            3. 国内漫游资费与长期保号
-          </button>
-        </div>
       </section>
 
       {/* SECTION 1: Activation */}
