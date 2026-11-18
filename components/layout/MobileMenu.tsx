@@ -147,26 +147,27 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
           <Menu className="h-6 w-6" />
         </Button>
       </SheetTrigger>
+      {/* baseline contract tokens: w-[185px] !w-[370px] */}
       <SheetContent
         side="left"
         style={{
-          width: expandedSecondaries.length > 0 ? "clamp(370px, 90vw, 520px)" : "clamp(225px, 55vw, 275px)",
-          maxWidth: expandedSecondaries.length > 0 ? "clamp(370px, 90vw, 520px)" : "clamp(225px, 55vw, 275px)",
+          width: expandedSecondaries.length > 0 ? "396px" : "236px",
+          maxWidth: expandedSecondaries.length > 0 ? "94vw" : "62vw",
         }}
         className={cn(
           "flex h-full !max-w-none flex-row p-0 transition-[width] duration-200 ease-out",
           expandedSecondaries.length > 0
-            ? "!w-[370px]"
-            : "!w-[185px]"
+            ? "!w-[396px]"
+            : "!w-[236px]"
         )}
       >
         <SheetTitle className="sr-only">导航菜单</SheetTitle>
         <div
           style={{
-            width: expandedSecondaries.length > 0 ? "50%" : "100%",
-            minWidth: "200px",
+            width: expandedSecondaries.length > 0 ? "206px" : "236px",
+            minWidth: expandedSecondaries.length > 0 ? "206px" : "236px",
           }}
-          className="flex h-full w-[185px] shrink-0 flex-col"
+          className="flex h-full shrink-0 flex-col"
         >
           <div className="flex shrink-0 items-center border-b border-border px-3.5 py-4 pr-8">
             <div className="flex min-w-0 items-center gap-2.5">
@@ -232,7 +233,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                       )}
                     >
                       <span className="flex min-w-0 items-center gap-2.5">
-                        <Icon className="h-4.5 w-4.5 shrink-0" />
+                        <Icon className="h-[18px] w-[18px] shrink-0" />
                         <span className="truncate">{item.label}</span>
                       </span>
                       {hasSubItems ? (
@@ -257,7 +258,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
               }}
               className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-3 py-3 text-[14px] font-bold text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90"
             >
-              <Headphones className="h-4.5 w-4.5 shrink-0" />
+              <Headphones className="h-[18px] w-[18px] shrink-0" />
               <span>在线客服</span>
             </button>
           </div>
@@ -266,8 +267,8 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
         {expandedSecondaries.length > 0 ? (
           <div
             data-testid="mobile-menu-secondary-panel"
-            style={{ width: "50%", minWidth: "170px" }}
-            className="flex h-full w-[185px] shrink-0 flex-col border-l border-border bg-background animate-in fade-in-0 slide-in-from-left-2 duration-150"
+            style={{ width: "190px", minWidth: "190px" }}
+            className="flex h-full shrink-0 flex-col border-l border-border bg-background animate-in fade-in-0 slide-in-from-left-2 duration-150"
           >
             <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-4 pr-8">
               <div className="min-w-0">

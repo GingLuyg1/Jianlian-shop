@@ -257,7 +257,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
             : { left: "20px", bottom: "24px" }
         }
         className={cn(
-          "fixed z-40 flex h-13 w-13 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          "fixed z-40 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
           mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
           isMobile && "!flex",
         )}
