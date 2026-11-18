@@ -142,14 +142,17 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
           data-storefront-menu-trigger
           variant="ghost"
           size="icon"
-          className={cn(mobileNavigationUntilLg ? "lg:hidden" : "md:hidden", isMobile && "!inline-flex")}
+          className={cn("h-10 w-10", mobileNavigationUntilLg ? "lg:hidden" : "md:hidden", isMobile && "!inline-flex")}
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-6 w-6" />
         </Button>
       </SheetTrigger>
       <SheetContent
         side="left"
-        style={{ width: expandedSecondaries.length > 0 ? "370px" : "185px", maxWidth: expandedSecondaries.length > 0 ? "370px" : "185px" }}
+        style={{
+          width: expandedSecondaries.length > 0 ? "clamp(370px, 90vw, 520px)" : "clamp(225px, 55vw, 275px)",
+          maxWidth: expandedSecondaries.length > 0 ? "clamp(370px, 90vw, 520px)" : "clamp(225px, 55vw, 275px)",
+        }}
         className={cn(
           "flex h-full !max-w-none flex-row p-0 transition-[width] duration-200 ease-out",
           expandedSecondaries.length > 0
@@ -159,32 +162,35 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
       >
         <SheetTitle className="sr-only">导航菜单</SheetTitle>
         <div
-          style={{ width: "185px", minWidth: "185px", maxWidth: "185px" }}
-          className="flex h-full w-[185px] min-w-[185px] max-w-[185px] shrink-0 flex-col"
+          style={{
+            width: expandedSecondaries.length > 0 ? "50%" : "100%",
+            minWidth: "200px",
+          }}
+          className="flex h-full w-[185px] shrink-0 flex-col"
         >
-          <div className="flex shrink-0 items-center border-b border-border px-2.5 py-3.5 pr-7">
-            <div className="flex min-w-0 items-center gap-2">
+          <div className="flex shrink-0 items-center border-b border-border px-3.5 py-4 pr-8">
+            <div className="flex min-w-0 items-center gap-2.5">
               <img
                 src="/assets/jianlian-brand-logo.png"
                 alt="Jianlian"
-                className="h-7 w-7 shrink-0 rounded-md object-cover"
+                className="h-8 w-8 shrink-0 rounded-lg object-cover"
               />
               <div className="min-w-0">
-                <div className="whitespace-nowrap text-[13px] font-semibold leading-tight text-foreground">
+                <div className="whitespace-nowrap text-[15px] font-bold leading-tight text-foreground">
                   Jianlian
                 </div>
-                <div className="mt-0.5 whitespace-nowrap text-[10px] leading-tight text-muted-foreground">
+                <div className="mt-0.5 whitespace-nowrap text-[11px] leading-tight text-muted-foreground">
                   数字商品服务
                 </div>
               </div>
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-1.5 py-2.5">
+          <nav className="flex-1 overflow-y-auto px-2.5 py-3">
             {navigationGroups.map((group) => group.items.length > 0 ? (
             <section key={group.title || "home"} aria-label={group.title || "首页"}>
-            {group.title ? <h2 className="mb-1.5 mt-4 px-2 text-[11px] font-medium text-muted-foreground">{group.title}</h2> : null}
-            <ul className="space-y-1">
+            {group.title ? <h2 className="mb-2 mt-4 px-2.5 text-xs font-semibold text-muted-foreground">{group.title}</h2> : null}
+            <ul className="space-y-1.5">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
@@ -192,10 +198,10 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                 const hasSubItems = subItems.length > 0;
                 const isExpanded = expandedPrimaryHref === item.href;
                 if (isCatalogCategoryHref(item.href) && !confirmed) {
-                  return <li key={item.href} className="flex h-[39px] items-center rounded-md px-2" aria-hidden={status !== "error"}>
+                  return <li key={item.href} className="flex h-[44px] items-center rounded-lg px-3" aria-hidden={status !== "error"}>
                     {status === "error" && item.href === "/products/sim-cards" ? (
                       <button type="button" onClick={() => void refreshPublicCategories().catch(() => undefined)} className="text-left text-xs text-muted-foreground underline">分类读取失败，重试</button>
-                    ) : <span className="h-3 w-3/4 rounded bg-slate-100" />}
+                    ) : <span className="h-3.5 w-3/4 rounded bg-slate-100" />}
                   </li>;
                 }
                 return (
@@ -217,20 +223,20 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                         setOpen(false);
                       }}
                       className={cn(
-                        "flex items-center justify-between gap-1.5 whitespace-nowrap rounded-md px-2 py-2 text-[12px] transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
+                        "flex items-center justify-between gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-[14px] transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
                         isExpanded
-                          ? "border border-primary/30 bg-orange-50 font-semibold text-primary"
+                          ? "border border-primary/30 bg-orange-50 font-bold text-primary"
                           : active
-                            ? "border border-primary/20 bg-primary/10 font-medium text-primary"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-orange-50/60"
+                            ? "border border-primary/20 bg-primary/10 font-semibold text-primary"
+                            : "font-medium text-slate-700 hover:bg-muted hover:text-foreground active:bg-orange-50/60"
                       )}
                     >
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <Icon className="h-4.5 w-4.5 shrink-0" />
                         <span className="truncate">{item.label}</span>
                       </span>
                       {hasSubItems ? (
-                        <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", isExpanded && "translate-x-0.5 text-primary")} />
+                        <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isExpanded && "translate-x-0.5 text-primary")} />
                       ) : null}
                     </Link>
                   </li>
@@ -241,7 +247,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
             ) : null)}
           </nav>
 
-          <div className="border-t border-border px-2 py-3">
+          <div className="border-t border-border px-2.5 py-3.5">
             <button
               type="button"
               onClick={() => {
@@ -249,9 +255,9 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                 setExpandedPrimaryHref("");
                 onSupportOpen();
               }}
-              className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary/90 px-2 py-2 text-[12px] font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary"
+              className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-3 py-3 text-[14px] font-bold text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90"
             >
-              <Headphones className="h-3.5 w-3.5 shrink-0" />
+              <Headphones className="h-4.5 w-4.5 shrink-0" />
               <span>在线客服</span>
             </button>
           </div>
@@ -260,21 +266,21 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
         {expandedSecondaries.length > 0 ? (
           <div
             data-testid="mobile-menu-secondary-panel"
-            style={{ width: "185px", minWidth: "185px", maxWidth: "185px" }}
-            className="flex h-full w-[185px] min-w-[185px] max-w-[185px] shrink-0 flex-col border-l border-border bg-background animate-in fade-in-0 slide-in-from-left-2 duration-150"
+            style={{ width: "50%", minWidth: "170px" }}
+            className="flex h-full w-[185px] shrink-0 flex-col border-l border-border bg-background animate-in fade-in-0 slide-in-from-left-2 duration-150"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-3.5 pr-8">
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-4 pr-8">
               <div className="min-w-0">
-                <div className="truncate text-[13px] font-semibold leading-tight text-foreground">
+                <div className="truncate text-[14px] font-bold leading-tight text-foreground">
                   {expandedPrimaryLabel}
                 </div>
-                <div className="mt-0.5 text-[10px] leading-tight text-muted-foreground">
+                <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
                   选择分类 ({expandedSecondaries.length})
                 </div>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-1.5 py-2.5">
-              <ul className="space-y-1">
+            <div className="flex-1 overflow-y-auto px-2 py-3">
+              <ul className="space-y-1.5">
                 {expandedSecondaries.map((sub) => {
                   const queryKey = expandedPrimaryHref === "/products/sim-cards" ? "country" : "category";
                   const targetHref = `${expandedPrimaryHref}?${queryKey}=${encodeURIComponent(sub.slug)}`;
@@ -298,25 +304,25 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                           setExpandedPrimaryHref("");
                         }}
                         className={cn(
-                          "flex items-center gap-1.5 rounded-md px-2 py-2 text-[12px] transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
+                          "flex items-center gap-2 rounded-xl px-2.5 py-2.5 text-[13px] transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
                           subActive
-                            ? "border border-primary/20 bg-primary/10 font-medium text-primary"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-orange-50/60"
+                            ? "border border-primary/20 bg-primary/10 font-semibold text-primary"
+                            : "font-medium text-slate-700 hover:bg-muted hover:text-foreground active:bg-orange-50/60"
                         )}
                       >
                         {sub.code ? (
-                          <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-primary/10 text-[10px] font-bold text-primary">
+                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-bold text-primary">
                             {sub.code}
                           </span>
                         ) : sub.image ? (
                           <img
                             src={sub.image}
                             alt={sub.name}
-                            className="h-6 w-6 shrink-0 rounded-md bg-white object-cover ring-1 ring-slate-200/80"
+                            className="h-7 w-7 shrink-0 rounded-lg bg-white object-cover ring-1 ring-slate-200/80"
                           />
                         ) : (
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                            <KeyRound className="h-3.5 w-3.5" />
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <KeyRound className="h-4 w-4" />
                           </span>
                         )}
                         <span className="min-w-0 flex-1 line-clamp-2 text-left leading-tight">{sub.name}</span>

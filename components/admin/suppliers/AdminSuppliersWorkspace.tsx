@@ -5,22 +5,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   AlertTriangle,
-  ArrowUpDown,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   Factory,
-  Info,
-  Layers,
   Loader2,
   Package,
-  PackageCheck,
   PackageSearch,
   RefreshCcw,
   Search,
-  ShieldCheck,
-  Sparkles,
   Zap,
 } from "lucide-react";
 
@@ -34,8 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 type SupplierBalance = {
@@ -44,17 +37,26 @@ type SupplierBalance = {
   totalSpent?: string | null;
   totalOrders?: number | null;
   currency?: string | null;
+  usdtCnyRate?: number | null;
 };
 
 type SupplierProduct = {
   id: string | number;
   title: string;
+  titleZh?: string | null;
+  faceLabel?: string | null;
+  faceCurrency?: string | null;
   price: string;
+  priceUsd?: string | null;
+  priceCny?: string | null;
+  usdtCnyRate?: number | null;
   currency?: string | null;
   stock: number;
   sales: number;
   isAuto: boolean;
   sortId?: string | number | null;
+  packagesCount?: number | null;
+  variantsCount?: number | null;
 };
 
 type SupplierProductDetail = SupplierProduct & {
@@ -143,10 +145,14 @@ export default function AdminSuppliersWorkspace() {
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"sales" | "price_asc" | "price_desc" | "stock">("sales");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(50);
 
   const [products, setProducts] = useState<SupplierProduct[]>([]);
+  const [upstreamTotal, setUpstreamTotal] = useState<number | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.2);
   const [productsLoading, setProductsLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [productsLoaded, setProductsLoaded] = useState(false);
   const [productsError, setProductsError] = useState<SupplierError | null>(null);
 
@@ -162,6 +168,9 @@ export default function AdminSuppliersWorkspace() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商连接检测失败");
       setBalance(payload.balance as SupplierBalance);
+      if (typeof payload.balance?.usdtCnyRate === "number") {
+        setUsdtCnyRate(payload.balance.usdtCnyRate);
+      }
       setDetection({ status: "connected", checkedAt: new Date().toISOString(), error: null });
     } catch (error) {
       const nextError =
@@ -182,7 +191,13 @@ export default function AdminSuppliersWorkspace() {
       const response = await fetch(url, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商商品目录读取失败");
-      setProducts(Array.isArray(payload.products) ? payload.products : []);
+      const list = Array.isArray(payload.products) ? payload.products : [];
+      setProducts(list);
+      setUpstreamTotal(typeof payload.total === "number" ? payload.total : list.length);
+      setNextCursor(typeof payload.nextCursor === "string" ? payload.nextCursor : null);
+      if (typeof payload.usdtCnyRate === "number") {
+        setUsdtCnyRate(payload.usdtCnyRate);
+      }
       setProductsLoaded(true);
       setPage(1);
     } catch (error) {
@@ -191,12 +206,44 @@ export default function AdminSuppliersWorkspace() {
           ? (error as SupplierError)
           : { message: "供应商商品目录读取失败", code: null, requestId: null };
       setProducts([]);
+      setUpstreamTotal(null);
+      setNextCursor(null);
       setProductsLoaded(true);
       setProductsError(nextError);
     } finally {
       setProductsLoading(false);
     }
   }, [activeSupplier.adminEndpoint, activeSupplier.code, country, query]);
+
+  const loadMoreProducts = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const url =
+        `${activeSupplier.adminEndpoint}?resource=products` +
+        (query.trim() ? `&q=${encodeURIComponent(query.trim())}` : "") +
+        `&cursor=${encodeURIComponent(nextCursor)}`;
+      const response = await fetch(url, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw getSupplierError(payload, "加载更多供应商商品失败");
+      const moreList: SupplierProduct[] = Array.isArray(payload.products) ? payload.products : [];
+      setProducts((prev) => {
+        const seen = new Set(prev.map((item) => String(item.id)));
+        const appended = moreList.filter((item) => !seen.has(String(item.id)));
+        return [...prev, ...appended];
+      });
+      if (typeof payload.total === "number") setUpstreamTotal(payload.total);
+      setNextCursor(typeof payload.nextCursor === "string" ? payload.nextCursor : null);
+    } catch (error) {
+      const nextError =
+        error && typeof error === "object" && "message" in error
+          ? (error as SupplierError)
+          : { message: "加载更多供应商商品失败", code: null, requestId: null };
+      setProductsError(nextError);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [activeSupplier.adminEndpoint, loadingMore, nextCursor, query]);
 
   useEffect(() => {
     void checkConnection();
@@ -215,6 +262,9 @@ export default function AdminSuppliersWorkspace() {
       const response = await fetch(`${activeSupplier.adminEndpoint}?resource=product&id=${encodeURIComponent(String(productId))}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商商品详情读取失败");
+      if (typeof payload.usdtCnyRate === "number") {
+        setUsdtCnyRate(payload.usdtCnyRate);
+      }
       setDetail(payload.product as SupplierProductDetail);
     } catch (error) {
       setDetailError(
@@ -289,6 +339,8 @@ export default function AdminSuppliersWorkspace() {
                 onClick={() => {
                   setActiveSupplierCode(supplier.code);
                   setProducts([]);
+                  setUpstreamTotal(null);
+                  setNextCursor(null);
                   setProductsLoaded(false);
                   setDetailOpen(false);
                 }}
@@ -364,7 +416,11 @@ export default function AdminSuppliersWorkspace() {
                     <div className="mt-1.5 text-2xl font-bold tabular-nums text-slate-950">
                       {balance ? formatSupplierMoney(balance.balance, balance.currency) : "—"}
                     </div>
-                    <div className="mt-1 text-[11px] text-slate-400">供应商只读余额</div>
+                    <div className="mt-1 text-[11px] text-slate-400">
+                      {balance?.currency === "USD" && balance.balance
+                        ? `约合 ¥${(Number(balance.balance) * usdtCnyRate).toFixed(2)}（按汇率 ${usdtCnyRate}）`
+                        : "供应商只读余额"}
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
@@ -470,6 +526,12 @@ export default function AdminSuppliersWorkspace() {
                   刷新
                 </Button>
 
+                {activeSupplier.code === "bitrefill" ? (
+                  <span className="inline-flex items-center rounded-lg border border-orange-200/80 bg-orange-50/70 px-2.5 py-1 text-[11px] font-medium text-orange-800">
+                    统一美金(USD)计价 · 按后台 USDT 汇率 (1 USD ≈ ¥{usdtCnyRate.toFixed(2)}，每日同步) 换算人民币
+                  </span>
+                ) : null}
+
                 <div className="flex items-center gap-2 ml-2">
                   <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
                     <input
@@ -512,9 +574,10 @@ export default function AdminSuppliersWorkspace() {
                   }}
                   className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"
                 >
-                  <option value={10}>10 条/页</option>
                   <option value={20}>20 条/页</option>
                   <option value={50}>50 条/页</option>
+                  <option value={100}>100 条/页</option>
+                  <option value={200}>200 条/页</option>
                 </select>
               </div>
             </div>
@@ -535,17 +598,22 @@ export default function AdminSuppliersWorkspace() {
               />
             ) : (
               <div className="flex min-h-0 flex-1 flex-col justify-between overflow-hidden">
-                <div className="min-h-0 flex-1 overflow-auto">
-                  <Table>
-                    <TableHeader className="sticky top-0 z-10 bg-slate-50">
+                <div className="max-h-[66vh] min-h-0 flex-1 overflow-auto">
+                  <table className="w-full caption-bottom border-collapse text-sm">
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm shadow-[0_1px_0_0_rgba(226,232,240,1)]">
                       <TableRow className="text-xs">
-                        <TableHead className="min-w-[200px]">供应商商品信息</TableHead>
-                        <TableHead className="text-center">编号 ID</TableHead>
-                        <TableHead className="text-right">目录展示价</TableHead>
-                        <TableHead className="text-right">当前库存</TableHead>
-                        <TableHead className="text-right">历史销量</TableHead>
-                        <TableHead className="text-center">交付类型</TableHead>
-                        <TableHead className="text-center">操作</TableHead>
+                        <TableHead className="sticky top-0 z-20 min-w-[220px] bg-slate-50/95">供应商商品信息</TableHead>
+                        <TableHead className="sticky top-0 z-20 min-w-[200px] bg-slate-50/95">
+                          {activeSupplier.code === "bitrefill" ? "中文翻译 / 说明" : "所属分类 / 规格数"}
+                        </TableHead>
+                        <TableHead className="sticky top-0 z-20 bg-slate-50/95 text-center">编号 ID</TableHead>
+                        <TableHead className="sticky top-0 z-20 bg-slate-50/95 text-right">
+                          {activeSupplier.code === "bitrefill" ? "目录价 (美金 USD | 折合人民币 CNY)" : "目录展示价"}
+                        </TableHead>
+                        <TableHead className="sticky top-0 z-20 bg-slate-50/95 text-right">当前库存</TableHead>
+                        <TableHead className="sticky top-0 z-20 bg-slate-50/95 text-right">历史销量</TableHead>
+                        <TableHead className="sticky top-0 z-20 bg-slate-50/95 text-center">交付类型</TableHead>
+                        <TableHead className="sticky top-0 z-20 bg-slate-50/95 text-center">操作</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -557,7 +625,7 @@ export default function AdminSuppliersWorkspace() {
                                 <Package className="h-4 w-4" />
                               </div>
                               <div className="min-w-0">
-                                <div className="max-w-[260px] truncate font-medium text-slate-900" title={product.title}>
+                                <div className="max-w-[280px] truncate font-medium text-slate-900" title={product.title}>
                                   {product.title}
                                 </div>
                                 <div className="text-[11px] text-slate-400">
@@ -566,8 +634,40 @@ export default function AdminSuppliersWorkspace() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center font-mono tabular-nums text-slate-600">{product.id}</TableCell>
-                          <TableCell className="text-right font-semibold tabular-nums text-slate-900">{formatSupplierMoney(product.price, product.currency)}</TableCell>
+                          <TableCell className="min-w-0 py-2.5">
+                            {activeSupplier.code === "bitrefill" ? (
+                              <div className="space-y-0.5">
+                                <div className="font-medium text-slate-800">{product.titleZh || product.title}</div>
+                                <div className="text-[11px] text-slate-500">
+                                  {product.faceLabel ? `首档面值: ${product.faceLabel}` : ""}
+                                  {product.packagesCount ? ` · 共 ${product.packagesCount} 个面额套餐` : ""}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <div className="font-medium text-slate-700">{product.sortId ? String(product.sortId) : "默认分类"}</div>
+                                {typeof product.variantsCount === "number" && product.variantsCount > 0 ? (
+                                  <div className="text-[11px] text-emerald-700">含 {product.variantsCount} 个子规格</div>
+                                ) : null}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center font-mono tabular-nums text-slate-600 select-all">{product.id}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {activeSupplier.code === "bitrefill" && product.priceCny ? (
+                              <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                                <span className="font-semibold text-slate-900">${product.priceUsd ?? product.price}</span>
+                                <span className="text-slate-300">|</span>
+                                <span className="rounded bg-orange-50 px-1.5 py-0.5 font-bold text-orange-700">
+                                  ≈ ¥{product.priceCny}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="font-semibold text-slate-900">
+                                {formatSupplierMoney(product.price, product.currency)}
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">
                             <span className={product.stock <= 0 ? "font-semibold text-red-600" : "text-slate-700"}>
                               {product.stock}
@@ -597,13 +697,37 @@ export default function AdminSuppliersWorkspace() {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                  </table>
                 </div>
 
-                <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">
-                  <div>
-                    共 <span className="font-semibold text-slate-800">{filteredProducts.length}</span> 款供应商商品 · 第{" "}
-                    <span className="font-semibold text-slate-800">{page}</span> / {totalPages} 页
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>
+                      已加载 <span className="font-semibold text-slate-800">{filteredProducts.length}</span> 款商品
+                      {upstreamTotal && upstreamTotal > products.length ? (
+                        <span className="text-slate-500">（上游共 <strong className="text-slate-800">{upstreamTotal}</strong> 款）</span>
+                      ) : null}
+                      {" "}· 第 <span className="font-semibold text-slate-800">{page}</span> / {totalPages} 页
+                    </span>
+                    {nextCursor ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 border-orange-300 bg-orange-50/80 px-2.5 text-xs font-semibold text-primary hover:bg-orange-100"
+                        onClick={loadMoreProducts}
+                        disabled={loadingMore}
+                      >
+                        {loadingMore ? (
+                          <>
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            正在拉取更多…
+                          </>
+                        ) : (
+                          `继续拉取更多上游商品 (${products.length}/${upstreamTotal ?? "…"})`
+                        )}
+                      </Button>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Button
@@ -646,9 +770,17 @@ export default function AdminSuppliersWorkspace() {
             <div className="mt-4 space-y-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <h3 className="font-bold text-slate-950">{detail.title}</h3>
+                {detail.titleZh ? (
+                  <div className="mt-1 text-xs font-semibold text-orange-700">{detail.titleZh}</div>
+                ) : null}
                 <div className="mt-1 text-xs font-mono text-slate-500">供应商商品编号：{detail.id}</div>
                 <div className="mt-2.5 flex flex-wrap gap-3 text-xs">
-                  <span className="font-semibold text-slate-900">目录展示价：{formatSupplierMoney(detail.price, detail.currency)}</span>
+                  <span className="font-semibold text-slate-900">
+                    目录展示价：
+                    {detail.priceCny
+                      ? `$${detail.priceUsd ?? detail.price} | ≈ ¥${detail.priceCny}`
+                      : formatSupplierMoney(detail.price, detail.currency)}
+                  </span>
                   <span className="text-slate-600">库存：{detail.stock}</span>
                   <span className="text-slate-600">总销量：{detail.sales}</span>
                   <span className={detail.isAuto ? "text-emerald-700 font-medium" : "text-slate-500"}>
@@ -715,7 +847,7 @@ function SupplierSkuVariantsTable({ variants, defaultCurrency }: { variants: unk
             <tr>
               <th className="px-3 py-2">规格名称</th>
               <th className="px-3 py-2">SKU 编码</th>
-              <th className="px-3 py-2 text-right">进价</th>
+              <th className="px-3 py-2 text-right">进价 (美金 / 折合人民币)</th>
               <th className="px-3 py-2 text-center">库存</th>
             </tr>
           </thead>
@@ -726,12 +858,16 @@ function SupplierSkuVariantsTable({ variants, defaultCurrency }: { variants: unk
               const rawPrice = item.price ?? item.catalogPrice ?? item.unitPrice ?? item.faceValue ?? null;
               const itemCurrency = item.currency ?? defaultCurrency ?? "CNY";
               const price = rawPrice != null ? formatSupplierMoney(String(rawPrice), itemCurrency) : "—";
+              const priceCny = item.priceCny ? `≈ ¥${item.priceCny}` : null;
               const stock = item.stock != null ? Number(item.stock) : null;
               return (
                 <tr key={String(sku) + idx} className="hover:bg-slate-50/60">
                   <td className="px-3 py-2 font-medium text-slate-900">{title}</td>
                   <td className="px-3 py-2 font-mono text-slate-500 select-all">{sku}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-emerald-600 tabular-nums">{price}</td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                    <span className="text-emerald-700">{price}</span>
+                    {priceCny ? <span className="ml-1.5 rounded bg-orange-50 px-1.5 py-0.5 text-orange-700">{priceCny}</span> : null}
+                  </td>
                   <td className="px-3 py-2 text-center">
                     {stock !== null ? (
                       <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-medium", stock > 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600")}>

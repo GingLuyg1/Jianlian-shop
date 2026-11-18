@@ -60,8 +60,21 @@ function mapProduct(raw: unknown) {
     sales: typeof rawRecord.sales === "number" ? rawRecord.sales : 0,
     isAuto,
     sortId: normalized.categoryName ?? normalized.categoryId ?? null,
+    variantsCount: rawVariants.length,
   };
 }
+
+type CatalogBatchCacheEntry = {
+  at: number;
+  products: ReturnType<typeof mapProduct>[];
+  total: number | null;
+  nextCursor: string | null;
+  complete: boolean;
+  status: string;
+};
+
+const catalogBatchCache = new Map<string, CatalogBatchCacheEntry>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export async function GET(request: Request) {
   const requestId = randomUUID();
@@ -94,22 +107,100 @@ export async function GET(request: Request) {
     if (resource === "products") {
       const q = params.get("q")?.trim() ?? "";
       const category = params.get("category")?.trim() ?? "";
+      const initialCursor = params.get("cursor")?.trim() || undefined;
       if (q.length > 100 || /[\u0000-\u001f<>]/u.test(q)) {
         return json({ error: "搜索关键词无效", code: "KUAJINGZY_QUERY_INVALID", requestId }, 400);
       }
 
-      const catalogOptions: { search?: string; category?: string; limit: number } = { limit: 50 };
-      if (q) catalogOptions.search = q;
-      else if (category) catalogOptions.category = category;
+      const cacheKey = `${q}::${category}::${initialCursor ?? ""}`;
+      const cached = catalogBatchCache.get(cacheKey);
+      if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+        return json({
+          supplier: "跨境资源网",
+          products: cached.products,
+          total: cached.total,
+          nextCursor: cached.nextCursor,
+          complete: cached.complete,
+          status: cached.status,
+          purchaseEnabled: false,
+          requestId,
+        });
+      }
 
-      const result = await client.collectMallCatalog(catalogOptions);
-      const allItems = "items" in result ? result.items : result.partial.items;
-      const items = allItems.slice(0, 100);
+      const baseFilters: { search?: string; category?: string } = {};
+      if (q) baseFilters.search = q;
+      else if (category) baseFilters.category = category;
+
+      // Use limit: 25 so each single page stays well below the 256 KiB stream limit,
+      // and collect up to 3 bounded batches (up to 375 products per click).
+      const collectedRaw: unknown[] = [];
+      let cursor = initialCursor;
+      let reportedTotal: number | null = null;
+      let finalStatus = "COMPLETE";
+      let isComplete = false;
+      const maxBatches = initialCursor ? 2 : 3;
+
+      for (let batch = 0; batch < maxBatches; batch += 1) {
+        const result = await client.collectMallCatalog({
+          ...baseFilters,
+          limit: 25,
+          ...(cursor ? { cursor } : {}),
+        });
+        const batchItems = "items" in result ? result.items : result.partial.items;
+        collectedRaw.push(...batchItems);
+        const batchTotal = "total" in result ? result.total : result.partial.reportedTotal;
+        if (typeof batchTotal === "number") reportedTotal = batchTotal;
+        finalStatus = result.status;
+        const nextCur = "partial" in result ? result.partial.nextCursor : null;
+        if ("items" in result && result.complete === true) {
+          cursor = undefined;
+          isComplete = true;
+          break;
+        }
+        if (!nextCur || batchItems.length === 0) {
+          cursor = nextCur ?? undefined;
+          isComplete = !nextCur;
+          break;
+        }
+        cursor = nextCur;
+      }
+
+      const mappedProducts: ReturnType<typeof mapProduct>[] = [];
+      const seenIds = new Set<string>();
+      for (const raw of collectedRaw) {
+        try {
+          const mapped = mapProduct(raw);
+          if (!seenIds.has(mapped.id)) {
+            seenIds.add(mapped.id);
+            mappedProducts.push(mapped);
+          }
+        } catch {
+          // Skip malformed upstream item without failing the entire catalog batch
+        }
+      }
+
+      const entry: CatalogBatchCacheEntry = {
+        at: Date.now(),
+        products: mappedProducts,
+        total: reportedTotal ?? mappedProducts.length,
+        nextCursor: cursor ?? null,
+        complete: isComplete && !cursor,
+        status: finalStatus,
+      };
+      catalogBatchCache.set(cacheKey, entry);
+      while (catalogBatchCache.size > 20) {
+        const oldestKey = catalogBatchCache.keys().next().value;
+        if (oldestKey !== undefined) catalogBatchCache.delete(oldestKey);
+        else break;
+      }
+
       return json({
         supplier: "跨境资源网",
-        products: items.map(mapProduct),
-        complete: "items" in result && result.complete === true && allItems.length <= 100,
-        status: result.status,
+        products: entry.products,
+        total: entry.total,
+        nextCursor: entry.nextCursor,
+        complete: entry.complete,
+        status: entry.status,
         purchaseEnabled: false,
         requestId,
       });

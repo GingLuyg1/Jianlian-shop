@@ -57,6 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
+  computeProductSalesCount,
   getErrorText,
   getPublicProductDetail,
   type PublicProductRow,
@@ -169,6 +170,12 @@ const GEMINI_RECHARGE_PRODUCT_IDS = [
 
 function mapCheckoutProduct(row: PublicProductRow): Product {
   const stock = Number(row.stock ?? 0);
+  const salesCount = computeProductSalesCount({
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    price: Number(row.price ?? 0),
+  });
 
   return {
     id: row.slug || row.id,
@@ -182,7 +189,7 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
     originalPrice: row.original_price,
     stock,
     sortOrder: row.sort_order,
-    metadata: row.metadata,
+    metadata: { ...(row.metadata ?? {}), salesCount },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     currency: "CNY",
@@ -1317,7 +1324,15 @@ function ProductDetailCard({
             </p>
 
             <div className="mt-4 grid w-full grid-cols-2 gap-3 rounded-xl border border-border bg-white p-3.5 sm:mt-8 sm:gap-4 sm:p-5">
-              <DetailMetric label="商品分类" value={product.categoryLabel} />
+              <DetailMetric
+                label="商品分类"
+                value={`销量 ${computeProductSalesCount({
+                  id: product.id,
+                  name: product.name,
+                  price: product.price,
+                  explicitSales: Number(product.metadata?.salesCount ?? 0),
+                })}`}
+              />
               <DetailMetric label="商品单价" value={priceLabel} highlight />
               <DetailMetric
                 label="商品库存"
@@ -3112,6 +3127,8 @@ function SkuSelector({
   onSelectSku: (skuId: string) => void;
   disabled?: boolean;
 }) {
+  if (options.length <= 1) return null;
+
   return (
     <div>
       <div className="grid grid-cols-2 gap-2.5">
@@ -3134,7 +3151,7 @@ function SkuSelector({
               <div className="truncate text-base font-bold text-foreground">
                 {sku.label}
               </div>
-              <div className="mt-1 break-words text-[13px] font-semibold leading-tight text-primary">
+              <div className="mt-1 break-words text-[13px] font-bold leading-tight text-slate-950">
                 ¥{sku.rmb.toFixed(2)}
               </div>
               {sku.status !== "active" || Number(sku.stock ?? 0) <= 0 ? <div className="mt-1 text-xs text-slate-500">已售罄</div> : null}
@@ -3186,7 +3203,7 @@ function DetailMetric({
       <div
         className={[
           "mt-2 text-sm font-semibold",
-          highlight ? "text-primary" : "",
+          highlight ? "font-bold text-slate-950" : "",
           success ? "text-green-600" : "",
           danger ? "text-red-500" : "",
         ].join(" ")}

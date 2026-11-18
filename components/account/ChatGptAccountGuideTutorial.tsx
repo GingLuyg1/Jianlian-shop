@@ -49,28 +49,30 @@ export default function ChatGptAccountGuideTutorial({
 
   return (
     <div className="space-y-6">
-      {/* 顶部章节切换导航 */}
-      <div className="sticky top-0 z-10 -mx-1 flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-sm backdrop-blur-md">
-        {sections.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentSection === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => handleSelect(item.id)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:text-sm ${
-                isActive
-                  ? "bg-slate-900 text-white shadow"
-                  : "bg-transparent text-slate-600 hover:bg-slate-100 active:bg-slate-200"
-              }`}
-            >
-              <Icon className={`h-4 w-4 ${isActive ? "text-emerald-400" : "text-slate-400"}`} />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* 仅在独立挂载（非教程目录页）时显示章节切换导航 */}
+      {!onSelectSection ? (
+        <div className="sticky top-0 z-10 -mx-1 flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-sm backdrop-blur-md">
+          {sections.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentSection === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleSelect(item.id)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:text-sm ${
+                  isActive
+                    ? "bg-slate-900 text-white shadow"
+                    : "bg-transparent text-slate-600 hover:bg-slate-100 active:bg-slate-200"
+                }`}
+              >
+                <Icon className={`h-4 w-4 ${isActive ? "text-emerald-400" : "text-slate-400"}`} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       {/* 章节内容区 */}
       {currentSection === "login" && <LoginSection />}

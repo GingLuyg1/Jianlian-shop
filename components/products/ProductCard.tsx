@@ -54,7 +54,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           <h3 className="mt-2 line-clamp-2 text-sm font-semibold text-foreground">{product.name}</h3>
           <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{product.description}</p>
           <div className="mt-3 flex items-baseline gap-1">
-            <span className="text-lg font-bold text-primary">{isDisabled ? "已售罄" : priceText}</span>
+            <span className="text-lg font-bold text-slate-950">{isDisabled ? "已售罄" : priceText}</span>
             {settings.show_original_price && product.originalPrice ? (
               <span className="text-xs text-muted-foreground line-through">
                 {settings.currency_symbol}
