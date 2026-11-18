@@ -36,6 +36,7 @@ import {
   type ProductStatus,
 } from "@/lib/supabase/admin-catalog";
 import AdminProductSkuManager, { type ProductSkuManagerHandle } from "@/components/admin/products/AdminProductSkuManager";
+import AdminSupplierBindingSheet from "@/components/admin/suppliers/AdminSupplierBindingSheet";
 import { cn } from "@/lib/utils";
 
 const PRODUCT_FALLBACK_IMAGE = "/assets/jianlian-brand-logo.png";
@@ -1243,6 +1244,8 @@ function ProductDialog({
   const secondaries = form?.primaryCategoryId ? getEnabledChildren(categories, form.primaryCategoryId) : [];
   const skuManagerRef = useRef<ProductSkuManagerHandle>(null);
   const [isSkuDirty, setIsSkuDirty] = useState(false);
+  const [bindingSku, setBindingSku] = useState<AdminProductSku | null>(null);
+  const [bindingSheetOpen, setBindingSheetOpen] = useState(false);
 
   if (!form) return null;
   return (
@@ -1408,14 +1411,27 @@ function ProductDialog({
                   stock: String(summary.stock),
                 });
               }}
-              onSupplierBinding={() => {
-                toast.info("如需配置供应商绑定，可前往【供应链管理】配置绑定。");
+              onSupplierBinding={(_prod, sku) => {
+                setBindingSku(sku ?? null);
+                setBindingSheetOpen(true);
               }}
             />
           </div>
         </div>
         <DialogActions saving={saving} onClose={onClose} disableSave={!isDirty && !isSkuDirty} />
       </form>
+      <AdminSupplierBindingSheet
+        open={bindingSheetOpen}
+        product={product}
+        sku={bindingSku}
+        onOpenChange={(open) => {
+          setBindingSheetOpen(open);
+          if (!open) setBindingSku(null);
+        }}
+        onSaved={() => {
+          skuManagerRef.current?.reload?.();
+        }}
+      />
     </ModalFrame>
   );
 }

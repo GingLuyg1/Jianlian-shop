@@ -20,6 +20,7 @@ import type { AdminProductSku } from "@/lib/supabase/admin-catalog";
 import type { DajuProduct, DajuProductDetail } from "@/lib/providers/daju/types";
 import { listDajuSkuStockOptions } from "@/lib/providers/daju/stock.mjs";
 import BitrefillSkuBindingFields from "./BitrefillSkuBindingFields";
+import KuajingZySkuBindingFields from "./KuajingZySkuBindingFields";
 
 type SupplierError = { message: string; code: string | null; requestId: string | null };
 type BindingSavedProduct = { metadata?: Record<string, unknown> | null; delivery_type?: AdminProduct["delivery_type"]; stock?: number; sku?: AdminProductSku | null };
@@ -84,7 +85,13 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
     const sourceMetadata = sku?.metadata ?? product.metadata;
     const metadata = sourceMetadata && typeof sourceMetadata === "object" && !Array.isArray(sourceMetadata) ? sourceMetadata : {};
     const existingProductId = Number(metadata.supplier_product_id);
-    setProvider(metadata.supplier === "bitrefill" || metadata.supplier_binding_candidate ? "bitrefill" : "daju");
+    setProvider(
+      metadata.supplier === "kuajingzy"
+        ? "kuajingzy"
+        : metadata.supplier === "bitrefill" || metadata.supplier_binding_candidate
+          ? "bitrefill"
+          : "daju"
+    );
     setQuery("");
     setProducts([]);
     setSearchLoaded(false);
@@ -260,7 +267,8 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
               <div className={glass.providerTabs} role="group" aria-label="选择供应商">
                 {[
                   { value: "daju", name: "大橘 AI", note: "Daju · 商品与规格绑定" },
-                  { value: "bitrefill", name: "Bitrefill", note: "仅保存待审核候选，不启用" },
+                  { value: "kuajingzy", name: "跨境资源网", note: "KuajingZY · 商品与规格绑定" },
+                  { value: "bitrefill", name: "Bitrefill", note: "礼品卡与话费卡规格绑定" },
                 ].map(option => (
                   <button key={option.value} type="button" aria-pressed={provider === option.value} disabled={saving} onClick={() => setProvider(option.value)}>
                     <span><span className="block text-sm font-semibold">{option.name}</span><span className="mt-1 block text-xs">{option.note}</span></span>
@@ -269,7 +277,20 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
                 ))}
               </div>
 
-              {provider === "bitrefill" ? (
+              {provider === "kuajingzy" ? (
+                <KuajingZySkuBindingFields
+                  key={`kj:${product.id}:${sku?.id ?? "root"}`}
+                  product={product}
+                  sku={sku}
+                  onSaved={saved => {
+                    onSaved({
+                      ...(saved.product && typeof saved.product === "object" ? saved.product : {}),
+                      sku: saved.sku ?? null,
+                    });
+                    onOpenChange(false);
+                  }}
+                />
+              ) : provider === "bitrefill" ? (
                 sku ? (
                   <div className="mt-5">
                     <BitrefillSkuBindingFields
