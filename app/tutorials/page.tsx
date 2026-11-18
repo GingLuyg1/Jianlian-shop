@@ -175,6 +175,8 @@ export default function TutorialsPage() {
   const [giffgaffGuide, setGiffgaffGuide] = useState<"activation" | "keeper">("activation");
   const [oneNzTreeOpen, setOneNzTreeOpen] = useState(false);
   const [oneNzGuide, setOneNzGuide] = useState<OneNzSection>("activation");
+  const [appleTreeOpen, setAppleTreeOpen] = useState(false);
+  const [chatgptTreeOpen, setChatgptTreeOpen] = useState(false);
   const [chatgptGuide, setChatgptGuide] = useState<ChatGptTutorialSection>("login");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -187,6 +189,8 @@ export default function TutorialsPage() {
       setSelected(paramTopic as (typeof tutorialTopics)[number]["id"]);
       if (paramTopic === "one-nz") setOneNzTreeOpen(true);
       if (paramTopic === "giffgaff") setGiffgaffTreeOpen(true);
+      if (paramTopic === "apple-id") setAppleTreeOpen(true);
+      if (paramTopic === "chatgpt-guide") setChatgptTreeOpen(true);
     }
     const paramGuide = params.get("guide");
     if (paramGuide === "activation" || paramGuide === "binding" || paramGuide === "rates") {
@@ -200,6 +204,7 @@ export default function TutorialsPage() {
   const showApple = matchingTopics.length > 0 && topic.id === "apple-id";
   const showGiffgaff = matchingTopics.length > 0 && topic.id === "giffgaff";
   const showOneNz = matchingTopics.length > 0 && topic.id === "one-nz";
+  const showChatgpt = matchingTopics.length > 0 && topic.id === "chatgpt-guide";
   const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={isMobile ? "max-w-none !pt-2 !px-3 pb-6" : "max-w-none px-4 py-3 md:px-6"}>
     <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!block !h-auto !space-y-3 !overflow-visible" : ""}`}>
@@ -307,7 +312,7 @@ export default function TutorialsPage() {
                   { guide: "login", label: "登录与 2FA 验证" },
                   { guide: "security", label: "改密与安全设置" },
                   { guide: "rebind", label: "设备与 2FA 换绑" },
-                  { guide: "protection", label: "防封与保号指南" },
+                  { guide: "anti-ban", label: "防封与保号指南" },
                 ].map((item) => (
                   <button
                     key={item.guide}
@@ -396,20 +401,30 @@ export default function TutorialsPage() {
                 setSearch("");
                 if (id === "giffgaff" && !showGiffgaff) setGiffgaffTreeOpen(true);
                 if (id === "one-nz" && !showOneNz) setOneNzTreeOpen(true);
+                if (id === "apple-id" && !showApple) setAppleTreeOpen(true);
+                if (id === "chatgpt-guide" && !showChatgpt) setChatgptTreeOpen(true);
                 if (id !== "giffgaff") setGiffgaffTreeOpen(false);
                 if (id !== "one-nz") setOneNzTreeOpen(false);
-                if (isMobile && id !== "giffgaff" && id !== "one-nz") setMobileNavOpen(false);
+                if (id !== "apple-id") setAppleTreeOpen(false);
+                if (id !== "chatgpt-guide") setChatgptTreeOpen(false);
+                if (isMobile && id !== "giffgaff" && id !== "one-nz" && id !== "apple-id" && id !== "chatgpt-guide") setMobileNavOpen(false);
                 resetScroll();
               }}>
                 <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>
                 {id === "required" && <span className={`${styles.pill} hidden md:inline`}>必读</span>}
-                {(id === "giffgaff" || id === "one-nz") && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
+                {(id === "giffgaff" || id === "one-nz" || id === "apple-id" || id === "chatgpt-guide") && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
               </button>;
+              if (id === "apple-id") {
+                return <Collapsible.Root key={id} asChild open={showApple && appleTreeOpen} onOpenChange={setAppleTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Apple ID 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`}>{appleChapters.map(([chapId, chapLabel]) => <button key={chapId} type="button" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { const heading = document.getElementById(chapId); heading?.scrollIntoView({ behavior: "smooth", block: "start" }); if (isMobile) setMobileNavOpen(false); }}>{chapLabel}</button>)}</nav></Collapsible.Content></div></Collapsible.Root>;
+              }
               if (id === "giffgaff") {
                 return <Collapsible.Root key={id} asChild open={showGiffgaff && giffgaffTreeOpen} onOpenChange={setGiffgaffTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Giffgaff 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={giffgaffGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={giffgaffGuide === "activation" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("activation"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>实体卡激活与使用</button><button type="button" aria-current={giffgaffGuide === "keeper" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("keeper"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>保号助手</button></nav></Collapsible.Content></div></Collapsible.Root>;
               }
               if (id === "one-nz") {
                 return <Collapsible.Root key={id} asChild open={showOneNz && oneNzTreeOpen} onOpenChange={setOneNzTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="One NZ 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={oneNzGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={oneNzGuide === "activation" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setOneNzGuide("activation"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>新手激活与防扣费</button><button type="button" aria-current={oneNzGuide === "binding" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setOneNzGuide("binding"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>App 注册绑定与查询</button><button type="button" aria-current={oneNzGuide === "rates" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setOneNzGuide("rates"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>国内漫游资费与保号</button></nav></Collapsible.Content></div></Collapsible.Root>;
+              }
+              if (id === "chatgpt-guide") {
+                return <Collapsible.Root key={id} asChild open={showChatgpt && chatgptTreeOpen} onOpenChange={setChatgptTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="ChatGPT 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={chatgptGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={chatgptGuide === "login" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("login"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>登录与 2FA 验证</button><button type="button" aria-current={chatgptGuide === "security" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("security"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>改密与安全设置</button><button type="button" aria-current={chatgptGuide === "rebind" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("rebind"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>设备与 2FA 换绑</button><button type="button" aria-current={chatgptGuide === "anti-ban" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("anti-ban"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>防封与保号指南</button></nav></Collapsible.Content></div></Collapsible.Root>;
               }
               return <div className="min-w-0" key={id}>{button}</div>;
             })}

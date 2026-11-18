@@ -397,6 +397,132 @@ export function getDescendantCategoryIds(categories: PublicCategory[], categoryI
   return Array.from(ids);
 }
 
+const PRODUCT_SALES_COUNT_BY_KEY: Record<string, number> = {
+  "sim-001": 88,
+  "sim-002": 69,
+  "sim-003": 66,
+  "sim-ultra-mobile": 64,
+  "sim-haha": 41,
+  "sim-lucky2": 39,
+  "sim-vodafone-es": 61,
+  "sim-enc-mobile": 36,
+  "sim-t-mobile": 50,
+  "air-mobile": 32,
+  "sim-one-nz": 78,
+  "sim-nz-001": 78,
+  "sim-orange-es": 36,
+  "sim-movistar-es": 39,
+  "sim-rakuten-mobile": 40,
+  "sim-hk-address-receiving": 25,
+  "giffgaff-uk-gbp-10-topup-pin": 69,
+  "giffgaff-uk-gbp-15-topup-pin": 68,
+  "giffgaff-uk-gbp-20-topup-pin": 81,
+  "gift-apple-us": 68,
+  "gift-apple-tr-500": 59,
+  "google-play-usa-usd-5-gift-card": 19,
+  "google-play-usa-usd-10-gift-card": 22,
+  "google-play-usa-usd-20-gift-card": 24,
+  "google-play-usa-usd-40-gift-card": 16,
+  "google-play-usa-usd-60-gift-card": 14,
+  "google-play-usa-usd-80-gift-card": 24,
+  "google-play-usa-usd-100-gift-card": 30,
+  "google-play-usa-usd-120-gift-card": 34,
+  "google-play-usa-usd-140-gift-card": 23,
+  "google-play-usa-usd-160-gift-card": 29,
+  "google-play-usa-usd-180-gift-card": 34,
+  "google-play-usa-usd-200-gift-card": 13,
+  "netflix-usa-usd-30-gift-card": 24,
+  "netflix-usa-usd-60-gift-card": 28,
+  "steam-usa-usd-5-gift-card": 22,
+  "steam-usa-usd-20-gift-card": 33,
+  "steam-usa-usd-30-gift-card": 22,
+  "steam-usa-usd-50-gift-card": 30,
+  "steam-usa-usd-100-gift-card": 19,
+  "apple-id": 38,
+  "dig-apple-id-us": 72,
+  "dig-apple-id-jp": 75,
+  "dig-apple-id-hk": 55,
+  "dig-apple-id-tw": 52,
+  "dig-apple-id-uk": 32,
+  "dig-apple-id-de": 31,
+  "dig-apple-id-vn": 34,
+  "dig-apple-id-my": 27,
+  "dig-apple-id-ng": 27,
+  "dig-apple-id-au": 24,
+  "dig-apple-id-sg": 23,
+  "dig-apple-id-tr": 23,
+  "dig-steam-ar": 36,
+  "dig-steam-br": 36,
+  "dig-steam-jp": 28,
+  "dig-steam-tr": 28,
+  "dig-steam-in": 27,
+  "dig-steam-ua": 25,
+  "dig-outlook-mail-std": 46,
+  "chatgpt-plus": 93,
+  "chatgpt-plus-premade-1d": 85,
+  "946a345e-c0a1-4a6b-a172-f994c6af2194": 85,
+  "ios-chatgpt-plus": 84,
+  "ios-chatgpt-plus-12": 82,
+  "chatgpt-pro-20x": 60,
+  "chat-gpt-pro-200": 54,
+  "chat-gpt-pro-50x": 49,
+  "ios-chatgpt-por-5": 45,
+  "ios-chatgpt-por-20": 29,
+  "chatgpt-go": 53,
+  "ai-claude-cdk-ng-max-5x-1m": 86,
+  "ai-claude-cdk-ng-max-20x-1m": 83,
+  "ai-claude-cdk-ng-pro-1m": 80,
+  "ai-gemini-google-one-pro-pixel": 77,
+  "ai-gemini-google-one-pro-pixel-1y": 64,
+  "google-ai-pro-18": 21,
+  "ai-grok-cdk-in-super-1m": 67,
+};
+
+export function computeProductSalesCount(input: {
+  id?: string | null;
+  slug?: string | null;
+  name?: string | null;
+  category?: string | null;
+  price?: number | null;
+  explicitSales?: number | null;
+}): number {
+  if (typeof input.explicitSales === "number" && Number.isFinite(input.explicitSales) && input.explicitSales > 0) {
+    return Math.round(input.explicitSales);
+  }
+  const slugKey = String(input.slug ?? "").trim().toLowerCase();
+  const idKey = String(input.id ?? "").trim().toLowerCase();
+  if (slugKey && PRODUCT_SALES_COUNT_BY_KEY[slugKey] !== undefined) {
+    return PRODUCT_SALES_COUNT_BY_KEY[slugKey];
+  }
+  if (idKey && PRODUCT_SALES_COUNT_BY_KEY[idKey] !== undefined) {
+    return PRODUCT_SALES_COUNT_BY_KEY[idKey];
+  }
+
+  const text = `${slugKey} ${idKey} ${String(input.name ?? "").toLowerCase()} ${String(input.category ?? "").toLowerCase()}`;
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const positiveHash = Math.abs(hash);
+
+  // Base range by product type, country/region, and tier/benefit
+  let min = 22;
+  let max = 56;
+  if (/chatgpt|claude|gemini|grok|plus|one\s*nz|giffgaff/.test(text)) {
+    min = 52;
+    max = 94;
+  } else if (/美国|美区|\bus\b|\busa\b|日本|\bjp\b|香港|\bhk\b|台湾|\btw\b|英国|\buk\b/.test(text)) {
+    min = 42;
+    max = 78;
+  }
+  if (/50x|500|200|180|160|140/.test(text) || Number(input.price ?? 0) >= 800) {
+    min = 15;
+    max = 48;
+  }
+  return min + (positiveHash % (max - min + 1));
+}
+
 export function mapPublicProductToProduct(
   row: PublicProductRow | PublicCatalogProductRow,
   productCategory: ProductCategory,
@@ -417,10 +543,15 @@ export function mapPublicProductToProduct(
     typeof (row as PublicCatalogProductRow).max_price === "number"
       ? Number((row as PublicCatalogProductRow).max_price)
       : row.price;
-  const salesCount =
-    typeof (row as PublicCatalogProductRow).sales_count === "number"
-      ? Math.max(0, Number((row as PublicCatalogProductRow).sales_count))
-      : 0;
+  const rawSales = (row as PublicCatalogProductRow).sales_count;
+  const salesCount = computeProductSalesCount({
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    category: `${productCategory} ${categoryLabel}`,
+    price: minPrice,
+    explicitSales: typeof rawSales === "number" && rawSales > 0 ? rawSales : null,
+  });
   const stockStatus: StockStatus =
     row.status === "sold_out" || effectiveStock <= 0
       ? "out-of-stock"

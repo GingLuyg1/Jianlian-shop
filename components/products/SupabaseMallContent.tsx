@@ -35,6 +35,7 @@ import { WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 import { findVisibleStorefrontPrimaryCategory, storefrontCategoryPaths } from "@/lib/catalog/visible-storefront-category-routes";
 import { clearCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
 import {
+  computeProductSalesCount,
   findPrimaryCategory,
   getChildCategories,
   getErrorText,
@@ -618,9 +619,9 @@ function CategoryPanel({
       <CardContent className={cn("h-full min-h-0 p-3", isMobile && "!p-1")}>
         <div className={cn(categoryPanelInnerClassName, isMobile && "!bg-transparent")}>
           {isMobile && categories.length > 0 ? (
-            <div className="mb-1.5 flex items-center justify-center gap-1 border-b border-orange-100/80 pb-1.5 text-center">
-              <span className="text-[10px] font-bold text-slate-600">分类</span>
-              <span className="rounded-full bg-orange-100/80 px-1.5 py-0.2 text-[9px] font-semibold text-primary">
+            <div className="mb-2 flex items-center justify-center gap-1 border-b border-orange-100/80 pb-2 pt-0.5 text-center">
+              <span className="text-xs font-bold text-slate-700">分类</span>
+              <span className="rounded-full bg-orange-100/90 px-2 py-0.5 text-[11px] font-bold text-primary">
                 ({categories.length})
               </span>
             </div>
@@ -631,7 +632,7 @@ function CategoryPanel({
             className={cn(
               categoryListScrollClassName,
               "relative",
-              isMobile && "!flex !flex-col !gap-1.5 !overflow-y-auto !overflow-x-hidden !space-y-0 !p-0.5"
+              isMobile && "!flex !flex-col !gap-2 !overflow-y-auto !overflow-x-hidden !space-y-0 !p-1"
             )}
           >
             {error ? (
@@ -718,14 +719,14 @@ function CategoryButton({
         onClick={onClick}
         className={cn(
           interactiveButtonClass,
-          "flex w-full flex-col items-center justify-center rounded-xl p-1 text-center transition-colors [-webkit-tap-highlight-color:transparent]",
+          "flex w-full flex-col items-center justify-center rounded-2xl px-2 py-2.5 text-center transition-colors [-webkit-tap-highlight-color:transparent]",
           active
             ? "border border-orange-300 bg-orange-50 font-bold text-primary shadow-xs"
-            : "border border-transparent bg-white/70 text-slate-700 hover:bg-slate-50"
+            : "border border-orange-100/60 bg-white/85 text-slate-700 hover:bg-slate-50"
         )}
       >
         {category.displayCode ? (
-          <span aria-hidden="true" className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-bold tracking-wide", active ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
+          <span aria-hidden="true" className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl text-sm font-bold tracking-wide", active ? "bg-primary text-white shadow-xs" : "bg-primary/10 text-primary")}>
             {category.displayCode}
           </span>
         ) : category.displayImage ? (
@@ -734,18 +735,18 @@ function CategoryButton({
             alt={category.name}
             onError={(event) => setProductImageFallback(event.currentTarget)}
             className={cn(
-              "h-7 w-7 shrink-0 rounded-lg bg-white object-cover",
-              active ? "ring-2 ring-primary" : "ring-1 ring-slate-200"
+              "h-11 w-11 shrink-0 rounded-xl bg-white object-cover",
+              active ? "ring-2 ring-primary shadow-xs" : "ring-1 ring-slate-200"
             )}
           />
         ) : (
-          <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", active ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
-            <Icon className="h-4 w-4" />
+          <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", active ? "bg-primary text-white shadow-xs" : "bg-primary/10 text-primary")}>
+            <Icon className="h-5 w-5" />
           </div>
         )}
         <span className={cn(
-          "mt-1 line-clamp-2 w-full break-words text-center text-[10px] leading-tight",
-          active ? "font-bold text-primary" : "font-medium text-slate-700"
+          "mt-1.5 line-clamp-2 w-full break-words text-center text-xs leading-snug",
+          active ? "font-bold text-primary" : "font-semibold text-slate-800"
         )}>
           {category.name}
         </span>
@@ -976,7 +977,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
             <span className={stock > 0 ? "text-green-600" : "text-slate-400"}>{stock}</span>
           </div>
         ) : null}
-        <div className="shrink-0 text-lg font-bold text-orange-600">
+        <div className={cn("shrink-0 text-lg font-bold", product.stockStatus === "out-of-stock" ? "text-slate-400" : "text-slate-950")}>
           {product.stockStatus === "out-of-stock" ? "已售罄" : priceText}
         </div>
       </div>
@@ -996,7 +997,15 @@ function CatalogProductIcon({ product, category }: { product: Product; category:
 function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, isMobile = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; onSelect: () => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
-  const salesCount = Math.max(0, Number(product.metadata?.salesCount ?? 0));
+  const rawSales = Number(product.metadata?.salesCount ?? 0);
+  const salesCount = computeProductSalesCount({
+    id: product.id,
+    slug: typeof product.metadata?.slug === "string" ? product.metadata.slug : product.id,
+    name: product.name,
+    category: `${category?.name ?? ""} ${product.categoryLabel ?? ""}`,
+    price: product.price,
+    explicitSales: rawSales > 0 ? rawSales : null,
+  });
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
@@ -1058,7 +1067,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className="text-base font-extrabold text-orange-600">
+            <span className={cn("text-base font-extrabold", hasStock ? "text-slate-950" : "text-slate-400")}>
               {hasStock ? priceText : "已售罄"}
             </span>
           </div>
@@ -1113,7 +1122,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
           <span>销量</span>
           <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-[#9a552b]">{salesCount}</span>
         </div>
-        <div className="shrink-0 text-right text-base font-bold text-orange-600 min-w-[120px] sm:min-w-[140px] sm:text-right pr-2">
+        <div className={cn("shrink-0 text-right text-base font-bold min-w-[120px] sm:min-w-[140px] sm:text-right pr-2", hasStock ? "text-slate-950" : "text-slate-400")}>
           {hasStock ? priceText : "已售罄"}
         </div>
       </div>
