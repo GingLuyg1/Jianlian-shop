@@ -1312,6 +1312,9 @@ function ProductDialog({
               onChange={(event) => onUpdate({ ...form, short_description: event.target.value })}
             />
           </Field>
+          <Field label="详细说明" className="sm:col-span-2">
+            <Textarea rows={3} value={form.description} onChange={(event) => onUpdate({ ...form, description: event.target.value })} />
+          </Field>
           <Field label="主图地址" className="sm:col-span-2" error={errors.image_url}>
             <div className="flex gap-3">
               <Input
@@ -1334,6 +1337,9 @@ function ProductDialog({
           </Field>
           <Field label="库存 (默认/基础库存)" error={errors.stock} required>
             <Input type="number" min="0" step="1" value={form.stock} onChange={(event) => onUpdate({ ...form, stock: event.target.value })} />
+          </Field>
+          <Field label="排序" error={errors.sort_order} required>
+            <Input type="number" step="1" value={form.sort_order} onChange={(event) => onUpdate({ ...form, sort_order: event.target.value })} />
           </Field>
           <Field label="交付方式" required>
             <select
@@ -1360,6 +1366,10 @@ function ProductDialog({
                 </option>
               ))}
             </select>
+          </Field>
+
+          <Field label="metadata.note" className="sm:col-span-2">
+            <Input value={form.metadata_note} onChange={(event) => onUpdate({ ...form, metadata_note: event.target.value })} />
           </Field>
 
           <div className="sm:col-span-2 mt-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">

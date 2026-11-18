@@ -688,7 +688,7 @@ function CheckoutPageContent() {
           customer_note: [
             hasSku ? `SKU：${selectedSku.label}` : "",
             isShippingProduct
-              ? `收货地址：${shippingRegion.trim()} ${shippingAddress.trim()}`
+              ? `收货地址：${shippingRegion.trim() === shippingAddress.trim() ? shippingAddress.trim() : `${shippingRegion.trim()} ${shippingAddress.trim()}`.trim()}`
               : "",
             customerNote,
           ]
@@ -869,7 +869,7 @@ function CheckoutPageContent() {
                       onChange={(event) => {
                         const nextAddress = event.target.value;
                         setShippingAddress(nextAddress);
-                        setShippingRegion(nextAddress.trim() ? nextAddress.trim().slice(0, 24) : "");
+                        setShippingRegion(nextAddress);
                       }}
                       placeholder="请输入省市区街道门牌等详细收货地址"
                       className="h-10 w-full bg-slate-50 text-sm"
