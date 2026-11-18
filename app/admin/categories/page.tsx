@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Edit, GripVertical, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -29,11 +29,13 @@ import {
   updateProduct,
   type AdminCategory,
   type AdminProduct,
+  type AdminProductSku,
   type CategoryPayload,
   type DeliveryType,
   type ProductPayload,
   type ProductStatus,
 } from "@/lib/supabase/admin-catalog";
+import AdminProductSkuManager, { type ProductSkuManagerHandle } from "@/components/admin/products/AdminProductSkuManager";
 import { cn } from "@/lib/utils";
 
 const PRODUCT_FALLBACK_IMAGE = "/assets/jianlian-brand-logo.png";
@@ -256,6 +258,11 @@ function AdminCategoriesPageInner() {
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
   const [productInitialForm, setProductInitialForm] = useState<ProductForm | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [skuRefreshKey, setSkuRefreshKey] = useState(0);
+  const editingProduct = useMemo(
+    () => products.find((p) => p.id === productForm?.id) ?? null,
+    [products, productForm?.id]
+  );
   const setNotice = (message: string) => {
     if (message) toast.success(message);
   };
@@ -557,13 +564,17 @@ function AdminCategoriesPageInner() {
     return errors;
   }
 
-  async function submitProduct(event: FormEvent<HTMLFormElement>) {
+  async function submitProduct(
+    event: FormEvent<HTMLFormElement>,
+    saveSkus?: (product: AdminProduct) => Promise<void>
+  ) {
     event.preventDefault();
     if (!productForm || saving) return;
     const errors = validateProduct(productForm);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    if (!isProductDirty(productForm, productInitialForm)) {
+    const isDirty = isProductDirty(productForm, productInitialForm);
+    if (!isDirty && !saveSkus) {
       setNotice("没有需要保存的商品修改");
       return;
     }
@@ -591,11 +602,15 @@ function AdminCategoriesPageInner() {
       const { original_price: preservedOriginalPrice, ...updatePayload } = payload;
       void preservedOriginalPrice;
       const saved = productForm.id ? await updateProduct(productForm.id, updatePayload) : await createProduct(payload);
+      if (saveSkus) {
+        await saveSkus(saved);
+      }
       mergeSavedProductIntoPanel(saved);
       const savedForm = toProductForm(saved, categoryMap);
       setProductInitialForm(savedForm);
       setProductForm(savedForm);
-      setNotice(productForm.id ? "\u5546\u54c1\u5df2\u4fdd\u5b58" : "\u5546\u54c1\u5df2\u65b0\u589e");
+      setNotice(productForm.id ? "商品已保存" : "商品已新增");
+      toast.success(productForm.id ? "商品已保存" : "商品已新增");
       closeProductEditorAfterSave();
       await loadProducts();
     } catch (saveError) {
@@ -952,6 +967,8 @@ function AdminCategoriesPageInner() {
         onClose={requestCloseProductEditor}
         onSubmit={submitProduct}
         onUpdate={setProductForm}
+        product={editingProduct}
+        skuRefreshKey={skuRefreshKey}
       />
     </AdminPageShell>
   );
@@ -1208,26 +1225,42 @@ function ProductDialog({
   onSubmit,
   onUpdate,
   saving,
+  product,
+  skuRefreshKey,
 }: {
   categories: AdminCategory[];
   errors: FieldErrors;
   form: ProductForm | null;
   isDirty: boolean;
   onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>, saveSkus?: (product: AdminProduct) => Promise<void>) => void;
   onUpdate: (form: ProductForm) => void;
   saving: boolean;
+  product: AdminProduct | null;
+  skuRefreshKey: number;
 }) {
   const rootCategories = categories.filter((category) => category.level === 1 && isCategoryEnabled(category)).sort(sortCategories);
   const secondaries = form?.primaryCategoryId ? getEnabledChildren(categories, form.primaryCategoryId) : [];
+  const skuManagerRef = useRef<ProductSkuManagerHandle>(null);
+  const [isSkuDirty, setIsSkuDirty] = useState(false);
+
   if (!form) return null;
   return (
-    <ModalFrame title={form.id ? "编辑商品" : "新增商品"} onClose={onClose} saving={saving}>
-      <form onSubmit={onSubmit} className="flex min-h-0 flex-col">
+    <ModalFrame title={form.id ? "编辑商品" : "新增商品"} onClose={onClose} saving={saving} size="max-w-5xl">
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!skuManagerRef.current?.validate()) return;
+          if (!(await skuManagerRef.current.prepareSave())) return;
+          onSubmit(event, (savedProduct) => skuManagerRef.current!.saveAll(savedProduct));
+        }}
+        className="flex min-h-0 flex-col"
+      >
         <div className="grid min-h-0 gap-4 overflow-y-auto p-5 sm:grid-cols-2">
           <Field label="商品名称" error={errors.name} required>
             <Input
               value={form.name}
+              placeholder="请输入商品名称"
               onChange={(event) => {
                 const name = event.target.value;
                 onUpdate({ ...form, name, slug: form.slug || slugify(name) });
@@ -1235,7 +1268,11 @@ function ProductDialog({
             />
           </Field>
           <Field label="商品标识" error={errors.slug} required>
-            <Input value={form.slug} onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })} />
+            <Input
+              value={form.slug}
+              placeholder="product-slug"
+              onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })}
+            />
           </Field>
           <Field label="一级分类" error={errors.primaryCategoryId} required>
             <select
@@ -1269,28 +1306,36 @@ function ProductDialog({
             </select>
           </Field>
           <Field label="简短说明" className="sm:col-span-2">
-            <Input value={form.short_description} onChange={(event) => onUpdate({ ...form, short_description: event.target.value })} />
+            <Input
+              value={form.short_description}
+              placeholder="一句话介绍商品亮点"
+              onChange={(event) => onUpdate({ ...form, short_description: event.target.value })}
+            />
           </Field>
           <Field label="详细说明" className="sm:col-span-2">
             <Textarea rows={3} value={form.description} onChange={(event) => onUpdate({ ...form, description: event.target.value })} />
           </Field>
-          <Field label="主图" className="sm:col-span-2" error={errors.image_url}>
+          <Field label="主图地址" className="sm:col-span-2" error={errors.image_url}>
             <div className="flex gap-3">
-              <Input value={form.image_url} onChange={(event) => onUpdate({ ...form, image_url: event.target.value })} />
+              <Input
+                value={form.image_url}
+                placeholder="/assets/... 或 https://..."
+                onChange={(event) => onUpdate({ ...form, image_url: event.target.value })}
+              />
               <img
                 src={form.image_url || PRODUCT_FALLBACK_IMAGE}
                 alt=""
-                className="h-10 w-10 rounded-lg border object-cover"
+                className="h-10 w-10 shrink-0 rounded-lg border object-cover"
                 onError={(event) => {
                   event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
                 }}
               />
             </div>
           </Field>
-          <Field label="售价" error={errors.price} required>
+          <Field label="售价 (默认/基础价)" error={errors.price} required>
             <Input type="number" min="0" step="0.01" value={form.price} onChange={(event) => onUpdate({ ...form, price: event.target.value })} />
           </Field>
-          <Field label="库存" error={errors.stock} required>
+          <Field label="库存 (默认/基础库存)" error={errors.stock} required>
             <Input type="number" min="0" step="1" value={form.stock} onChange={(event) => onUpdate({ ...form, stock: event.target.value })} />
           </Field>
           <Field label="排序" error={errors.sort_order} required>
@@ -1322,11 +1367,54 @@ function ProductDialog({
               ))}
             </select>
           </Field>
+
           <Field label="metadata.note" className="sm:col-span-2">
             <Input value={form.metadata_note} onChange={(event) => onUpdate({ ...form, metadata_note: event.target.value })} />
           </Field>
+
+          <div className="sm:col-span-2 mt-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">商品规格与 SKU 管理</h3>
+                <p className="text-xs text-slate-500 mt-0.5">多规格商品可在此处维护规格标题、编码、价格、库存与状态。</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900"
+                onClick={() => skuManagerRef.current?.reload?.()}
+              >
+                <RefreshCw className="mr-1 h-3 w-3" />
+                刷新规格
+              </Button>
+            </div>
+            <AdminProductSkuManager
+              ref={skuManagerRef}
+              product={product}
+              refreshKey={skuRefreshKey}
+              defaults={{
+                price: form.price,
+                original_price: form.original_price,
+                stock: form.stock,
+                delivery_type: form.delivery_type,
+                status: form.status,
+              }}
+              onSummary={(summary) => {
+                setIsSkuDirty(true);
+                onUpdate({
+                  ...form,
+                  price: String(summary.price ?? form.price),
+                  stock: String(summary.stock),
+                });
+              }}
+              onSupplierBinding={() => {
+                toast.info("如需配置供应商绑定，可前往【供应链管理】配置绑定。");
+              }}
+            />
+          </div>
         </div>
-        <DialogActions saving={saving} onClose={onClose} disableSave={!isDirty} />
+        <DialogActions saving={saving} onClose={onClose} disableSave={!isDirty && !isSkuDirty} />
       </form>
     </ModalFrame>
   );
@@ -1337,20 +1425,22 @@ function ModalFrame({
   onClose,
   saving,
   title,
+  size = "max-w-3xl",
 }: {
   children: ReactNode;
   onClose: () => void;
   saving: boolean;
   title: string;
+  size?: string;
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) onClose();
       }}
     >
-      <div className="flex max-h-[calc(100vh-48px)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl">
+      <div className={cn("flex max-h-[calc(100vh-48px)] w-full flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl", size)}>
         <div className="flex shrink-0 items-center justify-between border-b px-5 py-4">
           <h2 className="text-base font-semibold text-slate-950">{title}</h2>
           <button type="button" className="rounded-full p-2 text-slate-400 hover:bg-slate-100" onClick={onClose} disabled={saving}>
