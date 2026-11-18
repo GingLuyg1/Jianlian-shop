@@ -50,6 +50,7 @@ test("server sync and admin route cannot mutate sellable stock/status or call pu
   assert.doesNotMatch(sync,/\.update\(\{[^}]*\bstatus\s*:/s);
   assert.doesNotMatch(sync,/\.purchase\s*\(/);
   assert.doesNotMatch(route,/\.purchase\s*\(/);
+  assert.match(sync,/runtime\?\?=getKuajingZyReadonlyRuntime\(\)/);
   assert.match(sync,/collectMallCatalog\(\{itemId:supplierProductId,limit:1\}\)/);
   assert.match(route,/stock_mutated:false/);
   assert.match(route,/purchase_attempted:false/);
