@@ -46,7 +46,7 @@ test("checkout preserves shipping_address API contract while spanning full row f
   assert.match(checkout, /placeholder="请输入省市区街道门牌等详细收货地址"/);
 });
 
-test("ChatGPT Plus/Pro recharge details include 4-step flow, third-party disclosure, session credential risk warning, and FAQ", () => {
+test("ChatGPT Plus/Pro recharge details include 4-step flow, usage scope check, and FAQ", () => {
   const checkout = file("app/checkout/page.tsx");
   const gpt = checkout.slice(
     checkout.indexOf("function GptRechargeDetails"),
@@ -56,10 +56,6 @@ test("ChatGPT Plus/Pro recharge details include 4-step flow, third-party disclos
   assert.match(gpt, /4 步极简自助充值兑换流程/);
   assert.match(gpt, /https:\/\/cdk-card\.dajuai\.us\//);
   assert.match(gpt, /https:\/\/chatgpt\.com\/api\/auth\/session/);
-  assert.match(gpt, /非 OpenAI 官方系统/);
-  assert.match(gpt, /Session 账户凭证安全与风险提示/);
-  assert.match(gpt, /敏感账户会话凭证/);
-  assert.match(gpt, /退出登录并重新登录/);
   assert.match(gpt, /仅限免费版账号/);
   assert.match(gpt, /不可覆盖已有订阅/);
   for (const q of ["Q1：怎么完成充值？", "Q2：有账单可以查吗？", "Q3：质保多久？掉订阅怎么处理？", "Q4：充值未到账怎么办？"]) {

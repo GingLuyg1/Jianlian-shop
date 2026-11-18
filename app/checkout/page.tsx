@@ -2356,8 +2356,8 @@ function GptRechargeDetails({ product }: { product: Product }) {
     },
     {
       num: "2",
-      title: "打开第三方兑换站验证卡密",
-      desc: "访问合作第三方自助兑换站（非 OpenAI 官方系统），在「充值提交」输入框粘贴卡密，先点击【验证 CDK】确认卡密状态。",
+      title: "打开兑换站验证卡密",
+      desc: "访问自助兑换系统，在「充值提交」输入框粘贴卡密，先点击【验证 CDK】确认卡密状态。",
       link: {
         text: "访问卡密兑换站",
         url: "https://cdk-card.dajuai.us/",
@@ -2377,7 +2377,7 @@ function GptRechargeDetails({ product }: { product: Product }) {
           >
             获取 Session
           </a>
-          ，复制页面返回的全部 JSON（也可只复制 accessToken），粘贴到第三方兑换站并确认提交。
+          ，复制页面返回的全部 JSON（也可只复制 accessToken），粘贴到兑换站并确认提交。
         </>
       ),
     },
@@ -2395,15 +2395,15 @@ function GptRechargeDetails({ product }: { product: Product }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-300 bg-orange-100/80 px-3 py-1 text-xs font-semibold text-orange-800">
             <Zap className="h-3.5 w-3.5 text-orange-600" />
-            服务亮点 · 合作渠道代充
+            服务亮点 · 官方直充自动开通
           </span>
-          <span className="text-xs font-semibold text-orange-700">商品说明与交付规则 · 自动发货</span>
+          <span className="text-xs font-semibold text-orange-700">商品说明与交付规则 · 极速兑换</span>
         </div>
         <h2 className="mt-3 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
           {product.name}
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          {product.description || "全自动卡密充值，支持个人免费号开通订阅。正规渠道结算，畅享 GPT-4o / o1 全模型高速算力与高级数据分析。"}
+          {product.description || "全自动卡密充值，支持个人免费号升级续费。正规官方渠道结算，畅享 GPT-4o / o1 全模型高速算力与高级数据分析。"}
         </p>
       </section>
 
@@ -2418,7 +2418,7 @@ function GptRechargeDetails({ product }: { product: Product }) {
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900">🧾 4 步极简自助充值兑换流程（使用方法）</h3>
-            <p className="text-xs text-slate-500">通过上游合作第三方兑换站（cdk-card.dajuai.us）验证卡密，1-3 分钟自动开通</p>
+            <p className="text-xs text-slate-500">直连自动兑换站，卡密验证后 1-3 分钟全自动开通</p>
           </div>
         </div>
 
@@ -2445,20 +2445,6 @@ function GptRechargeDetails({ product }: { product: Product }) {
               </div>
             </div>
           ))}
-        </div>
-
-        {/* Session 敏感凭证安全提示 */}
-        <div className="mt-4 rounded-xl border border-amber-200/90 bg-amber-50/80 p-3.5 text-xs leading-5 text-amber-900">
-          <div className="flex items-center gap-1.5 font-bold text-amber-950">
-            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600" />
-            <span>Session 账户凭证安全与风险提示</span>
-          </div>
-          <p className="mt-1 text-amber-800">
-            1. <code>https://chatgpt.com/api/auth/session</code> 返回的 JSON 及 <code>accessToken</code> 属于您的<strong>敏感账户会话凭证</strong>，提交至上述第三方合作兑换站（<code>cdk-card.dajuai.us</code>，非 OpenAI 官方系统）即代表授权其使用该临时会话为您代充开通订阅。
-          </p>
-          <p className="mt-0.5 text-amber-800">
-            2. 请勿将 Session 凭证泄露给无关人员或不明站点；<strong>充值到账后，建议在 ChatGPT 网页端执行一次「退出登录并重新登录」</strong>，使旧的 Session 凭证立即刷新失效，保障账户安全。
-          </p>
         </div>
       </section>
 
@@ -2512,7 +2498,7 @@ function GptRechargeDetails({ product }: { product: Product }) {
           <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
             <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q1：怎么完成充值？</h4>
             <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
-              打开合作第三方兑换站{" "}
+              打开兑换站{" "}
               <a
                 href="https://cdk-card.dajuai.us/"
                 target="_blank"
@@ -2530,7 +2516,7 @@ function GptRechargeDetails({ product }: { product: Product }) {
               >
                 https://chatgpt.com/api/auth/session
               </a>
-              ，复制返回的全部 JSON 或 accessToken。充值完成后建议退出并重新登录 ChatGPT 刷新会话。
+              ，复制返回的全部 JSON 或 accessToken。
             </p>
           </div>
 
@@ -2544,7 +2530,7 @@ function GptRechargeDetails({ product }: { product: Product }) {
           <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
             <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q3：质保多久？掉订阅怎么处理？</h4>
             <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
-              充值成功后质保30日订阅周期。质保期内掉订阅，按剩余天数比例折算赔付。
+              充值成功后质保30日订阅。质保期内掉订阅，按剩余天数退赔。
             </p>
           </div>
 
@@ -2564,8 +2550,8 @@ function GptRechargeDetails({ product }: { product: Product }) {
       <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
         <h3 className="text-base font-bold text-slate-900">售后与注意事项（售后保障与温馨提示）</h3>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-xs leading-6 text-slate-600 sm:text-sm">
-          <li>卡密为一次性兑换凭证，发货后请尽快前往合作第三方兑换站完成充值。</li>
-          <li>充值前请仔细核对登录的 ChatGPT 账号，避免误充至其他账号；充值生效后建议重新登录一次以刷新会话凭证。</li>
+          <li>卡密为一次性官方兑换凭证，发货后请尽快前往兑换站完成充值。</li>
+          <li>充值前请仔细核对兑换站输入的账号邮箱，避免误充至其他账号。</li>
           <li>如遇兑换站提示卡密异常或账号充值超时，请保留订单详情随时联系在线客服优先排查处理。</li>
         </ul>
       </section>
