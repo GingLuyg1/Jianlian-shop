@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { CACHE_REVALIDATE_SECONDS } from "@/lib/cache/cache-tags";
 import { checkRateLimit, getRequestSourceKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import {
   buildEffectiveCategoryVisibility,
   filterEffectivelyVisibleCategories,
@@ -134,14 +135,22 @@ export async function GET(request: Request) {
     });
 
     const productIds = products.map((product) => product.id);
-    const skuRows = await loadSkus(supabase, productIds);
+    const [skuRows, salesCountByProduct] = await Promise.all([
+      loadSkus(supabase, productIds),
+      loadVerifiedSalesCounts(productIds),
+    ]);
     const skuMap = groupSkusByProduct(skuRows);
     const deliveryTypes = Array.from(
       new Set(products.map((product) => product.delivery_type).filter((value): value is string => Boolean(value)))
     ).sort();
 
     const visible = products
-      .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap))
+      .map((product) => enrichProduct(
+        product,
+        skuMap.get(product.id) ?? [],
+        categoryMap,
+        salesCountByProduct.get(product.id) ?? 0,
+      ))
       .filter((product) => matchSearch(product, skuMap.get(product.id) ?? [], keyword))
       .sort((a, b) => compareProducts(a, b, categoryMap));
 
@@ -193,6 +202,38 @@ async function loadSkus(supabase: ReturnType<typeof getSupabaseServerClient>, pr
   }
 }
 
+
+async function loadVerifiedSalesCounts(productIds: string[]) {
+  const output = new Map<string, number>();
+  if (productIds.length === 0) return output;
+
+  const service = getSupabaseServiceRoleClient();
+  if (!service) return output;
+
+  try {
+    const { data, error } = await service
+      .from("order_items")
+      .select("product_id,quantity,orders!inner(payment_status,refund_status)")
+      .in("product_id", productIds)
+      .eq("orders.payment_status", "paid")
+      .eq("orders.refund_status", "none")
+      .limit(10000);
+
+    if (error) return output;
+
+    for (const row of data ?? []) {
+      const productId = typeof row.product_id === "string" ? row.product_id : "";
+      const quantity = Number(row.quantity ?? 0);
+      if (!productId || !Number.isSafeInteger(quantity) || quantity <= 0) continue;
+      output.set(productId, (output.get(productId) ?? 0) + quantity);
+    }
+  } catch {
+    return output;
+  }
+
+  return output;
+}
+
 function groupSkusByProduct(skus: SkuRow[]) {
   const output = new Map<string, SkuRow[]>();
 
@@ -206,7 +247,12 @@ function groupSkusByProduct(skus: SkuRow[]) {
   return output;
 }
 
-function enrichProduct(product: ProductRow, skus: SkuRow[], categoryMap: Map<string, CategoryRow>): ProductView {
+function enrichProduct(
+  product: ProductRow,
+  skus: SkuRow[],
+  categoryMap: Map<string, CategoryRow>,
+  verifiedSalesCount: number,
+): ProductView {
   const activeSkus = skus.filter((sku) => sku.status === "active" || sku.status === "sold_out");
   const { productHasSkus: hasSkus, minPrice, maxPrice, effectiveStock } =
     derivePublicCatalogSkuSummary(product, activeSkus);
@@ -230,7 +276,7 @@ function enrichProduct(product: ProductRow, skus: SkuRow[], categoryMap: Map<str
     min_price: minPrice,
     max_price: maxPrice,
     effective_stock: effectiveStock,
-    sales_count: 0,
+    sales_count: verifiedSalesCount,
   };
 }
 
