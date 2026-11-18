@@ -121,8 +121,9 @@ REPO="$fixture/repo"
 sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 old=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 current="$RELEASE_ROOT/ui-round2-candidate-20261117/jianlian-shop-$old"
+fixtureLive="$current"
 mkdir -p "$REPO" "$current"
-current_pm2_cwd() { printf '%s\\n' "$current"; }
+current_pm2_cwd() { printf '%s\\n' "$fixtureLive"; }
 verify_runtime_release() { assert_existing_release_path "$1"; }
 disk_preflight() { return 0; }
 preflight_env() { return 0; }
