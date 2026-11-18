@@ -16,5 +16,6 @@ test("catalog API sources sales from paid, non-refunded order items", () => {
   assert.match(catalogRoute, /orders!inner\(payment_status,refund_status\)/);
   assert.match(catalogRoute, /eq\("orders\.payment_status", "paid"\)/);
   assert.match(catalogRoute, /eq\("orders\.refund_status", "none"\)/);
-  assert.match(catalogRoute, /sales_count: verifiedSalesCount/);
+  assert.match(catalogRoute, /loadVerifiedSalesCounts\(paged\.map/);
+  assert.match(catalogRoute, /sales_count: salesCountByProduct\.get\(product\.id\) \?\? 0/);
 });
