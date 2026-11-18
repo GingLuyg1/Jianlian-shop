@@ -869,10 +869,10 @@ function ProductPanel({
 
   return (
     <Card data-testid="storefront-product-list" data-catalog-route={pageRoute} data-catalog-page-ready={resultReady && !error ? "true" : "false"} aria-busy={isLoading} className={cn("min-h-0 overflow-hidden lg:h-full", isMobile && "min-h-[calc(100dvh-72px)] !rounded-2xl")}>
-      <CardContent className={productPanelContentClassName}>
-        <div ref={productListTopRef} className={cn("mb-3 flex flex-col justify-between gap-2.5 sm:gap-3", !isMobile && "xl:flex-row xl:items-start")}>
+      <CardContent className={cn(productPanelContentClassName, isMobile && "!p-2.5")}>
+        <div ref={productListTopRef} className={cn("mb-2 flex flex-col justify-between gap-2 sm:mb-3 sm:gap-3", !isMobile && "xl:flex-row xl:items-start")}>
           <div className={cn("flex min-w-0 items-center justify-between gap-2", !isMobile && "xl:block")}>
-            <h1 className={cn("min-h-7 truncate text-lg font-bold sm:text-xl", resultReady && "catalog-title-enter")}>{resultReady ? activeCategory.name : ""}</h1>
+            <h1 className={cn("min-h-6 truncate text-base font-bold sm:min-h-7 sm:text-xl", resultReady && "catalog-title-enter")}>{resultReady ? activeCategory.name : ""}</h1>
             <div data-testid="catalog-product-result-bar" className={cn("flex min-h-4 shrink-0 items-center gap-1.5 text-xs text-muted-foreground", !isMobile && "xl:mt-1.5 xl:gap-2")}>
               <span data-testid="catalog-product-result-dot" className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
               <span>{`当前 ${resultText} 个商品`}</span>
@@ -880,7 +880,7 @@ function ProductPanel({
           </div>
           <div className={cn("flex w-full gap-2", !isMobile && "xl:w-[760px]")}>
             <div className="relative min-w-0 flex-1">
-              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7d6355] sm:left-4" />
+              <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 text-[#7d6355]", isMobile ? "h-3.5 w-3.5" : "left-3.5 sm:left-4 h-4 w-4")} />
               <Input
                 disabled={Boolean(routePendingTarget)}
                 value={draftSearch}
@@ -889,10 +889,21 @@ function ProductPanel({
                   if (event.key === "Enter") onSearchSubmit();
                 }}
                 placeholder="搜索商品、SKU、规格或分类"
-                className="h-10 rounded-lg border-[#ead9cc] bg-[#fffaf6] pl-10 text-sm text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25 sm:pl-11"
+                className={cn(
+                  "rounded-lg border-[#ead9cc] bg-[#fffaf6] text-xs text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25 sm:text-sm",
+                  isMobile ? "h-[34px] pl-8.5" : "h-10 pl-10 sm:pl-11"
+                )}
               />
             </div>
-            <Button type="button" disabled={Boolean(routePendingTarget)} onClick={onSearchSubmit} className="h-10 w-[76px] shrink-0 rounded-lg bg-[#df7334] text-sm font-medium hover:bg-[#d7672a] sm:w-[92px]">
+            <Button
+              type="button"
+              disabled={Boolean(routePendingTarget)}
+              onClick={onSearchSubmit}
+              className={cn(
+                "shrink-0 rounded-lg bg-[#df7334] font-medium hover:bg-[#d7672a]",
+                isMobile ? "h-[34px] w-14 text-xs" : "h-10 w-[76px] text-sm sm:w-[92px]"
+              )}
+            >
               搜索
             </Button>
           </div>
@@ -915,7 +926,7 @@ function ProductPanel({
             {resultReady && currentProducts.length === 0 ? (
               <ProductEmptyState search={appliedSearch} onResetFilters={onResetFilters} />
             ) : (
-              <div ref={containerRef} data-wheel-container="products" className={cn("relative min-h-0 space-y-2.5 px-1 py-1 lg:scroll-fade-y lg:h-full lg:overflow-y-auto lg:px-1.5 lg:pr-2 lg:sidebar-scroll", isMobile && "!h-auto !overflow-visible !px-0", isLoading && currentProducts.length > 0 && "catalog-exiting")}>
+              <div ref={containerRef} data-wheel-container="products" className={cn("relative min-h-0 space-y-2.5 px-1 py-1 lg:scroll-fade-y lg:h-full lg:overflow-y-auto lg:px-1.5 lg:pr-2 lg:sidebar-scroll", isMobile && "!h-auto !overflow-visible !px-0 !space-y-1.5", isLoading && currentProducts.length > 0 && "catalog-exiting")}>
                 {currentProducts.map((product, index) => (
                   <div key={`${loadedProductKey}-${product.id}`} data-wheel-item={product.id} className="catalog-wheel-item">
                     <div className={isMobile ? undefined : "catalog-enter-item"} style={isMobile ? undefined : { animationDelay: `${Math.min(index * 35, 210)}ms` }}>
@@ -985,13 +996,15 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
   );
 }
 
-function CatalogProductIcon({ product, category }: { product: Product; category: DisplayCategory | null }) {
+function CatalogProductIcon({ product, category, isMobile }: { product: Product; category: DisplayCategory | null; isMobile?: boolean }) {
   const [failed, setFailed] = useState<string[]>([]);
   const ownImage = product.imageUrl?.trim();
   const source = [ownImage, category?.displayImage].find(value => value && !failed.includes(value));
   const Icon = category?.displayIcon ? iconMap[category.displayIcon] : KeyRound;
-  return source ? <img data-selection-icon src={source} alt={product.name} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" onError={() => setFailed(values => [...values, source])} />
-    : <span data-selection-icon className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10"><Icon className="h-6 w-6 text-primary" aria-label={category?.name || "商品"} /></span>;
+  const sizeClass = isMobile ? "h-9 w-9 shrink-0 rounded-lg" : "h-12 w-12 shrink-0 rounded-xl";
+  const iconSizeClass = isMobile ? "h-4.5 w-4.5 text-primary" : "h-6 w-6 text-primary";
+  return source ? <img data-selection-icon src={source} alt={product.name} className={cn(sizeClass, "bg-white object-cover")} onError={() => setFailed(values => [...values, source])} />
+    : <span data-selection-icon className={cn("flex items-center justify-center bg-primary/10", sizeClass)}><Icon className={iconSizeClass} aria-label={category?.name || "商品"} /></span>;
 }
 
 function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, isMobile = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; onSelect: () => void }) {
@@ -1029,31 +1042,31 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
           compactProductRowClassName,
           selectionMotion.item,
           catalogMotion.card,
-          "group !h-auto !px-3.5 !py-3 shadow-[0_2px_10px_-6px_rgba(91,62,38,0.18)]"
+          "group !h-auto !px-2.5 !py-2 shadow-[0_1px_6px_-2px_rgba(91,62,38,0.12)] rounded-xl"
         )}
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <CatalogProductIcon product={product} category={category} />
+        <div className="flex min-w-0 items-center gap-2.5">
+          <CatalogProductIcon product={product} category={category} isMobile={isMobile} />
           <div className="min-w-0 flex-1 text-left">
             <div
               data-selection-title
-              className="truncate text-[15px] font-bold leading-5 text-slate-900"
+              className="line-clamp-1 text-[13.5px] font-bold leading-tight text-slate-900"
             >
               {product.name}
             </div>
             {product.description ? (
-              <div className="mt-1 truncate text-xs leading-4 text-slate-500">
+              <div className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-slate-500">
                 {product.description}
               </div>
             ) : null}
           </div>
         </div>
-        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-orange-100/80 pt-2">
-          <div className="flex flex-wrap items-center gap-1.5">
+        <div className="mt-1.5 flex items-center justify-between gap-1.5 border-t border-orange-100/70 pt-1.5">
+          <div className="flex flex-wrap items-center gap-1">
             {showStock ? (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                  "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10.5px] font-semibold",
                   hasStock
                     ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/60"
                     : "bg-red-50 text-red-600 ring-1 ring-inset ring-red-200/60"
@@ -1062,12 +1075,12 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
                 <span>{hasStock ? `库存 ${stock}` : "库存 0"}</span>
               </span>
             ) : null}
-            <span className="inline-flex items-center rounded-full bg-orange-50/90 px-2.5 py-0.5 text-xs font-semibold text-[#9a552b] ring-1 ring-inset ring-orange-200/60">
+            <span className="inline-flex items-center rounded-full bg-orange-50/90 px-1.5 py-0.5 text-[10.5px] font-semibold text-[#9a552b] ring-1 ring-inset ring-orange-200/60">
               {`销量 ${salesCount}`}
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className={cn("text-base font-extrabold", hasStock ? "text-slate-950" : "text-slate-400")}>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className={cn("text-[14px] sm:text-base font-extrabold tracking-tight", hasStock ? "text-slate-950" : "text-slate-400")}>
               {hasStock ? priceText : "已售罄"}
             </span>
           </div>
