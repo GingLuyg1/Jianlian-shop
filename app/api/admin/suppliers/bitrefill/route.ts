@@ -87,12 +87,15 @@ export async function GET(request: Request) {
 
     if (resource === "products") {
       const q = params.get("q")?.trim() ?? "";
+      const rawCountry = (params.get("country")?.trim() || "US").toUpperCase();
+      const country = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : "US";
       if (q.length > 100 || /[\u0000-\u001f<>]/u.test(q)) {
         return json({ error: "搜索关键词无效", code: "BITREFILL_CATALOG_QUERY_INVALID", requestId }, 400);
       }
-      const result = await manager.list({ country: "US", q, page: 1, pageSize: 50 });
+      const result = await manager.list({ country, q, page: 1, pageSize: 50 });
       return json({
         supplier: "Bitrefill",
+        country,
         products: result.products.map(mapProduct),
         complete: !result.truncated && !result.hasMore,
         purchaseEnabled: false,
@@ -108,11 +111,17 @@ export async function GET(request: Request) {
         product: {
           ...mapProduct(result.product),
           isSku: result.product.packages.length > 1,
-          description: null,
-          minQty: null,
-          maxQty: null,
+          description: result.product.categories?.length ? `官方分类：${result.product.categories.join(" / ")} · 国家/地区：${result.product.country}` : null,
+          minQty: 1,
+          maxQty: 1,
           specs: [],
           skuVariants: result.product.packages.map((entry) => ({
+            id: entry.packageId,
+            sku: entry.packageId,
+            title: entry.valueLabel || (entry.faceValue !== null ? `${result.product.currency} ${entry.faceValue}` : entry.packageId),
+            price: entry.catalogPrice ?? entry.faceValue ?? null,
+            currency: result.product.currency,
+            stock: result.product.available ? 1 : 0,
             packageId: entry.packageId,
             faceValue: entry.faceValue,
             valueLabel: entry.valueLabel,

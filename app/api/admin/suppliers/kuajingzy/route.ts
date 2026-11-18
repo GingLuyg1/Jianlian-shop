@@ -26,6 +26,7 @@ function safeCode(error: unknown) {
 }
 
 function mapProduct(raw: unknown) {
+  const rawRecord = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const normalized = normalizeKuajingZyCatalog(
     { domain: "mall", items: [raw] },
     { provenance: "authenticated_catalog", fieldMap: { stock: "stock", deliveryMethod: "delivery" } },
@@ -33,7 +34,21 @@ function mapProduct(raw: unknown) {
   if (!normalized.identityComplete || !normalized.productId || !normalized.name) {
     throw new Error("KUAJINGZY_CATALOG_ITEM_IDENTITY_UNVERIFIED");
   }
+  const rawVariants = Array.isArray(rawRecord.variants) ? rawRecord.variants : [];
+  const variantStockSum = rawVariants.reduce((sum: number, v: any) => {
+    return sum + (typeof v?.stock === "number" && v.stock > 0 ? v.stock : 0);
+  }, 0);
   const stockValue = normalized.observed.stock?.value;
+  const computedStock =
+    typeof stockValue === "number"
+      ? stockValue
+      : rawVariants.length > 0
+        ? variantStockSum
+        : stockValue === true
+          ? 1
+          : 0;
+  const deliveryVal = String(rawRecord.delivery ?? normalized.observed.deliveryMethod?.value ?? "automatic").toLowerCase();
+  const isAuto = deliveryVal !== "manual";
   return {
     id: normalized.productId,
     title: normalized.name,
@@ -41,10 +56,10 @@ function mapProduct(raw: unknown) {
       ?? normalized.displayUnitPrice
       ?? "0",
     currency: "CNY",
-    stock: typeof stockValue === "number" ? stockValue : stockValue === true ? 1 : 0,
-    sales: 0,
-    isAuto: false,
-    sortId: null,
+    stock: computedStock,
+    sales: typeof rawRecord.sales === "number" ? rawRecord.sales : 0,
+    isAuto,
+    sortId: normalized.categoryName ?? normalized.categoryId ?? null,
   };
 }
 
@@ -78,26 +93,22 @@ export async function GET(request: Request) {
 
     if (resource === "products") {
       const q = params.get("q")?.trim() ?? "";
-      if (!q) {
-        return json({
-          supplier: "跨境资源网",
-          products: [],
-          searchRequired: true,
-          purchaseEnabled: false,
-          requestId,
-        });
-      }
+      const category = params.get("category")?.trim() ?? "";
       if (q.length > 100 || /[\u0000-\u001f<>]/u.test(q)) {
         return json({ error: "搜索关键词无效", code: "KUAJINGZY_QUERY_INVALID", requestId }, 400);
       }
 
-      const result = await client.collectMallCatalog({ search: q, limit: 50 });
+      const catalogOptions: { search?: string; category?: string; limit: number } = { limit: 50 };
+      if (q) catalogOptions.search = q;
+      else if (category) catalogOptions.category = category;
+
+      const result = await client.collectMallCatalog(catalogOptions);
       const allItems = "items" in result ? result.items : result.partial.items;
-      const items = allItems.slice(0, 50);
+      const items = allItems.slice(0, 100);
       return json({
         supplier: "跨境资源网",
         products: items.map(mapProduct),
-        complete: "items" in result && result.complete === true && allItems.length <= 50,
+        complete: "items" in result && result.complete === true && allItems.length <= 100,
         status: result.status,
         purchaseEnabled: false,
         requestId,
@@ -114,16 +125,29 @@ export async function GET(request: Request) {
       if (items.length !== 1 || String(items[0]?.id ?? "") !== id) {
         return json({ error: "供应商商品不存在或身份未确认", code: "KUAJINGZY_PRODUCT_NOT_FOUND", requestId }, 404);
       }
+      const rawItem = items[0] && typeof items[0] === "object" ? (items[0] as Record<string, unknown>) : {};
+      const mapped = mapProduct(items[0]);
+      const rawVariants = Array.isArray(rawItem.variants) ? rawItem.variants : [];
+      const skuVariants = rawVariants.map((v: any, idx: number) => ({
+        id: String(v?.id ?? idx + 1),
+        sku: String(v?.id ?? ""),
+        title: String(v?.name ?? v?.title ?? v?.specification ?? `规格 #${v?.id ?? idx + 1}`),
+        price: String(v?.prices?.CNY ?? v?.unitPrice ?? v?.price ?? mapped.price),
+        currency: "CNY",
+        stock: typeof v?.stock === "number" ? v.stock : null,
+        minQty: typeof v?.minimum === "number" ? v.minimum : null,
+        maxQty: typeof v?.maximum === "number" ? v.maximum : null,
+      }));
       return json({
         supplier: "跨境资源网",
         product: {
-          ...mapProduct(items[0]),
-          isSku: false,
-          description: null,
-          minQty: null,
-          maxQty: null,
+          ...mapped,
+          isSku: skuVariants.length > 0,
+          description: typeof rawItem.description === "string" ? rawItem.description : null,
+          minQty: typeof rawItem.minimum === "number" ? rawItem.minimum : (skuVariants[0]?.minQty ?? 1),
+          maxQty: typeof rawItem.maximum === "number" ? rawItem.maximum : (skuVariants[0]?.maxQty ?? null),
           specs: [],
-          skuVariants: [],
+          skuVariants,
           requiredInputs: [],
         },
         purchaseEnabled: false,

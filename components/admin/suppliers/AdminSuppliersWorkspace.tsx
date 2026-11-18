@@ -68,7 +68,8 @@ type SupplierProductDetail = SupplierProduct & {
 function formatSupplierMoney(value: string | null | undefined, currency?: string | null) {
   if (!value) return "—";
   if (!currency || currency === "CNY") return `¥${value}`;
-  if (currency === "USD") return `${value}`;
+  if (currency === "USD") return `$${value}`;
+  if (currency === "GBP") return `£${value}`;
   if (currency === "EUR") return `€${value}`;
   return `${currency} ${value}`;
 }
@@ -103,6 +104,14 @@ function getSupplierError(payload: unknown, fallback: string): SupplierError {
 }
 
 function SupplierErrorDetails({ error }: { error: SupplierError }) {
+  const envHint =
+    error.code?.includes("DAJU")
+      ? "请确认服务端已配置大橘 AI 供应商连接参数且服务器 IP 在大橘白名单中。"
+      : error.code?.includes("KUAJINGZY")
+        ? "请确认服务端已配置跨境资源网供应商密钥参数。"
+        : error.code?.includes("BITREFILL")
+          ? "请确认服务端已配置 Bitrefill 供应商密钥参数。"
+          : null;
   return (
     <div className="space-y-1 text-xs">
       <div className="font-medium text-red-800">{error.message}</div>
@@ -111,6 +120,7 @@ function SupplierErrorDetails({ error }: { error: SupplierError }) {
           错误代码：<span className="font-mono font-semibold">{error.code}</span>
         </div>
       ) : null}
+      {envHint ? <div className="text-amber-800 font-medium">{envHint}</div> : null}
       {error.requestId ? (
         <div className="text-red-700/80">
           请求追踪编号：<span className="font-mono">{error.requestId}</span>
@@ -128,6 +138,7 @@ export default function AdminSuppliersWorkspace() {
   const [activeArea, setActiveArea] = useState<"overview" | "products">("overview");
 
   const [query, setQuery] = useState("");
+  const [country, setCountry] = useState("US");
   const [autoDeliveryOnly, setAutoDeliveryOnly] = useState(false);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"sales" | "price_asc" | "price_desc" | "stock">("sales");
@@ -166,7 +177,8 @@ export default function AdminSuppliersWorkspace() {
     setProductsLoading(true);
     setProductsError(null);
     try {
-      const url = `${activeSupplier.adminEndpoint}?resource=products` + (query.trim() ? `&q=${encodeURIComponent(query.trim())}` : "");
+      const countryParam = activeSupplier.code === "bitrefill" ? `&country=${encodeURIComponent(country)}` : "";
+      const url = `${activeSupplier.adminEndpoint}?resource=products` + (query.trim() ? `&q=${encodeURIComponent(query.trim())}` : "") + countryParam;
       const response = await fetch(url, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商商品目录读取失败");
@@ -184,7 +196,7 @@ export default function AdminSuppliersWorkspace() {
     } finally {
       setProductsLoading(false);
     }
-  }, [activeSupplier.adminEndpoint, query]);
+  }, [activeSupplier.adminEndpoint, activeSupplier.code, country, query]);
 
   useEffect(() => {
     void checkConnection();
@@ -430,6 +442,25 @@ export default function AdminSuppliersWorkspace() {
                     placeholder="搜索供应商商品名称或 ID"
                   />
                 </div>
+                {activeSupplier.code === "bitrefill" ? (
+                  <select
+                    value={country}
+                    onChange={(e) => {
+                      setCountry(e.target.value);
+                      setProductsLoaded(false);
+                    }}
+                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                    aria-label="选择 Bitrefill 国家地区"
+                  >
+                    <option value="US">US 美国</option>
+                    <option value="GB">GB 英国</option>
+                    <option value="HK">HK 中国香港</option>
+                    <option value="JP">JP 日本</option>
+                    <option value="SG">SG 新加坡</option>
+                    <option value="DE">DE 德国</option>
+                    <option value="CA">CA 加拿大</option>
+                  </select>
+                ) : null}
                 <Button size="sm" className="h-8 text-xs" onClick={loadProducts} disabled={productsLoading}>
                   {productsLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Search className="mr-1.5 h-3.5 w-3.5" />}
                   搜索
@@ -649,7 +680,7 @@ export default function AdminSuppliersWorkspace() {
               {detail.skuVariants && Object.keys(detail.skuVariants).length > 0 ? (
                 <div>
                   <div className="text-xs font-semibold text-slate-900 mb-1.5">商品规格子项数据</div>
-                  <SupplierSkuVariantsTable variants={detail.skuVariants} />
+                  <SupplierSkuVariantsTable variants={detail.skuVariants} defaultCurrency={detail.currency} />
                 </div>
               ) : null}
 
@@ -669,7 +700,7 @@ export default function AdminSuppliersWorkspace() {
   );
 }
 
-function SupplierSkuVariantsTable({ variants }: { variants: unknown }) {
+function SupplierSkuVariantsTable({ variants, defaultCurrency }: { variants: unknown; defaultCurrency?: string | null }) {
   const list = Array.isArray(variants) ? variants : [];
   if (list.length === 0) return null;
 
@@ -690,14 +721,16 @@ function SupplierSkuVariantsTable({ variants }: { variants: unknown }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {list.map((item: any, idx: number) => {
-              const title = item.title || item.name || item.spec_name || item.sku_name || `规格 #${idx + 1}`;
-              const sku = item.sku || item.sku_id || item.code || item.id || "—";
-              const price = item.price != null ? `¥${Number(item.price).toFixed(2)}` : "—";
+              const title = item.title || item.name || item.spec_name || item.sku_name || item.valueLabel || (item.faceValue != null ? `面值 ${item.faceValue}` : `规格 #${idx + 1}`);
+              const sku = item.sku || item.sku_id || item.packageId || item.code || item.id || "—";
+              const rawPrice = item.price ?? item.catalogPrice ?? item.unitPrice ?? item.faceValue ?? null;
+              const itemCurrency = item.currency ?? defaultCurrency ?? "CNY";
+              const price = rawPrice != null ? formatSupplierMoney(String(rawPrice), itemCurrency) : "—";
               const stock = item.stock != null ? Number(item.stock) : null;
               return (
                 <tr key={String(sku) + idx} className="hover:bg-slate-50/60">
                   <td className="px-3 py-2 font-medium text-slate-900">{title}</td>
-                  <td className="px-3 py-2 font-mono text-slate-500">{sku}</td>
+                  <td className="px-3 py-2 font-mono text-slate-500 select-all">{sku}</td>
                   <td className="px-3 py-2 text-right font-semibold text-emerald-600 tabular-nums">{price}</td>
                   <td className="px-3 py-2 text-center">
                     {stock !== null ? (
