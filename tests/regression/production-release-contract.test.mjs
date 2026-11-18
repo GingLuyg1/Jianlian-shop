@@ -18,7 +18,12 @@ test("production release script enforces immutable release and recovery gates", 
 
   assert.match(script, /set -Eeuo pipefail/);
   assert.match(script, /\^\[0-9a-fA-F\]\{40\}\$/);
-  assert.match(script, /\^\/www\/releases\/jianlian-shop-\[0-9a-f\]\{40\}\$/);
+  assert.match(script, /is_canonical_release_path\(\)/);
+  assert.match(script, /is_legacy_nested_release_path\(\)/);
+  assert.match(script, /assert_existing_release_path\(\)/);
+  assert.match(script, /JIANLIAN_LEGACY_RELEASE_RECOVERY/);
+  assert.match(ecosystem, /JIANLIAN_LEGACY_RELEASE_RECOVERY/);
+  assert.match(ecosystem, /legacyRecovery && legacyNestedRelease\.test\(releaseDir\)/);
   assert.match(script, /ENV_SOURCE="\$REPO\/\.env\.local"/);
   assert.match(script, /install -m 600 -- "\$ENV_SOURCE" "\$target\/\.env\.production\.local"/);
   assert.doesNotMatch(script, /^\s*(?:source|\.)\s+.*env/m);
@@ -46,7 +51,7 @@ test("production release script enforces immutable release and recovery gates", 
   assert.match(script, /activate_release_fresh\(\)/);
   assert.doesNotMatch(script, /startOrReload/);
   assert.match(script, /run_pm2 delete "\$APP_NAME"/);
-  assert.match(script, /JIANLIAN_RELEASE_DIR="\$target" run_pm2 start "\$REPO\/ecosystem\.production\.config\.cjs" --only "\$APP_NAME"/);
+  assert.match(script, /JIANLIAN_LEGACY_RELEASE_RECOVERY="\$legacy_recovery" JIANLIAN_RELEASE_DIR="\$target" run_pm2 start "\$REPO\/ecosystem\.production\.config\.cjs" --only "\$APP_NAME"/);
   assert.doesNotMatch(script, /pm2 delete all|pm2 kill/);
   assert.match(script, /for attempt in \$\(seq 0 30\)/);
   assert.match(script, /sleep 2/);

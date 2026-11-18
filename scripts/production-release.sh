@@ -70,13 +70,39 @@ full_sha() {
 
 release_path_for_sha() { printf '%s/jianlian-shop-%s\n' "$RELEASE_ROOT" "$1"; }
 
+is_canonical_release_path() {
+  local input="${1:-}" parent name
+  parent="${input%/*}"
+  name="${input##*/}"
+  [[ "$parent" == "$RELEASE_ROOT" && "$name" =~ ^jianlian-shop-[0-9a-f]{40}$ ]]
+}
+
+is_legacy_nested_release_path() {
+  local input="${1:-}" parent container name
+  parent="${input%/*}"
+  container="${parent##*/}"
+  name="${input##*/}"
+  [[ "${parent%/*}" == "$RELEASE_ROOT" ]] || return 1
+  [[ "$container" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || return 1
+  [[ "$name" =~ ^jianlian-shop-[0-9a-f]{40}$ ]]
+}
+
 assert_release_path() {
   local resolved
-  [[ "${1:-}" =~ ^/www/releases/jianlian-shop-[0-9a-f]{40}$ ]] || die "release path must use an exact full SHA"
+  is_canonical_release_path "${1:-}" || die "new release path must be a top-level full-SHA release under $RELEASE_ROOT"
   resolved="$(readlink -m -- "$1")"
   [[ "$resolved" == "$1" ]] || die "release path is not canonical"
 }
 
+assert_existing_release_path() {
+  local input="${1:-}" resolved
+  if ! is_canonical_release_path "$input" && ! is_legacy_nested_release_path "$input"; then
+    die "existing release path must be a canonical full-SHA release under $RELEASE_ROOT"
+  fi
+  [[ -d "$input" && ! -L "$input" ]] || die "existing release directory is missing or is a symlink"
+  resolved="$(readlink -f -- "$input" 2>/dev/null || true)"
+  [[ "$resolved" == "$input" ]] || die "existing release path is not canonical or resolves through a symlink"
+}
 current_pm2_cwd() {
   local pid
   pid="$(run_pm2 pid "$APP_NAME" 2>/dev/null | tr -d '[:space:]')"
@@ -160,13 +186,14 @@ verify_public_endpoints() {
 }
 
 activate_release_fresh() {
-  local target="$1"
-  assert_release_path "$target"
+  local target="$1" legacy_recovery=0
+  assert_existing_release_path "$target"
   verify_runtime_release "$target"
+  if is_legacy_nested_release_path "$target"; then legacy_recovery=1; fi
   if pm2_app_exists; then
     run_pm2 delete "$APP_NAME" || return 1
   fi
-  if ! JIANLIAN_RELEASE_DIR="$target" run_pm2 start "$REPO/ecosystem.production.config.cjs" --only "$APP_NAME"; then
+  if ! JIANLIAN_LEGACY_RELEASE_RECOVERY="$legacy_recovery" JIANLIAN_RELEASE_DIR="$target" run_pm2 start "$REPO/ecosystem.production.config.cjs" --only "$APP_NAME"; then
     return 1
   fi
   wait_for_pm2_release "$target" || return 1
@@ -298,7 +325,7 @@ verify_release_tree() {
 
 verify_runtime_release() {
   local target="$1" sha
-  assert_release_path "$target"
+  assert_existing_release_path "$target"
   sha="${target##*-}"
   git -C "$REPO" cat-file -e "${sha}^{commit}" 2>/dev/null || die "release commit does not exist in persistent repository"
   [[ -d "$target" && -r "$target" && -x "$target" ]] || die "release directory is missing or unreadable"
@@ -420,9 +447,9 @@ preflight() {
   local sha="$1" rollback="$2" target current
   target="$(release_path_for_sha "$sha")"
   assert_release_path "$target"
-  assert_release_path "$rollback"
+  assert_existing_release_path "$rollback"
   current="$(current_pm2_cwd)"
-  assert_release_path "$current"
+  assert_existing_release_path "$current"
   status CURRENT_PM2_CWD "$current"
   status PM2_HOME /root/.pm2
   status TARGET_COMMIT "$sha"
@@ -553,9 +580,9 @@ switch_release() {
 
 rollback_release() {
   local target="$1" sha current
-  assert_release_path "$target"
+  assert_existing_release_path "$target"
   current="$(current_pm2_cwd)"
-  assert_release_path "$current"
+  assert_existing_release_path "$current"
   [[ "$target" != "$current" ]] || die "rollback target is already the current Production release"
   verify_runtime_release "$target"
   verify_runtime_release "$current"
@@ -577,8 +604,8 @@ cleanup_releases() {
   local sha="$1" rollback="$2" confirm="${3:-}" target current dir registered=0 plan expected_plan
   local -a candidates=()
   target="$(release_path_for_sha "$sha")"
-  assert_release_path "$target"; assert_release_path "$rollback"
-  current="$(current_pm2_cwd)"; assert_release_path "$current"
+  assert_release_path "$target"; assert_existing_release_path "$rollback"
+  current="$(current_pm2_cwd)"; assert_existing_release_path "$current"
   while IFS= read -r dir; do
     [[ -n "$dir" ]] || continue
     assert_release_path "$dir"
@@ -597,9 +624,9 @@ cleanup_releases() {
   printf '%s\n' "$expected_plan" | cmp -s - "$plan" || die "cleanup state changed since dry-run; run a new dry-run and review again"
   for dir in "${candidates[@]}"; do
     current="$(current_pm2_cwd)"
-    assert_release_path "$current"
+    assert_existing_release_path "$current"
     assert_release_path "$target"
-    assert_release_path "$rollback"
+    assert_existing_release_path "$rollback"
     assert_release_path "$dir"
     [[ "$dir" != "$current" && "$dir" != "$target" && "$dir" != "$rollback" ]] || die "cleanup protection changed after dry-run; refusing removal: $dir"
     registered=0
