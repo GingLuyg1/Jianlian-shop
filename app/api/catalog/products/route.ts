@@ -135,22 +135,14 @@ export async function GET(request: Request) {
     });
 
     const productIds = products.map((product) => product.id);
-    const [skuRows, salesCountByProduct] = await Promise.all([
-      loadSkus(supabase, productIds),
-      loadVerifiedSalesCounts(productIds),
-    ]);
+    const skuRows = await loadSkus(supabase, productIds);
     const skuMap = groupSkusByProduct(skuRows);
     const deliveryTypes = Array.from(
       new Set(products.map((product) => product.delivery_type).filter((value): value is string => Boolean(value)))
     ).sort();
 
     const visible = products
-      .map((product) => enrichProduct(
-        product,
-        skuMap.get(product.id) ?? [],
-        categoryMap,
-        salesCountByProduct.get(product.id) ?? 0,
-      ))
+      .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap))
       .filter((product) => matchSearch(product, skuMap.get(product.id) ?? [], keyword))
       .sort((a, b) => compareProducts(a, b, categoryMap));
 
@@ -159,8 +151,13 @@ export async function GET(request: Request) {
     const safePage = Math.min(page, totalPages);
     const from = (safePage - 1) * pageSize;
     const paged = visible.slice(from, from + pageSize);
+    const salesCountByProduct = await loadVerifiedSalesCounts(paged.map((product) => product.id));
+    const pagedWithSales = paged.map((product) => ({
+      ...product,
+      sales_count: salesCountByProduct.get(product.id) ?? 0,
+    }));
 
-    return productSuccess(paged, total, safePage, pageSize, requestId, totalPages, deliveryTypes);
+    return productSuccess(pagedWithSales, total, safePage, pageSize, requestId, totalPages, deliveryTypes);
   } catch (error) {
     console.error("[Catalog Products]", { requestId, message: safeErrorMessage(error) });
     return productError(
@@ -247,12 +244,7 @@ function groupSkusByProduct(skus: SkuRow[]) {
   return output;
 }
 
-function enrichProduct(
-  product: ProductRow,
-  skus: SkuRow[],
-  categoryMap: Map<string, CategoryRow>,
-  verifiedSalesCount: number,
-): ProductView {
+function enrichProduct(product: ProductRow, skus: SkuRow[], categoryMap: Map<string, CategoryRow>): ProductView {
   const activeSkus = skus.filter((sku) => sku.status === "active" || sku.status === "sold_out");
   const { productHasSkus: hasSkus, minPrice, maxPrice, effectiveStock } =
     derivePublicCatalogSkuSummary(product, activeSkus);
@@ -276,7 +268,7 @@ function enrichProduct(
     min_price: minPrice,
     max_price: maxPrice,
     effective_stock: effectiveStock,
-    sales_count: verifiedSalesCount,
+    sales_count: 0,
   };
 }
 
