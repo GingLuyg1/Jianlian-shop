@@ -860,26 +860,19 @@ function CheckoutPageContent() {
                       className="h-10 bg-slate-50 text-sm"
                     />
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium">
-                      <span className="text-red-500">*</span>省市区
-                    </label>
-                    <Input
-                      value={shippingRegion}
-                      onChange={(event) => setShippingRegion(event.target.value)}
-                      placeholder="例如：广东省 深圳市 南山区"
-                      className="h-10 bg-slate-50 text-sm"
-                    />
-                  </div>
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="mb-1.5 block text-xs font-medium">
                       <span className="text-red-500">*</span>详细地址
                     </label>
                     <Input
                       value={shippingAddress}
-                      onChange={(event) => setShippingAddress(event.target.value)}
-                      placeholder="街道、门牌号等"
-                      className="h-10 bg-slate-50 text-sm"
+                      onChange={(event) => {
+                        const nextAddress = event.target.value;
+                        setShippingAddress(nextAddress);
+                        setShippingRegion(nextAddress.trim() ? nextAddress.trim().slice(0, 24) : "");
+                      }}
+                      placeholder="请输入省市区街道门牌等详细收货地址"
+                      className="h-10 w-full bg-slate-50 text-sm"
                     />
                   </div>
                 </div>
@@ -2355,33 +2348,226 @@ function ChatGptGuideHeroBanner({
 }
 
 function GptRechargeDetails({ product }: { product: Product }) {
-  const sections = [
-    ["服务亮点 / SERVICE HIGHLIGHTS", "按所选商品提供兑换信息，请核对商品名称和说明后下单。"],
-    ["商品说明与交付规则", product.description || "具体商品内容以所选商品信息和兑换页面提示为准。"],
-    ["适用场景", "用于所选 ChatGPT 商品对应的账户兑换；适用条件以商品说明为准。"],
-    ["售后与注意事项", "兑换前核对卡密和账户信息；如遇异常，请保留订单信息并联系在线客服。"],
-    ["FAQ", "套餐、地区、有效期和售后条件是否相同？不同商品可能不同，请以当前商品信息为准。"],
+  const steps = [
+    {
+      num: "1",
+      title: "提取专属 CDK 卡密",
+      desc: "下单完成后，在订单详情页面或您填写的接收邮箱中复制专属充值兑换卡密。",
+    },
+    {
+      num: "2",
+      title: "打开第三方兑换站验证卡密",
+      desc: "访问合作第三方自助兑换站（非 OpenAI 官方系统），在「充值提交」输入框粘贴卡密，先点击【验证 CDK】确认卡密状态。",
+      link: {
+        text: "访问卡密兑换站",
+        url: "https://cdk-card.dajuai.us/",
+      },
+    },
+    {
+      num: "3",
+      title: "获取 Session 提交充值",
+      desc: (
+        <>
+          网页端登录你的免费版 ChatGPT 账号后，打开{" "}
+          <a
+            href="https://chatgpt.com/api/auth/session"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+          >
+            获取 Session
+          </a>
+          ，复制页面返回的全部 JSON（也可只复制 accessToken），粘贴到第三方兑换站并确认提交。
+        </>
+      ),
+    },
+    {
+      num: "4",
+      title: "处理开通会员",
+      desc: "系统全自动充值处理，一般 1-3 分钟内即刻生效，登录 Chat GPT 刷新即可点亮会员权益。",
+    },
   ];
+
   return (
     <div className="mt-8 w-full space-y-5">
-      <section className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
-        <h2 className="text-2xl font-bold text-slate-950">{product.name}</h2>
-        <p className="mt-2 text-sm leading-7 text-slate-600">{product.description || "请核对所选商品内容，按照兑换页面提示操作。"}</p>
+      {/* 头部品牌横幅：服务亮点与商品说明与交付规则 */}
+      <section className="relative overflow-hidden rounded-2xl border border-orange-200/90 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-orange-500/10 p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-300 bg-orange-100/80 px-3 py-1 text-xs font-semibold text-orange-800">
+            <Zap className="h-3.5 w-3.5 text-orange-600" />
+            服务亮点 · 合作渠道代充
+          </span>
+          <span className="text-xs font-semibold text-orange-700">商品说明与交付规则 · 自动发货</span>
+        </div>
+        <h2 className="mt-3 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+          {product.name}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          {product.description || "全自动卡密充值，支持个人免费号开通订阅。正规渠道结算，畅享 GPT-4o / o1 全模型高速算力与高级数据分析。"}
+        </p>
       </section>
+
+      {/* 充值方式对比 */}
       <ChatGptRechargeMethodComparison />
-      {sections.map(([title, description]) => (
-        <section key={title} className="rounded-2xl border border-border bg-white p-5">
-          <h3 className="text-base font-bold text-slate-950">{title}</h3>
-          <p className="mt-3 text-sm leading-7 text-slate-600">{description}</p>
-        </section>
-      ))}
-      <section className="rounded-2xl border border-border bg-white p-5">
-        <h3 className="text-base font-bold">使用方法</h3>
-        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-7 text-slate-600">
-          <li>核对 {product.name} 并完成下单，查看订单中的交付信息。</li>
-          <li>如收到兑换卡密，前往 <RechargeLink href="https://aikkcc.com/" />，按页面提示提交卡密及所需账户信息。</li>
-          <li>完成后核对账户状态；遇到问题请保留订单与兑换结果联系在线客服。</li>
-        </ol>
+
+      {/* 兑换流程 4 步（使用方法） */}
+      <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-white">
+            <Zap className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900">🧾 4 步极简自助充值兑换流程（使用方法）</h3>
+            <p className="text-xs text-slate-500">通过上游合作第三方兑换站（cdk-card.dajuai.us）验证卡密，1-3 分钟自动开通</p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {steps.map((st) => (
+            <div key={st.num} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white shadow-2xs">
+                {st.num}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-xs font-bold text-slate-900 sm:text-sm">{st.title}</h4>
+                <div className="mt-1 text-xs leading-5 text-slate-600">{st.desc}</div>
+                {st.link ? (
+                  <a
+                    href={st.link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary underline underline-offset-2 hover:opacity-80"
+                  >
+                    <span>{st.link.text}</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Session 敏感凭证安全提示 */}
+        <div className="mt-4 rounded-xl border border-amber-200/90 bg-amber-50/80 p-3.5 text-xs leading-5 text-amber-900">
+          <div className="flex items-center gap-1.5 font-bold text-amber-950">
+            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600" />
+            <span>Session 账户凭证安全与风险提示</span>
+          </div>
+          <p className="mt-1 text-amber-800">
+            1. <code>https://chatgpt.com/api/auth/session</code> 返回的 JSON 及 <code>accessToken</code> 属于您的<strong>敏感账户会话凭证</strong>，提交至上述第三方合作兑换站（<code>cdk-card.dajuai.us</code>，非 OpenAI 官方系统）即代表授权其使用该临时会话为您代充开通订阅。
+          </p>
+          <p className="mt-0.5 text-amber-800">
+            2. 请勿将 Session 凭证泄露给无关人员或不明站点；<strong>充值到账后，建议在 ChatGPT 网页端执行一次「退出登录并重新登录」</strong>，使旧的 Session 凭证立即刷新失效，保障账户安全。
+          </p>
+        </div>
+      </section>
+
+      {/* 下单前自检清单（适用场景） */}
+      <section className="rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50/60 via-orange-50/30 to-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 text-amber-600" />
+          <h3 className="text-base font-bold text-slate-900">✅ 使用范围与适用场景（下单前请自检）</h3>
+        </div>
+        <p className="mt-1 text-xs text-rose-600 font-semibold sm:text-sm">
+          不满足条件请不要提交，本商品不可覆盖已有订阅：
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-emerald-200/80 bg-white/95 p-4 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 sm:text-sm">
+              <span className="text-emerald-600 font-black">✔</span>
+              <span>仅限免费版账号</span>
+            </div>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600">
+              当前必须是没有任何订阅的免费版 ChatGPT 账号，或卡付充值到期的账号（免费账号均可正常开通；iOS 全区充值可覆盖，卡付不可覆盖）。
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-rose-200/80 bg-white/95 p-4 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-rose-800 sm:text-sm">
+              <span className="text-rose-600 font-black">✘</span>
+              <span>不可覆盖已有订阅</span>
+            </div>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600">
+              账号当前已有 Go、Plus、Pro 或其他有效订阅，不能用本商品覆盖或升级。提交了也不会按覆盖处理。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 教程直达横幅 */}
+      <ChatGptGuideHeroBanner
+        title="需要账户保号与使用环境配置指导？"
+        subtitle="查阅 ChatGPT 账号安全防封、海外节点选择、多设备登录与保号指南"
+        actionText="查阅教程"
+      />
+
+      {/* 常见问题 FAQ */}
+      <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2">
+          <HelpCircle className="h-5 w-5 text-orange-500" />
+          <h3 className="text-base font-bold text-slate-900">❓ 常见问题 FAQ</h3>
+        </div>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q1：怎么完成充值？</h4>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
+              打开合作第三方兑换站{" "}
+              <a
+                href="https://cdk-card.dajuai.us/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+              >
+                https://cdk-card.dajuai.us/
+              </a>
+              ，先验证 CDK，再提交 Session。Session 获取方式：网页登录 ChatGPT 后访问{" "}
+              <a
+                href="https://chatgpt.com/api/auth/session"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-primary underline underline-offset-2 hover:opacity-85"
+              >
+                https://chatgpt.com/api/auth/session
+              </a>
+              ，复制返回的全部 JSON 或 accessToken。充值完成后建议退出并重新登录 ChatGPT 刷新会话。
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q2：有账单可以查吗？</h4>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
+              有。正规卡充，带官方账单。可在 GPT 官网下载：左下角头像 → 设置 → 账单 → 查看。
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q3：质保多久？掉订阅怎么处理？</h4>
+            <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
+              充值成功后质保30日订阅周期。质保期内掉订阅，按剩余天数比例折算赔付。
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <h4 className="text-xs font-bold text-slate-900 sm:text-sm">▼ Q4：充值未到账怎么办？</h4>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs leading-5 text-slate-600 sm:text-sm">
+              <li>网页版刷新网页，查看右下角头像下方有没有出现相应权益</li>
+              <li>在 Jianlian.shop 我的订单里查询充值订单卡密，到兑换站查询充值账号是否有误</li>
+              <li>自查左下角头像 → 设置 → 账单 → 查看。有没有相对应的充值记录</li>
+              <li>自查后没有请联系人工客服，协助查询</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      {/* 售后与注意事项 */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <h3 className="text-base font-bold text-slate-900">售后与注意事项（售后保障与温馨提示）</h3>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-xs leading-6 text-slate-600 sm:text-sm">
+          <li>卡密为一次性兑换凭证，发货后请尽快前往合作第三方兑换站完成充值。</li>
+          <li>充值前请仔细核对登录的 ChatGPT 账号，避免误充至其他账号；充值生效后建议重新登录一次以刷新会话凭证。</li>
+          <li>如遇兑换站提示卡密异常或账号充值超时，请保留订单详情随时联系在线客服优先排查处理。</li>
+        </ul>
       </section>
     </div>
   );

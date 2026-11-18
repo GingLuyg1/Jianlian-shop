@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { SettingsProvider, usePublicSettings } from "@/components/settings/SettingsProvider";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import MobileMenu from "./MobileMenu";
-
+import MobileTopBarAuth from "./MobileTopBarAuth";
 import PublicSidebar from "./PublicSidebar";
 import PublicTopInfoBar from "./PublicTopInfoBar";
 import RouteLoadingIndicator from "./RouteLoadingIndicator";
@@ -166,7 +166,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
               <span>{previewWidth ? `${previewWidth}px` : "全宽"}</span>
             </button>
           ) : null}
-
+          <MobileTopBarAuth />
         </div>
       </div>
       <div

@@ -127,14 +127,14 @@ function LoginSection() {
           ，点击「Log in」登录按钮，在输入框填入订单交付格式中的【邮箱地址】，点击「Continue」继续。
         </>
       ),
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-login-email.png",
       note: "提示：切勿点击 Google / Apple 授权快捷登录，请直接在下方文本框输入交付的独立邮箱。",
     },
     {
       num: "2",
       title: "输入初始登录密码",
       desc: "在「Enter your password」页面，将卡密中的【密码】完整复制粘贴至密码框中，确认无前后多余空格后点击「Continue」。",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-login-password.png",
       note: "复制密码时注意核对大小写及特殊字符，建议先粘贴到记事本确认。",
     },
     {
@@ -163,28 +163,28 @@ function LoginSection() {
           等网页版验证器，也可使用 Google Authenticator App），将 2FA 密钥粘贴到输入框中。
         </>
       ),
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-2fa-input-key.jpg",
       note: "2FA 密钥通常为 32-64 位的纯英文字母与数字组合，一人一密钥。",
     },
     {
       num: "4",
       title: "点击获取并复制 6 位实时验证码",
       desc: "在 2FA 验证器中点击「Get Codes」按钮，系统会立即计算并显示 6 位时效动态数字（通常 30 秒有效），点击复制该 6 位验证码。",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-2fa-get-code.jpg",
       note: "动态码倒计时小于 5 秒时建议等待下一个 30 秒周期的新码，避免提交时刚好过期失效。",
     },
     {
       num: "5",
       title: "回填 6 位动态验证码完成登录",
       desc: "回到 ChatGPT 登录页面，在「Check your authenticator app」下方的 One-time code 输入框中填入刚刚复制的 6 位数字验证码，点击「Continue」。",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-2fa-verify-code.png",
       note: "如果提示 Code invalid，重新在 2FA 工具中复制最新生成的 6 位码再次尝试即可。",
     },
     {
       num: "6",
       title: "成功进入 ChatGPT 对话主界面",
       desc: "通过验证后即可进入主页面。点击左下角可查看账号名称与 Plus 尊享权益状态，可畅享 GPT-4o、o1 等全模型交互。",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-main-overview.png",
       note: "首次登录成功后，建议保持当前设备与浏览器窗口，按照第二章节教程修改密码提升账户独占安全性。",
     },
   ];
@@ -204,7 +204,7 @@ function LoginSection() {
         <div className="mt-3 overflow-x-auto rounded-xl border border-orange-200 bg-white/90 p-3 font-mono text-xs text-slate-800 shadow-inner">
           <div className="text-slate-400">// 标准交付格式示例</div>
           <div className="mt-1 font-semibold text-primary">
-            user_example@gmail.com ---- Passwd1234 ---- 3H5HRIM7SZHRFSJ22YMHO ---- EmailPasswd
+            user_example@gmail.com ---- Passwd1234 ---- JBSWY3DPEHPK3PXPEXAMPLESECRET2FA ---- EmailPasswd
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 sm:grid-cols-4">
             <div>① 账号/登录邮箱</div>
@@ -234,7 +234,12 @@ function LoginSection() {
 
             {/* 配图 */}
             <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-2 sm:p-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">请按文字步骤在官方页面操作，勿向他人提供密码或验证密钥。</div>
+              <img
+                src={step.image}
+                alt={step.title}
+                className="mx-auto max-h-[380px] w-auto max-w-full rounded-lg object-contain shadow-sm"
+                loading="lazy"
+              />
             </div>
 
             <div className="mt-3 rounded-lg border border-amber-200/60 bg-amber-50/70 p-2.5 text-xs text-amber-800">
@@ -254,31 +259,31 @@ function SecuritySection() {
       num: "1",
       title: "进入个人设置中心",
       desc: "在 ChatGPT 左下角点击用户名称/头像，在弹出的系统菜单中点击「Settings」（设置）选项。",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-settings-entry.png",
     },
     {
       num: "2",
       title: "选择账户安全与登录",
       desc: "在设置面板左侧导航栏中找到「账户安全与登录」（Security），然后在右侧主区域点击「密码 / Password」一栏进入改密页面。",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-security-password-entry.jpg",
     },
     {
       num: "3",
       title: "验证当前密码本人身份",
       desc: "系统会弹出安全核验页面「请先验证是你本人」，在输入框中输入交付给您的【当前初始密码】，点击「继续」。",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-verify-current-pwd.jpg",
     },
     {
       num: "4",
       title: "设置并确认您的新密码",
       desc: "在「更改密码」页面，输入您自定义的新密码，并在第二行重新输入确认新密码，点击「继续」。",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-set-new-pwd.jpg",
     },
     {
       num: "5",
       title: "安全二次确认（2FA 验证）",
       desc: "密码提交后，OpenAI 会要求进行身份验证器二次核验。使用 2FA 工具获取最新 6 位动态码填入，改密即正式生效完成！",
-      image: "",
+      image: "/assets/tutorials/chatgpt/gpt-pwd-2fa-confirm.jpg",
     },
   ];
 
@@ -311,7 +316,12 @@ function SecuritySection() {
             </div>
 
             <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-2 sm:p-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">请按文字步骤在官方页面操作，勿向他人提供密码或验证密钥。</div>
+              <img
+                src={step.image}
+                alt={step.title}
+                className="mx-auto max-h-[380px] w-auto max-w-full rounded-lg object-contain shadow-sm"
+                loading="lazy"
+              />
             </div>
           </section>
         ))}
@@ -328,8 +338,8 @@ function RebindSection() {
       title: "退出所有已登录会话（剔除陌生设备）",
       desc: "在「账户安全与登录」页面的最下方找到「活跃会话」，点击进入会话列表，点击「全部退出登录 / Log out of all devices」。此操作可立即强制下线除当前浏览器以外的所有未知历史登录会话，彻底清除任何潜在残留风险。",
       images: [
-        "",
-        "",
+        "/assets/tutorials/chatgpt/gpt-logout-devices-1.png",
+        "/assets/tutorials/chatgpt/gpt-logout-devices-2.png",
       ],
     },
     {
@@ -337,8 +347,8 @@ function RebindSection() {
       title: "关闭旧的 2FA 身份验证器",
       desc: "在「多因素身份验证 (MFA)」区域，找到「Authenticator app」，将右侧开关切换至关闭状态，并在确认弹窗中点击「移除 / Remove」。",
       images: [
-        "",
-        "",
+        "/assets/tutorials/chatgpt/gpt-mfa-toggle-off.jpg",
+        "/assets/tutorials/chatgpt/gpt-mfa-remove-confirm.jpg",
       ],
     },
     {
@@ -346,8 +356,8 @@ function RebindSection() {
       title: "绑定属于您自己的手机 2FA 验证器",
       desc: "移除旧验证器后，再次点击开启 Authenticator app。系统会展示专属二维码和新密钥，打开手机上的 Google Authenticator 或微软验证器扫码绑定，输入最新 6 位动态码确认完成换绑。",
       images: [
-        "",
-        "",
+        "/assets/tutorials/chatgpt/gpt-2fa-rebind-1.png",
+        "/assets/tutorials/chatgpt/gpt-2fa-rebind-2.png",
       ],
     },
   ];
@@ -383,7 +393,12 @@ function RebindSection() {
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {step.images.map((img, i) => (
                 <div key={i} className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-2">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">请按文字步骤在官方页面操作，勿向他人提供密码或验证密钥。</div>
+                  <img
+                    src={img}
+                    alt={`${step.title} 配图 ${i + 1}`}
+                    className="mx-auto max-h-[300px] w-auto max-w-full rounded-lg object-contain shadow-sm"
+                    loading="lazy"
+                  />
                 </div>
               ))}
             </div>
