@@ -23,7 +23,7 @@ const metadataOf=(value:unknown):Record<string,unknown> =>
 export async function syncKuajingZyAvailabilitySnapshot({
   service,
   productId,
-  client=getKuajingZyReadonlyRuntime(),
+  client,
 }:{
   service:SupabaseClient;
   productId:string;
@@ -43,6 +43,7 @@ export async function syncKuajingZyAvailabilitySnapshot({
 
   const syncedAt=new Date().toISOString();
   const itemCache=new Map<string,unknown>();
+  let runtime=client;
   let updated=0;
   let failures=0;
   let available=0;
@@ -50,7 +51,8 @@ export async function syncKuajingZyAvailabilitySnapshot({
 
   const loadItem=async(supplierProductId:string)=>{
     if(itemCache.has(supplierProductId)) return itemCache.get(supplierProductId);
-    const result=await client.collectMallCatalog({itemId:supplierProductId,limit:1});
+    runtime??=getKuajingZyReadonlyRuntime();
+    const result=await runtime.collectMallCatalog({itemId:supplierProductId,limit:1});
     const items="items" in result?result.items:result.partial.items;
     if(items.length!==1||String(items[0]?.id??"")!==supplierProductId) throw new Error("KUAJINGZY_PRODUCT_NOT_FOUND");
     itemCache.set(supplierProductId,items[0]);
