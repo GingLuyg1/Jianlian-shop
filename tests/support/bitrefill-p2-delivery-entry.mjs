@@ -11,6 +11,8 @@ export async function loadActualLocalDeliveryEntry(root) {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
   }).outputText).toString("base64");
   let router = readFileSync(resolve(root, "lib/providers/core/supplier-router.ts"), "utf8");
+  router = router.replace('import { fulfillKuajingZyOrderWithSupabase } from "../kuajingzy/fulfillment";',
+    'const fulfillKuajingZyOrderWithSupabase = async () => { throw new Error("KUAJINGZY_FORBIDDEN_IN_BITREFILL_FIXTURE"); };');
   router = router.replace('import { fulfillDajuOrderWithSupabase } from "../daju/fulfillment";',
     'const fulfillDajuOrderWithSupabase = async () => ({ handled: 0, fulfilled: 0, failed: 0, uncertain: 0, needsInput: 0 });');
   router = router.replaceAll('"./supplier-router-core.mjs"', JSON.stringify(moduleUrl("lib/providers/core/supplier-router-core.mjs")));
