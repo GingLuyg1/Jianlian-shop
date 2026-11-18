@@ -45,6 +45,7 @@ function load({ defer = false, categoryError = false, productReject = false, row
     "@/lib/cache/cache-tags": { CACHE_REVALIDATE_SECONDS: { publicCatalog: 30 } },
     "@/lib/security/rate-limit": { checkRateLimit: () => ({ allowed: true }), getRequestSourceKey: () => "isolated" },
     "@/lib/supabase/server": { getSupabaseServerClient: () => supabase },
+    "@/lib/supabase/service-role": { getSupabaseServiceRoleClient: () => null },
     "@/lib/catalog/effective-category-visibility.mjs": visibility,
     "@/lib/products/public-catalog-sku-summary.mjs": summary,
   };
