@@ -1,6 +1,15 @@
 const releaseDir = process.env.JIANLIAN_RELEASE_DIR;
+const legacyRecovery = process.env.JIANLIAN_LEGACY_RELEASE_RECOVERY === "1";
+const canonicalRelease = /^\/www\/releases\/jianlian-shop-[0-9a-f]{40}$/;
+const legacyNestedRelease = /^\/www\/releases\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/jianlian-shop-[0-9a-f]{40}$/;
 
-if (!releaseDir || !/^\/www\/releases\/jianlian-shop-[0-9a-f]{40}$/.test(releaseDir)) {
+if (
+  !releaseDir
+  || (
+    !canonicalRelease.test(releaseDir)
+    && !(legacyRecovery && legacyNestedRelease.test(releaseDir))
+  )
+) {
   throw new Error("JIANLIAN_RELEASE_DIR must be a full-SHA production release path");
 }
 

@@ -47,6 +47,8 @@ Preflight 检查 commit 存在、当前 PM2 cwd、目标 release 不存在、rol
 
 Preflight/prepare 的 rollback 参数只用于验证安全回退版本并保护清理计划；switch 没有该参数，自动恢复的是切换前现场记录并验证的当前 live。显式 rollback 则使用传入的目标目录。两者不要混淆。
 
+历史兼容边界：新 candidate 永远只能创建在顶层 `/www/releases/jianlian-shop-<FULL_SHA>`。如果当前已验证 Production 或指定 rollback 是历史遗留的一层嵌套路径（例如 `/www/releases/ui-round2-candidate-20261117/jianlian-shop-<FULL_SHA>`），脚本只允许把它作为“已存在 runtime / rollback / recovery”使用。该路径必须位于 `/www/releases` 下、仅多一层安全名称目录、末尾仍是精确 full-SHA、真实目录不可为 symlink，并继续通过 Git SHA、构建产物、环境和 runtime 校验。PM2 配置只有在发布脚本显式传入 `JIANLIAN_LEGACY_RELEASE_RECOVERY=1` 时才接受这种 legacy 路径。不得用该兼容口创建新的嵌套 candidate，也不得把任意目录当作 release。
+
 仅当空间不足时先列出清理候选（第一次调用必定只列出并停止），人工核对后才确认：
 
 ```bash

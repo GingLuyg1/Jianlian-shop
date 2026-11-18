@@ -38,6 +38,8 @@ touch "$current/.env.production.local"
 assert_release_path() {
   [[ "$1" == "$RELEASE_ROOT"/jianlian-shop-* && "\${1##*-}" =~ ^[0-9a-f]{40}$ ]] || die 'not a fixture release path'
 }
+assert_existing_release_path() { assert_release_path "$1"; }
+is_legacy_nested_release_path() { return 1; }
 git() { return 0; }
 verify_release_tree() { return 0; }
 report_env() { return 0; }
@@ -74,6 +76,62 @@ test("production release path validation rejects non-release and non-canonical p
   assert.equal(run('assert_release_path /www/releases/../not-a-release').status, 1);
 });
 
+test("legacy nested release is accepted only as an existing runtime/recovery path", () => {
+  const accepted = run(`
+fixture=$(mktemp -d)
+trap 'rm -r -- "$fixture"' EXIT
+RELEASE_ROOT="$fixture/releases"
+sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+nested="$RELEASE_ROOT/ui-round2-candidate-20261117/jianlian-shop-$sha"
+mkdir -p "$nested"
+assert_existing_release_path "$nested"
+is_legacy_nested_release_path "$nested"
+`);
+  pass(accepted);
+
+  const rejectedAsCandidate = run(`
+fixture=$(mktemp -d)
+trap 'rm -r -- "$fixture"' EXIT
+RELEASE_ROOT="$fixture/releases"
+sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+nested="$RELEASE_ROOT/ui-round2-candidate-20261117/jianlian-shop-$sha"
+mkdir -p "$nested"
+assert_release_path "$nested"
+`);
+  assert.equal(rejectedAsCandidate.status, 1);
+
+  const tooDeep = run(`
+fixture=$(mktemp -d)
+trap 'rm -r -- "$fixture"' EXIT
+RELEASE_ROOT="$fixture/releases"
+sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+nested="$RELEASE_ROOT/legacy/extra/jianlian-shop-$sha"
+mkdir -p "$nested"
+assert_existing_release_path "$nested"
+`);
+  assert.equal(tooDeep.status, 1);
+});
+
+test("preflight accepts a verified one-level legacy current release as rollback", () => {
+  const result = run(`
+fixture=$(mktemp -d)
+trap 'rm -r -- "$fixture"' EXIT
+RELEASE_ROOT="$fixture/releases"
+REPO="$fixture/repo"
+sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+old=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+current="$RELEASE_ROOT/ui-round2-candidate-20261117/jianlian-shop-$old"
+mkdir -p "$REPO" "$current"
+current_pm2_cwd() { printf '%s\\n' "$current"; }
+verify_runtime_release() { assert_existing_release_path "$1"; }
+disk_preflight() { return 0; }
+preflight_env() { return 0; }
+preflight "$sha" "$current"
+`);
+  pass(result);
+  assert.match(result.stdout, /CURRENT_PM2_CWD=.*ui-round2-candidate-20261117/);
+});
+
 test("all raw PM2 calls are confined to the pinned wrapper; protected path absent", () => {
   const withoutWrapper = script.replace('run_pm2() { PM2_HOME=/root/.pm2 pm2 "$@"; }', "");
   assert.doesNotMatch(withoutWrapper, /(?:^|[\s;()])pm2\s+(?:pid|describe|jlist|status|start|delete|save)\b/m);
@@ -95,6 +153,8 @@ pm2() {
   printf 'CALL:%s:%s\\n' "$PM2_HOME" "$*"
   [[ "$1" != save || "\${FAIL_SAVE:-0}" != 1 ]]
 }
+assert_existing_release_path() { return 0; }
+is_legacy_nested_release_path() { return 1; }
 verify_runtime_release() { return 0; }
 verify_prepare_marker() { return 0; }
 verify_build_marker() { return 0; }
