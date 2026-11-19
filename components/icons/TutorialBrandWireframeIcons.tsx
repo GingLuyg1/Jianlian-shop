@@ -73,3 +73,11 @@ export function HahaSimWireframeIcon({ className = "h-5 w-5" }: { className?: st
     </svg>
   );
 }
+
+export function GoogleWireframeIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2c2.73 0 5.21 1.09 7.02 2.87l-2.83 2.83A5.99 5.99 0 0 0 12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.8 0 5.16-1.92 5.82-4.5H12v-3.5h9.72c.18.64.28 1.31.28 2 0 5.523-4.477 10-10 10z" />
+    </svg>
+  );
+}

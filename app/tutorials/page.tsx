@@ -31,6 +31,7 @@ import HahaSimTutorial from "@/components/account/HahaSimTutorial";
 import OneNzTutorial, { type OneNzSection } from "@/components/account/OneNzTutorial";
 import ChatGptAccountGuideTutorial, { type ChatGptTutorialSection } from "@/components/account/ChatGptAccountGuideTutorial";
 import AppleIdTutorial, { appleChapters } from "@/components/account/AppleIdTutorial";
+import GoogleRegionTutorial from "@/components/account/GoogleRegionTutorial";
 import {
   AppleWireframeIcon,
   BinanceWireframeIcon,
@@ -38,6 +39,7 @@ import {
   GiffgaffWireframeIcon,
   HahaSimWireframeIcon,
   OneNzWireframeIcon,
+  GoogleWireframeIcon,
 } from "@/components/icons/TutorialBrandWireframeIcons";
 import sidebar from "@/components/layout/SidebarSlidingList.module.css";
 import selection from "@/components/ui/SelectionMotion.module.css";
@@ -88,6 +90,7 @@ const tutorialTopics = [
   { id: "haha-sim", label: "Haha SIM", title: "Haha SIM 实体卡激活与保号教程", description: "首次插卡、漫游设置、官方 App、故障排查与实名登记。", icon: HahaSimWireframeIcon, keywords: ["Haha", "haha SIM", "haha Travel", "实体卡", "激活", "数据漫游", "ICCID", "短信", "APN", "实名", "保号", "香港", "中港澳"] },
   { id: "one-nz", label: "One NZ", title: "One NZ 新西兰电话卡激活与保号教程", description: "0月租、免费收短信、国内5G漫游防扣费与保号指南", icon: OneNzWireframeIcon, keywords: ["One NZ", "OneNZ", "新西兰", "Vodafone", "沃达丰", "激活", "0月租", "短信免费", "mytype", "521", "充值保号", "iMessage", "关闭数据漫游"] },
   { id: "chatgpt-guide", label: "Chat Gpt", title: "ChatGPT 综合使用与保号教程", description: "账号登录、2FA 安全验证、密码管理、陌生设备剔除与防封禁指南", icon: ChatGptWireframeIcon, keywords: ["ChatGPT", "Plus", "成品号", "保号", "Codex", "客户端下载", "防封", "403", "接码", "短信验证", "节点", "Access Denied", "2FA", "改密", "安全设置"] },
+  { id: "google-region", label: "Google", title: "Google · 修改 Google 账号国家区域教程", description: "Google 账号服务条款归属地、Play 商店锁区改区与绑定境外卡完整教程", icon: GoogleWireframeIcon, keywords: ["Google", "谷歌", "Google账号", "改区", "换区", "Play商店", "Google Play", "美国", "美区", "免税州", "绑卡", "虚拟信用卡", "境外银行卡", "服务条款", "关联地区", "关闭支付资料"] },
 ] as const;
 
 function ScrollProgressFab({
@@ -435,7 +438,7 @@ export default function TutorialsPage() {
         <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}><div key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : ""}`} className={tutorial.topicEnter}><h1 className="text-lg font-semibold text-slate-900 sm:text-xl">{showGiffgaff ? "Giffgaff" : showOneNz ? `One NZ · ${oneNzGuide === "activation" ? "新手激活与防扣费" : oneNzGuide === "binding" ? "App 注册绑定与查询" : "国内漫游资费与保号"}` : topic.id === "chatgpt-guide" ? `Chat Gpt · ${chatgptGuide === "login" ? "登录与 2FA 验证" : chatgptGuide === "security" ? "改密与安全设置" : chatgptGuide === "rebind" ? "设备与 2FA 换绑" : "防封与保号指南"}` : topic.title}</h1>{topic.description && <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm sm:leading-6">{topic.description}</p>}</div></header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
           <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : ""}` : "empty"} className={tutorial.topicEnter}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : <div className="space-y-7">
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "google-region" ? <GoogleRegionTutorial /> : <div className="space-y-7">
             <section aria-labelledby="tutorial-service-title">
               <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
