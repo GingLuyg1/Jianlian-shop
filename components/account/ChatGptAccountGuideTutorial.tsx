@@ -3,25 +3,34 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowRight,
   Bot,
+  Check,
   CheckCircle2,
+  Clock,
+  Copy,
   Download,
   ExternalLink,
+  FileText,
+  HelpCircle,
   KeyRound,
+  LifeBuoy,
   Lock,
   LogOut,
   RefreshCcw,
+  Send,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
   Sparkles,
 } from "lucide-react";
 import tutorial from "@/components/account/TutorialsGlass.module.css";
+import TutorialImage from "@/components/account/TutorialImage";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 
-export type ChatGptTutorialSection = "login" | "security" | "rebind" | "anti-ban";
+export type ChatGptTutorialSection = "login" | "security" | "rebind" | "anti-ban" | "unban";
 
 interface ChatGptTutorialProps {
   activeSection?: ChatGptTutorialSection;
@@ -45,6 +54,7 @@ export default function ChatGptAccountGuideTutorial({
     { id: "security", label: "改密与安全设置", icon: Lock },
     { id: "rebind", label: "设备与 2FA 换绑", icon: LogOut },
     { id: "anti-ban", label: "防封与保号指南", icon: ShieldCheck },
+    { id: "unban", label: "账号解封申诉教程", icon: LifeBuoy },
   ];
 
   return (
@@ -78,7 +88,8 @@ export default function ChatGptAccountGuideTutorial({
       {currentSection === "login" && <LoginSection />}
       {currentSection === "security" && <SecuritySection />}
       {currentSection === "rebind" && <RebindSection />}
-      {currentSection === "anti-ban" && <AntiBanSection />}
+      {currentSection === "anti-ban" && <AntiBanSection onSelectSection={handleSelect} />}
+      {currentSection === "unban" && <UnbanSection />}
 
       {/* 底部客服与支持 */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -412,7 +423,7 @@ function RebindSection() {
 }
 
 // ── 章节四：防封与保号实战指南 ─────────────────────────────────
-function AntiBanSection() {
+function AntiBanSection({ onSelectSection }: { onSelectSection?: (section: ChatGptTutorialSection) => void }) {
   const rules = [
     {
       title: "规则一：节点纯净度是生命线",
@@ -461,6 +472,27 @@ function AntiBanSection() {
         ))}
       </div>
 
+      {/* 账号解封申诉引导卡片 */}
+      <div className="rounded-2xl border border-red-200/90 bg-gradient-to-br from-red-50/90 via-red-50/50 to-white p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs">
+        <div>
+          <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+            账号不幸收到警告或被停用？
+          </h4>
+          <p className="mt-1 text-xs text-slate-600">
+            不要慌张！只要未严重违反底层红线，大部分属于环境风控误伤，可通过官方渠道提交申诉申请解封。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSelectSection?.("unban")}
+          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-red-500 active:scale-95"
+        >
+          <span>查看官方解封申诉教程</span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
       {/* 快捷通道 */}
       <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-900 to-slate-800 p-5 text-white shadow-md">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -480,6 +512,493 @@ function AntiBanSection() {
             <span>选购国际 SIM 卡接码</span>
             <ArrowRight className="h-4 w-4" />
           </Link>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ── 通用复制按钮组件 ──────────────────────────────────────────
+function CopyButton({ text, label = "复制英文模板" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition hover:bg-orange-50 active:scale-95"
+    >
+      {copied ? (
+        <>
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+          <span className="text-emerald-700 font-medium">已复制到剪贴板</span>
+        </>
+      ) : (
+        <>
+          <Copy className="h-3.5 w-3.5 text-primary" />
+          <span>{label}</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+// ── 章节五：ChatGPT 账号官方解封申诉全流程指南 ────────────────────────
+function UnbanSection() {
+  const warningAppealTemplate = `Hello OpenAI Support,
+
+I received a warning on [收到警告的日期，例如: November 15, 2026] about "[警告中提到的原因，例如: Network Abuse]" on my ChatGPT account. The reference number is [邮件中的参考编号，如未提供可删除本句].
+
+I am not sure which conversation or activity caused this warning. Could you please review my account and let me know what caused it, or provide more details if possible? I would like to understand the issue and strictly follow your usage policies.
+
+Thank you for your help.`;
+
+  const reasonAppealTemplate = `My account was unable to be used on [活动开始日期，例如: November 15, 2026], displaying "[错误信息，例如: Authentication error, your account has been deleted or deactivated]".
+
+I believe this action was made in error and respectfully request it be reversed for the following reasons:
+1. Compliance with Policies: My account has always been used strictly for legitimate purposes (such as personal learning, programming, and writing assistance) and has never engaged in any prohibited activities.
+2. Lack of Specific Evidence: The notification did not specify which exact interaction or activity triggered the flag, nor was any supporting evidence provided.
+3. Potential False Positive: If a system check was triggered by dynamic IP changes or network environment fluctuations, it was entirely unintentional and not a deliberate violation.
+
+Please kindly conduct a manual review of my account and restore access. Thank you.`;
+
+  const backgroundAppealTemplate = `Account Email: [被封账号邮箱]
+Case Reference: [邮件中的 Case ID 如 C-xxxxxxxx，若无则填写 "None / Did not receive notification email"]
+Timeline:
+- [活动开始日期]: Unable to log in, received deactivation error prompt.
+- [活动结束日期]: The account remains inaccessible to date.
+
+Account Details:
+- Intended Use: Personal research, study, and daily productivity.
+- Subscription: [Plus / Free / Team，按实填写]
+- Recent Usage: Normal conversational queries without any automated, bulk, or high-concurrency requests.
+
+Diagnostic Information:
+[原样粘贴登录报错页面下方的诊断代码 / Ray ID / Error Code；若无则填写 "No diagnostic code displayed"]
+
+Request: Please verify whether this deactivation was caused by an automated false positive and assist in reactivating the account.`;
+
+  const appealFormSteps = [
+    {
+      num: "①",
+      title: "您想做什么？",
+      action: "勾选第 1 项：对警告或账号停用提出申诉（Appealing an account warning or closure）",
+      desc: "告知官方本次提交为账号复核申请，系统会自动转交 Trust & Safety 安全复核团队。",
+    },
+    {
+      num: "②",
+      title: "帐户电子邮件",
+      action: "填写被封 ChatGPT 账号的注册邮箱",
+      desc: "必须是接收 OpenAI 官方通知或绑定 ChatGPT 的原邮箱，以便客服快速定位账号。",
+    },
+    {
+      num: "③",
+      title: "受影响的 OpenAI 产品",
+      action: "下拉列表中选择「ChatGPT」",
+      desc: "明确是 ChatGPT 网页端/客户端服务受影响，避免工单被错分至 API 平台组。",
+    },
+    {
+      num: "④",
+      title: "您为什么申诉？",
+      action: "选择「我的使用并未违反 OpenAI 的《使用政策》、《广告政策》或《使用条款》」",
+      desc: "选第 1 项合法合规声明，强调自身为正常合规使用。",
+    },
+    {
+      num: "⑤",
+      title: "活动开始日期",
+      action: "填写首次无法登录或出问题的具体日期（年/月/日）",
+      desc: "例如：2026/11/15，用于定位风控日志产生的时间段。",
+    },
+    {
+      num: "⑥",
+      title: "活动结束日期",
+      action: "至今仍处于停用状态：填写「今天」的日期",
+      desc: "表明账号故障仍在持续中，需要官方介入恢复。",
+    },
+    {
+      num: "⑦",
+      title: "为什么应撤销警告或停用？",
+      action: "填写撤销理由（请直接复制下方提供的【英文模板 1】）",
+      desc: "陈述合规事实：日常合法用途、未收到具体证据、可能为网络 IP 误伤，请求人工复核。",
+    },
+    {
+      num: "⑧",
+      title: "更多补充背景信息",
+      action: "填写账号环境与报错诊断代码（请直接复制下方提供的【英文模板 2】）",
+      desc: "附上邮箱、案件号、时间线，并将登录报错界面底部的诊断代码原样粘贴进去。",
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* 顶部导言卡片 */}
+      <section className="relative overflow-hidden rounded-2xl border border-red-200/90 bg-gradient-to-br from-red-500/10 via-red-500/5 to-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+              <LifeBuoy className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 sm:text-lg">
+                ChatGPT 账号官方解封申诉全流程指南
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+                只要未触犯核心严重红线，OpenAI 误伤与风控波及均有极高概率申诉成功恢复！
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 font-medium text-emerald-800">
+              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+              常规误判 · 建议申诉
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 font-medium text-red-800">
+              <AlertTriangle className="h-3 w-3 text-red-600" />
+              严重底线违规 · 不可逆
+            </span>
+          </div>
+        </div>
+        <p className="mt-3 text-xs leading-6 text-slate-600 sm:text-sm sm:leading-7">
+          近期 OpenAI 针对账号的风控与清退频率明显提高。在着手尝试找回前，必须先厘清封禁的底层原因——触碰严重政策底线的情况属于“不可逆封禁”；而因节点波动、机房代理受牵连、绑卡扣费风控等常规误伤，官方均提供了正式的合规复核通道。
+        </p>
+      </section>
+
+      {/* 一、 先看红线：判断你的账号能否解封 */}
+      <section aria-labelledby="unban-rules" className="space-y-4">
+        <h3 id="unban-rules" className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[11px] font-bold">1</span>
+          先看红线：判断你的账号是否可以解封
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 不可逆封禁 */}
+          <div className="rounded-2xl border border-red-200/90 bg-red-50/40 p-4 sm:p-5 flex flex-col justify-between shadow-xs">
+            <div>
+              <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
+                <AlertTriangle className="h-4 w-4" />
+                <span>不可逆封禁（建议直接放弃，避免浪费时间）</span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-600">
+                如果封禁原因涉及官方核心底线，申诉通道会被系统自动拒绝或人工直接驳回：
+              </p>
+              <ul className="mt-2.5 space-y-1.5 text-xs text-slate-700 leading-5">
+                <li className="flex items-start gap-1.5">
+                  <span className="text-red-500 font-bold">•</span>
+                  <span><strong>严重触犯《使用政策》：</strong>色情或成人违规、未成年人安全/剥削（CSAM 绝对零容忍）、自残暴力倾向、危险武器、欺诈钓鱼或大规模黑产垃圾信息。</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-red-500 font-bold">•</span>
+                  <span><strong>触犯《服务条款》商业与技术红线：</strong>逆向工程、攻击官方接口、规避访问限制、高风险多人共享转售非企业版账号、滥用 API Key 进行破坏性请求。</span>
+                </li>
+              </ul>
+            </div>
+            <div className="mt-3 rounded-xl border border-red-200/80 bg-white/80 p-2.5 text-[11px] text-red-700">
+              提示：后台记录若明确命中上述行为，账号恢复概率几乎为零，请直接止损。
+            </div>
+          </div>
+
+          {/* 建议积极申诉 */}
+          <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/40 p-4 sm:p-5 flex flex-col justify-between shadow-xs">
+            <div>
+              <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>建议积极申诉（误伤与常规风控，大概率可解）</span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-600">
+                如果你属于以下“无辜躺枪”或风控波及类型，大概率只是触发了自动化防御规则：
+              </p>
+              <ul className="mt-2.5 space-y-1.5 text-xs text-slate-700 leading-5">
+                <li className="flex items-start gap-1.5">
+                  <span className="text-emerald-600 font-bold">•</span>
+                  <span><strong>正常合规对话：</strong>什么都没违规，在正常学术、编程、日常对话中突然提示无法登录。</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-emerald-600 font-bold">•</span>
+                  <span><strong>IP 或节点频繁漂移：</strong>机场节点不稳定或机房代理被连带拉黑（万人骑 IP 受牵连）。</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-emerald-600 font-bold">•</span>
+                  <span><strong>支付风控误杀：</strong>新绑定海外卡或 Plus 订阅续费扣费时遭遇风控误杀。</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-emerald-600 font-bold">•</span>
+                  <span><strong>号段受牵连：</strong>低价区订阅、注册环境异常但账号本体并无主观违规操作。</span>
+                </li>
+              </ul>
+            </div>
+            <div className="mt-3 rounded-xl border border-emerald-200/80 bg-white/80 p-2.5 text-[11px] text-emerald-800">
+              提示：只要未违反底线原则，OpenAI 大概率都会解封，请按下方流程申诉！
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 二、 情况 1：频繁 IP 更换或断连导致的警告邮件 (Policy Warning) */}
+      <section aria-labelledby="unban-case1" className="space-y-4">
+        <h3 id="unban-case1" className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[11px] font-bold">2</span>
+          情况 1：频繁 IP 更换或断连导致的警告邮件（Policy Warning）
+        </h3>
+
+        <div className="rounded-2xl border border-amber-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <p className="text-xs leading-6 text-slate-600 sm:text-sm">
+            这是因为频繁更换 IP 或网络节点经常断连漂移导致的预警。一般情况下官方会向注册邮箱发送警告邮件（常提示“网络虐待”或可疑活动）。在邮件中通常会直接提供「提出申诉」按钮，通过该按钮申诉通常 24 小时内即可撤销警告！
+          </p>
+
+          {/* 警告邮件与成功撤销对比图 */}
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-3">
+              <div className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <span>图 1：收到 OpenAI 警告通知邮件（含申诉按钮）</span>
+              </div>
+              <TutorialImage
+                src="/tutorials/chatgpt/chatgpt_warning_email.jpg"
+                width={579}
+                height={900}
+                caption="图 1：OpenAI 政策警告邮件，内含「提出申诉」按钮"
+                previewClassName="mx-auto h-[320px] sm:h-[360px] w-auto max-w-full rounded-lg object-contain shadow-xs"
+              />
+            </div>
+            <div className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-3">
+              <div className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>图 2：申诉成功，官方确认误判并撤销警告</span>
+              </div>
+              <TutorialImage
+                src="/tutorials/chatgpt/chatgpt_unban_success_email.png"
+                width={533}
+                height={680}
+                caption="图 2：申诉成功，官方致歉并撤销警告通知"
+                previewClassName="mx-auto h-[320px] sm:h-[360px] w-auto max-w-full rounded-lg object-contain shadow-xs"
+              />
+            </div>
+          </div>
+
+          {/* 申诉信模板 */}
+          <div className="mt-4 rounded-xl border border-orange-200/80 bg-orange-50/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-primary" />
+                警告申诉英文信模板（点击邮件内「提出申诉」按钮后填写）
+              </span>
+              <CopyButton text={warningAppealTemplate} label="复制警告申诉模板" />
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-orange-200/60 bg-white p-3 font-mono text-xs leading-relaxed text-slate-800">
+              {warningAppealTemplate}
+            </pre>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              * 填表提示：将模板中【】括起来的内容换成你收到的实际通知信息（如收到警告的日期、违规类别）；若邮件未给出参考编号（Reference Number），直接删除对应句子即可。一般约 1 个工作日便可得到官方答复并撤销警告！
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 三、 情况 2：账号已被停用 / 删除（官方表单正式申诉） */}
+      <section aria-labelledby="unban-case2" className="space-y-4">
+        <h3 id="unban-case2" className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[11px] font-bold">3</span>
+          情况 2：登录报错已被删除或停用（官方表单正式申诉）
+        </h3>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+          <p className="text-xs leading-6 text-slate-600 sm:text-sm">
+            当登录 ChatGPT 遇到「身份验证错误：你的账户已被删除或停用」时，通常是因为低价区订阅、共享支付卡/设备、中转代理或批量号段连带风控所致。只要未违反严重红线，均可通过 OpenAI 官方申诉表单提交工单进行复核。
+          </p>
+
+          {/* 登录报错界面配图 */}
+          <div className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-3">
+            <div className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <span>图 3：ChatGPT 登录身份验证错误报错界面</span>
+            </div>
+            <TutorialImage
+              src="/tutorials/chatgpt/chatgpt_deactivated_error.png"
+              width={680}
+              height={448}
+              caption="图 3：登录提示账户已被删除或停用报错界面"
+              previewClassName="mx-auto h-[220px] sm:h-[260px] w-auto max-w-full rounded-lg object-contain shadow-xs"
+            />
+          </div>
+
+          {/* 官方申诉表单直达通道 */}
+          <div className="rounded-xl border border-sky-200/90 bg-gradient-to-r from-sky-50 to-blue-50/40 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <ExternalLink className="h-4 w-4 text-sky-600" />
+                OpenAI 官方申诉表单入口
+              </h4>
+              <p className="mt-0.5 text-xs text-slate-600">
+                官方申诉表单链接：<code className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] text-sky-700 border border-sky-200">https://openai.com/form/appeal/</code>
+              </p>
+            </div>
+            <a
+              href="https://openai.com/form/appeal/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-sky-500 active:scale-95"
+            >
+              <span>打开官方申诉表单</span>
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </div>
+
+          {/* 官方表单 8 步规范填写图解与步骤 */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              官方申诉表单 8 步填写图解（按标注编号 ①~⑧ 顺序）
+            </h4>
+
+            {/* 表单标注指引图 */}
+            <div className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-3">
+              <TutorialImage
+                src="/tutorials/chatgpt/chatgpt_appeal_form_guide.png"
+                width={680}
+                height={360}
+                caption="图 4：OpenAI 官方申诉表单填写与编号标注指引"
+                previewClassName="mx-auto h-[260px] sm:h-[320px] w-auto max-w-full rounded-lg object-contain shadow-xs"
+              />
+            </div>
+
+            {/* 8 步卡片清单 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              {appealFormSteps.map((step) => (
+                <div
+                  key={step.num}
+                  className="rounded-xl border border-orange-100 bg-orange-50/30 p-3 flex items-start gap-2.5 text-xs leading-5"
+                >
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-white text-[10px] font-bold">
+                    {step.num}
+                  </span>
+                  <div>
+                    <div className="font-bold text-slate-900">{step.title}</div>
+                    <div className="font-semibold text-primary mt-0.5">{step.action}</div>
+                    <div className="text-slate-500 mt-0.5 text-[11px]">{step.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 模板 1：为什么应撤销警告或停用 (第 ⑦ 项) */}
+          <div className="rounded-xl border border-orange-200/80 bg-orange-50/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-primary" />
+                表单第 ⑦ 项：「为什么应撤销警告或停用」英文理由模板
+              </span>
+              <CopyButton text={reasonAppealTemplate} label="复制第 ⑦ 项理由模板" />
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-orange-200/60 bg-white p-3 font-mono text-xs leading-relaxed text-slate-800">
+              {reasonAppealTemplate}
+            </pre>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              * 填表提示：将 <code>[活动开始日期]</code>（如 November 15, 2026）和 <code>[错误信息]</code> 替换为您实际遇到的报错提示原话。
+            </p>
+          </div>
+
+          {/* 模板 2：更多补充背景信息 (第 ⑧ 项) */}
+          <div className="rounded-xl border border-orange-200/80 bg-orange-50/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-primary" />
+                表单第 ⑧ 项：「更多补充背景信息」英文环境模板
+              </span>
+              <CopyButton text={backgroundAppealTemplate} label="复制第 ⑧ 项补充模板" />
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-orange-200/60 bg-white p-3 font-mono text-xs leading-relaxed text-slate-800">
+              {backgroundAppealTemplate}
+            </pre>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              * 填表提示：务必将登录报错界面最下方的<strong>「诊断代码（Ray ID / Diagnostic code）」</strong>原样复制粘贴到模板中，这是 OpenAI 客服在后台精准检索日志最核心的关键依据！
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 四、 申诉后预期与心态管理 */}
+      <section aria-labelledby="unban-expectations" className="space-y-4">
+        <h3 id="unban-expectations" className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[11px] font-bold">4</span>
+          申诉后预期与心态管理
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              官方处理周期与提交禁忌
+            </h4>
+            <p className="mt-2 text-xs leading-6 text-slate-600 sm:text-sm">
+              官方人工与自动化复核通常需要 <strong>24 到 72 小时</strong>；若遇到大规模封禁潮，处理可能延长至 <strong>5~7 个工作日</strong>。
+            </p>
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs leading-5 text-amber-900">
+              <strong>重要禁忌：</strong>申诉提交后请耐心等待，<strong>切勿在短时间内重复发送多个相同工单</strong>，否则会被风控系统自动打上垃圾请求标记，严重拉低人工复核优先级。
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <HelpCircle className="h-4 w-4 text-primary" />
+              申诉成功率与应对策略
+            </h4>
+            <p className="mt-2 text-xs leading-6 text-slate-600 sm:text-sm">
+              即便是常规误伤，初次申诉也有一定概率收到系统模板回复。如果初次申诉被驳回，建议更换说明角度（更详尽地补充网络环境和真实使用场景）再次复核一次。
+            </p>
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+              <strong>备用建议：</strong>若两次申诉均未通过，说明账号后台关联标记过深，建议果断止损，重新配置全新独立节点与指纹环境注册新账号。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 五、 账号长久存活的日常避坑法则 */}
+      <section aria-labelledby="unban-tips" className="space-y-4">
+        <h3 id="unban-tips" className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[11px] font-bold">5</span>
+          日常长久存活防封避坑法则
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            {
+              title: "固定纯净独享节点",
+              desc: "尽量使用稳定纯净的独享或住宅节点，避免在对话中频繁切换不同国家地区，严禁多人共用万人骑的公共机房 IP。",
+            },
+            {
+              title: "敏感词与违规场景主动避让",
+              desc: "无论是学术研究还是日常测试，在提问中主动避让高风险敏感词汇，尽量采用中性、学术化、描述性的客观语言。",
+            },
+            {
+              title: "隔离付款与账单地址",
+              desc: "订阅 Plus 或绑定支付方式时，账单地址与 IP 归属地尽量保持一致，避免使用已被大面积滥用的虚拟卡号段。",
+            },
+            {
+              title: "核心对话数据定期本地导出",
+              desc: "养成定期在 Settings -> Data controls -> Export data 导出对话记录的好习惯，核心资产定期在本地保留备份。",
+            },
+          ].map((item, idx) => (
+            <div key={idx} className="rounded-xl border border-orange-100 bg-orange-50/20 p-4">
+              <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-primary">
+                  0{idx + 1}
+                </span>
+                <span>{item.title}</span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-600">{item.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
     </div>

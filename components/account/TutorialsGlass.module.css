@@ -45,6 +45,9 @@
 .subtopics[data-guide=anti-ban] .subtopicIndicator {
   transform: translateY(108px);
 }
+.subtopics[data-guide=unban] .subtopicIndicator {
+  transform: translateY(144px);
+}
 .chevron { width:15px; height:15px; transition:transform 240ms cubic-bezier(.22,1,.36,1); }
 [aria-expanded=true] > span > .chevron { transform:rotate(180deg); }
 .appleArticle { padding:12px 0 4px; }
