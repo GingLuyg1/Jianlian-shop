@@ -139,14 +139,19 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
 
   // 手机端选项栏尺寸规格：
   // 1. iPhone 13（标屏，宽 < 412px）：
-  //    - 一级选项栏宽度：原201px缩减21px并等比例缩放10% -> 162px
-  //    - 二级选项栏宽度：148px（两栏总宽310px，在390px屏幕留出80px充裕遮罩与呼吸感，彻底解决铺满屏幕的问题）
+  //    - 一二级选项栏均等比例缩放 10%（更加紧凑精致，彻底杜绝满屏拥挤感）
+  //    - 一级选项栏宽度：146px（原 162px * 0.9）
+  //    - 二级选项栏宽度：133px（原 148px * 0.9）
+  //    - 两栏展开总宽：279px（在 390px 视口保留 111px 宽裕遮罩空间，视觉极佳）
+  //    - 顶栏占位高度：精确统一为 58px（64px * 0.9）
   // 2. iPhone 13 Pro Max（大屏，宽 >= 412px）：
-  //    - 一级选项栏宽度：宽一级选项栏 -30px（原245px - 30px = 215px）
+  //    - 一二级选项栏均等比例放大 10%（大屏触控更加清晰舒展）
+  //    - 一级选项栏宽度：236px（原 215px * 1.1）
   //    - 二级选项栏宽度：180px
-  //    - 一级/二级选项栏内容整体放大 20%（字号、图标、内边距全面放大，大屏触控更舒适）
-  const primaryWidth = isProMax ? 215 : 162;
-  const secondaryWidth = isProMax ? 180 : 148;
+  //    - 两栏展开总宽：416px（在 428px/430px 屏幕完美契合，保留轻巧遮罩边界）
+  //    - 顶栏占位高度：精确统一为 74px（68px * 1.1）
+  const primaryWidth = isProMax ? 236 : 146;
+  const secondaryWidth = isProMax ? 180 : 133;
   const totalWidth = isExpanded ? primaryWidth + secondaryWidth : primaryWidth;
 
   const isActive = (href: string) => {
@@ -170,12 +175,12 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
           variant="ghost"
           size="icon"
           className={cn(
-            isProMax ? "h-11 w-11" : "h-10 w-10",
+            isProMax ? "h-11 w-11" : "h-9 w-9",
             mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
             isMobile && "!inline-flex"
           )}
         >
-          <Menu className={cn(isProMax ? "h-[26px] w-[26px]" : "h-6 w-6")} />
+          <Menu className={cn(isProMax ? "h-[27px] w-[27px]" : "h-5 w-5")} />
         </Button>
       </SheetTrigger>
       {/* baseline contract tokens: w-[185px] !w-[370px] */}
@@ -198,29 +203,29 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
           }}
           className="flex h-full shrink-0 flex-col"
         >
-          <div className={cn("box-border flex shrink-0 items-center border-b border-border pr-8", isProMax ? "h-[68px] min-h-[68px] max-h-[68px] px-3.5" : "h-[64px] min-h-[64px] max-h-[64px] px-2.5")}>
-            <div className="flex min-w-0 items-center gap-2">
+          <div className={cn("box-border flex shrink-0 items-center border-b border-border pr-8", isProMax ? "h-[74px] min-h-[74px] max-h-[74px] px-3.5" : "h-[58px] min-h-[58px] max-h-[58px] px-2")}>
+            <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
               <img
                 src="/assets/jianlian-brand-logo.png"
                 alt="Jianlian"
-                className={cn("shrink-0 rounded-lg object-cover", isProMax ? "h-9 w-9" : "h-6 w-6")}
+                className={cn("shrink-0 rounded-lg object-cover", isProMax ? "h-10 w-10" : "h-[22px] w-[22px]")}
               />
               <div className="min-w-0">
-                <div className={cn("whitespace-nowrap font-bold leading-tight text-foreground", isProMax ? "text-[16px]" : "text-[13px]")}>
+                <div className={cn("whitespace-nowrap font-bold leading-tight text-foreground", isProMax ? "text-[17px]" : "text-[12px]")}>
                   Jianlian
                 </div>
-                <div className={cn("mt-0.5 whitespace-nowrap leading-tight text-muted-foreground", isProMax ? "text-[12px]" : "text-[9.5px]")}>
+                <div className={cn("mt-0.5 whitespace-nowrap leading-tight text-muted-foreground", isProMax ? "text-[13px]" : "text-[9px]")}>
                   数字商品服务
                 </div>
               </div>
             </div>
           </div>
 
-          <nav className={cn("flex-1 overflow-y-auto", isProMax ? "px-3 py-3" : "px-1.5 py-2")}>
+          <nav className={cn("flex-1 overflow-y-auto", isProMax ? "px-3 py-3" : "px-1.5 py-1.5")}>
             {navigationGroups.map((group) => group.items.length > 0 ? (
             <section key={group.title || "home"} aria-label={group.title || "首页"}>
-            {group.title ? <h2 className={cn("mb-1 mt-2.5 px-2 font-semibold text-muted-foreground", isProMax ? "text-[12px]" : "text-[10px]")}>{group.title}</h2> : null}
-            <ul className={cn(isProMax ? "space-y-1.5" : "space-y-1")}>
+            {group.title ? <h2 className={cn("mb-1 mt-2 px-1.5 font-semibold text-muted-foreground", isProMax ? "text-[13px]" : "text-[9.5px]")}>{group.title}</h2> : null}
+            <ul className={cn(isProMax ? "space-y-1.5" : "space-y-0.5")}>
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
@@ -228,7 +233,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                 const hasSubItems = subItems.length > 0;
                 const isItemExpanded = expandedPrimaryHref === item.href;
                 if (isCatalogCategoryHref(item.href) && !confirmed) {
-                  return <li key={item.href} className="flex h-[36px] items-center rounded-lg px-2" aria-hidden={status !== "error"}>
+                  return <li key={item.href} className="flex h-[34px] items-center rounded-lg px-2" aria-hidden={status !== "error"}>
                     {status === "error" && item.href === "/products/sim-cards" ? (
                       <button type="button" onClick={() => void refreshPublicCategories().catch(() => undefined)} className="text-left text-xs text-muted-foreground underline">分类读取失败，重试</button>
                     ) : <span className="h-3.5 w-3/4 rounded bg-slate-100" />}
@@ -253,8 +258,8 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                         setOpen(false);
                       }}
                       className={cn(
-                        "flex items-center justify-between gap-1.5 whitespace-nowrap rounded-xl transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
-                        isProMax ? "px-3 py-2.5 text-[15.5px]" : "px-2 py-1.5 text-[12px]",
+                        "flex items-center justify-between gap-1 whitespace-nowrap rounded-xl transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
+                        isProMax ? "px-3 py-2.5 text-[16.5px]" : "px-2 py-1.5 text-[11.5px]",
                         isItemExpanded
                           ? "border border-primary/30 bg-orange-50 font-bold text-primary"
                           : active
@@ -263,11 +268,11 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                       )}
                     >
                       <span className="flex min-w-0 items-center gap-1.5">
-                        <Icon className={cn("shrink-0", isProMax ? "h-[19px] w-[19px]" : "h-3.5 w-3.5")} />
+                        <Icon className={cn("shrink-0", isProMax ? "h-[20px] w-[20px]" : "h-3.5 w-3.5")} />
                         <span className="truncate">{item.label}</span>
                       </span>
                       {hasSubItems ? (
-                        <ChevronRight className={cn("shrink-0 text-muted-foreground transition-transform", isProMax ? "h-4.5 w-4.5" : "h-3.5 w-3.5", isItemExpanded && "translate-x-0.5 text-primary")} />
+                        <ChevronRight className={cn("shrink-0 text-muted-foreground transition-transform", isProMax ? "h-5 w-5" : "h-3 w-3", isItemExpanded && "translate-x-0.5 text-primary")} />
                       ) : null}
                     </Link>
                   </li>
@@ -278,7 +283,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
             ) : null)}
           </nav>
 
-          <div className={cn("border-t border-border", isProMax ? "p-3" : "p-2")}>
+          <div className={cn("border-t border-border", isProMax ? "p-3" : "p-1.5")}>
             <button
               type="button"
               onClick={() => {
@@ -288,10 +293,10 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
               }}
               className={cn(
                 "flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary font-bold text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90",
-                isProMax ? "py-3 text-[15px]" : "py-2 text-[12px]"
+                isProMax ? "py-3 text-[16px]" : "py-1.5 text-[11.5px]"
               )}
             >
-              <Headphones className={cn("shrink-0", isProMax ? "h-[18px] w-[18px]" : "h-3.5 w-3.5")} />
+              <Headphones className={cn("shrink-0", isProMax ? "h-[19px] w-[19px]" : "h-3.5 w-3.5")} />
               <span>在线客服</span>
             </button>
           </div>
@@ -307,18 +312,18 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
             }}
             className="flex h-full shrink-0 flex-col border-l border-border bg-background animate-in fade-in-0 slide-in-from-left-2 duration-150"
           >
-            <div className={cn("box-border flex shrink-0 items-center justify-between border-b border-border pr-10", isProMax ? "h-[68px] min-h-[68px] max-h-[68px] px-3.5" : "h-[64px] min-h-[64px] max-h-[64px] px-2.5")}>
+            <div className={cn("box-border flex shrink-0 items-center justify-between border-b border-border pr-10", isProMax ? "h-[74px] min-h-[74px] max-h-[74px] px-3.5" : "h-[58px] min-h-[58px] max-h-[58px] px-2")}>
               <div className="min-w-0">
-                <div className={cn("truncate font-bold leading-tight text-foreground", isProMax ? "text-[16px]" : "text-[13px]")}>
+                <div className={cn("truncate font-bold leading-tight text-foreground", isProMax ? "text-[17px]" : "text-[12px]")}>
                   {expandedPrimaryLabel}
                 </div>
-                <div className={cn("mt-0.5 text-muted-foreground leading-tight", isProMax ? "text-[12px]" : "text-[9.5px]")}>
+                <div className={cn("mt-0.5 text-muted-foreground leading-tight", isProMax ? "text-[13px]" : "text-[9px]")}>
                   选择分类 ({expandedSecondaries.length})
                 </div>
               </div>
             </div>
-            <div className={cn("flex-1 overflow-y-auto", isProMax ? "px-2.5 py-3" : "px-1.5 py-2")}>
-              <ul className={cn(isProMax ? "space-y-1.5" : "space-y-1")}>
+            <div className={cn("flex-1 overflow-y-auto", isProMax ? "px-3 py-3" : "px-1.5 py-1.5")}>
+              <ul className={cn(isProMax ? "space-y-1.5" : "space-y-0.5")}>
                 {expandedSecondaries.map((sub) => {
                   const queryKey = expandedPrimaryHref === "/products/sim-cards" ? "country" : "category";
                   const targetHref = `${expandedPrimaryHref}?${queryKey}=${encodeURIComponent(sub.slug)}`;
@@ -343,24 +348,24 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                         }}
                         className={cn(
                           "flex items-center gap-1.5 rounded-xl transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
-                          isProMax ? "px-3 py-2.5 text-[15px]" : "px-2 py-1.5 text-[12px]",
+                          isProMax ? "px-3 py-2.5 text-[16px]" : "px-1.5 py-1.5 text-[11.5px]",
                           subActive
                             ? "border border-primary/20 bg-primary/10 font-semibold text-primary"
                             : "font-medium text-slate-700 hover:bg-muted hover:text-foreground active:bg-orange-50/60"
                         )}
                       >
                         {sub.code ? (
-                          <span className={cn("grid shrink-0 place-items-center rounded-lg bg-primary/10 font-bold text-primary", isProMax ? "h-7 w-7 text-xs" : "h-5 w-5 text-[9.5px]")}>
+                          <span className={cn("grid shrink-0 place-items-center rounded-lg bg-primary/10 font-bold text-primary", isProMax ? "h-7 w-7 text-xs" : "h-[18px] w-[18px] text-[8.5px]")}>
                             {sub.code}
                           </span>
                         ) : sub.image ? (
                           <img
                             src={sub.image}
                             alt={sub.name}
-                            className={cn("shrink-0 rounded-lg bg-white object-cover ring-1 ring-slate-200/80", isProMax ? "h-7 w-7" : "h-5 w-5")}
+                            className={cn("shrink-0 rounded-lg bg-white object-cover ring-1 ring-slate-200/80", isProMax ? "h-7 w-7" : "h-[18px] w-[18px]")}
                           />
                         ) : (
-                          <span className={cn("flex shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary", isProMax ? "h-7 w-7" : "h-5 w-5")}>
+                          <span className={cn("flex shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary", isProMax ? "h-7 w-7" : "h-[18px] w-[18px]")}>
                             <KeyRound className={cn(isProMax ? "h-4 w-4" : "h-3 w-3")} />
                           </span>
                         )}
