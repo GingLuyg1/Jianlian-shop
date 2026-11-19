@@ -4,7 +4,7 @@
  * MobileMenu - Drawer navigation for mobile devices
  */
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -68,7 +68,21 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [expandedPrimaryHref, setExpandedPrimaryHref] = useState<string>("");
-  const { isMobile } = useMobileStorefront();
+  const { isMobile, previewWidth } = useMobileStorefront();
+  const [windowWidth, setWindowWidth] = useState<number>(390);
+
+  useEffect(() => {
+    const update = () => setWindowWidth(window.innerWidth);
+    update();
+    window.addEventListener("resize", update, { passive: true });
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  // 当在电脑宽屏模拟预览时（windowWidth >= 1024 且 previewWidth 有值）：以 previewWidth 为准
+  // 当真机或窄屏窗口时：以真实设备视口 windowWidth 为准
+  const effectiveWidth = (windowWidth >= 1024 && previewWidth !== null) ? previewWidth : windowWidth;
+  const isProMax = effectiveWidth >= 412;
+
   const pendingRoute = useSyncExternalStore(subscribeCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending);
   const pendingCategoryHref = pendingRoute?.source === pathname ? pendingRoute.target : "";
   const { visibleHrefs, confirmed, status, rows } = useVisibleStorefrontCategoryHrefs();
@@ -121,6 +135,14 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
 
   const expandedSecondaries = expandedPrimaryHref ? secondaryByPrimaryHref.get(expandedPrimaryHref) ?? [] : [];
   const expandedPrimaryLabel = menuItems.find((item) => item.href === expandedPrimaryHref)?.label ?? "分类直达";
+  const isExpanded = expandedSecondaries.length > 0;
+
+  // 手机端一级选项栏固定宽度（展开二级选项时不收缩，始终保持固定）：
+  // iPhone 13（标屏，宽 < 412px）：固定 221px（减 15 像素）
+  // iPhone 13 Pro Max（大屏，宽 >= 412px）：固定 260px（放大 10%）
+  const primaryWidth = isProMax ? 260 : 221;
+  const secondaryWidth = 155;
+  const totalWidth = isExpanded ? primaryWidth + secondaryWidth : primaryWidth;
 
   const isActive = (href: string) => {
     if (pendingCategoryHref) return pendingCategoryHref === href;
@@ -142,62 +164,64 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
           data-storefront-menu-trigger
           variant="ghost"
           size="icon"
-          className={cn("h-10 w-10", mobileNavigationUntilLg ? "lg:hidden" : "md:hidden", isMobile && "!inline-flex")}
+          className={cn(
+            isProMax ? "h-11 w-11" : "h-10 w-10",
+            mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
+            isMobile && "!inline-flex"
+          )}
         >
-          <Menu className="h-6 w-6" />
+          <Menu className={cn(isProMax ? "h-[26px] w-[26px]" : "h-6 w-6")} />
         </Button>
       </SheetTrigger>
       {/* baseline contract tokens: w-[185px] !w-[370px] */}
       <SheetContent
         side="left"
         style={{
-          width: expandedSecondaries.length > 0 ? "396px" : "236px",
-          maxWidth: expandedSecondaries.length > 0 ? "94vw" : "62vw",
+          width: `${totalWidth}px`,
+          maxWidth: isExpanded ? "96vw" : "70vw",
         }}
         className={cn(
-          "flex h-full !max-w-none flex-row p-0 transition-[width] duration-200 ease-out",
-          expandedSecondaries.length > 0
-            ? "!w-[396px]"
-            : "!w-[236px]"
+          "flex h-full !max-w-none flex-row p-0 transition-[width] duration-200 ease-out"
         )}
       >
         <SheetTitle className="sr-only">导航菜单</SheetTitle>
         <div
           style={{
-            width: expandedSecondaries.length > 0 ? "206px" : "236px",
-            minWidth: expandedSecondaries.length > 0 ? "206px" : "236px",
+            width: `${primaryWidth}px`,
+            minWidth: `${primaryWidth}px`,
+            maxWidth: `${primaryWidth}px`,
           }}
           className="flex h-full shrink-0 flex-col"
         >
-          <div className="flex shrink-0 items-center border-b border-border px-3.5 py-4 pr-8">
+          <div className={cn("flex shrink-0 items-center border-b border-border pr-8", isProMax ? "px-4 py-4" : "px-3.5 py-4")}>
             <div className="flex min-w-0 items-center gap-2.5">
               <img
                 src="/assets/jianlian-brand-logo.png"
                 alt="Jianlian"
-                className="h-8 w-8 shrink-0 rounded-lg object-cover"
+                className={cn("shrink-0 rounded-lg object-cover", isProMax ? "h-9 w-9" : "h-8 w-8")}
               />
               <div className="min-w-0">
-                <div className="whitespace-nowrap text-[15px] font-bold leading-tight text-foreground">
+                <div className={cn("whitespace-nowrap font-bold leading-tight text-foreground", isProMax ? "text-[16px]" : "text-[15px]")}>
                   Jianlian
                 </div>
-                <div className="mt-0.5 whitespace-nowrap text-[11px] leading-tight text-muted-foreground">
+                <div className={cn("mt-0.5 whitespace-nowrap leading-tight text-muted-foreground", isProMax ? "text-[12px]" : "text-[11px]")}>
                   数字商品服务
                 </div>
               </div>
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+          <nav className={cn("flex-1 overflow-y-auto", isProMax ? "px-3 py-3.5" : "px-2.5 py-3")}>
             {navigationGroups.map((group) => group.items.length > 0 ? (
             <section key={group.title || "home"} aria-label={group.title || "首页"}>
-            {group.title ? <h2 className="mb-2 mt-4 px-2.5 text-xs font-semibold text-muted-foreground">{group.title}</h2> : null}
-            <ul className="space-y-1.5">
+            {group.title ? <h2 className={cn("mb-2 mt-4 px-2.5 font-semibold text-muted-foreground", isProMax ? "text-xs" : "text-xs")}>{group.title}</h2> : null}
+            <ul className={cn(isProMax ? "space-y-2" : "space-y-1.5")}>
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
                 const subItems = secondaryByPrimaryHref.get(item.href) ?? [];
                 const hasSubItems = subItems.length > 0;
-                const isExpanded = expandedPrimaryHref === item.href;
+                const isItemExpanded = expandedPrimaryHref === item.href;
                 if (isCatalogCategoryHref(item.href) && !confirmed) {
                   return <li key={item.href} className="flex h-[44px] items-center rounded-lg px-3" aria-hidden={status !== "error"}>
                     {status === "error" && item.href === "/products/sim-cards" ? (
@@ -210,7 +234,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                     <Link
                       href={item.href}
                       aria-current={active ? "page" : undefined}
-                      data-expanded={isExpanded ? "true" : undefined}
+                      data-expanded={isItemExpanded ? "true" : undefined}
                       onFocus={() => { if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows, true); }}
                       onClick={(event) => {
                         if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows);
@@ -224,8 +248,9 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                         setOpen(false);
                       }}
                       className={cn(
-                        "flex items-center justify-between gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-[14px] transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
-                        isExpanded
+                        "flex items-center justify-between gap-2 whitespace-nowrap rounded-xl transition-colors duration-100 [-webkit-tap-highlight-color:transparent]",
+                        isProMax ? "px-3.5 py-3 text-[15px]" : "px-3 py-2.5 text-[14px]",
+                        isItemExpanded
                           ? "border border-primary/30 bg-orange-50 font-bold text-primary"
                           : active
                             ? "border border-primary/20 bg-primary/10 font-semibold text-primary"
@@ -233,11 +258,11 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                       )}
                     >
                       <span className="flex min-w-0 items-center gap-2.5">
-                        <Icon className="h-[18px] w-[18px] shrink-0" />
+                        <Icon className={cn("shrink-0", isProMax ? "h-5 w-5" : "h-[18px] w-[18px]")} />
                         <span className="truncate">{item.label}</span>
                       </span>
                       {hasSubItems ? (
-                        <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isExpanded && "translate-x-0.5 text-primary")} />
+                        <ChevronRight className={cn("shrink-0 text-muted-foreground transition-transform", isProMax ? "h-[18px] w-[18px]" : "h-4 w-4", isItemExpanded && "translate-x-0.5 text-primary")} />
                       ) : null}
                     </Link>
                   </li>
@@ -248,7 +273,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
             ) : null)}
           </nav>
 
-          <div className="border-t border-border px-2.5 py-3.5">
+          <div className={cn("border-t border-border", isProMax ? "px-3 py-4" : "px-2.5 py-3.5")}>
             <button
               type="button"
               onClick={() => {
@@ -256,9 +281,12 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                 setExpandedPrimaryHref("");
                 onSupportOpen();
               }}
-              className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-3 py-3 text-[14px] font-bold text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90"
+              className={cn(
+                "flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary font-bold text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90",
+                isProMax ? "px-3.5 py-3.5 text-[15px]" : "px-3 py-3 text-[14px]"
+              )}
             >
-              <Headphones className="h-[18px] w-[18px] shrink-0" />
+              <Headphones className={cn("shrink-0", isProMax ? "h-5 w-5" : "h-[18px] w-[18px]")} />
               <span>在线客服</span>
             </button>
           </div>
@@ -267,7 +295,11 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
         {expandedSecondaries.length > 0 ? (
           <div
             data-testid="mobile-menu-secondary-panel"
-            style={{ width: "190px", minWidth: "190px" }}
+            style={{
+              width: `${secondaryWidth}px`,
+              minWidth: `${secondaryWidth}px`,
+              maxWidth: `${secondaryWidth}px`,
+            }}
             className="flex h-full shrink-0 flex-col border-l border-border bg-background animate-in fade-in-0 slide-in-from-left-2 duration-150"
           >
             <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-4 pr-8">

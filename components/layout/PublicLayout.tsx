@@ -115,8 +115,8 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       style={{ maxWidth: previewWidth ? `${previewWidth}px` : undefined }}
       className={cn(
         viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen !overflow-visible" : "min-h-screen overflow-x-hidden",
-        "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:260px] lg:[--storefront-sidebar-width:240px]",
-        !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:260px] md:[--storefront-sidebar-width:240px]",
+        "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:252px] lg:[--storefront-sidebar-width:232px]",
+        !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:252px] md:[--storefront-sidebar-width:232px]",
         isMobile && "[--storefront-content-padding-x:12px] lg:[--storefront-main-offset:0px]",
         mobilePreview && "mx-auto w-full border-x border-orange-200/80 shadow-[0_0_0_1px_rgba(214,180,148,0.45),0_20px_50px_-12px_rgba(89,56,30,0.28)]",
       )}
