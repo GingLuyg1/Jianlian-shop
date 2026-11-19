@@ -115,8 +115,8 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       style={{ maxWidth: previewWidth ? `${previewWidth}px` : undefined }}
       className={cn(
         viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen !overflow-visible" : "min-h-screen overflow-x-hidden",
-        "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:268px] lg:[--storefront-sidebar-width:248px]",
-        !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:268px] md:[--storefront-sidebar-width:248px]",
+        "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:260px] lg:[--storefront-sidebar-width:240px]",
+        !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:260px] md:[--storefront-sidebar-width:240px]",
         isMobile && "[--storefront-content-padding-x:12px] lg:[--storefront-main-offset:0px]",
         mobilePreview && "mx-auto w-full border-x border-orange-200/80 shadow-[0_0_0_1px_rgba(214,180,148,0.45),0_20px_50px_-12px_rgba(89,56,30,0.28)]",
       )}
@@ -194,21 +194,21 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
 
       {/* Floating preview controls on localhost / preview */}
       {showToggle ? (
-        <div className="fixed bottom-20 left-4 z-50 flex items-center gap-1 rounded-2xl border border-orange-200/90 bg-white/95 p-1 shadow-lg shadow-slate-900/10 backdrop-blur-md">
+        <div className="fixed bottom-20 left-4 z-50 flex flex-wrap items-center gap-1 rounded-2xl border border-orange-200/90 bg-white/95 p-1 shadow-lg shadow-slate-900/10 backdrop-blur-md">
           <span className="flex items-center gap-1 px-1.5 text-[11px] font-bold text-slate-500">
             <Smartphone className="h-3.5 w-3.5 text-primary" />
             <span className="hidden sm:inline">视口</span>
           </span>
           <button
             type="button"
-            onClick={() => setMobilePreviewSize(360)}
+            onClick={() => setMobilePreviewSize(375)}
             className={cn(
               "rounded-xl px-2 py-1 text-xs font-semibold transition-colors",
-              previewWidth === 360 ? "bg-primary text-white shadow-sm" : "text-slate-600 hover:bg-orange-50"
+              previewWidth === 375 ? "bg-primary text-white shadow-sm" : "text-slate-600 hover:bg-orange-50"
             )}
-            title="360px 小屏适配"
+            title="375px 小屏适配 (iPhone SE / 4.7寸)"
           >
-            360 小屏
+            375 小屏
           </button>
           <button
             type="button"
@@ -217,7 +217,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
               "rounded-xl px-2 py-1 text-xs font-semibold transition-colors",
               previewWidth === 390 ? "bg-primary text-white shadow-sm" : "text-slate-600 hover:bg-orange-50"
             )}
-            title="390px 标屏适配 (iPhone 12/13/14)"
+            title="390px 标屏适配 (iPhone 13/14/15 6.1寸)"
           >
             390 标屏
           </button>
@@ -228,9 +228,20 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
               "rounded-xl px-2 py-1 text-xs font-semibold transition-colors",
               previewWidth === 430 ? "bg-primary text-white shadow-sm" : "text-slate-600 hover:bg-orange-50"
             )}
-            title="430px 大屏适配 (iPhone Pro Max)"
+            title="430px 大屏适配 (iPhone Pro Max 6.7寸)"
           >
             430 大屏
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobilePreviewSize(1366)}
+            className={cn(
+              "rounded-xl px-2 py-1 text-xs font-semibold transition-colors",
+              previewWidth === 1366 ? "bg-amber-600 text-white shadow-sm" : "text-slate-600 hover:bg-amber-50"
+            )}
+            title="1366px 经典笔记本视口"
+          >
+            1366 笔记本
           </button>
           <button
             type="button"
@@ -243,6 +254,14 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
           >
             全宽
           </button>
+          <Link
+            href="/preview"
+            className="flex items-center gap-1 rounded-xl bg-orange-500 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-orange-600"
+            title="打开全尺寸响应式模拟工作室 (支持 375/390/430手机、1366/1440笔记本、1K/2K屏幕)"
+          >
+            <Monitor className="h-3 w-3" />
+            <span>多端模拟器</span>
+          </Link>
         </div>
       ) : null}
 
