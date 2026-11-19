@@ -24,35 +24,27 @@ import TutorialImage from "@/components/account/TutorialImage";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import tutorial from "@/components/account/TutorialsGlass.module.css";
 
-// 2FA 在线生成工具入口清单
+// 2FA 在线生成工具入口清单（直接提供超链接与多通道入口）
 const twoFaTools = [
   {
     name: "2FA TOTP 生成器",
     domain: "2fa.cn",
     url: "https://2fa.cn/",
-    description: "国内稳定极速、界面简洁友好，支持粘贴密钥一键生成 6 位验证码",
-    tag: "推荐常用",
   },
   {
     name: "2FA TOTP 生成器",
     domain: "2fa.web-ai.top",
     url: "https://2fa.web-ai.top/",
-    description: "AI 极简版 TOTP 验证工具，支持批量导入与快速倒计时校验",
-    tag: "快速镜像",
   },
   {
-    name: "2FA 在线生成器",
+    name: "2FA TOTP 生成器",
     domain: "2fa.show",
     url: "https://2fa.show",
-    description: "支持 URL 参数直链快捷生成，如 2fa.show/2fa/【密钥】",
-    tag: "直链生成",
   },
   {
-    name: "2FA.Live 生成器",
+    name: "2FA TOTP 生成器",
     domain: "2fa.live",
     url: "https://2fa.live",
-    description: "国际知名双重验证码生成站，全球广泛使用的高可用备选通道",
-    tag: "备用通道",
   },
 ];
 
@@ -143,72 +135,51 @@ export default function FacebookTutorial() {
         </div>
       </section>
 
-      {/* 第二部分：2FA TOTP 在线生成工具入口（多工具矩阵） */}
+      {/* 第二部分：2FA TOTP 动态验证码生成工具矩阵（多入口卡片） */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between border-b border-orange-100 pb-2">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-              2
-            </span>
-            <h2 className="text-lg font-bold text-slate-900">2FA TOTP 动态验证码生成工具入口</h2>
-          </div>
-          <span className="text-xs text-muted-foreground hidden sm:inline">提供多条在线通道，任选其一即可</span>
+        <div className="flex items-center gap-2 border-b border-orange-100 pb-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+            2
+          </span>
+          <h2 className="text-lg font-bold text-slate-900">2FA TOTP 动态验证码生成工具矩阵（多入口卡片）</h2>
         </div>
-
-        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-          双重验证码（TOTP）每 30 秒自动计算一次。请点击下方任意一个推荐入口，将卡密中的 <strong>2FA 密钥</strong> 粘贴进去即可一键生成 6 位纯数字验证码：
-        </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
           {twoFaTools.map((tool) => (
             <div
               key={tool.domain}
-              className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs transition-all hover:border-primary/40 hover:shadow-sm"
+              className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs transition-all hover:border-primary/40 hover:shadow-sm"
             >
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
-                    <KeyRound className="h-4 w-4 text-primary" />
+              <a
+                href={tool.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex min-w-0 flex-1 items-center gap-2.5"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                  <KeyRound className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-sm font-bold text-slate-800 transition-colors group-hover:text-primary">
                     <span>{tool.name}</span>
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-500">
-                      {tool.domain}
-                    </span>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60 group-hover:opacity-100" />
                   </div>
-                  <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-inset ring-orange-200">
-                    {tool.tag}
-                  </span>
+                  <div className="font-mono text-xs text-slate-400 group-hover:text-primary/70">
+                    {tool.domain}
+                  </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500 leading-relaxed">{tool.description}</p>
-              </div>
+              </a>
 
-              <div className="mt-3.5 flex items-center gap-2 pt-2 border-t border-slate-100">
-                <a
-                  href={tool.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-orange-500/10 py-2 text-xs font-bold text-primary transition-colors hover:bg-orange-500/20"
-                >
-                  <span>打开工具页面</span>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(tool.url, tool.domain)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
-                  title="复制链接"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => handleCopy(tool.url, tool.domain)}
+                className="shrink-0 rounded-xl border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+                title="复制链接"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))}
-        </div>
-
-        <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-3.5 text-xs text-blue-800 leading-relaxed flex items-start gap-2.5">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-          <div>
-            <strong>手机端 App 推荐</strong>：如果您更习惯在手机端长期保管，也可将该 2FA 密钥直接导入 <strong>Google Authenticator（谷歌身份验证器）</strong> 或 <strong>Microsoft Authenticator（微软身份验证器）</strong> 中，随时随地查看 6 位动态码，终身有效。
-          </div>
         </div>
       </section>
 
