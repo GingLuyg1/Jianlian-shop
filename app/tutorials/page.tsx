@@ -178,7 +178,6 @@ export default function TutorialsPage() {
   const [giffgaffGuide, setGiffgaffGuide] = useState<"activation" | "keeper">("activation");
   const [oneNzTreeOpen, setOneNzTreeOpen] = useState(false);
   const [oneNzGuide, setOneNzGuide] = useState<OneNzSection>("usage");
-  const [appleTreeOpen, setAppleTreeOpen] = useState(false);
   const [chatgptTreeOpen, setChatgptTreeOpen] = useState(false);
   const [chatgptGuide, setChatgptGuide] = useState<ChatGptTutorialSection>("login");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -192,7 +191,6 @@ export default function TutorialsPage() {
       setSelected(paramTopic as (typeof tutorialTopics)[number]["id"]);
       if (paramTopic === "one-nz") setOneNzTreeOpen(true);
       if (paramTopic === "giffgaff") setGiffgaffTreeOpen(true);
-      if (paramTopic === "apple-id") setAppleTreeOpen(true);
       if (paramTopic === "chatgpt-guide") setChatgptTreeOpen(true);
     }
     const paramGuide = params.get("guide");
@@ -206,7 +204,6 @@ export default function TutorialsPage() {
   const query = search.trim().toLocaleLowerCase();
   const matchingTopics = tutorialTopics.filter(topic => [topic.label, topic.title, topic.description, ...topic.keywords].some(text => text.toLocaleLowerCase().includes(query)));
   const topic = matchingTopics.find(item => item.id === selected) ?? matchingTopics[0] ?? tutorialTopics.find(item => item.id === selected)!;
-  const showApple = matchingTopics.length > 0 && topic.id === "apple-id";
   const showGiffgaff = matchingTopics.length > 0 && topic.id === "giffgaff";
   const showOneNz = matchingTopics.length > 0 && topic.id === "one-nz";
   const showChatgpt = matchingTopics.length > 0 && topic.id === "chatgpt-guide";
@@ -288,25 +285,6 @@ export default function TutorialsPage() {
                     );
                   })}
                 </div>
-              </div>
-            ) : null}
-
-            {/* 如果当前分类是 Apple ID，显示二级章节小药丸 */}
-            {topic.id === "apple-id" ? (
-              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2 touch-pan-x">
-                {appleChapters.map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      const heading = document.getElementById(id);
-                      heading?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                    className="inline-flex shrink-0 items-center rounded-lg border border-orange-200/60 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-2xs transition-colors active:bg-orange-50 active:text-primary"
-                  >
-                    {label}
-                  </button>
-                ))}
               </div>
             ) : null}
 
@@ -405,22 +383,17 @@ export default function TutorialsPage() {
                 setSearch("");
                 if (id === "giffgaff" && !showGiffgaff) setGiffgaffTreeOpen(true);
                 if (id === "one-nz" && !showOneNz) setOneNzTreeOpen(true);
-                if (id === "apple-id" && !showApple) setAppleTreeOpen(true);
                 if (id === "chatgpt-guide" && !showChatgpt) setChatgptTreeOpen(true);
                 if (id !== "giffgaff") setGiffgaffTreeOpen(false);
                 if (id !== "one-nz") setOneNzTreeOpen(false);
-                if (id !== "apple-id") setAppleTreeOpen(false);
                 if (id !== "chatgpt-guide") setChatgptTreeOpen(false);
-                if (isMobile && id !== "giffgaff" && id !== "one-nz" && id !== "apple-id" && id !== "chatgpt-guide") setMobileNavOpen(false);
+                if (isMobile && id !== "giffgaff" && id !== "one-nz" && id !== "chatgpt-guide") setMobileNavOpen(false);
                 resetScroll();
               }}>
                 <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>
                 {id === "required" && <span className={`${styles.pill} hidden md:inline`}>必读</span>}
-                {(id === "giffgaff" || id === "one-nz" || id === "apple-id" || id === "chatgpt-guide") && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
+                {(id === "giffgaff" || id === "one-nz" || id === "chatgpt-guide") && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
               </button>;
-              if (id === "apple-id") {
-                return <Collapsible.Root key={id} asChild open={showApple && appleTreeOpen} onOpenChange={setAppleTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Apple ID 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`}>{appleChapters.map(([chapId, chapLabel]) => <button key={chapId} type="button" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { const heading = document.getElementById(chapId); heading?.scrollIntoView({ behavior: "smooth", block: "start" }); if (isMobile) setMobileNavOpen(false); }}>{chapLabel}</button>)}</nav></Collapsible.Content></div></Collapsible.Root>;
-              }
               if (id === "giffgaff") {
                 return <Collapsible.Root key={id} asChild open={showGiffgaff && giffgaffTreeOpen} onOpenChange={setGiffgaffTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Giffgaff 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={giffgaffGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={giffgaffGuide === "activation" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("activation"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>实体卡激活与使用</button><button type="button" aria-current={giffgaffGuide === "keeper" ? "page" : undefined} className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("keeper"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>保号助手</button></nav></Collapsible.Content></div></Collapsible.Root>;
               }
@@ -439,7 +412,7 @@ export default function TutorialsPage() {
         <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}><div key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : ""}`} className={tutorial.topicEnter}><h1 className="text-lg font-semibold text-slate-900 sm:text-xl">{showGiffgaff ? "Giffgaff" : showOneNz ? (oneNzGuide === "guide" || oneNzGuide === "rates" ? "新西兰 One 卡使用指南与常见问题" : "新西兰 One NZ卡 已激活使用与账户绑定教程") : topic.id === "chatgpt-guide" ? `Chat Gpt · ${chatgptGuide === "login" ? "登录与 2FA 验证" : chatgptGuide === "security" ? "改密与安全设置" : chatgptGuide === "rebind" ? "设备与 2FA 换绑" : "防封与保号指南"}` : topic.title}</h1>{topic.description && <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm sm:leading-6">{topic.description}</p>}</div></header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
           <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : ""}` : "empty"} className={tutorial.topicEnter}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : showApple ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "google-region" ? <GoogleRegionTutorial /> : <div className="space-y-7">
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "google-region" ? <GoogleRegionTutorial /> : <div className="space-y-7">
             <section aria-labelledby="tutorial-service-title">
               <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">

@@ -32,9 +32,19 @@
 .subtopics .contentsLink { position:relative; height:36px; padding:8px 10px; border-radius:12px; }
 .subtopics .contentsLink[aria-current=page] { color:#ac5624; font-weight:600; }
 .subtopicIndicator { left:9px; width:calc(100% - 9px); height:36px; border-radius:12px; transform:translateY(0); }
-.subtopics[data-guide=keeper] .subtopicIndicator { transform:translateY(36px); }
-.subtopics[data-guide=binding] .subtopicIndicator { transform:translateY(36px); }
-.subtopics[data-guide=rates] .subtopicIndicator { transform:translateY(72px); }
+.subtopics[data-guide=keeper] .subtopicIndicator,
+.subtopics[data-guide=guide] .subtopicIndicator,
+.subtopics[data-guide=security] .subtopicIndicator,
+.subtopics[data-guide=binding] .subtopicIndicator {
+  transform: translateY(36px);
+}
+.subtopics[data-guide=rebind] .subtopicIndicator,
+.subtopics[data-guide=rates] .subtopicIndicator {
+  transform: translateY(72px);
+}
+.subtopics[data-guide=anti-ban] .subtopicIndicator {
+  transform: translateY(108px);
+}
 .chevron { width:15px; height:15px; transition:transform 240ms cubic-bezier(.22,1,.36,1); }
 [aria-expanded=true] > span > .chevron { transform:rotate(180deg); }
 .appleArticle { padding:12px 0 4px; }
