@@ -141,16 +141,6 @@ export default function FacebookTutorial() {
             </p>
           </div>
         </div>
-
-        {/* 字段图解 */}
-        <div className="mt-3">
-          <TutorialImage
-            src="/tutorials/facebook/fb_order_format.jpg"
-            caption="图 1：Facebook 商品发货内容与字段拆解示例"
-            width={800}
-            height={400}
-          />
-        </div>
       </section>
 
       {/* 第二部分：2FA TOTP 在线生成工具入口（多工具矩阵） */}
