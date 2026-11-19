@@ -11,6 +11,8 @@
 .topicList[data-topic=haha-sim] { --topic-index:4; }
 .topicList[data-topic=one-nz] { --topic-index:5; }
 .topicList[data-topic=chatgpt-guide] { --topic-index:6; }
+.topicList[data-topic=google-region] { --topic-index:7; }
+.topicList[data-topic=facebook] { --topic-index:8; }
 .topicIndicator { width:100%; height:var(--topic-height); transform:translateY(calc(var(--topic-index) * (var(--topic-height) + var(--topic-gap)))); }
 .navItem { display:flex; width:100%; height:var(--topic-height); min-width:0; align-items:center; gap:10px; border-radius:18px; padding:0 12px; color:#665749; }
 .navItem[aria-current=true] { color:#ac5624; font-weight:600; }
