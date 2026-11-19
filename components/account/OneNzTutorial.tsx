@@ -11,9 +11,12 @@ import {
   Globe,
   Headphones,
   KeyRound,
+  MessageSquare,
+  Radio,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  Wifi,
 } from "lucide-react";
 import TutorialImage from "@/components/account/TutorialImage";
 import { openPublicSupport } from "@/lib/support/open-public-support";
@@ -337,15 +340,255 @@ export default function OneNzTutorial({
             </p>
           </section>
 
-          {/* Rates Table */}
-          <section aria-labelledby="onenz-rates-title" className="space-y-3">
-            <h3 id="onenz-rates-title" className="text-base font-bold text-slate-950 sm:text-lg">
-              中国漫游资费对照表
+          {/* 1. 快速上手须知 */}
+          <section aria-labelledby="onenz-quickstart" className="space-y-3">
+            <h3 id="onenz-quickstart" className="text-base font-bold text-slate-950 sm:text-lg flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-100 text-primary text-xs font-bold">1</span>
+              快速上手须知
             </h3>
-            <div className="overflow-hidden rounded-2xl border border-orange-200/80 bg-white shadow-xs">
-              <div className="border-b border-orange-100 bg-orange-50/60 px-4 py-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-primary">基础资费明细</h4>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl border border-orange-200/80 bg-white p-4 shadow-xs">
+                <div className="font-semibold text-slate-900 text-sm">已预先激活</div>
+                <p className="mt-1 text-xs text-slate-600">卡片发货前已完成官方激活，到手直接插卡即可搜索网络使用。</p>
               </div>
+              <div className="rounded-2xl border border-orange-200/80 bg-white p-4 shadow-xs">
+                <div className="font-semibold text-slate-900 text-sm">漫游网络支持</div>
+                <p className="mt-1 text-xs text-slate-600">在中国大陆漫游时，通常自动连接中国移动或中国联通基站。</p>
+              </div>
+              <div className="rounded-2xl border border-orange-200/80 bg-white p-4 shadow-xs">
+                <div className="font-semibold text-slate-900 text-sm">基本计费逻辑</div>
+                <p className="mt-1 text-xs text-slate-600">预付费卡无欠费风险。境外漫游免费接收短信；接打电话、发送短信按量扣费。</p>
+              </div>
+              <div className="rounded-2xl border border-orange-200/80 bg-white p-4 shadow-xs">
+                <div className="font-semibold text-slate-900 text-sm">防跑流量提醒</div>
+                <p className="mt-1 text-xs text-slate-600">漫游数据资费昂贵，平时请务必关闭手机设置中的“数据漫游”开关。</p>
+              </div>
+            </div>
+          </section>
+
+          {/* 2. 查号与账户管理 */}
+          <section aria-labelledby="onenz-number-mgmt" className="space-y-3">
+            <h3 id="onenz-number-mgmt" className="text-base font-bold text-slate-950 sm:text-lg flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-100 text-primary text-xs font-bold">2</span>
+              查号与号码格式换算
+            </h3>
+            <div className="rounded-2xl border border-orange-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5">
+                  <div className="font-bold text-slate-900 text-xs">如何查询自己的手机号？</div>
+                  <ul className="mt-2 list-disc pl-4 space-y-1 text-xs text-slate-600 leading-5">
+                    <li><strong>方法 1（短信直查）：</strong> 发送短信内容 <code className="font-mono bg-orange-100/70 px-1 py-0.5 rounded text-primary">mynum</code> 到 <code className="font-mono bg-orange-100/70 px-1 py-0.5 rounded text-primary">521</code>。</li>
+                    <li><strong>方法 2（App 查看）：</strong> 登录 My One NZ 官方 App，在已绑定的 Prepay Mobile 服务主页查看。</li>
+                    <li><strong>方法 3（系统设置）：</strong> 在手机设置中的“蜂窝网络”或“SIM 卡”一栏查看本机号码。</li>
+                    <li><strong>方法 4（包装核对）：</strong> 查看随卡附带的外包装卡托上的条码标签。</li>
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5">
+                  <div className="font-bold text-slate-900 text-xs">国际格式换算规范</div>
+                  <p className="mt-2 text-xs text-slate-600 leading-5">
+                    新西兰国家代码为 <strong className="text-primary">+64</strong>。若本机号码在本土显示为 <code className="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">021 xxx xxxx</code>，在国内外平台填写注册时需<strong>去掉开头的 0</strong>，填写为：
+                  </p>
+                  <div className="mt-2 rounded-lg bg-white p-2.5 border border-orange-200/60 font-mono text-xs text-center font-bold text-primary">
+                    +64 21 xxx xxxx （或 0064 21 xxx xxxx）
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 3. 保号与有效期 */}
+          <section aria-labelledby="onenz-validity" className="space-y-4">
+            <h3 id="onenz-validity" className="text-base font-bold text-slate-950 sm:text-lg flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-100 text-primary text-xs font-bold">3</span>
+              保号与有效期
+            </h3>
+            <div className="rounded-2xl border border-orange-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="space-y-2">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Clock3 className="h-4 w-4 text-primary" />
+                  <span>如何查看号码有效期？</span>
+                </div>
+                <p className="text-xs text-slate-600 leading-6 pl-6">
+                  登录 One NZ 官方 App，进入已绑定的移动服务详情页（Credit expires 项，格式为日月年，如 <code className="font-mono bg-orange-50 px-1 py-0.5 rounded text-primary">29 Sep 27</code> 代表 2027年9月29日）即可直观看到到期日期。建议在手机日历中添加提前 7~14 天的日程提醒。
+                </p>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 space-y-2">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span>如何以最低成本长期保号？</span>
+                </div>
+                <div className="pl-6 text-xs text-slate-600 leading-6 space-y-1.5">
+                  <p>
+                    • One NZ 每次充值后，有效期通常会<strong>从充值当天起重新顺延 360 天</strong>（非原有效期向后累加）。
+                  </p>
+                  <p>
+                    • <strong>最佳策略</strong>：在卡片<strong>临近到期前几天</strong>再充值最低档位金额（10 NZD）。充值的 10 纽币不会被系统扣除，沉淀在卡内余额中，可用于紧急发短信或开通漫游包。
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-orange-200/70 bg-orange-50/40 p-4">
+                <div className="font-bold text-[#9f5327] text-xs">充值续费渠道指引：</div>
+                <p className="mt-1 text-xs text-slate-700 leading-5">
+                  可在 One NZ 官网（one.nz/prepaid-top-up）使用具有外币支付功能的 Visa / MasterCard 信用卡充值；<strong>如无外币信用卡，可直接联系本站在线客服代充，或在本站购买充值礼品卡/充值券进行充值续费保号</strong>（极速到账顺延 360 天）。
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openPublicSupport}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-primary/90"
+                  >
+                    <Headphones className="h-3.5 w-3.5" />
+                    <span>联系在线客服代充保号</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 4. 网络与信号问题 */}
+          <section aria-labelledby="onenz-network" className="space-y-4">
+            <h3 id="onenz-network" className="text-base font-bold text-slate-950 sm:text-lg flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-100 text-primary text-xs font-bold">4</span>
+              网络与信号问题
+            </h3>
+            <div className="rounded-2xl border border-orange-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="space-y-2">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Radio className="h-4 w-4 text-primary" />
+                  <span>插卡后显示“无服务”或没有网络怎么办？</span>
+                </div>
+                <ul className="list-disc pl-6 space-y-1.5 text-xs text-slate-600 leading-6">
+                  <li>确认使用的手机没有运营商网络锁（非合约机），双卡手机建议将 One NZ 实体卡插在<strong>卡槽 1</strong>；</li>
+                  <li>插卡后等待 1~3 分钟，尝试开启飞行模式等待 10 秒后再关闭，或直接重启手机；</li>
+                  <li>进入手机「设置 → 蜂窝网络/移动网络 → 网络运营商」，关闭“自动选择”，手动搜索并勾选「中国移动」或「中国联通」；</li>
+                  <li>尝试更换手机卡槽或换另一部手机交叉测试，并尽量避开地下室、电梯等信号屏蔽死角。</li>
+                </ul>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 space-y-2">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Wifi className="h-4 w-4 text-primary" />
+                  <span>支持开启 Wi-Fi 通话（VoWiFi）吗？</span>
+                </div>
+                <p className="text-xs text-slate-600 leading-6 pl-6">
+                  <strong>支持。</strong>若手机系统及运营商固件支持 Wi-Fi 通话，可在手机设置「蜂窝网络 → Wi-Fi 通话」中开启。连接 Wi-Fi 后能显著改善室内接收短信和通话的稳定性，在弱信号环境下依然稳定接码。
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 5. 短信与电话问题 */}
+          <section aria-labelledby="onenz-messages" className="space-y-4">
+            <h3 id="onenz-messages" className="text-base font-bold text-slate-950 sm:text-lg flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-100 text-primary text-xs font-bold">5</span>
+              短信与电话问题
+            </h3>
+            <div className="rounded-2xl border border-orange-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+              {/* 指定重点：发送 mynum 到 521 失败怎么办 */}
+              <div className="rounded-xl border border-orange-200 bg-orange-50/50 p-4 space-y-2">
+                <div className="font-bold text-red-800 text-sm flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                  <span>发送 mynum 到 521 失败怎么办？</span>
+                </div>
+                <div className="pl-6 text-xs text-slate-700 leading-6 space-y-1.5">
+                  <p>
+                    <strong>• iPhone：</strong> 进入“设置” -&gt; “信息”，临时<strong>关闭 iMessage</strong> 功能后重新发送短信。
+                  </p>
+                  <p>
+                    <strong>• Android：</strong> 打开自带短信 App 的设置 -&gt; 高级/更多设置 -&gt; 短信中心号码（SMSC），检查号码是否缺少 + 号。若显示为 <code className="rounded bg-white px-1 py-0.5 text-primary font-mono border border-orange-200">6421600600</code>，请手动修改为 <code className="rounded bg-white px-1 py-0.5 text-primary font-mono border border-orange-200 font-bold">+6421600600</code> 保存，检查无误后重启手机重试。
+                  </p>
+                  <p className="text-muted-foreground text-[11px]">
+                    发送内容为 <code className="font-mono bg-white px-1 py-0.5 rounded">mynum</code> 或 <code className="font-mono bg-white px-1 py-0.5 rounded">mytype</code>（全小写、无空格），接收方直接填 <code className="font-mono bg-white px-1 py-0.5 rounded">521</code>，无需加任何区号。
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  <span>为什么收不到某些平台的验证码？</span>
+                </div>
+                <ul className="list-disc pl-6 space-y-1.5 text-xs text-slate-600 leading-6">
+                  <li><strong>骚扰拦截检查</strong>：检查手机系统自带的骚扰拦截、垃圾短信过滤文件夹，部分系统可能误判境外短信；</li>
+                  <li><strong>号码格式核对</strong>：确认平台填写的手机号格式已正确去除首位 0（格式必须为 <code className="font-mono bg-slate-100 px-1 py-0.5 rounded">+64 21 xxx xxxx</code>）；</li>
+                  <li><strong>平台风控环境</strong>：部分境外互联网平台（如某些金融、社交平台）会根据当前登录设备的 IP、地理位置或网络风控环境决定是否下发短信。若多次未收到，建议更换干净的网络节点或代理环境重试。</li>
+                </ul>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 space-y-2">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-primary" />
+                  <span>为什么别人拨打我的号码提示空号或接不通？</span>
+                </div>
+                <ul className="list-disc pl-6 space-y-1.5 text-xs text-slate-600 leading-6">
+                  <li><strong>核对卡内余额</strong>：境外漫游接听电话为收费项目（约 2.89 NZD/分钟），卡内余额为 0 时系统可能限制呼入；</li>
+                  <li><strong>核对呼叫格式</strong>：主叫方拨号必须加上新西兰区号，如 <code className="font-mono bg-slate-100 px-1 py-0.5 rounded">+64 21 xxx xxxx</code> 或 <code className="font-mono bg-slate-100 px-1 py-0.5 rounded">0064 21 xxx xxxx</code>；</li>
+                  <li><strong>主叫方权限</strong>：拨打方的手机号码需开通国际长途呼出权限。</li>
+                </ul>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 space-y-2">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-primary" />
+                  <span>刚插卡余额为什么被扣了约 0.89 ~ 0.92 NZD？</span>
+                </div>
+                <p className="text-xs text-slate-600 leading-6 pl-6">
+                  这是 <strong>iPhone 的系统机制</strong>：插入新卡后系统尝试激活 iMessage 或 FaceTime 时，会在后台自动向境外 Apple 服务器发送一条国际验证短信产生扣费。
+                  <strong>避坑建议</strong>：iPhone 用户在插卡前或弹出提示时，务必果断点击【取消】，或在“设置 → 信息”中临时关闭 iMessage，插卡后仅收短信完全不影响正常使用。
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 6. 资费与账户安全 */}
+          <section aria-labelledby="onenz-security" className="space-y-4">
+            <h3 id="onenz-security" className="text-base font-bold text-slate-950 sm:text-lg flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-orange-100 text-primary text-xs font-bold">6</span>
+              资费与账户安全
+            </h3>
+            <div className="rounded-2xl border border-orange-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-red-100 bg-red-50/40 p-4 space-y-1.5">
+                  <div className="font-bold text-red-800 text-xs flex items-center gap-1.5">
+                    <ShieldAlert className="h-4 w-4 text-red-600 shrink-0" />
+                    <span>常闭数据漫游</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-5">
+                    绝大多数情况下仅需用此卡接收验证码（国内收短信完全免费）。新西兰漫游数据极其昂贵（约 11.5 NZD/MB），请务必在手机设置中始终关闭该卡的数据漫游，杜绝后台应用流量偷跑。
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-4 space-y-1.5">
+                  <div className="font-bold text-[#9f5327] text-xs flex items-center gap-1.5">
+                    <CreditCard className="h-4 w-4 text-primary shrink-0" />
+                    <span>正规充值渠道</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-5">
+                    建议使用官方支持的外币信用卡，或联系本站正规客服代充 / 购买官方充值礼品卡，切勿轻信来历不明的超低价黑卡代充，防止被运营商直接封号回收。
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4 space-y-1.5">
+                  <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <KeyRound className="h-4 w-4 text-slate-700 shrink-0" />
+                    <span>信息保密防盗</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-5">
+                    请妥善保管好卡套上的手机号、PUK 码、PIN 码及 One NZ 官方账户密码。切勿随意透露给第三方，切勿将平台登录短信验证码发送给任何人。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 漫游资费对照表 */}
+          <section aria-labelledby="onenz-rates-summary" className="space-y-3">
+            <h4 id="onenz-rates-summary" className="text-sm font-bold text-slate-900">
+              漫游资费明细速查
+            </h4>
+            <div className="overflow-hidden rounded-2xl border border-orange-200/80 bg-white shadow-xs">
               <div className="divide-y divide-slate-100 text-xs">
                 {roamingRates.map((r) => (
                   <div key={r.item} className="flex flex-col gap-1 p-3.5 sm:flex-row sm:items-center sm:justify-between">
@@ -360,80 +603,8 @@ export default function OneNzTutorial({
             </div>
           </section>
 
-          {/* 常见问题排错 */}
-          <section aria-labelledby="onenz-guide-troubleshooting" className="space-y-4">
-            <h3 id="onenz-guide-troubleshooting" className="text-base font-bold text-slate-950 sm:text-lg">
-              查号与常见故障排错
-            </h3>
-            <div className={`${tutorial.guideFaq} space-y-3`}>
-              {/* 指定 QA 1: 发送 mynum 到 521 失败怎么办？ */}
-              <details open className="rounded-2xl border border-orange-200/80 bg-white p-4">
-                <summary className="cursor-pointer font-bold text-slate-900 flex items-center gap-2">
-                  <span className={tutorial.questionBadge}>Q</span>
-                  发送 mynum 到 521 失败怎么办？
-                </summary>
-                <div className="mt-3 pl-8 text-xs leading-6 text-slate-700 space-y-2">
-                  <p>
-                    <strong>- iPhone：</strong> 进入“设置” -&gt; “信息”，临时关闭 iMessage 功能后重新发送短信。
-                  </p>
-                  <p>
-                    <strong>- Android：</strong> 打开自带短信 App 的设置 -&gt; 高级/更多设置 -&gt; 短信中心号码（SMSC），检查号码是否缺少 + 号。若显示为 <code className="rounded bg-orange-100/80 px-1 py-0.5 text-primary font-mono">6421600600</code>，请手动修改为 <code className="rounded bg-orange-100/80 px-1 py-0.5 text-primary font-mono">+6421600600</code> 保存，检查无误后重启手机重试。
-                  </p>
-                  <p className="text-muted-foreground">
-                    提示：发送内容为 <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">mynum</code> 或 <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">mytype</code>（全小写、无空格），接收方直接填 <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">521</code>，发送成功后系统将免费回复您的本机号码。
-                  </p>
-                </div>
-              </details>
-
-              {/* 指定 QA 2: 插卡无服务 */}
-              <details className="rounded-2xl border border-orange-200/80 bg-white p-4">
-                <summary className="cursor-pointer font-bold text-slate-900 flex items-center gap-2">
-                  <span className={tutorial.questionBadge}>Q</span>
-                  插卡后手机显示「无服务」或无法搜索到网络？
-                </summary>
-                <div className="mt-3 pl-8 text-xs leading-6 text-slate-700 space-y-1.5">
-                  <p>1. 请确认您的手机为支持全网通的无运营商网络锁设备（双卡手机建议插在卡槽 1）；</p>
-                  <p>2. 进入手机「设置 → 蜂窝网络/移动网络 → 网络运营商」，关闭“自动选择”，手动搜索并勾选「中国移动」或「中国联通」；</p>
-                  <p>3. 打开飞行模式等待 10 秒后关闭，或重启手机使 SIM 卡重新注册网络基站。</p>
-                </div>
-              </details>
-
-              {/* 指定 QA 3: 接收短信资费 */}
-              <details className="rounded-2xl border border-orange-200/80 bg-white p-4">
-                <summary className="cursor-pointer font-bold text-slate-900 flex items-center gap-2">
-                  <span className={tutorial.questionBadge}>Q</span>
-                  国内接收短信真的完全免费吗？
-                </summary>
-                <div className="mt-3 pl-8 text-xs leading-6 text-slate-700">
-                  <p>
-                    是的，只要关闭数据漫游、不主动发送国际短信、不接听/拨打电话，在中国大陆通过移动/联通漫游接收任何国内外验证码及通知短信均完全免费，不扣除卡内任何余额。
-                  </p>
-                </div>
-              </details>
-            </div>
-          </section>
-
-          {/* 充值续费与保号规则 */}
-          <section aria-labelledby="onenz-recharge-section" className="space-y-4">
-            <div className="rounded-2xl border border-orange-200/80 bg-orange-50/40 p-5 space-y-3">
-              <h3 id="onenz-recharge-section" className="text-sm font-bold text-[#9f5327] flex items-center gap-2">
-                <Clock3 className="h-4 w-4" />
-                每年充值 10 纽币（NZD）长期保号规则
-              </h3>
-              <ul className="list-disc pl-5 space-y-2 text-xs leading-6 text-slate-700">
-                <li>
-                  <strong>有效期自动顺延 360 天：</strong>新卡激活后拥有 12 个月（360 天）有效期。后续每年只需充值一次 10 NZD，账户有效期自动从充值当天起往后延长 360 天！
-                </li>
-                <li>
-                  <strong>余额永久留存：</strong>充值的 10 纽币不会被系统扣除，而是沉淀在卡内余额中，可用于未来发短信或开通国际套餐。
-                </li>
-                <li>
-                  <strong>充值续费渠道：</strong>可在 One NZ 官网（one.nz/prepaid-top-up）使用具有外币支付功能的 Visa / MasterCard 信用卡充值；<strong>如无外币信用卡，可直接联系本站在线客服协助代充，或在本站购买充值礼品卡/充值券进行充值续费</strong>（极速到账顺延 360 天）。
-                </li>
-              </ul>
-            </div>
-
-            {/* 客服与网站代充卡片 */}
+          {/* 客服与网站代充卡片 */}
+          <section aria-label="代充客服支持">
             <div className="flex flex-col gap-3 rounded-2xl border border-orange-200/80 bg-white p-4 sm:flex-row sm:items-center sm:justify-between shadow-xs">
               <div>
                 <div className="text-sm font-bold text-slate-900">需要代充 One NZ 纽币或购买充值礼品卡？</div>
