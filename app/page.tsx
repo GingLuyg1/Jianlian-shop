@@ -107,7 +107,7 @@ function HeroCarousel() {
   }, []);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm xl:h-full">
+    <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm h-[200px] xl:h-[220px] 2xl:h-[270px]">
       <div
         className={cn(
           "flex h-full w-[200%]",
@@ -118,23 +118,23 @@ function HeroCarousel() {
         {orderedSlides.map((slide) => (
           <div
             key={slide.title}
-            className="relative h-full w-1/2 shrink-0 overflow-hidden px-8 py-7"
+            className="relative h-full w-1/2 shrink-0 overflow-hidden px-6 py-5 2xl:px-8 2xl:py-7"
           >
-            <div className="relative z-10 flex h-full max-w-4xl flex-col justify-center pb-6 lg:max-w-[52%] lg:pb-0">
-              <h1 className="max-w-3xl text-2xl font-bold leading-tight tracking-tight text-slate-950 sm:text-4xl lg:text-5xl">
+            <div className="relative z-10 flex h-full max-w-4xl flex-col justify-center pb-4 lg:max-w-[55%] lg:pb-0">
+              <h1 className="max-w-3xl text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl lg:text-3xl 2xl:text-4xl">
                 {slide.title}
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:mt-5 sm:text-base sm:leading-7 lg:text-lg">
+              <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground sm:mt-2.5 sm:text-sm sm:leading-6 2xl:text-base">
                 {slide.desc}
               </p>
-              <div className="mt-7 flex flex-wrap gap-3 text-sm font-medium text-primary">
-                <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+              <div className="mt-3 2xl:mt-5 flex flex-wrap gap-2 text-xs 2xl:text-sm font-medium text-primary">
+                <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
                   安全合规
                 </span>
-                <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+                <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
                   快速交付
                 </span>
-                <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+                <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
                   专业售后
                 </span>
               </div>
@@ -145,7 +145,7 @@ function HeroCarousel() {
         ))}
       </div>
 
-      <div className="absolute bottom-5 left-8 z-20 flex gap-2">
+      <div className="absolute bottom-3.5 left-6 z-20 flex gap-2">
         {heroSlides.map((slide, index) => (
           <button
             key={slide.title}
@@ -306,42 +306,17 @@ export default function HomePage() {
     return mobileCategoryTree.flatMap((cat) => cat.items);
   }, [mobileCategoryTree]);
 
-  useEffect(() => {
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    const desktopQuery = window.matchMedia("(min-width: 1280px)");
-
-    const syncOverflow = () => {
-      if (desktopQuery.matches && !isMobile) {
-        document.body.style.overflow = "hidden";
-        document.documentElement.style.overflow = "hidden";
-      } else {
-        document.body.style.overflow = previousBodyOverflow;
-        document.documentElement.style.overflow = previousHtmlOverflow;
-      }
-    };
-
-    syncOverflow();
-    desktopQuery.addEventListener("change", syncOverflow);
-
-    return () => {
-      desktopQuery.removeEventListener("change", syncOverflow);
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
-    };
-  }, [isMobile]);
-
   return (
-    <PublicLayout contentClassName={cn("mx-auto max-w-[1540px] px-4 py-3 md:mt-0 xl:h-[calc(100vh-64px)] xl:overflow-hidden md:px-5 md:py-3", isMobile && "!px-3 !py-2.5 !h-auto !overflow-visible")}>
-      <div className={cn("grid gap-3 xl:h-full md:gap-4 xl:grid-rows-[300px_minmax(0,1fr)_96px]", isMobile && "!grid-rows-none !h-auto !gap-3")}>
+    <PublicLayout contentClassName={cn("mx-auto max-w-[1540px] px-4 py-3 md:px-5 md:py-4 pb-12", isMobile && "!px-3 !py-2.5 !pb-16")}>
+      <div className={cn("flex flex-col gap-3.5 md:gap-4", isMobile && "!gap-3")}>
         <div className={cn(
-          "[&_h1]:text-2xl [&_h1]:lg:text-5xl [&_p]:mt-2.5 [&_p]:text-sm [&_p]:leading-6 [&_p]:lg:mt-5 [&_p]:lg:text-lg [&_p]:lg:leading-7 [&>section>div:first-child>div]:px-5 [&>section>div:first-child>div]:py-5 [&>section>div:first-child>div]:pb-10 [&>section>div:first-child>div]:lg:px-8 [&>section>div:first-child>div]:lg:py-7 [&>section>div:last-child]:bottom-3.5 [&>section>div:last-child]:left-5 [&>section>div:last-child]:lg:bottom-5 [&>section>div:last-child]:lg:left-8",
+          "[&_h1]:text-xl [&_h1]:sm:text-2xl [&_h1]:lg:text-3xl [&_h1]:2xl:text-4xl [&_p]:mt-2 [&_p]:text-xs [&_p]:leading-5 [&_p]:sm:mt-2.5 [&_p]:sm:text-sm [&_p]:sm:leading-6 [&_p]:2xl:text-base [&>section>div:first-child>div]:px-5 [&>section>div:first-child>div]:py-4 [&>section>div:first-child>div]:pb-8 [&>section>div:first-child>div]:lg:px-7 [&>section>div:first-child>div]:lg:py-6 [&>section>div:last-child]:bottom-3 [&>section>div:last-child]:left-5 [&>section>div:last-child]:lg:bottom-4 [&>section>div:last-child]:lg:left-7",
           isMobile && "[&_h1]:!text-xl [&_h1]:!leading-7 [&_p]:!mt-2 [&_p]:!text-xs [&_p]:!leading-5 [&>section]:!min-h-0 [&>section>div:first-child]:!min-h-[168px] [&>section>div:first-child>div]:!px-4 [&>section>div:first-child>div]:!py-3.5 [&>section>div:first-child>div]:!pb-9 [&>section>div:last-child]:!bottom-2.5 [&>section>div:last-child]:!left-4 [&_.hero-visual-desktop]:!hidden"
         )}>
           <HeroCarousel />
         </div>
 
-        <section className={cn("grid min-h-0 gap-3 md:gap-4 xl:grid-cols-[1fr_330px]", isMobile && "!grid-cols-1")}>
+        <section className={cn("grid gap-3 md:gap-4 xl:grid-cols-[1fr_330px]", isMobile && "!grid-cols-1")}>
           {isMobile && mobileSecondaryItems.length > 0 ? (
             <div data-testid="mobile-secondary-direct-grid" className="rounded-2xl border border-orange-200/80 bg-white p-3.5 shadow-sm">
               <div className="mb-2.5 flex items-center justify-between gap-2">
