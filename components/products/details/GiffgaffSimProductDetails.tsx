@@ -135,24 +135,24 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
       title: "Giffgaff 白卡（全新未激活）",
       price: "¥68",
       features: [
-        "全新未拆封三合一实体卡（附 6位/13位 激活码）",
-        "需在官网（giffgaff.com/activate）自主输入激活码",
-        "使用外币卡或本站充值卡充值 £10 激活",
-        "官方活动额外赠送 £5（激活后到账合计 £15 余额）",
-        "适合有外币信用卡、喜欢 100% 自主绑定私人邮箱的买家",
+        "全新未拆封三合一实体纯白卡（未激活 · 无赠送）",
+        "附带官方 6位/13位 激活码，需在官网自主输入激活",
+        "自行充值激活，充多少到账多少（例如充 £10 到账 £10）",
+        "国内自动漫游中国移动/联通 4G/5G 免费收短信",
+        "适合有外币卡、喜欢 100% 自主选号与自主绑邮箱的买家",
       ],
       recommend: false,
     },
     {
-      tag: "超值首充特惠",
-      title: "GiffGaff 赠5英镑卡",
+      tag: "超值首充赠金",
+      title: "GiffGaff 赠5英镑卡（全新未激活）",
       price: "¥98",
       features: [
-        "全新三合一实体卡，附带专享首充特权",
-        "享受官方首充优惠与额外 £5 英镑官方赠金到账",
-        "极具性价比的英国原生电话卡之选",
+        "全新三合一实体卡（未激活 · 附首充赠送特权）",
+        "在官网首次充值 £10 激活时，官方额外赠送 £5 英镑",
+        "首充到账合计 £15 充足余额（约合 140 元真实余额）",
         "国内自动漫游中国移动/联通 4G/5G 免费收短信",
-        "支持全平台 AI、社交、海淘验证",
+        "极具性价比的英国原生电话卡之选，全平台通用",
       ],
       recommend: false,
     },
@@ -332,14 +332,16 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
                 key={cat.title}
                 className="flex flex-col rounded-xl border border-orange-100 bg-gradient-to-b from-orange-50/30 to-white p-4"
               >
-                <div className="flex items-center justify-between border-b border-orange-100/60 pb-3">
+                <div className="border-b border-orange-100/60 pb-3">
                   <div className="flex items-center gap-2">
-                    <CatIcon className="h-4 w-4 text-orange-600" />
-                    <span className="text-xs font-bold text-slate-900 sm:text-sm">{cat.title}</span>
+                    <CatIcon className="h-4 w-4 shrink-0 text-orange-600" />
+                    <span className="whitespace-nowrap text-xs font-bold text-slate-900 sm:text-sm">{cat.title}</span>
                   </div>
-                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${cat.color}`}>
-                    {cat.badge}
-                  </span>
+                  <div className="mt-2">
+                    <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-medium ${cat.color}`}>
+                      {cat.badge}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-3 space-y-2.5">
                   {cat.items.map((item) => (

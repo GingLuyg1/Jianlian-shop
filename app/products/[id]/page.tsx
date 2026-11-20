@@ -15,8 +15,13 @@ import {
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import EncMobileProductDetails from "@/components/products/details/EncMobileProductDetails";
+import EuropeanSimProductDetails from "@/components/products/details/EuropeanSimProductDetails";
 import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
+import HahaSimProductDetails from "@/components/products/details/HahaSimProductDetails";
 import OneNzProductDetails from "@/components/products/details/OneNzProductDetails";
+import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
+import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Badge } from "@/components/ui/badge";
@@ -535,6 +540,16 @@ export default function ProductDetailPage() {
                 <GiffgaffSimProductDetails product={product} />
               ) : (product.name.toLowerCase().includes("one nz") || (product.slug || "").includes("one-nz") || (product.slug || "") === "sim-nz-001") ? (
                 <OneNzProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("haha") || (product.slug || "").includes("haha") || (product.slug || "") === "sim-haha") ? (
+                <HahaSimProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("ultra") || (product.slug || "").includes("ultra") || product.name.toLowerCase().includes("t-mobile") || (product.slug || "").includes("t-mobile")) ? (
+                <UltraMobileProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("enc") || (product.slug || "").includes("enc") || product.name.toLowerCase().includes("air mobile") || (product.slug || "").includes("air-mobile")) ? (
+                <EncMobileProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("orange") || (product.slug || "").includes("orange") || product.name.toLowerCase().includes("vodafone") || (product.slug || "").includes("vodafone") || product.name.toLowerCase().includes("movistar") || (product.slug || "").includes("movistar")) ? (
+                <EuropeanSimProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("rakuten") || (product.slug || "").includes("rakuten") || product.name.includes("乐天")) ? (
+                <RakutenMobileProductDetails product={product} />
               ) : (
                 <>
                   <Card>

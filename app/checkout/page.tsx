@@ -15,7 +15,12 @@ import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
+import EncMobileProductDetails from "@/components/products/details/EncMobileProductDetails";
+import EuropeanSimProductDetails from "@/components/products/details/EuropeanSimProductDetails";
 import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
+import HahaSimProductDetails from "@/components/products/details/HahaSimProductDetails";
+import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
+import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
 import Link from "next/link";
 import {
   CreditCard,
@@ -181,6 +186,53 @@ function isGiffgaffSimProduct(product: { id?: string; name?: string; slug?: stri
     name.includes("充值") ||
     slug.includes("topup");
   return isGiffgaff && !isTopup;
+}
+
+function isHahaSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return name.includes("haha") || slug.includes("haha");
+}
+
+function isUltraMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return (
+    name.includes("ultra") ||
+    slug.includes("ultra") ||
+    name.includes("t-mobile") ||
+    slug.includes("t-mobile")
+  );
+}
+
+function isEncMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return (
+    name.includes("enc") ||
+    slug.includes("enc") ||
+    name.includes("air mobile") ||
+    slug.includes("air-mobile")
+  );
+}
+
+function isEuropeanSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return (
+    name.includes("orange") ||
+    slug.includes("orange") ||
+    name.includes("vodafone") ||
+    slug.includes("vodafone") ||
+    name.includes("movistar") ||
+    slug.includes("movistar")
+  );
+}
+
+function isRakutenMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return name.includes("rakuten") || slug.includes("rakuten") || name.includes("乐天");
 }
 const CLAUDE_RECHARGE_PRODUCT_IDS = [
   "ai-claude-cdk-ng-pro-1m",
@@ -1406,6 +1458,16 @@ function ProductDetailCard({
           <OneNzProductDetails product={product} />
         ) : isGiffgaffSimProduct(product) ? (
           <GiffgaffSimProductDetails product={product} />
+        ) : isHahaSimProduct(product) ? (
+          <HahaSimProductDetails product={product} />
+        ) : isUltraMobileProduct(product) ? (
+          <UltraMobileProductDetails product={product} />
+        ) : isEncMobileProduct(product) ? (
+          <EncMobileProductDetails product={product} />
+        ) : isEuropeanSimProduct(product) ? (
+          <EuropeanSimProductDetails product={product} />
+        ) : isRakutenMobileProduct(product) ? (
+          <RakutenMobileProductDetails product={product} />
         ) : (
           <div className="mt-8 w-full">
             <h2 className="mb-3 text-base font-semibold">商品详情</h2>
