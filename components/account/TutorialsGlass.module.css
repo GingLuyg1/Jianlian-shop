@@ -13,6 +13,7 @@
 .topicList[data-topic=chatgpt-guide] { --topic-index:6; }
 .topicList[data-topic=google-region] { --topic-index:7; }
 .topicList[data-topic=facebook] { --topic-index:8; }
+.topicList[data-topic=twitter] { --topic-index:9; }
 .topicIndicator { width:100%; height:var(--topic-height); transform:translateY(calc(var(--topic-index) * (var(--topic-height) + var(--topic-gap)))); }
 .navItem { display:flex; width:100%; height:var(--topic-height); min-width:0; align-items:center; gap:10px; border-radius:18px; padding:0 12px; color:#665749; }
 .navItem[aria-current=true] { color:#ac5624; font-weight:600; }
@@ -29,19 +30,21 @@
 @keyframes expand { from { height:0; overflow:hidden; opacity:.55; } to { height:var(--expanded-height); overflow:hidden; opacity:1; } }
 @keyframes collapse { from { height:var(--expanded-height); overflow:hidden; opacity:1; } to { height:0; overflow:hidden; opacity:0; } }
 .appleContents { margin:8px 2px 4px 14px; padding-left:9px; border-left:1px solid #ead7c5; }
-.contentsLink { display:block; width:100%; padding:6px 8px; border-radius:8px; text-align:left; font-size:13px; line-height:1.5; color:#665749; }
+.contentsLink { display:block; width:100%; padding:6px 8px; border-radius:8px; text-align:left; font-size:13px; line-height:1.5; color:#665749; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .subtopics { position:relative; isolation:isolate; }
-.subtopics .contentsLink { position:relative; height:36px; padding:8px 10px; border-radius:12px; }
+.subtopics .contentsLink { position:relative; height:36px; padding:8px 10px; border-radius:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .subtopics .contentsLink[aria-current=page] { color:#ac5624; font-weight:600; }
 .subtopicIndicator { left:9px; width:calc(100% - 9px); height:36px; border-radius:12px; transform:translateY(0); }
 .subtopics[data-guide=keeper] .subtopicIndicator,
 .subtopics[data-guide=guide] .subtopicIndicator,
 .subtopics[data-guide=security] .subtopicIndicator,
-.subtopics[data-guide=binding] .subtopicIndicator {
+.subtopics[data-guide=binding] .subtopicIndicator,
+.subtopics[data-guide=x-2fa] .subtopicIndicator {
   transform: translateY(36px);
 }
 .subtopics[data-guide=rebind] .subtopicIndicator,
-.subtopics[data-guide=rates] .subtopicIndicator {
+.subtopics[data-guide=rates] .subtopicIndicator,
+.subtopics[data-guide=x-renew-token] .subtopicIndicator {
   transform: translateY(72px);
 }
 .subtopics[data-guide=anti-ban] .subtopicIndicator {
