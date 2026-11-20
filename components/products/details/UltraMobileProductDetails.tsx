@@ -125,7 +125,7 @@ export default function UltraMobileProductDetails({ product }: UltraMobileProduc
 
   const specs = [
     ["商品规格", "Ultra Mobile PayGo 官方原生实体三合一 SIM 卡（T-Mobile 旗下网络）"],
-    ["交付方式", "国内现货默认包邮直达（妥善防静电防折弯保护包装；如需顺丰加急请联系客服）"],
+    ["交付方式", "妥善防静电防折弯保护包装，默认包邮直达（如需顺丰加急请联系客服）"],
     ["基础月租", "每月 3 美元（含 100 分钟通话 + 100 条免费短信，建议账户充值一定余额自动扣月租）"],
     ["漫游网络", "国内漫游接入中国移动/联通信号；在 Wi-Fi Calling 下直连美国基站免漫游费"],
     ["号码格式", "美国本土原生手机号码段（+1 xxx xxx xxxx，最高信誉物理卡号段）"],
@@ -136,7 +136,7 @@ export default function UltraMobileProductDetails({ product }: UltraMobileProduc
     {
       step: "01",
       title: "下单包邮送达",
-      desc: "提交订单并填写准确收件信息，国内现货默认包邮送达，妥善封装保护芯片安全。",
+      desc: "提交订单并填写准确收件信息，妥善封装防静电防折弯保护芯片安全，默认包邮送达。",
     },
     {
       step: "02",
@@ -210,7 +210,7 @@ export default function UltraMobileProductDetails({ product }: UltraMobileProduc
           <div className="relative mt-5 flex flex-wrap items-center gap-3 pt-2 text-xs text-orange-100/90">
             <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 backdrop-blur-sm">
               <Truck className="h-4 w-4 text-orange-300" />
-              <span>国内现货 · 默认包邮发货（加急顺丰可联系客服）</span>
+              <span>默认包邮发货（加急顺丰可联系客服）</span>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 backdrop-blur-sm">
               <Smartphone className="h-4 w-4 text-emerald-300" />
@@ -368,10 +368,10 @@ export default function UltraMobileProductDetails({ product }: UltraMobileProduc
       <div className="flex flex-col gap-4 rounded-2xl border border-orange-200/90 bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="space-y-1">
           <div className="text-sm font-bold text-slate-950 sm:text-base">
-            需要了解更多 Ultra Mobile 激活指导或美银开户搭配技巧？
+            需要了解更多 Ultra Mobile 激活指导、WiFi Calling 设置或跨境验证技巧？
           </div>
           <p className="text-xs text-slate-600 sm:text-sm">
-            本站为您提供全流程咨询与技术支持，保障您的境外卡片长期安全稳定持有。
+            本站为您提供全流程卡片激活指导与售后支持，保障您的境外卡片长期安全稳定持有。
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2.5">

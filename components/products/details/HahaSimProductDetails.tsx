@@ -124,7 +124,7 @@ export default function HahaSimProductDetails({ product }: HahaSimProductDetails
 
   const specs = [
     ["商品名称", "中国香港 Haha SIM 实体三合一电话卡（丰泽 Fortress & 和记 3HK 联合出品）"],
-    ["交付方式", "国内现货默认包邮直达（妥善防静电防折弯保护包装；如需顺丰加急请联系在线客服）"],
+    ["交付方式", "妥善防静电防折弯保护包装，默认包邮直达（如需顺丰加急请联系在线客服）"],
     ["漫游网络", "国内自动漫游接入中国移动或中国联通 4G / 5G 高速网络"],
     ["号码格式", "香港本土原生手机号码段（+852 开头，高信誉原生实体移动号）"],
     ["保号规则", "新卡开卡自带 365 天有效期；后续每年仅需充值 10 港币（约 9 元）顺延 365 天，余额留存不过期"],
@@ -135,7 +135,7 @@ export default function HahaSimProductDetails({ product }: HahaSimProductDetails
     {
       step: "01",
       title: "下单包邮送达",
-      desc: "提交订单并填写准确收件信息，国内现货默认包邮送达，妥善封装保护芯片安全。",
+      desc: "提交订单并填写准确收件信息，妥善封装防静电防折弯保护芯片安全，默认包邮送达。",
     },
     {
       step: "02",
@@ -213,7 +213,7 @@ export default function HahaSimProductDetails({ product }: HahaSimProductDetails
           <div className="relative mt-5 flex flex-wrap items-center gap-3 pt-2 text-xs text-orange-100/90">
             <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 backdrop-blur-sm">
               <Truck className="h-4 w-4 text-orange-300" />
-              <span>国内现货 · 默认包邮发货（加急顺丰可联系客服）</span>
+              <span>默认包邮发货（加急顺丰可联系客服）</span>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 backdrop-blur-sm">
               <Smartphone className="h-4 w-4 text-emerald-300" />

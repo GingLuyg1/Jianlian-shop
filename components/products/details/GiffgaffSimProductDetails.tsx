@@ -174,7 +174,7 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
   // 商品参数与规则说明
   const specs = [
     ["商品规格", "Giffgaff 英国预付费原生实体三合一 SIM 卡（支持标准大卡、Micro、Nano 卡槽）"],
-    ["交付方式", "国内现货默认包邮直达（妥善防静电防折弯保护包装；如需顺丰加急请联系客服）"],
+    ["交付方式", "妥善防静电防折弯保护包装，默认包邮直达（如需顺丰加急请联系客服）"],
     ["漫游网络", "国内自动漫游接入中国移动或中国联通 4G / 5G 高速信号"],
     ["号码格式", "英国本土原生手机号码段（+44 7xxx xxxxxx，高信誉原生实体移动号）"],
     ["保号规则", "每 180 天产生一次计费活动（发 1 条短信或使用保号助手消耗约 120KB 流量约 2.4 便士，即可延期 180 天）"],
@@ -186,7 +186,7 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
     {
       step: "01",
       title: "下单包邮送达",
-      desc: "提交订单并填写准确的收件信息，国内现货默认包邮送达（妥善封装防折弯保护芯片安全）。",
+      desc: "提交订单并填写准确的收件信息，妥善封装防静电防折弯保护芯片安全，默认包邮送达。",
     },
     {
       step: "02",
@@ -270,7 +270,7 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
           <div className="relative mt-5 flex flex-wrap items-center gap-3 pt-2 text-xs text-amber-100/90">
             <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 backdrop-blur-sm">
               <Truck className="h-4 w-4 text-amber-300" />
-              <span>国内现货 · 默认包邮发货（加急顺丰可联系客服）</span>
+              <span>默认包邮发货（加急顺丰可联系客服）</span>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 backdrop-blur-sm">
               <Smartphone className="h-4 w-4 text-emerald-300" />
