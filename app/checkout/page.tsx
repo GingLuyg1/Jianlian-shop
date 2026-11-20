@@ -227,7 +227,7 @@ function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { settings } = usePublicSettings();
-  const productId = searchParams.get("product") ?? "";
+  const productId = searchParams.get("p") || searchParams.get("product") || "";
   const requestedSkuId = searchParams.get("sku") ?? "";
 
   const [email, setEmail] = useState("");
@@ -795,7 +795,11 @@ function CheckoutPageContent() {
           product={product}
           loading={productLoading}
           priceLabel={priceLabel}
-          closeHref={safeProductReturnTo(searchParams.get("returnTo")) ?? getProductListHref(product)}
+          closeHref={
+            safeProductReturnTo(searchParams.get("returnTo")) ??
+            (typeof window !== "undefined" ? safeProductReturnTo(sessionStorage.getItem("checkout_return_to")) : null) ??
+            getProductListHref(product)
+          }
         />
 
         <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden lg:h-full">

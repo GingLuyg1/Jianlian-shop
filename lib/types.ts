@@ -36,6 +36,7 @@ export type ListingStatus = "active" | "inactive";
 // A single product in the mall
 export interface Product {
   id: string;
+  slug?: string | null;
   name: string;                          // 商品名称
   category: ProductCategory;             // 商品分类
   categoryLabel: string;                 // 分类中文名

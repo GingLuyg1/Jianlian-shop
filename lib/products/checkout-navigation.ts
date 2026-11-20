@@ -10,10 +10,16 @@ export function safeProductReturnTo(value: string | null | undefined): string | 
   } catch { return null; }
 }
 
-export function checkoutHref(id: string, source: string): string {
-  const query = new URLSearchParams({ product: id });
-  const returnTo = safeProductReturnTo(source);
-  if (returnTo) query.set("returnTo", returnTo);
+export function checkoutHref(idOrSlug: string, source?: string): string {
+  if (typeof window !== "undefined" && source) {
+    const returnTo = safeProductReturnTo(source);
+    if (returnTo) {
+      try {
+        sessionStorage.setItem("checkout_return_to", returnTo);
+      } catch {}
+    }
+  }
+  const query = new URLSearchParams({ p: idOrSlug });
   return `/checkout?${query}`;
 }
 

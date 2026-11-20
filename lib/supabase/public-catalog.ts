@@ -454,6 +454,7 @@ export function mapPublicProductToProduct(
 
   return {
     id: row.id,
+    slug: row.slug,
     name: row.name,
     category: productCategory,
     categoryLabel,

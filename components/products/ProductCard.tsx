@@ -88,10 +88,10 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" className="h-8 text-xs" asChild>
-            <Link href={`/products/${product.id}`}>查看详情</Link>
+            <Link href={`/products/${product.slug || product.id}`}>查看详情</Link>
           </Button>
           <Button className="h-8 text-xs" disabled={isDisabled} asChild={!isDisabled}>
-            {isDisabled ? "不可购买" : <Link href={`/checkout?product=${product.id}`}>立即购买</Link>}
+            {isDisabled ? "不可购买" : <Link href={`/checkout?p=${product.slug || product.id}`}>立即购买</Link>}
           </Button>
         </div>
       </CardContent>

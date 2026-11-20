@@ -16,12 +16,30 @@ type TutorialImageProps = {
 export default function TutorialImage({ src, caption, width, height, previewClassName = "mx-auto h-auto max-h-[420px] w-full object-contain" }: TutorialImageProps) {
   return (
     <Dialog>
-      <figure className="min-w-0 overflow-hidden rounded-2xl border border-orange-100 bg-white">
+      <figure
+        className="min-w-0 overflow-hidden rounded-2xl border border-orange-100 bg-white"
+        onContextMenu={(e) => e.preventDefault()}
+      >
         <DialogTrigger asChild>
-          <button type="button" aria-label={`查看大图：${caption}`} className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary">
+          <button
+            type="button"
+            aria-label={`查看大图：${caption}`}
+            className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+            onContextMenu={(e) => e.preventDefault()}
+          >
             {/* Full-resolution local assets are also used by the zoom canvas. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={caption} width={width} height={height} loading="lazy" decoding="async" className={previewClassName} />
+            <img
+              src={src}
+              alt={caption}
+              width={width}
+              height={height}
+              draggable={false}
+              loading="lazy"
+              decoding="async"
+              onContextMenu={(e) => e.preventDefault()}
+              className={`${previewClassName} select-none`}
+            />
           </button>
         </DialogTrigger>
         <figcaption className="flex items-center justify-between gap-3 border-t border-orange-100 bg-orange-50/50 px-4 py-3 text-xs leading-5 text-slate-600">
@@ -37,10 +55,21 @@ export default function TutorialImage({ src, caption, width, height, previewClas
               <Button type="button" size="sm" variant="outline" onClick={() => zoomIn(0.25, 0)} aria-label="放大图片"><Plus className="h-4 w-4" aria-hidden="true" /></Button>
               <Button type="button" size="sm" variant="outline" onClick={() => resetTransform(0)}><RotateCcw className="mr-1.5 h-4 w-4" aria-hidden="true" />复位</Button>
             </div>
-            <div className="h-[min(68dvh,720px)] min-h-0 overflow-hidden rounded-xl border border-orange-100 bg-white">
+            <div
+              className="h-[min(68dvh,720px)] min-h-0 overflow-hidden rounded-xl border border-orange-100 bg-white"
+              onContextMenu={(e) => e.preventDefault()}
+            >
               <TransformComponent wrapperStyle={{ width: "100%", height: "100%", touchAction: "none" }} contentStyle={{ width: "100%", height: "100%" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt={caption} draggable={false} width={width} height={height} className="h-full w-full select-none object-contain" />
+                <img
+                  src={src}
+                  alt={caption}
+                  draggable={false}
+                  width={width}
+                  height={height}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className="h-full w-full select-none object-contain pointer-events-auto"
+                />
               </TransformComponent>
             </div>
           </>}
