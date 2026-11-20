@@ -78,46 +78,6 @@ export default function TwitterTutorial({
         <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
           汇总 X (Twitter) 预制账号的 Token 免密登录、2FA 两步动态验证码登录、以及修改密码后提取最新 Token 的全流程实操技巧，避开风控异常，保障账号长期稳定可用。
         </p>
-
-        {/* 顶部三章节快速切换胶囊 */}
-        <div className="mt-5 flex flex-wrap gap-2 border-t border-orange-200/50 pt-4">
-          <button
-            type="button"
-            onClick={() => onSelectSection?.("x-token")}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
-              activeSection === "x-token"
-                ? "bg-primary text-white shadow-xs"
-                : "bg-white/80 text-slate-700 hover:bg-orange-50 border border-orange-200/60"
-            }`}
-          >
-            <Laptop className="h-3.5 w-3.5" />
-            <span>X Token 使用教程(仅电脑)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectSection?.("x-2fa")}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
-              activeSection === "x-2fa"
-                ? "bg-primary text-white shadow-xs"
-                : "bg-white/80 text-slate-700 hover:bg-orange-50 border border-orange-200/60"
-            }`}
-          >
-            <Smartphone className="h-3.5 w-3.5" />
-            <span>X 2fa 使用教程(手机/电脑)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectSection?.("x-renew-token")}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
-              activeSection === "x-renew-token"
-                ? "bg-primary text-white shadow-xs"
-                : "bg-white/80 text-slate-700 hover:bg-orange-50 border border-orange-200/60"
-            }`}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            <span>X 修改密码后重新获取Token</span>
-          </button>
-        </div>
       </section>
 
       {/* 教程一：X Token 使用教程 (仅电脑) */}
@@ -165,7 +125,7 @@ export default function TwitterTutorial({
                     src="/tutorials/twitter/x_token_step1_extension.png"
                     caption="图 1：在推特页面中打开扩展插件，粘贴卡密中的 Token 并点击 LOGIN"
                     width={800}
-                    height={384}
+                    height={400}
                   />
                 </div>
               </div>
@@ -477,50 +437,7 @@ export default function TwitterTutorial({
         </div>
       )}
 
-      {/* 底部全教程导航卡片 */}
-      <section className="rounded-2xl border border-orange-200/80 bg-orange-50/40 p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="font-bold text-slate-900 text-sm">X (Twitter) 教程目录快速切换</h3>
-            <p className="text-xs text-slate-500 mt-0.5">点击直接切换不同实操指引章节</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onSelectSection?.("x-token")}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-                activeSection === "x-token"
-                  ? "bg-primary text-white"
-                  : "bg-white text-slate-700 border border-orange-200/70 hover:bg-orange-50"
-              }`}
-            >
-              X Token 教程
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectSection?.("x-2fa")}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-                activeSection === "x-2fa"
-                  ? "bg-primary text-white"
-                  : "bg-white text-slate-700 border border-orange-200/70 hover:bg-orange-50"
-              }`}
-            >
-              X 2FA 教程
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectSection?.("x-renew-token")}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-                activeSection === "x-renew-token"
-                  ? "bg-primary text-white"
-                  : "bg-white text-slate-700 border border-orange-200/70 hover:bg-orange-50"
-              }`}
-            >
-              重新获取 Token
-            </button>
-          </div>
-        </div>
-      </section>
+
     </div>
   );
 }
