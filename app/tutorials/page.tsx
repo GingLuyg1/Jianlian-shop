@@ -99,6 +99,114 @@ const tutorialTopics = [
   { id: "twitter", label: "X (Twitter)", title: "X (Twitter) 账号使用与管理教程", description: "X Token 电脑免密直登、2FA 两步动态验证码安全登录、以及修改密码后重新提取最新 Token 全流程指引", icon: TwitterWireframeIcon, keywords: ["X", "Twitter", "推特", "Token", "auth_token", "X Token", "X 2fa", "2FA", "两步验证", "重新获取Token", "改密", "修改密码", "插件登录", "Cookie", "Application", "F12", "开发者工具"] },
 ] as const;
 
+function getTutorialTitleMeta({
+  topicId,
+  giffgaffGuide,
+  oneNzGuide,
+  chatgptGuide,
+  twitterGuide,
+}: {
+  topicId: string;
+  giffgaffGuide: "activation" | "keeper";
+  oneNzGuide: OneNzSection;
+  chatgptGuide: ChatGptTutorialSection;
+  twitterGuide: TwitterSection;
+}) {
+  switch (topicId) {
+    case "twitter": {
+      const subTitle =
+        twitterGuide === "x-token"
+          ? "X Token 使用教程(仅电脑)"
+          : twitterGuide === "x-2fa"
+          ? "X 2fa 使用教程(手机/电脑)"
+          : "X 修改密码后重新获取Token";
+      const desc =
+        twitterGuide === "x-token"
+          ? "电脑端通过 Chrome / Edge 扩展或控制台代码一键免密注入登录，避开密码风控"
+          : twitterGuide === "x-2fa"
+          ? "手机或电脑使用两步验证 (TOTP) 动态 6 位验证码安全登录全流程"
+          : "在推特修改密码后，通过 F12 开发者工具重新提取最新 40 位 auth_token 会话凭证";
+      return {
+        mainTitle: "X (Twitter) 使用教程",
+        subTitle,
+        desc,
+      };
+    }
+    case "facebook":
+      return {
+        mainTitle: "Facebook 使用教程",
+        subTitle: "FB通过2FA的登录教程",
+        desc: "Facebook 账号卡密格式解析、2FA 双重身份验证码获取与安全登录全流程指引",
+      };
+    case "google-region":
+      return {
+        mainTitle: "Google 使用教程",
+        subTitle: "Google 账号修改国家/地区完整指南",
+        desc: "Google 账号服务条款归属地、Play 商店地区区分与锁定海外全套指南",
+      };
+    case "one-nz": {
+      const isUsage = oneNzGuide === "usage" || oneNzGuide === "activation" || oneNzGuide === "binding";
+      return {
+        mainTitle: "新西兰 One NZ 使用教程",
+        subTitle: isUsage ? "已激活使用与账户绑定教程" : "卡使用指南与常见问题",
+        desc: isUsage
+          ? "0月租、免费收短信、国内5G漫游防扣费设置与 My One NZ App 账户绑定"
+          : "日常使用技巧、资费明细、每年 10 纽币充值保号规则及常见卡点排查",
+      };
+    }
+    case "chatgpt-guide": {
+      const subMap: Record<ChatGptTutorialSection, { title: string; desc: string }> = {
+        login: { title: "登录与 2FA 验证", desc: "ChatGPT 账号基础登录、2FA 两步动态验证码获取与多设备兼容操作" },
+        security: { title: "改密与安全设置", desc: "修改账户登录密码、增强会话安全性与官方安全设置指南" },
+        rebind: { title: "设备与 2FA 换绑", desc: "剔除陌生异地设备登录态、重置或换绑两步身份验证器" },
+        "anti-ban": { title: "防封与保号指南", desc: "纯净网络环境、规避 OpenAI 节点风控与长期保号技巧" },
+        unban: { title: "账号解封申诉教程", desc: "遭遇误封或警告时的官方申诉模板与成功解封全流程" },
+      };
+      const cur = subMap[chatgptGuide] || subMap.login;
+      return {
+        mainTitle: "ChatGPT 使用教程",
+        subTitle: cur.title,
+        desc: cur.desc,
+      };
+    }
+    case "giffgaff": {
+      const isAct = giffgaffGuide === "activation";
+      return {
+        mainTitle: "Giffgaff 教程",
+        subTitle: isAct ? "实体卡激活与使用" : "保号助手",
+        desc: isAct
+          ? "英国原生 SIM 卡激活、充值、首插使用与国内漫游收短信全流程"
+          : "利用极小流量（约 120 KB）快速完成一次网络请求，轻松维持 6 个月活跃保号",
+      };
+    }
+    case "haha-sim":
+      return {
+        mainTitle: "Haha SIM 电话卡教程",
+        subTitle: "Haha SIM 实体卡激活与保号教程",
+        desc: "首次插卡、漫游设置、官方 App、故障排查与实名登记",
+      };
+    case "apple-id":
+      return {
+        mainTitle: "Apple ID 使用教程",
+        subTitle: "账号登录与卡密格式说明",
+        desc: "仅登录 App Store、密保问题与答案填写、避免 iCloud 锁机安全指南",
+      };
+    case "binance":
+      return {
+        mainTitle: "币安教程",
+        subTitle: "币安 · USDT 交易教程",
+        desc: "Binance 注册、C2C 快捷购买 USDT 与 BEP20 充值网络提现流程",
+      };
+    case "required":
+    default:
+      return {
+        mainTitle: "使用必读",
+        subTitle: "购买与交付指南",
+        desc: "先核对商品适用范围与交付说明，减少订单信息填写错误，保障交易安全",
+      };
+  }
+}
+
 function ScrollProgressFab({
   isMobile,
   previewWidth,
@@ -222,6 +330,13 @@ export default function TutorialsPage() {
   const showChatgpt = matchingTopics.length > 0 && topic.id === "chatgpt-guide";
   const showTwitter = matchingTopics.length > 0 && topic.id === "twitter";
   const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
+  const titleMeta = getTutorialTitleMeta({
+    topicId: topic.id,
+    giffgaffGuide,
+    oneNzGuide,
+    chatgptGuide,
+    twitterGuide,
+  });
   return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={isMobile ? "max-w-none !pt-2 !px-3 pb-6" : "max-w-none px-4 py-3 md:px-6"}>
     <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!block !h-auto !space-y-3 !overflow-visible" : ""}`}>
       <aside data-testid="tutorial-navigation" className={cn(glass.surface, styles.panel, tutorial.navigation, isMobile && "!max-h-none !overflow-visible !p-2 !sticky !top-[65px] !z-30 bg-white/95 backdrop-blur-md shadow-xs border border-orange-100/90 rounded-2xl")}>
@@ -457,7 +572,28 @@ export default function TutorialsPage() {
         </div>
       </aside>
       <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content} ${isMobile ? "!overflow-visible" : ""}`}>
-        <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}><div key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showTwitter ? twitterGuide : ""}`} className={tutorial.topicEnter}><h1 className="text-lg font-semibold text-slate-900 sm:text-xl">{showGiffgaff ? "Giffgaff" : showOneNz ? (oneNzGuide === "guide" || oneNzGuide === "rates" ? "新西兰 One 卡使用指南与常见问题" : "新西兰 One NZ卡 已激活使用与账户绑定教程") : topic.id === "chatgpt-guide" ? `Chat Gpt · ${chatgptGuide === "login" ? "登录与 2FA 验证" : chatgptGuide === "security" ? "改密与安全设置" : chatgptGuide === "rebind" ? "设备与 2FA 换绑" : chatgptGuide === "anti-ban" ? "防封与保号指南" : "账号解封申诉教程"}` : showTwitter ? `X (Twitter) · ${twitterGuide === "x-token" ? "X Token 使用教程(仅电脑)" : twitterGuide === "x-2fa" ? "X 2fa 使用教程(手机/电脑)" : "X 修改密码后重新获取Token"}` : topic.title}</h1>{topic.description && <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm sm:leading-6">{topic.description}</p>}</div></header>
+        <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}>
+          <div
+            key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showTwitter ? twitterGuide : ""}`}
+            className={tutorial.topicEnter}
+          >
+            <div className="flex flex-col gap-1">
+              <h1 className="text-lg font-extrabold tracking-tight text-slate-900 sm:text-xl md:text-2xl">
+                {titleMeta.mainTitle}
+              </h1>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-primary sm:text-sm md:text-base">
+                  {titleMeta.subTitle}
+                </span>
+              </div>
+              {titleMeta.desc ? (
+                <p className="mt-0.5 text-xs leading-5 text-slate-500 sm:text-sm sm:leading-6">
+                  {titleMeta.desc}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
           <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
           {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "google-region" ? <GoogleRegionTutorial /> : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : <div className="space-y-7">

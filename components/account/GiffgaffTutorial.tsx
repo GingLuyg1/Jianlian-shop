@@ -21,14 +21,13 @@ const questions = [
 
 export default function GiffgaffTutorial() {
   return <article className="min-w-0 space-y-7 text-sm leading-7 text-slate-600" aria-label="Giffgaff 保号助手教程">
-    <section className={tutorial.guideHero}>
-      <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#9f5327]"><Signal className="h-4 w-4" aria-hidden="true" />少量流量 · 手动保号</span>
-      <h2 className="mt-3 text-xl font-semibold text-slate-900">Giffgaff 保号助手</h2>
-      <p className="mt-2 max-w-3xl">用 Giffgaff SIM 的移动数据完成一次真实联网。助手标称下载约 120 KB；实际流量和扣费还会受网页、系统后台及运营商计费方式影响。</p>
-      <div className="mt-5 flex flex-wrap gap-3">
-        <a href={helper} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-[#d96e2c] px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-[#c96022] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d96e2c]">打开保号助手<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>
+    <div className="rounded-2xl border border-orange-200/80 bg-orange-50/40 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="space-y-1">
+        <div className="font-semibold text-slate-900 text-sm">Giffgaff 在线保号助手</div>
+        <p className="text-xs text-slate-600">用 Giffgaff SIM 的移动数据完成一次真实联网。助手标称下载约 120 KB，用于维持连续 6 个月活跃保号。</p>
       </div>
-    </section>
+      <a href={helper} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#d96e2c] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#c96022]">打开保号助手<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>
+    </div>
 
     <section aria-labelledby="giffgaff-steps">
       <h2 id="giffgaff-steps" className="text-lg font-semibold text-slate-900">按顺序操作</h2>

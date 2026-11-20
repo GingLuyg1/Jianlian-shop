@@ -25,12 +25,10 @@ const examplePrices = [
 
 export default function HahaSimTutorial() {
   return <article className="min-w-0 space-y-7 text-sm leading-7 text-slate-600" aria-label="Haha SIM 实体卡激活与保号教程">
-    <section className={tutorial.guideHero}>
-      <span className="inline-flex items-center gap-2 font-semibold text-[#9f5327]"><Smartphone className="h-4 w-4" aria-hidden="true" />haha TRAVEL 实体卡</span>
-      <h2 className="mt-3 text-xl font-semibold text-slate-900">从插卡到激活</h2>
-      <p className="mt-2 max-w-3xl">先确认信号和号码，再通过官方 App 查看余额、套餐及有效期。</p>
-      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1"><a href={official.product} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-[#9f5327] underline underline-offset-4">查看商品资料<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a><a href={official.faq} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-[#9f5327] underline underline-offset-4">查看官方常见问题<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a></div>
-    </section>
+    <div className="flex flex-wrap gap-x-5 gap-y-1">
+      <a href={official.product} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-[#9f5327] underline underline-offset-4">查看官方商品资料<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></a>
+      <a href={official.faq} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-[#9f5327] underline underline-offset-4">查看官方常见问题 (PDF)<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></a>
+    </div>
 
     <section aria-labelledby="haha-overview"><h2 id="haha-overview" className="text-lg font-semibold text-slate-900">套餐与费用</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{examplePrices.map(([label, value]) => <div key={label} className={tutorial.guideStep}><h3 className="font-semibold text-slate-900">{label}</h3><p className="mt-2">{value}</p></div>)}</div>

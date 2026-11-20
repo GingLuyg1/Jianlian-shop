@@ -56,41 +56,14 @@ export default function TwitterTutorial({
     }
   };
 
-  return (
-    <div className="space-y-8">
-      {/* 顶部 Hero 区域 */}
-      <section className={tutorial.guideHero}>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-0.5 text-xs font-semibold text-white">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-            X (Twitter) 官方全流程使用指引
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
-            <CheckCircle2 className="h-3 w-3" />
-            支持 Token 免密 · 2FA 双重认证 · 改密续期
-          </span>
-        </div>
-        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-          X (Twitter) 账号使用与管理完整教程
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
-          汇总 X (Twitter) 预制账号的 Token 免密登录、2FA 两步动态验证码登录、以及修改密码后提取最新 Token 的全流程实操技巧，避开风控异常，保障账号长期稳定可用。
-        </p>
-      </section>
+  const consoleLoginScript = `javascript:void(function(){const t=prompt("请输入您的 Twitter auth_token：");if(t){document.cookie="auth_token="+t.trim()+";path=/;domain=.x.com;secure;max-age=31536000";location.href="https://x.com/home"}})();`;
 
+  return (
+    <div className="space-y-6">
       {/* 教程一：X Token 使用教程 (仅电脑) */}
       {activeSection === "x-token" && (
         <div className="space-y-6">
           <section className="space-y-4">
-            <div className="flex items-center gap-2 border-b border-orange-100 pb-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-                1
-              </span>
-              <h2 className="text-lg font-bold text-slate-900">X Token 使用教程（电脑端免密直登）</h2>
-            </div>
-
             <div className="rounded-2xl border border-orange-200/80 bg-orange-50/40 p-4 sm:p-5">
               <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
                 <KeyRound className="h-4 w-4 text-primary" />
@@ -156,16 +129,36 @@ export default function TwitterTutorial({
             </div>
 
             {/* 极客备用：F12 控制台一键免插件登录 */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
-              <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
-                <Terminal className="h-4 w-4 text-primary" />
-                <span>进阶备用：无需安装任何插件的控制台登录代码</span>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+                  <Terminal className="h-4 w-4 text-primary" />
+                  <span>进阶备用：无需安装任何插件的控制台登录代码</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(consoleLoginScript, "控制台登录代码")}
+                  className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-white px-2.5 py-1 text-xs font-semibold text-primary shadow-2xs hover:bg-orange-50 active:scale-95 transition-all"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>一键复制代码</span>
+                </button>
               </div>
-              <p className="mt-2 text-xs text-slate-600 leading-relaxed">
-                如果您不想安装浏览器插件，可直接打开 <code>https://x.com</code>，按下键盘 <strong>F12</strong> 打开开发者工具，切换至 <strong>Console（控制台）</strong>，粘贴并回车执行下方代码即可一键登录：
-              </p>
-              <div className="mt-2.5 rounded-xl border border-slate-300 bg-slate-900 p-3 font-mono text-xs text-emerald-400 select-all break-all">
-                javascript:void(function(){`{`}const t=prompt(&quot;请输入您的 Twitter auth_token：&quot;);if(t){`{`}document.cookie=&quot;auth_token=&quot;+t.trim()+&quot;;path=/;domain=.x.com;secure;max-age=31536000&quot;;location.href=&quot;https://x.com/home&quot;{`}`}{`}`})();
+
+              <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-900 leading-relaxed space-y-1">
+                <p className="font-bold text-blue-950">💡 什么是代码登录？</p>
+                <p>这是为不想在电脑上安装浏览器插件的用户准备的免插件备用直登方案。直接在推特页面按 F12 并在 Console 中执行下方代码，即可一键呼出输入框注入 Token：</p>
+                <ol className="list-decimal pl-4 space-y-1 mt-1 text-slate-700">
+                  <li>点击上方<strong>【一键复制代码】</strong>（<span className="text-red-600 font-semibold">注：代码中的英文双引号 &quot;&quot; 为标准语法，严禁删除</span>）；</li>
+                  <li>在电脑浏览器打开 <code>https://x.com</code>，按下键盘 <strong>F12</strong>，切换至 <strong>Console（控制台）</strong> 标签页；</li>
+                  <li>在控制台光标处直接粘贴并按<strong>回车（Enter）</strong>；</li>
+                  <li>浏览器顶部会自动弹出一个输入对话框，提示：<span className="font-bold text-red-600 bg-white border border-red-200 px-1.5 py-0.5 rounded shadow-2xs">请输入您的 Twitter auth_token：</span>；</li>
+                  <li>将发货卡密中的 <strong>40 位 Token 凭证</strong> 粘贴进弹出的输入框，点击<strong>确定</strong>，页面即刻完成授权注入并自动刷新直达推特首页！</li>
+                </ol>
+              </div>
+
+              <div className="rounded-xl border border-slate-300 bg-slate-900 p-3 font-mono text-xs text-emerald-400 select-all break-all">
+                {consoleLoginScript}
               </div>
             </div>
 
@@ -186,9 +179,9 @@ export default function TwitterTutorial({
           <section className="space-y-4">
             <div className="flex items-center gap-2 border-b border-orange-100 pb-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-                2
+                1
               </span>
-              <h2 className="text-lg font-bold text-slate-900">X 2FA 双重身份验证登录教程（手机/电脑通用）</h2>
+              <h2 className="text-base font-bold text-slate-900">使用 2FA 密钥获取 6 位动态验证码登录</h2>
             </div>
 
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
@@ -353,9 +346,9 @@ export default function TwitterTutorial({
           <section className="space-y-4">
             <div className="flex items-center gap-2 border-b border-orange-100 pb-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-                3
+                1
               </span>
-              <h2 className="text-lg font-bold text-slate-900">X 修改密码后重新获取 Token 教程</h2>
+              <h2 className="text-base font-bold text-slate-900">通过 F12 开发者工具重新提取最新 auth_token</h2>
             </div>
 
             <div className="rounded-2xl border border-orange-200/80 bg-orange-50/40 p-4 sm:p-5">

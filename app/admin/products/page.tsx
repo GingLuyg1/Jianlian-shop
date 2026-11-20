@@ -1763,11 +1763,10 @@ function ProductFormDialog({
                     }}
                   />
                 </Field>
-                <Field label="商品网址标识 (Slug / 英文别名)" required error={errors.slug}>
+                <Field label="商品网址标识 (Slug)" required error={errors.slug}>
                   <Input
                     value={form.slug}
                     onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })}
-                    placeholder="例如: enc-mobile (生成美观简短网址)"
                   />
                 </Field>
                 <Field label="商品图片" error={errors.image_url}>
