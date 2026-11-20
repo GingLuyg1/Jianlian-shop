@@ -24,7 +24,7 @@ export default function GiffgaffTutorial() {
     <div className="rounded-2xl border border-orange-200/80 bg-orange-50/40 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div className="space-y-1">
         <div className="font-semibold text-slate-900 text-sm">Giffgaff 在线保号助手</div>
-        <p className="text-xs text-slate-600">用 Giffgaff SIM 的移动数据完成一次真实联网。助手标称下载约 120 KB，用于维持连续 6 个月活跃保号。</p>
+        <p className="text-xs text-slate-600">用 Giffgaff SIM 的移动数据完成一次真实联网。助手标称下载约 120 KB；实际流量和扣费还会受网页、系统后台及运营商计费方式影响，用于维持连续 6 个月活跃保号。</p>
       </div>
       <a href={helper} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#d96e2c] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#c96022]">打开保号助手<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>
     </div>

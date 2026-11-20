@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
+import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
 import Link from "next/link";
 import {
   CreditCard,
@@ -158,6 +159,29 @@ const SKU_OPTIONS_BY_PRODUCT_ID: Record<string, SkuOption[]> = {
 const GPT_RECHARGE_PRODUCT_ID = "ai-gpt-cdk-tr-plus-1m";
 const GROK_RECHARGE_PRODUCT_ID = "ai-grok-cdk-in-super-1m";
 const GIFFGAFF_TOPUP_PRODUCT_ID = "gift-giffgaff-topup";
+
+function isGiffgaffSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  const id = (product.id || "").toLowerCase();
+  const isGiffgaff =
+    name.includes("giffgaff") ||
+    slug.includes("giffgaff") ||
+    id === "3b973a67-20ad-4f91-a538-4f9a83b3d560" ||
+    id === "5ed6a9c7-d9e2-4cb1-8161-fd5f8a4b192d" ||
+    id === "8c4776d9-17e3-40af-a1e0-0101f55516dc" ||
+    slug === "sim-001" ||
+    slug === "sim-002" ||
+    slug === "sim-003";
+  const isTopup =
+    id === GIFFGAFF_TOPUP_PRODUCT_ID ||
+    id === "e00553bf-a2da-48c7-9bdc-9b897b18b2fd" ||
+    id === "5e4025b0-9a14-4827-87a2-f7f3e0e79734" ||
+    id === "b2878f67-344a-40e4-af59-b32b6db21d29" ||
+    name.includes("充值") ||
+    slug.includes("topup");
+  return isGiffgaff && !isTopup;
+}
 const CLAUDE_RECHARGE_PRODUCT_IDS = [
   "ai-claude-cdk-ng-pro-1m",
   "ai-claude-cdk-ng-max-5x-1m",
@@ -1372,7 +1396,7 @@ function ProductDetailCard({
           <ClaudeRechargeDetails product={product} />
         ) : family === "gemini" ? (
           <GeminiRechargeDetails product={product} />
-        ) : product.id === GIFFGAFF_TOPUP_PRODUCT_ID ? (
+        ) : product.id === GIFFGAFF_TOPUP_PRODUCT_ID || (product.name.toLowerCase().includes("giffgaff") && (product.name.includes("充值") || (product.slug || "").includes("topup"))) ? (
           <GiffgaffTopupDetails product={product} />
         ) : product.id.startsWith("gift-apple-") ? (
           <AppleGiftCardDetails product={product} />
@@ -1380,6 +1404,8 @@ function ProductDetailCard({
           <AppleIdDetails product={product} />
         ) : product.id === "sim-nz-001" || product.name.toLowerCase().includes("one nz") ? (
           <OneNzProductDetails product={product} />
+        ) : isGiffgaffSimProduct(product) ? (
+          <GiffgaffSimProductDetails product={product} />
         ) : (
           <div className="mt-8 w-full">
             <h2 className="mb-3 text-base font-semibold">商品详情</h2>

@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
+import OneNzProductDetails from "@/components/products/details/OneNzProductDetails";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Badge } from "@/components/ui/badge";
@@ -527,47 +529,57 @@ export default function ProductDetailPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">商品说明</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
-                  <p>
-                    {product.description ||
-                      product.short_description ||
-                      "该商品暂未填写详细说明，下单前如需确认更多信息，请联系在线客服。"}
-                  </p>
+              {((product.name.toLowerCase().includes("giffgaff") || (product.slug || "").includes("giffgaff") || (product.slug || "").startsWith("sim-00")) &&
+                !product.name.includes("充值") &&
+                !(product.slug || "").includes("topup")) ? (
+                <GiffgaffSimProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("one nz") || (product.slug || "").includes("one-nz") || (product.slug || "") === "sim-nz-001") ? (
+                <OneNzProductDetails product={product} />
+              ) : (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">商品说明</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
+                      <p>
+                        {product.description ||
+                          product.short_description ||
+                          "该商品暂未填写详细说明，下单前如需确认更多信息，请联系在线客服。"}
+                      </p>
 
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <InfoItem
-                      icon={ShieldCheck}
-                      title="安全合规"
-                      desc="下单前请核对商品用途，非商品问题不支持退换。"
-                    />
-                    <InfoItem
-                      icon={PackageCheck}
-                      title="交付方式"
-                      desc={getDeliveryLabel(deliveryType)}
-                    />
-                    <InfoItem
-                      icon={Headphones}
-                      title="售后支持"
-                      desc="有疑问请先联系在线客服确认。"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <InfoItem
+                          icon={ShieldCheck}
+                          title="安全合规"
+                          desc="下单前请核对商品用途，非商品问题不支持退换。"
+                        />
+                        <InfoItem
+                          icon={PackageCheck}
+                          title="交付方式"
+                          desc={getDeliveryLabel(deliveryType)}
+                        />
+                        <InfoItem
+                          icon={Headphones}
+                          title="售后支持"
+                          desc="有疑问请先联系在线客服确认。"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">购买须知</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm leading-7 text-muted-foreground">
-                  <p>1. 下单前请确认商品名称、规格、库存状态和交付方式。</p>
-                  <p>2. 账号、卡密和数字交付类商品属于一次性商品，售出后不支持无理由退换。</p>
-                  <p>3. 商品库存、价格和 SKU 状态以服务端创建订单时重新校验结果为准。</p>
-                </CardContent>
-              </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">购买须知</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm leading-7 text-muted-foreground">
+                      <p>1. 下单前请确认商品名称、规格、库存状态和交付方式。</p>
+                      <p>2. 账号、卡密和数字交付类商品属于一次性商品，售出后不支持无理由退换。</p>
+                      <p>3. 商品库存、价格和 SKU 状态以服务端创建订单时重新校验结果为准。</p>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </main>
 
             <aside className="flex min-h-0 min-w-0 overflow-visible md:h-full md:overflow-hidden">

@@ -100,8 +100,14 @@ export async function GET(
     const categoryRead = Promise.resolve().then(() => supabase
       .from("categories").select("id,parent_id,level,is_active"))
       .catch((error: unknown) => ({ data: null, error }));
-    const isUuid = UUID_RE.test(identifier);
-    const queryProduct = (field: "id" | "slug", value = identifier) =>
+    const SLUG_ALIASES: Record<string, string> = {
+      "sim-001": "giffgaff-sim-blank",
+      "sim-002": "giffgaff-sim-5gbp",
+      "sim-003": "giffgaff-sim-active-15gbp",
+    };
+    const resolvedIdentifier = SLUG_ALIASES[identifier.toLowerCase()] || identifier;
+    const isUuid = UUID_RE.test(resolvedIdentifier);
+    const queryProduct = (field: "id" | "slug", value = resolvedIdentifier) =>
       supabase
         .from("products")
         .select(PRODUCT_SELECT)
@@ -113,6 +119,14 @@ export async function GET(
     let { data: productData, error: productError } = isUuid
       ? await queryProduct("id")
       : await queryProduct("slug");
+
+    if (!productError && !productData && resolvedIdentifier !== identifier) {
+      const fallbackOriginal = await queryProduct("slug", identifier);
+      if (fallbackOriginal.data) {
+        productData = fallbackOriginal.data;
+        productError = fallbackOriginal.error;
+      }
+    }
 
     if (!productError && !productData && isUuid) {
       const fallback = await queryProduct("slug");
