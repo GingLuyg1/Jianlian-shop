@@ -1,0 +1,100 @@
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.entering,
+.loading {
+  animation: optionSpinnerEnter 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.completing {
+  transform: scale(1.04);
+  opacity: 1;
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease-out;
+}
+
+.leaving {
+  animation: optionSpinnerExit 190ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+}
+
+.track {
+  fill: none;
+  stroke: rgba(216, 110, 49, 0.18);
+}
+
+.progressRing {
+  fill: none;
+  stroke: rgba(223, 124, 63, 0.48);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 110ms cubic-bezier(0.22, 1, 0.36, 1), stroke 140ms ease;
+}
+
+.completing .progressRing,
+.leaving .progressRing {
+  stroke: #d66b2c;
+}
+
+.spinArc {
+  fill: none;
+  stroke: #d66b2c;
+  stroke-linecap: round;
+  transform-origin: 50% 50%;
+  animation: optionSpinnerOrbit 680ms linear infinite;
+}
+
+.completing .spinArc,
+.leaving .spinArc {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+@keyframes optionSpinnerOrbit {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes optionSpinnerEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.32) translateX(4px) rotate(-45deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateX(0) rotate(0deg);
+  }
+}
+
+@keyframes optionSpinnerExit {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.35) translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entering,
+  .loading,
+  .leaving {
+    animation: none;
+  }
+}

@@ -15,13 +15,18 @@ import {
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import AirMobileProductDetails from "@/components/products/details/AirMobileProductDetails";
 import EncMobileProductDetails from "@/components/products/details/EncMobileProductDetails";
-import EuropeanSimProductDetails from "@/components/products/details/EuropeanSimProductDetails";
 import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
 import HahaSimProductDetails from "@/components/products/details/HahaSimProductDetails";
+import Lucky2ProductDetails from "@/components/products/details/Lucky2ProductDetails";
+import MovistarSimProductDetails from "@/components/products/details/MovistarSimProductDetails";
 import OneNzProductDetails from "@/components/products/details/OneNzProductDetails";
+import OrangeSimProductDetails from "@/components/products/details/OrangeSimProductDetails";
 import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
+import TMobileProductDetails from "@/components/products/details/TMobileProductDetails";
 import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
+import VodafoneSimProductDetails from "@/components/products/details/VodafoneSimProductDetails";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Badge } from "@/components/ui/badge";
@@ -538,16 +543,26 @@ export default function ProductDetailPage() {
                 !product.name.includes("充值") &&
                 !(product.slug || "").includes("topup")) ? (
                 <GiffgaffSimProductDetails product={product} />
-              ) : (product.name.toLowerCase().includes("one nz") || (product.slug || "").includes("one-nz") || (product.slug || "") === "sim-nz-001") ? (
+              ) : (product.name.toLowerCase().includes("one nz") || (product.slug || "").includes("one-nz") || (product.slug || "") === "sim-one-nz" || (product.slug || "") === "sim-nz-001") ? (
                 <OneNzProductDetails product={product} />
               ) : (product.name.toLowerCase().includes("haha") || (product.slug || "").includes("haha") || (product.slug || "") === "sim-haha") ? (
                 <HahaSimProductDetails product={product} />
-              ) : (product.name.toLowerCase().includes("ultra") || (product.slug || "").includes("ultra") || product.name.toLowerCase().includes("t-mobile") || (product.slug || "").includes("t-mobile")) ? (
+              ) : (product.name.toLowerCase().includes("lucky") || (product.slug || "").includes("lucky")) ? (
+                <Lucky2ProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("t-mobile") || (product.slug || "").includes("t-mobile")) ? (
+                <TMobileProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("ultra") || (product.slug || "").includes("ultra")) ? (
                 <UltraMobileProductDetails product={product} />
-              ) : (product.name.toLowerCase().includes("enc") || (product.slug || "").includes("enc") || product.name.toLowerCase().includes("air mobile") || (product.slug || "").includes("air-mobile")) ? (
+              ) : (product.name.toLowerCase().includes("air mobile") || (product.slug || "").includes("air-mobile")) ? (
+                <AirMobileProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("enc") || (product.slug || "").includes("enc")) ? (
                 <EncMobileProductDetails product={product} />
-              ) : (product.name.toLowerCase().includes("orange") || (product.slug || "").includes("orange") || product.name.toLowerCase().includes("vodafone") || (product.slug || "").includes("vodafone") || product.name.toLowerCase().includes("movistar") || (product.slug || "").includes("movistar")) ? (
-                <EuropeanSimProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("orange") || (product.slug || "").includes("orange")) ? (
+                <OrangeSimProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("vodafone") || (product.slug || "").includes("vodafone")) ? (
+                <VodafoneSimProductDetails product={product} />
+              ) : (product.name.toLowerCase().includes("movistar") || (product.slug || "").includes("movistar")) ? (
+                <MovistarSimProductDetails product={product} />
               ) : (product.name.toLowerCase().includes("rakuten") || (product.slug || "").includes("rakuten") || product.name.includes("乐天")) ? (
                 <RakutenMobileProductDetails product={product} />
               ) : (
