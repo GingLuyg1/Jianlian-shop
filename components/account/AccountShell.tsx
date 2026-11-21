@@ -18,6 +18,7 @@ import { isAccountDataPage } from "@/lib/motion/account-page-ready";
 
 import { accountNavigation } from "@/components/account/account-navigation";
 import { AccountEmailContext } from "@/components/account/AccountEmailContext";
+import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 
 export default function AccountShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -31,23 +32,6 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   const [resendSeconds, setResendSeconds] = useState(0);
   const redirectPath = useMemo(() => pathname || "/account", [pathname]);
   const contentRef = useRef<HTMLElement>(null);
-
-  useLayoutEffect(() => {
-    const main = contentRef.current;
-    if (!main || !isAccountDataPage(pathname)) return;
-    const syncContent = () => {
-      const page = main.querySelector<HTMLElement>("[data-account-page]");
-      const settled = page?.dataset.accountPage === pathname && page.getAttribute("aria-busy") === "false";
-      const failed = main.querySelector('[data-page-error="true"]');
-      // Keep intermediate route titles/skeletons behind the loading layer.
-      // Publish real content (or its error) in the same commit as readiness.
-      main.style.visibility = settled || failed ? "visible" : "hidden";
-    };
-    syncContent();
-    const observer = new MutationObserver(syncContent);
-    observer.observe(main, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-account-page", "aria-busy", "data-page-error"] });
-    return () => { observer.disconnect(); main.style.removeProperty("visibility"); };
-  }, [pathname, checking]);
 
   useEffect(() => {
     const desktopQuery = window.matchMedia("(min-width: 768px)");
@@ -87,6 +71,14 @@ export default function AccountShell({ children }: { children: ReactNode }) {
       }
 
       const supabase = getSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.user && active) {
+        setEmail(sessionData.session.user.email ?? "");
+        setOrdersLoginRequired(false);
+        setEmailVerified(Boolean(sessionData.session.user.email_confirmed_at));
+        setChecking(false);
+      }
+
       const {
         data: { user },
         error,
@@ -273,7 +265,9 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
   const listRef = useRef<HTMLDivElement>(null);
   const indicatorRef = useRef<HTMLSpanElement>(null);
   const pendingRef = useRef<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(pathname);
+  const [loadingHref, setLoadingHref] = useState<string>("");
+  const [pulseHref, setPulseHref] = useState<string>("");
 
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -281,11 +275,7 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
     if (!list || !indicator) return;
     const update = () => {
       const target = pendingRef.current ?? pathname;
-      // Commit the visual selection only after the requested route AND its
-      // own initial data have settled; stale route/data commits cannot win.
-      if (target !== pathname || window.location.pathname !== pathname) return;
-      const page = Array.from(document.querySelectorAll<HTMLElement>("[data-account-page]")).find(node => node.dataset.accountPage === target);
-      if (!page || page.dataset.accountReady !== "true") return;
+      setSelected(target);
       const link = Array.from(list.querySelectorAll<HTMLElement>("[data-account-nav]")).find(node => node.dataset.accountNav === target);
       if (!link || list.getBoundingClientRect().width === 0) return;
       const item = link.getBoundingClientRect(), box = list.getBoundingClientRect();
@@ -294,18 +284,30 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
       indicator.style.transform = `translate3d(${item.left - box.left}px, ${item.top - box.top}px, 0)`;
       if (indicator.dataset.ready !== "true") indicator.getBoundingClientRect();
       indicator.dataset.ready = "true";
-      pendingRef.current = null;
-      setSelected(target);
+
+      if (target === pathname) {
+        const page = Array.from(document.querySelectorAll<HTMLElement>("[data-account-page]")).find(node => node.dataset.accountPage === target);
+        if (page && page.dataset.accountReady === "true") {
+          pendingRef.current = null;
+          setLoadingHref("");
+        }
+      }
     };
     update();
     const mutation = new MutationObserver(update);
     mutation.observe(document.querySelector("main") ?? document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-busy", "data-account-page", "data-account-ready"] });
     const resize = new ResizeObserver(update);
     resize.observe(list);
-    const onPopState = () => { pendingRef.current = null; };
+    const onPopState = () => { pendingRef.current = null; setLoadingHref(""); };
     window.addEventListener("popstate", onPopState);
     return () => { mutation.disconnect(); resize.disconnect(); window.removeEventListener("popstate", onPopState); };
   }, [pathname]);
+
+  useEffect(() => {
+    if (!loadingHref) return;
+    const timer = window.setTimeout(() => setLoadingHref(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [loadingHref]);
 
   return (
     <div ref={listRef} className={cn(center.slidingNav, compact && center.compactNav)}>
@@ -313,14 +315,25 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
       {accountNavigation.map((item) => {
         const Icon = item.icon;
         const active = selected === item.href;
+        const isItemLoading = loadingHref === item.href || pulseHref === item.href;
         return (
           <Link key={item.href} href={item.href} data-account-nav={item.href} aria-current={active ? "page" : undefined}
             onClick={(event) => {
               if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.defaultPrevented) return;
               pendingRef.current = item.href;
+              setSelected(item.href);
+              setLoadingHref(item.href);
+              setPulseHref(item.href);
+              window.setTimeout(() => {
+                setPulseHref((curr) => (curr === item.href ? "" : curr));
+              }, 140);
             }}
             className={cn("flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", center.navLink, compact && "shrink-0", active ? "font-medium text-primary" : "text-slate-500")}
-          ><span className={center.navIcon}><Icon className="h-4 w-4" aria-hidden="true" /></span><span>{item.label}</span></Link>
+          >
+            <span className={center.navIcon}><Icon className="h-4 w-4" aria-hidden="true" /></span>
+            <span className="truncate">{item.label}</span>
+            <OptionLoadingSpinner active={isItemLoading} size="sm" className="ml-auto" />
+          </Link>
         );
       })}
     </div>

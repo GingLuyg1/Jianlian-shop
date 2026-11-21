@@ -3,20 +3,23 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Bot,
+  Award,
   Calendar,
   CheckCircle2,
   Clock3,
   CreditCard,
+  ExternalLink,
+  Flame,
   Globe,
   HelpCircle,
   MessageSquare,
+  QrCode,
   Radio,
-  ShieldAlert,
   ShieldCheck,
   Smartphone,
   Sparkles,
-  Truck,
+  TrendingDown,
+  Wifi,
   Zap,
 } from "lucide-react";
 import { openPublicSupport } from "@/lib/support/open-public-support";
@@ -33,375 +36,305 @@ interface Lucky2ProductDetailsProps {
 }
 
 export default function Lucky2ProductDetails({ product }: Lucky2ProductDetailsProps) {
-  const highlights = [
+  const comparisonItems = [
     {
-      icon: Calendar,
-      title: "自带 2~3 年超长有效期",
-      desc: "相比普通电话卡需频繁每半年充值，Lucky2 到手即享 2~3 年超长有效期，省心省力长效保号神卡。",
-      tag: "超长有效期",
+      category: "持有与保号成本",
+      traditional: "每 90~180 天需强制充值，年均持有成本 ¥120~¥200+",
+      lucky2: "到手自带 2~3 年超长有效期，年均持有成本低至约 ¥15",
+      highlight: true,
     },
     {
-      icon: Globe,
-      title: "香港原生 +852 手机号",
-      desc: "香港本土原生移动号段（非 VoIP 虚拟号），真实实体物理 SIM 卡，秒过海外各类严格风控。",
-      tag: "原生港卡",
+      category: "忘充断号风险",
+      traditional: "半年忘记充值一次直接销号，绑定的大量重要海外账号连带丢失",
+      lucky2: "自带超长待机时间，到期前仅需轻微充值即继续顺延，极致省心",
+      highlight: true,
     },
     {
-      icon: CreditCard,
-      title: "官方 0 月租 · 零持有成本",
-      desc: "无日常强制月租，平时放在国内不打电话、不发短信即完全 0 月租，无任何隐藏扣费风险。",
-      tag: "官方 0 月租",
+      category: "国内接收短信",
+      traditional: "部分卡片需要开启国际漫游或扣取高昂月租才允许接收短信",
+      lucky2: "国内漫游接收 SMS 验证码完全免费（0 月租 0 待机扣费）",
+      highlight: false,
     },
     {
-      icon: MessageSquare,
-      title: "国内免费接收短信",
-      desc: "国内自动漫游接入中国移动或中国联通 4G/5G 优质信号，接收海内外平台 SMS 短信验证码完全免费。",
-      tag: "收短信免费",
-    },
-    {
-      icon: Zap,
-      title: "香港 CSL 优质网络覆盖",
-      desc: "依托香港电讯（HKT）旗下主流运营商 CSL 基站网络，漫游信号强劲稳定，接码顺畅秒级送达。",
-      tag: "CSL 网络",
-    },
-    {
-      icon: Smartphone,
-      title: "三合一免剪卡 · 全网通适配",
-      desc: "标准大卡、Micro、Nano 任意卡槽通用，适配 iPhone 及全网通安卓机型，即插即用无需剪卡。",
-      tag: "全网通通用",
+      category: "网络运营商归属",
+      traditional: "部分为虚拟 MVNO 二手分销，信誉受限易被平台风控拦截",
+      lucky2: "香港主流电信巨头 CSL 原生网络号段，信誉高，过验极佳",
+      highlight: false,
     },
   ];
 
-  const platformCategories = [
+  const tariffs = [
     {
-      title: "AI 智能生产力矩阵",
-      badge: "秒过手机验证",
-      icon: Bot,
-      color: "border-rose-200 bg-rose-50/50 text-rose-800",
-      items: [
-        { name: "ChatGPT / OpenAI", desc: "注册与 Plus 绑卡验证" },
-        { name: "Claude (Anthropic)", desc: "高风控手机验证秒过" },
-        { name: "Google Gemini", desc: "谷歌生态高级 AI 验证" },
-        { name: "xAI Grok / Midjourney", desc: "海外大模型全支持" },
-      ],
+      title: "内地接收短信",
+      rate: "完全免费 (¥0/条)",
+      desc: "在中国大陆漫游时，接收任何海内外平台的短信验证码均不收取任何费用",
+      badge: "核心卖点",
+      color: "border-rose-200 bg-rose-50 text-rose-700",
     },
     {
-      title: "全球主流社交与通讯",
-      badge: "解 +86 限制",
-      icon: MessageSquare,
-      color: "border-blue-200 bg-blue-50/50 text-blue-800",
-      items: [
-        { name: "Telegram", desc: "解除中国号不能私聊陌生人限制" },
-        { name: "WhatsApp", desc: "海外贸易与跨国通讯必备" },
-        { name: "TikTok (海外抖音)", desc: "跨境出海带货与达人号" },
-        { name: "Twitter (X) / Instagram", desc: "国际社媒高权重注册" },
-      ],
+      title: "超长持有周期",
+      rate: "2~3 年超长待机",
+      desc: "随卡自带极长有效期，无需设置日历提醒定期充值续命，长期接码神器",
+      badge: "免维护",
+      color: "border-amber-200 bg-amber-50 text-amber-700",
     },
     {
-      title: "跨境金融与港区券商",
-      badge: "香港原生信用",
-      icon: CreditCard,
-      color: "border-amber-200 bg-amber-50/50 text-amber-800",
-      items: [
-        { name: "PayPal (国际区)", desc: "香港/美区/欧洲个人商户" },
-        { name: "港美股证券开户", desc: "富途牛牛/长桥等香港券商" },
-        { name: "Wise (TransferWise)", desc: "国际多币种资金账户安全验证" },
-        { name: "Stripe / 港区 Apple ID", desc: "免绑外卡安全绑定收验证码" },
-      ],
+      title: "中港漫游数据",
+      rate: "支持按需购买",
+      desc: "支持在香港或内地按天订购漫游上网包，插卡即连 4G/5G 高速网络",
+      badge: "灵活按需",
+      color: "border-emerald-200 bg-emerald-50 text-emerald-700",
     },
     {
-      title: "全球影音与海淘商铺",
-      badge: "畅享海外服务",
-      icon: Globe,
-      color: "border-emerald-200 bg-emerald-50/50 text-emerald-800",
-      items: [
-        { name: "Steam (外区)", desc: "港区/阿区/美区换区验证" },
-        { name: "Netflix / Spotify", desc: "全球影音流媒体会员认证" },
-        { name: "Amazon 香港/全球站", desc: "海淘买卖家安全账户绑定" },
-        { name: "eBay / Discord", desc: "跨区社区与商城验证" },
-      ],
+      title: "账户便捷查询",
+      rate: "随时免密查询",
+      desc: "手机拨打 *105# 或通过官方网页快速核验卡号、余额及最新过期时间",
+      badge: "快捷指令",
+      color: "border-blue-200 bg-blue-50 text-blue-700",
     },
   ];
 
-  const steps = [
+  const kycSteps = [
     {
       step: "01",
-      title: "下单购买与发货",
-      desc: "提交订单并填写收件人信息，现货顺丰/普通快递包邮发货，附带卡套与详细实操说明书。",
+      title: "扫描卡套实名二维码",
+      desc: "收到实体卡后，使用手机微信或浏览器扫描卡套背面专属实名验证二维码。",
     },
     {
       step: "02",
-      title: "收到卡片插入手机",
-      desc: "收到实体三合一 SIM 卡后直接装入手机 SIM 卡槽（注意请勿开启数据漫游流量防扣费）。",
+      title: "上传证件快速核验",
+      desc: "根据香港特区政府电话卡实名制要求，使用港澳通行证或中国护照在线拍摄即时审核。",
     },
     {
       step: "03",
-      title: "搜网与短信漫游激活",
-      desc: "手机将自动漫游接入中国移动或中国联通信号，收到官方激活与号码确认短信即可开始使用。",
+      title: "插卡接入即开即用",
+      desc: "审核通常数分钟内通过，将三合一 SIM 卡插入手机，开启数据漫游即可正常收码待机。",
     },
-    {
-      step: "04",
-      title: "日常 0 月租接码使用",
-      desc: "平时放在手机中接收验证码完全免费，2~3 年超长有效期内无需频繁充值，省心长期持有。",
-    },
-    {
-      step: "05",
-      title: "到期前充值续命",
-      desc: "在有效期到期前，通过官方渠道或微信/支付宝充值小额话费，即可再续期 1~2 年有效期。",
-    },
+  ];
+
+  const appScenarios = [
+    { name: "Telegram / 纸飞机", status: "秒过", desc: "彻底解除 +86 账号无法私聊陌生人限制" },
+    { name: "WhatsApp / 国际微信", status: "支持", desc: "跨境商务出海通讯与客户维护必备" },
+    { name: "TikTok / 国际抖音", status: "免拔卡", desc: "国际版短视频注册与达人号运营" },
+    { name: "Twitter (X) / Instagram", status: "极速", desc: "绑定国际顶级社交平台高权重实卡账号" },
+    { name: "ChatGPT / OpenAI / Claude", status: "畅通", desc: "高风控海外 AI 大模型短信验证秒过" },
+    { name: "香港虚拟银行 / 券商", status: "认证", desc: "众安 ZA Bank、理慧 livi 等港区金融机构" },
   ];
 
   const faqs = [
     {
-      q: "Lucky2 SIM 卡在国内使用有月租吗？接收短信收费吗？",
-      a: "完全 0 月租！平时放在手机里，只要不主动拨打电话、不发送短信、不开启数据漫游流量，就没有任何月租扣费。在国内接收海内外各类平台的 SMS 短信验证码完全免费。",
+      q: "为什么说 Lucky2 是性价比最高的保号神卡？",
+      a: "常规境外电话卡（如英国、美国卡）通常需要每隔 3 到 6 个月充值或发送付费短信才能防止过期，一年维护成本往往超过 100 元，且一旦忘记就会永久被销号。Lucky2 到手自带长达 2~3 年的有效期，在此期间国内接收短信完全免费，相当于每年仅需十几元即可安心保号。",
     },
     {
-      q: "Lucky2 的有效期是多久？后续如何保号？",
-      a: "Lucky2 最大优势在于其自带超长有效期（到手即享 2~3 年有效期），相比普通半年一充的卡片极其省心。在到期前只需充值小额话费，即可再次顺延 1~2 年有效期，属于极具性价比的长效保号卡。",
+      q: "实名认证需要去香港本地办理吗？",
+      a: "完全不需要！Lucky2 支持全程在线实名认证。持有中国居民身份证配港澳通行证，或直接使用中国护照，只需用手机摄像头拍照上传即可由系统自动审核完成，全程仅需 2~3 分钟。",
     },
     {
-      q: "在国内使用需要实名认证吗？",
-      a: "根据香港电讯条例，若在香港本地使用需要完成实名登记；若仅在香港境外（如大陆地区）进行漫游接收短信，通常插卡即用。如需长期使用或开通更多增值功能，也可按卡套指引在官方网页便捷上传护照或港澳通行证完成合规认证。",
+      q: "卡片插在手机里需要一直开着漫游吗？",
+      a: "是的，在中国大陆使用时，手机系统设置里需要开启「数据漫游」，以便手机搜索并注册到中国移动或中国联通的合作漫游基站。请放心，如果不订购上网套餐且关闭移动蜂窝网络，仅待机接收短信不会产生任何漫游上网扣费。",
     },
     {
-      q: "插卡后需要关闭移动数据流量吗？",
-      a: "强烈建议关闭！境外卡在大陆漫游时，上网流量费率较高。请务必在手机设置中关闭该 SIM 卡的【移动数据】和【数据漫游】，仅保留正常的信号待机，即可确保 0 月租纯粹免费接收短信。",
+      q: "后续有效期快到了该如何续期？",
+      a: "在有效期届满前，您可以直接在官方渠道或本商城购买 Lucky2 充值增值券，充值后系统将自动顺延有效期，让您的宝贵号码长期安全持有。",
     },
   ];
 
   return (
-    <div className="mt-6 space-y-8 text-foreground">
-      {/* 顶部专属 Hero 区域 - 祥瑞红金科技风 */}
-      <div className="relative overflow-hidden rounded-3xl border border-red-200/90 bg-gradient-to-br from-red-600 via-rose-600 to-amber-600 p-6 text-white shadow-lg sm:p-8">
-        <div className="relative z-10">
+    <div className="mt-8 space-y-8">
+      {/* 1. 独家视觉 Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-950 via-rose-900 to-amber-950 p-6 text-white shadow-xl sm:p-8">
+        <div className="relative z-10 max-w-2xl space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-md">
-              <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-              香港原生号码 · 超长 2~3 年有效期
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-200">
+              <Sparkles className="h-3.5 w-3.5" />
+              香港 CSL 官方原生网络
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/30 px-3 py-1 text-xs font-semibold text-amber-100 backdrop-blur-md">
-              <Calendar className="h-3.5 w-3.5 text-amber-300" />
-              免频繁充值 · 官方 0 月租
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-xs font-medium text-rose-200">
+              <Calendar className="h-3.5 w-3.5" />
+              自带 2~3 年超长有效期
             </span>
           </div>
 
-          <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-3xl">
-            Lucky2 香港原生电话卡 · 超长效保号神卡
+          <h2 className="text-2xl font-black tracking-tight sm:text-3xl text-white">
+            香港 Lucky2 SIM 卡 · 长效保号与接码利器
           </h2>
-          <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-red-50/90 sm:text-base">
-            依托香港 CSL 优质网络，真实物理 SIM 卡原生 +852 号段。自带 2~3 年超长有效期，国内漫游免费接收海内外短信验证码，无日常月租，省心省钱的长期境外号码持有优选方案。
+
+          <p className="text-sm leading-relaxed text-rose-100/90 sm:text-base">
+            专为长期稳定持有香港号码打造：到手即享超长免充值有效期，国内漫游接收短信完全免费。
+            告别传统电话卡频繁充值续命与忘充销号烦恼！
           </p>
 
-          <div className="mt-6 flex flex-wrap gap-4 text-xs font-medium text-red-100 sm:text-sm">
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-amber-300" />
-              香港原生 +852
+          <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-amber-200/90">
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <span>国内免费接收短信</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-amber-300" />
-              超长 2~3 年有效期
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <span>在线快速实名认证</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-amber-300" />
-              国内免费收短信
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-amber-300" />
-              实体卡现货速发
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <span>三合一免剪卡全机型适配</span>
             </div>
           </div>
         </div>
 
-        <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-amber-400/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-16 right-20 h-48 w-48 rounded-full bg-red-400/20 blur-2xl" />
+        {/* Decorative background glow */}
+        <div className="pointer-events-none absolute -right-12 -top-12 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-12 right-24 h-48 w-48 rounded-full bg-rose-500/20 blur-2xl" />
       </div>
 
-      {/* 六大核心卖点 */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {highlights.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={item.title}
-              className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-red-300 hover:shadow-md"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600 transition-colors group-hover:bg-red-600 group-hover:text-white">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
-                  {item.tag}
-                </span>
-              </div>
-              <h3 className="mt-3.5 text-sm font-bold text-slate-900 sm:text-base">
-                {item.title}
-              </h3>
-              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                {item.desc}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 平台兼容矩阵 */}
-      <div className="overflow-hidden rounded-3xl border border-slate-200/90 bg-white p-5 shadow-xs sm:p-7">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* 2. 差异化独家模块: 保号成本对比天梯 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-red-600" />
-              <span className="text-xs font-bold uppercase tracking-wider text-red-600">
-                生态兼容全面覆盖
-              </span>
+              <TrendingDown className="h-5 w-5 text-rose-600" />
+              <h3 className="text-lg font-bold text-slate-900">为什么选择 Lucky2？—— 保号成本直观对比</h3>
             </div>
-            <h3 className="mt-1 text-lg font-extrabold text-slate-900 sm:text-xl">
-              全场景海外应用与平台兼容矩阵
-            </h3>
-            <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-              原生香港移动运营商号段（非 VoIP），真实物理 SIM 卡信誉度极高，秒过各类严苛风控。
-            </p>
+            <p className="mt-1 text-xs text-slate-500">对比传统境外卡繁琐的定期充值与高昂持有开销</p>
           </div>
-          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-            <Radio className="h-3.5 w-3.5 animate-pulse text-red-600" />
-            实测高权重畅通
+          <span className="inline-flex w-fit items-center rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+            省钱省心 90%+
           </span>
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {platformCategories.map((cat) => {
-            const CatIcon = cat.icon;
-            return (
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+          <div className="grid grid-cols-1 divide-y divide-slate-200 md:grid-cols-4 md:divide-x md:divide-y-0">
+            {comparisonItems.map((item, idx) => (
               <div
-                key={cat.title}
-                className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:bg-slate-50"
+                key={idx}
+                className={`flex flex-col justify-between p-4 ${
+                  item.highlight ? "bg-amber-50/40" : "bg-white"
+                }`}
               >
                 <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CatIcon className="h-4 w-4 text-slate-700" />
-                      <h4 className="text-sm font-bold text-slate-800">{cat.title}</h4>
-                    </div>
-                  </div>
-                  <span
-                    className={`mt-2 inline-block rounded-md border px-2 py-0.5 text-[11px] font-medium ${cat.color}`}
-                  >
-                    {cat.badge}
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {item.category}
                   </span>
-                  <div className="mt-3.5 space-y-2.5">
-                    {cat.items.map((it) => (
-                      <div key={it.name} className="text-xs">
-                        <div className="font-semibold text-slate-800">{it.name}</div>
-                        <div className="text-[11px] text-muted-foreground">{it.desc}</div>
-                      </div>
-                    ))}
+                  <div className="mt-3 space-y-2.5 text-xs leading-relaxed">
+                    <div className="rounded-lg bg-slate-100 p-2 text-slate-500">
+                      <span className="font-semibold text-slate-700">常规卡：</span>
+                      {item.traditional}
+                    </div>
+                    <div className="rounded-lg bg-rose-50 p-2 text-rose-800">
+                      <span className="font-bold text-rose-700">Lucky2：</span>
+                      {item.lucky2}
+                    </div>
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 新手防扣费警示卡 */}
-      <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-5 shadow-xs">
-        <div className="flex items-center gap-2 text-sm font-bold text-amber-900 sm:text-base">
-          <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0" />
-          新手插卡必看：防扣费与使用建议（重要）
-        </div>
-        <div className="mt-3 space-y-2 text-xs leading-relaxed text-amber-900/90 sm:text-sm">
-          <p>
-            1. <strong>插卡前务必关闭【移动数据】与【数据漫游】</strong>：境外卡漫游上网资费较高，请在插卡前务必在手机设置中将该卡的数据流量完全关闭，仅保留纯信号待机接收短信，即可完全 0 费用。
-          </p>
-          <p>
-            2. <strong>国内接收短信完全免费</strong>：用于国内漫游接收 Telegram、WhatsApp、Google、海外银行等各类平台的 SMS 短信验证码完全不扣费。
-          </p>
-          <p>
-            3. <strong>超长有效期省心持有</strong>：自带 2~3 年有效期待机期，无需像普通卡每半年充值。到期前按需充值即可续期。
-          </p>
-        </div>
-      </div>
-
-      {/* 商品规格与交付说明 */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <h3 className="text-base font-bold text-slate-900 sm:text-lg">商品规格与交付说明</h3>
-        <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2 sm:text-sm">
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
-            <span className="text-muted-foreground">卡片介质</span>
-            <span className="font-semibold text-slate-800">标准/Micro/Nano 三合一实体 SIM 卡</span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
-            <span className="text-muted-foreground">运营商归属</span>
-            <span className="font-semibold text-slate-800">香港 CSL 优质网络 MVNO</span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
-            <span className="text-muted-foreground">初始有效期</span>
-            <span className="font-semibold text-slate-800">到手即享 2~3 年超长有效期</span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
-            <span className="text-muted-foreground">发货方式</span>
-            <span className="font-semibold text-slate-800">国内现货速发 · 快递包邮</span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
-            <span className="text-muted-foreground">国内月租</span>
-            <span className="font-semibold text-slate-800">0 月租（平时接码完全免费）</span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
-            <span className="text-muted-foreground">适用设备</span>
-            <span className="font-semibold text-slate-800">iPhone 全系列及全网通安卓手机</span>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* 五步极速上手 */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <h3 className="text-base font-bold text-slate-900 sm:text-lg">极速上手五步流程</h3>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {steps.map((st) => (
-            <div key={st.step} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5">
-              <span className="text-xs font-black text-red-600">{st.step}</span>
-              <div className="mt-1.5 text-xs font-bold text-slate-900">{st.title}</div>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{st.desc}</p>
-            </div>
-          ))}
+      {/* 3. 香港 CSL 原生资费清单 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-6">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-amber-600" />
+            <h3 className="text-lg font-bold text-slate-900">香港 CSL 原生网络核心资费看板</h3>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">资费透明公道，无任何隐藏月租或强制捆绑消费</p>
         </div>
-      </div>
 
-      {/* 常见问题解答 */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="flex items-center gap-2">
-          <HelpCircle className="h-5 w-5 text-red-600" />
-          <h3 className="text-base font-bold text-slate-900 sm:text-lg">常见问题解答</h3>
-        </div>
-        <div className="mt-4 space-y-3">
-          {faqs.map((f, i) => (
-            <div key={i} className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
-              <div className="text-xs font-bold text-slate-900 sm:text-sm">Q: {f.q}</div>
-              <div className="mt-1.5 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                A: {f.a}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {tariffs.map((t, i) => (
+            <div key={i} className="flex flex-col justify-between rounded-xl border border-slate-200 p-4 transition-all hover:border-amber-300 hover:shadow-sm">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500">{t.title}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${t.color}`}>
+                    {t.badge}
+                  </span>
+                </div>
+                <div className="mt-2 text-base font-bold text-slate-900">{t.rate}</div>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">{t.desc}</p>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* 客服咨询条 */}
-      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-amber-50 p-5 sm:flex-row sm:p-6">
+      {/* 4. 内地合规实名认证 3 步指南 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-6">
+          <div className="flex items-center gap-2">
+            <QrCode className="h-5 w-5 text-blue-600" />
+            <h3 className="text-lg font-bold text-slate-900">内地居民在线实名激活流程（极速开通）</h3>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">香港特区电讯条例合规指引，免跑香港本地，手机扫码即可认证</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {kycSteps.map((s, idx) => (
+            <div key={idx} className="relative rounded-xl border border-slate-100 bg-slate-50/60 p-5">
+              <span className="text-2xl font-black text-rose-600/30">{s.step}</span>
+              <h4 className="mt-2 text-sm font-bold text-slate-900">{s.title}</h4>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 5. 常见业务场景兼容清单 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-6">
+          <div className="flex items-center gap-2">
+            <Globe className="h-5 w-5 text-emerald-600" />
+            <h3 className="text-lg font-bold text-slate-900">全球海外主流平台实测兼容矩阵</h3>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">实体 SIM 物理号段，高信任度，秒过各类平台风控核验</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {appScenarios.map((app, i) => (
+            <div key={i} className="flex flex-col justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 text-center">
+              <div>
+                <span className="inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  {app.status}
+                </span>
+                <div className="mt-2 text-xs font-bold text-slate-800">{app.name}</div>
+              </div>
+              <p className="mt-1 text-[11px] leading-tight text-slate-500">{app.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 6. 常见问答 FAQ */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-5 flex items-center gap-2">
+          <HelpCircle className="h-5 w-5 text-slate-700" />
+          <h3 className="text-lg font-bold text-slate-900">Lucky2 常见问题解答</h3>
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {faqs.map((f, i) => (
+            <div key={i} className="py-4 first:pt-0 last:pb-0">
+              <h4 className="text-sm font-semibold text-slate-900">{f.q}</h4>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{f.a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 7. 底部官方指引与客服咨询卡片 */}
+      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 p-6 sm:flex-row">
         <div>
-          <h4 className="text-sm font-bold text-red-950 sm:text-base">
-            需要了解更多香港手机卡保号选型或实名指导？
-          </h4>
-          <p className="mt-1 text-xs text-red-800/80">
-            本站为您提供全流程咨询与售后技术支持，保障您的境外号码长期安全稳定可用。
-          </p>
+          <h4 className="text-base font-bold text-slate-900">需要更多香港卡片实名指导或套餐配置咨询？</h4>
+          <p className="mt-1 text-xs text-slate-600">本站提供全流程一对一技术协助，保障您的港卡长效稳定安全持有。</p>
         </div>
         <button
           type="button"
           onClick={() => openPublicSupport()}
-          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-red-700 active:scale-95 sm:text-sm"
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 transition-colors"
         >
-          咨询在线客服
-          <ArrowRight className="h-4 w-4" />
+          <MessageSquare className="h-4 w-4" />
+          联系在线技术客服
         </button>
       </div>
     </div>

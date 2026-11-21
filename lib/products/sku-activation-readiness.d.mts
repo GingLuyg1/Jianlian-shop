@@ -1,4 +1,7 @@
 export type SkuActivationReason =
+  | "SELLABLE_CAP_REQUIRED"
+  | "SELLABLE_CAP_EXCEEDS_SUPPLIER_SNAPSHOT"
+  | "SUPPLIER_PURCHASE_DISABLED"
   | "ZERO_STOCK"
   | "NO_FULFILLMENT_SOURCE"
   | "SUPPLIER_BINDING_INCOMPLETE"
@@ -30,7 +33,7 @@ export function getEffectiveSkuDeliveryType(product: Record<string, unknown> | n
 export function isAutomaticSkuActivation(previousStatus: unknown, nextStatus: unknown, product: Record<string, unknown> | null, sku: Record<string, unknown>): boolean;
 export function validSupplierStockTimestamp(value: unknown): boolean;
 export function getSupplierStockEvidence(metadata: unknown): SkuActivationReadiness["supplier"];
-export function evaluateSkuActivationReadiness(input: { product: Record<string, unknown> | null; sku: Record<string, unknown>; localAvailableCount?: number; localInventoryError?: boolean }): SkuActivationReadiness;
+export function evaluateSkuActivationReadiness(input: { product: Record<string, unknown> | null; sku: Record<string, unknown>; localAvailableCount?: number; localInventoryError?: boolean; purchaseContext?: Record<string, any> }): SkuActivationReadiness;
 export function readSkuActivationReadiness(service: any, product: Record<string, unknown> | null, sku: Record<string, unknown>): Promise<SkuActivationReadiness>;
 export function formatSkuActivationReasons(reasons: unknown): string;
 export function summarizeSkuReadiness(skus: Array<Record<string, unknown>>, diagnosticRows?: Array<Record<string, any>>): {

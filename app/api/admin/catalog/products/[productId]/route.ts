@@ -312,6 +312,7 @@ export async function DELETE(request: Request, props: RouteContext) {
   const requestId = getRequestId(request);
   const admin = await requireCatalogAdmin(requestId);
   if (!admin.ok) return admin.response;
+  const service = getSupabaseServiceRoleClient() ?? admin.supabase;
 
   const productId = params.productId?.trim();
   if (!productId || !isSafeProductId(productId)) {
@@ -321,15 +322,48 @@ export async function DELETE(request: Request, props: RouteContext) {
   const rateLimit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, `product_delete:${productId}`));
   if (!rateLimit.allowed) return rateLimit.response!;
 
-  const { data: before, error: beforeError } = await admin.supabase
+  const selectFields = (
+    getSupabaseServiceRoleClient()
+      ? PRODUCT_FIELDS
+      : PRODUCT_FIELDS.replace(",metadata,", ",")
+  ) as typeof PRODUCT_FIELDS;
+
+  const { data: before, error: beforeError } = await service
     .from("products")
-    .select(PRODUCT_FIELDS)
+    .select(selectFields)
     .eq("id", productId)
     .maybeSingle();
-  if (beforeError || !before) return jsonResponse({ error: "商品不存在或已被删除" }, 404);
 
-  const { error } = await admin.supabase.from("products").delete().eq("id", productId);
+  if (beforeError) {
+    console.error("[AdminProductDelete] product query failed", {
+      requestId,
+      productId,
+      error: safeSupabaseError(beforeError),
+    });
+    return jsonResponse({ error: "读取商品信息失败，请稍后重试" }, 500);
+  }
+
+  if (!before) {
+    return jsonResponse({ error: "商品不存在或已被删除" }, 404);
+  }
+
+  // Clean up associated product_skus first
+  const { error: skusError } = await service.from("product_skus").delete().eq("product_id", productId);
+  if (skusError) {
+    console.warn("[AdminProductDelete] sku delete skipped or warning", {
+      requestId,
+      productId,
+      error: safeSupabaseError(skusError),
+    });
+  }
+
+  const { error } = await service.from("products").delete().eq("id", productId);
   if (error) {
+    console.error("[AdminProductDelete] product deletion failed", {
+      requestId,
+      productId,
+      error: safeSupabaseError(error),
+    });
     await auditCatalogAction({
       request,
       user: admin.user,
@@ -340,9 +374,9 @@ export async function DELETE(request: Request, props: RouteContext) {
       targetLabel: String((before as { name?: unknown }).name ?? ""),
       result: "failed",
       beforeSummary: before,
-      errorMessage: "商品删除失败",
+      errorMessage: error.message || "商品删除失败",
     });
-    return jsonResponse({ error: "商品删除失败，请稍后重试" }, 400);
+    return jsonResponse({ error: `商品删除失败：${error.message || "请稍后重试"}` }, 400);
   }
 
   await auditCatalogAction({

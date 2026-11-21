@@ -31,6 +31,22 @@ const nextConfig = {
           { key: "Cache-Control", value: "no-store, max-age=0" },
         ],
       },
+      // Tutorial screenshots and brand assets rarely change: let browsers
+      // reuse them for 7 days and refresh silently afterwards.
+      {
+        source: "/tutorials/:path*",
+        headers: [
+          ...securityHeaders,
+          { key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=86400" },
+        ],
+      },
+      {
+        source: "/assets/:path*",
+        headers: [
+          ...securityHeaders,
+          { key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=86400" },
+        ],
+      },
     ];
   },
 };

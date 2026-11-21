@@ -1,9 +1,9 @@
 import type { PublicCategory } from "@/lib/supabase/public-catalog";
 
 const CATEGORY_ROUTE_MATCHERS: Record<string, { slugs: string[]; names: string[] }> = {
-  "/products/sim-cards": { slugs: ["sim-cards", "phone-cards", "international-phone-cards"], names: ["国际电话卡", "电话卡"] },
+  "/products/sim-cards": { slugs: ["sim-cards", "phone-cards", "international-phone-cards"], names: ["国际电话卡", "电话卡", "国际sim卡", "sim卡", "sim"] },
   "/products/gift-cards": { slugs: ["gift-cards", "gift-card", "recharge-card"], names: ["礼品卡", "充值卡"] },
-  "/products/digital-accounts": { slugs: ["digital-accounts", "digital-account"], names: ["数字账号"] },
+  "/products/digital-accounts": { slugs: ["digital-accounts", "digital-account"], names: ["数字账号", "社媒账号", "数字/社媒", "数字"] },
   "/products/ai-membership": { slugs: ["ai-membership", "ai-member", "ai-recharge"], names: ["ai", "会员"] },
 };
 

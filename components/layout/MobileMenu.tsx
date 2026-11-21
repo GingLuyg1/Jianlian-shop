@@ -86,9 +86,15 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
   const pendingRoute = useSyncExternalStore(subscribeCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending);
   const pendingCategoryHref = pendingRoute?.source === pathname ? pendingRoute.target : "";
   const { visibleHrefs, confirmed, status, rows } = useVisibleStorefrontCategoryHrefs();
-  const visibleMenuItems = menuItems.filter(
-    (item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href)
-  );
+  const visibleMenuItems = menuItems
+    .filter((item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href))
+    .map((item) => {
+      if (rows && isCatalogCategoryHref(item.href)) {
+        const primary = findVisibleStorefrontPrimaryCategory(item.href, rows);
+        if (primary?.name) return { ...item, label: primary.name };
+      }
+      return item;
+    });
   const navigationGroups = [
     { title: "", items: visibleMenuItems.filter((item) => item.href === "/") },
     { title: "资源中心", items: visibleMenuItems.filter((item) => isCatalogCategoryHref(item.href)) },
@@ -134,7 +140,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
   }, [rows]);
 
   const expandedSecondaries = expandedPrimaryHref ? secondaryByPrimaryHref.get(expandedPrimaryHref) ?? [] : [];
-  const expandedPrimaryLabel = menuItems.find((item) => item.href === expandedPrimaryHref)?.label ?? "分类直达";
+  const expandedPrimaryLabel = visibleMenuItems.find((item) => item.href === expandedPrimaryHref)?.label ?? "分类直达";
   const isExpanded = expandedSecondaries.length > 0;
 
   // 手机端选项栏尺寸规格：

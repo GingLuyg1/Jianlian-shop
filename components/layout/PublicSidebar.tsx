@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -22,10 +22,12 @@ import {
 import { cn } from "@/lib/utils";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
+import { findVisibleStorefrontPrimaryCategory } from "@/lib/catalog/visible-storefront-category-routes";
 import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
 import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-query-cache";
 import { prefetchPublicProductCounts } from "@/lib/catalog/public-product-count-cache";
-import { startCatalogRouteExit } from "@/lib/motion/catalog-route-exit";
+import { getCatalogRoutePending, getServerCatalogRoutePending, startCatalogRouteExit, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
+import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import SidebarSlidingList from "./SidebarSlidingList";
 import styles from "./PublicSidebarGlass.module.css";
 import selectionMotion from "@/components/ui/SelectionMotion.module.css";
@@ -57,6 +59,20 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
   const router = useRouter();
   const { isMobile } = useMobileStorefront();
   const { visibleHrefs, confirmed, status, rows } = useVisibleStorefrontCategoryHrefs();
+  const pendingCatalogRoute = useSyncExternalStore(subscribeCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending);
+  const [clickedHref, setClickedHref] = useState<string>("");
+
+  useEffect(() => {
+    if (!clickedHref) return;
+    const targetPath = clickedHref.split("?")[0];
+    const reached = targetPath === "/" ? pathname === "/" : pathname === targetPath || (targetPath === "/account" && pathname.startsWith("/account") && !pathname.startsWith("/account/orders"));
+    if (reached && (!pendingCatalogRoute || pendingCatalogRoute.target.split("?")[0] === pathname)) {
+      const timer = window.setTimeout(() => setClickedHref(""), 90);
+      return () => window.clearTimeout(timer);
+    }
+    const maxTimer = window.setTimeout(() => setClickedHref(""), 3500);
+    return () => window.clearTimeout(maxTimer);
+  }, [clickedHref, pathname, pendingCatalogRoute]);
   useEffect(() => {
     if (!rows) return;
     // Idle visits prepare lightweight counts, not every category's SKU/stock.
@@ -65,9 +81,15 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
     if (idle === undefined) run();
     return () => { if (idle !== undefined) window.cancelIdleCallback(idle); };
   }, [pathname, rows]);
-  const visibleMenuItems = menuItems.filter(
-    (item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href)
-  );
+  const visibleMenuItems = menuItems
+    .filter((item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href))
+    .map((item) => {
+      if (rows && isCatalogCategoryHref(item.href)) {
+        const primary = findVisibleStorefrontPrimaryCategory(item.href, rows);
+        if (primary?.name) return { ...item, label: primary.name };
+      }
+      return item;
+    });
   const navigationGroups = [
     { title: "", items: visibleMenuItems.filter((item) => item.href === "/") },
     { title: "资源中心", items: visibleMenuItems.filter((item) => isCatalogCategoryHref(item.href)) },
@@ -112,6 +134,7 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
             if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows, true);
           }}
           onClick={(event) => {
+            setClickedHref(item.href);
             if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows);
             startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
           }}
@@ -122,7 +145,12 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
           )}
         >
           <Icon className="h-[18px] w-[18px] shrink-0" />
-          <span>{item.label}</span>
+          <span className="truncate">{item.label}</span>
+          <OptionLoadingSpinner
+            active={clickedHref === item.href || pendingCatalogRoute?.target.split("?")[0] === item.href}
+            size="sm"
+            className="ml-auto"
+          />
         </Link>
       </li>
     );

@@ -52,18 +52,16 @@ export default function AlternateLoginMethods({
   }
 
   return (
-    <div className="mt-5 space-y-3 border-t border-slate-200 pt-5" data-testid="alternate-login-methods">
-      <p className="text-center text-xs text-slate-500">其他登录方式</p>
+    <div className="mt-3 space-y-2" data-testid="alternate-login-methods">
       <button
         type="button"
         onClick={() => void googleLogin()}
         disabled={busy}
-        className="flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-60"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50 disabled:opacity-60"
       >
         使用 Google 账号继续
       </button>
       {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
-      <p className="text-center text-xs text-slate-500">继续即代表同意网站用户协议与隐私政策。</p>
     </div>
   );
 }
