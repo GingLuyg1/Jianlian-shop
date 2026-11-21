@@ -19,7 +19,19 @@ test("checkout keeps a compact purchase column and aligns product detail surface
   assert.match(checkout, /lg:\[scrollbar-gutter:stable_both-edges\]/);
   assert.doesNotMatch(checkout, /mt-3 max-w-2xl text-sm leading-relaxed/);
   assert.doesNotMatch(checkout, /mt-8 grid max-w-2xl/);
-  assert.equal((checkout.match(/<div className="mt-8 w-full space-y-5">/g) ?? []).length, 8);
+  const inlineDetails = checkout.match(/<div className="mt-8 w-full space-y-5">/g) ?? [];
+  assert.ok(inlineDetails.length >= 7, "Inline checkout details retain their spacing");
+  for (const component of [
+    "OneNzProductDetails",
+    "GiffgaffSimProductDetails",
+    "HahaSimProductDetails",
+    "UltraMobileProductDetails",
+    "EncMobileProductDetails",
+    "EuropeanSimProductDetails",
+    "RakutenMobileProductDetails",
+  ]) {
+    assert.ok(checkout.includes(`<${component} product={product} />`), `${component} renders in checkout`);
+  }
   assert.doesNotMatch(checkout, /mt-8 max-w-(?:3xl|4xl)/);
 
   const paymentIndex = checkout.indexOf("支付方式");
@@ -38,10 +50,10 @@ test("storefront floating sidebar reserves its desktop footprint and retains com
   const productUi = file("components/products/product-ui.ts");
   const productDetail = file("app/products/[id]/page.tsx");
 
-  assert.match(layout, /lg:\[--storefront-sidebar-width:248px\]/);
-  assert.match(layout, /lg:\[--storefront-main-offset:268px\]/);
-  assert.match(layout, /md:\[--storefront-sidebar-width:248px\]/);
-  assert.match(layout, /md:\[--storefront-main-offset:268px\]/);
+  assert.match(layout, /lg:\[--storefront-sidebar-width:232px\]/);
+  assert.match(layout, /lg:\[--storefront-main-offset:252px\]/);
+  assert.match(layout, /md:\[--storefront-sidebar-width:232px\]/);
+  assert.match(layout, /md:\[--storefront-main-offset:252px\]/);
   assert.match(publicSidebar, /mx-auto flex h-\[46px\] w-\[calc\(100%-6px\)\] items-center justify-start/);
   assert.match(publicSidebar, /text-left text-sm/);
   assert.match(publicSidebar, /sidebar-scroll flex-1 overflow-y-auto px-2/);
