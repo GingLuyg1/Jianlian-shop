@@ -42,7 +42,7 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
       icon: CreditCard,
       title: "0 月租 · 零持有成本",
       desc: "默认按量计费（Pay As You Go），平时不拨打电话、不发短信、不偷跑数据即完全 0 月租，无任何月租与隐藏费用。",
-      tag: "100% 零月租",
+      tag: "官方 0 月租",
     },
     {
       icon: MessageSquare,
@@ -320,7 +320,7 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
           </div>
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
             <Radio className="h-3.5 w-3.5 animate-pulse text-orange-600" />
-            实测 100% 畅通接收
+            实测全平台高通过率
           </span>
         </div>
 

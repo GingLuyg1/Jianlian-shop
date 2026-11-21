@@ -6,12 +6,12 @@ import { rememberPublicProductCount } from "@/lib/catalog/public-product-count-c
 import { rememberPublicProductPreview, clearPublicProductPreviews } from "@/lib/catalog/public-product-preview";
 
 // Public listing data only. Neither prices nor stock in this cache authorize a purchase.
-// Extended to 10 minutes fresh, 30 minutes stale-while-revalidate for instantaneous navigation.
-const MAX_AGE_MS = 600_000;
+// Paint cached rows for up to 30 minutes and revalidate on access after 15 seconds.
+const PRODUCT_FRESH_TTL_MS = 15_000;
 const STALE_MAX_AGE_MS = 1_800_000;
 const MAX_ENTRIES = 120;
-const entries = new Map<string, { result?: CatalogProductResult; promise?: Promise<CatalogProductResult>; savedAt: number }>();
-let generation = 0;
+type PageEntry = { result?: CatalogProductResult; promise?: Promise<CatalogProductResult>; savedAt: number };
+const entries = new Map<string, PageEntry>();
 let backgroundInFlight = 0;
 const categoryToRoute = new Map([
   ["/products/sim-cards", "sim-cards"],
@@ -28,46 +28,61 @@ export function publicProductQueryKey(query: CatalogProductQuery) {
   ]);
 }
 
-export function peekPublicProductPage(query: CatalogProductQuery, now = Date.now()) {
-  const entry = entries.get(publicProductQueryKey(query));
-  return entry?.result && now - entry.savedAt < STALE_MAX_AGE_MS ? entry.result : undefined;
+function cacheState(entry: PageEntry | undefined, now = Date.now()) {
+  if (!entry?.result) return "missing";
+  const age = now - entry.savedAt;
+  if (age < PRODUCT_FRESH_TTL_MS) return "fresh";
+  return age < STALE_MAX_AGE_MS ? "stale" : "expired";
 }
 
-export function getPublicProductPage(query: CatalogProductQuery, force = false): Promise<CatalogProductResult> {
-  const key = publicProductQueryKey(query);
-  const prior = entries.get(key);
-  const now = Date.now();
-  if (!force && prior?.result && now - prior.savedAt < MAX_AGE_MS) return Promise.resolve(prior.result);
-  if (!force && prior?.result && now - prior.savedAt < STALE_MAX_AGE_MS) {
-    if (!prior.promise) {
-      const bgPromise = searchPublicCatalogProducts(query).then((result) => {
-        result.products.forEach((product) => rememberPublicProductPreview(product));
-        entries.set(key, { result, savedAt: Date.now() });
-        return result;
-      }).catch(() => prior.result!);
-      entries.set(key, { result: prior.result, promise: bgPromise, savedAt: prior.savedAt });
-    }
-    return Promise.resolve(prior.result);
-  }
-  if (prior?.promise) return prior.promise;
+export function peekPublicProductPage(query: CatalogProductQuery, now = Date.now()) {
+  const entry = entries.get(publicProductQueryKey(query));
+  const state = cacheState(entry, now);
+  return state === "fresh" || state === "stale" ? entry?.result : undefined;
+}
+
+function refreshPublicProductPage(query: CatalogProductQuery, key: string, entry: PageEntry = { savedAt: 0 }) {
+  if (entry.promise) return entry.promise;
   const promise = searchPublicCatalogProducts(query).then((result) => {
-    if (entries.get(key)?.promise === promise) {
+    if (entries.get(key) === entry) {
       result.products.forEach((product) => rememberPublicProductPreview(product));
+      entry.result = result;
+      entry.savedAt = Date.now();
+      entry.promise = undefined;
       entries.delete(key);
-      entries.set(key, { result, savedAt: Date.now() });
+      entries.set(key, entry);
       while (entries.size > MAX_ENTRIES) entries.delete(entries.keys().next().value!);
     }
     return result;
   }).catch((error: unknown) => {
-    if (entries.get(key)?.promise === promise) entries.delete(key);
+    if (entries.get(key) === entry) {
+      entry.promise = undefined;
+      const state = cacheState(entry);
+      if (state === "expired" || state === "missing") entries.delete(key);
+    }
     throw error;
   });
-  entries.set(key, { promise, savedAt: 0 });
+  entry.promise = promise;
+  entries.set(key, entry);
   return promise;
 }
 
+export function getPublicProductPage(query: CatalogProductQuery, force = false): Promise<CatalogProductResult> {
+  const key = publicProductQueryKey(query);
+  const entry = entries.get(key);
+  const state = cacheState(entry);
+  if (!force && state === "fresh" && entry?.result) return Promise.resolve(entry.result);
+
+  const request = refreshPublicProductPage(query, key, entry);
+  if (force || state !== "stale" || !entry) return request;
+
+  return request.catch((error: unknown) => {
+    if (entries.get(key) === entry && cacheState(entry) === "stale" && entry.result) return entry.result;
+    throw error;
+  });
+}
+
 export function clearPublicProductPages() {
-  generation += 1;
   entries.clear();
   clearPublicProductPreviews();
 }
@@ -85,10 +100,12 @@ function mayBackgroundPrefetch() {
 /** Secondary intent shares the existing public page cache and global budget. */
 export async function prefetchPublicProductPage(query: CatalogProductQuery) {
   if (!mayBackgroundPrefetch() || backgroundInFlight >= 2) return false;
-  if (peekPublicProductPage(query)) return true;
-  if (entries.get(publicProductQueryKey(query))?.promise) return false;
+  const key = publicProductQueryKey(query);
+  const entry = entries.get(key);
+  if (cacheState(entry) === "fresh") return true;
+  if (entry?.promise) return false;
   backgroundInFlight += 1;
-  try { await getPublicProductPage(query); return true; }
+  try { await refreshPublicProductPage(query, key, entry); return true; }
   catch { return false; }
   finally { backgroundInFlight -= 1; }
 }
@@ -101,10 +118,15 @@ export function prefetchDefaultPublicProductPage(href: string, rows: PublicCateg
   const first = getChildCategories(rows, primary.id)[0];
   const selected = first ?? primary;
   const query = { primaryCategoryId: primary.id, secondaryCategoryId: first?.id ?? "", keyword: "", page: 1, pageSize: 20 };
-  const startedAtGeneration = generation;
+  const key = publicProductQueryKey(query);
+  const entry = entries.get(key);
   if (background) backgroundInFlight += 1;
-  return getPublicProductPage(query).then((result) => {
-    if (generation !== startedAtGeneration) return false;
+  const request = cacheState(entry) === "fresh" && entry?.result
+    ? Promise.resolve(entry.result)
+    : refreshPublicProductPage(query, key, entry);
+  const requestedEntry = entries.get(key);
+  return request.then((result) => {
+    if (entries.get(key) !== requestedEntry) return false;
     // Count hints use the exact same filters and route identity as the page.
     rememberPublicProductCount(JSON.stringify([productCategory, selected.id, "", 1, 20]), href, selected.id, result.products.length);
     return true;

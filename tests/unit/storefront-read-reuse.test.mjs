@@ -49,6 +49,20 @@ function publicDetail(fetcher) {
   new Function("require", "module", "exports", "fetch", code)(name => name.endsWith("effective-category-visibility.mjs") ? visibility : { getSupabaseBrowserClient() { throw Error("unexpected direct read"); } }, module, module.exports, fetcher);
   return module.exports;
 }
+test("listing refresh bypasses the browser HTTP cache and reads the current rows", async () => {
+  const requests = [];
+  const api = publicDetail(async (url, options) => {
+    requests.push({ url, options });
+    return Response.json({ success: true, data: { products: [{ id: "a", stock: 2 - requests.length }], total: 1 } });
+  });
+  assert.equal((await api.searchPublicCatalogProducts({ primaryCategoryId: "p" })).products[0].stock, 1);
+  assert.equal((await api.searchPublicCatalogProducts({ primaryCategoryId: "p" })).products[0].stock, 0);
+  assert.deepEqual(requests, Array.from({ length: 2 }, () => ({
+    url: "/api/catalog/products?primaryCategoryId=p",
+    options: { cache: "no-store" },
+  })));
+});
+
 test("simultaneous product details share one read, while every settled revisit revalidates stock", async () => {
   let calls = 0, resolve; const api = publicDetail(() => { calls++; return new Promise(done => { resolve = done; }); });
   const a = api.getPublicProductDetail("product-a"), b = api.getPublicProductDetail("product-a"); assert.equal(a, b); assert.equal(calls, 1);

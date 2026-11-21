@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { productImageFallbackSrc, setProductImageFallback } from "./product-ui";
+import { productImageFallbackSrc, resolveProductImageSrc, setProductImageFallback } from "./product-ui";
 
 interface ProductCardProps {
   product: Product;
@@ -35,7 +35,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         <Link href={`/products/${product.id}`} className="block">
           <div className="aspect-square overflow-hidden rounded-xl border bg-white">
             <img
-              src={product.imageUrl || productImageFallbackSrc}
+              src={resolveProductImageSrc(product.imageUrl)}
               alt={product.name}
               onError={(event) => setProductImageFallback(event.currentTarget)}
               className="h-full w-full object-cover"

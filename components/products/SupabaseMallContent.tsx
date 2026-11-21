@@ -56,6 +56,7 @@ import {
   mallContentClassName,
   productImageFallbackSrc,
   productPanelContentClassName,
+  resolveProductImageSrc,
   setProductImageFallback,
 } from "./product-ui";
 
@@ -1008,24 +1009,10 @@ function ProductPanel({
 
 function safeNavigate(router: any, href: string) {
   try {
-    const timer = setTimeout(() => {
-      if (typeof window !== "undefined" && window.location.pathname + window.location.search !== href) {
-        window.location.assign(href);
-      }
-    }, 1200);
-
-    const promise = router.push(href);
-    if (promise && typeof promise.catch === "function") {
-      promise.catch(() => {
-        clearTimeout(timer);
-        if (typeof window !== "undefined") {
-          window.location.assign(href);
-        }
-      });
-    }
+    router.push(href);
   } catch {
     if (typeof window !== "undefined") {
-      window.location.assign(href);
+      window.location.href = href;
     }
   }
 }
@@ -1033,16 +1020,24 @@ function safeNavigate(router: any, href: string) {
 function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: string; product: Product; showStock: boolean }) {
   const router = useRouter();
   const stock = product.stock ?? 0;
-  const imageSrc = product.imageUrl || productImageFallbackSrc;
+  const imageSrc = resolveProductImageSrc(product.imageUrl);
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
   const priceText = hasSkus && maxPrice > minPrice
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
+  const targetHref = checkoutHref(product.slug || product.id, typeof window !== "undefined" ? window.location.pathname + window.location.search : "");
 
   return (
-    <button type="button" data-catalog-card onClick={() => safeNavigate(router, checkoutHref(product.slug || product.id, window.location.pathname + window.location.search))} className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}>
+    <button
+      type="button"
+      data-catalog-card
+      onMouseEnter={() => router.prefetch(targetHref)}
+      onTouchStart={() => router.prefetch(targetHref)}
+      onClick={() => safeNavigate(router, targetHref)}
+      className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
+    >
       <div className="flex h-full min-w-0 items-center gap-5">
         <img data-selection-icon src={imageSrc} alt={product.name} onError={(event) => setProductImageFallback(event.currentTarget)} className="h-12 w-12 shrink-0 rounded-xl bg-white object-cover" />
         <div className="min-w-0 flex-1 text-left">
@@ -1069,7 +1064,7 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
 
 function CatalogProductIcon({ product, category, isMobile }: { product: Product; category: DisplayCategory | null; isMobile?: boolean }) {
   const [failed, setFailed] = useState<string[]>([]);
-  const ownImage = product.imageUrl?.trim();
+  const ownImage = resolveProductImageSrc(product.imageUrl?.trim());
   const source = [ownImage, category?.displayImage].find(value => value && !failed.includes(value));
   const Icon = category?.displayIcon ? iconMap[category.displayIcon] : KeyRound;
   const sizeClass = isMobile ? "h-9 w-9 shrink-0 rounded-lg" : "h-12 w-12 shrink-0 rounded-xl";
@@ -1098,6 +1093,8 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
+  const targetHref = checkoutHref(product.slug || product.id, typeof window !== "undefined" ? window.location.pathname + window.location.search : "");
+
   if (isMobile) {
     return (
       <button
@@ -1105,9 +1102,11 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
         disabled={disabled}
         data-catalog-card
         data-selected={selected ? "true" : undefined}
+        onMouseEnter={() => router.prefetch(targetHref)}
+        onTouchStart={() => router.prefetch(targetHref)}
         onClick={() => {
           onSelect();
-          safeNavigate(router, checkoutHref(product.slug || product.id, window.location.pathname + window.location.search));
+          safeNavigate(router, targetHref);
         }}
         className={cn(
           compactProductRowClassName,
@@ -1166,9 +1165,11 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
       disabled={disabled}
       data-catalog-card
       data-selected={selected ? "true" : undefined}
+      onMouseEnter={() => router.prefetch(targetHref)}
+      onTouchStart={() => router.prefetch(targetHref)}
       onClick={() => {
         onSelect();
-        safeNavigate(router, checkoutHref(product.slug || product.id, window.location.pathname + window.location.search));
+        safeNavigate(router, targetHref);
       }}
       className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >

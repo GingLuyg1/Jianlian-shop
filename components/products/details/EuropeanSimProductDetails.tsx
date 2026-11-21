@@ -32,11 +32,25 @@ interface EuropeanSimProductDetailsProps {
 }
 
 export default function EuropeanSimProductDetails({ product }: EuropeanSimProductDetailsProps) {
-  const brandName = product.name.includes("Vodafone")
+  const isVodafone = product.name.includes("Vodafone") || (product.slug || "").includes("vodafone");
+  const isMovistar = product.name.includes("Movistar") || (product.slug || "").includes("movistar");
+  const brandName = isVodafone
     ? "Vodafone 西班牙沃达丰"
-    : product.name.includes("Movistar")
+    : isMovistar
     ? "Movistar 西班牙电信"
     : "Orange 西班牙电信";
+
+  const heroGradient = isVodafone
+    ? "from-neutral-950 via-red-950 to-rose-950 border-red-300"
+    : isMovistar
+    ? "from-slate-950 via-blue-950 to-cyan-950 border-sky-300"
+    : "from-slate-900 via-rose-950 to-orange-950 border-orange-200";
+
+  const heroAccentBadge = isVodafone
+    ? "border-red-400/40 bg-red-600/30 text-red-200"
+    : isMovistar
+    ? "border-cyan-400/40 bg-cyan-600/30 text-cyan-200"
+    : "border-orange-400/40 bg-orange-600/30 text-orange-200";
 
   const highlights = [
     {
@@ -49,7 +63,7 @@ export default function EuropeanSimProductDetails({ product }: EuropeanSimProduc
       icon: CreditCard,
       title: "0 月租 · 零持有成本",
       desc: "默认按量计费模式（Pay As You Go），平时放在国内不打电话、不发短信即完全 0 月租，无强制月扣费。",
-      tag: "100% 零月租",
+      tag: "官方 0 月租",
     },
     {
       icon: MessageSquare,
@@ -182,16 +196,16 @@ export default function EuropeanSimProductDetails({ product }: EuropeanSimProduc
   return (
     <div className="mt-8 w-full space-y-6 text-slate-800">
       {/* 顶部 Hero 巨幕 */}
-      <section className="overflow-hidden rounded-2xl border border-orange-200/80 bg-white shadow-sm">
-        <div className="relative bg-gradient-to-br from-slate-900 via-rose-950 to-orange-950 p-6 text-white sm:p-8">
-          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-orange-500/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-rose-500/10 blur-3xl" />
+      <section className={`overflow-hidden rounded-2xl border ${heroGradient} bg-white shadow-sm`}>
+        <div className={`relative bg-gradient-to-br ${heroGradient} p-6 text-white sm:p-8`}>
+          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/5 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-white/5 blur-3xl" />
 
           <div className="relative flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/30 bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-300">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
               🇪🇸 西班牙/欧洲原生实体 SIM 卡
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-orange-200">
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${heroAccentBadge}`}>
               0 月租 · 国内免费接收短信
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300">
@@ -264,7 +278,7 @@ export default function EuropeanSimProductDetails({ product }: EuropeanSimProduc
           </div>
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
             <Radio className="h-3.5 w-3.5 animate-pulse text-orange-600" />
-            实测 100% 畅通接收
+            实测高权重畅通
           </span>
         </div>
 

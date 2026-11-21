@@ -280,69 +280,64 @@ export default function TMobileProductDetails({ product }: TMobileProductDetails
 
       {/* 核心重点板块：如何变为 $3/月 PAYGO 套餐（阶段实测方法） */}
       <section className="overflow-hidden rounded-3xl border-2 border-pink-300 bg-gradient-to-br from-white via-pink-50/30 to-rose-50/20 p-5 shadow-sm sm:p-7">
-        <div className="flex items-center justify-between border-b border-pink-100 pb-4">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-pink-600 text-white shadow-xs">
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <div>
-              <h3 className="text-base font-extrabold text-slate-950 sm:text-lg">
-                如何变更为 $3/月 PAYGO 套餐？（阶段实测保号降费指南）
-              </h3>
-              <p className="text-xs text-slate-500">
-                很多客户关心的长期低成本持有方案，请按以下实测步骤与风控边界谨慎操作
-              </p>
+        <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
+          {/* 左栏：标题与转换四步流程 */}
+          <div className="space-y-4 lg:col-span-7">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-pink-600 text-white shadow-xs">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-950 sm:text-lg">
+                  如何变更为 $3/月 PAYGO 套餐？（阶段实测保号降费指南）
+                </h3>
+                <p className="text-xs text-slate-500">
+                  很多客户关心的长期低成本持有方案，请按以下实测步骤与风控边界谨慎操作
+                </p>
+              </div>
             </div>
-          </div>
-          <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-pink-100 px-3 py-1 text-xs font-bold text-pink-800">
-            独家实操攻略
-          </span>
-        </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-12">
-          {/* 左栏：转换四步流程 */}
-          <div className="space-y-3.5 lg:col-span-7">
-            <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-700">
-              <FileText className="h-4 w-4 text-pink-600" />
-              自行转换四步流程规范
-            </h4>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {paygoFourSteps.map((st) => (
-                <div
-                  key={st.num}
-                  className="rounded-2xl border border-pink-100/90 bg-white p-4 shadow-2xs"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-500 text-[10px] font-bold text-white">
-                      {st.num}
-                    </span>
-                    <span className="text-xs font-bold text-slate-900">{st.title}</span>
+            <div className="space-y-3 pt-1">
+              <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-700">
+                <FileText className="h-4 w-4 text-pink-600" />
+                自行转换四步流程规范
+              </h4>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {paygoFourSteps.map((st) => (
+                  <div
+                    key={st.num}
+                    className="rounded-2xl border border-pink-100/90 bg-white p-3.5 shadow-2xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-500 text-[10px] font-bold text-white">
+                        {st.num}
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">{st.title}</span>
+                    </div>
+                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{st.desc}</p>
                   </div>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-600">{st.desc}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* 右栏：120天停机限制与风险提示（必读） */}
-          <div className="flex flex-col justify-between rounded-2xl border-2 border-red-200 bg-red-50/80 p-5 shadow-xs lg:col-span-5">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-bold text-red-900 sm:text-base">
-                <ShieldAlert className="h-5 w-5 text-red-600 shrink-0" />
-                ⚠️ 120 天停机限制与风险提示（必读！）
+          {/* 右栏：120天停机限制与风险提示（必读） - 向上对齐与左侧持平 */}
+          <div className="rounded-2xl border-2 border-red-200 bg-red-50/80 p-5 shadow-xs lg:col-span-5">
+            <div className="flex items-center gap-2 text-sm font-bold text-red-900 sm:text-base">
+              <ShieldAlert className="h-5 w-5 text-red-600 shrink-0" />
+              ⚠️ 120 天停机限制与风险提示（必读！）
+            </div>
+            <div className="mt-3.5 space-y-3 text-xs leading-relaxed text-slate-700">
+              <div className="rounded-xl border border-red-200/80 bg-white/90 p-3.5">
+                <strong className="text-red-700">1. 停机期内无法接收任何第三方验证码：</strong>
+                在约 120 天的欠费停机期内，该卡<strong>只能接收 T-Mobile 官方网站登录验证码</strong>！美区银行、海外社媒、支付软件等第三方短信验证码一律无法收到。重要账号请勿在此时提前换绑！
               </div>
-              <div className="mt-3.5 space-y-3 text-xs leading-relaxed text-slate-700">
-                <div className="rounded-xl border border-red-200/80 bg-white/90 p-3.5">
-                  <strong className="text-red-700">1. 停机期内无法接收任何第三方验证码：</strong>
-                  在约 120 天的欠费停机期内，该卡<strong>只能接收 T-Mobile 官方网站登录验证码</strong>！美区银行、海外社媒、支付软件等第三方短信验证码一律无法收到。重要账号请勿在此时提前换绑！
-                </div>
-                <div className="rounded-xl border border-red-200/80 bg-white/90 p-3.5">
-                  <strong className="text-red-700">2. 非官方承诺业务，存在销号关户风险：</strong>
-                  此保号降费路径为玩家群体目前阶段的实测机制，非运营商官方承诺政策，不保证 100% 成功；若 120 天内因运营商规则变更被系统提前回收或注销，号码将无法找回。重要主力工作号请勿使用此方法！
-                </div>
+              <div className="rounded-xl border border-red-200/80 bg-white/90 p-3.5">
+                <strong className="text-red-700">2. 非官方承诺业务，存在销号关户风险：</strong>
+                此保号降费路径为玩家群体目前阶段的实测机制，非运营商官方承诺政策，不保证绝对成功；若 120 天内因运营商规则变更被系统提前回收或注销，号码将无法找回。重要主力工作号请勿使用此方法！
               </div>
             </div>
-            <div className="mt-4 pt-2 border-t border-red-200/60 text-[11px] text-red-800">
+            <div className="mt-3 pt-2.5 border-t border-red-200/60 text-[11px] text-red-800">
               建议：若追求绝对稳定与长期无间断接码，推荐继续保留默认正常资费持有。
             </div>
           </div>
