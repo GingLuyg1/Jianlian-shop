@@ -14,11 +14,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
+import { resolveProductImageSrc } from "@/components/products/product-ui";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
+import AirMobileProductDetails from "@/components/products/details/AirMobileProductDetails";
 import EncMobileProductDetails from "@/components/products/details/EncMobileProductDetails";
 import EuropeanSimProductDetails from "@/components/products/details/EuropeanSimProductDetails";
 import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
 import HahaSimProductDetails from "@/components/products/details/HahaSimProductDetails";
+import Lucky2ProductDetails from "@/components/products/details/Lucky2ProductDetails";
 import OneNzProductDetails from "@/components/products/details/OneNzProductDetails";
 import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
 import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
@@ -212,15 +215,22 @@ function isUltraMobileProduct(product: { id?: string; name?: string; slug?: stri
   return name.includes("ultra") || slug.includes("ultra");
 }
 
+function isLucky2Product(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return name.includes("lucky") || slug.includes("lucky");
+}
+
+function isAirMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return name.includes("air mobile") || slug.includes("air-mobile");
+}
+
 function isEncMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
-  return (
-    name.includes("enc") ||
-    slug.includes("enc") ||
-    name.includes("air mobile") ||
-    slug.includes("air-mobile")
-  );
+  return (name.includes("enc") || slug.includes("enc")) && !name.includes("air") && !slug.includes("air");
 }
 
 function isEuropeanSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
@@ -1471,10 +1481,14 @@ function ProductDetailCard({
           <GiffgaffSimProductDetails product={product} />
         ) : isHahaSimProduct(product) ? (
           <HahaSimProductDetails product={product} />
+        ) : isLucky2Product(product) ? (
+          <Lucky2ProductDetails product={product} />
         ) : isTMobileProduct(product) ? (
           <TMobileProductDetails product={product} />
         ) : isUltraMobileProduct(product) ? (
           <UltraMobileProductDetails product={product} />
+        ) : isAirMobileProduct(product) ? (
+          <AirMobileProductDetails product={product} />
         ) : isEncMobileProduct(product) ? (
           <EncMobileProductDetails product={product} />
         ) : isEuropeanSimProduct(product) ? (
@@ -3151,7 +3165,7 @@ function DetailMetric({
 function getProductImage(product: Product) {
   const customImg = product.image || (product as any).imageUrl || (product as any).image_url;
   if (customImg && typeof customImg === "string" && customImg.trim()) {
-    return customImg.trim();
+    return resolveProductImageSrc(customImg.trim());
   }
   const name = product.name.toLowerCase();
   if (

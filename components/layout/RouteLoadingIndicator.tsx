@@ -262,14 +262,9 @@ export default function RouteLoadingIndicator() {
   if (!visible) return null;
 
   return (
-    <div className="route-loading-shell pointer-events-none fixed inset-0 z-[80]">
-      <div className="absolute inset-0 bg-background/35 backdrop-blur-[1px]" />
-      <div className="h-1 w-full overflow-hidden bg-primary/10">
-        <div className="route-loading-bar h-full w-1/2 rounded-r-full bg-primary" />
-      </div>
-      <div className="route-loading-toast absolute left-1/2 top-[82px] flex -translate-x-1/2 items-center gap-2 rounded-full border border-primary/15 bg-white/95 px-4 py-2 text-sm font-medium text-primary shadow-lg backdrop-blur">
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
-        正在加载页面
+    <div className="route-loading-shell pointer-events-none fixed top-0 left-0 right-0 z-[100]">
+      <div className="h-[2.5px] w-full overflow-hidden bg-primary/15">
+        <div className="route-loading-bar h-full w-2/3 rounded-r-full bg-primary" />
       </div>
     </div>
   );

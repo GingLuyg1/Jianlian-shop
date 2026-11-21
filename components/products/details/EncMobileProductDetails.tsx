@@ -254,7 +254,7 @@ export default function EncMobileProductDetails({ product }: EncMobileProductDet
           </div>
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
             <Radio className="h-3.5 w-3.5 animate-pulse text-orange-600" />
-            实测 100% 畅通接收
+            实测高权重畅通
           </span>
         </div>
 

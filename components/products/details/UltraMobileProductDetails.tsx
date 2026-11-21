@@ -240,7 +240,7 @@ export default function UltraMobileProductDetails({ product }: UltraMobileProduc
           </div>
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700">
             <Radio className="h-3.5 w-3.5 animate-pulse text-purple-600" />
-            实测 100% 畅通支持
+            实测全生态高通过率
           </span>
         </div>
 
