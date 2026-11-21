@@ -1,7 +1,16 @@
 // Progress only, never a login credential. Supabase must still verify the real code.
 export const PENDING_SIGNUP_KEY = "jianlian:pending-signup:v1";
 export type PendingSignup = { email: string; userId: string; invite: string };
-const MAX_AGE = 3600_000;
+// Keep the recovery hint no longer than the Production OTP lifetime.
+const MAX_AGE = 600_000;
+
+export function readPendingSignup(storage: Storage, now = Date.now()): PendingSignup | null {
+  const localRaw = storage.getItem(PENDING_SIGNUP_KEY);
+  const local = decodePendingSignup(localRaw, now);
+  if (local) return local;
+  if (localRaw) storage.removeItem(PENDING_SIGNUP_KEY);
+  return null;
+}
 
 export function encodePendingSignup(value: PendingSignup, now = Date.now()) {
   return JSON.stringify({ email: value.email, userId: value.userId, invite: value.invite, savedAt: now });
