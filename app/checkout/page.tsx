@@ -19,6 +19,9 @@ import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechar
 import AirMobileProductDetails from "@/components/products/details/AirMobileProductDetails";
 import EncMobileProductDetails from "@/components/products/details/EncMobileProductDetails";
 import EuropeanSimProductDetails from "@/components/products/details/EuropeanSimProductDetails";
+import OrangeSimProductDetails from "@/components/products/details/OrangeSimProductDetails";
+import VodafoneSimProductDetails from "@/components/products/details/VodafoneSimProductDetails";
+import MovistarSimProductDetails from "@/components/products/details/MovistarSimProductDetails";
 import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
 import HahaSimProductDetails from "@/components/products/details/HahaSimProductDetails";
 import Lucky2ProductDetails from "@/components/products/details/Lucky2ProductDetails";
@@ -231,6 +234,24 @@ function isEncMobileProduct(product: { id?: string; name?: string; slug?: string
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return (name.includes("enc") || slug.includes("enc")) && !name.includes("air") && !slug.includes("air");
+}
+
+function isOrangeSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return name.includes("orange") || slug.includes("orange");
+}
+
+function isVodafoneSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return name.includes("vodafone") || slug.includes("vodafone");
+}
+
+function isMovistarSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return name.includes("movistar") || slug.includes("movistar");
 }
 
 function isEuropeanSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
@@ -1491,6 +1512,12 @@ function ProductDetailCard({
           <AirMobileProductDetails product={product} />
         ) : isEncMobileProduct(product) ? (
           <EncMobileProductDetails product={product} />
+        ) : isOrangeSimProduct(product) ? (
+          <OrangeSimProductDetails product={product} />
+        ) : isVodafoneSimProduct(product) ? (
+          <VodafoneSimProductDetails product={product} />
+        ) : isMovistarSimProduct(product) ? (
+          <MovistarSimProductDetails product={product} />
         ) : isEuropeanSimProduct(product) ? (
           <EuropeanSimProductDetails product={product} />
         ) : isRakutenMobileProduct(product) ? (

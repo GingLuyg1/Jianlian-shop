@@ -106,18 +106,21 @@ function formatMoney(value: number, currency = "CNY") {
   return currency === "USDT" ? `${amount} USDT` : `¥${amount}`;
 }
 
+let cachedAccountAssets: AccountAssetsResponse | null = null;
+
 export default function AccountOverviewPage() {
-  const [data, setData] = useState<AccountAssetsResponse | null>(null);
+  const [data, setData] = useState<AccountAssetsResponse | null>(() => cachedAccountAssets);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedAccountAssets);
 
   const loadOverview = useCallback(async () => {
-    setLoading(true);
+    if (!cachedAccountAssets) setLoading(true);
     setError(null);
     try {
       const response = await fetch("/api/account/assets", { cache: "no-store" });
       const result = (await response.json().catch(() => null)) as AccountAssetsResponse & { error?: string };
       if (!response.ok) throw new Error(result?.error ?? "账户资产加载失败，请稍后重试");
+      cachedAccountAssets = result;
       setData(result);
     } catch (loadError) {
       setError(getClientErrorMessage(loadError, "账户资产加载失败，请稍后重试"));

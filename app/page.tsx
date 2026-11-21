@@ -238,9 +238,15 @@ function HeroVisual({ type }: { type: string }) {
 export default function HomePage() {
   const { isMobile } = useMobileStorefront();
   const { visibleHrefs: visibleCategoryHrefs, rows: categoryRows } = useVisibleStorefrontCategoryHrefs();
-  const visibleCategoryCards = categoryCards.filter(
-    (item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href)
-  );
+  const visibleCategoryCards = categoryCards
+    .filter((item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href))
+    .map((item) => {
+      if (categoryRows && isCatalogCategoryHref(item.href)) {
+        const primary = findVisibleStorefrontPrimaryCategory(item.href, categoryRows);
+        if (primary?.name) return { ...item, title: primary.name };
+      }
+      return item;
+    });
   const visibleHotLinks = hotLinks.filter((item) => {
     const categoryHref = item.href.split("?")[0];
     return !isCatalogCategoryHref(categoryHref) || visibleCategoryHrefs.has(categoryHref);
@@ -293,7 +299,7 @@ export default function HomePage() {
       tree.push({
         path: card.href,
         primaryId: primary.id,
-        primaryName: card.title,
+        primaryName: primary.name || card.title,
         icon: card.icon,
         items: subItems,
       });

@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { Button } from "@/components/ui/button";
+import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 type TutorialImageProps = {
@@ -14,6 +16,12 @@ type TutorialImageProps = {
 };
 
 export default function TutorialImage({ src, caption, width, height, previewClassName = "mx-auto h-auto max-h-[420px] w-full object-contain" }: TutorialImageProps) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    // Cached images may finish before hydration attaches onLoad.
+    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) setLoaded(true);
+  }, [src]);
   return (
     <Dialog>
       <figure
@@ -24,21 +32,30 @@ export default function TutorialImage({ src, caption, width, height, previewClas
           <button
             type="button"
             aria-label={`查看大图：${caption}`}
-            className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+            className="relative block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
             onContextMenu={(e) => e.preventDefault()}
           >
+            {!loaded ? (
+              <span aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 bg-gradient-to-br from-orange-50/90 via-[#fffaf4] to-orange-50/70 text-xs font-medium text-[#b57944]">
+                <OptionLoadingSpinner active size="md" />
+                <span>图片加载中…</span>
+              </span>
+            ) : null}
             {/* Full-resolution local assets are also used by the zoom canvas. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              ref={imgRef}
               src={src}
               alt={caption}
               width={width}
               height={height}
               draggable={false}
-              loading="lazy"
+              loading="eager"
               decoding="async"
+              onLoad={() => setLoaded(true)}
+              onError={() => setLoaded(true)}
               onContextMenu={(e) => e.preventDefault()}
-              className={`${previewClassName} select-none`}
+              className={`${previewClassName} select-none transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
             />
           </button>
         </DialogTrigger>

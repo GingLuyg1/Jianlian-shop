@@ -1,172 +1,1284 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  Check,
+  CheckCircle2,
+  Clock3,
+  Copy,
+  Eye,
+  EyeOff,
+  FileLock2,
+  KeyRound,
+  Loader2,
+  Lock,
+  Mail,
+  RefreshCw,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
-
+import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import { getSafeAuthErrorMessage, isEmailFormatValid } from "@/lib/auth/password-policy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
-type SecurityForm = {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-};
+type SecurityTab = "change-email" | "email-password" | "old-password";
 
-type FieldErrors = Partial<Record<keyof SecurityForm, string>>;
+const SECURITY_TABS: Array<{
+  id: SecurityTab;
+  label: string;
+  shortDesc: string;
+  icon: typeof Mail;
+}> = [
+  {
+    id: "change-email",
+    label: "更换绑定邮箱",
+    shortDesc: "双向验证码核验更换通知邮箱",
+    icon: Mail,
+  },
+  {
+    id: "email-password",
+    label: "邮箱改密码",
+    shortDesc: "通过注册邮箱验证码重置密码",
+    icon: ShieldCheck,
+  },
+  {
+    id: "old-password",
+    label: "原密码改密码",
+    shortDesc: "验证当前登录密码后设置新密码",
+    icon: KeyRound,
+  },
+];
 
-function validatePassword(value: string) {
-  if (value.length < 8) return "新密码至少 8 位。";
-  if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) {
-    return "建议新密码同时包含字母和数字。";
-  }
-  return "";
+function evaluatePasswordChecks(pwd: string) {
+  const hasMinLength = pwd.length >= 8;
+  const hasRecommendedLength = pwd.length >= 12;
+  const hasLetter = /[A-Za-z]/.test(pwd);
+  const hasNumber = /[0-9]/.test(pwd);
+  const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+  const score = [hasMinLength, hasLetter, hasNumber, hasRecommendedLength || hasSpecial].filter(Boolean).length;
+  return {
+    hasMinLength,
+    hasRecommendedLength,
+    hasLetter,
+    hasNumber,
+    hasSpecial,
+    score,
+  };
+}
+
+function formatDateTime(iso: string | null | undefined) {
+  if (!iso) return "刚刚活跃";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "刚刚活跃";
+  return d.toLocaleString("zh-CN", {
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function AccountSecurityPage() {
   const router = useRouter();
-  const [form, setForm] = useState<SecurityForm>({
-    currentPassword: "",
+  const [activeTab, setActiveTab] = useState<SecurityTab>("change-email");
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [lastSignInAt, setLastSignInAt] = useState<string | null>(null);
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [copiedEmail, setCopiedEmail] = useState(false);
+
+  // Tab 1: Change Email form state
+  const [emailForm, setEmailForm] = useState({
+    currentCode: "",
+    newEmail: "",
+    newCode: "",
+  });
+  const [emailErrors, setEmailErrors] = useState<Record<string, string>>({});
+  const [currentCodeCountdown, setCurrentCodeCountdown] = useState(0);
+  const [newCodeCountdown, setNewCodeCountdown] = useState(0);
+  const [sendingCurrentCode, setSendingCurrentCode] = useState(false);
+  const [sendingNewCode, setSendingNewCode] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
+
+  // Tab 2: Email Reset Password form state
+  const [emailPwdForm, setEmailPwdForm] = useState({
+    code: "",
     newPassword: "",
     confirmPassword: "",
   });
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [saving, setSaving] = useState(false);
-  const [visible, setVisible] = useState<Record<keyof SecurityForm, boolean>>({
-    currentPassword: false,
-    newPassword: false,
-    confirmPassword: false,
+  const [emailPwdErrors, setEmailPwdErrors] = useState<Record<string, string>>({});
+  const [emailPwdCountdown, setEmailPwdCountdown] = useState(0);
+  const [sendingEmailPwdCode, setSendingEmailPwdCode] = useState(false);
+  const [savingEmailPwd, setSavingEmailPwd] = useState(false);
+  const [showEmailPwd, setShowEmailPwd] = useState({ new: false, confirm: false });
+
+  // Tab 3: Old Password Change form state
+  const [oldPwdForm, setOldPwdForm] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
+  const [oldPwdErrors, setOldPwdErrors] = useState<Record<string, string>>({});
+  const [savingOldPwd, setSavingOldPwd] = useState(false);
+  const [showOldPwd, setShowOldPwd] = useState({ old: false, new: false, confirm: false });
 
-  function updateField(field: keyof SecurityForm, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: undefined }));
+  // Countdown timers
+  useEffect(() => {
+    if (currentCodeCountdown <= 0) return;
+    const timer = setInterval(() => setCurrentCodeCountdown((prev) => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [currentCodeCountdown]);
+
+  useEffect(() => {
+    if (newCodeCountdown <= 0) return;
+    const timer = setInterval(() => setNewCodeCountdown((prev) => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [newCodeCountdown]);
+
+  useEffect(() => {
+    if (emailPwdCountdown <= 0) return;
+    const timer = setInterval(() => setEmailPwdCountdown((prev) => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [emailPwdCountdown]);
+
+  // Load current user (fast local session first, then remote verification)
+  useEffect(() => {
+    async function loadCurrentUser() {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.user) {
+          if (sessionData.session.user.email) setUserEmail(sessionData.session.user.email);
+          if (sessionData.session.user.last_sign_in_at) setLastSignInAt(sessionData.session.user.last_sign_in_at);
+          if (sessionData.session.user.created_at) setCreatedAt(sessionData.session.user.created_at);
+          setLoadingUser(false);
+        }
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user?.email) {
+          setUserEmail(user.email);
+        }
+        if (user?.last_sign_in_at) {
+          setLastSignInAt(user.last_sign_in_at);
+        }
+        if (user?.created_at) {
+          setCreatedAt(user.created_at);
+        }
+      } catch (err) {
+        console.error("Failed to load user email:", err);
+      } finally {
+        setLoadingUser(false);
+      }
+    }
+    void loadCurrentUser();
+  }, []);
+
+  const handleCopyEmail = useCallback(async () => {
+    if (!userEmail) return;
+    try {
+      await navigator.clipboard.writeText(userEmail);
+      setCopiedEmail(true);
+      toast.success("已添加到剪贴板");
+      setTimeout(() => setCopiedEmail(false), 2000);
+    } catch {
+      toast.error("复制失败，请手动选中复制");
+    }
+  }, [userEmail]);
+
+  // --- Handlers for Tab 1: 更换绑定邮箱 ---
+  async function handleSendCurrentEmailCode() {
+    if (currentCodeCountdown > 0 || sendingCurrentCode || !userEmail) return;
+    setSendingCurrentCode(true);
+    setEmailErrors((prev) => ({ ...prev, currentCode: "" }));
+    try {
+      const res = await fetch("/api/account/security/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail, purpose: "current_email_verify" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "发送验证码失败");
+      toast.success(data.message || "验证码已发送至当前邮箱，请查收");
+      setCurrentCodeCountdown(60);
+    } catch (err: any) {
+      toast.error(err.message || "发送失败，请稍后重试");
+      setEmailErrors((prev) => ({ ...prev, currentCode: err.message }));
+    } finally {
+      setSendingCurrentCode(false);
+    }
   }
 
-  function validate() {
-    const nextErrors: FieldErrors = {};
-    if (!form.currentPassword) nextErrors.currentPassword = "请输入当前密码。";
-    const passwordError = validatePassword(form.newPassword);
-    if (passwordError) nextErrors.newPassword = passwordError;
-    if (form.newPassword === form.currentPassword) nextErrors.newPassword = "新密码不能与当前密码相同。";
-    if (form.confirmPassword !== form.newPassword) nextErrors.confirmPassword = "两次新密码必须一致。";
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+  async function handleSendNewEmailCode() {
+    if (newCodeCountdown > 0 || sendingNewCode) return;
+    const newMail = emailForm.newEmail.trim().toLowerCase();
+    if (!newMail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMail)) {
+      setEmailErrors((prev) => ({ ...prev, newEmail: "请输入有效的邮箱地址" }));
+      return;
+    }
+    if (newMail === userEmail.toLowerCase()) {
+      setEmailErrors((prev) => ({ ...prev, newEmail: "新邮箱不能与当前绑定邮箱相同" }));
+      return;
+    }
+
+    setSendingNewCode(true);
+    setEmailErrors((prev) => ({ ...prev, newEmail: "", newCode: "" }));
+    try {
+      const res = await fetch("/api/account/security/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newMail, purpose: "new_email_verify" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "发送新邮箱验证码失败");
+      toast.success(data.message || "验证码已发送至新邮箱，请查收");
+      setNewCodeCountdown(60);
+    } catch (err: any) {
+      toast.error(err.message || "发送失败，请稍后重试");
+      setEmailErrors((prev) => ({ ...prev, newEmail: err.message }));
+    } finally {
+      setSendingNewCode(false);
+    }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (saving || !validate()) return;
+  async function handleSubmitChangeEmail(e: FormEvent) {
+    e.preventDefault();
+    if (savingEmail) return;
 
-    setSaving(true);
+    const errors: Record<string, string> = {};
+    if (!emailForm.currentCode.trim()) errors.currentCode = "请输入当前邮箱验证码";
+    if (!emailForm.newEmail.trim()) errors.newEmail = "请输入新的绑定邮箱";
+    if (!emailForm.newCode.trim()) errors.newCode = "请输入新邮箱验证码";
 
+    if (Object.keys(errors).length > 0) {
+      setEmailErrors(errors);
+      return;
+    }
+
+    setSavingEmail(true);
+    try {
+      const res = await fetch("/api/account/security/change-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentCode: emailForm.currentCode.trim(),
+          newEmail: emailForm.newEmail.trim().toLowerCase(),
+          newCode: emailForm.newCode.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "更换邮箱失败");
+
+      toast.success("邮箱更换成功！已绑定新邮箱：" + data.email);
+      setUserEmail(data.email);
+      setEmailForm({ currentCode: "", newEmail: "", newCode: "" });
+      setEmailErrors({});
+    } catch (err: any) {
+      toast.error(err.message || "更换邮箱失败，请检查验证码");
+      setEmailErrors((prev) => ({ ...prev, form: err.message }));
+    } finally {
+      setSavingEmail(false);
+    }
+  }
+
+  // --- Handlers for Tab 2: 邮箱改密码 ---
+  async function handleSendEmailPwdCode() {
+    if (emailPwdCountdown > 0 || sendingEmailPwdCode || !userEmail) return;
+    setSendingEmailPwdCode(true);
+    setEmailPwdErrors((prev) => ({ ...prev, code: "" }));
+    try {
+      const res = await fetch("/api/account/security/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail, purpose: "password_reset" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "发送重置密码验证码失败");
+      toast.success(data.message || "改密验证码已发送至您的注册邮箱");
+      setEmailPwdCountdown(60);
+    } catch (err: any) {
+      toast.error(err.message || "发送失败，请稍后重试");
+      setEmailPwdErrors((prev) => ({ ...prev, code: err.message }));
+    } finally {
+      setSendingEmailPwdCode(false);
+    }
+  }
+
+  async function handleSubmitEmailPwd(e: FormEvent) {
+    e.preventDefault();
+    if (savingEmailPwd) return;
+
+    const errors: Record<string, string> = {};
+    if (!emailPwdForm.code.trim()) errors.code = "请输入邮箱收到的验证码";
+    if (emailPwdForm.newPassword.length < 8) errors.newPassword = "新密码长度至少 8 位";
+    if (!/[A-Za-z]/.test(emailPwdForm.newPassword) || !/[0-9]/.test(emailPwdForm.newPassword)) {
+      errors.newPassword = "新密码需同时包含字母和数字";
+    }
+    if (emailPwdForm.newPassword !== emailPwdForm.confirmPassword) {
+      errors.confirmPassword = "两次输入的新密码不一致";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEmailPwdErrors(errors);
+      return;
+    }
+
+    setSavingEmailPwd(true);
+    try {
+      const res = await fetch("/api/account/security/reset-password-by-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: emailPwdForm.code.trim(),
+          newPassword: emailPwdForm.newPassword,
+          confirmPassword: emailPwdForm.confirmPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "修改密码失败");
+
+      toast.success("密码修改成功！请使用新密码重新登录");
+      setEmailPwdForm({ code: "", newPassword: "", confirmPassword: "" });
+      setEmailPwdErrors({});
+
+      const supabase = getSupabaseBrowserClient();
+      await supabase.auth.signOut({ scope: "global" });
+      router.replace("/login?redirect=/account/security");
+    } catch (err: any) {
+      toast.error(err.message || "修改密码失败，请稍后重试");
+      setEmailPwdErrors((prev) => ({ ...prev, form: err.message }));
+    } finally {
+      setSavingEmailPwd(false);
+    }
+  }
+
+  // --- Handlers for Tab 3: 原密码改密码 ---
+  async function handleSubmitOldPwd(e: FormEvent) {
+    e.preventDefault();
+    if (savingOldPwd) return;
+
+    const errors: Record<string, string> = {};
+    if (!oldPwdForm.oldPassword) errors.oldPassword = "请输入原密码";
+    if (oldPwdForm.newPassword.length < 8) errors.newPassword = "新密码长度至少 8 位";
+    if (!/[A-Za-z]/.test(oldPwdForm.newPassword) || !/[0-9]/.test(oldPwdForm.newPassword)) {
+      errors.newPassword = "新密码需同时包含字母和数字";
+    }
+    if (oldPwdForm.newPassword === oldPwdForm.oldPassword) {
+      errors.newPassword = "新密码不能与原密码相同";
+    }
+    if (oldPwdForm.newPassword !== oldPwdForm.confirmPassword) {
+      errors.confirmPassword = "两次输入的新密码不一致";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setOldPwdErrors(errors);
+      return;
+    }
+
+    setSavingOldPwd(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user?.email) {
-        toast.error("登录状态已失效，请重新登录。");
-        setSaving(false);
-        return;
-      }
+      if (!userEmail) throw new Error("无法获取当前用户信息，请重新登录");
 
       const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: form.currentPassword,
+        email: userEmail,
+        password: oldPwdForm.oldPassword,
       });
 
       if (verifyError) {
-        setErrors({ currentPassword: "当前密码不正确。" });
-        setSaving(false);
+        setOldPwdErrors({ oldPassword: "原密码不正确，请重新输入" });
+        setSavingOldPwd(false);
         return;
       }
 
       const { error: updateError } = await supabase.auth.updateUser({
-        password: form.newPassword,
+        password: oldPwdForm.newPassword,
       });
 
-      if (updateError) {
-        toast.error("密码修改失败，请稍后重试。");
-        setSaving(false);
-        return;
-      }
+      if (updateError) throw updateError;
 
-      toast.success("密码已修改，请重新登录。");
+      toast.success("密码已成功修改！请使用新密码重新登录");
       await supabase.auth.signOut({ scope: "global" });
       router.replace("/login?redirect=/account/security");
-      router.refresh();
-    } catch {
-      toast.error("密码修改失败，请稍后重试。");
-      setSaving(false);
+    } catch (err: any) {
+      toast.error(err.message || "修改密码失败，请稍后重试");
+      setOldPwdErrors((prev) => ({ ...prev, form: err.message }));
+    } finally {
+      setSavingOldPwd(false);
     }
   }
 
+  const activePasswordChecks = useMemo(() => {
+    const pwd = activeTab === "email-password" ? emailPwdForm.newPassword : oldPwdForm.newPassword;
+    return evaluatePasswordChecks(pwd);
+  }, [activeTab, emailPwdForm.newPassword, oldPwdForm.newPassword]);
+
+  const primaryActionBtnClass =
+    "bg-gradient-to-br from-[#df7c3f] to-[#d66b2c] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_6px_14px_-6px_rgba(181,118,66,0.55)] hover:from-[#e58549] hover:to-[#c96022] active:translate-y-[0.5px] disabled:opacity-60 border-0";
+
+  const codeSendBtnClass =
+    "h-11 min-w-[116px] shrink-0 rounded-xl border border-[#e6c4a3] bg-gradient-to-b from-[#fffaf3] to-[#ffedd8] px-4 text-xs font-semibold text-[#b85d23] shadow-[inset_0_1px_0_#fff,0_3px_8px_-5px_rgba(162,106,53,0.3)] hover:from-[#fff4e6] hover:to-[#ffe3c2] hover:text-[#9c4b18] disabled:opacity-55";
+
   return (
-    <Card data-account-page="/account/security" data-account-ready={true} aria-busy={false} className={`${glass.surface} ${styles.panel} ${styles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden`}>
-      <CardHeader className={`${glass.hero} ${styles.pageHeader}`}>
-        <CardTitle className="text-xl">账号安全</CardTitle>
-        <p className="text-sm text-muted-foreground">修改密码前需要重新验证当前密码。</p>
-      </CardHeader>
-      <CardContent className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <EmailBinding />
-        <form onSubmit={handleSubmit} className={`${styles.formGroup} flex w-full max-w-xl flex-col gap-5`}>
-
-          <PasswordField
-            id="currentPassword"
-            label="当前密码"
-            value={form.currentPassword}
-            visible={visible.currentPassword}
-            error={errors.currentPassword}
-            autoComplete="current-password"
-            onToggle={() => setVisible((current) => ({ ...current, currentPassword: !current.currentPassword }))}
-            onChange={(value) => updateField("currentPassword", value)}
-          />
-          <PasswordField
-            id="newPassword"
-            label="新密码"
-            value={form.newPassword}
-            visible={visible.newPassword}
-            error={errors.newPassword}
-            autoComplete="new-password"
-            onToggle={() => setVisible((current) => ({ ...current, newPassword: !current.newPassword }))}
-            onChange={(value) => updateField("newPassword", value)}
-          />
-          <PasswordField
-            id="confirmPassword"
-            label="确认新密码"
-            value={form.confirmPassword}
-            visible={visible.confirmPassword}
-            error={errors.confirmPassword}
-            autoComplete="new-password"
-            onToggle={() => setVisible((current) => ({ ...current, confirmPassword: !current.confirmPassword }))}
-            onChange={(value) => updateField("confirmPassword", value)}
-          />
-
-          <div className="pt-2">
-            <Button type="submit" disabled={saving}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {saving ? "修改中..." : "修改密码"}
-            </Button>
+    <div
+      data-account-page="/account/security"
+      data-account-ready={!loadingUser}
+      aria-busy={loadingUser}
+      className={`${styles.page} flex min-h-0 min-w-0 flex-col gap-4`}
+    >
+      {/* Top Security Panel with Header, Mode Switcher & 4-Metric Status Overview */}
+      <Card className={`${glass.surface} ${styles.panel} shrink-0 overflow-hidden`}>
+        <CardHeader
+          className={`${glass.hero} ${styles.pageHeader} flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between`}
+        >
+          <div className="flex min-w-0 items-center gap-3.5">
+            <span className={`${glass.icon} ${styles.sectionIcon}`}>
+              <Shield className="h-5 w-5" strokeWidth={1.7} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <CardTitle className="text-lg sm:text-xl">账号安全设置</CardTitle>
+                <span className={styles.pill}>双重验证防护中</span>
+              </div>
+            </div>
           </div>
-        </form>
-      </CardContent>
-    </Card>
+
+          {/* Warm Terracotta Segmented Navigation Tabs */}
+          <div className={`${styles.apiTabs} shrink-0 self-start lg:self-center`} role="tablist" aria-label="账号安全操作模式">
+            {SECURITY_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    styles.apiTab,
+                    "inline-flex items-center gap-1.5 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardHeader>
+
+        {/* 4-Card Security Overview Strip */}
+        <CardContent className="space-y-4 pt-1">
+          {!loadingUser && !userEmail ? <EmailBinding /> : null}
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {/* Metric 1: Bound Email */}
+            <div className={`${glass.inset} ${styles.stat} flex flex-col justify-between`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <Mail className="h-3.5 w-3.5 text-primary" />
+                  当前绑定邮箱
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyEmail}
+                  disabled={!userEmail}
+                  className="inline-flex items-center gap-1 rounded-full border border-[#f0d8be] bg-[#fff8ef] px-2 py-0.5 text-[11px] font-medium text-[#b5672d] transition hover:bg-[#ffeed9] disabled:opacity-50"
+                  title="点击复制绑定邮箱"
+                >
+                  {copiedEmail ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                  <span>{copiedEmail ? "已复制" : "复制"}</span>
+                </button>
+              </div>
+              <p className="mt-3 truncate text-sm font-semibold text-slate-800" title={userEmail || undefined}>
+                {loadingUser ? "正在读取..." : userEmail || "暂未绑定邮箱"}
+              </p>
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-700">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <span>已认证 · 可接收验证码与订单通知</span>
+              </div>
+            </div>
+
+            {/* Metric 2: Security Protection Level */}
+            <div className={`${glass.inset} ${styles.stat} flex flex-col justify-between`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                  安全防护等级
+                </span>
+                <span className="rounded-full border border-emerald-200 bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                  高 · 95分
+                </span>
+              </div>
+              <div className="mt-3">
+                <div className="mb-1.5 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-[#71482e]">邮箱 + 密码双重保护</span>
+                  <span className="text-[#b57944]">正常</span>
+                </div>
+                <div className={styles.vipProgress}>
+                  <span style={{ width: "92%" }} />
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">敏感操作均需动态邮件验证码核验</p>
+            </div>
+
+            {/* Metric 3: Password Protection Status */}
+            <div className={`${glass.inset} ${styles.stat} flex flex-col justify-between`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <Lock className="h-3.5 w-3.5 text-primary" />
+                  登录密码状态
+                </span>
+                <span className={styles.pill}>加密存储</span>
+              </div>
+              <p className="mt-3 text-sm font-semibold text-slate-800">已启用高强度加密验证</p>
+              <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                <span>支持邮箱验证码改密 / 原密码改密</span>
+              </div>
+            </div>
+
+            {/* Metric 4: Active Session Info */}
+            <div className={`${glass.inset} ${styles.stat} flex flex-col justify-between`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <Clock3 className="h-3.5 w-3.5 text-primary" />
+                  最近登录验证
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50/70 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  当前在线
+                </span>
+              </div>
+              <p className="mt-3 text-sm font-semibold text-slate-800">
+                {loadingUser ? "—" : formatDateTime(lastSignInAt)}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                注册于 {loadingUser ? "—" : formatDateTime(createdAt).split(" ")[0]}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Main Two-Column Workspace: Left Form Panel + Right Security Guide & Checklist */}
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+        {/* LEFT COLUMN: Active Security Operation Form */}
+        <section className={`${glass.surface} ${styles.panel} p-5 sm:p-7`}>
+          {/* TAB 1: 更换绑定邮箱 (Ref 图2) */}
+          {activeTab === "change-email" && (
+            <div>
+              <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-slate-900">更换绑定邮箱</h2>
+                    <span className={styles.pill}>双向验证</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    先验证当前绑定邮箱，再验证新邮箱归属，确保账户通知与找回渠道安全衔接
+                  </p>
+                </div>
+                <span className={`${glass.icon} h-10 w-10`}>
+                  <Mail className="h-5 w-5" strokeWidth={1.7} />
+                </span>
+              </div>
+
+              <form onSubmit={handleSubmitChangeEmail} autoComplete="off" className="space-y-5">
+                {/* 1. 当前绑定邮箱 (点击可复制到剪贴板，匹配参考图2) */}
+                <div className={styles.field}>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sec-current-email" className="text-xs font-semibold text-slate-700">
+                      当前绑定邮箱
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={handleCopyEmail}
+                      className="text-xs font-medium text-[#c5672b] hover:underline"
+                    >
+                      {copiedEmail ? "✓ 已添加到剪贴板" : "点击复制邮箱"}
+                    </button>
+                  </div>
+                  <div
+                    onClick={handleCopyEmail}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void handleCopyEmail();
+                      }
+                    }}
+                    title="点击复制当前绑定邮箱"
+                    className="mt-1.5 flex h-11 cursor-pointer items-center justify-between rounded-xl border border-[#eadfd3] bg-[#faf5ef]/90 px-3.5 text-sm font-medium text-[#695646] transition hover:border-[#dfc7ae]"
+                  >
+                    <span className="truncate">{loadingUser ? "加载中..." : userEmail || "未绑定邮箱"}</span>
+                    <span className="ml-2 inline-flex shrink-0 items-center gap-1 rounded-md bg-white/80 px-2 py-0.5 text-[11px] text-[#9b7b5e] shadow-sm">
+                      {copiedEmail ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                      {copiedEmail ? "已复制" : "复制"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. 当前邮箱验证码 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-current-email-code" className="text-xs font-semibold text-slate-700">
+                    当前邮箱验证码
+                  </Label>
+                  <div className="mt-1.5 flex gap-2.5">
+                    <Input
+                      id="sec-current-email-code"
+                      name="current_email_otp_code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="请输入 6 位邮箱验证码"
+                      value={emailForm.currentCode}
+                      onChange={(e) => {
+                        setEmailForm((prev) => ({ ...prev, currentCode: e.target.value }));
+                        setEmailErrors((prev) => ({ ...prev, currentCode: "" }));
+                      }}
+                      className={cn(
+                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                        emailErrors.currentCode && "border-red-500 focus-visible:ring-red-500/20"
+                      )}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleSendCurrentEmailCode}
+                      disabled={currentCodeCountdown > 0 || sendingCurrentCode || !userEmail}
+                      className={codeSendBtnClass}
+                    >
+                      {sendingCurrentCode ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : currentCodeCountdown > 0 ? (
+                        `${currentCodeCountdown}s 后重发`
+                      ) : (
+                        "获取验证码"
+                      )}
+                    </Button>
+                  </div>
+                  {emailErrors.currentCode && (
+                    <p className="mt-1.5 text-xs text-red-600">{emailErrors.currentCode}</p>
+                  )}
+                </div>
+
+                {/* 3. 新绑定邮箱 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-new-email" className="text-xs font-semibold text-slate-700">
+                    新绑定邮箱
+                  </Label>
+                  <Input
+                    id="sec-new-email"
+                    name="new_binding_email_address"
+                    type="email"
+                    autoComplete="off"
+                    placeholder="请输入新的绑定邮箱地址"
+                    value={emailForm.newEmail}
+                    onChange={(e) => {
+                      setEmailForm((prev) => ({ ...prev, newEmail: e.target.value }));
+                      setEmailErrors((prev) => ({ ...prev, newEmail: "" }));
+                    }}
+                    className={cn(
+                      "mt-1.5 h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                      emailErrors.newEmail && "border-red-500 focus-visible:ring-red-500/20"
+                    )}
+                  />
+                  {emailErrors.newEmail && (
+                    <p className="mt-1.5 text-xs text-red-600">{emailErrors.newEmail}</p>
+                  )}
+                </div>
+
+                {/* 4. 新邮箱验证码 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-new-email-code" className="text-xs font-semibold text-slate-700">
+                    新邮箱验证码
+                  </Label>
+                  <div className="mt-1.5 flex gap-2.5">
+                    <Input
+                      id="sec-new-email-code"
+                      name="new_email_otp_code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="请输入新邮箱 6 位验证码"
+                      value={emailForm.newCode}
+                      onChange={(e) => {
+                        setEmailForm((prev) => ({ ...prev, newCode: e.target.value }));
+                        setEmailErrors((prev) => ({ ...prev, newCode: "" }));
+                      }}
+                      className={cn(
+                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                        emailErrors.newCode && "border-red-500 focus-visible:ring-red-500/20"
+                      )}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleSendNewEmailCode}
+                      disabled={newCodeCountdown > 0 || sendingNewCode || !emailForm.newEmail.trim()}
+                      className={codeSendBtnClass}
+                    >
+                      {sendingNewCode ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : newCodeCountdown > 0 ? (
+                        `${newCodeCountdown}s 后重发`
+                      ) : (
+                        "发送验证码"
+                      )}
+                    </Button>
+                  </div>
+                  {emailErrors.newCode && (
+                    <p className="mt-1.5 text-xs text-red-600">{emailErrors.newCode}</p>
+                  )}
+                </div>
+
+                {emailErrors.form && (
+                  <div className="rounded-xl border border-red-200 bg-red-50/90 px-3.5 py-2.5 text-xs text-red-700">
+                    {emailErrors.form}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <Button
+                    type="submit"
+                    disabled={savingEmail}
+                    className={cn("h-11 w-full rounded-xl px-7 text-sm font-semibold sm:w-auto", primaryActionBtnClass)}
+                  >
+                    {savingEmail ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        正在核验更换...
+                      </>
+                    ) : (
+                      "确认更换"
+                    )}
+                  </Button>
+                  <span className="text-xs text-slate-400">验证码 10 分钟内有效，如未收到请检查垃圾箱</span>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 2: 邮箱改密码 (Ref 图3) */}
+          {activeTab === "email-password" && (
+            <div>
+              <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-slate-900">邮箱改密码</h2>
+                    <span className={styles.pill}>免原密码重置</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    向当前注册邮箱发送动态验证码，核验通过后直接设定新密码
+                  </p>
+                </div>
+                <span className={`${glass.icon} h-10 w-10`}>
+                  <ShieldCheck className="h-5 w-5" strokeWidth={1.7} />
+                </span>
+              </div>
+
+              <form onSubmit={handleSubmitEmailPwd} autoComplete="off" className="space-y-5">
+                {/* Hidden username anchor to prevent browser password manager from autofilling the OTP input */}
+                <input
+                  type="text"
+                  name="username"
+                  value={userEmail}
+                  readOnly
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  autoComplete="username"
+                  className="sr-only"
+                />
+
+                {/* 1. 注册邮箱 */}
+                <div className={styles.field}>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sec-reg-email" className="text-xs font-semibold text-slate-700">
+                      注册邮箱
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={handleCopyEmail}
+                      className="text-xs font-medium text-[#c5672b] hover:underline"
+                    >
+                      {copiedEmail ? "✓ 已添加到剪贴板" : "点击复制"}
+                    </button>
+                  </div>
+                  <div
+                    onClick={handleCopyEmail}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void handleCopyEmail();
+                      }
+                    }}
+                    className="mt-1.5 flex h-11 cursor-pointer items-center justify-between rounded-xl border border-[#eadfd3] bg-[#faf5ef]/90 px-3.5 text-sm font-medium text-[#695646] transition hover:border-[#dfc7ae]"
+                  >
+                    <span className="truncate">{loadingUser ? "加载中..." : userEmail || "未获取到账号邮箱"}</span>
+                    <span className="ml-2 inline-flex shrink-0 items-center gap-1 rounded-md bg-white/80 px-2 py-0.5 text-[11px] text-[#9b7b5e] shadow-sm">
+                      已验证
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. 邮箱验证码 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-reset-otp-code" className="text-xs font-semibold text-slate-700">
+                    邮箱验证码
+                  </Label>
+                  <div className="mt-1.5 flex gap-2.5">
+                    <Input
+                      id="sec-reset-otp-code"
+                      name="password_reset_otp_code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="请输入 6 位邮箱验证码"
+                      value={emailPwdForm.code}
+                      onChange={(e) => {
+                        setEmailPwdForm((prev) => ({ ...prev, code: e.target.value }));
+                        setEmailPwdErrors((prev) => ({ ...prev, code: "" }));
+                      }}
+                      className={cn(
+                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                        emailPwdErrors.code && "border-red-500 focus-visible:ring-red-500/20"
+                      )}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleSendEmailPwdCode}
+                      disabled={emailPwdCountdown > 0 || sendingEmailPwdCode || !userEmail}
+                      className={codeSendBtnClass}
+                    >
+                      {sendingEmailPwdCode ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : emailPwdCountdown > 0 ? (
+                        `${emailPwdCountdown}s 后重发`
+                      ) : (
+                        "获取验证码"
+                      )}
+                    </Button>
+                  </div>
+                  {emailPwdErrors.code && (
+                    <p className="mt-1.5 text-xs text-red-600">{emailPwdErrors.code}</p>
+                  )}
+                </div>
+
+                {/* 3. 新密码 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-email-new-pwd" className="text-xs font-semibold text-slate-700">
+                    新密码
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <Input
+                      id="sec-email-new-pwd"
+                      name="new_reset_password"
+                      type={showEmailPwd.new ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="请输入新密码（至少 8 位，建议 12 位以上含字母与数字）"
+                      value={emailPwdForm.newPassword}
+                      onChange={(e) => {
+                        setEmailPwdForm((prev) => ({ ...prev, newPassword: e.target.value }));
+                        setEmailPwdErrors((prev) => ({ ...prev, newPassword: "" }));
+                      }}
+                      className={cn(
+                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 pr-10 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                        emailPwdErrors.newPassword && "border-red-500 focus-visible:ring-red-500/20"
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEmailPwd((p) => ({ ...p, new: !p.new }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                      aria-label={showEmailPwd.new ? "隐藏密码" : "显示密码"}
+                    >
+                      {showEmailPwd.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {emailPwdErrors.newPassword && (
+                    <p className="mt-1.5 text-xs text-red-600">{emailPwdErrors.newPassword}</p>
+                  )}
+                </div>
+
+                {/* 4. 确认新密码 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-email-confirm-pwd" className="text-xs font-semibold text-slate-700">
+                    确认新密码
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <Input
+                      id="sec-email-confirm-pwd"
+                      name="confirm_reset_password"
+                      type={showEmailPwd.confirm ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="请再次输入新密码"
+                      value={emailPwdForm.confirmPassword}
+                      onChange={(e) => {
+                        setEmailPwdForm((prev) => ({ ...prev, confirmPassword: e.target.value }));
+                        setEmailPwdErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                      }}
+                      className={cn(
+                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 pr-10 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                        emailPwdErrors.confirmPassword && "border-red-500 focus-visible:ring-red-500/20"
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEmailPwd((p) => ({ ...p, confirm: !p.confirm }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                      aria-label={showEmailPwd.confirm ? "隐藏密码" : "显示密码"}
+                    >
+                      {showEmailPwd.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {emailPwdErrors.confirmPassword && (
+                    <p className="mt-1.5 text-xs text-red-600">{emailPwdErrors.confirmPassword}</p>
+                  )}
+                </div>
+
+                {/* Real-time Password Strength Indicator */}
+                <PasswordStrengthMeter checks={activePasswordChecks} />
+
+                {emailPwdErrors.form && (
+                  <div className="rounded-xl border border-red-200 bg-red-50/90 px-3.5 py-2.5 text-xs text-red-700">
+                    {emailPwdErrors.form}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <Button
+                    type="submit"
+                    disabled={savingEmailPwd}
+                    className={cn("h-11 w-full rounded-xl px-7 text-sm font-semibold sm:w-auto", primaryActionBtnClass)}
+                  >
+                    {savingEmailPwd ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        正在提交修改...
+                      </>
+                    ) : (
+                      "确认修改"
+                    )}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("old-password")}
+                    className="text-xs font-medium text-[#b5672d] hover:underline"
+                  >
+                    记得原密码？改用原密码直接修改 →
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 3: 原密码改密码 (Ref 图4) */}
+          {activeTab === "old-password" && (
+            <div>
+              <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-slate-900">原密码改密码</h2>
+                    <span className={styles.pill}>即时验证</span>
+                  </div>
+                </div>
+                <span className={`${glass.icon} h-10 w-10`}>
+                  <KeyRound className="h-5 w-5" strokeWidth={1.7} />
+                </span>
+              </div>
+
+              <form onSubmit={handleSubmitOldPwd} autoComplete="off" className="space-y-5">
+                <input
+                  type="text"
+                  name="username"
+                  value={userEmail}
+                  readOnly
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  autoComplete="username"
+                  className="sr-only"
+                />
+
+                {/* 1. 原密码 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-old-pwd" className="text-xs font-semibold text-slate-700">
+                    原密码
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <Input
+                      id="sec-old-pwd"
+                      name="current_account_password"
+                      type={showOldPwd.old ? "text" : "password"}
+                      autoComplete="current-password"
+                      placeholder="请输入当前密码"
+                      value={oldPwdForm.oldPassword}
+                      onChange={(e) => {
+                        setOldPwdForm((prev) => ({ ...prev, oldPassword: e.target.value }));
+                        setOldPwdErrors((prev) => ({ ...prev, oldPassword: "" }));
+                      }}
+                      className={cn(
+                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 pr-10 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                        oldPwdErrors.oldPassword && "border-red-500 focus-visible:ring-red-500/20"
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPwd((p) => ({ ...p, old: !p.old }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                      aria-label={showOldPwd.old ? "隐藏密码" : "显示密码"}
+                    >
+                      {showOldPwd.old ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {oldPwdErrors.oldPassword && (
+                    <p className="mt-1.5 text-xs text-red-600">{oldPwdErrors.oldPassword}</p>
+                  )}
+                </div>
+
+                {/* 2. 新密码 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-old-new-pwd" className="text-xs font-semibold text-slate-700">
+                    新密码
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <Input
+                      id="sec-old-new-pwd"
+                      name="new_account_password"
+                      type={showOldPwd.new ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="请输入新密码（至少 8 位，建议 12 位以上含字母与数字）"
+                      value={oldPwdForm.newPassword}
+                      onChange={(e) => {
+                        setOldPwdForm((prev) => ({ ...prev, newPassword: e.target.value }));
+                        setOldPwdErrors((prev) => ({ ...prev, newPassword: "" }));
+                      }}
+                      className={cn(
+                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 pr-10 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                        oldPwdErrors.newPassword && "border-red-500 focus-visible:ring-red-500/20"
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPwd((p) => ({ ...p, new: !p.new }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                      aria-label={showOldPwd.new ? "隐藏密码" : "显示密码"}
+                    >
+                      {showOldPwd.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {oldPwdErrors.newPassword && (
+                    <p className="mt-1.5 text-xs text-red-600">{oldPwdErrors.newPassword}</p>
+                  )}
+                </div>
+
+                {/* 3. 确认新密码 */}
+                <div className={styles.field}>
+                  <Label htmlFor="sec-old-confirm-pwd" className="text-xs font-semibold text-slate-700">
+                    确认新密码
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <Input
+                      id="sec-old-confirm-pwd"
+                      name="confirm_account_password"
+                      type={showOldPwd.confirm ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="请再次输入新密码"
+                      value={oldPwdForm.confirmPassword}
+                      onChange={(e) => {
+                        setOldPwdForm((prev) => ({ ...prev, confirmPassword: e.target.value }));
+                        setOldPwdErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                      }}
+                      className={cn(
+                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 pr-10 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                        oldPwdErrors.confirmPassword && "border-red-500 focus-visible:ring-red-500/20"
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPwd((p) => ({ ...p, confirm: !p.confirm }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                      aria-label={showOldPwd.confirm ? "隐藏密码" : "显示密码"}
+                    >
+                      {showOldPwd.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {oldPwdErrors.confirmPassword && (
+                    <p className="mt-1.5 text-xs text-red-600">{oldPwdErrors.confirmPassword}</p>
+                  )}
+                </div>
+
+                {/* Real-time Password Strength Indicator */}
+                <PasswordStrengthMeter checks={activePasswordChecks} />
+
+                {oldPwdErrors.form && (
+                  <div className="rounded-xl border border-red-200 bg-red-50/90 px-3.5 py-2.5 text-xs text-red-700">
+                    {oldPwdErrors.form}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <Button
+                    type="submit"
+                    disabled={savingOldPwd}
+                    className={cn("h-11 w-full rounded-xl px-7 text-sm font-semibold sm:w-auto", primaryActionBtnClass)}
+                  >
+                    {savingOldPwd ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        正在提交修改...
+                      </>
+                    ) : (
+                      "确认修改"
+                    )}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("email-password")}
+                    className="text-xs font-medium text-[#b5672d] hover:underline"
+                  >
+                    忘记原密码？使用邮箱验证码重置 →
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </section>
+
+        {/* RIGHT COLUMN: Contextual Step-by-Step Guide & Security Protection Checklist */}
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* Card B: Security Best Practices & Quick Navigation */}
+          <section className={`${glass.surface} ${styles.panel} flex-1 p-5 sm:p-6`}>
+            <div className="mb-3.5 flex items-center gap-2.5">
+              <span className={`${glass.icon} h-9 w-9`}>
+                <ShieldAlert className="h-4 w-4" strokeWidth={1.7} />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">安全守则与防护建议</h3>
+                <p className="text-xs text-slate-500">保障数字商品卡密与账户余额安全</p>
+              </div>
+            </div>
+
+            <ul className="space-y-2.5 text-xs leading-5 text-slate-600">
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d86e31]" />
+                <span>
+                  <strong className="font-semibold text-slate-800">官方唯一域名：</strong>
+                  请认准 <code className="rounded bg-[#fff3e4] px-1.5 py-0.5 font-mono text-[#b55d24]">www.jianlian.shop</code>，切勿在任何第三方钓鱼页面输入密码或验证码。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d86e31]" />
+                <span>
+                  <strong className="font-semibold text-slate-800">验证码时效保护：</strong>
+                  邮件验证码有效期为 10 分钟，简联客服绝不会主动向您索取任何验证码或密码。
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d86e31]" />
+                <span>
+                  <strong className="font-semibold text-slate-800">独立密码策略：</strong>
+                  由于账户内包含余额与已购数字卡密，请勿使用与其他网站相同的弱口令密码。
+                </span>
+              </li>
+            </ul>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#efe3d5] pt-3.5">
+              <Link
+                href="/account/privacy"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#b85d23] hover:underline"
+              >
+                <FileLock2 className="h-3.5 w-3.5" />
+                <span>管理个人数据导出与隐私设置 →</span>
+              </Link>
+              <Link
+                href="/account"
+                className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800"
+              >
+                <RefreshCw className="h-3 w-3" />
+                <span>返回账号资料</span>
+              </Link>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   );
 }
 
+function PasswordStrengthMeter({
+  checks,
+}: {
+  checks: ReturnType<typeof evaluatePasswordChecks>;
+}) {
+  const items = [
+    { label: "长度至少 8 位", ok: checks.hasMinLength },
+    { label: "包含英文字母", ok: checks.hasLetter },
+    { label: "包含数字 (0-9)", ok: checks.hasNumber },
+    { label: "12 位以上或含特殊符号（推荐）", ok: checks.hasRecommendedLength || checks.hasSpecial },
+  ];
+
+  return (
+    <div className="rounded-xl border border-[#efe2d3] bg-[#fffaf3]/85 p-3.5">
+      <div className="mb-2 flex items-center justify-between text-xs">
+        <span className="font-semibold text-[#785335]">密码安全强度校验</span>
+        <span className="font-medium text-[#b5672d]">
+          {checks.score <= 1 ? "待输入 / 较弱" : checks.score === 2 ? "基础" : checks.score === 3 ? "良好" : "极佳"}
+        </span>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {[1, 2, 3, 4].map((level) => (
+          <div
+            key={level}
+            className={cn(
+              "h-1.5 rounded-full transition-colors",
+              checks.score >= level
+                ? checks.score >= 3
+                  ? "bg-gradient-to-r from-[#e39b56] to-[#d66b2c]"
+                  : "bg-amber-400"
+                : "bg-[#ede2d5]"
+            )}
+          />
+        ))}
+      </div>
+      <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-[11px]">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className={cn(
+              "flex items-center gap-1.5",
+              item.ok ? "font-medium text-emerald-700" : "text-slate-400"
+            )}
+          >
+            <CheckCircle2 className={cn("h-3.5 w-3.5 shrink-0", item.ok ? "text-emerald-600" : "text-slate-300")} />
+            <span className="truncate">{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Preserved initial email binding helper for accounts created without an email address
 function EmailBinding() {
-  const [account, setAccount] = useState<{ id: string; email?: string } | null>(null);
+  const [account, setAccount] = useState<{ id: string; email?: string | null } | null>(null);
   const [email, setEmail] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -175,23 +1287,21 @@ function EmailBinding() {
 
   useEffect(() => {
     let active = true;
-    async function loadAccount() {
-      try {
-        const { data, error: userError } = await getSupabaseBrowserClient().auth.getUser();
-        if (userError || !data.user) throw new Error("ACCOUNT_UNAVAILABLE");
-        if (active) setAccount({ id: data.user.id, email: data.user.email });
-      } catch {
-        if (active) setError("暂时无法读取邮箱绑定状态。");
-      }
-    }
-    void loadAccount();
-    return () => { active = false; };
+    getSupabaseBrowserClient()
+      .auth.getUser()
+      .then(({ data: { user } }) => {
+        if (active && user) setAccount({ id: user.id, email: user.email });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function sendCode(address: string, resend = false) {
     if (busy || !account || account.email) return;
     if (!isEmailFormatValid(address)) {
-      setError("请输入正确的邮箱地址。");
+      setError("请输入有效邮箱地址。");
       return;
     }
     setBusy(true);
@@ -199,7 +1309,10 @@ function EmailBinding() {
     setMessage("");
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
       if (userError || user?.id !== account.id || user.email) {
         setError("账户状态已变化，请刷新页面后重试。");
         return;
@@ -246,7 +1359,10 @@ function EmailBinding() {
         setError("无法确认验证码所属账号，请重新登录。");
         return;
       }
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
       if (userError || user?.id !== account.id || user.email?.toLowerCase() !== pendingEmail || !user.email_confirmed_at) {
         setError("暂时无法确认邮箱绑定，请刷新后查看绑定状态。");
         return;
@@ -261,83 +1377,60 @@ function EmailBinding() {
     }
   }
 
+  if (!account || account.email) return null;
+
   return (
-    <section className="mb-6 max-w-xl space-y-3 border-b pb-5" aria-label="邮箱绑定">
-      <h2 className="font-semibold">邮箱绑定</h2>
-      {account?.email ? (
-        <p className="break-all text-sm text-muted-foreground">{account.email}</p>
-      ) : pendingEmail ? (
+    <section className={`${glass.inset} rounded-2xl p-4`} aria-label="邮箱绑定">
+      <h2 className="text-sm font-semibold text-slate-900">首次邮箱绑定</h2>
+      {pendingEmail ? (
         <EmailVerificationForm
           email={pendingEmail}
           busy={busy}
           onVerify={verifyCode}
           onResend={() => sendCode(pendingEmail, true)}
-          onBack={() => { setPendingEmail(""); setError(""); setMessage(""); }}
+          onBack={() => {
+            setPendingEmail("");
+            setError("");
+            setMessage("");
+          }}
         />
-      ) : account ? (
-        <form className="space-y-3" onSubmit={(event) => {
-          event.preventDefault();
-          void sendCode(email.trim().toLowerCase());
-        }}>
-          <Label htmlFor="binding-email">要绑定的邮箱</Label>
-          <Input
-            id="binding-email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-          <Button type="submit" disabled={busy}>发送验证码</Button>
-        </form>
-      ) : null}
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
-    </section>
-  );
-}
-
-function PasswordField({
-  autoComplete,
-  error,
-  id,
-  label,
-  onChange,
-  onToggle,
-  value,
-  visible,
-}: {
-  autoComplete: string;
-  error?: string;
-  id: keyof SecurityForm;
-  label: string;
-  onChange: (value: string) => void;
-  onToggle: () => void;
-  value: string;
-  visible: boolean;
-}) {
-  return (
-    <div className={styles.field}>
-      <Label htmlFor={id}>{label}</Label>
-      <div className="relative mt-2">
-        <Input
-          id={id}
-          type={visible ? "text" : "password"}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          autoComplete={autoComplete}
-          className="pr-11"
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-          aria-label={visible ? "隐藏密码" : "显示密码"}
+      ) : (
+        <form
+          className="mt-2 flex flex-wrap items-end gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void sendCode(email.trim().toLowerCase());
+          }}
         >
-          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-      {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
-    </div>
+          <div className="min-w-[240px] flex-1">
+            <Label htmlFor="binding-email" className="text-xs">
+              要绑定的邮箱
+            </Label>
+            <Input
+              id="binding-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              className="mt-1 h-10"
+            />
+          </div>
+          <Button type="submit" disabled={busy}>
+            发送验证码
+          </Button>
+        </form>
+      )}
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-red-600">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p role="status" className="mt-2 text-xs text-emerald-700">
+          {message}
+        </p>
+      )}
+    </section>
   );
 }
