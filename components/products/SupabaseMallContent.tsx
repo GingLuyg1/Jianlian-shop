@@ -142,10 +142,9 @@ function SupabaseMallContentInner({
   const { isMobile } = useMobileStorefront();
 
   useEffect(() => {
-    const pending = getCatalogRoutePending();
-    if (pending && pending.target.split("?")[0] === pathname) {
-      clearCatalogRoutePending();
-    }
+    clearCatalogRoutePending();
+    const shell = document.querySelector<HTMLElement>('[data-testid="storefront-category-layout"]');
+    shell?.removeAttribute("data-route-exiting");
   }, [pathname]);
   const categorySnapshot = usePublicCategorySnapshot();
   useSyncExternalStore(subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion);
@@ -487,6 +486,9 @@ function SupabaseMallContentInner({
   }, [resolvedCategory, filters.search, filters.page, filters.pageSize, productCategory, productQueryKey, retryNonce]);
 
   function handleCategorySelect(category: DisplayCategory) {
+    clearCatalogRoutePending();
+    const shell = document.querySelector<HTMLElement>('[data-testid="storefront-category-layout"]');
+    shell?.removeAttribute("data-route-exiting");
     if (selectedCategoryId === category.id && !filters.search) return;
     productRequestIdRef.current += 1;
     setSelectedCategoryId(category.id);
@@ -872,7 +874,7 @@ function CategoryButton({
           : "border border-slate-100 bg-white/80 text-foreground lg:bg-transparent"
       )}
     >
-      <div className="flex min-w-0 items-center gap-2 lg:gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-3">
         {category.displayCode ? (
           <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-bold tracking-wide text-primary lg:h-11 lg:w-11 lg:rounded-xl lg:text-sm">{category.displayCode}</span>
         ) : category.displayImage ? (
@@ -890,11 +892,14 @@ function CategoryButton({
             <Icon className="h-4 w-4 text-primary lg:h-6 lg:w-6" />
           </div>
         )}
-        <div className="line-clamp-2 break-words text-left text-xs sm:text-sm font-semibold leading-tight lg:text-base max-w-[130px]">{category.name}</div>
+        <span className="min-w-0 flex-1 truncate text-left text-xs font-semibold leading-tight sm:text-sm lg:text-base">{category.name}</span>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        <OptionLoadingSpinner active={loading} size="sm" />
-        {!loading ? <ChevronRight className="hidden h-5 w-5 shrink-0 lg:block" /> : null}
+      <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+        {loading ? (
+          <OptionLoadingSpinner active size="sm" />
+        ) : (
+          <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted-foreground/60 lg:block" />
+        )}
       </div>
     </button>
   );
@@ -967,7 +972,7 @@ function ProductPanel({
   const resultReady = !isLoading && !routePendingTarget && !!activeCategory &&
     selectedCategoryId === activeCategory.id && loadedCategoryId === activeCategory.id &&
     loadedProductKey === currentProductKey && routeMatchesCategory;
-  const currentProducts = resultReady ? products : products.length > 0 ? products : [];
+  const currentProducts = products.length > 0 ? products : [];
   const resultText = resultReady ? String(total) : products.length > 0 ? String(total) : "/";
 
   return (
@@ -1025,33 +1030,33 @@ function ProductPanel({
               重试
             </button>
           </div>
+        ) : isLoading && currentProducts.length === 0 ? (
+          <ProductSkeleton count={Math.max(knownProductCount || 3, 3)} />
+        ) : currentProducts.length === 0 ? (
+          <ProductEmptyState search={appliedSearch} onResetFilters={onResetFilters} />
         ) : (
           <div className={cn("relative min-h-[260px] flex-1 lg:min-h-0 lg:overflow-hidden", isMobile && "!overflow-visible")}>
-            {resultReady && currentProducts.length === 0 ? (
-              <ProductEmptyState search={appliedSearch} onResetFilters={onResetFilters} />
-            ) : (
-              <div ref={containerRef} data-wheel-container="products" className={cn("relative min-h-0 space-y-2.5 px-1 py-1 lg:scroll-fade-y lg:h-full lg:overflow-y-auto lg:px-1.5 lg:pr-2 lg:sidebar-scroll", isMobile && "!h-auto !overflow-visible !px-0 !space-y-1.5")}>
-                {currentProducts.map((product, index) => (
-                  <div key={`${loadedProductKey || activeCategory?.id || "list"}-${product.id}`} data-wheel-item={product.id} className="catalog-wheel-item">
-                    <div className={isMobile ? undefined : "catalog-enter-item"} style={isMobile ? undefined : { animationDelay: `${Math.min(index * 35, 210)}ms` }}>
-                      <ProductRowCompact
-                        product={product}
-                        category={activeCategory}
-                        currencySymbol={currencySymbol}
-                        showStock={showStock}
-                        disabled={false}
-                        selected={selectedProductId === product.id}
-                        isMobile={isMobile}
-                        onSelect={() => {
-                          setSelectedProductId(product.id);
-                          centerItem(product.id);
-                        }}
-                      />
-                    </div>
+            <div ref={containerRef} data-wheel-container="products" className={cn("relative min-h-0 space-y-2.5 px-1 py-1 lg:scroll-fade-y lg:h-full lg:overflow-y-auto lg:px-1.5 lg:pr-2 lg:sidebar-scroll", isMobile && "!h-auto !overflow-visible !px-0 !space-y-1.5")}>
+              {currentProducts.map((product, index) => (
+                <div key={`${loadedProductKey || activeCategory?.id || "list"}-${product.id}`} data-wheel-item={product.id} className="catalog-wheel-item">
+                  <div className={isMobile ? undefined : "catalog-enter-item"} style={isMobile ? undefined : { animationDelay: `${Math.min(index * 35, 210)}ms` }}>
+                    <ProductRowCompact
+                      product={product}
+                      category={activeCategory}
+                      currencySymbol={currencySymbol}
+                      showStock={showStock}
+                      disabled={false}
+                      selected={selectedProductId === product.id}
+                      isMobile={isMobile}
+                      onSelect={() => {
+                        setSelectedProductId(product.id);
+                        centerItem(product.id);
+                      }}
+                    />
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

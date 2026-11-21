@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   FileLock2,
+  Globe,
   KeyRound,
   Loader2,
   Lock,
@@ -1166,51 +1167,71 @@ export default function AccountSecurityPage() {
         <div className="flex min-w-0 flex-col gap-4">
           {/* Card B: Security Best Practices & Quick Navigation */}
           <section className={`${glass.surface} ${styles.panel} flex-1 p-5 sm:p-6`}>
-            <div className="mb-3.5 flex items-center gap-2.5">
-              <span className={`${glass.icon} h-9 w-9`}>
-                <ShieldAlert className="h-4 w-4" strokeWidth={1.7} />
+            <div className="mb-4 flex items-center justify-between border-b border-[#efe3d5]/70 pb-3.5">
+              <div className="flex items-center gap-3">
+                <span className={`${glass.icon} flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100/70 text-[#d86e31] shadow-sm`}>
+                  <ShieldAlert className="h-5 w-5" strokeWidth={1.8} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 sm:text-base">安全守则与防护建议</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">保障数字商品卡密与账户余额资产安全</p>
+                </div>
+              </div>
+              <span className="hidden items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200/60 sm:inline-flex">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                系统级防护
               </span>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">安全守则与防护建议</h3>
-                <p className="text-xs text-slate-500">保障数字商品卡密与账户余额安全</p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 rounded-xl border border-[#f3e5d8] bg-[#fffbf6] p-3 transition-colors hover:border-[#e8d2be] hover:bg-white sm:p-3.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-100/70 text-[#c26227]">
+                  <Globe className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-slate-900 sm:text-sm">官方唯一授权域名</div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    请认准 <code className="rounded bg-[#ffe8cc] px-1.5 py-0.5 font-mono font-semibold text-[#a84d16]">www.jianlian.shop</code>，切勿在任何第三方钓鱼页面输入登录凭据或验证码。
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-xl border border-[#f3e5d8] bg-[#fffbf6] p-3 transition-colors hover:border-[#e8d2be] hover:bg-white sm:p-3.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-100/70 text-[#c26227]">
+                  <KeyRound className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-slate-900 sm:text-sm">双向验证码时效机制</div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    邮件验证码有效期为 10 分钟且单次失效。简联官方客服绝不会以任何名义索取验证码或要求提供登录密码。
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-xl border border-[#f3e5d8] bg-[#fffbf6] p-3 transition-colors hover:border-[#e8d2be] hover:bg-white sm:p-3.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-100/70 text-[#c26227]">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-slate-900 sm:text-sm">高强度独立口令策略</div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    账户包含您的钱包余额与提取卡密，建议组合大小写字母与数字设置独立密码，切勿复用公共弱口令。
+                  </p>
+                </div>
               </div>
             </div>
 
-            <ul className="space-y-2.5 text-xs leading-5 text-slate-600">
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d86e31]" />
-                <span>
-                  <strong className="font-semibold text-slate-800">官方唯一域名：</strong>
-                  请认准 <code className="rounded bg-[#fff3e4] px-1.5 py-0.5 font-mono text-[#b55d24]">www.jianlian.shop</code>，切勿在任何第三方钓鱼页面输入密码或验证码。
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d86e31]" />
-                <span>
-                  <strong className="font-semibold text-slate-800">验证码时效保护：</strong>
-                  邮件验证码有效期为 10 分钟，简联客服绝不会主动向您索取任何验证码或密码。
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d86e31]" />
-                <span>
-                  <strong className="font-semibold text-slate-800">独立密码策略：</strong>
-                  由于账户内包含余额与已购数字卡密，请勿使用与其他网站相同的弱口令密码。
-                </span>
-              </li>
-            </ul>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#efe3d5] pt-3.5">
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#efe3d5] pt-4">
               <Link
                 href="/account/privacy"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#b85d23] hover:underline"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50/80 px-3 py-1.5 text-xs font-semibold text-[#b85d23] ring-1 ring-inset ring-orange-200/60 transition hover:bg-orange-100"
               >
                 <FileLock2 className="h-3.5 w-3.5" />
-                <span>管理个人数据导出与隐私设置 →</span>
+                <span>隐私设置与数据管理 →</span>
               </Link>
               <Link
                 href="/account"
-                className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800"
+                className="inline-flex items-center gap-1.5 text-xs text-slate-500 transition hover:text-slate-800"
               >
                 <RefreshCw className="h-3 w-3" />
                 <span>返回账号资料</span>

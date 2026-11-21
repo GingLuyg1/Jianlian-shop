@@ -25,6 +25,7 @@ import { PENDING_SIGNUP_KEY, encodePendingSignup, decodePendingSignup, type Pend
 import { getSafeAuthErrorMessage, getSafeNetworkAuthMessage, isEmailFormatValid, validateAuthPassword } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
+import AnimatedCharacters from "@/components/auth/AnimatedCharacters";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import {
   getOrCreateProfile,
@@ -39,7 +40,7 @@ type AuthScreenProps = {
   mode: AuthMode;
 };
 
-const features = ["安全账号", "快速下单", "订单查询"];
+const features = ["安全加密", "极速交付", "正品保障"];
 
 
 function getAuthRedirectUrl(path: string) {
@@ -83,10 +84,14 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [inviteCode, setInviteCode] = useState(inviteFromUrl);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [registration, setRegistration] = useState<PendingSignup | null>(null);
+
+  const loginFailed = Boolean(error);
 
   useEffect(() => {
     if (!isRegister) return;
@@ -139,6 +144,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           return;
         }
       }
+      setLoginSuccess(true);
       toast.success("邮箱已验证，注册完成。");
       forgetPendingSignup();
       router.replace("/account");
@@ -358,6 +364,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         }
       }
 
+      setLoginSuccess(true);
       toast.success("登录成功，正在进入账户中心。");
       router.push(redirectTo);
       router.refresh();
@@ -370,100 +377,113 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#fff4e7] text-foreground">
-      <div className="pointer-events-none fixed -left-20 -top-24 h-80 w-80 rounded-full bg-[#ffd6a1] opacity-55 blur-3xl" />
-      <div className="pointer-events-none fixed -right-24 top-0 h-96 w-96 rounded-full bg-[#ffe1b8] opacity-65 blur-3xl" />
-      <div className="pointer-events-none fixed bottom-[-140px] right-24 h-80 w-80 rounded-full bg-[#ffc47d] opacity-25 blur-3xl" />
+    <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#fff8f0] via-[#fff1e2] to-[#feebd7] text-foreground selection:bg-orange-200">
+      {/* High-end ambient background light orbs */}
+      <div className="pointer-events-none fixed -left-28 -top-28 h-[460px] w-[460px] rounded-full bg-gradient-to-br from-[#ffd5a4] via-[#ffbe80] to-[#ffa45b] opacity-35 blur-[100px]" />
+      <div className="pointer-events-none fixed -right-32 top-4 h-[520px] w-[520px] rounded-full bg-gradient-to-bl from-[#ffe5c7] via-[#ffd7a8] to-[#fec896] opacity-45 blur-[110px]" />
+      <div className="pointer-events-none fixed bottom-[-110px] left-1/4 h-[440px] w-[440px] rounded-full bg-gradient-to-tr from-[#ede9fe] via-[#fed7aa] to-[#fecba1] opacity-35 blur-[110px]" />
+      <div className="pointer-events-none fixed bottom-[-90px] -right-24 h-[380px] w-[380px] rounded-full bg-gradient-to-tl from-[#fed7aa] to-[#fdb978] opacity-40 blur-[95px]" />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-5 sm:px-6 sm:py-6">
         <div className="flex items-center justify-start">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-full bg-white/75 px-4 py-2 text-sm font-medium text-slate-600 shadow-sm ring-1 ring-orange-100 transition-all hover:scale-[1.02] hover:text-primary"
+            className="inline-flex items-center gap-2 rounded-full border border-orange-200/60 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:border-orange-300 hover:text-primary"
           >
             <ArrowLeft className="h-4 w-4" />
             返回首页
           </Link>
         </div>
 
-        <div className="grid flex-1 items-center gap-8 py-10 lg:grid-cols-[minmax(0,1fr)_430px]">
+        <div className="grid flex-1 items-center gap-8 py-4 sm:py-6 lg:grid-cols-[minmax(0,1fr)_440px]">
+          {/* Left Hero Card - Hidden on Mobile, Pure Desktop Showcase */}
           <section className="hidden lg:block">
-            <div className="relative max-w-xl overflow-hidden rounded-[34px] border border-white/75 bg-white/45 p-10 shadow-[0_28px_90px_rgba(168,95,30,0.16)] backdrop-blur">
-              <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[#ffca86]/60" />
-              <div className="absolute -bottom-12 -left-12 h-36 w-36 rounded-full bg-[#ffdcb0]/65" />
-              <div className="relative">
-                <div className="mb-8 inline-flex items-center gap-3 rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-primary shadow-sm ring-1 ring-orange-100">
-                  <img
-                    src="/assets/jianlian-brand-logo.png"
-                    alt="Jianlian"
-                    width={32}
-                    height={32}
-                    className="h-8 w-8 rounded-xl object-cover"
-                  />
-                  Jianlian 账号
-                </div>
-
-                <h1 className="max-w-lg text-[52px] font-black leading-[1.08] tracking-tight text-[#121827]">
-                  欢迎加入 Jianlian
-                </h1>
-                <p className="mt-5 max-w-md text-xl font-semibold leading-9 text-slate-800">
-                  使用邮箱和密码登录，刷新页面后也会保持登录状态。
-                </p>
-                <p className="mt-3 max-w-md text-base leading-7 text-slate-600">
-                  登录后可查看账户信息、余额占位和订单入口。当前仅接入身份验证，不接支付和真实订单数据库。
-                </p>
-
-                <div className="mt-8 flex items-center gap-4 rounded-3xl bg-white/80 p-5 shadow-sm ring-1 ring-orange-100">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fff0df] text-primary">
-                    <Sparkles className="h-7 w-7" />
+            <div className="relative flex min-h-[600px] max-w-xl flex-col justify-between overflow-hidden rounded-[36px] border border-white/90 bg-gradient-to-b from-white/85 via-white/70 to-[#fff2e2]/80 p-8 pb-0 shadow-[0_32px_100px_-20px_rgba(202,122,44,0.18),0_4px_24px_rgba(0,0,0,0.03)] backdrop-blur-xl">
+              <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-gradient-to-br from-[#ffb67a]/40 to-[#ff9f50]/20 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-14 -left-14 h-48 w-48 rounded-full bg-gradient-to-tr from-[#fed7aa]/50 to-[#fdba74]/25 blur-3xl" />
+              
+              <div className="relative z-10">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2.5 rounded-full border border-orange-200/70 bg-white/95 px-3.5 py-1.5 text-sm font-bold text-slate-800 shadow-xs backdrop-blur-sm">
+                    <img
+                      src="/assets/jianlian-brand-logo.png"
+                      alt="Jianlian"
+                      width={28}
+                      height={28}
+                      className="h-7 w-7 rounded-xl object-cover shadow-xs ring-1 ring-orange-200/60"
+                    />
+                    <span>Jianlian.shop</span>
                   </div>
-                  <div>
-                    <div className="text-lg font-bold text-slate-950">
-                      Supabase Auth 登录
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      会话写入浏览器 cookie，适配 Next.js App Router。
-                    </div>
+                  <div className="flex items-center gap-2">
+                    {features.map((item) => (
+                      <span
+                        key={item}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-orange-100/90 bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs backdrop-blur-sm"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                        {item}
+                      </span>
+                    ))}
                   </div>
                 </div>
 
-                <div className="mt-5 grid max-w-lg grid-cols-3 gap-3">
-                  {features.map((item) => (
-                    <div
-                      key={item}
-                      className="rounded-2xl bg-white/80 p-4 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-orange-100 transition-all hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                      <CheckCircle2 className="mb-3 h-5 w-5 text-primary" />
-                      {item}
-                    </div>
-                  ))}
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-100/70 px-3 py-1 text-xs font-semibold text-primary">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>数字商品与服务平台</span>
+                  </div>
+                  <h1 className="text-[38px] font-black leading-[1.15] tracking-tight text-[#171923]">
+                    开启你的数字体验
+                  </h1>
+                  <p className="text-sm font-medium text-slate-600">
+                    安全、快速、放心的优质账号与数字化方案
+                  </p>
                 </div>
+              </div>
+
+              <div className="relative z-10 mt-auto pt-2">
+                <AnimatedCharacters
+                  email={email}
+                  mode={mode}
+                  isTyping={isTyping || Boolean(registration)}
+                  showPassword={showPassword}
+                  passwordLength={password.length}
+                  loginFailed={loginFailed}
+                  loginSuccess={loginSuccess}
+                />
               </div>
             </div>
           </section>
 
+          {/* Right Form Card - On Mobile, Shows ONLY this pristine clean card */}
           <section className="w-full">
-            <div className="mx-auto max-w-[430px] rounded-[30px] bg-white/85 p-2 shadow-[0_28px_90px_rgba(15,23,42,0.16)] ring-1 ring-white/80 backdrop-blur">
-              <div className="rounded-[24px] border border-orange-50 p-6 sm:p-7">
+            <div className="mx-auto max-w-[440px] rounded-[32px] border border-white/85 bg-white/80 p-2 shadow-[0_32px_90px_-15px_rgba(15,23,42,0.14)] ring-1 ring-white/90 backdrop-blur-xl">
+              <div className="rounded-[26px] border border-orange-100/70 bg-white/90 p-6 sm:p-7 shadow-xs">
                 <div className="mb-6 flex items-center gap-3">
                   <img
                     src="/assets/jianlian-brand-logo.png"
                     alt="Jianlian"
                     width={44}
                     height={44}
-                    className="h-11 w-11 rounded-2xl object-cover shadow-sm ring-1 ring-slate-200"
+                    className="h-11 w-11 rounded-2xl object-cover shadow-xs ring-1 ring-orange-200/50"
                   />
                   <div>
-                    <div className="text-xl font-black leading-tight">
+                    <div className="text-xl font-black leading-tight tracking-tight text-slate-900">
                       Jianlian
                     </div>
-                    <div className="mt-0.5 text-xs font-medium text-muted-foreground">
+                    <div className="mt-0.5 text-xs font-semibold text-slate-500">
                       数字商品服务
                     </div>
                   </div>
                 </div>
 
-                <div className="mb-6 flex rounded-2xl bg-slate-100 p-1">
+                <div className="relative mb-6 grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-xl bg-white shadow-sm transition-transform duration-300 ease-out",
+                      isRegister ? "translate-x-[calc(100%+4px)]" : "translate-x-0"
+                    )}
+                  />
                   <AuthTab href="/login" active={!isRegister}>
                     登录
                   </AuthTab>
@@ -473,14 +493,12 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                 </div>
 
                 <div className="mb-5">
-                  <h2 className="text-2xl font-black">
+                  <h2
+                    key={mode}
+                    className="text-2xl font-black transition-all duration-300"
+                  >
                     {isRegister ? "创建新账号" : "欢迎回来"}
                   </h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {isRegister
-                      ? "设置密码并验证邮箱，创建你的 Jianlian 账号。"
-                      : "登录成功后将进入账户中心。"}
-                  </p>
                 </div>
 
                 {registration ? (
@@ -497,21 +515,6 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   </>
                 ) : <>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {isRegister ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="displayName">昵称（选填）</Label>
-                      <Input
-                        id="displayName"
-                        value={displayName}
-                        onChange={(event) => setDisplayName(event.target.value)}
-                        placeholder="请输入昵称"
-                        className="h-12 rounded-xl bg-slate-50"
-                        autoComplete="nickname"
-                        maxLength={40}
-                      />
-                    </div>
-                  ) : null}
-
                   <div className="space-y-2">
                     <Label htmlFor="email">邮箱</Label>
                     <div className="relative">
@@ -521,6 +524,8 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                         type="email"
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
+                        onFocus={() => setIsTyping(true)}
+                        onBlur={() => setIsTyping(false)}
                         placeholder="请输入邮箱"
                         className="h-12 rounded-xl bg-slate-50 pl-10"
                         autoComplete="email"
@@ -556,10 +561,20 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                         )}
                       </button>
                     </div>
+                    {!isRegister ? (
+                      <div className="flex justify-end pt-0.5">
+                        <Link
+                          href="/forgot-password"
+                          className="text-xs font-medium text-slate-500 transition-colors hover:text-primary"
+                        >
+                          忘记密码
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
 
                   {isRegister ? (
-                    <>
+                    <div className="space-y-4 transition-all duration-300">
                       <div className="space-y-2">
                         <Label htmlFor="confirmPassword">确认密码</Label>
                         <div className="relative">
@@ -571,6 +586,8 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                             onChange={(event) =>
                               setConfirmPassword(event.target.value)
                             }
+                            onFocus={() => setIsTyping(true)}
+                            onBlur={() => setIsTyping(false)}
                             placeholder="请再次输入密码"
                             className="h-12 rounded-xl bg-slate-50 pl-10"
                             autoComplete="new-password"
@@ -588,41 +605,14 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                             onChange={(event) =>
                               setInviteCode(event.target.value)
                             }
+                            onFocus={() => setIsTyping(true)}
+                            onBlur={() => setIsTyping(false)}
                             placeholder="请输入邀请码"
                             className="h-12 rounded-xl bg-slate-50 pl-10"
                           />
                         </div>
                       </div>
-                      <div className="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-3">
-                        <Checkbox
-                          id="acceptedTerms"
-                          checked={acceptedTerms}
-                          onCheckedChange={(checked) =>
-                            setAcceptedTerms(checked === true)
-                          }
-                          className="mt-0.5"
-                        />
-                        <Label
-                          htmlFor="acceptedTerms"
-                          className="cursor-pointer text-sm font-normal leading-6 text-slate-700"
-                        >
-                          我已阅读并同意
-                          <Link
-                            href="/terms"
-                            className="mx-1 font-semibold text-primary hover:text-primary/80"
-                          >
-                            用户协议
-                          </Link>
-                          和
-                          <Link
-                            href="/privacy"
-                            className="mx-1 font-semibold text-primary hover:text-primary/80"
-                          >
-                            隐私政策
-                          </Link>
-                        </Label>
-                      </div>
-                    </>
+                    </div>
                   ) : null}
 
                   {error ? (
@@ -660,24 +650,37 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                   inviteCode={inviteCode}
                   acceptedTerms={acceptedTerms}
                 />
-                </>}
 
-                <div className="mt-5 flex items-center justify-between text-sm">
-                  <Link
-                    href={isRegister ? "/login" : "/register"}
-                    className="font-medium text-primary transition-colors hover:text-primary/80"
+                <div className="mt-3 flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2.5 transition-all duration-300">
+                  <Checkbox
+                    id="acceptedTerms"
+                    checked={acceptedTerms}
+                    onCheckedChange={(checked) =>
+                      setAcceptedTerms(checked === true)
+                    }
+                    className="mt-0.5"
+                  />
+                  <Label
+                    htmlFor="acceptedTerms"
+                    className="cursor-pointer text-xs font-normal leading-5 text-slate-700"
                   >
-                    {isRegister ? "已有账号，去登录" : "没有账号，立即注册"}
-                  </Link>
-                  {!isRegister ? (
+                    我已阅读并同意
                     <Link
-                      href="/forgot-password"
-                      className="font-medium text-slate-500 transition-colors hover:text-primary"
+                      href="/terms"
+                      className="mx-1 font-semibold text-primary hover:text-primary/80"
                     >
-                      忘记密码
+                      用户协议
                     </Link>
-                  ) : null}
+                    和
+                    <Link
+                      href="/privacy"
+                      className="mx-1 font-semibold text-primary hover:text-primary/80"
+                    >
+                      隐私政策
+                    </Link>
+                  </Label>
                 </div>
+                </>}
               </div>
             </div>
           </section>
@@ -700,9 +703,9 @@ function AuthTab({
     <Link
       href={href}
       className={cn(
-        "flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-all",
+        "relative z-10 flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors duration-300",
         active
-          ? "bg-white text-primary shadow-sm"
+          ? "text-primary"
           : "text-slate-500 hover:text-primary"
       )}
     >

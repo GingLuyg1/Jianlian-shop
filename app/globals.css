@@ -250,8 +250,9 @@ body:has([data-storefront-ui]) [role="dialog"]:not([class*="inset-y-0"]) {
 }
 
 [data-route-exiting="true"] [data-wheel-container="products"] [data-wheel-item] {
-  animation: catalog-content-exit 160ms ease-in both;
+  opacity: 0.4;
   pointer-events: none;
+  transition: opacity 160ms ease-out;
 }
 
 .catalog-placeholder {
