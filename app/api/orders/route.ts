@@ -1,3 +1,4 @@
+import { authorizeKuajingZyStorefrontOrder } from "@/lib/providers/kuajingzy/storefront";
 import { NextResponse } from "next/server";
 import { authorizeBitrefillStorefrontOrder } from "@/lib/providers/bitrefill/production-server";
 
@@ -376,6 +377,12 @@ export async function POST(request: Request) {
       );
     }
 
+    try {
+      await authorizeKuajingZyStorefrontOrder(supabase, productId, skuId, quantity);
+    } catch {
+      return NextResponse.json({error:"商品当前不可购买",code:"KUAJINGZY_ORDER_UNAVAILABLE"},{status:409});
+    }
+
     let verifiedAgreements;
     try {
       verifiedAgreements = await verifyCheckoutAgreements(supabase, agreementInputs);
@@ -389,17 +396,18 @@ export async function POST(request: Request) {
     const { count: activeSkuCount, error: skuCountError } = await supabase
       .from("product_skus")
       .select("id", { count: "exact", head: true })
-      .eq("product_id", productId)
-      .eq("status", "active");
+      .eq("product_id", productId);
 
-    if (skuCountError && !/product_skus|does not exist|schema cache|PGRST/i.test(skuCountError.message)) {
+    if (skuCountError) {
       return NextResponse.json(
         { error: getOrderErrorMessage(skuCountError, "SKU information could not be loaded. Please try again later.") },
         { status: 400 }
       );
     }
 
-    if ((activeSkuCount ?? 0) > 0 && !skuId) {
+    const {data: skuMode,error: skuModeError}=await supabase.from("products").select("has_skus").eq("id",productId).maybeSingle();
+    if(skuModeError) return NextResponse.json({error:"商品规格校验失败"},{status:503});
+    if (((activeSkuCount ?? 0) > 0 || skuMode?.has_skus===true) && !skuId) {
       return NextResponse.json({ error: "Please select a complete product SKU." }, { status: 400 });
     }
 
