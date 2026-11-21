@@ -251,7 +251,8 @@ export async function searchPublicCatalogProducts(query: CatalogProductQuery) {
   if (query.pageSize) params.set("pageSize", String(query.pageSize));
   if (query.excludeId) params.set("excludeId", query.excludeId);
 
-  const response = await fetch(`/api/catalog/products?${params.toString()}`);
+  // The page cache already deduplicates requests and enforces its freshness window.
+  const response = await fetch(`/api/catalog/products?${params.toString()}`, { cache: "no-store" });
   const payload = (await response.json().catch(() => null)) as CatalogProductResponse | null;
 
   if (!response.ok || !payload?.success) {

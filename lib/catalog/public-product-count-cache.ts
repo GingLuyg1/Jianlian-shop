@@ -1,11 +1,11 @@
-// A short-lived, public-only hint for the number of cards on one exact result page.
-// This count never authorizes purchases or supplies product data; the public
-// page cache separately revalidates listings on a short TTL.
-const MAX_AGE_MS = 600_000;
+// Advisory presentation counts only. These hints provide no product rows, prices,
+// stock, or purchase authorization. Exact page counts last 10 minutes and bulk
+// category totals last 15 minutes; listing rows revalidate independently.
+const EXACT_COUNT_TTL_MS = 600_000;
 const counts = new Map<string, { categoryId: string; count: number; savedAt: number }>();
 const routeQueries = new Map<string, string>();
 const categoryTotals = new Map<string, { total: number; savedAt: number }>();
-const TOTAL_MAX_AGE_MS = 900_000;
+const CATEGORY_TOTAL_TTL_MS = 900_000;
 let fetchedAt = 0;
 let nextAttemptAt = 0;
 let generation = 0;
@@ -20,7 +20,7 @@ export function getServerPublicProductCountVersion() { return 0; }
 /** One optional bulk read for all public secondary categories, never a count per card. */
 export function prefetchPublicProductCounts(): Promise<boolean> {
   if (pending) return pending;
-  if (fetchedAt > 0 && Date.now() - fetchedAt < TOTAL_MAX_AGE_MS) return Promise.resolve(true);
+  if (fetchedAt > 0 && Date.now() - fetchedAt < CATEGORY_TOTAL_TTL_MS) return Promise.resolve(true);
   const connection = typeof navigator === "undefined" ? undefined : (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
   if (typeof document === "undefined" || document.visibilityState !== "visible" || connection?.saveData ||
     ["2g", "slow-2g"].includes(connection?.effectiveType ?? "") || Date.now() < nextAttemptAt) return Promise.resolve(false);
@@ -53,7 +53,7 @@ function prefetchedPageCount(queryKey: string, now: number) {
     if (typeof route !== "string" || typeof categoryId !== "string" || search !== "" ||
       !Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 60) return undefined;
     const row = categoryTotals.get(categoryId);
-    if (!row || now - row.savedAt >= TOTAL_MAX_AGE_MS) return undefined;
+    if (!row || now - row.savedAt >= CATEGORY_TOTAL_TTL_MS) return undefined;
     // Listing clamps out-of-range pages to its last page; mirror that contract.
     const safePage = Math.min(page, Math.max(1, Math.ceil(row.total / pageSize)));
     return Math.min(pageSize, Math.max(0, row.total - (safePage - 1) * pageSize));
@@ -70,7 +70,7 @@ export function rememberPublicProductCount(queryKey: string, route: string, cate
 export function getPublicProductCount(queryKey: string, now = Date.now()): number | undefined {
   const entry = counts.get(queryKey);
   if (!entry) return prefetchedPageCount(queryKey, now);
-  if (now - entry.savedAt > MAX_AGE_MS) {
+  if (now - entry.savedAt >= EXACT_COUNT_TTL_MS) {
     counts.delete(queryKey);
     return prefetchedPageCount(queryKey, now);
   }
