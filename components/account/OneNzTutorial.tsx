@@ -153,20 +153,6 @@ export default function OneNzTutorial({
       {/* 教程 1：新西兰 One NZ卡 已激活使用与账户绑定教程 */}
       {isUsage ? (
         <>
-          {/* Hero Section */}
-          <section className={tutorial.guideHero}>
-            <span className="inline-flex items-center gap-2 font-semibold text-[#9f5327]">
-              <Smartphone className="h-4 w-4" aria-hidden="true" />
-              新西兰 One NZ（原 Vodafone NZ）预付费实体 SIM 卡
-            </span>
-            <h2 className="mt-3 text-xl font-semibold text-slate-900 sm:text-2xl">
-              新西兰 One NZ卡 已激活使用与账户绑定教程
-            </h2>
-            <p className="mt-2 max-w-3xl">
-              0 月租、国内免费接收验证码短信、即插即用免实名。本文详细介绍新手插卡使用、防扣费设置以及在 My One NZ App 中完成账户绑定与有效期查询。
-            </p>
-          </section>
-
           {/* Core Features */}
           <section aria-labelledby="onenz-features">
             <h2 id="onenz-features" className="text-lg font-semibold text-slate-900">
@@ -326,20 +312,6 @@ export default function OneNzTutorial({
       ) : (
         /* 教程 2：新西兰 One 卡使用指南与常见问题 */
         <>
-          {/* Hero Section */}
-          <section className={tutorial.guideHero}>
-            <span className="inline-flex items-center gap-2 font-semibold text-[#9f5327]">
-              <Smartphone className="h-4 w-4" aria-hidden="true" />
-              新西兰 One NZ（原 Vodafone NZ）预付费 SIM 卡
-            </span>
-            <h2 className="mt-3 text-xl font-semibold text-slate-900 sm:text-2xl">
-              新西兰 One 卡使用指南与常见问题
-            </h2>
-            <p className="mt-2 max-w-3xl leading-6 text-slate-700">
-              本文汇总了已激活/未激活 One NZ 预付费 SIM 卡的日常使用技巧、查号排错、保号规则及资费安全说明。资费及具体规则以 One NZ 官方最新公布为准。
-            </p>
-          </section>
-
           {/* 1. 快速上手须知 */}
           <section aria-labelledby="onenz-quickstart" className="space-y-3">
             <h3 id="onenz-quickstart" className="text-base font-bold text-slate-950 sm:text-lg flex items-center gap-2">

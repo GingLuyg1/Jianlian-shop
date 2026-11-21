@@ -1015,8 +1015,8 @@ export default function AdminProductsPage() {
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
                     className="pl-9"
-                    aria-label="搜索标题或商家编码"
-                    placeholder="搜索标题或商家编码"
+                    aria-label="搜索标题或网址标识(Slug)"
+                    placeholder="搜索标题或网址标识(Slug)"
                     value={productSearch}
                     onChange={(event) => {
                       setProductSearch(event.target.value);
@@ -1509,7 +1509,7 @@ function ProductTable({
         <TableHeader className="sticky top-0 z-20">
           <TableRow>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>商品网址标识</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>网址标识 (Slug)</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
             <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
@@ -1763,11 +1763,10 @@ function ProductFormDialog({
                     }}
                   />
                 </Field>
-                <Field label="商家编码" required error={errors.slug}>
+                <Field label="商品网址标识 (Slug)" required error={errors.slug}>
                   <Input
                     value={form.slug}
                     onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })}
-                    placeholder="lowercase-slug"
                   />
                 </Field>
                 <Field label="商品图片" error={errors.image_url}>

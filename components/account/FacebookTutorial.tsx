@@ -63,27 +63,7 @@ export default function FacebookTutorial() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* 顶部标题与简介 */}
-      <section className={tutorial.guideHero}>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100/90 px-3 py-0.5 text-xs font-semibold text-blue-800">
-            <Globe2 className="h-3.5 w-3.5" />
-            Facebook (FB) 官方安全登录
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
-            <CheckCircle2 className="h-3 w-3" />
-            2FA 双重身份验证已实测
-          </span>
-        </div>
-        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-          Facebook 账号与 2FA 双重认证登录教程
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
-          本教程详细拆解已开启 2FA（双重身份验证）的 Facebook 账号卡密格式、两步验证码生成与安全登录全流程。按标准步骤操作，可顺利避开“在另一台设备上检查通知”等设备拦截，确保 100% 成功登录。
-        </p>
-      </section>
-
+    <div className="space-y-6">
       {/* 第一部分：发货卡密格式深度解析 */}
       <section className="space-y-4">
         <div className="flex items-center gap-2 border-b border-orange-100 pb-2">

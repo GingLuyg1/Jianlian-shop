@@ -21,27 +21,7 @@ import tutorial from "@/components/account/TutorialsGlass.module.css";
 
 export default function GoogleRegionTutorial() {
   return (
-    <div className="space-y-8">
-      {/* 顶部标题与简介 */}
-      <section className={tutorial.guideHero}>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100/80 px-3 py-0.5 text-xs font-semibold text-primary">
-            <Globe2 className="h-3.5 w-3.5" />
-            官方服务与 Play 商店锁区
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
-            <CheckCircle2 className="h-3 w-3" />
-            已实测成功
-          </span>
-        </div>
-        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-          Google 账号修改国家/地区完整指南
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
-          Google 账号包含两大核心区域属性：<strong>Google 账户服务条款归属地</strong>（影响 Gemini、Google Voice、服务协议等）与 <strong>Google Play 商店及付款资料区域</strong>（影响应用商店软件下载与外币内购）。本教程带您完整完成这两大区域的切换与锁定。
-        </p>
-      </section>
-
+    <div className="space-y-6">
       {/* 重要前提准备 */}
       <section className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-5 sm:p-6">
         <div className="flex items-start gap-3">

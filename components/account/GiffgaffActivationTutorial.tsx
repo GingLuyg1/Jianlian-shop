@@ -42,12 +42,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 export default function GiffgaffActivationTutorial() {
   return <article className="min-w-0 space-y-5 text-sm leading-7 text-slate-600" aria-label="Giffgaff 实体卡激活与使用教程">
-    <header className={tutorial.guideHero}>
-      <span className="inline-flex items-center gap-2 font-semibold text-[#9f5327]"><Smartphone className="h-4 w-4" aria-hidden="true" />英国实体 SIM</span>
-      <h2 className="mt-3 text-xl font-semibold text-slate-900">实体卡激活与使用</h2>
-      <p className="mt-2">先在网页激活，再插卡等待网络连接。页面按钮和资费以 Giffgaff 当前显示为准。</p>
-      <div className="mt-4"><External href={links.activate}>打开 Giffgaff 激活页</External></div>
-    </header>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200/80 bg-orange-50/40 p-4">
+      <p className="text-xs text-slate-600">先在官网激活卡片并绑定充值，再插卡等待网络连接（页面按钮和资费以 Giffgaff 官方当前显示为准）。</p>
+      <External href={links.activate}>打开 Giffgaff 官方激活页</External>
+    </div>
 
     <Section title="激活实体卡">
       <ol className="grid gap-4 lg:grid-cols-2">
