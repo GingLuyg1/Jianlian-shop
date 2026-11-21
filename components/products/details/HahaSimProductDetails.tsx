@@ -3,19 +3,23 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Bot,
+  BatteryCharging,
+  Calendar,
   CheckCircle2,
   Clock3,
   CreditCard,
+  Download,
+  Flame,
   Globe,
   HelpCircle,
   MessageSquare,
+  Plane,
+  QrCode,
   Radio,
-  ShieldAlert,
+  Repeat,
   ShieldCheck,
   Smartphone,
   Sparkles,
-  Truck,
   Zap,
 } from "lucide-react";
 import { openPublicSupport } from "@/lib/support/open-public-support";
@@ -32,397 +36,225 @@ interface HahaSimProductDetailsProps {
 }
 
 export default function HahaSimProductDetails({ product }: HahaSimProductDetailsProps) {
-  const highlights = [
+  const timelineSteps = [
     {
-      icon: CreditCard,
-      title: "0 月租 · 零持有成本",
-      desc: "无日常强制月租，平时放在国内不打电话、不发短信即完全 0 月租，无任何扣费隐患。",
-      tag: "官方 0 月租",
+      title: "到手激活开卡",
+      badge: "DAY 1",
+      desc: "在 Haha Travel APP 完成实名登记并插卡，卡片正式激活，自带初始 365 天超长有效期。",
     },
     {
-      icon: MessageSquare,
-      title: "国内免费接收短信",
-      desc: "国内自动漫游接入中国移动或中国联通 4G/5G 信号，接收全球各大平台 SMS 验证码完全免费。",
-      tag: "收短信免费",
+      title: "国内 0 月租待机",
+      badge: "DAY 1 ~ 360",
+      desc: "无任何月租与待机最低消费，国内漫游接收短信全部免费，随时随地接收海外应用验证码。",
     },
     {
-      icon: Globe,
-      title: "香港原生 +852 手机号",
-      desc: "香港和记 3HK 与丰泽联合出品，真实三大运营商移动号码段（非虚拟 VoIP），秒过各大平台风控。",
-      tag: "原生香港卡",
+      title: "每年 HK$10 续命",
+      badge: "DAY 360+",
+      desc: "在到期日前，在 APP 内任意订购一次 HK$10 最低流量包或账户充值，有效期立即再延长 365 天！",
     },
     {
-      icon: ShieldCheck,
-      title: "国内收短信免实名",
-      desc: "在中国大陆漫游仅用于接收验证码无需实名认证，即插即用，充分保障出海业务与个人隐私。",
-      tag: "大陆免实名",
-    },
-    {
-      icon: Clock3,
-      title: "每年 10 港币永久保号",
-      desc: "新卡自带 365 天有效期（整整一年）；后续每年充值 10 HKD（约 9 元）即可顺延一年，余额永久保留不过期。",
-      tag: "年成本仅9元",
-    },
-    {
-      icon: Smartphone,
-      title: "三合一免剪卡 · 插卡即用",
-      desc: "标准大卡、Micro、Nano 任意卡槽通用，适配 iPhone 及全网通安卓手机，无需剪卡器。",
-      tag: "全网通通用",
+      title: "实现终身低成本持有",
+      badge: "长久有效",
+      desc: "循环每年仅需 10 港币（折合约 9 元人民币），即可长期保住珍贵的香港物理原生号码。",
     },
   ];
 
-  const platformCategories = [
-    {
-      title: "港美股券商与境外银行",
-      badge: "秒开境外账户",
-      icon: CreditCard,
-      color: "border-emerald-200 bg-emerald-50/50 text-emerald-800",
-      items: [
-        { name: "香港虚拟银行", desc: "众安 ZA Bank / 理慧 livi 账户验证" },
-        { name: "港美股知名券商", desc: "富途牛牛 / 老虎证券 / 长桥证券" },
-        { name: "香港传统银行", desc: "汇丰 One / 中银香港账户绑定" },
-        { name: "Wise / PayPal 国际", desc: "国际多币种资金安全验证" },
-      ],
-    },
-    {
-      title: "全球主流社交通讯",
-      badge: "解 +86 双向限制",
-      icon: MessageSquare,
-      color: "border-blue-200 bg-blue-50/50 text-blue-800",
-      items: [
-        { name: "Telegram", desc: "秒解中国号无法私聊陌生人限制" },
-        { name: "WhatsApp", desc: "海外商务与跨国通讯高权重注册" },
-        { name: "TikTok (海外抖音)", desc: "跨境出海达人号与带货店铺" },
-        { name: "Twitter (X) / Instagram", desc: "国际社媒矩阵高权重号" },
-      ],
-    },
-    {
-      title: "AI 智能生产力矩阵",
-      badge: "秒过手机验证",
-      icon: Bot,
-      color: "border-amber-200 bg-amber-50/50 text-amber-800",
-      items: [
-        { name: "ChatGPT / OpenAI", desc: "账号注册与 Plus 绑卡验证" },
-        { name: "Claude (Anthropic)", desc: "高风控手机验证秒过" },
-        { name: "Google Gemini", desc: "谷歌生态高级 AI 验证" },
-        { name: "xAI Grok / Midjourney", desc: "海外大模型全支持" },
-      ],
-    },
-    {
-      title: "跨境电商与数字娱乐",
-      badge: "畅享海外服务",
-      icon: Globe,
-      color: "border-purple-200 bg-purple-50/50 text-purple-800",
-      items: [
-        { name: "海外 Apple ID", desc: "免绑外卡安全绑定收验证码" },
-        { name: "Steam (外区)", desc: "港区/土区/美区换区验证" },
-        { name: "Netflix / Spotify", desc: "全球影音流媒体会员认证" },
-        { name: "Amazon / eBay", desc: "跨区商城买卖家账户绑定" },
-      ],
-    },
+  const travelPackages = [
+    { region: "中国大陆 & 澳门", tariff: "低至 HK$10 / 日", desc: "多天共享数据，出差往返或备用高速流量", hot: true },
+    { region: "日本 / 韩国 / 台湾", tariff: "低至 HK$15 / 日", desc: "出境旅行插卡即用，原生高速 4G/5G 本地网", hot: true },
+    { region: "新马泰 / 东南亚", tariff: "低至 HK$12 / 日", desc: "覆盖主流海岛与旅游国家，即买即生效", hot: false },
+    { region: "欧洲 / 英国 / 北美", tariff: "低至 HK$25 / 日", desc: "欧美主流国家漫游支持，商务跨国无忧", hot: false },
   ];
 
-  const specs = [
-    ["商品名称", "中国香港 Haha SIM 实体三合一电话卡（丰泽 Fortress & 和记 3HK 联合出品）"],
-    ["交付方式", "妥善防静电防折弯保护包装，默认包邮直达（如需顺丰加急请联系在线客服）"],
-    ["漫游网络", "国内自动漫游接入中国移动或中国联通 4G / 5G 高速网络"],
-    ["号码格式", "香港本土原生手机号码段（+852 开头，高信誉原生实体移动号）"],
-    ["保号规则", "新卡开卡自带 365 天有效期；后续每年仅需充值 10 港币（约 9 元）顺延 365 天，余额留存不过期"],
-    ["售后说明", "物理 SIM 卡一经拆封插卡激活后不支持无理由退换，发货前均经严格质检验真"],
-  ];
-
-  const steps = [
+  const appGuides = [
     {
       step: "01",
-      title: "下单包邮送达",
-      desc: "提交订单并填写准确收件信息，妥善封装防静电防折弯保护芯片安全，默认包邮送达。",
+      title: "下载 Haha Travel APP",
+      desc: "苹果 App Store 或各大安卓应用商店搜索「Haha Travel」官方应用并安装。",
     },
     {
       step: "02",
-      title: "确认关闭数据漫游",
-      desc: "【关键防扣费】插卡前先在手机设置中确认【关闭数据漫游】，避免后台流量偷跑扣除话费。",
+      title: "扫描卡身二维码实名绑定",
+      desc: "打开 APP 扫描实体卡条形码，按香港政府要求使用港澳通行证或中国护照完成在线实名。",
     },
     {
       step: "03",
-      title: "插卡自动选网",
-      desc: "将 Nano SIM 卡插入全网通手机卡槽，稍等数秒即可接入中国移动或中国联通 4G/5G 漫游信号。",
-    },
-    {
-      step: "04",
-      title: "直接接收短信",
-      desc: "即插即用！在大陆接收各类海外平台验证码免实名认证，直接畅快接码。",
-    },
-    {
-      step: "05",
-      title: "每年长效保号",
-      desc: "新卡自带整整 365 天有效期，到期前在手机下载 Haha TRAVEL App 充值 10 港币即可再续一年！",
+      title: "随时查余额与买流量",
+      desc: "APP 内可直观查看剩余天数、当前余额，并支持直接使用信用卡或支付宝/微信充值。",
     },
   ];
 
   const faqs = [
     {
-      q: "Haha 卡在大陆使用需要实名认证吗？",
-      a: "如果您只在中国大陆漫游接收短信验证码，是完全不需要实名认证的，插卡即用！只有在香港本地使用电话/流量，或在大陆开启主动发短信/打电话漫游时，香港电讯法例才要求通过 App 上传护照完成实名登记。",
+      q: "Haha SIM 为什么要每年充值 10 港币？",
+      a: "Haha SIM 是香港丰泽（Fortress）联合 3 旗下推出的漫游神卡，本身无月租、无待机费。香港电讯规则要求号码每年需至少有一次活跃消费记录才能继续保留号码。您只需每年在 APP 里花 10 港币买一个一日包或充值 10 港币，就能自动顺延 365 天有效期，是目前全网公认成本最低的保号卡之一。",
     },
     {
-      q: "Haha 卡在国内能收到哪些平台的验证码？",
-      a: "支持几乎所有海外及香港本土平台！包括 Telegram、WhatsApp、TikTok、ChatGPT、Claude、海外 Apple ID、Google、Facebook、PayPal、以及众安银行、富途牛牛、汇丰等港美股券商与银行账户验证码。",
+      q: "在国内可以接收哪些软件的验证码？",
+      a: "Haha SIM 是香港原生实体卡，非虚拟号段，信誉度极高。实测秒过 Telegram、WhatsApp、TikTok、X (Twitter)、Instagram、OpenAI/ChatGPT、Claude 以及各大香港券商银行。",
     },
     {
-      q: "每年如何保号？最低费用是多少？",
-      a: "Haha 卡开卡自带 365 天有效期（整整一年）。在这一年快结束前，只需在手机应用商店下载「Haha TRAVEL」App，绑定您的卡号，使用支付宝或信用卡充值最低 10 港币（约 9 元人民币），有效期就会自动从当天再延长 365 天！充值的 10 港币留在卡内余额中，永不清零。",
-    },
-    {
-      q: "插卡后收不到短信怎么办？",
-      a: "请首先确认手机已关闭数据漫游，并成功连上「中国移动」或「中国联通」信号。如果连不上信号，可以在手机设置中将网络选择从「自动」改为「手动」，手动指定连接中国移动或中国联通。若海外平台收不到码，请更换纯净的海外节点重试。",
+      q: "不需要流量的时候会偷跑扣费吗？",
+      a: "绝对不会。Haha SIM 的数据流量是「先购买套餐包才产生流量」的机制，如果没有在 APP 中购买流量包，即使开启数据也不会扣除余额，国内接收短信完全免费，放进备用机待机极度安心。",
     },
   ];
 
   return (
-    <div className="mt-8 w-full space-y-6 text-slate-800">
-      {/* 顶部 Hero 巨幕 */}
-      <section className="overflow-hidden rounded-2xl border border-orange-200/80 bg-white shadow-sm">
-        <div className="relative bg-gradient-to-br from-slate-900 via-sky-950 to-orange-950 p-6 text-white sm:p-8">
-          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-orange-500/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-sky-500/10 blur-3xl" />
-
-          <div className="relative flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/30 bg-sky-500/20 px-3 py-1 text-xs font-semibold text-sky-300">
-              🇭🇰 中国香港原生实体 SIM 卡
+    <div className="mt-8 space-y-8">
+      {/* 1. 赛博黄黑丰泽风格 Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-zinc-950 via-slate-900 to-amber-950 p-6 text-white shadow-xl sm:p-8">
+        <div className="relative z-10 max-w-2xl space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/40 bg-yellow-400/10 px-3 py-1 text-xs font-semibold text-yellow-300">
+              <Sparkles className="h-3.5 w-3.5 text-yellow-400" />
+              香港丰泽 Fortress 官方出品
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-orange-200">
-              0 月租 · 国内免费接收短信
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300">
-              大陆免实名 · 年保号仅 10 港币
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200">
+              <Repeat className="h-3.5 w-3.5" />
+              每年仅需 HK$10 续命 365 天
             </span>
           </div>
 
-          <h2 className="relative mt-4 text-2xl font-black tracking-tight sm:text-3xl text-white">
-            {product.name} SIM 卡 · 香港丰泽 & 和记 3HK 联合出品
+          <h2 className="text-2xl font-black tracking-tight sm:text-3xl text-white">
+            Haha SIM 香港原生卡 · 终身 0 月租接码旅游神卡
           </h2>
 
-          <p className="relative mt-2 text-sm font-semibold text-orange-200/95 sm:text-base">
-            香港 3HK 优质网络 · 真实实体 SIM 卡 · 纯净原生 +852 号段 · 港美股/出海/AI 神卡
+          <p className="text-sm leading-relaxed text-slate-300 sm:text-base">
+            零月租、零维护门槛。国内漫游免费接收海内外验证码；支持全球 70+ 国家高速漫游上网，出差旅游直接化身漫游卡！
           </p>
 
-          <p className="relative mt-3 max-w-3xl text-xs leading-6 text-slate-300 sm:text-sm sm:leading-7">
-            香港大型零售连锁丰泽（Fortress）联合香港三大运营商之一和记电讯（3HK）推出的实体预付费卡。在国内漫游自动接入中国移动或中国联通优质 4G/5G 网络，免费接收海内外验证码。新卡开卡自带 365 天有效期，后续每年仅需充值 10 港币（约 9 元人民币）即可延长整整一年，充值余额永久有效不清零！
-          </p>
-
-          <div className="relative mt-5 flex flex-wrap items-center gap-3 pt-2 text-xs text-orange-100/90">
-            <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 backdrop-blur-sm">
-              <Truck className="h-4 w-4 text-orange-300" />
-              <span>默认包邮发货（加急顺丰可联系客服）</span>
+          <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-yellow-200/90">
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="h-4 w-4 text-yellow-400" />
+              <span>国内漫游免月租</span>
             </div>
-            <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 backdrop-blur-sm">
-              <Smartphone className="h-4 w-4 text-emerald-300" />
-              <span>标准/Micro/Nano 三合一免剪卡 · 全网通通用</span>
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="h-4 w-4 text-yellow-400" />
+              <span>接收短信完全免费</span>
             </div>
-          </div>
-        </div>
-
-        {/* 核心六大卖点网格 */}
-        <div className="grid gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-3 sm:p-6 bg-orange-50/20">
-          {highlights.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.title}
-                className="relative flex flex-col justify-between rounded-xl border border-orange-100/80 bg-white p-4 shadow-sm transition hover:border-orange-300 hover:shadow-md"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-700">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <span className="rounded-full bg-orange-100/70 px-2 py-0.5 text-[11px] font-semibold text-orange-800">
-                      {item.tag}
-                    </span>
-                  </div>
-                  <div className="mt-3 text-sm font-bold text-slate-900">{item.title}</div>
-                  <p className="mt-1.5 text-xs leading-5 text-slate-600">{item.desc}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 支持海内外平台矩阵（一行标题 + 下一行标签） */}
-      <section className="rounded-2xl border border-orange-200/80 bg-white p-5 sm:p-6 shadow-sm">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="flex items-center gap-2 text-base font-bold text-slate-950 sm:text-lg">
-              <Sparkles className="h-5 w-5 text-orange-600" />
-              全场景海外应用与港美股兼容矩阵
-            </h3>
-            <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-              原生香港移动运营商号段（非 VoIP），真实物理 SIM 卡信誉度极高，秒过各类严苛风控。
-            </p>
-          </div>
-          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-            <Radio className="h-3.5 w-3.5 animate-pulse text-orange-600" />
-            实测高权重畅通
-          </span>
-        </div>
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {platformCategories.map((cat) => {
-            const CatIcon = cat.icon;
-            return (
-              <div
-                key={cat.title}
-                className="flex flex-col rounded-xl border border-orange-100 bg-gradient-to-b from-orange-50/30 to-white p-4"
-              >
-                <div className="border-b border-orange-100/60 pb-3">
-                  <div className="flex items-center gap-2">
-                    <CatIcon className="h-4 w-4 shrink-0 text-orange-600" />
-                    <span className="whitespace-nowrap text-xs font-bold text-slate-900 sm:text-sm">{cat.title}</span>
-                  </div>
-                  <div className="mt-2">
-                    <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-medium ${cat.color}`}>
-                      {cat.badge}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-3 space-y-2.5">
-                  {cat.items.map((item) => (
-                    <div key={item.name} className="text-xs">
-                      <div className="font-semibold text-slate-800">{item.name}</div>
-                      <div className="text-[11px] text-slate-500">{item.desc}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 新手插卡必看：三大防扣费重要警示 */}
-      <section className="rounded-2xl border border-red-200 bg-red-50/75 p-5 text-slate-800 shadow-sm sm:p-6">
-        <div className="flex items-start gap-3.5">
-          <ShieldAlert className="mt-1 h-6 w-6 shrink-0 text-red-600" />
-          <div className="space-y-3">
-            <div className="text-base font-bold text-red-900 sm:text-lg">
-              新手插卡必看：两大防扣费避坑指南（插卡前务必阅读！）
-            </div>
-            <div className="space-y-2.5 text-xs leading-5 text-slate-700 sm:text-sm sm:leading-6">
-              <div className="rounded-xl border border-red-200/60 bg-white/80 p-3.5">
-                <p>
-                  <strong className="text-red-700">1. 插卡前务必【关闭移动数据漫游】：</strong>
-                  国际数据漫游资费较贵。平时在大陆接收验证码完全不需要开漫游数据！在手机蜂窝网络设置中务必保持【关闭数据漫游】，防止后台 App（如微信、邮箱或系统同步）偷跑流量触发扣费。
-                </p>
-              </div>
-              <div className="rounded-xl border border-red-200/60 bg-white/80 p-3.5">
-                <p>
-                  <strong className="text-red-700">2. iPhone 提示激活 iMessage / FaceTime 务必点击【取消】：</strong>
-                  苹果手机插卡后，iOS 系统偶尔会弹出“可能会发送用于激活 iMessage / FaceTime 的短信，是否允许？”提示。此时<strong>务必果断点击【取消】</strong>！点击取消完全不影响任何正常接收验证码；若误点“好”，手机会自动发送一条国际短信扣除话费。
-                </p>
-              </div>
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="h-4 w-4 text-yellow-400" />
+              <span>Haha Travel 专属 APP 管理</span>
             </div>
           </div>
         </div>
-      </section>
 
-      {/* 商品规格说明 */}
-      <section className="rounded-2xl border border-orange-200/80 bg-white p-5 sm:p-6 shadow-sm">
-        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950 sm:text-lg">
-          <ShieldCheck className="h-5 w-5 text-orange-600" />
-          商品规格与交付说明
-        </h3>
-        <div className="mt-4 space-y-2.5">
-          {specs.map(([label, text]) => (
-            <div
-              key={String(label)}
-              className="flex flex-col rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-2"
-            >
-              <span className="shrink-0 text-xs font-bold text-slate-900 sm:text-sm sm:w-28">{label}：</span>
-              <span className="text-xs leading-5 text-slate-600 sm:text-sm sm:leading-6">{text}</span>
+        {/* Decorative background visual */}
+        <div className="pointer-events-none absolute -right-10 -top-10 h-64 w-64 rounded-full bg-yellow-500/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-10 right-20 h-48 w-48 rounded-full bg-amber-500/10 blur-2xl" />
+      </div>
+
+      {/* 2. 差异化独家模块: 每年 HK$10 续命时间轴 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-6">
+          <div className="flex items-center gap-2">
+            <BatteryCharging className="h-5 w-5 text-yellow-600" />
+            <h3 className="text-lg font-bold text-slate-900">终身 0 月租 · 每年 HK$10 续命运转机制</h3>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">超低持有开销，每年仅需花费约 9 元人民币即可让号码永久可用</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {timelineSteps.map((step, idx) => (
+            <div key={idx} className="relative rounded-xl border border-yellow-100 bg-gradient-to-b from-yellow-50/50 to-white p-4">
+              <span className="inline-block rounded-md bg-yellow-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                {step.badge}
+              </span>
+              <h4 className="mt-2 text-sm font-bold text-slate-900">{step.title}</h4>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{step.desc}</p>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* 快速上手五步走 */}
-      <section className="rounded-2xl border border-orange-200/80 bg-white p-5 sm:p-6 shadow-sm">
-        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950 sm:text-lg">
-          <Zap className="h-5 w-5 text-orange-600" />
-          从收到卡到长期保号：简明五步流程
-        </h3>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {steps.map((st) => (
-            <div
-              key={st.step}
-              className="relative flex flex-col justify-between rounded-xl border border-orange-100 bg-gradient-to-b from-orange-50/40 to-white p-4"
-            >
-              <div>
-                <span className="font-mono text-2xl font-black text-orange-400">{st.step}</span>
-                <div className="mt-2 text-xs font-bold text-slate-900 sm:text-sm">{st.title}</div>
-                <p className="mt-1.5 text-xs leading-5 text-slate-600">{st.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 直达全套图文教程横幅 */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-orange-200/90 bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div className="space-y-1">
-          <div className="text-sm font-bold text-slate-950 sm:text-base">
-            需要更详尽的 Haha 卡插卡选网、App 充值与保号图文指南？
-          </div>
-          <p className="text-xs text-slate-600 sm:text-sm">
-            本站为您整理了全套高清步骤图与常见排错技巧，支持一步一步对照操作。
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={openPublicSupport}
-            className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2 text-xs font-semibold text-orange-800 shadow-sm transition hover:bg-orange-50 sm:text-sm"
-          >
-            联系客服咨询
-          </button>
-          <Link
-            href="/tutorials?topic=haha-sim"
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-orange-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-700 sm:text-sm"
-          >
-            <span>查看完整图文教程</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
       </div>
 
-      {/* 常见问题 FAQ 折叠卡片 */}
-      <section className="rounded-2xl border border-orange-200/80 bg-white p-5 sm:p-6 shadow-sm">
-        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950 sm:text-lg">
-          <HelpCircle className="h-5 w-5 text-orange-600" />
-          常见问答与疑难解答
-        </h3>
-        <div className="mt-4 space-y-3">
-          {faqs.map((faq, i) => (
-            <details
-              key={i}
-              className="group rounded-xl border border-orange-100 bg-orange-50/20 p-4 transition open:bg-orange-50/40"
-            >
-              <summary className="flex cursor-pointer items-center justify-between font-semibold text-slate-900 text-xs sm:text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
-                    Q
-                  </span>
-                  <span>{faq.q}</span>
-                </span>
-                <span className="text-slate-400 transition-transform group-open:rotate-180">▼</span>
-              </summary>
-              <p className="mt-3 pl-7 text-xs leading-6 text-slate-600 sm:text-sm sm:leading-6">
-                {faq.a}
-              </p>
-            </details>
+      {/* 3. 全球 70+ 国漫游数据加购包 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Plane className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-bold text-slate-900">全球 70+ 国家漫游流量（即买即用）</h3>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">不仅是接码保号卡，更是出国自由行、商务出差的随身 Wi-Fi 替代品</p>
+          </div>
+          <span className="inline-flex w-fit items-center rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+            覆盖全球主流目的地
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {travelPackages.map((pkg, i) => (
+            <div key={i} className="flex flex-col justify-between rounded-xl border border-slate-200 p-4 transition-all hover:border-yellow-400 hover:shadow-sm">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">{pkg.region}</span>
+                  {pkg.hot && (
+                    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                      热门
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 text-base font-bold text-yellow-600">{pkg.tariff}</div>
+                <p className="mt-1.5 text-xs text-slate-500">{pkg.desc}</p>
+              </div>
+            </div>
           ))}
         </div>
-      </section>
+      </div>
+
+      {/* 4. Haha Travel 官方 APP 全流程指引 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-6">
+          <div className="flex items-center gap-2">
+            <Download className="h-5 w-5 text-emerald-600" />
+            <h3 className="text-lg font-bold text-slate-900">Haha Travel 官方应用实操步骤</h3>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">全部业务在线办理，清晰透明，无繁琐人工手续</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {appGuides.map((g, idx) => (
+            <div key={idx} className="rounded-xl border border-slate-100 bg-slate-50/70 p-5">
+              <span className="text-2xl font-black text-amber-500/30">{g.step}</span>
+              <h4 className="mt-2 text-sm font-bold text-slate-900">{g.title}</h4>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{g.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 5. 常见问答 FAQ */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+        <div className="mb-5 flex items-center gap-2">
+          <HelpCircle className="h-5 w-5 text-slate-700" />
+          <h3 className="text-lg font-bold text-slate-900">Haha SIM 常见问题解答</h3>
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {faqs.map((f, i) => (
+            <div key={i} className="py-4 first:pt-0 last:pb-0">
+              <h4 className="text-sm font-semibold text-slate-900">{f.q}</h4>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{f.a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 6. 底部客服支持卡片 */}
+      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-yellow-200 bg-gradient-to-r from-yellow-50 via-amber-50 to-orange-50 p-6 sm:flex-row">
+        <div>
+          <h4 className="text-base font-bold text-slate-900">需要 Haha SIM 实名协助或到手指导？</h4>
+          <p className="mt-1 text-xs text-slate-600">本站提供全流程一对一技术协助，保障您顺利完成开卡与充值顺延。</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => openPublicSupport()}
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-semibold text-yellow-400 shadow-sm hover:bg-slate-800 transition-colors"
+        >
+          <MessageSquare className="h-4 w-4" />
+          联系在线技术客服
+        </button>
+      </div>
     </div>
   );
 }

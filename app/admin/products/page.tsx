@@ -2195,7 +2195,7 @@ function NativeSelect({
   return (
     <select
       className={cn(
-        "h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50",
+        "relative h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:relative focus:z-20 focus-visible:relative focus-visible:z-20 focus-visible:outline-none focus:border-primary disabled:cursor-not-allowed disabled:opacity-50",
         className
       )}
       disabled={disabled}

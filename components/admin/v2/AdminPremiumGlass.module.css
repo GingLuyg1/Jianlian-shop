@@ -60,10 +60,10 @@
 }
 .shell.shell.shell [data-admin-shell-topbar] input { border-radius: 12px; background: #f3f6fc; border-color: #dce3ee; }
 
-.filterBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.filterBar > div { flex: 1 1 190px; max-width: 220px; }
-.filterBar > select { flex: 1 1 124px; max-width: 152px; }
-.filters :is(input, select) { height: 36px; font-size: 12px; }
+.filterBar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.filterBar > div { flex: 1 1 190px; max-width: 220px; position: relative; }
+.filterBar > select { flex: 1 1 124px; max-width: 152px; position: relative; }
+.filters :is(input, select) { height: 36px; font-size: 12px; position: relative; }
 .filters select {
   appearance: none;
   padding-right: 28px;
@@ -71,8 +71,8 @@
   background-repeat: no-repeat;
   background-position: right 8px center;
 }
-.advancedFields { display: flex; flex-wrap: wrap; gap: 8px; }
-.advancedFields > select { width: 190px; max-width: 100%; }
+.advancedFields { display: flex; flex-wrap: wrap; gap: 10px; }
+.advancedFields > select { width: 190px; max-width: 100%; position: relative; }
 .tableTools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .filterActions { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 .moreFilters { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 25px; padding: 2px 8px; border-radius: 8px; font-size: 11px; color: var(--glass-muted); }
@@ -148,7 +148,19 @@
   background: #eef3fb;
 }
 
-.filters :is(input, select):focus-visible, .advanced summary:focus-visible {
+.filters :is(input, select):focus,
+.filters :is(input, select):focus-visible,
+.filterBar > div:focus-within,
+.filterBar > select:focus,
+.filterBar > select:focus-visible {
+  position: relative;
+  z-index: 20;
+  border-color: var(--glass-accent) !important;
+  box-shadow: 0 0 0 2px rgba(63, 99, 220, 0.25) !important;
+  outline: none !important;
+}
+
+.advanced summary:focus-visible {
   outline: 2px solid var(--glass-accent);
   outline-offset: 1px;
 }

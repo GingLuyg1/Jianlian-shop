@@ -378,3 +378,16 @@ html[data-mobile-preview="true"] .hero-visual-desktop {
     display: none !important;
   }
 }
+
+/* Universal form control focus stacking to prevent border/ring clipping by adjacent siblings */
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+[role="combobox"]:focus,
+[role="combobox"]:focus-visible {
+  position: relative;
+  z-index: 15;
+}
