@@ -512,6 +512,13 @@ export async function POST(request: Request) {
     }
     let { data, error } = await supabase.rpc("create_order_with_item", orderPayload);
 
+    if (error?.message === "KUAJINGZY_SELLABLE_CAP_EXHAUSTED") {
+      return NextResponse.json(
+        { error: "商品当前不可购买，请刷新后重试", code: "KUAJINGZY_ORDER_UNAVAILABLE" },
+        { status: 409 }
+      );
+    }
+
     if (error) {
       logCreateOrderRpcError({
         requestId: clientRequestId,
