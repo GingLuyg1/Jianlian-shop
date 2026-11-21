@@ -1,0 +1,42 @@
+name: KuajingZY atomic sellable cap
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/*kuajingzy_atomic_sellable_cap*'
+      - 'app/api/orders/route.ts'
+      - 'tests/integration/kuajingzy-atomic-sellable-cap-pg17.mjs'
+      - 'tests/support/*kuajingzy-atomic-cap*'
+      - 'tests/unit/kuajingzy-atomic-cap.test.mjs'
+      - '.github/workflows/kuajingzy-atomic-sellable-cap.yml'
+permissions:
+  contents: read
+jobs:
+  atomic-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: synthetic-local-ci-only
+          POSTGRES_DB: kuajingzy_freeze_isolated
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      KJ_PGHOST: 127.0.0.1
+      KJ_PGPORT: "5432"
+      KJ_PGDATABASE: kuajingzy_freeze_isolated
+      KJ_PGUSER: postgres
+      PGPASSWORD: synthetic-local-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Real transaction concurrency and lifecycle regression
+        run: node tests/integration/kuajingzy-atomic-sellable-cap-pg17.mjs
