@@ -11,15 +11,53 @@ export type PublicCategorySnapshot = {
 };
 
 const REFRESH_AFTER_MS = 30_000;
-const initialSnapshot: PublicCategorySnapshot = { status: "idle", rows: null };
+const SNAPSHOT_STORAGE_KEY = "jianlian_public_category_snapshot_v1";
+
+function loadPersistedSnapshot(): { rows: PublicCategory[]; savedAt: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(SNAPSHOT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSnapshot(rows: PublicCategory[]) {
+  if (typeof window === "undefined" || !rows || rows.length === 0) return;
+  try {
+    window.sessionStorage.setItem(
+      SNAPSHOT_STORAGE_KEY,
+      JSON.stringify({ rows, savedAt: Date.now() })
+    );
+  } catch {
+    /* Safe fallback if storage quota exceeded */
+  }
+}
+
+// 优先从 sessionStorage 恢复快照，消除退出商品详情页返回列表时侧边栏“资源中心”闪烁骨架屏
+const initialPersisted = loadPersistedSnapshot();
+const initialSnapshot: PublicCategorySnapshot =
+  initialPersisted && initialPersisted.rows.length > 0
+    ? { status: "ready", rows: initialPersisted.rows }
+    : { status: "idle", rows: null };
+
 let snapshot = initialSnapshot;
-let fetchedAt = 0;
+let fetchedAt = initialPersisted ? initialPersisted.savedAt : 0;
 let pending: Promise<PublicCategory[]> | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
 
 function publish(next: PublicCategorySnapshot) {
   snapshot = next;
+  if (next.status === "ready" && next.rows && next.rows.length > 0) {
+    persistSnapshot(next.rows);
+  }
   listeners.forEach((listener) => listener());
 }
 
