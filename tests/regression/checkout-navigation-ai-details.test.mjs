@@ -9,13 +9,59 @@ const testModule = { exports: {} };
 new Function("exports", "module", compiled)(testModule.exports, testModule);
 const { safeProductReturnTo, checkoutHref, resolveRechargeProductFamily, resolveCheckoutCategory } = testModule.exports;
 
-test("checkout return preserves category, search and page and rejects open redirects", () => {
-  for (const path of ["/products/ai-membership?category=chatgpt", "/products/ai-membership?category=chatgpt&search=plus&page=2"]) {
-    const href = new URL(checkoutHref("id", path), "https://jianlian.shop");
-    assert.equal(safeProductReturnTo(href.searchParams.get("returnTo")), path);
+const validReturnPaths = [
+  "/products/ai-membership?category=chatgpt",
+  "/products/ai-membership?category=chatgpt&search=plus&page=2",
+];
+const invalidReturnPaths = [
+  "https://evil.example",
+  "//evil.example",
+  "javascript:alert(1)",
+  "/products/\\evil",
+  "/products/ai-membership/../../login",
+  "/admin",
+];
+
+test("checkout return preserves safe product paths and rejects unsafe destinations", () => {
+  for (const path of validReturnPaths) {
+    assert.equal(safeProductReturnTo(path), path);
+    assert.equal(checkoutHref("product-slug", path), "/checkout?p=product-slug");
   }
-  for (const bad of ["https://evil.example", "//evil.example", "javascript:alert(1)", "/products/\\evil", "/products/../../login", "/admin"]) assert.equal(safeProductReturnTo(bad), null);
+  for (const path of invalidReturnPaths) assert.equal(safeProductReturnTo(path), null);
 });
+
+test("browser checkout stores only safe return paths and uses the short URL", () => {
+  const storage = new Map();
+  const writes = [];
+  const mocks = {
+    window: {},
+    sessionStorage: {
+      setItem(key, value) {
+        writes.push([key, value]);
+        storage.set(key, value);
+      },
+    },
+  };
+  const original = Object.getOwnPropertyDescriptors(globalThis);
+  try {
+    for (const [key, value] of Object.entries(mocks)) {
+      Object.defineProperty(globalThis, key, { configurable: true, value });
+    }
+    const path = validReturnPaths[1];
+    assert.equal(checkoutHref("product-slug", path), "/checkout?p=product-slug");
+    assert.equal(storage.get("checkout_return_to"), path);
+    for (const invalidPath of invalidReturnPaths) {
+      assert.equal(checkoutHref("product-slug", invalidPath), "/checkout?p=product-slug");
+    }
+    assert.deepEqual(writes, [["checkout_return_to", path]]);
+  } finally {
+    for (const key of Object.keys(mocks)) {
+      if (original[key]) Object.defineProperty(globalThis, key, original[key]);
+      else delete globalThis[key];
+    }
+  }
+});
+
 test("new and legacy AI families use evidence rather than UUID whitelists", () => {
   for (const name of ["（卡付）ChatGPT Go 印度", "（卡付）ChatGPT Plus 菲律宾（同步官方售后）", "（卡付）Chat GPT PRO 20x 菲律宾", "chat-gpt PRO 5x"]) {
     assert.equal(resolveRechargeProductFamily({ name }), "chatgpt");

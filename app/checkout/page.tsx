@@ -22,6 +22,7 @@ import HahaSimProductDetails from "@/components/products/details/HahaSimProductD
 import OneNzProductDetails from "@/components/products/details/OneNzProductDetails";
 import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
 import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
+import TMobileProductDetails from "@/components/products/details/TMobileProductDetails";
 import Link from "next/link";
 import {
   CreditCard,
@@ -195,15 +196,20 @@ function isHahaSimProduct(product: { id?: string; name?: string; slug?: string |
   return name.includes("haha") || slug.includes("haha");
 }
 
-function isUltraMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isTMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return (
-    name.includes("ultra") ||
-    slug.includes("ultra") ||
-    name.includes("t-mobile") ||
-    slug.includes("t-mobile")
+    (name.includes("t-mobile") || slug.includes("t-mobile") || slug.includes("tmobile")) &&
+    !name.includes("ultra") &&
+    !slug.includes("ultra")
   );
+}
+
+function isUltraMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  return name.includes("ultra") || slug.includes("ultra");
 }
 
 function isEncMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
@@ -1379,9 +1385,13 @@ function ProductDetailCard({
     <Card data-testid="checkout-product-detail" className="relative h-auto min-h-0 overflow-hidden lg:h-full">
       <button
         type="button"
-        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground sm:right-4 sm:top-4 sm:h-9 sm:w-9"
+        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:w-9"
         onClick={() => {
-          router.push(closeHref);
+          if (typeof window !== "undefined" && window.history.length > 1 && document.referrer.includes(window.location.host)) {
+            router.back();
+          } else {
+            router.push(closeHref);
+          }
         }}
         aria-label="关闭下单页面"
       >
@@ -1461,6 +1471,8 @@ function ProductDetailCard({
           <GiffgaffSimProductDetails product={product} />
         ) : isHahaSimProduct(product) ? (
           <HahaSimProductDetails product={product} />
+        ) : isTMobileProduct(product) ? (
+          <TMobileProductDetails product={product} />
         ) : isUltraMobileProduct(product) ? (
           <UltraMobileProductDetails product={product} />
         ) : isEncMobileProduct(product) ? (

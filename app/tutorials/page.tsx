@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import {
   ArrowUp,
@@ -199,6 +200,12 @@ function getTutorialTitleMeta({
         subTitle: "币安 · USDT 交易教程",
         desc: "Binance 注册、C2C 快捷购买 USDT 与 BEP20 充值网络提现流程",
       };
+    case "rakuten-mobile":
+      return {
+        mainTitle: "日本乐天移动使用教程",
+        subTitle: "Rakuten Mobile 原生卡安装与配置教程",
+        desc: "日本乐天原生实体 SIM 卡从收到卡片、插卡防扣费、搜网激活到 APN 配置的全流程图文与实操视频指引",
+      };
     case "required":
     default:
       return {
@@ -285,10 +292,19 @@ function ScrollProgressFab({
   );
 }
 
-export default function TutorialsPage() {
+function TutorialsPageContent() {
+  const searchParams = useSearchParams();
   const { isMobile, previewWidth, mobilePreview } = useMobileStorefront();
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>("required");
+  const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("topic");
+      if (p && tutorialTopics.some((t) => t.id === p)) {
+        return p as (typeof tutorialTopics)[number]["id"];
+      }
+    }
+    return "required";
+  });
   const [expandAllOpen, setExpandAllOpen] = useState(false);
   const [giffgaffTreeOpen, setGiffgaffTreeOpen] = useState(false);
   const [giffgaffGuide, setGiffgaffGuide] = useState<"activation" | "keeper">("activation");
@@ -302,9 +318,7 @@ export default function TutorialsPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const paramTopic = params.get("topic");
+    const paramTopic = searchParams?.get("topic");
     if (paramTopic && tutorialTopics.some((t) => t.id === paramTopic)) {
       setSelected(paramTopic as (typeof tutorialTopics)[number]["id"]);
       if (paramTopic === "one-nz") setOneNzTreeOpen(true);
@@ -312,17 +326,17 @@ export default function TutorialsPage() {
       if (paramTopic === "chatgpt-guide") setChatgptTreeOpen(true);
       if (paramTopic === "twitter") setTwitterTreeOpen(true);
     }
-    const paramGuide = params.get("guide");
+    const paramGuide = searchParams?.get("guide");
     if (paramGuide === "usage" || paramGuide === "activation" || paramGuide === "binding") {
       setOneNzGuide("usage");
     } else if (paramGuide === "guide" || paramGuide === "rates") {
       setOneNzGuide("guide");
     } else if (paramGuide === "login" || paramGuide === "security" || paramGuide === "rebind" || paramGuide === "anti-ban" || paramGuide === "unban") {
-      setChatgptGuide(paramGuide);
+      setChatgptGuide(paramGuide as ChatGptTutorialSection);
     } else if (paramGuide === "x-token" || paramGuide === "x-2fa" || paramGuide === "x-renew-token") {
-      setTwitterGuide(paramGuide);
+      setTwitterGuide(paramGuide as TwitterSection);
     }
-  }, []);
+  }, [searchParams]);
 
   const query = search.trim().toLocaleLowerCase();
   const matchingTopics = tutorialTopics.filter(topic => [topic.label, topic.title, topic.description, ...topic.keywords].some(text => text.toLocaleLowerCase().includes(query)));
@@ -619,4 +633,12 @@ export default function TutorialsPage() {
     {/* 教程专用回到顶部环形进度浮动按钮 (右侧，不与左侧客服重叠) */}
     <ScrollProgressFab isMobile={isMobile} previewWidth={previewWidth} mobilePreview={mobilePreview} />
   </PublicLayout></div>;
+}
+
+export default function TutorialsPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-500">正在加载教程中心...</div>}>
+      <TutorialsPageContent />
+    </Suspense>
+  );
 }

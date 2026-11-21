@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { refreshPublicCategories, usePublicCategorySnapshot } from "@/lib/catalog/public-category-snapshot";
 import { simRegionCode, fallbackCategoriesByPath, type StorefrontFallbackCategory } from "@/lib/catalog/storefront-category-visuals";
 import { clearPublicProductCounts, forgetPublicProductCount, getPublicProductCount, getPublicProductCountForRoute, rememberPublicProductCount, retainVisiblePublicProductCounts, subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion } from "@/lib/catalog/public-product-count-cache";
-import { forgetPublicProductPage, getPublicProductPage, peekPublicProductPage, prefetchPublicProductPage } from "@/lib/catalog/public-product-query-cache";
+import { forgetPublicProductPage, getPublicProductPage, peekPublicProductPage, prefetchPublicProductPage, publicProductQueryKey } from "@/lib/catalog/public-product-query-cache";
 import { useProgressiveWheelMotion } from "@/hooks/use-progressive-wheel-motion";
 import { WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 import { findVisibleStorefrontPrimaryCategory, storefrontCategoryPaths } from "@/lib/catalog/visible-storefront-category-routes";
@@ -238,6 +238,30 @@ function SupabaseMallContentInner({
     ? (secondaryCategories.length > 0 ? secondaryCategories : allMobileSecondaryCategories)
     : secondaryCategories;
 
+  // Background prefetch all sibling secondary categories so clicking any country/category is 0ms instant
+  useEffect(() => {
+    if (!secondaryCategories || secondaryCategories.length === 0) return;
+    const prefetchSiblings = () => {
+      secondaryCategories.forEach((cat) => {
+        const primaryId = cat.level === 1 ? cat.id : cat.parent_id ?? "";
+        const secondaryId = cat.level === 2 ? cat.id : "";
+        if (primaryId) {
+          void prefetchPublicProductPage({
+            primaryCategoryId: primaryId,
+            secondaryCategoryId: secondaryId,
+            keyword: "",
+            page: 1,
+            pageSize: CATALOG_PAGE_SIZE,
+          });
+        }
+      });
+    };
+    if (typeof window !== "undefined") {
+      const timer = window.setTimeout(prefetchSiblings, 120);
+      return () => window.clearTimeout(timer);
+    }
+  }, [secondaryCategories]);
+
   const isLoadingSecondaryCategories = !categorySnapshot.rows && categorySnapshot.status !== "error";
   const pendingSecondaryCategories = useMemo(() => {
     if (!routePending?.target || !categorySnapshot.rows) return null;
@@ -440,12 +464,35 @@ function SupabaseMallContentInner({
     productRequestIdRef.current += 1;
     setSelectedCategoryId(category.id);
     setActiveCategory(category);
-    setIsLoadingProducts(true);
-    setLoadedProductKey("");
-    setLoadedCategoryId("");
-    setProducts([]);
-    setTotal(0);
     setProductError("");
+
+    const primaryCategoryId = category.level === 1 ? category.id : category.parent_id ?? "";
+    const secondaryCategoryId = category.level === 2 ? category.id : "";
+    const query = {
+      primaryCategoryId,
+      secondaryCategoryId,
+      keyword: "",
+      page: 1,
+      pageSize: CATALOG_PAGE_SIZE,
+    };
+    const cached = peekPublicProductPage(query);
+    if (cached) {
+      setProducts(
+        cached.products.map((row) =>
+          mapPublicProductToProduct(row, productCategory, row.category_path || category.name)
+        )
+      );
+      setTotal(cached.total);
+      setIsLoadingProducts(false);
+      setLoadedCategoryId(category.id);
+      setLoadedProductKey(publicProductQueryKey(query));
+      setCountReadyKey(publicProductQueryKey(query));
+    } else {
+      setIsLoadingProducts(true);
+      setLoadedProductKey("");
+      setLoadedCategoryId("");
+      // Keep previous products visible while loading to eliminate blank-screen flashing
+    }
     updateUrl({ categorySlug: category.slug, search: "", page: 1 });
   }
 

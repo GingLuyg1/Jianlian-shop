@@ -99,11 +99,18 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
       <li key={item.href}>
         <Link
           href={item.href}
+          prefetch={true}
           data-sidebar-link={item.href}
           data-sidebar-active={active ? "true" : undefined}
           aria-current={active ? "page" : undefined}
-          onMouseEnter={() => { if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows, true); }}
-          onFocus={() => { if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows, true); }}
+          onMouseEnter={() => {
+            router.prefetch(item.href);
+            if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows, true);
+          }}
+          onFocus={() => {
+            router.prefetch(item.href);
+            if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows, true);
+          }}
           onClick={(event) => {
             if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows);
             startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));

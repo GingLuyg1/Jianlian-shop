@@ -111,9 +111,12 @@ export function startCatalogRouteExit(event: PlainNavigationClick, currentPath: 
   event.preventDefault();
   if (pendingNavigation) clearTimeout(pendingNavigation);
   publishPendingRoute({ source: currentPath, target: targetPath });
+  navigate();
   pendingNavigation = setTimeout(() => {
     pendingNavigation = null;
-    navigate();
-  }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160);
+    if (typeof window !== "undefined" && window.location.pathname !== targetPath) {
+      window.location.assign(targetPath);
+    }
+  }, 1200);
   return true;
 }
