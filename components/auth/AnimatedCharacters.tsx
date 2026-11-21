@@ -312,6 +312,14 @@ const SPEECH_LINES = {
     "救命，差点被当成萝卜拔出来了！🥕",
     "我的后颈皮都要被你揪秃啦！😆",
   ],
+  dragSquashed: [
+    "别压了别压了，要变成饼了！🍪",
+    "嗷呜~ 我要被压成软糖垫子了！🍮",
+    "好重好重！谁在给我做全身推拿呀？💆",
+    "再压就要从键盘底下溜走啦！💨",
+    "呜哇，被压扁成二维生物了！",
+    "哎呀呀，我的发型都被压平了！🤣",
+  ],
 };
 
 const CONFETTI_COLORS = [
@@ -421,9 +429,12 @@ export default function AnimatedCharacters({
     scaleX: 1,
     scaleY: 1,
     isLifted: false,
+    isSquashed: false,
   });
   const [droppingChar, setDroppingChar] = useState<CharKey | null>(null);
-  const [dropParams, setDropParams] = useState({ lift: 0, angle: 0 });
+  const [dropParams, setDropParams] = useState({ lift: 0, shift: 0, angle: 0 });
+  const [squashReboundingChar, setSquashReboundingChar] = useState<CharKey | null>(null);
+  const [squashParams, setSquashParams] = useState({ sx: 1.2, sy: 0.75 });
   const [reboundingChar, setReboundingChar] = useState<CharKey | null>(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const hasDraggedRef = useRef(false);
@@ -659,6 +670,7 @@ export default function AnimatedCharacters({
       scaleX: 1,
       scaleY: 1,
       isLifted: false,
+      isSquashed: false,
     });
   };
 
@@ -673,37 +685,41 @@ export default function AnimatedCharacters({
     if (dy < 0) {
       // Dragging UP
       const pullUpDist = -dy;
-      if (pullUpDist <= 28) {
-        // Elastic stretch tension phase (anchored to ground)
+      if (pullUpDist <= 25) {
+        // Elastic stretch tension phase (anchored firmly to ground)
         setDragPhysics({
-          shiftX: Math.max(-60, Math.min(60, dx * 0.6)),
+          shiftX: Math.max(-45, Math.min(45, dx * 0.45)),
           liftY: 0,
-          angle: Math.max(-14, Math.min(14, dx * 0.18)),
-          scaleX: 1 - pullUpDist * 0.0035,
-          scaleY: 1 + pullUpDist * 0.007,
+          angle: Math.max(-6, Math.min(6, dx * 0.08)),
+          scaleX: 1 - pullUpDist * 0.003,
+          scaleY: 1 + pullUpDist * 0.006,
           isLifted: false,
+          isSquashed: false,
         });
       } else {
-        // Plucked out! ("揪出来！" 拔地而起 离地悬空)
-        const excess = pullUpDist - 28;
+        // Plucked out! ("揪出来！" 拔地而起 离地悬空 自然轻摆)
+        const excess = pullUpDist - 25;
+        const targetLift = Math.min(105, excess * 0.75);
         setDragPhysics({
-          shiftX: Math.max(-85, Math.min(85, dx * 0.75)),
-          liftY: Math.min(110, excess * 0.72),
-          angle: Math.max(-22, Math.min(22, dx * 0.22)),
-          scaleX: 0.91,
-          scaleY: 1.12 + Math.min(0.16, excess * 0.002),
+          shiftX: Math.max(-75, Math.min(75, dx * 0.65)),
+          liftY: targetLift,
+          angle: Math.max(-11, Math.min(11, dx * 0.12)),
+          scaleX: 0.94 - Math.min(0.04, excess * 0.0006),
+          scaleY: 1.08 + Math.min(0.1, excess * 0.001),
           isLifted: true,
+          isSquashed: false,
         });
       }
     } else {
-      // Dragging DOWN: squashes into the floor
+      // Dragging DOWN: squashes into the floor (Organic mochi compression, firmly grounded)
       setDragPhysics({
-        shiftX: Math.max(-45, Math.min(45, dx * 0.5)),
+        shiftX: Math.max(-35, Math.min(35, dx * 0.35)),
         liftY: 0,
-        angle: Math.max(-10, Math.min(10, dx * 0.15)),
-        scaleX: 1 + Math.min(0.4, dy * 0.005),
-        scaleY: 1 - Math.min(0.35, dy * 0.0045),
+        angle: Math.max(-5, Math.min(5, dx * 0.06)),
+        scaleX: Math.min(1.22, 1 + dy * 0.0022),
+        scaleY: Math.max(0.72, 1 - dy * 0.003),
         isLifted: false,
+        isSquashed: dy > 16,
       });
     }
   };
@@ -711,7 +727,7 @@ export default function AnimatedCharacters({
   const handlePointerUp = (char: CharKey) => {
     if (draggingChar !== char) return;
     const wasDragged = hasDraggedRef.current;
-    const { liftY, angle, isLifted } = dragPhysics;
+    const { shiftX, liftY, angle, isLifted, isSquashed, scaleX, scaleY } = dragPhysics;
 
     setDraggingChar(null);
     setDragPhysics({
@@ -721,15 +737,29 @@ export default function AnimatedCharacters({
       scaleX: 1,
       scaleY: 1,
       isLifted: false,
+      isSquashed: false,
     });
 
     if (wasDragged) {
       if (isLifted && liftY > 16) {
-        // Was plucked in the air! Trigger drop & landing animation
-        setDropParams({ lift: liftY, angle });
+        // Was plucked in the air! Trigger physical drop & landing bounce
+        setDropParams({
+          lift: Math.round(liftY),
+          shift: Math.round(shiftX),
+          angle: Math.round(angle),
+        });
         setDroppingChar(char);
-        setTimeout(() => setDroppingChar(null), 650);
+        setTimeout(() => setDroppingChar(null), 750);
         triggerBubble(pickRandom(SPEECH_LINES.dragPlucked), char, 3000);
+      } else if (isSquashed) {
+        // Squashed down -> springs back with squishy jelly rebound!
+        setSquashParams({
+          sx: Number(scaleX.toFixed(2)),
+          sy: Number(scaleY.toFixed(2)),
+        });
+        setSquashReboundingChar(char);
+        setTimeout(() => setSquashReboundingChar(null), 650);
+        triggerBubble(pickRandom(SPEECH_LINES.dragSquashed), char, 2800);
       } else {
         // Rebound
         setReboundingChar(char);
@@ -747,6 +777,9 @@ export default function AnimatedCharacters({
       return `translateX(${shiftX}px) translateY(${-liftY}px) rotate(${angle}deg) scale(${scaleX}, ${scaleY})`;
     }
     if (droppingChar === char) {
+      return "none";
+    }
+    if (squashReboundingChar === char) {
       return "none";
     }
     return baseTransform;
@@ -792,11 +825,25 @@ export default function AnimatedCharacters({
   const orangeHeight = activeFailPose ? 135 : 154;
   const yellowHeight = activeFailPose ? 210 : 232;
 
-  // Dynamic bottom radius during pluck ("揪出来"): flat on ground, rounded when lifted in air
-  const purpleBottomRadius = draggingChar === "purple" && dragPhysics.liftY > 0 ? Math.min(24, Math.round(dragPhysics.liftY * 0.8)) : 0;
-  const blackBottomRadius = draggingChar === "black" && dragPhysics.liftY > 0 ? Math.min(22, Math.round(dragPhysics.liftY * 0.75)) : 0;
-  const orangeBottomRadius = draggingChar === "orange" && dragPhysics.liftY > 0 ? Math.min(48, Math.round(dragPhysics.liftY * 0.9)) : 0;
-  const yellowBottomRadius = draggingChar === "yellow" && dragPhysics.liftY > 0 ? Math.min(72, Math.round(dragPhysics.liftY * 1.2)) : 0;
+  // Natural rounded bottom curves that eliminate sharp knife cut corners in all states
+  const purpleBottomRadius =
+    (draggingChar === "purple" && dragPhysics.liftY > 0) || droppingChar === "purple"
+      ? Math.min(24, Math.round(10 + (dragPhysics.liftY || dropParams.lift) * 0.5))
+      : 10;
+  const blackBottomRadius =
+    (draggingChar === "black" && dragPhysics.liftY > 0) || droppingChar === "black"
+      ? Math.min(22, Math.round(10 + (dragPhysics.liftY || dropParams.lift) * 0.5))
+      : 10;
+  const orangeBottomRadius =
+    (draggingChar === "orange" && dragPhysics.liftY > 0) || droppingChar === "orange"
+      ? Math.min(65, Math.round(18 + (dragPhysics.liftY || dropParams.lift) * 0.9))
+      : draggingChar === "orange" && dragPhysics.isSquashed
+        ? Math.min(32, Math.round(18 + (dragPhysics.scaleX - 1) * 60))
+        : 18;
+  const yellowBottomRadius =
+    (draggingChar === "yellow" && dragPhysics.liftY > 0) || droppingChar === "yellow"
+      ? Math.min(72, Math.round(14 + (dragPhysics.liftY || dropParams.lift) * 0.9))
+      : 14;
 
   // Real-time expression gaze: When one buddy is plucked into the air, the other 3 look at it in shock!
   const pForceX = activeFailPose
@@ -1020,19 +1067,61 @@ export default function AnimatedCharacters({
         }
         @keyframes jianlian-drop-land {
           0% {
-            transform: translateY(calc(var(--drop-lift, 60) * -1px)) rotate(calc(var(--drop-angle, 0) * 1deg)) scale(0.92, 1.15);
+            transform: translate(calc(var(--drop-shift, 0) * 1px), calc(var(--drop-lift, 60) * -1px)) rotate(calc(var(--drop-angle, 0) * 1deg)) scale(0.95, 1.1);
           }
-          40% {
-            transform: translateY(0px) rotate(0deg) scale(1.22, 0.78);
+          38% {
+            transform: translate(0px, 0px) rotate(0deg) scale(1.22, 0.78);
           }
-          68% {
-            transform: translateY(-14px) rotate(0deg) scale(0.94, 1.08);
+          65% {
+            transform: translate(0px, -18px) rotate(0deg) scale(0.94, 1.06);
           }
-          85% {
-            transform: translateY(2px) scale(1.04, 0.97);
+          82% {
+            transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.97);
+          }
+          94% {
+            transform: translate(0px, -3px) rotate(0deg) scale(0.99, 1.01);
           }
           100% {
-            transform: translateY(0px) scale(1, 1);
+            transform: translate(0px, 0px) rotate(0deg) scale(1, 1);
+          }
+        }
+        @keyframes jianlian-squash-rebound {
+          0% {
+            transform: scale(var(--squash-sx, 1.2), var(--squash-sy, 0.75));
+          }
+          38% {
+            transform: scale(0.9, 1.15);
+          }
+          65% {
+            transform: scale(1.06, 0.96);
+          }
+          84% {
+            transform: scale(0.98, 1.02);
+          }
+          100% {
+            transform: scale(1, 1);
+          }
+        }
+        @keyframes jianlian-shadow-impact {
+          0% {
+            transform: scale(0.7);
+            opacity: 0.16;
+          }
+          38% {
+            transform: scale(1.3);
+            opacity: 0.38;
+          }
+          65% {
+            transform: scale(0.85);
+            opacity: 0.18;
+          }
+          82% {
+            transform: scale(1.08);
+            opacity: 0.28;
+          }
+          100% {
+            transform: scale(0.6);
+            opacity: 0;
           }
         }
       `}</style>
@@ -1054,74 +1143,78 @@ export default function AnimatedCharacters({
               : "none",
           }}
         >
-          {/* Ground Shadows for Plucked / Lifted Characters */}
-          {draggingChar === "purple" && dragPhysics.liftY > 4 && (
+          {/* Ground Shadows for Plucked / Lifted Characters & Drop Landing Impact */}
+          {((draggingChar === "purple" && dragPhysics.liftY > 4) || droppingChar === "purple") && (
             <div
               style={{
                 position: "absolute",
                 bottom: "-4px",
-                left: `${70 + 25 + dragPhysics.shiftX * 0.25}px`,
+                left: `${70 + 25 + (draggingChar === "purple" ? dragPhysics.shiftX * 0.25 : dropParams.shift * 0.25)}px`,
                 width: "130px",
                 height: "12px",
                 borderRadius: "50%",
                 backgroundColor: "rgba(88, 43, 224, 0.28)",
                 filter: "blur(4px)",
-                transform: `scale(${Math.max(0.45, 1 - dragPhysics.liftY * 0.005)})`,
-                opacity: Math.max(0.15, 0.6 - dragPhysics.liftY * 0.003),
+                transform: droppingChar === "purple" ? undefined : `scale(${Math.max(0.45, 1 - dragPhysics.liftY * 0.005)})`,
+                opacity: droppingChar === "purple" ? undefined : Math.max(0.15, 0.6 - dragPhysics.liftY * 0.003),
+                animation: droppingChar === "purple" ? "jianlian-shadow-impact 0.75s ease-out both" : "none",
                 pointerEvents: "none",
                 zIndex: 0,
               }}
             />
           )}
-          {draggingChar === "black" && dragPhysics.liftY > 4 && (
+          {((draggingChar === "black" && dragPhysics.liftY > 4) || droppingChar === "black") && (
             <div
               style={{
                 position: "absolute",
                 bottom: "-4px",
-                left: `${240 + 16 + dragPhysics.shiftX * 0.25}px`,
+                left: `${240 + 16 + (draggingChar === "black" ? dragPhysics.shiftX * 0.25 : dropParams.shift * 0.25)}px`,
                 width: "90px",
                 height: "12px",
                 borderRadius: "50%",
                 backgroundColor: "rgba(0, 0, 0, 0.25)",
                 filter: "blur(4px)",
-                transform: `scale(${Math.max(0.45, 1 - dragPhysics.liftY * 0.005)})`,
-                opacity: Math.max(0.15, 0.6 - dragPhysics.liftY * 0.003),
+                transform: droppingChar === "black" ? undefined : `scale(${Math.max(0.45, 1 - dragPhysics.liftY * 0.005)})`,
+                opacity: droppingChar === "black" ? undefined : Math.max(0.15, 0.6 - dragPhysics.liftY * 0.003),
+                animation: droppingChar === "black" ? "jianlian-shadow-impact 0.75s ease-out both" : "none",
                 pointerEvents: "none",
                 zIndex: 0,
               }}
             />
           )}
-          {draggingChar === "orange" && dragPhysics.liftY > 4 && (
+          {((draggingChar === "orange" && dragPhysics.liftY > 4) || droppingChar === "orange") && (
             <div
               style={{
                 position: "absolute",
                 bottom: "-4px",
-                left: `${0 + 40 + dragPhysics.shiftX * 0.25}px`,
+                left: `${0 + 40 + (draggingChar === "orange" ? dragPhysics.shiftX * 0.25 : dropParams.shift * 0.25)}px`,
                 width: "160px",
                 height: "12px",
                 borderRadius: "50%",
                 backgroundColor: "rgba(240, 121, 60, 0.28)",
                 filter: "blur(4px)",
-                transform: `scale(${Math.max(0.45, 1 - dragPhysics.liftY * 0.005)})`,
-                opacity: Math.max(0.15, 0.6 - dragPhysics.liftY * 0.003),
+                transform: droppingChar === "orange" ? undefined : `scale(${Math.max(0.45, 1 - dragPhysics.liftY * 0.005)})`,
+                opacity: droppingChar === "orange" ? undefined : Math.max(0.15, 0.6 - dragPhysics.liftY * 0.003),
+                animation: droppingChar === "orange" ? "jianlian-shadow-impact 0.75s ease-out both" : "none",
                 pointerEvents: "none",
                 zIndex: 0,
               }}
             />
           )}
-          {draggingChar === "yellow" && dragPhysics.liftY > 4 && (
+          {((draggingChar === "yellow" && dragPhysics.liftY > 4) || droppingChar === "yellow") && (
             <div
               style={{
                 position: "absolute",
                 bottom: "-4px",
-                left: `${310 + 20 + dragPhysics.shiftX * 0.25}px`,
+                left: `${310 + 20 + (draggingChar === "yellow" ? dragPhysics.shiftX * 0.25 : dropParams.shift * 0.25)}px`,
                 width: "102px",
                 height: "12px",
                 borderRadius: "50%",
                 backgroundColor: "rgba(223, 198, 54, 0.3)",
                 filter: "blur(4px)",
-                transform: `scale(${Math.max(0.45, 1 - dragPhysics.liftY * 0.005)})`,
-                opacity: Math.max(0.15, 0.6 - dragPhysics.liftY * 0.003),
+                transform: droppingChar === "yellow" ? undefined : `scale(${Math.max(0.45, 1 - dragPhysics.liftY * 0.005)})`,
+                opacity: droppingChar === "yellow" ? undefined : Math.max(0.15, 0.6 - dragPhysics.liftY * 0.003),
+                animation: droppingChar === "yellow" ? "jianlian-shadow-impact 0.75s ease-out both" : "none",
                 pointerEvents: "none",
                 zIndex: 0,
               }}
@@ -1174,8 +1267,14 @@ export default function AnimatedCharacters({
               boxShadow:
                 "inset 0 4px 10px rgba(255,255,255,0.34), inset -6px 0 14px rgba(45,14,130,0.22), 0 -4px 24px rgba(108,63,245,0.18)",
               zIndex: 1,
-              transformOrigin: draggingChar === "purple" ? "center 20%" : "bottom center",
-              transition: draggingChar === "purple" ? "none" : "all 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              transformOrigin:
+                draggingChar === "purple" && dragPhysics.isLifted
+                  ? "50% 12%"
+                  : "bottom center",
+              transition:
+                draggingChar === "purple"
+                  ? "none"
+                  : "all 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)",
               transform: getCharTransform(
                 "purple",
                 poked.purple
@@ -1188,13 +1287,19 @@ export default function AnimatedCharacters({
                         ? `skewX(${(purplePos.bodySkew || 0) - 12}deg) translateX(40px)`
                         : `skewX(${purplePos.bodySkew || 0}deg)`
               ),
-              animation: droppingChar === "purple"
-                ? "jianlian-drop-land 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
-                : reboundingChar === "purple"
-                  ? "jianlian-jelly-rebound 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
-                  : "none",
+              animation:
+                droppingChar === "purple"
+                  ? "jianlian-drop-land 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                  : squashReboundingChar === "purple"
+                    ? "jianlian-squash-rebound 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                    : reboundingChar === "purple"
+                      ? "jianlian-jelly-rebound 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
+                      : "none",
               ["--drop-lift" as string]: dropParams.lift,
+              ["--drop-shift" as string]: dropParams.shift,
               ["--drop-angle" as string]: dropParams.angle,
+              ["--squash-sx" as string]: squashParams.sx,
+              ["--squash-sy" as string]: squashParams.sy,
             }}
           >
             {/* Eyes */}
@@ -1275,61 +1380,71 @@ export default function AnimatedCharacters({
               <div className="h-2.5 w-4 rounded-full bg-pink-300 blur-[1.5px]" />
             </div>
 
-            {/* Purple Mouth */}
+            {/* Purple Mouth - Upgraded to Organic Vector SVG with Expressive Lips & Tongue */}
             <div
               style={{
                 position: "absolute",
-                backgroundColor: "#231F20",
                 left: isRevealingPassword
-                  ? "72px"
+                  ? "70px"
                   : isLookingAtEachOther
-                    ? "106px"
-                    : `${97 + purplePos.faceX}px`,
+                    ? "104px"
+                    : `${94 + purplePos.faceX}px`,
                 top: activeFailPose
-                  ? "74px"
+                  ? "72px"
                   : isRevealingPassword
-                    ? "57px"
+                    ? "55px"
                     : isLookingAtEachOther
-                      ? "82px"
-                      : `${58 + purplePos.faceY}px`,
-                width:
-                  draggingChar === "purple" && dragPhysics.isLifted
-                    ? "20px"
-                    : loginSuccess || poked.purple
-                      ? "30px"
-                      : (isTyping || isHidingPassword) && !activeFailPose
-                        ? "8px"
-                        : "24px",
-                height:
-                  draggingChar === "purple" && dragPhysics.isLifted
-                    ? "22px"
-                    : loginSuccess || poked.purple
-                      ? "16px"
-                      : (isTyping || isHidingPassword) && !activeFailPose
-                        ? "30px"
-                        : "9px",
-                borderRadius:
-                  draggingChar === "purple" && dragPhysics.isLifted
-                    ? "50%"
-                    : activeFailPose
-                      ? "12px 12px 0 0"
-                      : loginSuccess || poked.purple
-                        ? "0 0 15px 15px"
-                        : isTyping || isHidingPassword
-                          ? "4px"
-                          : "0 0 12px 12px",
-                transform:
-                  draggingChar === "purple" && dragPhysics.isLifted
-                    ? "translateX(2px)"
-                    : (isTyping || isHidingPassword) &&
-                      !activeFailPose &&
-                      !loginSuccess &&
-                      !poked.purple
-                      ? `translateX(13.5px) translateY(-26px) skewX(${-((purplePos.bodySkew || 0) - 12)}deg)`
-                      : "none",
+                      ? "80px"
+                      : `${56 + purplePos.faceY}px`,
                 transition: "all 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
-            />
+            >
+              <svg width="34" height="22" viewBox="0 0 34 22">
+                {draggingChar === "purple" && dragPhysics.isLifted ? (
+                  <>
+                    <ellipse cx="17" cy="11" rx="8" ry="10" fill="#231F20" />
+                    <ellipse cx="17" cy="15.5" rx="5" ry="3.5" fill="#FF6584" opacity="0.9" />
+                  </>
+                ) : activeFailPose ? (
+                  <path
+                    d="M 5 15 Q 17 5, 29 15"
+                    stroke="#231F20"
+                    strokeWidth="3.2"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                ) : loginSuccess || poked.purple ? (
+                  <>
+                    <path d="M 3 5 Q 17 21, 31 5 Q 17 8, 3 5 Z" fill="#231F20" />
+                    <path d="M 9 12 Q 17 8, 25 12 Q 17 20, 9 12 Z" fill="#FF6584" />
+                  </>
+                ) : isPurplePeeking ? (
+                  <>
+                    <path
+                      d="M 5 7 Q 17 18, 29 8"
+                      stroke="#231F20"
+                      strokeWidth="3"
+                      fill="none"
+                      strokeLinecap="round"
+                    />
+                    <path d="M 17 11 Q 23 11, 24 16 Q 19 18, 15 15 Z" fill="#FF6584" />
+                  </>
+                ) : isTyping || isHidingPassword ? (
+                  <path
+                    d="M 9 11 Q 17 15, 25 11"
+                    stroke="#231F20"
+                    strokeWidth="2.8"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                ) : (
+                  <>
+                    <path d="M 5 6 Q 17 18, 29 6 Q 17 8, 5 6 Z" fill="#231F20" />
+                    <path d="M 10 11 Q 17 8, 24 11 Q 17 17, 10 11 Z" fill="#FF6584" opacity="0.9" />
+                  </>
+                )}
+              </svg>
+            </div>
           </div>
 
           {/* 2. Black Tall Character (Beautified Soft Matte Charcoal) */}
@@ -1352,8 +1467,14 @@ export default function AnimatedCharacters({
               boxShadow:
                 "inset 0 3px 8px rgba(255,255,255,0.18), inset -5px 0 12px rgba(0,0,0,0.35), -4px 0 20px rgba(0,0,0,0.16)",
               zIndex: 2,
-              transformOrigin: draggingChar === "black" ? "center 20%" : "bottom center",
-              transition: draggingChar === "black" ? "none" : "all 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              transformOrigin:
+                draggingChar === "black" && dragPhysics.isLifted
+                  ? "50% 12%"
+                  : "bottom center",
+              transition:
+                draggingChar === "black"
+                  ? "none"
+                  : "all 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)",
               transform: getCharTransform(
                 "black",
                 poked.black
@@ -1368,13 +1489,19 @@ export default function AnimatedCharacters({
                           ? `skewX(${(blackPos.bodySkew || 0) * 1.5}deg)`
                           : `skewX(${blackPos.bodySkew || 0}deg)`
               ),
-              animation: droppingChar === "black"
-                ? "jianlian-drop-land 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
-                : reboundingChar === "black"
-                  ? "jianlian-jelly-rebound 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
-                  : "none",
+              animation:
+                droppingChar === "black"
+                  ? "jianlian-drop-land 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                  : squashReboundingChar === "black"
+                    ? "jianlian-squash-rebound 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                    : reboundingChar === "black"
+                      ? "jianlian-jelly-rebound 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
+                      : "none",
               ["--drop-lift" as string]: dropParams.lift,
+              ["--drop-shift" as string]: dropParams.shift,
               ["--drop-angle" as string]: dropParams.angle,
+              ["--squash-sx" as string]: squashParams.sx,
+              ["--squash-sy" as string]: squashParams.sy,
             }}
           >
             <div
@@ -1444,8 +1571,14 @@ export default function AnimatedCharacters({
               boxShadow:
                 "inset 0 4px 12px rgba(255,255,255,0.42), inset -6px 0 14px rgba(180,65,15,0.18), 0 -4px 20px rgba(240,121,60,0.2)",
               zIndex: 3,
-              transformOrigin: draggingChar === "orange" ? "center 30%" : "bottom center",
-              transition: draggingChar === "orange" ? "none" : "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              transformOrigin:
+                draggingChar === "orange" && dragPhysics.isLifted
+                  ? "50% 15%"
+                  : "bottom center",
+              transition:
+                draggingChar === "orange"
+                  ? "none"
+                  : "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
               transform: getCharTransform(
                 "orange",
                 poked.orange
@@ -1456,13 +1589,19 @@ export default function AnimatedCharacters({
                       ? "skewX(0deg)"
                       : `skewX(${orangePos.bodySkew || 0}deg)`
               ),
-              animation: droppingChar === "orange"
-                ? "jianlian-drop-land 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
-                : reboundingChar === "orange"
-                  ? "jianlian-jelly-rebound 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
-                  : "none",
+              animation:
+                droppingChar === "orange"
+                  ? "jianlian-drop-land 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                  : squashReboundingChar === "orange"
+                    ? "jianlian-squash-rebound 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                    : reboundingChar === "orange"
+                      ? "jianlian-jelly-rebound 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
+                      : "none",
               ["--drop-lift" as string]: dropParams.lift,
+              ["--drop-shift" as string]: dropParams.shift,
               ["--drop-angle" as string]: dropParams.angle,
+              ["--squash-sx" as string]: squashParams.sx,
+              ["--squash-sy" as string]: squashParams.sy,
             }}
           >
             {/* Orange Eyes: Upgraded to High-Definition EyeBall with Dual Micro-Highlights */}
@@ -1477,6 +1616,10 @@ export default function AnimatedCharacters({
                   : isRevealingPassword
                     ? "55px"
                     : `${58 + orangePos.faceY}px`,
+                transform:
+                  draggingChar === "orange" && dragPhysics.isSquashed
+                    ? "scale(1.22, 0.42)"
+                    : "none",
                 transition: draggingChar === "orange" ? "none" : "all 0.12s ease-out",
               }}
             >
@@ -1518,7 +1661,16 @@ export default function AnimatedCharacters({
                   : isRevealingPassword
                     ? "72px"
                     : `${76 + orangePos.faceY}px`,
-                opacity: activeFailPose ? 0.2 : 0.6,
+                opacity:
+                  draggingChar === "orange" && dragPhysics.isSquashed
+                    ? 0.95
+                    : activeFailPose
+                      ? 0.2
+                      : 0.6,
+                transform:
+                  draggingChar === "orange" && dragPhysics.isSquashed
+                    ? "scale(1.35, 1.1)"
+                    : "none",
                 pointerEvents: "none",
                 transition: draggingChar === "orange" ? "none" : "all 0.12s ease-out",
               }}
@@ -1527,42 +1679,16 @@ export default function AnimatedCharacters({
               <div className="h-2.5 w-4 rounded-full bg-rose-500/55 blur-[1.5px]" />
             </div>
 
+            {/* Orange Mouth - Upgraded to Expressive Multi-Layer SVG Vector with Lips & Tongue */}
             <div
               style={{
                 position: "absolute",
-                backgroundColor: "#231F20",
-                left: isRevealingPassword ? "94px" : `${122 + orangePos.faceX}px`,
+                left: isRevealingPassword ? "90px" : `${117 + orangePos.faceX}px`,
                 top: activeFailPose
-                  ? "98px"
+                  ? "94px"
                   : isRevealingPassword
-                    ? "87px"
-                    : `${90 + orangePos.faceY}px`,
-                width:
-                  (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
-                    ? "16px"
-                    : loginSuccess || poked.orange
-                      ? "32px"
-                      : (isTyping || isHidingPassword) && !activeFailPose
-                        ? "14px"
-                        : "26px",
-                height:
-                  (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
-                    ? "16px"
-                    : loginSuccess || poked.orange
-                      ? "18px"
-                      : (isTyping || isHidingPassword) && !activeFailPose
-                        ? "14px"
-                        : "13px",
-                borderRadius:
-                  (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
-                    ? "50%"
-                    : activeFailPose
-                      ? "13px 13px 0 0"
-                      : loginSuccess || poked.orange
-                        ? "0 0 16px 16px"
-                        : isTyping || isHidingPassword
-                          ? "50%"
-                          : "0 0 13px 13px",
+                    ? "84px"
+                    : `${86 + orangePos.faceY}px`,
                 transform:
                   (isTyping || isHidingPassword) &&
                   !activeFailPose &&
@@ -1573,7 +1699,47 @@ export default function AnimatedCharacters({
                     : "none",
                 transition: "all 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
-            />
+            >
+              <svg width="36" height="24" viewBox="0 0 36 24">
+                {draggingChar === "orange" && dragPhysics.isSquashed ? (
+                  <path
+                    d="M 4 11 Q 12 17, 20 11 Q 28 6, 33 11"
+                    stroke="#231F20"
+                    strokeWidth="3.2"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                ) : (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted ? (
+                  <>
+                    <ellipse cx="18" cy="11.5" rx="8" ry="10" fill="#231F20" />
+                    <ellipse cx="18" cy="16" rx="4.8" ry="3.5" fill="#FF6584" opacity="0.9" />
+                  </>
+                ) : activeFailPose ? (
+                  <path
+                    d="M 6 16 Q 18 6, 30 16"
+                    stroke="#231F20"
+                    strokeWidth="3.2"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                ) : loginSuccess || poked.orange ? (
+                  <>
+                    <path d="M 3 6 Q 18 23, 33 6 Q 18 8, 3 6 Z" fill="#231F20" />
+                    <path d="M 9 13 Q 18 9, 27 13 Q 18 22, 9 13 Z" fill="#FF6584" />
+                  </>
+                ) : isTyping || isHidingPassword ? (
+                  <>
+                    <ellipse cx="18" cy="11" rx="5.5" ry="6.5" fill="#231F20" />
+                    <ellipse cx="18" cy="14" rx="3.5" ry="2.2" fill="#FF6584" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M 6 6 Q 18 19, 30 6 Q 18 8, 6 6 Z" fill="#231F20" />
+                    <path d="M 11 12 Q 18 9, 25 12 Q 18 18, 11 12 Z" fill="#FF6584" />
+                  </>
+                )}
+              </svg>
+            </div>
           </div>
 
           {/* 4. Yellow Rounded Character (Beautified Warm Golden Pill) */}
@@ -1596,8 +1762,14 @@ export default function AnimatedCharacters({
               boxShadow:
                 "inset 0 4px 10px rgba(255,255,255,0.48), inset -6px 0 14px rgba(170,135,10,0.2), -4px 0 18px rgba(0,0,0,0.1)",
               zIndex: 4,
-              transformOrigin: draggingChar === "yellow" ? "center 25%" : "bottom center",
-              transition: draggingChar === "yellow" ? "none" : "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              transformOrigin:
+                draggingChar === "yellow" && dragPhysics.isLifted
+                  ? "50% 15%"
+                  : "bottom center",
+              transition:
+                draggingChar === "yellow"
+                  ? "none"
+                  : "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
               transform: getCharTransform(
                 "yellow",
                 poked.yellow
@@ -1608,13 +1780,19 @@ export default function AnimatedCharacters({
                       ? "skewX(0deg)"
                       : `skewX(${yellowPos.bodySkew || 0}deg)`
               ),
-              animation: droppingChar === "yellow"
-                ? "jianlian-drop-land 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
-                : reboundingChar === "yellow"
-                  ? "jianlian-jelly-rebound 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
-                  : "none",
+              animation:
+                droppingChar === "yellow"
+                  ? "jianlian-drop-land 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                  : squashReboundingChar === "yellow"
+                    ? "jianlian-squash-rebound 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
+                    : reboundingChar === "yellow"
+                      ? "jianlian-jelly-rebound 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
+                      : "none",
               ["--drop-lift" as string]: dropParams.lift,
+              ["--drop-shift" as string]: dropParams.shift,
               ["--drop-angle" as string]: dropParams.angle,
+              ["--squash-sx" as string]: squashParams.sx,
+              ["--squash-sy" as string]: squashParams.sy,
             }}
           >
             <div
@@ -1628,6 +1806,10 @@ export default function AnimatedCharacters({
                   : isRevealingPassword
                     ? "35px"
                     : `${40 + yellowPos.faceY}px`,
+                transform:
+                  draggingChar === "yellow" && dragPhysics.isSquashed
+                    ? "scale(1.2, 0.4)"
+                    : "none",
                 transition: "all 0.25s cubic-bezier(0, 0, 0.2, 1)",
               }}
             >
@@ -1683,13 +1865,15 @@ export default function AnimatedCharacters({
               <svg width="80" height="20" viewBox="0 0 80 20">
                 <path
                   d={
-                    draggingChar === "yellow" && dragPhysics.isLifted
-                      ? "M0 10 Q10 16, 20 4 Q30 16, 40 4 Q50 16, 60 4 Q70 16, 80 10"
-                      : activeFailPose
-                        ? "M0 10 Q10 2, 20 10 Q30 18, 40 10 Q50 2, 60 10 Q70 18, 80 10"
-                        : loginSuccess || poked.yellow
-                          ? "M0 2 Q10 10, 20 14 Q30 18, 40 18 Q50 18, 60 14 Q70 10, 80 2"
-                          : "M0 10 Q10 10, 20 10 Q30 10, 40 10 Q50 10, 60 10 Q70 10, 80 10"
+                    draggingChar === "yellow" && dragPhysics.isSquashed
+                      ? "M0 10 Q10 14, 20 6 Q30 14, 40 6 Q50 14, 60 6 Q70 14, 80 10"
+                      : draggingChar === "yellow" && dragPhysics.isLifted
+                        ? "M0 10 Q10 16, 20 4 Q30 16, 40 4 Q50 16, 60 4 Q70 16, 80 10"
+                        : activeFailPose
+                          ? "M0 10 Q10 2, 20 10 Q30 18, 40 10 Q50 2, 60 10 Q70 18, 80 10"
+                          : loginSuccess || poked.yellow
+                            ? "M0 2 Q10 10, 20 14 Q30 18, 40 18 Q50 18, 60 14 Q70 10, 80 2"
+                            : "M0 10 Q10 10, 20 10 Q30 10, 40 10 Q50 10, 60 10 Q70 10, 80 10"
                   }
                   stroke="#231F20"
                   strokeWidth="3.2"

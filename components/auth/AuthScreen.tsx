@@ -86,6 +86,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [showWhiteRipple, setShowWhiteRipple] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -145,6 +146,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         }
       }
       setLoginSuccess(true);
+      setShowWhiteRipple(true);
       toast.success("邮箱已验证，注册完成。");
       forgetPendingSignup();
       router.replace("/account");
@@ -365,9 +367,12 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       }
 
       setLoginSuccess(true);
+      setShowWhiteRipple(true);
       toast.success("登录成功，正在进入账户中心。");
-      router.push(redirectTo);
-      router.refresh();
+      setTimeout(() => {
+        router.push(redirectTo);
+        router.refresh();
+      }, 500);
     } catch (authException) {
       console.warn("[Supabase Auth] Network or runtime exception");
       setError(getSafeNetworkAuthMessage(authException));
@@ -686,6 +691,50 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           </section>
         </div>
       </div>
+
+      {/* Pure White Ripple Overlay on Successful Login */}
+      {showWhiteRipple && (
+        <div
+          className="pointer-events-none fixed inset-0 z-[9999] overflow-hidden"
+          aria-hidden="true"
+        >
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white/95"
+            style={{
+              width: "1400px",
+              height: "1400px",
+              boxShadow:
+                "0 0 35px 8px rgba(255, 255, 255, 0.9), inset 0 0 20px 4px rgba(255, 255, 255, 0.75)",
+              animation: "white-ripple-radiate 1.1s cubic-bezier(0.1, 0.8, 0.2, 1) forwards",
+            }}
+          />
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              width: "160px",
+              height: "160px",
+              background:
+                "radial-gradient(circle, #ffffff 0%, rgba(255, 255, 255, 0.98) 55%, rgba(255, 255, 255, 0.85) 80%, rgba(255, 255, 255, 0) 100%)",
+              boxShadow: "0 0 100px 40px rgba(255, 255, 255, 0.95)",
+              animation: "white-flood-expand 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+            }}
+          />
+          <style>{`
+            @keyframes white-ripple-radiate {
+              0% { opacity: 1; transform: translate(-50%, -50%) scale(0.02); }
+              40% { opacity: 0.9; }
+              75% { opacity: 0.45; }
+              100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+            }
+            @keyframes white-flood-expand {
+              0% { opacity: 1; transform: translate(-50%, -50%) scale(0.04); }
+              40% { opacity: 0.98; }
+              75% { opacity: 0.85; }
+              100% { opacity: 0; transform: translate(-50%, -50%) scale(40); }
+            }
+          `}</style>
+        </div>
+      )}
     </main>
   );
 }
