@@ -18,7 +18,6 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -156,11 +155,18 @@ export default function AccountSecurityPage() {
     return () => clearInterval(timer);
   }, [emailPwdCountdown]);
 
-  // Load current user
+  // Load current user (fast local session first, then remote verification)
   useEffect(() => {
     async function loadCurrentUser() {
       try {
         const supabase = getSupabaseBrowserClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.user) {
+          if (sessionData.session.user.email) setUserEmail(sessionData.session.user.email);
+          if (sessionData.session.user.last_sign_in_at) setLastSignInAt(sessionData.session.user.last_sign_in_at);
+          if (sessionData.session.user.created_at) setCreatedAt(sessionData.session.user.created_at);
+          setLoadingUser(false);
+        }
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -421,64 +427,6 @@ export default function AccountSecurityPage() {
     return evaluatePasswordChecks(pwd);
   }, [activeTab, emailPwdForm.newPassword, oldPwdForm.newPassword]);
 
-  const guideSteps = useMemo(() => {
-    if (activeTab === "change-email") {
-      return [
-        {
-          step: "STEP 01",
-          title: "核验原绑定邮箱身份",
-          desc: "点击「获取验证码」向当前绑定邮箱发送 6 位安全验证码，确认由账号持有人本人发起操作。",
-        },
-        {
-          step: "STEP 02",
-          title: "验证新邮箱收信能力",
-          desc: "输入新的目标邮箱并点击「发送验证码」，确保新邮箱真实有效且能正常接收简联系统通知。",
-        },
-        {
-          step: "STEP 03",
-          title: "双向核验通过即时换绑",
-          desc: "提交后系统立即完成换绑，后续订单回执、卡密交付与安全通知将自动同步至新邮箱。",
-        },
-      ];
-    }
-    if (activeTab === "email-password") {
-      return [
-        {
-          step: "STEP 01",
-          title: "发送邮箱改密验证码",
-          desc: "系统向您的注册邮箱发送 6 位一次性安全动态码（10 分钟内有效），无需记忆旧密码。",
-        },
-        {
-          step: "STEP 02",
-          title: "设定高强度新登录密码",
-          desc: "新密码需至少 8 位（推荐 12 位以上）并同时包含字母与数字，避免与其他平台密码混用。",
-        },
-        {
-          step: "STEP 03",
-          title: "全局会话重置保护",
-          desc: "密码修改成功后将自动注销所有旧设备登录会话，请使用新密码重新登录以确保账户安全。",
-        },
-      ];
-    }
-    return [
-      {
-        step: "STEP 01",
-        title: "核验当前使用的原密码",
-        desc: "输入您当前正在使用的登录密码完成本地身份核验，适合记得原密码时的日常定期轮换。",
-      },
-      {
-        step: "STEP 02",
-        title: "设置差异化新密码",
-        desc: "新密码不可与原密码相同，且需同时包含字母和数字；建议每 90 天定期更新一次密码。",
-      },
-      {
-        step: "STEP 03",
-        title: "清理旧会话并重新登录",
-        desc: "提交修改后系统将即时更新密钥并退出当前登录态，重新登录后即可正常访问全部服务。",
-      },
-    ];
-  }, [activeTab]);
-
   const primaryActionBtnClass =
     "bg-gradient-to-br from-[#df7c3f] to-[#d66b2c] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_6px_14px_-6px_rgba(181,118,66,0.55)] hover:from-[#e58549] hover:to-[#c96022] active:translate-y-[0.5px] disabled:opacity-60 border-0";
 
@@ -506,9 +454,6 @@ export default function AccountSecurityPage() {
                 <CardTitle className="text-lg sm:text-xl">账号安全设置</CardTitle>
                 <span className={styles.pill}>双重验证防护中</span>
               </div>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                全方位保护您的账号与余额资产安全，支持双向邮箱验证码核验与多维度密码管理。
-              </p>
             </div>
           </div>
 
@@ -652,7 +597,7 @@ export default function AccountSecurityPage() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitChangeEmail} autoComplete="off" className={`${styles.formGroup} space-y-5`}>
+              <form onSubmit={handleSubmitChangeEmail} autoComplete="off" className="space-y-5">
                 {/* 1. 当前绑定邮箱 (点击可复制到剪贴板，匹配参考图2) */}
                 <div className={styles.field}>
                   <div className="flex items-center justify-between">
@@ -847,7 +792,7 @@ export default function AccountSecurityPage() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitEmailPwd} autoComplete="off" className={`${styles.formGroup} space-y-5`}>
+              <form onSubmit={handleSubmitEmailPwd} autoComplete="off" className="space-y-5">
                 {/* Hidden username anchor to prevent browser password manager from autofilling the OTP input */}
                 <input
                   type="text"
@@ -1054,16 +999,13 @@ export default function AccountSecurityPage() {
                     <h2 className="text-lg font-bold text-slate-900">原密码改密码</h2>
                     <span className={styles.pill}>即时验证</span>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    输入当前登录密码完成身份核验后，立即更新为新密码
-                  </p>
                 </div>
                 <span className={`${glass.icon} h-10 w-10`}>
                   <KeyRound className="h-5 w-5" strokeWidth={1.7} />
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitOldPwd} autoComplete="off" className={`${styles.formGroup} space-y-5`}>
+              <form onSubmit={handleSubmitOldPwd} autoComplete="off" className="space-y-5">
                 <input
                   type="text"
                   name="username"
@@ -1222,46 +1164,6 @@ export default function AccountSecurityPage() {
 
         {/* RIGHT COLUMN: Contextual Step-by-Step Guide & Security Protection Checklist */}
         <div className="flex min-w-0 flex-col gap-4">
-          {/* Card A: Dynamic Operation Flow Guide */}
-          <section className={`${glass.surface} ${styles.panel} p-5 sm:p-6`}>
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <span className={`${glass.icon} h-9 w-9`}>
-                  <Sparkles className="h-4 w-4" strokeWidth={1.7} />
-                </span>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">当前操作流程说明</h3>
-                  <p className="text-xs text-slate-500">
-                    {SECURITY_TABS.find((t) => t.id === activeTab)?.label} · 3 步安全校验
-                  </p>
-                </div>
-              </div>
-              <span className={styles.pill}>操作指引</span>
-            </div>
-
-            <div className="space-y-3">
-              {guideSteps.map((item, idx) => (
-                <div
-                  key={item.step}
-                  className={`${glass.inset} rounded-2xl p-3.5 transition hover:border-[#e3c3a3]`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#c26428]">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ffecd6] text-[11px] text-[#b55d24]">
-                        {idx + 1}
-                      </span>
-                      {item.title}
-                    </span>
-                    <span className="text-[10px] font-semibold tracking-wider text-[#b99676]">
-                      {item.step}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 pl-6 text-xs leading-5 text-slate-600">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
           {/* Card B: Security Best Practices & Quick Navigation */}
           <section className={`${glass.surface} ${styles.panel} flex-1 p-5 sm:p-6`}>
             <div className="mb-3.5 flex items-center gap-2.5">

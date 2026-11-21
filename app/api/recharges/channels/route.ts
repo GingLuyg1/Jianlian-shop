@@ -16,8 +16,16 @@ import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase
 
 export const dynamic = "force-dynamic";
 
+// Public, non-personal projection: a short in-process cache avoids a database
+// round trip for every page that prefetches channels.
+const CHANNEL_CACHE_TTL_MS = 15_000;
+let channelCache: { body: { channels: unknown[] }; expiresAt: number } | null = null;
+
 export async function GET() {
   const requestId = randomUUID();
+  if (channelCache && Date.now() < channelCache.expiresAt) {
+    return NextResponse.json(channelCache.body);
+  }
   if (!hasSupabaseServerConfig()) {
     const publicError = getSafePublicPaymentChannelError(
       "service_unavailable",
@@ -68,7 +76,9 @@ export async function GET() {
         providerExternalFeeDisclosure: capability.providerExternalFeeDisclosure ?? undefined,
       };
     });
-    return NextResponse.json({ channels: effectiveChannels });
+    const body = { channels: effectiveChannels };
+    channelCache = { body, expiresAt: Date.now() + CHANNEL_CACHE_TTL_MS };
+    return NextResponse.json(body);
   } catch (error) {
     const schemaMissing = isPaymentSchemaUnavailable(error);
     const publicError = getSafePublicPaymentChannelError(

@@ -33,13 +33,21 @@ function getSettingRawValue(row: { setting_value?: unknown } | undefined) {
   return value;
 }
 
+let maintenanceCache: { enabled: boolean; expiresAt: number } | null = null;
+const MAINTENANCE_CACHE_TTL_MS = 15_000;
+
 async function isMaintenanceEnabled(supabase: ReturnType<typeof createServerClient>) {
+  const now = Date.now();
+  if (maintenanceCache && now < maintenanceCache.expiresAt) {
+    return maintenanceCache.enabled;
+  }
+
   const { data, error } = await supabase
     .from("site_settings")
     .select("setting_key,setting_value")
     .in("setting_key", ["maintenance_enabled", "site_status"]);
 
-  if (error) return false;
+  if (error) return maintenanceCache?.enabled ?? false;
   const rows = new Map(
     ((data ?? []) as { setting_key?: unknown; setting_value?: unknown }[]).map((row) => [
       String(row.setting_key),
@@ -48,12 +56,14 @@ async function isMaintenanceEnabled(supabase: ReturnType<typeof createServerClie
   );
   const enabled = getSettingRawValue(rows.get("maintenance_enabled"));
   const status = getSettingRawValue(rows.get("site_status"));
-  return enabled === true || enabled === "true" || enabled === "1" || status === "maintenance";
+  const isEnabled = enabled === true || enabled === "true" || enabled === "1" || status === "maintenance";
+  maintenanceCache = { enabled: isEnabled, expiresAt: now + MAINTENANCE_CACHE_TTL_MS };
+  return isEnabled;
 }
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  if (isStaticAssetPath(pathname)) return NextResponse.next();
+  if (isStaticAssetPath(pathname) || pathname.startsWith("/api/")) return NextResponse.next();
 
   let response = NextResponse.next({ request: { headers: request.headers } });
 
@@ -74,19 +84,21 @@ export async function middleware(request: NextRequest) {
       },
     });
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
     // Only the orders page shell is public so it can render its sign-in cover.
     // All order data APIs and every other protected account/admin route retain authentication.
     const requiresAuth = pathname === "/account" || (pathname.startsWith("/account/") && pathname !== "/account/orders") || pathname === "/admin" || pathname.startsWith("/admin/");
-    if (requiresAuth && !user) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/login";
-      loginUrl.search = "";
-      loginUrl.searchParams.set("redirect", `${pathname}${request.nextUrl.search}`);
-      return NextResponse.redirect(loginUrl);
+    if (requiresAuth) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        const loginUrl = request.nextUrl.clone();
+        loginUrl.pathname = "/login";
+        loginUrl.search = "";
+        loginUrl.searchParams.set("redirect", `${pathname}${request.nextUrl.search}`);
+        return NextResponse.redirect(loginUrl);
+      }
     }
 
     if (!isMaintenanceBypassPath(pathname) && (await isMaintenanceEnabled(supabase))) {

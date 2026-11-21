@@ -28,13 +28,15 @@ const STATUS_LABELS: Record<string, string> = {
   failed: "失败",
 };
 
+let cachedPrivacySummary: PrivacySummary | null = null;
+
 function makeClientRequestId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 export default function AccountPrivacyPage() {
-  const [summary, setSummary] = useState<PrivacySummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<PrivacySummary | null>(() => cachedPrivacySummary);
+  const [loading, setLoading] = useState(() => !cachedPrivacySummary);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -45,12 +47,13 @@ export default function AccountPrivacyPage() {
   const [reason, setReason] = useState("");
 
   async function loadSummary() {
-    setLoading(true);
+    if (!cachedPrivacySummary) setLoading(true);
     setError(null);
     try {
       const response = await fetch("/api/account/privacy", { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "隐私设置读取失败");
+      cachedPrivacySummary = payload;
       setSummary(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "隐私设置读取失败");
@@ -174,10 +177,7 @@ export default function AccountPrivacyPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-6">
         {error ? <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button type="button" className="shrink-0 underline underline-offset-4" onClick={loadSummary}>重试</button></div> : null}
-        {loading ? (
-          <div className="h-64 animate-pulse rounded-xl bg-orange-50" />
-        ) : (
-          <div className="space-y-5">
+        <div className="space-y-5">
             <section className="grid gap-3 md:grid-cols-4">
               {[
                 ["订单", counts.orders],
@@ -187,7 +187,7 @@ export default function AccountPrivacyPage() {
               ].map(([label, value]) => (
                 <div key={String(label)} className={`${glass.inset} rounded-xl p-4`}>
                   <p className="text-sm text-slate-500">{label}</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">{value ?? "—"}</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-950">{loading && value === undefined ? "…" : (value ?? "—")}</p>
                 </div>
               ))}
             </section>
@@ -257,11 +257,10 @@ export default function AccountPrivacyPage() {
                     <span>{STATUS_LABELS[item.status] ?? item.status}</span>
                     <span className="text-slate-500">{item.createdAt ? new Date(item.createdAt).toLocaleString("zh-CN") : "—"}</span>
                   </div>
-                )) : <div className="rounded-lg bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">暂无隐私请求</div>}
+                )) : <div className="rounded-lg bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">{loading ? "正在读取隐私请求..." : "暂无隐私请求"}</div>}
               </div>
             </section>
           </div>
-        )}
       </div>
     </div>
   );
