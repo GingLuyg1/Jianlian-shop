@@ -47,7 +47,7 @@ export async function PATCH(
   }
   const [{ data: before }, { data: product, error: productError }] = await Promise.all([
     service.from("product_skus").select(SKU_FIELDS).eq("id", params.skuId).eq("product_id", params.id).maybeSingle(),
-    service.from("products").select("id,delivery_type").eq("id", params.id).maybeSingle(),
+    service.from("products").select("id,delivery_type,metadata").eq("id", params.id).maybeSingle(),
   ]);
   if (!before) return json({ error: "SKU 不存在", requestId }, 404);
   if (productError || !product) return json({ error: "商品不存在", code: "PRODUCT_NOT_FOUND", requestId }, 404);
