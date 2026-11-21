@@ -11,6 +11,7 @@ export function planBitrefillInvoiceSplits(input: { items: Array<Record<string, 
 export function planBitrefillInvoiceGroups(input: { items: Array<Record<string, any>> }): Array<{ request: Record<string, any>; allocations: Array<Record<string, any>> }>;
 export function normalizeBitrefillOrder(value: unknown): Record<string, any>;
 export function normalizeBitrefillInvoice(value: unknown): Record<string, any>;
+export function normalizeBitrefillReadonlyInvoice(value: unknown): Record<string, any>;
 export function normalizeBitrefillRedemption(value: unknown): { storage: "digital_delivery_secrets"; payload: Record<string, string> } | null;
 export function reconcileBitrefillInvoice(value: unknown): Record<string, any>;
 export function reconcileBitrefillInvoiceGroups(groups: Array<Record<string, any>>, authoritativeInvoices: unknown[], externalOrderBindings: Record<string, unknown>): Record<string, any>;
