@@ -1433,9 +1433,13 @@ function ProductDetailCard({
     <Card data-testid="checkout-product-detail" className="relative h-auto min-h-0 overflow-hidden lg:h-full">
       <button
         type="button"
+        data-route-loading="true"
         className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:w-9"
         onClick={() => {
-          // 点击一次立即退出返回分类列表页面，避免在详情页内多次选 SKU 导致后退打转
+          // 点击一次立即退出返回分类列表页面，触发顶部横条加载动画
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("jianlian:start-top-loading"));
+          }
           router.push(closeHref);
         }}
         aria-label="关闭下单页面"

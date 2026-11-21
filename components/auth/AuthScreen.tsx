@@ -6,9 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  CheckCircle2,
-  ShieldCheck,
-  Zap,
   Eye,
   EyeOff,
   KeyRound,
@@ -38,7 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
-import AuthCharacters from "@/components/auth/AuthCharacters";
+import AnimatedCharacters from "@/components/auth/AnimatedCharacters";
 import {
   getOrCreateProfile,
   getSupabaseBrowserClient,
@@ -103,7 +100,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   );
 
   const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [inviteCode, setInviteCode] = useState(inviteFromUrl);
@@ -128,9 +124,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   useEffect(() => {
     if (!isRegister) return;
     try {
-      const pending = decodePendingSignup(
-        window.sessionStorage.getItem(PENDING_SIGNUP_KEY)
-      );
+      const pending = decodePendingSignup(window.sessionStorage.getItem(PENDING_SIGNUP_KEY));
       if (pending) setRegistration(pending);
       else window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
     } catch {
@@ -180,21 +174,13 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         );
         return;
       }
-      if (
-        !data.session ||
-        data.user?.id !== registration.userId ||
-        !data.user.email_confirmed_at
-      ) {
+      if (!data.session || data.user?.id !== registration.userId || !data.user.email_confirmed_at) {
         if (data.session) await supabase.auth.signOut({ scope: "local" });
         setError("无法确认此注册，请重新开始。");
         return;
       }
       await getOrCreateProfile(supabase, data.user);
-      const restriction = await getLoginRestrictionMessage(
-        supabase,
-        data.user.id,
-        true
-      );
+      const restriction = await getLoginRestrictionMessage(supabase, data.user.id, true);
       if (restriction) {
         await supabase.auth.signOut({ scope: "local" });
         setError(restriction);
@@ -216,10 +202,8 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       toast.success("邮箱已验证，注册完成。");
       setLoginSuccess(true);
       forgetPendingSignup();
-      setTimeout(() => {
-        router.replace("/account");
-        router.refresh();
-      }, 500);
+      router.replace("/account");
+      router.refresh();
     } catch {
       await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
       setError("注册验证暂时不可用，请稍后重试。");
@@ -369,7 +353,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
 
       if (isRegister) {
         const normalizedInviteCode = inviteCode.trim().toUpperCase();
-        const normalizedDisplayName = displayName.trim();
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
@@ -380,9 +363,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
             data: {
               ...(normalizedInviteCode
                 ? { invite_code: normalizedInviteCode }
-                : {}),
-              ...(normalizedDisplayName
-                ? { display_name: normalizedDisplayName }
                 : {}),
             },
           },
@@ -521,32 +501,14 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       安全、极速、放心的全球海外原生账户与数字化服务方案
                     </p>
                   </div>
-
-                  {/* 极简高级安全与服务标签微矩阵 */}
-                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs font-semibold text-slate-600">
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-white/85 px-3 py-1 shadow-2xs">
-                      <ShieldCheck className="h-3.5 w-3.5 text-orange-500" />
-                      <span>256-bit 端到端加密</span>
-                    </div>
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-white/85 px-3 py-1 shadow-2xs">
-                      <Zap className="h-3.5 w-3.5 text-amber-500" />
-                      <span>秒级全自动交付</span>
-                    </div>
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-white/85 px-3 py-1 shadow-2xs">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                      <span>100% 正品保障</span>
-                    </div>
-                  </div>
                 </div>
 
                 {/* 卡通角色核心组件 */}
                 <div className="mt-4">
-                  <AuthCharacters
+                  <AnimatedCharacters
                     email={email}
                     mode={currentMode}
                     isTyping={isTyping}
-                    isEmailFocused={isEmailFocused}
-                    isPasswordFocused={isPasswordFocused}
                     showPassword={showPassword}
                     passwordLength={password.length}
                     loginFailed={Boolean(error)}
@@ -619,11 +581,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                   <h2 className="text-2xl font-black text-slate-900">
                     {isRegister ? "创建新账号" : "欢迎回来"}
                   </h2>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {isRegister
-                      ? "设置密码并验证邮箱，创建你的 Jianlian 账号。"
-                      : "登录成功后将进入账户中心。"}
-                  </p>
                 </div>
 
                 {registration ? (
@@ -663,33 +620,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       onSubmit={handleSubmit}
                       className="space-y-4 transition-opacity duration-200"
                     >
-                      {/* 注册专属昵称输入行：网格动画平滑向下延伸与回收 */}
-                      <div
-                        className={cn(
-                          "grid transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                          isRegister
-                            ? "grid-rows-[1fr] opacity-100"
-                            : "grid-rows-[0fr] opacity-0 pointer-events-none"
-                        )}
-                      >
-                        <div className="overflow-hidden">
-                          <div className="space-y-1.5 pb-2">
-                            <Label htmlFor="displayName">昵称（选填）</Label>
-                            <Input
-                              id="displayName"
-                              value={displayName}
-                              onChange={(event) =>
-                                setDisplayName(event.target.value)
-                              }
-                              placeholder="请输入昵称"
-                              className="h-11 rounded-xl bg-slate-50/80"
-                              autoComplete="nickname"
-                              maxLength={40}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
                       <div className="space-y-1.5">
                         <Label htmlFor="email">邮箱</Label>
                         <div className="relative">

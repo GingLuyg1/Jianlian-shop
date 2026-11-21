@@ -83,7 +83,7 @@ const PENETRATION_MATRIX = [
   {
     category: "跨境金融与商户矩阵",
     targets: [
-      { name: "Bank of America (美银)", level: "A+ 原生", note: "美国本土实体号段，秒过 Zelle 绑定与网银审核" },
+      { name: "Bank of America (美银)", level: "A+ 原生", note: "美国本土实体号段，适配 Zelle 绑定与网银审核" },
       { name: "Chase / Citi / Wells Fargo", level: "A+ 原生", note: "三大行短信验证码 100% 畅通送达" },
       { name: "美区 Stripe / PayPal / Wise", level: "A 顶级", note: "跨境电商独立站资金结算与商户二步认证" },
       { name: "Capital One / 华美 Velo", level: "A 顶级", note: "海外信用卡申请与实体卡开卡激活" },
@@ -255,7 +255,7 @@ export default function EncMobileProductDetails({ product }: EncMobileProductDet
           </div>
           <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
             <span className="text-slate-400">[ENCRYPTION]</span>
-            <span className="font-bold text-cyan-400">A5/3 + 军工级 128-bit 芯片加密</span>
+            <span className="font-bold text-cyan-400">原生硬件级 A5/3 芯片标准加密</span>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
             <span className="text-slate-400">[VOIP_ATTRIBUTE]</span>
@@ -272,7 +272,7 @@ export default function EncMobileProductDetails({ product }: EncMobileProductDet
             <span>PENETRATION_RADAR // 顶流生态穿透雷达</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900">
-            秒过 OpenAI、Claude 与全美主流银行风控
+            广泛适配 OpenAI、Claude 与全美主流银行风控
           </h2>
           <p className="text-sm text-slate-500">
             绝非随时可能失效的接码平台，真实物理实体卡，支持终身绑定与两步安全验证。
@@ -321,11 +321,11 @@ export default function EncMobileProductDetails({ product }: EncMobileProductDet
               <span>HARDWARE_DISPATCH // 实体硬件极速交付</span>
             </div>
             <h3 className="text-2xl font-black text-white">
-              现货顺丰空运 · 黑色屏蔽防静电装甲
+              默认包邮发货（加急顺丰可联系客服）
             </h3>
             <p className="max-w-xl text-xs font-medium leading-relaxed text-slate-300">
-              本商品为正品全新实体卡，采用加厚防折弯硬盒与专业铝箔防静电袋封装。
-              下单后系统自动分配顺丰单号，请在右侧准确填写收货地址、姓名与联系电话。
+              本商品为正品全新实体卡，采用加厚防折硬盒与专业防静电袋封装。
+              下单后系统自动分配快递物流单号，请在右侧准确填写收货地址、姓名与联系电话。
             </p>
           </div>
           <button
@@ -333,7 +333,7 @@ export default function EncMobileProductDetails({ product }: EncMobileProductDet
             onClick={openPublicSupport}
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-3.5 text-sm font-black text-slate-950 shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] hover:bg-emerald-400 active:scale-[0.98]"
           >
-            联系专属极客客服
+            联系专属在线客服
             <ArrowRight className="h-4 w-4" />
           </button>
         </div>

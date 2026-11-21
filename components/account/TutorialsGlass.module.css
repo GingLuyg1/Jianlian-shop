@@ -16,8 +16,9 @@
 .topicList[data-topic=twitter] { --topic-index:9; }
 .topicList[data-topic=rakuten-mobile] { --topic-index:10; }
 .topicIndicator { width:100%; height:var(--topic-height); transform:translateY(calc(var(--topic-index) * (var(--topic-height) + var(--topic-gap)))); }
-.navItem { display:flex; width:100%; height:var(--topic-height); min-width:0; align-items:center; gap:10px; border-radius:18px; padding:0 12px; color:#665749; }
-.navItem[aria-current=true] { color:#ac5624; font-weight:600; }
+.navItem { display:flex; width:100%; height:var(--topic-height); min-width:0; align-items:center; gap:10px; border-radius:18px; padding:0 12px; color:#665749; transition:all 180ms ease; }
+.navItem:hover { background:rgba(255, 245, 235, 0.6); color:#332920; }
+.navItem[aria-current=true] { background:linear-gradient(90deg, rgba(255, 238, 224, 0.95) 0%, rgba(255, 247, 239, 0.8) 100%); color:#ac5624; font-weight:700; box-shadow:inset 0 0 0 1px rgba(249, 115, 22, 0.28), 0 2px 8px rgba(185, 93, 40, 0.08); }
 .content { display:flex; min-width:0; min-height:0; flex-direction:column; overflow:hidden; }
 .header { flex-shrink:0; padding:26px 30px; border-bottom:1px solid rgb(235 216 199 / 55%); }
 .scroll { min-height:0; flex:1; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-gutter:stable; padding:28px; }
@@ -33,13 +34,15 @@
 .appleContents { margin:8px 2px 4px 14px; padding-left:9px; border-left:1px solid #ead7c5; }
 .contentsLink { display:block; width:100%; padding:6px 8px; border-radius:8px; text-align:left; font-size:13px; line-height:1.5; color:#665749; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .subtopics { position:relative; isolation:isolate; }
-.subtopics .contentsLink { position:relative; height:36px; padding:8px 10px; border-radius:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.subtopics .contentsLink[aria-current=page] { color:#ac5624; font-weight:600; }
+.subtopics .contentsLink { position:relative; height:36px; padding:8px 12px; border-radius:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:all 180ms ease; }
+.subtopics .contentsLink:hover { background:rgba(255, 245, 235, 0.5); color:#332920; }
+.subtopics .contentsLink[aria-current=page] { background:linear-gradient(90deg, rgba(255, 235, 215, 0.95) 0%, rgba(255, 247, 239, 0.75) 100%); color:#ac5624; font-weight:700; border-left:3px solid #f97316; box-shadow:0 1px 4px rgba(249, 115, 22, 0.1); }
 .subtopicIndicator { left:9px; width:calc(100% - 9px); height:36px; border-radius:12px; transform:translateY(0); }
 .subtopics[data-guide=keeper] .subtopicIndicator,
 .subtopics[data-guide=guide] .subtopicIndicator,
 .subtopics[data-guide=security] .subtopicIndicator,
 .subtopics[data-guide=binding] .subtopicIndicator,
+.subtopics[data-guide=region] .subtopicIndicator,
 .subtopics[data-guide=x-2fa] .subtopicIndicator {
   transform: translateY(36px);
 }

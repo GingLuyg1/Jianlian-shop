@@ -660,18 +660,144 @@ function TutorialsPageContent() {
         </header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
           <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : <GoogleRegionTutorial onSwitchToQrSms={() => setGoogleGuide("qr-sms")} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-7">
-            <section aria-labelledby="tutorial-service-title">
-              <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
-                <div className={`${glass.inset} rounded-2xl p-5 sm:p-6`}><span className={styles.pill}>Jianlian 数字商品服务</span><p className="mt-4 text-sm leading-7 text-slate-600">本商城提供数字账号、礼品卡、通信及相关数字商品服务。请在购买前确认商品地区、规格、使用条件与交付方式。具体商品说明优先于通用教程。</p><p className="mt-3 text-sm leading-7 text-slate-500">遇到不确定的信息，请先联系在线客服确认，避免购买不适用的商品。</p></div>
-                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">{serviceRules.map(({ title, text, icon: Icon }) => <div key={title} className={`${glass.inset} flex items-start gap-3 rounded-2xl p-4`}><Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><div><h3 className="text-sm font-semibold">{title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{text}</p></div></div>)}</div>
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : <GoogleRegionTutorial onSwitchToQrSms={() => setGoogleGuide("qr-sms")} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-6">
+            {/* 1. 平台服务说明与三大核心准则 */}
+            <section aria-labelledby="tutorial-service-title" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={`${glass.icon} h-11 w-11`}>
+                    <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h2 id="tutorial-service-title" className="text-lg font-bold text-slate-900">
+                      服务说明与交易规范
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      下单前请先核对适用范围与交付说明，保障您的账户与资产安全
+                    </p>
+                  </div>
+                </div>
+                <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/80 px-3 py-1 text-xs font-bold text-primary">
+                  官方使用指南
+                </span>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                <div className={`${glass.inset} rounded-2xl border border-orange-100/80 bg-white/80 p-5 sm:p-6 shadow-xs`}>
+                  <div className="inline-flex items-center gap-2 rounded-lg bg-orange-100/70 px-2.5 py-1 text-xs font-bold text-orange-900">
+                    Jianlian 数字商品与服务平台
+                  </div>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-700">
+                    本商城专注于提供高纯净度数字账号、海外实体 SIM 通信卡、数字礼品卡及 AI 生产力充值服务。购买前请重点确认商品的地区归属、网络环境要求、规格型号与交付方式（自动卡密直发或人工工单处理）。
+                  </p>
+                  <p className="mt-2.5 text-xs leading-relaxed text-slate-500">
+                    若商品详情页标注有专属实操说明或时效限制，其具体说明优先于本通用指南。遇到不确定的规格请先咨询客服。
+                  </p>
+                </div>
+
+                <div className="grid gap-2.5 sm:grid-cols-3 xl:grid-cols-1">
+                  {serviceRules.map(({ title, text, icon: Icon }) => (
+                    <div
+                      key={title}
+                      className="flex items-start gap-3 rounded-2xl border border-orange-100/70 bg-orange-50/40 p-3.5 transition-colors hover:bg-orange-50/70"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-primary shadow-2xs">
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-xs font-bold text-slate-900">{title}</h3>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">{text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
-            <section className="rounded-2xl border border-orange-200/70 bg-orange-50/40 p-5 sm:p-6"><h2 className="flex items-center gap-2 text-base font-semibold text-[#b96532]"><ShieldCheck className="h-5 w-5" aria-hidden="true" />合规与账户安全</h2><p className="mt-3 text-sm leading-7 text-slate-600">仅限合法用途。请勿提交涉及违法、欺诈、侵权或他人隐私的内容。不要通过公开渠道发送账号密码、卡密、验证码或支付凭证。</p></section>
-            <section aria-labelledby="tutorial-purchase-title"><div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ClipboardCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-purchase-title" className="text-lg font-semibold">购买与交付指南</h2><p className="mt-1 text-xs text-slate-500">按顺序核对，减少商品或订单信息填写错误。</p></div></div><div className="grid gap-3 sm:grid-cols-2">{steps.map(({ title, text, icon: Icon }, index) => <article key={title} className={`${glass.inset} rounded-2xl p-5`}><div className="flex items-center gap-2 text-sm font-semibold"><span className="text-xs tabular-nums text-[#b18c63]">0{index + 1}</span><Icon className="h-4 w-4 text-primary" aria-hidden="true" /><h3>{title}</h3></div><p className="mt-3 text-sm leading-7 text-slate-500">{text}</p></article>)}</div></section>
-            <section className={`${glass.inset} rounded-2xl p-5 sm:p-6`}><h2 className="text-base font-semibold">下单与售后提醒</h2><ul className="mt-4 list-disc space-y-3 pl-4 text-sm leading-7 text-slate-600">{notices.map(notice => <li key={notice}>{notice}</li>)}</ul></section>
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-orange-100 pt-5"><p className="text-sm text-slate-500">需要补货、批量购买或确认商品是否适用？</p><Button variant="outline" onClick={openPublicSupport}><Headphones className="mr-2 h-4 w-4" />联系在线客服<ArrowUpRight className="ml-2 h-4 w-4" /></Button></div>
+
+            {/* 2. 四步标准核对流程 */}
+            <section aria-labelledby="tutorial-purchase-title" className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className={`${glass.icon} h-11 w-11`}>
+                  <ClipboardCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+                </span>
+                <div>
+                  <h2 id="tutorial-purchase-title" className="text-lg font-bold text-slate-900">
+                    四步标准核对流程
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    按顺序清晰核对，有效避免信息错填与使用障碍
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3.5 sm:grid-cols-2">
+                {steps.map(({ title, text, icon: Icon }, index) => (
+                  <article
+                    key={title}
+                    className="group relative flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:border-orange-200 hover:shadow-sm"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-orange-50 text-xs font-extrabold text-primary border border-orange-200/60">
+                          0{index + 1}
+                        </span>
+                        <Icon className="h-4 w-4 text-slate-400 group-hover:text-primary transition-colors" aria-hidden="true" />
+                      </div>
+                      <h3 className="mt-3 text-sm font-bold text-slate-900">{title}</h3>
+                      <p className="mt-2 text-xs leading-relaxed text-slate-600">{text}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            {/* 3. 合规与账户安全准则 */}
+            <section className="rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-white p-5 shadow-2xs">
+              <div className="flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
+                  <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="space-y-1">
+                  <h2 className="text-sm font-bold text-amber-900">合规使用与隐私安全声明</h2>
+                  <p className="text-xs leading-relaxed text-slate-600">
+                    本站所售商品仅限合法正当的技术学习、跨境电商、科研及个人合规业务使用，严禁用于任何违反法律法规的活动。请妥善保管交付的账号密码与两步验证码，切勿在公开网络环境泄露个人凭证。
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* 4. 常见下单与售后提醒 */}
+            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-3">
+              <h2 className="text-base font-bold text-slate-900">下单与售后核心保障</h2>
+              <div className="grid gap-3 sm:grid-cols-3 pt-1">
+                {notices.map((notice, idx) => {
+                  const [tag, ...rest] = notice.split("：");
+                  return (
+                    <div key={idx} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 space-y-1.5">
+                      <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                        <span>{tag}</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-slate-500">
+                        {rest.join("：")}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* 5. 底部客服协助 */}
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-orange-100 bg-orange-50/30 p-4">
+              <p className="text-xs font-medium text-slate-600">
+                需要批量采购咨询或确认特定商品规格？
+              </p>
+              <Button size="sm" variant="outline" className="border-orange-200 bg-white hover:bg-orange-50 text-xs font-bold text-primary" onClick={openPublicSupport}>
+                <Headphones className="mr-1.5 h-3.5 w-3.5" />
+                联系在线客服
+                <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>}
           </div>
         </div>
