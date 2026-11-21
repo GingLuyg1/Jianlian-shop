@@ -1,0 +1,84 @@
+# 跨境资源网：目录超限后有界采集方案（仅离线设计，2026-11-05）
+
+## 已知事实及证据来源
+
+- 已有一次认证余额 GET 通过，CNY；**本任务不再查余额**。
+- 最新真实目录 GET `/api/open/v1/catalog/mall` 返回 HTTP 200，但在固定 262144 字节（256 KiB）读取上限触发 `KUAJINGZY_RESPONSE_TOO_LARGE`。
+- `BYTES_OBSERVED=268230` 是停止读取时已观察到的字节数，**不是**保证的完整响应长度；不能从中推定“只需把上限提升到 270 KB”。
+- 商品 ID、可售价格、库存和交付字段都没有通过真实验收，`SUITABLE_PRODUCTS=NOT_VERIFIED`。
+- 旧 `KUAJINGZY_TRANSPORT_FAILED` 已通过 PR #103 的分阶段诊断修复定位到正文体积，不再围绕网络、Token 或余额做重复排查。
+- 以上真实执行证据来自用户提供的本地 Codex 回执；受保护 Windows 路径 `D:\Jianlian\_kuajingzy_catalog_only_20261105\REPORT.md` 在本次 GitHub 操作环境不可直接读取，完整原始证据尚未独立核验。
+- 已在用户登录态 API 文档 `https://888.kuajing.one/pc/#api-docs` 看到普通 API 的 `GET /api/open/v1/catalog/mall` 接口、以及**整站**关于“分页”的通用错误提示；当前可读的文档默认停在“快速开始”面板，**未显示该目录接口自身允许的 query 参数和分页响应字段**。所以目录**支持分页尚未核实**，不能自造 `page`、`pageSize`、`limit`、`offset`、`cursor` 等参数。
+
+## 第一阶段：离线核实接口合同（无任何真实 API 请求）
+
+Codex 在现有已登录网页点击普通 API 下的「查询跨境商城目录」条目，读取该接口详情/参数表及响应示例，或者索取供应商明确的书面技术合同。只保存以下脱敏说明：
+1. 该接口是否明确支持分页（YES/NO/NOT_VERIFIED）。
+2. 每个请求参数的**文档精确名称、类型、必填/缺省和上下限**；可选分页是否改变数据形状。
+3. 响应如何标记当前页、总量及结束条件，是否有稳定排序与快照保证。
+4. 商品目录中的 ID、规格、币种、价格、库存、交付类型是否确有对应字段；有示例不等于真实可售。
+5. 是否支持只读的按商品 ID/目录类别查询以免扫全量，以及其他两种 API 协议是否提供不同的分页合约；三种协议不得混用鉴权/签名。
+
+**判定门禁：** 若该目录没有明确公开的分页合同，保持 `PAGINATION_VERIFIED=NO`，停止凭猜测发送分页查询。网页自己说明只允许文档列明的 query/body 字段。
+
+## 第二阶段：若分页合同得到官方确认，再单独实现隔离的有界只读收集器
+
+默认不替换、不放宽当前 `MAX_BODY_BYTES=262144` 的门禁。新收集器只可使用离线核实的原样路径与精确 query 参数。采用以下硬限制：
+- 固定受信 HTTPS 主机、GET-only；授权 Bearer 仅来自现有受保护密钥来源；不得记录 Cookie、密钥或原始响应。
+- 每次人工获准的执行最多 5 页、每页最多 262144 字节、会话累计最多 1048576 字节（1 MiB），并采用**两者先达到即停止**；单次请求超时 12 秒，失败不自动重试，不在同一任务重复已通过的余额 GET。
+- 分页顺序严格递增/游标只能向前；页序不推进、数据标记冲突、总量异常、重复商品或重复游标、无法识别结束条件均 Fail Closed；不能把不完整的前 N 页称作“全量目录”，更不能以此自动上架或自动下架。
+- 若供应商提供的官方结束条件确认全量完成且每页均安全解析，才能作只读汇总；若 5 页用尽但仍有下一页，返回 `PARTIAL_BOUNDED`，不执行销售或采购。
+- CNY 金额必须按精确十进制字符串核对，拒绝浮点推导、未确认汇率/折扣；仅采集字段名、记录数和经审核的 SKU 元数据，不在聊天/公开 CI 输出原始账号、卡密、邮箱、号码或全文数据。
+- 紧急停止/上游 401/403/429/5xx/格式错误：停止，不换键、不绕过限流、不改参数重试。
+- 模拟数据离线覆盖：前进/结束、重复页、字段漂移、分页上限/总字节上限、单页溢出、授权故障、敏感内容脱敏；CI 通过后才能安排**另一次**人工有界只读验收。
+
+## 若目录分页不支持或仍未核实
+
+不继续在固定全量接口上试参数、不直接把上限改成 384 KiB / 512 KiB，也不使用 Range/压缩头等未经官方合同支持的变通方式。优先问供应商技术支持是否提供：
+- 已批准账户下可用的分页、类别、单商品 GET，及精确文档；
+- 其他同一账户已开放协议的只读目录（需独立签名合同、响应结构及限流核验）；
+- 或服务器端导出/正式 API 文档允许的有限集合方式。
+
+在没有上述权威合同的情况下，记录 `CATALOG_COLLECTION_BLOCKED=UNPAGINATED_OR_UNVERIFIED` 并 STOP。若未来确证没有分页而只能读取全量，应**另行评审、授权**一个有固定绝对大小和单次次数的例外；不能凭本轮观测字节数推算完整响应大小。
+
+## 绝对禁止及最终验收
+
+当前 PR #103 继续 Draft；Production 继续运行 UI 已确认版本 `9bebcfc7b62d6bcd2211649af3774dc11ce73bee`（基于用户提供的真实部署回执）；Bitrefill #102、支付、USDT、Daju 独立主线不变。不得充值、采购、创建订单、同步生产商品、启用供应商采购开关、修改 Production DB、合并或部署本 PR。
+
+本次**唯一下一步**：Codex 离线核实 `/api/open/v1/catalog/mall` 是否支持分页，写出参数/响应字段证据和 `PAGINATION_VERIFIED`，决定是否允许启动“有界分页读取”的下一阶段开发。**本轮不得发起新真实目录 GET。**
+
+完成后更新 `D:\Jianlian\_project_handoffs\CURRENT_HANDOFF.md` 与跨境资源网独立交接；只追加本主线状态，不覆盖其他主线；输出 `PAGINATION_VERIFIED`、`DOCUMENTED_QUERY_PARAMS`、`RESPONSE_TERMINATION_CONTRACT`、`CATALOG_COLLECTION_NEXT_STEP`、`PURCHASE_EXECUTED=no`、`PRODUCTION_CHANGED=no` 和 `NEXT_ACTION=STOP`。
+
+## 2026-11-05 后续：无网络有界分页状态审计模块
+
+已实际开发 `lib/providers/kuajingzy/bounded-catalog-pages.mjs` 和 `tests/unit/kuajingzy-bounded-catalog-pages.test.mjs`。本模块**不生成 URL、不发送 API 请求、不推测分页参数、不读取/打印 API Key**；只校验后续官方分页适配器提供的标准化页摘要。
+
+内建固定门禁：最多 5 页、单页最多 262144 字节、累计最多 1048576 字节、单页最多 1000 项、合计最多 5000 项；必须顺序递增且 `hasMore` 为明确布尔值；重复商品（以内部 SHA256 摘要比较）、空页仍声明有下一页、单页超限或不确定终止一律失败或标记部分采集。只有收到显式结束标记时才会返回 COMPLETE，即使 COMPLETE 仍 `saleAuthorized=false`，不能自动上架或自动采购。
+
+本地 Node 离线 9 项模拟测试通过；GitHub 最新提交 CI 状态需要另外核对。**尚未确认跨境资源网普通 API 的 `GET /api/open/v1/catalog/mall` 支持分页**；这份离线模块不是供应商合同或真实目录验收。
+
+仍然唯一下一步：本地 Codex 通过已授权的本机浏览器**仅阅读文档**中的「普通 API → 查询跨境商城目录」接口参数表，确认 `PAGINATION_VERIFIED=YES/NO/NOT_VERIFIED`、所有允许的 query 参数、响应结束标记，并保存非敏感证据。若看不到，先询问供应商，不调用真实目录猜参数。不重新查询余额、不调采购接口、不更改默认 256 KiB API 读取门禁、不合并/部署 PR #103。
+
+## 2026-11-05 用户实拍 API 详情：无分页参数，改为定向过滤查询
+
+用户提供的普通 API 「查询跨境商城目录」接口实际截图，路径为 `GET /api/open/v1/catalog/mall`。请求参数表**仅三行**：
+
+| 名称 | 位置、类型 | 必填 | 文档限制 |
+| --- | --- | --- | --- |
+| `Authorization` | Header, string | 是 | `Bearer <API_KEY>` |
+| `category` | Query, string | 否 | 分类名称，最多 120 字节；国家选择使用返回的类别 ID |
+| `search` | Query, string | 否 | 搜索商品，最多 200 字节 |
+
+截图中的响应示例为 `{data:{domain:"mall",items:[...]}}`；可见的商品字段包括 `id`、`categoryId`、`categoryName`、`platform`、`name`、`titleEnglish`、`image`、`description`、`unitPrice`、`prices`。该截图不证明任何实际商品的售价、库存、可用性或转售授权。截图中的说明特别指出库存随读取时刻更新、`prices` 为 CNY/USD 展示、`pricing.memberLevel` 表示会员等级、实际服务端订单金额才是准值。
+
+**分页结论：** 官方界面的该 GET 参数表不包含 `page` / `pageSize` / `limit` / `offset` / `cursor`，因此 `PAGINATION_DOCUMENTED=NO`。不能把其他接口或通用错误描述里的“分页”当作此接口已经支持分页；响应是否还有未展示字段也不能猜。原离线分页审计模块保留为备用设计，不得用于当前供应商真实请求。
+
+**现有 PR #103 新增可执行的更小权限替代：**
+- `buildKuajingZyMallFilterPath({search})` 或 `({category})`：严格**恰好一个**被文档列明的字符串参数，按 UTF-8 字节上限校验和百分号编码；拒绝空串、组合、未列明分页参数、注入和控制字符。
+- `readMallCatalogFiltered`：固定同一 HTTPS 主机和 GET、12 秒超时、单响应最多 256 KiB、绝不自动重试、严格校验 `data.domain=mall` 和 `data.items` 为数组；只做定向取证，返回 `fullCatalog=false, saleAuthorized=false, costVerified=false, inventoryVerified=false`。
+- 操作员 `node scripts/probe-kuajingzy-readonly.mjs --catalog-filtered`：仅允许当前**过滤模式**，需要从受保护环境提供 `KUAJINGZY_API_KEY`，以及**二选一**的 `KUAJINGZY_CATALOG_SEARCH` 或 `KUAJINGZY_CATALOG_CATEGORY`。无参数/旧的全量 CLI 模式已禁用，防止再次意外查询大目录。**单次一个 GET，无余额请求、无采购 POST。**
+- 只输出根字段名、条目字段名及计数、错误安全代码，不输出 API Key、真实商品详情、账户余额、客户资料或卡密。受限筛选结果不等于完整目录，也不等于可售 SKU。
+- `tests/unit/kuajingzy-filtered-catalog.test.mjs` 验证参数白名单、UTF-8 字节长度、百分号编码、无重复请求、大小限制、身份/金额禁用、异常脱敏。最新 CI 必须通过后才能做下一轮真实只读验收。
+
+**唯一后续受控动作：** 本地 Codex 核对已加密密钥、最新交接、该 PR HEAD 和 CI；选择一个与待售合法数字商品相关的**精准关键词**（建议先用“礼品卡”，但不保证该供应商拥有该品类），通过受保护环境只执行一次 `--catalog-filtered`。若仍然 `RESPONSE_TOO_LARGE`，停止，不加限制、不换关键词重试；若成功，记录脱敏 `data.items` 结构、是否存在所需金额/库存/发货字段，并准备下一步销售与自动交付接口映射。禁止第二个自动 GET、余额复查、真实采购、充值、Prod 修改、合并或部署。完成后更新总交接和跨境资源网独立交接。
+
