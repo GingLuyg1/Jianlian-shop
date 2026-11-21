@@ -46,7 +46,6 @@ import {
   type PublicCategory,
 } from "@/lib/supabase/public-catalog";
 import CategoryContentBoundary from "./CategoryContentBoundary";
-import SecondarySlidingIndicator from "./SecondarySlidingIndicator";
 import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import selectionMotion from "@/components/ui/SelectionMotion.module.css";
 import catalogMotion from "./CatalogSelectionMotion.module.css";
@@ -747,7 +746,7 @@ function CategoryPanel({
                     active={visualSelectionId === category.id}
                     loading={
                       clickPulseId === category.id ||
-                      (clickedCategoryId === category.id && isLoadingProducts)
+                      ((clickedCategoryId === category.id || (!clickedCategoryId && visualSelectionId === category.id)) && isLoadingProducts)
                     }
                     disabled={disabled}
                     isMobile={isMobile}
@@ -766,9 +765,6 @@ function CategoryPanel({
                 </div>
               </div>
             )) : null}
-            {!isMobile && !mobileExpanded ? (
-              <SecondarySlidingIndicator containerRef={containerRef} activeId={selectedCategoryId} ready={!error && Boolean(selectedCategoryId)} layoutKey={categories.map((category) => category.id).join(",")} />
-            ) : null}
           </div>
         </div>
       </CardContent>
@@ -868,10 +864,10 @@ function CategoryButton({
       className={cn(
         interactiveButtonClass,
         selectionMotion.item,
-        "flex items-center justify-between rounded-xl px-3 py-2 text-left disabled:cursor-default lg:w-full lg:px-3.5 lg:py-3 [-webkit-tap-highlight-color:transparent]",
+        "flex items-center justify-between rounded-xl px-3 py-2 text-left disabled:cursor-default lg:w-full lg:px-3.5 lg:py-3 [-webkit-tap-highlight-color:transparent] transition-all duration-150",
         active
-          ? "border border-transparent bg-transparent text-primary"
-          : "border border-slate-100 bg-white/80 text-foreground lg:bg-transparent"
+          ? "border border-orange-300/80 bg-gradient-to-r from-orange-100/90 via-orange-50/95 to-orange-100/70 text-primary shadow-[0_2px_10px_-2px_rgba(216,110,49,0.22)] ring-1 ring-orange-300/40 font-semibold"
+          : "border border-slate-100/90 bg-white/80 text-foreground hover:border-orange-200/60 hover:bg-white"
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-3">
@@ -898,7 +894,7 @@ function CategoryButton({
         {loading ? (
           <OptionLoadingSpinner active size="sm" />
         ) : (
-          <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted-foreground/60 lg:block" />
+          <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block", active ? "text-primary" : "text-muted-foreground/60")} />
         )}
       </div>
     </button>
