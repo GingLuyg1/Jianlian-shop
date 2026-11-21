@@ -3,13 +3,19 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+type RouteContext = {
+  params: Promise<{
+    orderNo: string;
+  }>;
+};
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { orderNo: string } }
+  context: RouteContext
 ) {
   try {
     const supabase = getSupabaseServerClient();
-    const orderNo = params.orderNo;
+    const { orderNo } = await context.params;
 
     const {
       data: { user },

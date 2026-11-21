@@ -3,13 +3,19 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+type RouteContext = {
+  params: Promise<{
+    identifier: string;
+  }>;
+};
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { identifier: string } }
+  context: RouteContext
 ) {
   try {
     const supabase = getSupabaseServerClient();
-    const identifier = params.identifier;
+    const { identifier } = await context.params;
 
     const { data: product, error } = await supabase
       .from("products")
