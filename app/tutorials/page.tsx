@@ -33,6 +33,7 @@ import OneNzTutorial, { type OneNzSection } from "@/components/account/OneNzTuto
 import ChatGptAccountGuideTutorial, { type ChatGptTutorialSection } from "@/components/account/ChatGptAccountGuideTutorial";
 import AppleIdTutorial, { appleChapters } from "@/components/account/AppleIdTutorial";
 import GoogleRegionTutorial from "@/components/account/GoogleRegionTutorial";
+import GoogleQrSmsTutorial from "@/components/account/GoogleQrSmsTutorial";
 import FacebookTutorial from "@/components/account/FacebookTutorial";
 import TwitterTutorial, { type TwitterSection } from "@/components/account/TwitterTutorial";
 import RakutenMobileTutorial from "@/components/account/RakutenMobileTutorial";
@@ -96,7 +97,7 @@ const tutorialTopics = [
   { id: "haha-sim", label: "Haha SIM", title: "Haha SIM 实体卡激活与保号教程", description: "首次插卡、漫游设置、官方 App、故障排查与实名登记。", icon: HahaSimWireframeIcon, keywords: ["Haha", "haha SIM", "haha Travel", "实体卡", "激活", "数据漫游", "ICCID", "短信", "APN", "实名", "保号", "香港", "中港澳"] },
   { id: "one-nz", label: "One NZ", title: "新西兰 One NZ 电话卡教程", description: "0月租、免费收短信、国内5G漫游防扣费与保号指南", icon: OneNzWireframeIcon, keywords: ["One NZ", "OneNZ", "新西兰", "已激活使用与账户绑定教程", "卡使用指南与常见问题", "Vodafone", "沃达丰", "激活", "0月租", "短信免费", "mytype", "mynum", "521", "充值保号", "iMessage", "关闭数据漫游"] },
   { id: "chatgpt-guide", label: "Chat Gpt", title: "ChatGPT 综合使用与保号教程", description: "账号登录、2FA 安全验证、密码管理、陌生设备剔除、防封禁与官方解封申诉指南", icon: ChatGptWireframeIcon, keywords: ["ChatGPT", "Plus", "成品号", "保号", "Codex", "客户端下载", "防封", "403", "接码", "短信验证", "节点", "Access Denied", "2FA", "改密", "安全设置", "解封", "申诉", "账号解封", "账号停用", "身份验证错误", "OpenAI申诉", "撤销警告"] },
-  { id: "google-region", label: "Google", title: "Google · 修改 Google 账号国家区域教程", description: "Google 账号服务条款归属地、Play 商店锁区改区与绑定境外卡完整教程", icon: GoogleWireframeIcon, keywords: ["Google", "谷歌", "Google账号", "改区", "换区", "Play商店", "Google Play", "美国", "美区", "免税州", "绑卡", "虚拟信用卡", "境外银行卡", "服务条款", "关联地区", "关闭支付资料"] },
+  { id: "google-region", label: "Google", title: "Google · 扫码降级为短信与修改国家区域教程", description: "Google 扫码降级为短信验证码神器、服务条款归属地与 Play 商店锁区改区完整指南", icon: GoogleWireframeIcon, keywords: ["Google", "谷歌", "Google账号", "改区", "换区", "Play商店", "Google Play", "美国", "美区", "免税州", "绑卡", "虚拟信用卡", "境外银行卡", "服务条款", "关联地区", "关闭支付资料", "google-qr-sms-helper", "扫码降级", "短信验证码", "Cloud Shell", "降级插件", "跨设备验证", "MO-SMS"] },
   { id: "facebook", label: "Facebook", title: "Facebook · 账号与 2FA 登录教程", description: "Facebook 账号卡密格式解析、2FA 双重身份验证码获取与安全登录全流程指引", icon: FacebookWireframeIcon, keywords: ["Facebook", "FB", "脸书", "2FA", "两步验证", "TOTP", "双重认证", "UID", "账号", "登录", "尝试其他方法", "身份验证应用程序", "2fa.cn", "2fa.show", "2fa.live", "2fa.web-ai.top", "验证码", "养号", "防封"] },
   { id: "twitter", label: "X (Twitter)", title: "X (Twitter) 账号使用与管理教程", description: "X Token 电脑免密直登、2FA 两步动态验证码安全登录、以及修改密码后重新提取最新 Token 全流程指引", icon: TwitterWireframeIcon, keywords: ["X", "Twitter", "推特", "Token", "auth_token", "X Token", "X 2fa", "2FA", "两步验证", "重新获取Token", "改密", "修改密码", "插件登录", "Cookie", "Application", "F12", "开发者工具"] },
   { id: "rakuten-mobile", label: "Rakuten Mobile", title: "日本乐天 Rakuten Mobile 安装与配置教程", description: "日本乐天原生实体卡安装、关漫游防扣费、网络搜网与高清视频教程", icon: Smartphone, keywords: ["日本", "乐天", "Rakuten", "Rakutenmobile", "Rakuten Mobile", "乐天移动", "煤炉", "Mercari", "Line", "抽票", "视频教程", "APN", "漫游", "防扣费", "实体卡", "原生卡"] },
@@ -108,7 +109,9 @@ function getTutorialTitleMeta({
   oneNzGuide,
   chatgptGuide,
   twitterGuide,
+  googleGuide,
 }: {
+  googleGuide: "qr-sms" | "region";
   topicId: string;
   giffgaffGuide: "activation" | "keeper";
   oneNzGuide: OneNzSection;
@@ -141,12 +144,18 @@ function getTutorialTitleMeta({
         subTitle: "FB通过2FA的登录教程",
         desc: "Facebook 账号卡密格式解析、2FA 双重身份验证码获取与安全登录全流程指引",
       };
-    case "google-region":
+    case "google-region": {
+      const isQrSms = googleGuide === "qr-sms";
       return {
         mainTitle: "Google 使用教程",
-        subTitle: "Google 账号修改国家/地区完整指南",
-        desc: "Google 账号服务条款归属地、Play 商店地区区分与锁定海外全套指南",
+        subTitle: isQrSms
+          ? "Google 扫码降级为短信验证码教程"
+          : "Google 账号修改国家/地区完整指南",
+        desc: isQrSms
+          ? "使用 Google QR SMS Helper 插件将桌面端强制扫码验证一键降级回输入手机号接收 6 位验证码"
+          : "Google 账号服务条款归属地、Play 商店地区区分与锁定海外全套指南",
       };
+    }
     case "one-nz": {
       const isUsage = oneNzGuide === "usage" || oneNzGuide === "activation" || oneNzGuide === "binding";
       return {
@@ -314,6 +323,8 @@ function TutorialsPageContent() {
   const [chatgptGuide, setChatgptGuide] = useState<ChatGptTutorialSection>("login");
   const [twitterTreeOpen, setTwitterTreeOpen] = useState(false);
   const [twitterGuide, setTwitterGuide] = useState<TwitterSection>("x-token");
+  const [googleTreeOpen, setGoogleTreeOpen] = useState(false);
+  const [googleGuide, setGoogleGuide] = useState<"qr-sms" | "region">("qr-sms");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -325,6 +336,7 @@ function TutorialsPageContent() {
       if (paramTopic === "giffgaff") setGiffgaffTreeOpen(true);
       if (paramTopic === "chatgpt-guide") setChatgptTreeOpen(true);
       if (paramTopic === "twitter") setTwitterTreeOpen(true);
+      if (paramTopic === "google-region") setGoogleTreeOpen(true);
     }
     const paramGuide = searchParams?.get("guide");
     if (paramGuide === "usage" || paramGuide === "activation" || paramGuide === "binding") {
@@ -335,6 +347,10 @@ function TutorialsPageContent() {
       setChatgptGuide(paramGuide as ChatGptTutorialSection);
     } else if (paramGuide === "x-token" || paramGuide === "x-2fa" || paramGuide === "x-renew-token") {
       setTwitterGuide(paramGuide as TwitterSection);
+    } else if (paramGuide === "qr-sms") {
+      setGoogleGuide("qr-sms");
+    } else if (paramGuide === "region") {
+      setGoogleGuide("region");
     }
   }, [searchParams]);
 
@@ -345,6 +361,7 @@ function TutorialsPageContent() {
   const showOneNz = matchingTopics.length > 0 && topic.id === "one-nz";
   const showChatgpt = matchingTopics.length > 0 && topic.id === "chatgpt-guide";
   const showTwitter = matchingTopics.length > 0 && topic.id === "twitter";
+  const showGoogle = matchingTopics.length > 0 && topic.id === "google-region";
   const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   const titleMeta = getTutorialTitleMeta({
     topicId: topic.id,
@@ -352,6 +369,7 @@ function TutorialsPageContent() {
     oneNzGuide,
     chatgptGuide,
     twitterGuide,
+    googleGuide,
   });
   return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={isMobile ? "max-w-none !pt-2 !px-3 pb-6" : "max-w-none px-4 py-3 md:px-6"}>
     <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!block !h-auto !space-y-3 !overflow-visible" : ""}`}>
@@ -514,6 +532,33 @@ function TutorialsPageContent() {
               </div>
             ) : null}
 
+            {/* 如果当前分类是 Google，显示二级小药丸 */}
+            {topic.id === "google-region" ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2 touch-pan-x">
+                {[
+                  { guide: "qr-sms", label: "扫码降级为短信(推荐)" },
+                  { guide: "region", label: "修改国家/地区教程" },
+                ].map((item) => (
+                  <button
+                    key={item.guide}
+                    type="button"
+                    onClick={() => {
+                      setGoogleGuide(item.guide as any);
+                      resetScroll();
+                    }}
+                    title={item.label}
+                    className={`inline-flex shrink-0 items-center rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      googleGuide === item.guide
+                        ? "bg-primary text-white font-semibold"
+                        : "bg-white text-slate-600 border border-orange-200/60"
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             {/* 如果当前分类是 X (Twitter)，显示二级小药丸 */}
             {topic.id === "twitter" ? (
               <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2 touch-pan-x">
@@ -568,7 +613,7 @@ function TutorialsPageContent() {
               }}>
                 <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>
                 {id === "required" && <span className={`${styles.pill} hidden md:inline`}>必读</span>}
-                {(id === "giffgaff" || id === "one-nz" || id === "chatgpt-guide" || id === "twitter") && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
+                {(id === "giffgaff" || id === "one-nz" || id === "chatgpt-guide" || id === "twitter" || id === "google-region") && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
               </button>;
               if (id === "giffgaff") {
                 return <Collapsible.Root key={id} asChild open={showGiffgaff && giffgaffTreeOpen} onOpenChange={setGiffgaffTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Giffgaff 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={giffgaffGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={giffgaffGuide === "activation" ? "page" : undefined} title="实体卡激活与使用" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("activation"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>实体卡激活与使用</button><button type="button" aria-current={giffgaffGuide === "keeper" ? "page" : undefined} title="保号助手" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("keeper"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>保号助手</button></nav></Collapsible.Content></div></Collapsible.Root>;
@@ -578,6 +623,9 @@ function TutorialsPageContent() {
               }
               if (id === "chatgpt-guide") {
                 return <Collapsible.Root key={id} asChild open={showChatgpt && chatgptTreeOpen} onOpenChange={setChatgptTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="ChatGPT 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={chatgptGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={chatgptGuide === "login" ? "page" : undefined} title="登录与 2FA 验证" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("login"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>登录与 2FA 验证</button><button type="button" aria-current={chatgptGuide === "security" ? "page" : undefined} title="改密与安全设置" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("security"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>改密与安全设置</button><button type="button" aria-current={chatgptGuide === "rebind" ? "page" : undefined} title="设备与 2FA 换绑" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("rebind"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>设备与 2FA 换绑</button><button type="button" aria-current={chatgptGuide === "anti-ban" ? "page" : undefined} title="防封与保号指南" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("anti-ban"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>防封与保号指南</button><button type="button" aria-current={chatgptGuide === "unban" ? "page" : undefined} title="账号解封申诉教程" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("unban"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>账号解封申诉教程</button></nav></Collapsible.Content></div></Collapsible.Root>;
+              }
+              if (id === "google-region") {
+                return <Collapsible.Root key={id} asChild open={showGoogle && googleTreeOpen} onOpenChange={setGoogleTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Google 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={googleGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={googleGuide === "qr-sms" ? "page" : undefined} title="Google 扫码降级为短信验证码" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGoogleGuide("qr-sms"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>扫码降级为短信(推荐)</button><button type="button" aria-current={googleGuide === "region" ? "page" : undefined} title="修改国家/地区教程" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGoogleGuide("region"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>修改国家/地区教程</button></nav></Collapsible.Content></div></Collapsible.Root>;
               }
               if (id === "twitter") {
                 return <Collapsible.Root key={id} asChild open={showTwitter && twitterTreeOpen} onOpenChange={setTwitterTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="X (Twitter) 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={twitterGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={twitterGuide === "x-token" ? "page" : undefined} title="X Token 使用教程(仅电脑)" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setTwitterGuide("x-token"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>X Token 使用教程(仅电脑)</button><button type="button" aria-current={twitterGuide === "x-2fa" ? "page" : undefined} title="X 2fa 使用教程(手机/电脑)" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setTwitterGuide("x-2fa"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>X 2fa 使用教程(手机/电脑)</button><button type="button" aria-current={twitterGuide === "x-renew-token" ? "page" : undefined} title="X 修改密码后重新获取Token" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setTwitterGuide("x-renew-token"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>X 修改密码后重新获取Token</button></nav></Collapsible.Content></div></Collapsible.Root>;
@@ -612,7 +660,7 @@ function TutorialsPageContent() {
         </header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
           <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "google-region" ? <GoogleRegionTutorial /> : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-7">
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : <GoogleRegionTutorial onSwitchToQrSms={() => setGoogleGuide("qr-sms")} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-7">
             <section aria-labelledby="tutorial-service-title">
               <div className="mb-5 flex items-center gap-3"><span className={`${glass.icon} h-11 w-11`}><ShieldCheck className="h-5 w-5" aria-hidden="true" /></span><div><h2 id="tutorial-service-title" className="text-lg font-semibold">服务说明</h2><p className="mt-1 text-xs leading-5 text-slate-500">先核对适用范围，再确认所需商品。</p></div></div>
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
