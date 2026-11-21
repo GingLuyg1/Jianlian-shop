@@ -99,7 +99,7 @@ const tutorialTopics = [
   { id: "google-region", label: "Google", title: "Google · 修改 Google 账号国家区域教程", description: "Google 账号服务条款归属地、Play 商店锁区改区与绑定境外卡完整教程", icon: GoogleWireframeIcon, keywords: ["Google", "谷歌", "Google账号", "改区", "换区", "Play商店", "Google Play", "美国", "美区", "免税州", "绑卡", "虚拟信用卡", "境外银行卡", "服务条款", "关联地区", "关闭支付资料"] },
   { id: "facebook", label: "Facebook", title: "Facebook · 账号与 2FA 登录教程", description: "Facebook 账号卡密格式解析、2FA 双重身份验证码获取与安全登录全流程指引", icon: FacebookWireframeIcon, keywords: ["Facebook", "FB", "脸书", "2FA", "两步验证", "TOTP", "双重认证", "UID", "账号", "登录", "尝试其他方法", "身份验证应用程序", "2fa.cn", "2fa.show", "2fa.live", "2fa.web-ai.top", "验证码", "养号", "防封"] },
   { id: "twitter", label: "X (Twitter)", title: "X (Twitter) 账号使用与管理教程", description: "X Token 电脑免密直登、2FA 两步动态验证码安全登录、以及修改密码后重新提取最新 Token 全流程指引", icon: TwitterWireframeIcon, keywords: ["X", "Twitter", "推特", "Token", "auth_token", "X Token", "X 2fa", "2FA", "两步验证", "重新获取Token", "改密", "修改密码", "插件登录", "Cookie", "Application", "F12", "开发者工具"] },
-  { id: "rakuten-mobile", label: "乐天移动", title: "日本乐天 Rakuten Mobile 安装与配置教程", description: "日本乐天原生实体卡安装、关漫游防扣费、网络搜网与高清视频教程", icon: Smartphone, keywords: ["日本", "乐天", "Rakuten", "Rakutenmobile", "乐天移动", "煤炉", "Mercari", "Line", "抽票", "视频教程", "APN", "漫游", "防扣费", "实体卡", "原生卡"] },
+  { id: "rakuten-mobile", label: "Rakuten Mobile", title: "日本乐天 Rakuten Mobile 安装与配置教程", description: "日本乐天原生实体卡安装、关漫游防扣费、网络搜网与高清视频教程", icon: Smartphone, keywords: ["日本", "乐天", "Rakuten", "Rakutenmobile", "Rakuten Mobile", "乐天移动", "煤炉", "Mercari", "Line", "抽票", "视频教程", "APN", "漫游", "防扣费", "实体卡", "原生卡"] },
 ] as const;
 
 function getTutorialTitleMeta({
@@ -202,7 +202,7 @@ function getTutorialTitleMeta({
       };
     case "rakuten-mobile":
       return {
-        mainTitle: "日本乐天移动使用教程",
+        mainTitle: "Rakuten Mobile (日本乐天) 使用教程",
         subTitle: "Rakuten Mobile 原生卡安装与配置教程",
         desc: "日本乐天原生实体 SIM 卡从收到卡片、插卡防扣费、搜网激活到 APN 配置的全流程图文与实操视频指引",
       };

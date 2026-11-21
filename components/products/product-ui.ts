@@ -39,6 +39,15 @@ export const productSupportTextClassName =
 
 export const productImageFallbackSrc = "/assets/jianlian-brand-logo.png";
 
+export function resolveProductImageSrc(url?: string | null): string {
+  if (!url) return productImageFallbackSrc;
+  if (url.includes("/storage/v1/object/public/product-images/")) {
+    const filename = url.split("/").pop();
+    if (filename) return `/assets/products/${filename}`;
+  }
+  return url;
+}
+
 export function setProductImageFallback(image: HTMLImageElement) {
   if (image.dataset.fallbackApplied === "true") return;
   image.dataset.fallbackApplied = "true";

@@ -37,7 +37,7 @@ export default function HahaSimProductDetails({ product }: HahaSimProductDetails
       icon: CreditCard,
       title: "0 月租 · 零持有成本",
       desc: "无日常强制月租，平时放在国内不打电话、不发短信即完全 0 月租，无任何扣费隐患。",
-      tag: "100% 零月租",
+      tag: "官方 0 月租",
     },
     {
       icon: MessageSquare,
@@ -263,7 +263,7 @@ export default function HahaSimProductDetails({ product }: HahaSimProductDetails
           </div>
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
             <Radio className="h-3.5 w-3.5 animate-pulse text-orange-600" />
-            实测 100% 畅通接收
+            实测高权重畅通
           </span>
         </div>
 

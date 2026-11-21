@@ -43,7 +43,7 @@ export default function RakutenMobileProductDetails({ product }: RakutenMobilePr
       target: "Mercari (日本煤炉)",
       problem: "严格审查运营商 HLR 数据库，虚拟号/漫游号秒封",
       solution: "乐天正规日本移动网络原生号段，秒过短信验证与实名风控",
-      status: "100% 秒过",
+      status: "原生高信誉秒过",
     },
     {
       target: "LINE 日本本土版",
@@ -155,7 +155,7 @@ export default function RakutenMobileProductDetails({ product }: RakutenMobilePr
           </div>
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
             <Radio className="h-3.5 w-3.5 animate-pulse text-rose-600" />
-            实测 100% 畅通通过
+            实测高风控高通过率
           </span>
         </div>
 
