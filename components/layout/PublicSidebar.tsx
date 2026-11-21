@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
+import { findVisibleStorefrontPrimaryCategory } from "@/lib/catalog/visible-storefront-category-routes";
 import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
 import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-query-cache";
 import { prefetchPublicProductCounts } from "@/lib/catalog/public-product-count-cache";
@@ -65,9 +66,15 @@ export default function PublicSidebar({ onSupportOpen, mobileNavigationUntilLg =
     if (idle === undefined) run();
     return () => { if (idle !== undefined) window.cancelIdleCallback(idle); };
   }, [pathname, rows]);
-  const visibleMenuItems = menuItems.filter(
-    (item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href)
-  );
+  const visibleMenuItems = menuItems
+    .filter((item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href))
+    .map((item) => {
+      if (rows && isCatalogCategoryHref(item.href)) {
+        const primary = findVisibleStorefrontPrimaryCategory(item.href, rows);
+        if (primary?.name) return { ...item, label: primary.name };
+      }
+      return item;
+    });
   const navigationGroups = [
     { title: "", items: visibleMenuItems.filter((item) => item.href === "/") },
     { title: "资源中心", items: visibleMenuItems.filter((item) => isCatalogCategoryHref(item.href)) },

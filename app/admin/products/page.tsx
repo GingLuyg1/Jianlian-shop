@@ -1183,14 +1183,6 @@ export default function AdminProductsPage() {
                 <p className="mt-2 text-xs text-slate-500">未绑定供应商不等于无法履约；商品仍可能使用商品规格级本地数字库存。</p>
               </div>
 
-              {activeProductFilters.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                  <span className="font-medium">已启用 {activeProductFilters.length} 个筛选</span>
-                  {activeProductFilters.map((label) => <Badge key={label} variant="outline" className="bg-white">{label}</Badge>)}
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={resetProductFilters}>清除筛选</Button>
-                </div>
-              ) : null}
-
               {isProductLoading ? (
                 <ProductTableSkeleton />
               ) : productListError ? (

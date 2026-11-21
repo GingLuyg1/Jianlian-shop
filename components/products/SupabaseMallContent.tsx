@@ -11,6 +11,7 @@ import {
   Gift,
   KeyRound,
   LayoutGrid,
+  Loader2,
   MessageCircle,
   Phone,
   Search,
@@ -239,15 +240,19 @@ function SupabaseMallContentInner({
     ? (secondaryCategories.length > 0 ? secondaryCategories : allMobileSecondaryCategories)
     : secondaryCategories;
 
-  // Background prefetch all sibling secondary categories so clicking any country/category is 0ms instant
+  // Background prefetch all sibling secondary categories via a 2-worker queue so clicking any country/category is 0ms instant
   useEffect(() => {
     if (!secondaryCategories || secondaryCategories.length === 0) return;
-    const prefetchSiblings = () => {
-      secondaryCategories.forEach((cat) => {
+    let cancelled = false;
+    const queue = [...secondaryCategories];
+    const runWorker = async () => {
+      while (!cancelled && queue.length > 0) {
+        const cat = queue.shift();
+        if (!cat) break;
         const primaryId = cat.level === 1 ? cat.id : cat.parent_id ?? "";
         const secondaryId = cat.level === 2 ? cat.id : "";
         if (primaryId) {
-          void prefetchPublicProductPage({
+          await prefetchPublicProductPage({
             primaryCategoryId: primaryId,
             secondaryCategoryId: secondaryId,
             keyword: "",
@@ -255,11 +260,17 @@ function SupabaseMallContentInner({
             pageSize: CATALOG_PAGE_SIZE,
           });
         }
-      });
+      }
     };
     if (typeof window !== "undefined") {
-      const timer = window.setTimeout(prefetchSiblings, 120);
-      return () => window.clearTimeout(timer);
+      const timer = window.setTimeout(() => {
+        void runWorker();
+        void runWorker();
+      }, 80);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
     }
   }, [secondaryCategories]);
 
@@ -419,7 +430,21 @@ function SupabaseMallContentInner({
           page: filters.page,
           pageSize: filters.pageSize,
         };
-        const cacheHit = Boolean(peekPublicProductPage(query));
+        const cachedPage = peekPublicProductPage(query);
+        const cacheHit = Boolean(cachedPage);
+        if (cachedPage) {
+          rememberPublicProductCount(currentQueryKey, `${window.location.pathname}${window.location.search}`, currentCategory.id, cachedPage.products.length);
+          setCountReadyKey(currentQueryKey);
+          setProducts(
+            cachedPage.products.map((row) =>
+              mapPublicProductToProduct(row, productCategory, row.category_path || currentCategory.name)
+            )
+          );
+          setTotal(cachedPage.total);
+          setLoadedProductKey(currentQueryKey);
+          setLoadedCategoryId(currentCategory.id);
+          setIsLoadingProducts(false);
+        }
         const countWasKnown = getPublicProductCount(currentQueryKey) !== undefined;
         const result = await getPublicProductPage(query);
         if (!mounted || requestId !== productRequestIdRef.current) return;
@@ -476,6 +501,7 @@ function SupabaseMallContentInner({
       page: 1,
       pageSize: CATALOG_PAGE_SIZE,
     };
+    const nextProductKey = JSON.stringify([productCategory, category.id, "", 1, CATALOG_PAGE_SIZE]);
     const cached = peekPublicProductPage(query);
     if (cached) {
       setProducts(
@@ -486,8 +512,9 @@ function SupabaseMallContentInner({
       setTotal(cached.total);
       setIsLoadingProducts(false);
       setLoadedCategoryId(category.id);
-      setLoadedProductKey(publicProductQueryKey(query));
-      setCountReadyKey(publicProductQueryKey(query));
+      setLoadedProductKey(nextProductKey);
+      setCountReadyKey(nextProductKey);
+      rememberPublicProductCount(nextProductKey, `/products/${productCategory}?${queryParam}=${category.slug}`, category.id, cached.products.length);
     } else {
       setIsLoadingProducts(true);
       setLoadedProductKey("");
@@ -643,9 +670,8 @@ function CategoryPanel({
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const [visualSelectionId, setVisualSelectionId] = useState("");
   useLayoutEffect(() => {
-    // Text, icon ring and border must commit with the indicator, not with the
-    // pending click. Keep the existing appearance while its result is loading.
-    if (selectionReady && !error) setVisualSelectionId(selectedCategoryId);
+    // Immediately reflect the clicked secondary category so selection feedback is 0ms instant
+    if (!error && selectedCategoryId) setVisualSelectionId(selectedCategoryId);
     else setVisualSelectionId((current) => categories.some((category) => category.id === current) ? current : "");
   }, [categories, selectedCategoryId, selectionReady, error]);
   // Cached rows are already verified. Never cover them with the exit phase of
@@ -710,7 +736,7 @@ function CategoryPanel({
               </div>
             )) : null}
             {!isMobile && !mobileExpanded ? (
-              <SecondarySlidingIndicator containerRef={containerRef} activeId={selectedCategoryId} ready={selectionReady && !error} layoutKey={categories.map((category) => category.id).join(",")} />
+              <SecondarySlidingIndicator containerRef={containerRef} activeId={selectedCategoryId} ready={!error && Boolean(selectedCategoryId)} layoutKey={categories.map((category) => category.id).join(",")} />
             ) : null}
             {showPlaceholder ? (
               <div className={cn("absolute inset-0 z-10 bg-gradient-to-b from-orange-50/95 to-white px-1 py-1 pointer-events-none", placeholderPhase === "leaving" && "catalog-placeholder-leaving")}>
@@ -894,6 +920,7 @@ function ProductPanel({
   onRetry: () => void;
 }) {
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [navigatingProductId, setNavigatingProductId] = useState("");
   const [routeStalled, setRouteStalled] = useState(false);
   const { isMobile } = useMobileStorefront();
   const placeholderPhase = useDelayedLoading(isLoading, 0);
@@ -985,9 +1012,11 @@ function ProductPanel({
                         showStock={showStock}
                         disabled={!resultReady}
                         selected={selectedProductId === product.id}
+                        isNavigating={navigatingProductId === product.id}
                         isMobile={isMobile}
                         onSelect={() => {
                           setSelectedProductId(product.id);
+                          setNavigatingProductId(product.id);
                           centerItem(product.id);
                         }}
                       />
@@ -1007,13 +1036,30 @@ function ProductPanel({
   );
 }
 
+let activeNavigationTimer: number | null = null;
+
 function safeNavigate(router: any, href: string) {
+  if (typeof window === "undefined") return;
+  if (activeNavigationTimer) {
+    window.clearTimeout(activeNavigationTimer);
+    activeNavigationTimer = null;
+  }
+  const targetPath = href.split("?")[0];
+  activeNavigationTimer = window.setTimeout(() => {
+    activeNavigationTimer = null;
+    if (window.location.pathname !== targetPath) {
+      window.location.assign(href);
+    }
+  }, 380);
+
   try {
     router.push(href);
   } catch {
-    if (typeof window !== "undefined") {
-      window.location.href = href;
+    if (activeNavigationTimer) {
+      window.clearTimeout(activeNavigationTimer);
+      activeNavigationTimer = null;
     }
+    window.location.assign(href);
   }
 }
 
@@ -1027,15 +1073,15 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
   const priceText = hasSkus && maxPrice > minPrice
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
-  const targetHref = checkoutHref(product.slug || product.id, typeof window !== "undefined" ? window.location.pathname + window.location.search : "");
 
   return (
     <button
       type="button"
       data-catalog-card
-      onMouseEnter={() => router.prefetch(targetHref)}
-      onTouchStart={() => router.prefetch(targetHref)}
-      onClick={() => safeNavigate(router, targetHref)}
+      onClick={() => {
+        const href = checkoutHref(product.slug || product.id, typeof window !== "undefined" ? window.location.pathname + window.location.search : "");
+        safeNavigate(router, href);
+      }}
       className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-5">
@@ -1073,7 +1119,7 @@ function CatalogProductIcon({ product, category, isMobile }: { product: Product;
     : <span data-selection-icon className={cn("flex items-center justify-center bg-primary/10", sizeClass)}><Icon className={iconSizeClass} aria-label={category?.name || "商品"} /></span>;
 }
 
-function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, isMobile = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; onSelect: () => void }) {
+function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, isNavigating = false, isMobile = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; isNavigating?: boolean; isMobile?: boolean; onSelect: () => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
   const rawSales = Number(product.metadata?.salesCount ?? 0);
@@ -1093,7 +1139,14 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
-  const targetHref = checkoutHref(product.slug || product.id, typeof window !== "undefined" ? window.location.pathname + window.location.search : "");
+  const handleCardClick = () => {
+    onSelect();
+    const href = checkoutHref(
+      product.slug || product.id,
+      typeof window !== "undefined" ? window.location.pathname + window.location.search : ""
+    );
+    safeNavigate(router, href);
+  };
 
   if (isMobile) {
     return (
@@ -1102,12 +1155,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
         disabled={disabled}
         data-catalog-card
         data-selected={selected ? "true" : undefined}
-        onMouseEnter={() => router.prefetch(targetHref)}
-        onTouchStart={() => router.prefetch(targetHref)}
-        onClick={() => {
-          onSelect();
-          safeNavigate(router, targetHref);
-        }}
+        onClick={handleCardClick}
         className={cn(
           compactProductRowClassName,
           selectionMotion.item,
@@ -1120,9 +1168,15 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
           <div className="min-w-0 flex-1 text-left">
             <div
               data-selection-title
-              className="line-clamp-1 text-[13.5px] font-bold leading-tight text-slate-900"
+              className="flex items-center gap-1.5 line-clamp-1 text-[13.5px] font-bold leading-tight text-slate-900"
             >
-              {product.name}
+              <span className="truncate">{product.name}</span>
+              {isNavigating ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  进入中
+                </span>
+              ) : null}
             </div>
             {product.description ? (
               <div className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-slate-500">
@@ -1165,19 +1219,20 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
       disabled={disabled}
       data-catalog-card
       data-selected={selected ? "true" : undefined}
-      onMouseEnter={() => router.prefetch(targetHref)}
-      onTouchStart={() => router.prefetch(targetHref)}
-      onClick={() => {
-        onSelect();
-        safeNavigate(router, targetHref);
-      }}
+      onClick={handleCardClick}
       className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-3 sm:gap-5">
         <CatalogProductIcon product={product} category={category} />
         <div className="min-w-0 flex-1 text-left">
-          <div data-selection-title className="line-clamp-1 text-sm font-semibold text-slate-700 sm:text-base">
-            {product.name}
+          <div data-selection-title className="flex items-center gap-2 line-clamp-1 text-sm font-semibold text-slate-700 sm:text-base">
+            <span className="truncate">{product.name}</span>
+            {isNavigating ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-100/90 px-2 py-0.5 text-xs font-semibold text-primary">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                正在进入...
+              </span>
+            ) : null}
           </div>
           {product.description ? (
             <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground sm:mt-1">

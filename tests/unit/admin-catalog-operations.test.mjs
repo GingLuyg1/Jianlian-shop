@@ -229,5 +229,5 @@ test("API uses bounded batch SKU reads and the UI keeps filters in URL state", (
   assert.doesNotMatch(route, /supplier.*fetch|sync_daju_supplier_stock/i);
   assert.match(page, /serializeAdminCatalogFilterState/);
   assert.match(page, /router\.replace/);
-  assert.match(page, /已启用 \{activeProductFilters\.length\} 个筛选/);
+  assert.match(page, /resetProductFilters/);
 });
