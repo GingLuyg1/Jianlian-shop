@@ -263,7 +263,10 @@ function isEuropeanSimProduct(product: { id?: string; name?: string; slug?: stri
     name.includes("vodafone") ||
     slug.includes("vodafone") ||
     name.includes("movistar") ||
-    slug.includes("movistar")
+    slug.includes("movistar") ||
+    name.includes("欧洲") ||
+    slug.includes("european") ||
+    slug.includes("eu-sim")
   );
 }
 
@@ -631,7 +634,12 @@ function CheckoutPageContent() {
   const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) => legalDocuments.find((doc) => doc.document_type === type));
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
-  const isShippingProduct = ["shipping", "physical"].includes(String(productRow?.delivery_type ?? ""));
+  const isSimProduct = Boolean(
+    (product?.category && ["sim-cards", "sim", "phone-cards"].includes(String(product.category))) ||
+    (product?.slug && (product.slug.includes("sim") || product.slug.includes("mobile") || product.slug.includes("giffgaff") || product.slug.includes("lucky2") || product.slug.includes("t-mobile") || product.slug.includes("one-nz") || product.slug.includes("haha") || product.slug.includes("european"))) ||
+    (product?.name && (product.name.toLowerCase().includes("sim") || product.name.includes("卡") || product.name.toLowerCase().includes("mobile")))
+  );
+  const isShippingProduct = ["shipping", "physical"].includes(String(productRow?.delivery_type ?? "")) || isSimProduct;
   const selectedPaymentChannel = paymentChannels.find((channel) =>
     getPaymentMethodOption(paymentMethod)?.channelCodes.includes(channel.code)) ?? null;
   const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod)
@@ -932,11 +940,20 @@ function CheckoutPageContent() {
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">
                     <span className="text-red-500">*</span>联系邮箱
+                    {isShippingProduct && (
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                        （用于接收订单及物流发货单号）
+                      </span>
+                    )}
                   </label>
                   <Input
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="请输入接收卡密的邮箱"
+                    placeholder={
+                      isShippingProduct
+                        ? "请输入接收物流通知的邮箱"
+                        : "请输入接收卡密的邮箱"
+                    }
                     className="h-10 bg-slate-50 text-sm"
                     disabled={orderConfigurationLocked}
                   />
@@ -1418,11 +1435,8 @@ function ProductDetailCard({
         type="button"
         className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:w-9"
         onClick={() => {
-          if (typeof window !== "undefined" && window.history.length > 1 && document.referrer.includes(window.location.host)) {
-            router.back();
-          } else {
-            router.push(closeHref);
-          }
+          // 点击一次立即退出返回分类列表页面，避免在详情页内多次选 SKU 导致后退打转
+          router.push(closeHref);
         }}
         aria-label="关闭下单页面"
       >

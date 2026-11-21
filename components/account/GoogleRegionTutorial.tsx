@@ -19,9 +19,50 @@ import TutorialImage from "@/components/account/TutorialImage";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import tutorial from "@/components/account/TutorialsGlass.module.css";
 
-export default function GoogleRegionTutorial() {
+interface GoogleRegionTutorialProps {
+  onSwitchToQrSms?: () => void;
+}
+
+export default function GoogleRegionTutorial({ onSwitchToQrSms }: GoogleRegionTutorialProps) {
   return (
     <div className="space-y-6">
+      {/* 扫码风控降级神器快捷入口横幅 */}
+      <section className="rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-blue-50/90 p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                遇到 Google 桌面端强制要求手机扫码验证 (MO-SMS)？
+              </h3>
+              <p className="text-xs text-slate-600 mt-0.5">
+                推荐使用开源神器 <strong>Google QR SMS Helper</strong> 扩展插件，一键降级回传统的 6 位短信验证码。
+              </p>
+            </div>
+          </div>
+          {onSwitchToQrSms ? (
+            <button
+              type="button"
+              onClick={onSwitchToQrSms}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-all shrink-0"
+            >
+              <span>查看扫码降级教程</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <Link
+              href="/tutorials?topic=google-region&guide=qr-sms"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-all shrink-0"
+            >
+              <span>查看扫码降级教程</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
+        </div>
+      </section>
+
       {/* 重要前提准备 */}
       <section className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-5 sm:p-6">
         <div className="flex items-start gap-3">

@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   CheckCircle2,
+  ShieldCheck,
+  Zap,
   Eye,
   EyeOff,
   KeyRound,
@@ -21,12 +23,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSafeInternalRedirect } from "@/lib/auth/redirect";
 import { getAuthSiteOrigin } from "@/lib/auth/site-origin";
-import { PENDING_SIGNUP_KEY, encodePendingSignup, decodePendingSignup, type PendingSignup } from "@/lib/auth/pending-signup";
-import { getSafeAuthErrorMessage, getSafeNetworkAuthMessage, isEmailFormatValid, validateAuthPassword } from "@/lib/auth/password-policy";
+import {
+  PENDING_SIGNUP_KEY,
+  encodePendingSignup,
+  decodePendingSignup,
+  type PendingSignup,
+} from "@/lib/auth/pending-signup";
+import {
+  getSafeAuthErrorMessage,
+  getSafeNetworkAuthMessage,
+  isEmailFormatValid,
+  validateAuthPassword,
+} from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
-import AnimatedCharacters from "@/components/auth/AnimatedCharacters";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
+import AuthCharacters from "@/components/auth/AuthCharacters";
 import {
   getOrCreateProfile,
   getSupabaseBrowserClient,
@@ -40,15 +52,20 @@ type AuthScreenProps = {
   mode: AuthMode;
 };
 
-const features = ["安全加密", "极速交付", "正品保障"];
-
+const features = ["安全账号", "快速下单", "订单查询"];
 
 function getAuthRedirectUrl(path: string) {
-  const origin = getAuthSiteOrigin(typeof window === "undefined" ? undefined : window.location.origin);
+  const origin = getAuthSiteOrigin(
+    typeof window === "undefined" ? undefined : window.location.origin
+  );
   return `${origin}${path}`;
 }
 
-async function getLoginRestrictionMessage(supabase: ReturnType<typeof getSupabaseBrowserClient>, userId: string, strict = true) {
+async function getLoginRestrictionMessage(
+  supabase: ReturnType<typeof getSupabaseBrowserClient>,
+  userId: string,
+  strict = true
+) {
   try {
     const { data, error } = await supabase
       .from("profiles")
@@ -56,18 +73,26 @@ async function getLoginRestrictionMessage(supabase: ReturnType<typeof getSupabas
       .eq("id", userId)
       .maybeSingle();
 
-    if (error || !data) return strict ? "暂时无法确认账户状态，请稍后登录。" : "";
-    if (data?.account_status === "disabled") return "账户已被禁用，请联系客服。";
-    if (data?.risk_status === "blocked") return "账户当前受限，请联系客服。";
+    if (error || !data)
+      return strict ? "暂时无法确认账户状态，请稍后登录。" : "";
+    if (data?.account_status === "disabled")
+      return "账户已被禁用，请联系客服。";
+    if (data?.risk_status === "blocked")
+      return "账户当前受限，请联系客服。";
     return "";
   } catch {
     return strict ? "暂时无法确认账户状态，请稍后登录。" : "";
   }
 }
-export default function AuthScreen({ mode }: AuthScreenProps) {
+
+export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isRegister = mode === "register";
+
+  // 内部受控的当前登录/注册模式，平滑切换不刷新
+  const [currentMode, setCurrentMode] = useState<AuthMode>(initialMode);
+  const isRegister = currentMode === "register";
+
   const redirectTo = useMemo(
     () => getSafeInternalRedirect(searchParams?.get("redirect") ?? null),
     [searchParams]
@@ -84,28 +109,55 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   const [inviteCode, setInviteCode] = useState(inviteFromUrl);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [loginSuccess, setLoginSuccess] = useState(false);
-  const [showWhiteRipple, setShowWhiteRipple] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [registration, setRegistration] = useState<PendingSignup | null>(null);
 
-  const loginFailed = Boolean(error);
+  // 卡通角色动效状态
+  const [isEmailFocused, setIsEmailFocused] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+
+  // 当外部传入的 initialMode 变更时同步
+  useEffect(() => {
+    setCurrentMode(initialMode);
+  }, [initialMode]);
 
   useEffect(() => {
     if (!isRegister) return;
     try {
-      const pending = decodePendingSignup(window.sessionStorage.getItem(PENDING_SIGNUP_KEY));
+      const pending = decodePendingSignup(
+        window.sessionStorage.getItem(PENDING_SIGNUP_KEY)
+      );
       if (pending) setRegistration(pending);
       else window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
-    } catch { /* Verification remains usable when browser storage is unavailable. */ }
+    } catch {
+      /* Verification remains usable when browser storage is unavailable. */
+    }
   }, [isRegister]);
 
   function forgetPendingSignup() {
-    try { window.sessionStorage.removeItem(PENDING_SIGNUP_KEY); } catch { /* No credentials are stored. */ }
+    try {
+      window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
+    } catch {
+      /* No credentials are stored. */
+    }
   }
+
+  // 模式切换平滑更新 URL，不刷新页面
+  const switchMode = (nextMode: AuthMode) => {
+    if (currentMode === nextMode) return;
+    setCurrentMode(nextMode);
+    setError("");
+    setMessage("");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.pathname = nextMode === "register" ? "/register" : "/login";
+      window.history.replaceState(null, "", url.toString());
+    }
+  };
 
   async function verifyRegistration(code: string) {
     if (loading || !registration) return;
@@ -120,37 +172,54 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         type: "signup",
       });
       if (verifyError) {
-        setError(getSafeAuthErrorMessage(verifyError, "验证码无效或已过期，请重新获取。"));
+        setError(
+          getSafeAuthErrorMessage(
+            verifyError,
+            "验证码无效或已过期，请重新获取。"
+          )
+        );
         return;
       }
-      if (!data.session || data.user?.id !== registration.userId || !data.user.email_confirmed_at) {
+      if (
+        !data.session ||
+        data.user?.id !== registration.userId ||
+        !data.user.email_confirmed_at
+      ) {
         if (data.session) await supabase.auth.signOut({ scope: "local" });
         setError("无法确认此注册，请重新开始。");
         return;
       }
       await getOrCreateProfile(supabase, data.user);
-      const restriction = await getLoginRestrictionMessage(supabase, data.user.id, true);
+      const restriction = await getLoginRestrictionMessage(
+        supabase,
+        data.user.id,
+        true
+      );
       if (restriction) {
         await supabase.auth.signOut({ scope: "local" });
         setError(restriction);
         return;
       }
       if (registration.invite) {
-        const { error: bindError } = await supabase.rpc("bind_referrer_by_code", {
-          input_invite_code: registration.invite,
-        });
+        const { error: bindError } = await supabase.rpc(
+          "bind_referrer_by_code",
+          {
+            input_invite_code: registration.invite,
+          }
+        );
         if (bindError) {
           await supabase.auth.signOut({ scope: "local" });
           setError("注册邮箱已验证，邀请码绑定失败，请联系客服。");
           return;
         }
       }
-      setLoginSuccess(true);
-      setShowWhiteRipple(true);
       toast.success("邮箱已验证，注册完成。");
+      setLoginSuccess(true);
       forgetPendingSignup();
-      router.replace("/account");
-      router.refresh();
+      setTimeout(() => {
+        router.replace("/account");
+        router.refresh();
+      }, 500);
     } catch {
       await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
       setError("注册验证暂时不可用，请稍后重试。");
@@ -170,7 +239,12 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         email: registration.email,
       });
       if (resendError) {
-        setError(getSafeAuthErrorMessage(resendError, "暂时无法重发验证码，请稍后重试。"));
+        setError(
+          getSafeAuthErrorMessage(
+            resendError,
+            "暂时无法重发验证码，请稍后重试。"
+          )
+        );
         return;
       }
       setMessage("验证码已重新发送，请使用最新一封邮件。");
@@ -183,15 +257,18 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
   useEffect(() => {
     const reason = searchParams?.get("auth_error");
-    if (reason === "restricted") setError("账户已被禁用或暂时受限，请联系客服。");
-    else if (reason === "invite") setError("邀请关系绑定失败，请联系客服核实。");
-    else if (reason === "invalid_link") setError("登录链接已过期或无效，请重新登录。");
+    if (reason === "restricted")
+      setError("账户已被禁用或暂时受限，请联系客服。");
+    else if (reason === "invite")
+      setError("邀请关系绑定失败，请联系客服核实。");
+    else if (reason === "invalid_link")
+      setError("登录链接已过期或无效，请重新登录。");
     else if (reason === "config") setError("登录服务暂时不可用。");
   }, [searchParams]);
 
   useEffect(() => {
-    const inviteCode = inviteFromUrl.trim();
-    if (!inviteCode || !hasSupabaseConfig()) return;
+    const invite = inviteFromUrl.trim();
+    if (!invite || !hasSupabaseConfig()) return;
 
     async function recordPromotionVisit() {
       const visitorKey =
@@ -203,7 +280,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         const { error } = await getSupabaseBrowserClient().rpc(
           "record_promotion_visit",
           {
-            input_invite_code: inviteCode,
+            input_invite_code: invite,
             input_visitor_key: visitorKey,
           }
         );
@@ -211,7 +288,7 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
         if (error) {
           console.warn("[Promotion] Failed to record visit");
         }
-      } catch (visitError) {
+      } catch {
         console.warn("[Promotion] Failed to record visit");
       }
     }
@@ -227,7 +304,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       .auth.getUser()
       .then(async ({ data }) => {
         if (!active || !data.user) return;
-        const restriction = await getLoginRestrictionMessage(getSupabaseBrowserClient(), data.user.id);
+        const restriction = await getLoginRestrictionMessage(
+          getSupabaseBrowserClient(),
+          data.user.id
+        );
         if (!active) return;
         if (restriction) {
           await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
@@ -298,7 +378,9 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
               `/auth/callback?next=${encodeURIComponent("/account")}`
             ),
             data: {
-              ...(normalizedInviteCode ? { invite_code: normalizedInviteCode } : {}),
+              ...(normalizedInviteCode
+                ? { invite_code: normalizedInviteCode }
+                : {}),
               ...(normalizedDisplayName
                 ? { display_name: normalizedDisplayName }
                 : {}),
@@ -308,7 +390,10 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
 
         if (signUpError) {
           setError(
-            getSafeAuthErrorMessage(signUpError, "注册服务暂时不可用，请稍后重试。")
+            getSafeAuthErrorMessage(
+              signUpError,
+              "注册服务暂时不可用，请稍后重试。"
+            )
           );
           return;
         }
@@ -322,8 +407,19 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
           setError("无法开始邮箱验证，请稍后重试。");
           return;
         }
-        const pending = { email: normalizedEmail, userId: data.user.id, invite: normalizedInviteCode };
-        try { window.sessionStorage.setItem(PENDING_SIGNUP_KEY, encodePendingSignup(pending)); } catch { /* No password/token persistence. */ }
+        const pending = {
+          email: normalizedEmail,
+          userId: data.user.id,
+          invite: normalizedInviteCode,
+        };
+        try {
+          window.sessionStorage.setItem(
+            PENDING_SIGNUP_KEY,
+            encodePendingSignup(pending)
+          );
+        } catch {
+          /* No password/token persistence. */
+        }
         setRegistration(pending);
         setPassword("");
         setConfirmPassword("");
@@ -367,12 +463,11 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
       }
 
       setLoginSuccess(true);
-      setShowWhiteRipple(true);
       toast.success("登录成功，正在进入账户中心。");
       setTimeout(() => {
         router.push(redirectTo);
         router.refresh();
-      }, 500);
+      }, 850);
     } catch (authException) {
       console.warn("[Supabase Auth] Network or runtime exception");
       setError(getSafeNetworkAuthMessage(authException));
@@ -382,88 +477,90 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#fff8f0] via-[#fff1e2] to-[#feebd7] text-foreground selection:bg-orange-200">
-      {/* High-end ambient background light orbs */}
-      <div className="pointer-events-none fixed -left-28 -top-28 h-[460px] w-[460px] rounded-full bg-gradient-to-br from-[#ffd5a4] via-[#ffbe80] to-[#ffa45b] opacity-35 blur-[100px]" />
-      <div className="pointer-events-none fixed -right-32 top-4 h-[520px] w-[520px] rounded-full bg-gradient-to-bl from-[#ffe5c7] via-[#ffd7a8] to-[#fec896] opacity-45 blur-[110px]" />
-      <div className="pointer-events-none fixed bottom-[-110px] left-1/4 h-[440px] w-[440px] rounded-full bg-gradient-to-tr from-[#ede9fe] via-[#fed7aa] to-[#fecba1] opacity-35 blur-[110px]" />
-      <div className="pointer-events-none fixed bottom-[-90px] -right-24 h-[380px] w-[380px] rounded-full bg-gradient-to-tl from-[#fed7aa] to-[#fdb978] opacity-40 blur-[95px]" />
+    <main className="relative min-h-screen overflow-hidden bg-[#fff6ee] text-foreground">
+      {/* 优化后的高级暖色微光背景 */}
+      <div className="pointer-events-none fixed -left-32 -top-32 h-[480px] w-[480px] rounded-full bg-gradient-to-br from-[#ffd9b3] via-[#ffc68a] to-[#ffb366] opacity-60 blur-3xl" />
+      <div className="pointer-events-none fixed -right-24 top-1/4 h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-[#ffe6cc] via-[#ffd2a8] to-[#ffb885] opacity-55 blur-3xl" />
+      <div className="pointer-events-none fixed bottom-[-160px] left-1/3 h-[420px] w-[420px] rounded-full bg-gradient-to-t from-[#ffcf9e] to-[#ffe8d1] opacity-45 blur-3xl" />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-5 sm:px-6 sm:py-6">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6">
         <div className="flex items-center justify-start">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-full border border-orange-200/60 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur-md transition-all hover:scale-[1.02] hover:border-orange-300 hover:text-primary"
+            className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-orange-200/60 backdrop-blur transition-all hover:scale-[1.02] hover:bg-white hover:text-primary"
           >
             <ArrowLeft className="h-4 w-4" />
             返回首页
           </Link>
         </div>
 
-        <div className="grid flex-1 items-center gap-8 py-4 sm:py-6 lg:grid-cols-[minmax(0,1fr)_440px]">
-          {/* Left Hero Card - Hidden on Mobile, Pure Desktop Showcase */}
+        <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_430px]">
+          {/* 左侧卡通角色舞台卡片 */}
           <section className="hidden lg:block">
-            <div className="relative flex min-h-[600px] max-w-xl flex-col justify-between overflow-hidden rounded-[36px] border border-white/90 bg-gradient-to-b from-white/85 via-white/70 to-[#fff2e2]/80 p-8 pb-0 shadow-[0_32px_100px_-20px_rgba(202,122,44,0.18),0_4px_24px_rgba(0,0,0,0.03)] backdrop-blur-xl">
-              <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-gradient-to-br from-[#ffb67a]/40 to-[#ff9f50]/20 blur-2xl" />
-              <div className="pointer-events-none absolute -bottom-14 -left-14 h-48 w-48 rounded-full bg-gradient-to-tr from-[#fed7aa]/50 to-[#fdba74]/25 blur-3xl" />
-              
-              <div className="relative z-10">
-                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2.5 rounded-full border border-orange-200/70 bg-white/95 px-3.5 py-1.5 text-sm font-bold text-slate-800 shadow-xs backdrop-blur-sm">
-                    <img
-                      src="/assets/jianlian-brand-logo.png"
-                      alt="Jianlian"
-                      width={28}
-                      height={28}
-                      className="h-7 w-7 rounded-xl object-cover shadow-xs ring-1 ring-orange-200/60"
-                    />
-                    <span>Jianlian.shop</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {features.map((item) => (
-                      <span
-                        key={item}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-orange-100/90 bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs backdrop-blur-sm"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                        {item}
+            <div className="relative max-w-xl overflow-hidden rounded-[34px] border border-white/80 bg-white/50 p-8 shadow-[0_28px_90px_rgba(168,95,30,0.14)] backdrop-blur-xl">
+              <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#ffca86]/50 blur-xl" />
+              <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-[#ffdcb0]/55 blur-xl" />
+              <div className="relative">
+                {/* 重构后的极简高奢品牌微排版与背书 */}
+                <div className="relative z-10 mb-6 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-orange-200/80 bg-white/95 px-3.5 py-1 text-xs font-bold text-slate-800 shadow-xs backdrop-blur-md">
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
                       </span>
-                    ))}
+                      <span>Jianlian Hub · 全球数字商品与网络服务</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+                      开启你的数字体验
+                    </h1>
+                    <p className="text-sm font-medium text-slate-600 leading-relaxed">
+                      安全、极速、放心的全球海外原生账户与数字化服务方案
+                    </p>
+                  </div>
+
+                  {/* 极简高级安全与服务标签微矩阵 */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs font-semibold text-slate-600">
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-white/85 px-3 py-1 shadow-2xs">
+                      <ShieldCheck className="h-3.5 w-3.5 text-orange-500" />
+                      <span>256-bit 端到端加密</span>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-white/85 px-3 py-1 shadow-2xs">
+                      <Zap className="h-3.5 w-3.5 text-amber-500" />
+                      <span>秒级全自动交付</span>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-white/85 px-3 py-1 shadow-2xs">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      <span>100% 正品保障</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-100/70 px-3 py-1 text-xs font-semibold text-primary">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>数字商品与服务平台</span>
-                  </div>
-                  <h1 className="text-[38px] font-black leading-[1.15] tracking-tight text-[#171923]">
-                    开启你的数字体验
-                  </h1>
-                  <p className="text-sm font-medium text-slate-600">
-                    安全、快速、放心的优质账号与数字化方案
-                  </p>
+                {/* 卡通角色核心组件 */}
+                <div className="mt-4">
+                  <AuthCharacters
+                    email={email}
+                    mode={currentMode}
+                    isTyping={isTyping}
+                    isEmailFocused={isEmailFocused}
+                    isPasswordFocused={isPasswordFocused}
+                    showPassword={showPassword}
+                    passwordLength={password.length}
+                    loginFailed={Boolean(error)}
+                    loginSuccess={loginSuccess}
+                  />
                 </div>
-              </div>
-
-              <div className="relative z-10 mt-auto pt-2">
-                <AnimatedCharacters
-                  email={email}
-                  mode={mode}
-                  isTyping={isTyping || Boolean(registration)}
-                  showPassword={showPassword}
-                  passwordLength={password.length}
-                  loginFailed={loginFailed}
-                  loginSuccess={loginSuccess}
-                />
               </div>
             </div>
           </section>
 
-          {/* Right Form Card - On Mobile, Shows ONLY this pristine clean card */}
+          {/* 右侧表单卡片 */}
           <section className="w-full">
-            <div className="mx-auto max-w-[440px] rounded-[32px] border border-white/85 bg-white/80 p-2 shadow-[0_32px_90px_-15px_rgba(15,23,42,0.14)] ring-1 ring-white/90 backdrop-blur-xl">
-              <div className="rounded-[26px] border border-orange-100/70 bg-white/90 p-6 sm:p-7 shadow-xs">
+            <div className="mx-auto max-w-[430px] rounded-[32px] border border-white/90 bg-white/80 p-2 shadow-[0_28px_90px_rgba(15,23,42,0.14)] ring-1 ring-orange-100/60 backdrop-blur-xl">
+              <div className="rounded-[26px] border border-orange-50 bg-white/90 p-6 sm:p-7">
                 <div className="mb-6 flex items-center gap-3">
                   <img
                     src="/assets/jianlian-brand-logo.png"
@@ -476,34 +573,57 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                     <div className="text-xl font-black leading-tight tracking-tight text-slate-900">
                       Jianlian
                     </div>
-                    <div className="mt-0.5 text-xs font-semibold text-slate-500">
+                    <div className="mt-0.5 text-xs font-medium text-muted-foreground">
                       数字商品服务
                     </div>
                   </div>
                 </div>
 
-                <div className="relative mb-6 grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
+                {/* 增加平滑弹簧滑块指示动画的登录/注册 Tab */}
+                <div className="relative mb-6 flex rounded-2xl bg-slate-100/90 p-1">
                   <div
                     className={cn(
-                      "pointer-events-none absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-xl bg-white shadow-sm transition-transform duration-300 ease-out",
-                      isRegister ? "translate-x-[calc(100%+4px)]" : "translate-x-0"
+                      "absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-xl bg-white shadow-sm transition-transform duration-300 ease-out",
+                      isRegister
+                        ? "translate-x-[calc(100%+8px)]"
+                        : "translate-x-0"
                     )}
                   />
-                  <AuthTab href="/login" active={!isRegister}>
+                  <button
+                    type="button"
+                    onClick={() => switchMode("login")}
+                    className={cn(
+                      "relative z-10 flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors duration-200",
+                      !isRegister
+                        ? "text-primary"
+                        : "text-slate-500 hover:text-slate-700"
+                    )}
+                  >
                     登录
-                  </AuthTab>
-                  <AuthTab href="/register" active={isRegister}>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchMode("register")}
+                    className={cn(
+                      "relative z-10 flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors duration-200",
+                      isRegister
+                        ? "text-primary"
+                        : "text-slate-500 hover:text-slate-700"
+                    )}
+                  >
                     注册
-                  </AuthTab>
+                  </button>
                 </div>
 
-                <div className="mb-5">
-                  <h2
-                    key={mode}
-                    className="text-2xl font-black transition-all duration-300"
-                  >
+                <div className="mb-5 transition-all duration-200">
+                  <h2 className="text-2xl font-black text-slate-900">
                     {isRegister ? "创建新账号" : "欢迎回来"}
                   </h2>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {isRegister
+                      ? "设置密码并验证邮箱，创建你的 Jianlian 账号。"
+                      : "登录成功后将进入账户中心。"}
+                  </p>
                 </div>
 
                 {registration ? (
@@ -513,253 +633,299 @@ export default function AuthScreen({ mode }: AuthScreenProps) {
                       busy={loading}
                       onVerify={verifyRegistration}
                       onResend={resendRegistrationCode}
-                      onBack={() => { forgetPendingSignup(); setRegistration(null); setError(""); setMessage(""); }}
+                      onBack={() => {
+                        forgetPendingSignup();
+                        setRegistration(null);
+                        setError("");
+                        setMessage("");
+                      }}
                     />
-                    {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
-                    {message && <p role="status" className="mt-3 text-sm text-emerald-700">{message}</p>}
-                  </>
-                ) : <>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">邮箱</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        onFocus={() => setIsTyping(true)}
-                        onBlur={() => setIsTyping(false)}
-                        placeholder="请输入邮箱"
-                        className="h-12 rounded-xl bg-slate-50 pl-10"
-                        autoComplete="email"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="password">密码</Label>
-                    <div className="relative">
-                      <LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        placeholder="请输入密码"
-                        className="h-12 rounded-xl bg-slate-50 pl-10 pr-11"
-                        autoComplete={isRegister ? "new-password" : "current-password"}
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-                        onClick={() => setShowPassword((value) => !value)}
-                        aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                    {error && (
+                      <p
+                        role="alert"
+                        className="mt-3 text-sm text-red-600"
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
+                        {error}
+                      </p>
+                    )}
+                    {message && (
+                      <p
+                        role="status"
+                        className="mt-3 text-sm text-emerald-700"
+                      >
+                        {message}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <form
+                      onSubmit={handleSubmit}
+                      className="space-y-4 transition-opacity duration-200"
+                    >
+                      {/* 注册专属昵称输入行：网格动画平滑向下延伸与回收 */}
+                      <div
+                        className={cn(
+                          "grid transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                          isRegister
+                            ? "grid-rows-[1fr] opacity-100"
+                            : "grid-rows-[0fr] opacity-0 pointer-events-none"
                         )}
-                      </button>
-                    </div>
-                    {!isRegister ? (
-                      <div className="flex justify-end pt-0.5">
-                        <Link
-                          href="/forgot-password"
-                          className="text-xs font-medium text-slate-500 transition-colors hover:text-primary"
-                        >
-                          忘记密码
-                        </Link>
+                      >
+                        <div className="overflow-hidden">
+                          <div className="space-y-1.5 pb-2">
+                            <Label htmlFor="displayName">昵称（选填）</Label>
+                            <Input
+                              id="displayName"
+                              value={displayName}
+                              onChange={(event) =>
+                                setDisplayName(event.target.value)
+                              }
+                              placeholder="请输入昵称"
+                              className="h-11 rounded-xl bg-slate-50/80"
+                              autoComplete="nickname"
+                              maxLength={40}
+                            />
+                          </div>
+                        </div>
                       </div>
-                    ) : null}
-                  </div>
 
-                  {isRegister ? (
-                    <div className="space-y-4 transition-all duration-300">
-                      <div className="space-y-2">
-                        <Label htmlFor="confirmPassword">确认密码</Label>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="email">邮箱</Label>
                         <div className="relative">
-                          <LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
-                            id="confirmPassword"
-                            type={showPassword ? "text" : "password"}
-                            value={confirmPassword}
-                            onChange={(event) =>
-                              setConfirmPassword(event.target.value)
-                            }
-                            onFocus={() => setIsTyping(true)}
-                            onBlur={() => setIsTyping(false)}
-                            placeholder="请再次输入密码"
-                            className="h-12 rounded-xl bg-slate-50 pl-10"
-                            autoComplete="new-password"
+                            id="email"
+                            type="email"
+                            value={email}
+                            onChange={(event) => {
+                              setEmail(event.target.value);
+                              setIsTyping(true);
+                            }}
+                            onFocus={() => {
+                              setIsEmailFocused(true);
+                              setIsTyping(true);
+                            }}
+                            onBlur={() => {
+                              setIsEmailFocused(false);
+                              setIsTyping(false);
+                            }}
+                            placeholder="请输入邮箱"
+                            className="h-11 rounded-xl bg-slate-50/80 pl-10"
+                            autoComplete="email"
                             required
                           />
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="inviteCode">邀请码（选填）</Label>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="password">密码</Label>
                         <div className="relative">
-                          <KeyRound className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
-                            id="inviteCode"
-                            value={inviteCode}
-                            onChange={(event) =>
-                              setInviteCode(event.target.value)
+                            id="password"
+                            type={showPassword ? "text" : "password"}
+                            value={password}
+                            onChange={(event) => {
+                              setPassword(event.target.value);
+                              setIsTyping(true);
+                            }}
+                            onFocus={() => {
+                              setIsPasswordFocused(true);
+                              setIsTyping(true);
+                            }}
+                            onBlur={() => {
+                              setIsPasswordFocused(false);
+                              setIsTyping(false);
+                            }}
+                            placeholder="请输入密码"
+                            className="h-11 rounded-xl bg-slate-50/80 pl-10 pr-11"
+                            autoComplete={
+                              isRegister ? "new-password" : "current-password"
                             }
-                            onFocus={() => setIsTyping(true)}
-                            onBlur={() => setIsTyping(false)}
-                            placeholder="请输入邀请码"
-                            className="h-12 rounded-xl bg-slate-50 pl-10"
+                            required
                           />
+                          <button
+                            type="button"
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                            onClick={() => setShowPassword((value) => !value)}
+                            aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
                         </div>
                       </div>
-                    </div>
-                  ) : null}
 
-                  {error ? (
-                    <div
-                      role="alert"
-                      aria-live="polite"
-                      className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
-                    >
-                      {error}
-                    </div>
-                  ) : null}
+                      {/* 注册多出的表单项：流畅高度展开与回收动画 */}
+                      <div
+                        className={cn(
+                          "grid transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                          isRegister
+                            ? "grid-rows-[1fr] opacity-100"
+                            : "grid-rows-[0fr] opacity-0 pointer-events-none"
+                        )}
+                      >
+                        <div className="overflow-hidden space-y-4 pt-1">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="confirmPassword">确认密码</Label>
+                            <div className="relative">
+                              <LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                              <Input
+                                id="confirmPassword"
+                                type={showPassword ? "text" : "password"}
+                                value={confirmPassword}
+                                onChange={(event) =>
+                                  setConfirmPassword(event.target.value)
+                                }
+                                placeholder="请再次输入密码"
+                                className="h-11 rounded-xl bg-slate-50/80 pl-10"
+                                autoComplete="new-password"
+                                required={isRegister}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="inviteCode">邀请码（选填）</Label>
+                            <div className="relative">
+                              <KeyRound className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                              <Input
+                                id="inviteCode"
+                                value={inviteCode}
+                                onChange={(event) =>
+                                  setInviteCode(event.target.value)
+                                }
+                                placeholder="请输入邀请码"
+                                className="h-11 rounded-xl bg-slate-50/80 pl-10"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2.5">
+                            <Checkbox
+                              id="acceptedTerms"
+                              checked={acceptedTerms}
+                              onCheckedChange={(checked) =>
+                                setAcceptedTerms(checked === true)
+                              }
+                              className="mt-0.5"
+                            />
+                            <Label
+                              htmlFor="acceptedTerms"
+                              className="cursor-pointer text-xs font-normal leading-5 text-slate-700"
+                            >
+                              我已阅读并同意
+                              <Link
+                                href="/terms"
+                                className="mx-1 font-semibold text-primary hover:text-primary/80"
+                              >
+                                用户协议
+                              </Link>
+                              和
+                              <Link
+                                href="/privacy"
+                                className="mx-1 font-semibold text-primary hover:text-primary/80"
+                              >
+                                隐私政策
+                              </Link>
+                            </Label>
+                          </div>
+                        </div>
+                      </div>
 
-                  {message ? (
-                    <div
-                      role="status"
-                      aria-live="polite"
-                      className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-                    >
-                      {message}
-                    </div>
-                  ) : null}
+                      {error ? (
+                        <div
+                          role="alert"
+                          aria-live="polite"
+                          className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-600"
+                        >
+                          {error}
+                        </div>
+                      ) : null}
 
-                  <Button
-                    type="submit"
-                    className="h-12 w-full rounded-xl"
-                    disabled={loading}
+                      {message ? (
+                        <div
+                          role="status"
+                          aria-live="polite"
+                          className="rounded-xl border border-green-200 bg-green-50 px-3.5 py-2.5 text-xs text-green-700"
+                        >
+                          {message}
+                        </div>
+                      ) : null}
+
+                      <Button
+                        type="submit"
+                        className="h-11 w-full rounded-xl text-sm font-semibold"
+                        disabled={loading}
+                      >
+                        {loading
+                          ? "处理中..."
+                          : isRegister
+                          ? "注册"
+                          : "登录"}
+                      </Button>
+                    </form>
+
+                    <AlternateLoginMethods
+                      mode={currentMode}
+                      redirectTo={
+                        redirectTo === "/" ? "/account" : redirectTo
+                      }
+                      inviteCode={inviteCode}
+                      acceptedTerms={acceptedTerms}
+                    />
+                  </>
+                )}
+
+                <div className="mt-5 flex items-center justify-between text-xs">
+                  <button
+                    type="button"
+                    onClick={() => switchMode(isRegister ? "login" : "register")}
+                    className="font-medium text-primary transition-colors hover:text-primary/80"
                   >
-                    {loading ? "处理中..." : isRegister ? "注册" : "登录"}
-                  </Button>
-                </form>
-
-                <AlternateLoginMethods
-                  mode={mode}
-                  redirectTo={redirectTo === "/" ? "/account" : redirectTo}
-                  inviteCode={inviteCode}
-                  acceptedTerms={acceptedTerms}
-                />
-
-                <div className="mt-3 flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2.5 transition-all duration-300">
-                  <Checkbox
-                    id="acceptedTerms"
-                    checked={acceptedTerms}
-                    onCheckedChange={(checked) =>
-                      setAcceptedTerms(checked === true)
-                    }
-                    className="mt-0.5"
-                  />
-                  <Label
-                    htmlFor="acceptedTerms"
-                    className="cursor-pointer text-xs font-normal leading-5 text-slate-700"
-                  >
-                    我已阅读并同意
+                    {isRegister ? "已有账号，去登录" : "没有账号，立即注册"}
+                  </button>
+                  {!isRegister ? (
                     <Link
-                      href="/terms"
-                      className="mx-1 font-semibold text-primary hover:text-primary/80"
+                      href="/forgot-password"
+                      className="font-medium text-slate-500 transition-colors hover:text-primary"
                     >
-                      用户协议
+                      忘记密码
                     </Link>
-                    和
-                    <Link
-                      href="/privacy"
-                      className="mx-1 font-semibold text-primary hover:text-primary/80"
-                    >
-                      隐私政策
-                    </Link>
-                  </Label>
+                  ) : null}
                 </div>
-                </>}
               </div>
             </div>
           </section>
         </div>
       </div>
-
-      {/* Pure White Ripple Overlay on Successful Login */}
-      {showWhiteRipple && (
-        <div
-          className="pointer-events-none fixed inset-0 z-[9999] overflow-hidden"
-          aria-hidden="true"
-        >
-          <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white/95"
-            style={{
-              width: "1400px",
-              height: "1400px",
-              boxShadow:
-                "0 0 35px 8px rgba(255, 255, 255, 0.9), inset 0 0 20px 4px rgba(255, 255, 255, 0.75)",
-              animation: "white-ripple-radiate 1.1s cubic-bezier(0.1, 0.8, 0.2, 1) forwards",
+      {/* 登录成功同心圆柔光涟漪转场层（参考用户视频动效） */}
+      {loginSuccess && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center overflow-hidden">
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
+                @keyframes jianlian-auth-ripple {
+                  0% { transform: scale(0.2); opacity: 0.9; }
+                  50% { opacity: 0.55; }
+                  100% { transform: scale(22); opacity: 0; }
+                }
+                @keyframes jianlian-auth-glow {
+                  0% { opacity: 0; }
+                  40% { opacity: 0.85; }
+                  100% { opacity: 1; }
+                }
+              `,
             }}
           />
-          <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{
-              width: "160px",
-              height: "160px",
-              background:
-                "radial-gradient(circle, #ffffff 0%, rgba(255, 255, 255, 0.98) 55%, rgba(255, 255, 255, 0.85) 80%, rgba(255, 255, 255, 0) 100%)",
-              boxShadow: "0 0 100px 40px rgba(255, 255, 255, 0.95)",
-              animation: "white-flood-expand 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-            }}
-          />
-          <style>{`
-            @keyframes white-ripple-radiate {
-              0% { opacity: 1; transform: translate(-50%, -50%) scale(0.02); }
-              40% { opacity: 0.9; }
-              75% { opacity: 0.45; }
-              100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
-            }
-            @keyframes white-flood-expand {
-              0% { opacity: 1; transform: translate(-50%, -50%) scale(0.04); }
-              40% { opacity: 0.98; }
-              75% { opacity: 0.85; }
-              100% { opacity: 0; transform: translate(-50%, -50%) scale(40); }
-            }
-          `}</style>
+          <div className="absolute h-36 w-36 rounded-full border-2 border-orange-400/50 bg-radial from-orange-400/25 to-transparent blur-[1px] animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_forwards]" />
+          <div className="absolute h-36 w-36 rounded-full border-2 border-amber-300/50 bg-radial from-amber-300/25 to-transparent blur-sm animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.2s_forwards]" />
+          <div className="absolute h-36 w-36 rounded-full border-2 border-orange-500/40 bg-radial from-orange-500/20 to-transparent blur-md animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.4s_forwards]" />
+          <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] animate-[jianlian-auth-glow_0.9s_ease-out_forwards]" />
         </div>
       )}
     </main>
   );
 }
-
-function AuthTab({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "relative z-10 flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors duration-300",
-        active
-          ? "text-primary"
-          : "text-slate-500 hover:text-primary"
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
-

@@ -42,6 +42,35 @@ type CachedAuthState = {
   ready: boolean;
 };
 
+const AUTH_CACHE_STORAGE_KEY = "jianlian_topbar_auth_cache_v1";
+
+function loadPersistedAuthCache(): { user: User | null; profile: UserProfile | null } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_CACHE_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function persistAuthCache(user: User | null, profile: UserProfile | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (!user) {
+      window.sessionStorage.removeItem(AUTH_CACHE_STORAGE_KEY);
+    } else {
+      window.sessionStorage.setItem(
+        AUTH_CACHE_STORAGE_KEY,
+        JSON.stringify({ user, profile })
+      );
+    }
+  } catch {
+    /* Safe ignore */
+  }
+}
+
 let cachedAuthState: CachedAuthState = {
   user: null,
   profile: null,
@@ -114,11 +143,21 @@ export default function PublicTopInfoBar({
   const router = useRouter();
   const pathname = usePathname();
   const { isMobile } = useMobileStorefront();
-  const [user, setUser] = useState<User | null>(cachedAuthState.user);
-  const [profile, setProfile] = useState<UserProfile | null>(
-    cachedAuthState.profile
-  );
-  const [authReady, setAuthReady] = useState(cachedAuthState.ready);
+  const [user, setUser] = useState<User | null>(() => {
+    if (cachedAuthState.user) return cachedAuthState.user;
+    const persisted = loadPersistedAuthCache();
+    return persisted?.user ?? null;
+  });
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    if (cachedAuthState.profile) return cachedAuthState.profile;
+    const persisted = loadPersistedAuthCache();
+    return persisted?.profile ?? null;
+  });
+  const [authReady, setAuthReady] = useState(() => {
+    if (cachedAuthState.ready) return true;
+    const persisted = loadPersistedAuthCache();
+    return Boolean(persisted);
+  });
   const [announcementDelay, setAnnouncementDelay] = useState(0);
 
   const updateAuthState = (
@@ -131,6 +170,7 @@ export default function PublicTopInfoBar({
       profile: nextProfile,
       ready: nextReady,
     };
+    persistAuthCache(nextUser, nextProfile);
     setUser(nextUser);
     setProfile(nextProfile);
     setAuthReady(nextReady);

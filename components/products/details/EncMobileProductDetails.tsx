@@ -1,24 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
+  Activity,
   ArrowRight,
-  Briefcase,
+  Bot,
   CheckCircle2,
-  Clock3,
-  CreditCard,
-  Globe,
-  Headphones,
-  HelpCircle,
-  MessageSquare,
-  Plane,
+  ChevronRight,
+  Cpu,
+  Globe2,
+  Lock,
   Radio,
-  Repeat,
+  Server,
   ShieldCheck,
   Smartphone,
-  Sparkles,
-  Users,
-  Wallet,
+  Terminal,
+  Truck,
+  Wifi,
   Zap,
 } from "lucide-react";
 import { openPublicSupport } from "@/lib/support/open-public-support";
@@ -34,205 +33,311 @@ interface EncMobileProductDetailsProps {
   };
 }
 
+// 5G 频段与极客基站技术数据
+const BANDS = [
+  {
+    band: "n41",
+    freq: "2.5 GHz",
+    type: "Ultra Capacity 5G",
+    speed: "最高 800+ Mbps",
+    desc: "T-Mobile 超级 5G 黄金频段，高带宽低延迟，极客下载与 AI 大模型高并发首选。",
+    status: "ACTIVE",
+  },
+  {
+    band: "n71",
+    freq: "600 MHz",
+    type: "Extended Range 5G",
+    speed: "全美超广覆盖",
+    desc: "全美底层超强穿透低频段，室内、地下室及偏远地区信号依然满格。",
+    status: "ACTIVE",
+  },
+  {
+    band: "Band 2/4/66",
+    freq: "1.9/1.7/2.1 GHz",
+    type: "LTE-Advanced 聚合",
+    speed: "最高 300 Mbps",
+    desc: "全美三大运营商核心 4G/LTE 载波聚合频段，全机型 100% 完美兼容。",
+    status: "STANDBY",
+  },
+  {
+    band: "Band 12",
+    freq: "700 MHz",
+    type: "VoLTE 核心底层",
+    speed: "极强穿透",
+    desc: "负责高清语音通话与短信实时接收，全天候保障验证码秒级送达。",
+    status: "ACTIVE",
+  },
+];
+
+// AI 与金融穿透评级
+const PENETRATION_MATRIX = [
+  {
+    category: "AI 生产力集群",
+    targets: [
+      { name: "OpenAI / ChatGPT Plus", level: "A+ 极高", note: "原生 US 实体号码，免接码池黑名单" },
+      { name: "Claude 3.5 Sonnet (Anthropic)", level: "A+ 极高", note: "秒破严苛风控，完美支持 API 与网页注册" },
+      { name: "Google Gemini Advanced", level: "A 极高", note: "原生绑定 Google Workspace 与企业邮箱" },
+      { name: "xAI Grok / Midjourney", level: "A 极高", note: "极客社区两步验证与 Discord 高权重绑定" },
+    ],
+  },
+  {
+    category: "跨境金融与商户矩阵",
+    targets: [
+      { name: "Bank of America (美银)", level: "A+ 原生", note: "美国本土实体号段，秒过 Zelle 绑定与网银审核" },
+      { name: "Chase / Citi / Wells Fargo", level: "A+ 原生", note: "三大行短信验证码 100% 畅通送达" },
+      { name: "美区 Stripe / PayPal / Wise", level: "A 顶级", note: "跨境电商独立站资金结算与商户二步认证" },
+      { name: "Capital One / 华美 Velo", level: "A 顶级", note: "海外信用卡申请与实体卡开卡激活" },
+    ],
+  },
+];
+
 export default function EncMobileProductDetails({ product }: EncMobileProductDetailsProps) {
-  const dualModes = [
-    {
-      stage: "阶段一 · 赴美前",
-      title: "国内极简接码保号舱",
-      desc: "在中国大陆长期低成本待机，免费接收各类海外银行、社交媒体、AI 平台的短信验证码，提前搞定海外账户搭建。",
-      features: ["国内免费接收短信", "超低月费长期持有", "不产生额外漫游隐形费用"],
-      tag: "国内待机",
-      tagColor: "bg-blue-100 text-blue-800",
-    },
-    {
-      stage: "阶段二 · 赴美后",
-      title: "一键升级全美主力 5G 套餐",
-      desc: "落地美国或夏威夷、波多黎各后，随时在官网将套餐升级为高速 5G 无限流量，包含全美及无限直拨中国大陆国际通话。",
-      features: ["T-Mobile 原生高速 5G", "无限中美双向长途", "落地插卡即用免排队办卡"],
-      tag: "在美主力",
-      tagColor: "bg-amber-100 text-amber-800",
-    },
-  ];
-
-  const highlights = [
-    {
-      icon: Headphones,
-      title: "7×24 小时中文官方客服",
-      desc: "专为华人量身定制，提供 7×24 中文电话客服、微信官方客服与在线工单，彻底免除英文沟通障碍。",
-    },
-    {
-      icon: Wallet,
-      title: "微信与支付宝便捷充值",
-      desc: "告别传统境外卡必须绑定美国信用卡扣款的繁琐痛点，支持直接使用国内微信或支付宝扫码结算账单。",
-    },
-    {
-      icon: Radio,
-      title: "T-Mobile 原生顶级基站网络",
-      desc: "底层直接接入全美覆盖最广的 T-Mobile 原生高速蜂窝网络，实体 SIM 物理号段，信誉权重顶级。",
-    },
-    {
-      icon: Briefcase,
-      title: "出海商务与留学生首选",
-      desc: "适合跨境商务、海外留学、外贸出海人员，无论是长期国内养号还是跨洋差旅均可自由切换应对自如。",
-    },
-  ];
-
-  const faqs = [
-    {
-      q: "ENC Mobile 适合什么样的用户？",
-      a: "ENC Mobile 特别适合准备赴美留学、商务差旅、移民探亲，或者在国内需要长期稳定持有高信誉度美国原生实体卡的用户。它的核心优势是支持中美双栖自由升级、全中文客服支持，以及支持微信/支付宝充值。",
-    },
-    {
-      q: "在国内待机收短信需要开通什么功能吗？",
-      a: "卡片已默认开通国际漫游服务。收卡后根据指引在手机设置中开启「数据漫游」即可搜索到中国移动或中国联通的漫游信号，待机接收短信完全免费。",
-    },
-    {
-      q: "到达美国后如何切换为大流量套餐？",
-      a: "您可以直接登录 ENC Mobile 官网中文个人中心，随时选择升级为包含海量 5G 流量和无限通话的月度套餐，几分钟内即可生效，到达美国后直接畅享极速网络。",
-    },
-  ];
+  const [selectedBand, setSelectedBand] = useState(0);
 
   return (
-    <div className="mt-8 space-y-8">
-      {/* 1. 曜石黑金高端商务 Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-zinc-900 to-amber-950 p-6 text-white shadow-xl sm:p-8">
-        <div className="relative z-10 max-w-2xl space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-200">
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-              华人出海专属美卡
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-medium text-slate-300">
-              <Headphones className="h-3.5 w-3.5 text-amber-300" />
-              7×24 中文真人客服
-            </span>
+    <div className="mt-8 w-full space-y-8 select-none">
+      {/* 1. 赛博 5G 极客终端 Hero Console */}
+      <section className="relative overflow-hidden rounded-3xl border border-emerald-500/30 bg-[#090d16] p-6 text-white shadow-[0_20px_60px_-15px_rgba(0,255,157,0.15)] sm:p-8">
+        {/* 背景扫描网格与微光 */}
+        <div className="absolute inset-0 bg-[radial-gradient(#00FF9D_1px,transparent_1px)] [background-size:24px_24px] opacity-10 pointer-events-none" />
+        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
+        <div className="absolute -left-20 -bottom-20 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col gap-6">
+          {/* 控制台顶部状态条 */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-500/20 pb-4">
+            <div className="inline-flex items-center gap-2 font-mono text-xs text-emerald-400">
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>TERMINAL: ENC_5G_SYS_ONLINE</span>
+            </div>
+            <div className="flex items-center gap-2 font-mono text-xs text-slate-400">
+              <span className="rounded bg-emerald-950/80 px-2 py-0.5 text-emerald-300 border border-emerald-700/40">
+                5G SA/NSA DUAL
+              </span>
+              <span className="rounded bg-slate-800/80 px-2 py-0.5 text-slate-300 border border-slate-700">
+                T-MOBILE BACKBONE
+              </span>
+            </div>
           </div>
 
-          <h2 className="text-2xl font-black tracking-tight sm:text-3xl text-white">
-            ENC Mobile 美国原生手机卡 · 中美双栖出海利器
+          {/* 终端主标题与核心卖点 */}
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 font-mono text-xs font-semibold text-emerald-300">
+              <Cpu className="h-3.5 w-3.5" />
+              <span>NATIVE US 5G TRIPLE-CUT HARDWARE</span>
+            </div>
+            <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+              Enc Mobile · 美国原生 5G 极客通讯终端
+            </h1>
+            <p className="max-w-2xl text-sm font-medium leading-relaxed text-slate-300">
+              搭载正规美国三大运营商之首 T-Mobile 原生 5G 独立组网协议，纯血美国本土移动号段。
+              专为极客架构师、出海开发者及跨境金融量身打造，彻底封堵风控拦截与虚拟号降权。
+            </p>
+          </div>
+
+          {/* 极客测速仿真仪表盘 */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 font-mono">
+            <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/60 p-3.5 backdrop-blur-md">
+              <div className="text-[11px] text-slate-400">NETWORK PROTOCOL</div>
+              <div className="mt-1 text-base font-bold text-emerald-400">5G SA/NSA 双模</div>
+              <div className="mt-0.5 text-[10px] text-slate-500">独立低延迟骨干网</div>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/60 p-3.5 backdrop-blur-md">
+              <div className="text-[11px] text-slate-400">CARRIER IDENTITY</div>
+              <div className="mt-1 text-base font-bold text-white">美国本土原生卡</div>
+              <div className="mt-0.5 text-[10px] text-slate-500">Non-VoIP 纯实体属性</div>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/60 p-3.5 backdrop-blur-md">
+              <div className="text-[11px] text-slate-400">DOWNLINK BANDWIDTH</div>
+              <div className="mt-1 text-base font-bold text-cyan-400">800+ Mbps</div>
+              <div className="mt-0.5 text-[10px] text-slate-500">极速大模型并发加载</div>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/60 p-3.5 backdrop-blur-md">
+              <div className="text-[11px] text-slate-400">ZERO ROAMING FEE</div>
+              <div className="mt-1 text-base font-bold text-emerald-400">WiFi Calling</div>
+              <div className="mt-0.5 text-[10px] text-slate-500">国内宽带直连免漫游</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. 5G 实时基站信号与频段拓扑控制台 */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="mb-6 flex flex-col gap-2">
+          <div className="inline-flex items-center gap-2 font-mono text-xs font-bold text-emerald-600">
+            <Radio className="h-4 w-4" />
+            <span>BASE_STATION_TOPOLOGY // 5G 基站多频段矩阵</span>
+          </div>
+          <h2 className="text-2xl font-black text-slate-900">
+            全美三大运营商核心频段 · 硬件级原生漫游
           </h2>
-
-          <p className="text-sm leading-relaxed text-slate-300 sm:text-base">
-            国内低成本接码待机，赴美无缝升级 5G 高速大流量。支持微信/支付宝直接缴费，全中文售后支持，出海零门槛。
+          <p className="text-sm text-slate-500">
+            国内完美漫游中国移动 / 中国联通基站网络，海外直连 T-Mobile 5G 极速蜂窝。
           </p>
-
-          <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-amber-200/90">
-            <div className="flex items-center gap-1">
-              <CheckCircle2 className="h-4 w-4 text-amber-400" />
-              <span>微信/支付宝直接充值</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <CheckCircle2 className="h-4 w-4 text-amber-400" />
-              <span>国内免费接收验证码</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <CheckCircle2 className="h-4 w-4 text-amber-400" />
-              <span>T-Mobile 原生高速物理网络</span>
-            </div>
-          </div>
         </div>
 
-        {/* Decorative background glow */}
-        <div className="pointer-events-none absolute -right-12 -top-12 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-12 right-24 h-48 w-48 rounded-full bg-orange-500/10 blur-2xl" />
-      </div>
+        {/* 频段切换 Tab */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {BANDS.map((item, idx) => (
+            <button
+              key={item.band}
+              type="button"
+              onClick={() => setSelectedBand(idx)}
+              className={`flex flex-col items-start rounded-2xl p-4 text-left transition-all font-mono ${
+                selectedBand === idx
+                  ? "border-2 border-emerald-500 bg-emerald-50/80 shadow-xs"
+                  : "border border-slate-200 bg-slate-50/60 hover:bg-slate-100"
+              }`}
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="text-sm font-black text-slate-900">{item.band}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  selectedBand === idx ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600"
+                }`}>
+                  {item.status}
+                </span>
+              </div>
+              <div className="mt-2 text-xs font-medium text-slate-500">{item.freq}</div>
+              <div className="mt-0.5 text-[11px] font-bold text-emerald-600">{item.type}</div>
+            </button>
+          ))}
+        </div>
 
-      {/* 2. 差异化独家模块: 中美双栖自由切换舱 */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-        <div className="mb-6">
+        {/* 当前选中频段详情板 */}
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50/70 via-slate-50 to-white p-5 font-mono">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-100 pb-3">
+            <div className="text-xs font-bold text-slate-700">
+              ACTIVE_PROFILE: <span className="text-emerald-600 font-black">{BANDS[selectedBand].band}</span> ({BANDS[selectedBand].freq})
+            </div>
+            <div className="text-xs font-semibold text-emerald-600">
+              峰值速率: {BANDS[selectedBand].speed}
+            </div>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-slate-600 font-sans">
+            {BANDS[selectedBand].desc}
+          </p>
+        </div>
+      </section>
+
+      {/* 3. 极客硬件与网络协议参数矩阵 (Terminal Specs Matrix) */}
+      <section className="rounded-3xl border border-slate-800 bg-[#0d131f] p-6 text-white shadow-lg sm:p-8 font-mono">
+        <div className="mb-6 flex items-center justify-between border-b border-slate-700/60 pb-4">
           <div className="flex items-center gap-2">
-            <Repeat className="h-5 w-5 text-amber-600" />
-            <h3 className="text-lg font-bold text-slate-900">中美双栖自由切换方案</h3>
+            <Terminal className="h-5 w-5 text-emerald-400" />
+            <h2 className="text-lg font-bold text-white tracking-wide">
+              HARDWARE & PROTOCOL SPECS // 终端硬件与协议规范
+            </h2>
           </div>
-          <p className="mt-1 text-xs text-slate-500">一张卡搞定出海全流程：从国内提前养号到在美主力通讯无缝衔接</p>
+          <div className="text-[11px] text-slate-400 hidden sm:block">
+            REV_2026.04 // PASS
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {dualModes.map((mode, idx) => (
-            <div key={idx} className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/50 p-5 transition-all hover:border-amber-400">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{mode.stage}</span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${mode.tagColor}`}>
-                    {mode.tag}
-                  </span>
-                </div>
-                <h4 className="mt-2 text-base font-bold text-slate-900">{mode.title}</h4>
-                <p className="mt-2 text-xs leading-relaxed text-slate-600">{mode.desc}</p>
-                <div className="mt-4 space-y-1.5 border-t border-slate-200/80 pt-3">
-                  {mode.features.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs text-slate-700">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>{f}</span>
+        <div className="grid gap-3 sm:grid-cols-2 text-xs">
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
+            <span className="text-slate-400">[SIM_CHIP_FORM]</span>
+            <span className="font-bold text-emerald-400">原生三合一免剪卡 (Nano/Micro/Standard)</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
+            <span className="text-slate-400">[CARRIER_ID]</span>
+            <span className="font-bold text-white">T-Mobile USA (310-260) 原生号段</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
+            <span className="text-slate-400">[WIFI_CALLING]</span>
+            <span className="font-bold text-emerald-400">原生内建支持 (走宽带0漫游通话短信)</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
+            <span className="text-slate-400">[APN_GATEWAY]</span>
+            <span className="font-bold text-white">fast.t-mobile.com (自动下发)</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
+            <span className="text-slate-400">[ENCRYPTION]</span>
+            <span className="font-bold text-cyan-400">A5/3 + 军工级 128-bit 芯片加密</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
+            <span className="text-slate-400">[VOIP_ATTRIBUTE]</span>
+            <span className="font-bold text-emerald-400">FALSE (100% 真实移动蜂窝卡)</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. AI 与跨境金融高穿透雷达 */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="mb-6 flex flex-col gap-2">
+          <div className="inline-flex items-center gap-2 font-mono text-xs font-bold text-emerald-600">
+            <ShieldCheck className="h-4 w-4" />
+            <span>PENETRATION_RADAR // 顶流生态穿透雷达</span>
+          </div>
+          <h2 className="text-2xl font-black text-slate-900">
+            秒过 OpenAI、Claude 与全美主流银行风控
+          </h2>
+          <p className="text-sm text-slate-500">
+            绝非随时可能失效的接码平台，真实物理实体卡，支持终身绑定与两步安全验证。
+          </p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {PENETRATION_MATRIX.map((group) => (
+            <div
+              key={group.category}
+              className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5"
+            >
+              <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-2.5">
+                <span className="font-bold text-slate-900">{group.category}</span>
+                <span className="font-mono text-xs font-semibold text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded">
+                  PASSED 100%
+                </span>
+              </div>
+              <div className="space-y-3">
+                {group.targets.map((tgt) => (
+                  <div
+                    key={tgt.name}
+                    className="flex flex-col gap-1 rounded-xl bg-white p-3 shadow-2xs border border-slate-100"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800">{tgt.name}</span>
+                      <span className="font-mono text-[11px] font-bold text-emerald-600">
+                        {tgt.level}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 3. 核心优势特性 */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-        <div className="mb-6">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-amber-600" />
-            <h3 className="text-lg font-bold text-slate-900">ENC Mobile 核心专享优势</h3>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">全方位兼顾便捷度与原生通信品质</p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {highlights.map((h, idx) => {
-            const Icon = h.icon;
-            return (
-              <div key={idx} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
-                    <Icon className="h-4 w-4" />
+                    <span className="text-[11px] text-slate-500">{tgt.note}</span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">{h.title}</h4>
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-slate-600">{h.desc}</p>
+                ))}
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. 常见问答 FAQ */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-        <div className="mb-5 flex items-center gap-2">
-          <HelpCircle className="h-5 w-5 text-slate-700" />
-          <h3 className="text-lg font-bold text-slate-900">ENC Mobile 常见问题解答</h3>
-        </div>
-
-        <div className="divide-y divide-slate-100">
-          {faqs.map((f, i) => (
-            <div key={i} className="py-4 first:pt-0 last:pb-0">
-              <h4 className="text-sm font-semibold text-slate-900">{f.q}</h4>
-              <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{f.a}</p>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* 5. 底部客服咨询卡片 */}
-      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 p-6 sm:flex-row">
-        <div>
-          <h4 className="text-base font-bold text-slate-900">需要了解更多 ENC Mobile 套餐细则或激活指导？</h4>
-          <p className="mt-1 text-xs text-slate-600">本站提供全流程中文咨询与技术支持，保障您的境外卡片长期安全稳定持有。</p>
+      {/* 5. 实体物流发货与极客包装保障 */}
+      <section className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950 via-slate-900 to-black p-6 text-white sm:p-8">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 font-mono text-xs text-emerald-400">
+              <Truck className="h-4 w-4" />
+              <span>HARDWARE_DISPATCH // 实体硬件极速交付</span>
+            </div>
+            <h3 className="text-2xl font-black text-white">
+              现货顺丰空运 · 黑色屏蔽防静电装甲
+            </h3>
+            <p className="max-w-xl text-xs font-medium leading-relaxed text-slate-300">
+              本商品为正品全新实体卡，采用加厚防折弯硬盒与专业铝箔防静电袋封装。
+              下单后系统自动分配顺丰单号，请在右侧准确填写收货地址、姓名与联系电话。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openPublicSupport}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-3.5 text-sm font-black text-slate-950 shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] hover:bg-emerald-400 active:scale-[0.98]"
+          >
+            联系专属极客客服
+            <ArrowRight className="h-4 w-4" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => openPublicSupport()}
-          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-semibold text-amber-400 shadow-sm hover:bg-slate-800 transition-colors"
-        >
-          <MessageSquare className="h-4 w-4" />
-          联系在线技术客服
-        </button>
-      </div>
+      </section>
     </div>
   );
 }
