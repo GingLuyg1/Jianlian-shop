@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
+import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 
@@ -165,8 +167,8 @@ export default function AccountPrivacyPage() {
   }
 
   return (
-    <div data-account-page="/account/privacy" data-account-ready={!loading && !error} aria-busy={loading} className={`${glass.surface} ${styles.panel} ${styles.page} ${styles.privacy} flex h-full min-h-0 flex-col overflow-hidden`}>
-      <div className={`${glass.hero} ${styles.pageHeader}`}>
+    <div data-account-page="/account/privacy" data-account-ready={!loading && !error} aria-busy={loading} className={cn(`${glass.surface} ${styles.panel} ${styles.page} ${styles.privacy} flex h-full min-h-0 flex-col overflow-hidden`, "max-md:border-0 max-md:shadow-none max-md:bg-transparent")}>
+      <div className={`${glass.hero} ${styles.pageHeader} max-md:px-4 max-md:py-3`}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-slate-950">隐私设置</h1>
@@ -175,60 +177,80 @@ export default function AccountPrivacyPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-6 max-md:px-1">
         {error ? <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button type="button" className="shrink-0 underline underline-offset-4" onClick={loadSummary}>重试</button></div> : null}
-        <div className="space-y-5">
-            <section className="grid gap-3 md:grid-cols-4">
+        <div className="space-y-4 sm:space-y-5">
+            <section className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4">
               {[
                 ["订单", counts.orders],
                 ["充值", counts.recharges],
                 ["余额流水", counts.balanceTransactions],
                 ["交付记录", counts.deliveries],
               ].map(([label, value]) => (
-                <div key={String(label)} className={`${glass.inset} rounded-xl p-4`}>
-                  <p className="text-sm text-slate-500">{label}</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">{loading && value === undefined ? "…" : (value ?? "—")}</p>
+                <div key={String(label)} className={`${glass.inset} rounded-xl p-3.5 sm:p-4 transition-all`}>
+                  <p className="text-xs sm:text-sm text-slate-500">{label}</p>
+                  <div className="mt-1.5 flex h-8 items-center">
+                    {loading && value === undefined ? (
+                      <span className="h-6 w-12 animate-pulse rounded-md bg-orange-200/50" />
+                    ) : (
+                      <span className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{value ?? "0"}</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </section>
 
-            <section className="rounded-xl border p-5">
+            <section className="rounded-xl border border-[#ebdece] bg-white/90 p-4 sm:p-5 shadow-xs">
               <div className="flex items-start gap-3">
-                <FileLock2 className="mt-1 h-5 w-5 text-primary" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100/70 text-[#d86e31]">
+                  <FileLock2 className="h-4.5 w-4.5" />
+                </div>
                 <div>
-                  <h2 className="text-lg font-semibold">个人数据导出</h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">导出内容包含基本资料、订单摘要、充值记录、余额流水、退款记录、交付摘要和通知记录。不会包含密码、Token、支付密钥、内部备注或其他用户数据。</p>
-                  <Button className="mt-4" onClick={exportData} disabled={exporting}>
-                    <Download className="mr-2 h-4 w-4" />
-                    {exporting ? "生成中..." : "导出个人数据"}
+                  <h2 className="text-base sm:text-lg font-semibold text-slate-900">个人数据导出</h2>
+                  <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-500">导出内容包含基本资料、订单摘要、充值记录、余额流水、退款记录、交付摘要和通知记录。不会包含密码、Token、支付密钥、内部备注或其他用户数据。</p>
+                  <Button className="mt-3.5 h-10 rounded-xl font-medium" onClick={exportData} disabled={exporting}>
+                    <OptionLoadingSpinner active={exporting} size="sm" className="mr-2" />
+                    {!exporting ? <Download className="mr-2 h-4 w-4" /> : null}
+                    {exporting ? "生成导出文件中..." : "导出个人数据"}
                   </Button>
                 </div>
               </div>
             </section>
 
-            <section className="rounded-xl border border-orange-200 bg-orange-50/30 p-5">
+            <section className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 sm:p-5 shadow-xs">
               <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-1 h-5 w-5 text-primary" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100/70 text-[#d86e31]">
+                  <ShieldAlert className="h-4.5 w-4.5" />
+                </div>
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-lg font-semibold">账号注销</h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">注销前会校验未完成订单、待处理退款、余额、待交付内容和安全风险。历史订单、支付、余额流水和审计记录会按业务和法定要求保留，个人资料会按规则匿名化。</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={checkDeletion} disabled={checking}>{checking ? "检查中..." : "检查阻塞项"}</Button>
-                    {hasActiveDeletion ? <Button variant="outline" onClick={cancelDeletion} disabled={cancelling}>{cancelling ? "取消中..." : "取消注销申请"}</Button> : null}
+                  <h2 className="text-base sm:text-lg font-semibold text-slate-900">账号注销</h2>
+                  <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-600">注销前会校验未完成订单、待处理退款、余额、待交付内容和安全风险。历史订单、支付、余额流水和审计记录会按业务和法定要求保留，个人资料会按规则匿名化。</p>
+                  <div className="mt-3.5 flex flex-wrap gap-2">
+                    <Button variant="outline" className="h-9 rounded-xl text-xs sm:text-sm" onClick={checkDeletion} disabled={checking}>
+                      <OptionLoadingSpinner active={checking} size="sm" className="mr-1.5" />
+                      {checking ? "检查中..." : "检查阻塞项"}
+                    </Button>
+                    {hasActiveDeletion ? (
+                      <Button variant="outline" className="h-9 rounded-xl text-xs sm:text-sm text-red-600 hover:text-red-700" onClick={cancelDeletion} disabled={cancelling}>
+                        <OptionLoadingSpinner active={cancelling} size="sm" className="mr-1.5" />
+                        {cancelling ? "取消中..." : "取消注销申请"}
+                      </Button>
+                    ) : null}
                   </div>
                   {blockers.length ? (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <div className="mt-3.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs sm:text-sm text-amber-800">
                       <p className="font-medium">当前存在阻塞项：</p>
-                      <ul className="mt-2 list-disc space-y-1 pl-5">
+                      <ul className="mt-1.5 list-disc space-y-1 pl-5">
                         {blockers.map((item) => <li key={item}>{item}</li>)}
                       </ul>
                     </div>
                   ) : null}
-                  <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,180px)_auto]">
-                    <input className="rounded-lg border px-3 py-2 text-sm" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="注销原因或补充说明" />
-                    <input className="rounded-lg border px-3 py-2 text-sm" value={confirmText} onChange={(event) => setConfirmText(event.target.value)} placeholder="输入：确认注销" />
-                    <Button variant="destructive" onClick={requestDeletion} disabled={requesting}>
-                      <Trash2 className="mr-2 h-4 w-4" />
+                  <div className="mt-3.5 grid min-w-0 gap-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,160px)_auto]">
+                    <input className="h-10 rounded-xl border border-[#eadfd3] bg-white px-3 text-xs sm:text-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="注销原因或补充说明" />
+                    <input className="h-10 rounded-xl border border-[#eadfd3] bg-white px-3 text-xs sm:text-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" value={confirmText} onChange={(event) => setConfirmText(event.target.value)} placeholder="输入：确认注销" />
+                    <Button variant="destructive" className="h-10 rounded-xl text-xs sm:text-sm font-medium" onClick={requestDeletion} disabled={requesting}>
+                      <OptionLoadingSpinner active={requesting} size="sm" className="mr-1.5" />
+                      {!requesting ? <Trash2 className="mr-1.5 h-4 w-4" /> : null}
                       {requesting ? "提交中..." : "提交注销申请"}
                     </Button>
                   </div>
@@ -236,28 +258,33 @@ export default function AccountPrivacyPage() {
               </div>
             </section>
 
-            <section className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border p-5">
-                <h2 className="text-lg font-semibold">数据保留说明</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">账号注销后，订单、支付、余额流水、退款、交付摘要和审计记录会保留用于财务核对、争议处理和安全审计；邮箱、昵称、头像、电话和常用地址会匿名化。</p>
+            <section className="grid gap-3 sm:gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-[#ebdece] bg-white/90 p-4 sm:p-5 shadow-xs">
+                <h2 className="text-base font-semibold text-slate-900">数据保留说明</h2>
+                <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-slate-500">账号注销后，订单、支付、余额流水、退款、交付摘要和审计记录会保留用于财务核对、争议处理和安全审计；邮箱、昵称、头像、电话和常用地址会匿名化。</p>
               </div>
-              <div className="rounded-xl border p-5">
-                <h2 className="text-lg font-semibold">登录设备与通知</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">登录设备管理与通知偏好暂未开放。现有账户登录与安全保护保持有效。</p>
+              <div className="rounded-xl border border-[#ebdece] bg-white/90 p-4 sm:p-5 shadow-xs">
+                <h2 className="text-base font-semibold text-slate-900">登录设备与通知</h2>
+                <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-slate-500">登录设备管理与通知偏好暂未开放。现有账户登录与安全保护保持有效。</p>
               </div>
             </section>
 
-            <section className="rounded-xl border p-5">
-              <h2 className="text-lg font-semibold">最近隐私请求</h2>
+            <section className="rounded-xl border border-[#ebdece] bg-white/90 p-4 sm:p-5 shadow-xs">
+              <h2 className="text-base font-semibold text-slate-900">最近隐私请求</h2>
               <div className="mt-3 space-y-2">
-                {(summary?.recentRequests ?? summary?.requests)?.length ? (summary?.recentRequests ?? summary?.requests ?? []).map((item) => (
-                  <div key={item.id} className={`${styles.requestRow} rounded-lg bg-white/70 px-3 py-3 text-sm`}>
-                    <span>{item.requestNo}</span>
-                    <span>{item.requestType === "data_export" ? "数据导出" : "账号注销"}</span>
-                    <span>{STATUS_LABELS[item.status] ?? item.status}</span>
-                    <span className="text-slate-500">{item.createdAt ? new Date(item.createdAt).toLocaleString("zh-CN") : "—"}</span>
+                {loading ? (
+                  <div className="space-y-2 py-2">
+                    <div className="h-10 w-full animate-pulse rounded-lg bg-slate-100" />
+                    <div className="h-10 w-full animate-pulse rounded-lg bg-slate-100" />
                   </div>
-                )) : <div className="rounded-lg bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">{loading ? "正在读取隐私请求..." : "暂无隐私请求"}</div>}
+                ) : (summary?.recentRequests ?? summary?.requests)?.length ? (summary?.recentRequests ?? summary?.requests ?? []).map((item) => (
+                  <div key={item.id} className={`${styles.requestRow} rounded-lg bg-slate-50/80 px-3 py-2.5 text-xs sm:text-sm`}>
+                    <span className="font-medium text-slate-800">{item.requestNo}</span>
+                    <span>{item.requestType === "data_export" ? "数据导出" : "账号注销"}</span>
+                    <span className="text-primary font-medium">{STATUS_LABELS[item.status] ?? item.status}</span>
+                    <span className="text-slate-400">{item.createdAt ? new Date(item.createdAt).toLocaleString("zh-CN") : "—"}</span>
+                  </div>
+                )) : <div className="rounded-lg bg-slate-50 px-3 py-6 text-center text-xs sm:text-sm text-slate-500">暂无隐私请求记录</div>}
               </div>
             </section>
           </div>
