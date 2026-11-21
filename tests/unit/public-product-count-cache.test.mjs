@@ -11,7 +11,9 @@ test("public placeholder count belongs only to the exact query and route", () =>
   assert.equal(getPublicProductCountForRoute("/products/a", 1001), 2);
   assert.equal(getPublicProductCount("category-a|search=x|page=1", 1001), undefined);
   assert.equal(getPublicProductCountForRoute("/products/b", 1001), undefined);
-  assert.equal(getPublicProductCount("category-a|search=|page=1", 31001), undefined);
+  assert.equal(getPublicProductCount("category-a|search=|page=1", 1000 + 599_999), 2);
+  assert.equal(getPublicProductCountForRoute("/products/a", 1000 + 600_000), undefined);
+  assert.equal(getPublicProductCount("category-a|search=|page=1", 1000 + 600_001), undefined);
 });
 
 test("disabled categories and failed requests invalidate count hints", () => {
@@ -23,4 +25,8 @@ test("disabled categories and failed requests invalidate count hints", () => {
   assert.equal(getPublicProductCountForRoute("/products/b", 1001), undefined);
   forgetPublicProductCount("a");
   assert.equal(getPublicProductCountForRoute("/products/a", 1001), undefined);
+  rememberPublicProductCount("a", "/products/a", "a", 2, 1001);
+  clearPublicProductCounts();
+  assert.equal(getPublicProductCount("a", 1002), undefined);
+  assert.equal(getPublicProductCountForRoute("/products/a", 1002), undefined);
 });

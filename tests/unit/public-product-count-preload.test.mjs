@@ -29,7 +29,17 @@ test("one bulk count request serves all page sizes, while search remains unknown
   assert.equal(api.getPublicProductCount(key("a", "search")), undefined);
   assert.equal(api.getPublicProductCount(key("b")), undefined);
   await api.prefetchPublicProductCounts(); assert.equal(calls.length, 1);
-  advance(30001); assert.equal(api.getPublicProductCount(key()), undefined);
+  advance(899_999);
+  assert.equal(api.getPublicProductCount(key()), 20);
+  assert.equal(await api.prefetchPublicProductCounts(), true);
+  assert.equal(calls.length, 1);
+  advance(1);
+  assert.equal(api.getPublicProductCount(key()), undefined);
+  const refresh = api.prefetchPublicProductCounts();
+  assert.equal(calls.length, 2);
+  calls[1](new Response(null, { status: 503 }));
+  assert.equal(await refresh, false);
+  assert.equal(api.getPublicProductCount(key()), undefined);
 });
 
 test("actual query counts supersede speculative totals and failed queries discard hints", async () => {
@@ -37,6 +47,22 @@ test("actual query counts supersede speculative totals and failed queries discar
   api.rememberPublicProductCount(key(), "/products/sim-cards", "a", 2, 1000);
   assert.equal(api.getPublicProductCount(key()), 2);
   api.forgetPublicProductCount(key()); assert.equal(api.getPublicProductCount(key()), undefined);
+});
+
+test("bulk hints for hidden categories and cleared data are immediately invalid", async () => {
+  const { api, calls } = client();
+  const preload = api.prefetchPublicProductCounts();
+  calls[0](Response.json({ complete: true, counts: [
+    { primaryCategoryId: "p", secondaryCategoryId: "a", total: 3 },
+    { primaryCategoryId: "p", secondaryCategoryId: "b", total: 7 },
+  ] }));
+  assert.equal(await preload, true);
+  assert.equal(api.getPublicProductCount(key("b")), 7);
+  api.retainVisiblePublicProductCounts(new Set(["a"]));
+  assert.equal(api.getPublicProductCount(key("b")), undefined);
+  assert.equal(api.getPublicProductCount(key("a")), 3);
+  api.clearPublicProductCounts();
+  assert.equal(api.getPublicProductCount(key("a")), undefined);
 });
 
 test("failed, incomplete and malformed responses never become zero-count hints", async () => {
