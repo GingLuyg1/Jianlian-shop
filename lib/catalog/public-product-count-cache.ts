@@ -1,11 +1,11 @@
 // A short-lived, public-only hint for the number of cards on one exact result page.
 // This count never authorizes purchases or supplies product data; the public
 // page cache separately revalidates listings on a short TTL.
-const MAX_AGE_MS = 15_000;
+const MAX_AGE_MS = 600_000;
 const counts = new Map<string, { categoryId: string; count: number; savedAt: number }>();
 const routeQueries = new Map<string, string>();
 const categoryTotals = new Map<string, { total: number; savedAt: number }>();
-const TOTAL_MAX_AGE_MS = 30_000;
+const TOTAL_MAX_AGE_MS = 900_000;
 let fetchedAt = 0;
 let nextAttemptAt = 0;
 let generation = 0;

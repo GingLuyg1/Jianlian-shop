@@ -3,9 +3,11 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  BookOpen,
   Bot,
   Calendar,
   CheckCircle2,
+  ChevronRight,
   Clock,
   Clock3,
   CreditCard,
@@ -237,6 +239,32 @@ export default function OneNzProductDetails({ product }: OneNzProductDetailsProp
           </div>
         </div>
       </section>
+
+      {/* 底部绑定教程专区：新西兰 One NZ 官方图文与激活配置教程直通卡 */}
+      <div className="flex flex-col gap-4 rounded-3xl border border-emerald-300/80 bg-gradient-to-br from-emerald-900 via-teal-950 to-slate-950 p-6 text-white shadow-md sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-300 border border-emerald-400/30">
+              <BookOpen className="h-3.5 w-3.5" />
+              配套保姆级教程
+            </span>
+            <span className="text-xs text-slate-400">免充值 · 零月租 · 防扣费</span>
+          </div>
+          <h4 className="text-base font-extrabold text-white sm:text-lg">
+            新西兰 One NZ 官方图文与账户绑定教程
+          </h4>
+          <p className="text-xs leading-relaxed text-slate-300 sm:text-sm">
+            已备齐详细日常使用技巧、My One NZ App 账户绑定、免费查本机号码（发 521）及防扣费完整指南。
+          </p>
+        </div>
+        <Link
+          href="/tutorials?topic=one-nz&guide=usage"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-3 text-xs font-bold text-slate-950 shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-95 sm:text-sm"
+        >
+          <span>进入 One NZ 完整使用教程</span>
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      </div>
 
       {/* 底部客服咨询条 */}
       <div className="flex flex-col gap-4 rounded-2xl border border-emerald-200/90 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">

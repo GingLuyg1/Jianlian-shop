@@ -6,8 +6,10 @@ import { rememberPublicProductCount } from "@/lib/catalog/public-product-count-c
 import { rememberPublicProductPreview, clearPublicProductPreviews } from "@/lib/catalog/public-product-preview";
 
 // Public listing data only. Neither prices nor stock in this cache authorize a purchase.
-const MAX_AGE_MS = 15_000;
-const MAX_ENTRIES = 24;
+// Extended to 10 minutes fresh, 30 minutes stale-while-revalidate for instantaneous navigation.
+const MAX_AGE_MS = 600_000;
+const STALE_MAX_AGE_MS = 1_800_000;
+const MAX_ENTRIES = 120;
 const entries = new Map<string, { result?: CatalogProductResult; promise?: Promise<CatalogProductResult>; savedAt: number }>();
 let generation = 0;
 let backgroundInFlight = 0;
@@ -28,13 +30,25 @@ export function publicProductQueryKey(query: CatalogProductQuery) {
 
 export function peekPublicProductPage(query: CatalogProductQuery, now = Date.now()) {
   const entry = entries.get(publicProductQueryKey(query));
-  return entry?.result && now - entry.savedAt < MAX_AGE_MS ? entry.result : undefined;
+  return entry?.result && now - entry.savedAt < STALE_MAX_AGE_MS ? entry.result : undefined;
 }
 
 export function getPublicProductPage(query: CatalogProductQuery, force = false): Promise<CatalogProductResult> {
   const key = publicProductQueryKey(query);
   const prior = entries.get(key);
-  if (!force && prior?.result && Date.now() - prior.savedAt < MAX_AGE_MS) return Promise.resolve(prior.result);
+  const now = Date.now();
+  if (!force && prior?.result && now - prior.savedAt < MAX_AGE_MS) return Promise.resolve(prior.result);
+  if (!force && prior?.result && now - prior.savedAt < STALE_MAX_AGE_MS) {
+    if (!prior.promise) {
+      const bgPromise = searchPublicCatalogProducts(query).then((result) => {
+        result.products.forEach((product) => rememberPublicProductPreview(product));
+        entries.set(key, { result, savedAt: Date.now() });
+        return result;
+      }).catch(() => prior.result!);
+      entries.set(key, { result: prior.result, promise: bgPromise, savedAt: prior.savedAt });
+    }
+    return Promise.resolve(prior.result);
+  }
   if (prior?.promise) return prior.promise;
   const promise = searchPublicCatalogProducts(query).then((result) => {
     if (entries.get(key)?.promise === promise) {
