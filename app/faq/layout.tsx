@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { buildPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "常见问题",
-  description: "Jianlian Shop 下单、交付、售后和账号使用常见问题。",
+  title: "工单中心",
+  description: "Jianlian Shop 售后处理、订单咨询、充值问题与技术对接工单中心。",
   path: "/faq",
 });
 
