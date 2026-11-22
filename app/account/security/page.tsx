@@ -458,8 +458,23 @@ export default function AccountSecurityPage() {
             </div>
           </div>
 
-          {/* Warm Terracotta Segmented Navigation Tabs */}
-          <div className={`${styles.apiTabs} shrink-0 self-start lg:self-center`} role="tablist" aria-label="账号安全操作模式">
+          {/* 增加平滑动态滑块效果的账号安全模式切换 Tab */}
+          <div
+            className="relative flex rounded-2xl bg-orange-100/60 p-1 border border-orange-200/60 shadow-2xs shrink-0 self-start lg:self-center"
+            role="tablist"
+            aria-label="账号安全操作模式"
+          >
+            {/* 平滑动态滑块背景 */}
+            <div
+              className={cn(
+                "absolute top-1 bottom-1 rounded-xl bg-white shadow-xs transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                activeTab === "change-email"
+                  ? "left-1 w-[calc(33.333%-2.67px)] translate-x-0"
+                  : activeTab === "email-password"
+                  ? "left-1 w-[calc(33.333%-2.67px)] translate-x-[calc(100%+4px)]"
+                  : "left-1 w-[calc(33.333%-2.67px)] translate-x-[calc(200%+8px)]"
+              )}
+            />
             {SECURITY_TABS.map((tab) => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id;
@@ -471,12 +486,14 @@ export default function AccountSecurityPage() {
                   aria-selected={isSelected}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    styles.apiTab,
-                    "inline-flex items-center gap-1.5 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    "relative z-10 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold transition-colors duration-200 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isSelected
+                      ? "text-primary font-black"
+                      : "text-slate-600 hover:text-slate-900"
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>{tab.label}</span>
+                  <Icon className={cn("h-3.5 w-3.5 shrink-0 transition-colors", isSelected ? "text-primary" : "text-slate-500")} aria-hidden="true" />
+                  <span className="whitespace-nowrap">{tab.label}</span>
                 </button>
               );
             })}
@@ -589,9 +606,6 @@ export default function AccountSecurityPage() {
                     <h2 className="text-lg font-bold text-slate-900">更换绑定邮箱</h2>
                     <span className={styles.pill}>双向验证</span>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    先验证当前绑定邮箱，再验证新邮箱归属，确保账户通知与找回渠道安全衔接
-                  </p>
                 </div>
                 <span className={`${glass.icon} h-10 w-10`}>
                   <Mail className="h-5 w-5" strokeWidth={1.7} />
@@ -784,9 +798,6 @@ export default function AccountSecurityPage() {
                     <h2 className="text-lg font-bold text-slate-900">邮箱改密码</h2>
                     <span className={styles.pill}>免原密码重置</span>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    向当前注册邮箱发送动态验证码，核验通过后直接设定新密码
-                  </p>
                 </div>
                 <span className={`${glass.icon} h-10 w-10`}>
                   <ShieldCheck className="h-5 w-5" strokeWidth={1.7} />

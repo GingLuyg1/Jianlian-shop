@@ -47,7 +47,7 @@ const AUTH_CACHE_STORAGE_KEY = "jianlian_topbar_auth_cache_v1";
 function loadPersistedAuthCache(): { user: User | null; profile: UserProfile | null } | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.sessionStorage.getItem(AUTH_CACHE_STORAGE_KEY);
+    const raw = window.localStorage.getItem(AUTH_CACHE_STORAGE_KEY) || window.sessionStorage.getItem(AUTH_CACHE_STORAGE_KEY);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -60,11 +60,11 @@ function persistAuthCache(user: User | null, profile: UserProfile | null) {
   try {
     if (!user) {
       window.sessionStorage.removeItem(AUTH_CACHE_STORAGE_KEY);
+      window.localStorage.removeItem(AUTH_CACHE_STORAGE_KEY);
     } else {
-      window.sessionStorage.setItem(
-        AUTH_CACHE_STORAGE_KEY,
-        JSON.stringify({ user, profile })
-      );
+      const data = JSON.stringify({ user, profile });
+      window.sessionStorage.setItem(AUTH_CACHE_STORAGE_KEY, data);
+      window.localStorage.setItem(AUTH_CACHE_STORAGE_KEY, data);
     }
   } catch {
     /* Safe ignore */
@@ -197,7 +197,7 @@ export default function PublicTopInfoBar({
       if (!mounted) return;
 
       if (session?.user) {
-        const nextProfile = await getCurrentProfile().catch(() => null);
+        const nextProfile = await getCurrentProfile().catch(() => cachedAuthState.profile);
         updateAuthState(session.user, nextProfile, true);
       } else {
         updateAuthState(null, null, true);
@@ -216,7 +216,7 @@ export default function PublicTopInfoBar({
           .then((nextProfile) =>
             updateAuthState(session.user, nextProfile, true)
           )
-          .catch(() => updateAuthState(session.user, null, true));
+          .catch(() => updateAuthState(session.user, cachedAuthState.profile, true));
       }
     });
 
@@ -309,9 +309,13 @@ export default function PublicTopInfoBar({
           <span className="whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
             余额
           </span>
-          <span className="min-w-[44px] whitespace-nowrap text-center text-[12px] font-bold text-primary sm:min-w-[52px] sm:text-[13px]">
-            ¥{balance.toFixed(2)}
-          </span>
+          {!authReady && !profile ? (
+            <div className="h-4 w-12 animate-pulse rounded bg-orange-100/70" />
+          ) : (
+            <span className="min-w-[44px] whitespace-nowrap text-center text-[12px] font-bold text-primary sm:min-w-[52px] sm:text-[13px]">
+              ¥{balance.toFixed(2)}
+            </span>
+          )}
         </div>
 
         <div className={cn("hidden h-8 min-w-0 items-center justify-end gap-1.5 justify-self-end sm:flex sm:h-9 sm:w-[150px]", isMobile && "!hidden")}>

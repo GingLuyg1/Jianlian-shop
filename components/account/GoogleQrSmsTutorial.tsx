@@ -291,25 +291,25 @@ export default function GoogleQrSmsTutorial() {
         </div>
       </section>
 
-      {/* 5. 底部客服与帮助 */}
-      <section className="rounded-3xl border border-blue-200/80 bg-gradient-to-br from-blue-50 to-indigo-50/60 p-6 sm:p-8">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1.5">
+      {/* 5. 技术交流与免责分享声明 */}
+      <section className="rounded-3xl border border-orange-200/80 bg-gradient-to-br from-amber-50/80 via-orange-50/50 to-white p-6 sm:p-8 shadow-xs">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/90 px-3 py-1 text-xs font-bold text-orange-800 shadow-2xs">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              <span>技术分享与交流须知</span>
+            </div>
             <h3 className="text-lg sm:text-xl font-black text-slate-900">
-              实操中遇到疑难卡点？
+              教程仅供实操分享与经验交流
             </h3>
-            <p className="text-xs sm:text-sm text-slate-600">
-              如果遇到号码提示“无法用于验证”、节点风控或无法弹出降级按钮，可随时联系我们的专属技术客服获取一对一协助。
+            <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed">
+              本教程及配套开源辅助工具仅供网络运维实操与协议研究分享，旨在解析 Google 跨设备身份验证 Fallback 机制，不构成任何商业承诺或一对一技术代办。因第三方平台风控规则动态演进，若遇特定节点风控或运营商号段限制，建议优化网络环境或更换纯净号段实操。
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openPublicSupport}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition-all hover:scale-[1.02] hover:bg-blue-700 active:scale-[0.98] shrink-0"
-          >
-            联系在线技术客服
-            <ArrowRight className="h-4 w-4" />
-          </button>
+          <div className="shrink-0 rounded-2xl border border-orange-100 bg-white/80 p-4 text-center text-xs font-semibold text-slate-600 shadow-2xs">
+            <div className="text-primary font-bold">开放知识库</div>
+            <div className="mt-1 text-slate-500">经验分享 · 自由探讨</div>
+          </div>
         </div>
       </section>
     </div>

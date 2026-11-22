@@ -196,10 +196,6 @@ export default function RouteLoadingIndicator() {
           !isSamePageUrl(url);
 
         if (isInternalRoute) {
-          if (isCatalogCategoryPath(url.pathname) || url.pathname === "/checkout") {
-            cancelLoading();
-            return;
-          }
           clearCatalogRoutePending();
           startLoading(false, url.pathname);
         }
@@ -210,30 +206,33 @@ export default function RouteLoadingIndicator() {
       const shouldHintButtonRoute =
         button &&
         !button.disabled &&
-        button.hasAttribute("data-route-loading") &&
-        !button.hasAttribute("popovertarget") &&
-        Boolean(button.closest("main"));
+        (button.hasAttribute("data-route-loading") ||
+          button.getAttribute("aria-label") === "关闭下单页面" ||
+          (button.getAttribute("title") || "").includes("关闭") ||
+          (button.hasAttribute("data-route-loading") && Boolean(button.closest("main"))));
 
       if (shouldHintButtonRoute) {
         startLoading(true);
       }
     };
 
+    const handleCustomStart = () => {
+      startLoading(true);
+    };
+
     const handlePopState = () => {
-      if (isCatalogCategoryPath(window.location.pathname) || window.location.pathname === "/checkout") {
-        cancelLoading();
-        return;
-      }
       clearCatalogRoutePending();
       startLoading(false);
     };
 
     document.addEventListener("click", handleClick, true);
     window.addEventListener("popstate", handlePopState);
+    window.addEventListener("jianlian:start-top-loading", handleCustomStart);
 
     return () => {
       document.removeEventListener("click", handleClick, true);
       window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("jianlian:start-top-loading", handleCustomStart);
       loadIdRef.current += 1;
       clearTimers();
     };
@@ -243,11 +242,6 @@ export default function RouteLoadingIndicator() {
     if (routeKeyRef.current === routeKey) return;
 
     routeKeyRef.current = routeKey;
-
-    if (isCatalogCategoryPath(pathname) || pathname === "/checkout") {
-      cancelLoading();
-      return;
-    }
 
     clearCatalogRoutePending();
 
