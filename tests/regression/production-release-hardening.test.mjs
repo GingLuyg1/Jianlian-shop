@@ -17,6 +17,83 @@ const run = (body) => spawnSync(bash, ["--noprofile", "--norc", "-s"], {
 });
 const pass = (result) => assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 
+const mockPublicCurl = `
+curl() {
+  [[ "$1" == -q ]] || return 2
+  local url='' format='' location
+  for arg in "$@"; do
+    [[ "$arg" != -L && "$arg" != --location ]] || return 2
+    url="$arg"
+  done
+  while (( $# )); do
+    if [[ "$1" == -w ]]; then format="$2"; break; fi
+    shift
+  done
+  case "$url" in
+    https://jianlian.shop/|https://jianlian.shop/login)
+      [[ "$format" == '%{http_code}\\n%header{location}' ]] || return 2
+      location="$BARE_LOCATION"
+      if [[ "$location" == exact ]]; then location="https://www.\${url#https://}"; fi
+      printf '%s\\n%s' "$BARE_CODE" "$location"
+      ;;
+    https://www.jianlian.shop/)
+      [[ "$format" == '%{http_code}' ]] || return 2
+      printf '%s' "$WWW_ROOT"
+      ;;
+    https://www.jianlian.shop/login)
+      [[ "$format" == '%{http_code}' ]] || return 2
+      printf '%s' "$WWW_LOGIN"
+      ;;
+    *) return 2 ;;
+  esac
+}
+BARE_CODE=301
+BARE_LOCATION=exact
+WWW_ROOT=200
+WWW_LOGIN=200
+`;
+
+for (const [name, override, accepted] of [
+  ["301 to exact www path", "", true],
+  ["308 to exact www path", "BARE_CODE=308", true],
+  ["temporary 302", "BARE_CODE=302", false],
+  ["temporary 307", "BARE_CODE=307", false],
+  ["wrong host", "BARE_LOCATION=https://wrong.example/", false],
+  ["wrong path", "BARE_LOCATION=https://www.jianlian.shop/login", false],
+  ["wrong scheme", "BARE_LOCATION=http://www.jianlian.shop/", false],
+  ["relative Location", "BARE_LOCATION=/", false],
+  ["missing Location", "BARE_LOCATION=''", false],
+  ["redirect loop", "BARE_LOCATION=https://jianlian.shop/", false],
+  ["bare 404", "BARE_CODE=404", false],
+  ["bare 500", "BARE_CODE=500", false],
+  ["www root non-200", "WWW_ROOT=301", false],
+  ["www login non-200", "WWW_LOGIN=503", false],
+]) {
+  test(`public release contract checks ${name}`, () => {
+    const result = run(`${mockPublicCurl}\n${override}\nverify_public_endpoints`);
+    assert.equal(result.status, accepted ? 0 : 1, result.stdout + result.stderr);
+    if (accepted) {
+      assert.match(result.stdout, /PUBLIC_BARE_REDIRECT__=PASS/);
+      assert.match(result.stdout, /PUBLIC_BARE_REDIRECT__login=PASS/);
+      assert.match(result.stdout, /PUBLIC_CANONICAL__login=200/);
+    }
+  });
+}
+
+test("localhost health remains a direct 200 gate", () => {
+  const probe = `
+seq() { printf '0\\n'; }
+sleep() { :; }
+curl() {
+  for arg in "$@"; do :; done
+  [[ "$arg" == http://127.0.0.1:3001/api/health ]] || return 2
+  printf '%s' "$LOCAL_STATUS"
+}
+`;
+  pass(run(`${probe}\nLOCAL_STATUS=200 wait_for_production_health`));
+  assert.equal(run(`${probe}\nLOCAL_STATUS=301 wait_for_production_health`).status, 1);
+});
+
 // All files are disposable local fixtures, never actual release directories.
 const fixture = `
 fixture=$(mktemp -d)
@@ -165,7 +242,7 @@ current_pm2_cwd() { printf '%s\\n' "$pinnedCurrent"; }
 pm2_app_exists() { run_pm2 describe "$APP_NAME"; }
 wait_for_pm2_release() { return 0; }
 wait_for_production_health() { return 0; }
-verify_public_endpoints() { return 0; }
+${mockPublicCurl}
 `;
 for (const [name, invocation] of [
   ["switch", 'switch_release aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
@@ -222,10 +299,12 @@ for (const command of ['switch_release aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
   });
   test(`${command} public check failure restores and saves previous release`, () => {
     const result = run(`${actions}
-checks=0
-verify_public_endpoints() { checks=$((checks + 1)); [[ "$checks" -gt 1 ]]; }
+activate_release_fresh() {
+  if [[ "$1" == "$current" ]]; then WWW_LOGIN=200; else WWW_LOGIN=503; fi
+}
 ${command}`);
     assert.equal(result.status, 1);
+    assert.match(result.stdout, /PUBLIC_CANONICAL__login=503[\s\S]*PUBLIC_CANONICAL__login=200/);
     assert.match(result.stdout, /RECOVERY_PM2_SAVE=PASS/);
     assert.match(result.stderr, /previous release restored and its PM2 state saved/);
     assert.equal(result.stdout.split("\n").filter(line => line === "CALL:/root/.pm2:save").length, 1);

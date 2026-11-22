@@ -31,10 +31,15 @@ process.stdin.on("end", () => {
 
 ```bash
 curl --connect-timeout 10 --max-time 20 -sS -o /dev/null -w 'LOCAL_HEALTH=%{http_code}\n' http://127.0.0.1:3001/api/health
-for endpoint in /api/health / /login /products/account-recharge; do
-  curl --connect-timeout 10 --max-time 20 -sS -o /dev/null -w "$endpoint=%{http_code}\n" "https://jianlian.shop$endpoint"
+for endpoint in / /login; do
+  bare="$(curl -q --connect-timeout 10 --max-time 20 -sS -o /dev/null -w '%{http_code}\n%header{location}' "https://jianlian.shop$endpoint")" || exit 1
+  expected="https://www.jianlian.shop$endpoint"
+  [[ "$bare" == "301"$'\n'"$expected" || "$bare" == "308"$'\n'"$expected" ]] || exit 1
 done
-curl --connect-timeout 10 --max-time 20 -fsS https://jianlian.shop/api/recharges/channels | node -e '
+for endpoint in /api/health / /login /products/account-recharge; do
+  curl -q --connect-timeout 10 --max-time 20 -sS -o /dev/null -w "$endpoint=%{http_code}\n" "https://www.jianlian.shop$endpoint"
+done
+curl -q --connect-timeout 10 --max-time 20 -fsS https://www.jianlian.shop/api/recharges/channels | node -e '
 let input=""; process.stdin.on("data", c=>input+=c);
 process.stdin.on("end",()=>{
  const codes=JSON.parse(input).channels.map(c=>c.code);
@@ -43,7 +48,7 @@ process.stdin.on("end",()=>{
 });'
 ```
 
-要求各 HTTP=200。授权浏览器只读查看充值页无白屏/异常、金额输入和渠道展示正常，不点击“创建充值”，不打开已有支付状态轮询页面。要求 Alipay=false、WeChat=false、USDT-BEP20=true。另由已授权只读 DB 通道核实 canonical payment_channels enabled 状态；public 隐藏不能单独证明 enabled=false。禁止把凭据拼入命令、输出或日志。
+localhost health 和 www 各接口须直接返回 HTTP 200。裸域首页和登录页须返回 301 或 308，Location 精确指向 HTTPS www 的相同路径。检查时禁用跳转跟随，读取 Location 需 curl 7.84.0 或更新版本。授权浏览器只读查看充值页无白屏/异常、金额输入和渠道展示正常，不点击“创建充值”，不打开已有支付状态轮询页面。要求 Alipay=false、WeChat=false、USDT-BEP20=true。另由已授权只读 DB 通道核实 canonical payment_channels enabled 状态；public 隐藏不能单独证明 enabled=false。禁止把凭据拼入命令、输出或日志。
 
 ## Reconciliation 与零业务动作
 

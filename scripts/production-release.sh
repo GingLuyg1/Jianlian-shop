@@ -177,10 +177,20 @@ wait_for_production_health() {
 }
 
 verify_public_endpoints() {
-  local path http
+  local path bare canonical redirect http
   for path in / /login; do
-    http="$(curl -sS -o /dev/null -w '%{http_code}' "https://jianlian.shop$path" || true)"
-    status "PUBLIC_${path//\//_}" "$http"
+    bare="https://jianlian.shop$path"
+    canonical="https://www.jianlian.shop$path"
+    redirect="$(curl -q --connect-timeout 10 --max-time 20 -sS -o /dev/null -w '%{http_code}\n%header{location}' "$bare")" || return 1
+    http="${redirect%%$'\n'*}"
+    status "PUBLIC_BARE_${path//\//_}" "$http"
+    if [[ "$redirect" != "301"$'\n'"$canonical" && "$redirect" != "308"$'\n'"$canonical" ]]; then
+      status "PUBLIC_BARE_REDIRECT_${path//\//_}" FAIL
+      return 1
+    fi
+    status "PUBLIC_BARE_REDIRECT_${path//\//_}" PASS
+    http="$(curl -q --connect-timeout 10 --max-time 20 -sS -o /dev/null -w '%{http_code}' "$canonical")" || return 1
+    status "PUBLIC_CANONICAL_${path//\//_}" "$http"
     [[ "$http" == 200 ]] || return 1
   done
 }
