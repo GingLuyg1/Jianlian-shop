@@ -31,10 +31,13 @@ curl() {
   done
   case "$url" in
     https://jianlian.shop/|https://jianlian.shop/login)
-      [[ "$format" == '%{http_code}\\n%header{location}' ]] || return 2
+      [[ "$format" == '\\n%{http_code}' ]] || return 2
       location="$BARE_LOCATION"
       if [[ "$location" == exact ]]; then location="https://www.\${url#https://}"; fi
-      printf '%s\\n%s' "$BARE_CODE" "$location"
+      printf 'HTTP/2 %s\\r\\n' "$BARE_CODE"
+      if [[ -n "$location" ]]; then printf 'location: %s\\r\\n' "$location"; fi
+      if [[ "$DUPLICATE_LOCATION" == 1 ]]; then printf 'Location: %s\\r\\n' "$location"; fi
+      printf '\\r\\n\\n%s' "$BARE_CODE"
       ;;
     https://www.jianlian.shop/)
       [[ "$format" == '%{http_code}' ]] || return 2
@@ -49,6 +52,7 @@ curl() {
 }
 BARE_CODE=301
 BARE_LOCATION=exact
+DUPLICATE_LOCATION=0
 WWW_ROOT=200
 WWW_LOGIN=200
 `;
@@ -63,6 +67,7 @@ for (const [name, override, accepted] of [
   ["wrong scheme", "BARE_LOCATION=http://www.jianlian.shop/", false],
   ["relative Location", "BARE_LOCATION=/", false],
   ["missing Location", "BARE_LOCATION=''", false],
+  ["duplicate Location", "DUPLICATE_LOCATION=1", false],
   ["redirect loop", "BARE_LOCATION=https://jianlian.shop/", false],
   ["bare 404", "BARE_CODE=404", false],
   ["bare 500", "BARE_CODE=500", false],
