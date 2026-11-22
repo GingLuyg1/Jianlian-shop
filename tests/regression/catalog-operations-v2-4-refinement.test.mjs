@@ -48,11 +48,13 @@ test("tutorial and FAQ prioritize actual product-specific delivery and aftersale
   const tutorial = read("app/tutorials/page.tsx");
   for (const text of ["购买与交付指南", "核对详情", "填写并提交", "交付后核验", "联系在线客服"]) assert.ok(tutorial.includes(text));
   const faq = read("app/faq/page.tsx");
-  for (const text of ["购买前", "订单与交付", "售后与核验", "合规与安全", "不要通过公开渠道发送密码", "以商品详情页标注的售后范围和时效为准"]) assert.ok(faq.includes(text));
-  for (const source of [tutorial, faq]) {
-    assert.doesNotMatch(source, /24 小时|不退不换|电商拓客/);
-    assert.match(source, /overflow-y-auto/);
+  const guidance = faq.match(/const FAQ_KNOWLEDGE_BASE = \[([\s\S]*?)\n\];/)?.[1];
+  assert.ok(guidance, "ticket center has an FAQ knowledge base");
+  for (const copy of ["购买与下单", "交付与售后", "安全与凭据", "登录密码", "以商品详情页标注的售后范围和时效为准"]) {
+    assert.ok(guidance.includes(copy), copy);
   }
+  for (const source of [tutorial, guidance]) assert.doesNotMatch(source, /24 小时|不退不换|电商拓客/);
+  for (const source of [tutorial, faq]) assert.match(source, /overflow-y-auto/);
 });
 test("homepage carousel keeps approved desktop fill while copy and links stay intact", () => {
   const source = read("app/page.tsx");

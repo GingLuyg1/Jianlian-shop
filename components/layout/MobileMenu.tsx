@@ -55,7 +55,7 @@ const menuItems = [
 
 const helpItems = [
   { label: "使用教程", href: "/tutorials", icon: BookOpen },
-  { label: "常见问题", href: "/faq", icon: HelpCircle },
+  { label: "工单中心", href: "/faq", icon: Headphones },
 ];
 
 type MobileMenuProps = {

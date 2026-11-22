@@ -698,9 +698,9 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                     >
                       <div className="space-y-1.5">
                         <Label htmlFor="email">邮箱</Label>
-                        <div className="relative">
-                          <Mail className="pointer-events-none absolute left-3.5 top-1/2 z-30 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input
+                        <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
+                          <Mail className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
+                          <input
                             id="email"
                             type="email"
                             value={email}
@@ -717,7 +717,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                               setIsTyping(false);
                             }}
                             placeholder="请输入邮箱"
-                            className="relative z-10 h-11 rounded-xl border border-slate-200/90 bg-white/95 pl-10 pr-4 text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-0 focus-visible:outline-none shadow-xs"
+                            className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
                             autoComplete="email"
                             required
                           />
@@ -726,9 +726,9 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
 
                       <div className="space-y-1.5">
                         <Label htmlFor="password">密码</Label>
-                        <div className="relative">
-                          <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 z-30 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input
+                        <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
+                          <LockKeyhole className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
+                          <input
                             id="password"
                             type={showPassword ? "text" : "password"}
                             value={password}
@@ -745,7 +745,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                               setIsTyping(false);
                             }}
                             placeholder="请输入密码"
-                            className="relative z-10 h-11 rounded-xl border border-slate-200/90 bg-white/95 pl-10 pr-11 text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-0 focus-visible:outline-none shadow-xs"
+                            className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
                             autoComplete={
                               isRegister ? "new-password" : "current-password"
                             }
@@ -753,7 +753,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                           />
                           <button
                             type="button"
-                            className="absolute right-3.5 top-1/2 z-30 -translate-y-1/2 cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
+                            className="shrink-0 ml-2.5 p-1 text-muted-foreground transition-colors hover:text-foreground focus:outline-none cursor-pointer"
                             onClick={() => setShowPassword((value) => !value)}
                             aria-label={showPassword ? "隐藏密码" : "显示密码"}
                           >
@@ -794,9 +794,9 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                         >
                           <div className="space-y-1.5">
                             <Label htmlFor="emailOtp">邮箱验证码</Label>
-                            <div className="relative flex items-center">
-                              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 z-30 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                              <Input
+                            <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
+                              <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
+                              <input
                                 id="emailOtp"
                                 type="text"
                                 value={emailOtp}
@@ -804,14 +804,14 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                                   setEmailOtp(event.target.value.trim())
                                 }
                                 placeholder="请输入邮箱收到的验证码"
-                                className="relative z-10 h-11 rounded-xl border border-slate-200/90 bg-white/95 pl-10 pr-28 font-mono text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-0 focus-visible:outline-none shadow-xs"
+                                className="flex-1 min-w-0 bg-transparent font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
                                 maxLength={8}
                               />
                               <button
                                 type="button"
                                 onClick={handleSendRegisterOtp}
                                 disabled={otpSending || otpCountdown > 0 || !email.trim()}
-                                className="absolute right-1.5 top-1/2 z-30 -translate-y-1/2 rounded-lg bg-orange-100/90 px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition-colors hover:bg-orange-200/90 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="shrink-0 ml-2 rounded-lg bg-orange-100/90 px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition-colors hover:bg-orange-200/90 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {otpSending
                                   ? "发送中..."
@@ -823,16 +823,16 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                           </div>
                           <div className="space-y-1.5">
                             <Label htmlFor="inviteCode">邀请码（选填）</Label>
-                            <div className="relative">
-                              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 z-30 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                              <Input
+                            <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
+                              <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
+                              <input
                                 id="inviteCode"
                                 value={inviteCode}
                                 onChange={(event) =>
                                   setInviteCode(event.target.value)
                                 }
                                 placeholder="请输入邀请码"
-                                className="relative z-10 h-11 rounded-xl border border-slate-200/90 bg-white/95 pl-10 pr-4 text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-0 focus-visible:outline-none shadow-xs"
+                                className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
                               />
                             </div>
                           </div>
