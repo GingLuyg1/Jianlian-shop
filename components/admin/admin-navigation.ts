@@ -12,6 +12,7 @@ import {
   PackageCheck,
   RotateCcw,
   Settings,
+  Share2,
   ShieldCheck,
   Users,
   WalletCards,
@@ -21,7 +22,7 @@ import {
   isAdminPathActive,
 } from "./admin-navigation-state.mjs";
 
-export type AdminNavigationGroupKey = "products" | "suppliers" | "trade" | "finance" | "users" | "system";
+export type AdminNavigationGroupKey = "products" | "suppliers" | "trade" | "finance" | "users" | "agents" | "system";
 
 type AdminNavigationLink = {
   type: "link";
@@ -105,6 +106,19 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
       { label: "用户管理", href: "/admin/users" },
       { label: "隐私请求", href: "/admin/privacy-requests" },
       { label: "邮件通知", href: "/admin/notifications/email-deliveries" },
+    ],
+  },
+  {
+    type: "group",
+    key: "agents",
+    label: "代理与分销",
+    icon: Share2,
+    routePrefixes: ["/admin/agents"],
+    children: [
+      { label: "代理管理概览", href: "/admin/agents" },
+      { label: "API申请记录", href: "/admin/agents?tab=applications" },
+      { label: "IP加白管理", href: "/admin/agents?tab=whitelist" },
+      { label: "分销代理订单", href: "/admin/agents?tab=orders" },
     ],
   },
   { type: "link", label: "系统设置", href: "/admin/settings", icon: Settings },

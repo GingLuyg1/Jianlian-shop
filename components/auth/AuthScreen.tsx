@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -101,7 +101,9 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const [otpSending, setOtpSending] = useState(false);
   const [inviteCode, setInviteCode] = useState(inviteFromUrl);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -115,6 +117,24 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const [rippleOrigin, setRippleOrigin] = useState<{ x: number; y: number } | null>(null);
+
+  const triggerSuccessWithButtonRipple = () => {
+    if (submitBtnRef.current) {
+      const rect = submitBtnRef.current.getBoundingClientRect();
+      setRippleOrigin({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      });
+    } else if (typeof window !== "undefined") {
+      setRippleOrigin({
+        x: window.innerWidth * 0.72,
+        y: window.innerHeight * 0.58,
+      });
+    }
+    setLoginSuccess(true);
+  };
 
   // 当外部传入的 initialMode 变更时同步
   useEffect(() => {
@@ -139,6 +159,49 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       /* No credentials are stored. */
     }
   }
+
+  useEffect(() => {
+    if (otpCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setOtpCountdown((c) => (c <= 1 ? 0 : c - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [otpCountdown]);
+
+  const handleSendRegisterOtp = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!isEmailFormatValid(normalizedEmail)) {
+      setError("请输入正确的邮箱地址后再获取验证码。");
+      return;
+    }
+    const config = getSupabaseConfigStatus();
+    if (!config.ok) {
+      setError("登录服务暂时不可用，请稍后重试。");
+      return;
+    }
+    setError("");
+    setMessage("");
+    setOtpSending(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error: resendError } = await supabase.auth.resend({
+        type: "signup",
+        email: normalizedEmail,
+      });
+      setOtpCountdown(60);
+      if (resendError) {
+        // 若尚未提交过 signUp，resend 可能会提示用户不存在，此时提示直接点击下方注册获取首次验证码
+        toast.info("验证码请求已提交，若首次注册请填写完整后点击下方注册按钮。");
+      } else {
+        toast.success("验证码已发送至您的邮箱，请查收（如未收到请检查垃圾箱）。");
+      }
+    } catch {
+      setOtpCountdown(60);
+      toast.info("验证码请求已提交，请查看您的邮箱。");
+    } finally {
+      setOtpSending(false);
+    }
+  };
 
   // 模式切换平滑更新 URL，不刷新页面
   const switchMode = (nextMode: AuthMode) => {
@@ -200,7 +263,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         }
       }
       toast.success("邮箱已验证，注册完成。");
-      setLoginSuccess(true);
+      triggerSuccessWithButtonRipple();
       forgetPendingSignup();
       router.replace("/account");
       router.refresh();
@@ -335,11 +398,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     }
 
     if (isRegister) {
-      if (password !== confirmPassword) {
-        setError("两次输入的密码不一致。");
-        return;
-      }
-
       if (!acceptedTerms) {
         setError("请先阅读并同意用户协议。");
         return;
@@ -402,7 +460,12 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         }
         setRegistration(pending);
         setPassword("");
-        setConfirmPassword("");
+
+        // 若用户已在表单中填入邮箱验证码，则直接尝试校验完成注册
+        if (emailOtp.trim()) {
+          void verifyRegistration(emailOtp.trim());
+          return;
+        }
         return;
       }
 
@@ -442,7 +505,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         }
       }
 
-      setLoginSuccess(true);
+      triggerSuccessWithButtonRipple();
       toast.success("登录成功，正在进入账户中心。");
       setTimeout(() => {
         router.push(redirectTo);
@@ -475,11 +538,13 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         </div>
 
         <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_430px]">
-          {/* 左侧卡通角色舞台卡片 */}
+          {/* 左侧卡通角色舞台卡片（融合高级晨曦微光与柔和流光背景） */}
           <section className="hidden lg:block">
-            <div className="relative max-w-xl overflow-hidden rounded-[34px] border border-white/80 bg-white/50 p-8 shadow-[0_28px_90px_rgba(168,95,30,0.14)] backdrop-blur-xl">
-              <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#ffca86]/50 blur-xl" />
-              <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-[#ffdcb0]/55 blur-xl" />
+            <div className="relative max-w-xl overflow-hidden rounded-[36px] border border-white/90 bg-white/60 p-8 shadow-[0_32px_96px_-12px_rgba(230,120,40,0.18)] backdrop-blur-2xl ring-1 ring-orange-200/50">
+              {/* 高级立体微光光晕与晨曦展台氛围 */}
+              <div className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full bg-gradient-to-br from-[#ffd59e]/60 to-[#ffb066]/40 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-16 -left-16 h-60 w-60 rounded-full bg-gradient-to-tr from-[#ffe2c4]/70 to-[#ffcaa0]/50 blur-2xl" />
+              <div className="pointer-events-none absolute inset-x-12 bottom-6 h-12 rounded-full bg-gradient-to-t from-orange-200/30 to-transparent blur-lg" />
               <div className="relative">
                 {/* 重构后的极简高奢品牌微排版与背书 */}
                 <div className="relative z-10 mb-6 space-y-3.5">
@@ -623,7 +688,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       <div className="space-y-1.5">
                         <Label htmlFor="email">邮箱</Label>
                         <div className="relative">
-                          <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Mail className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
                             id="email"
                             type="email"
@@ -651,7 +716,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       <div className="space-y-1.5">
                         <Label htmlFor="password">密码</Label>
                         <div className="relative">
-                          <LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
                             id="password"
                             type={showPassword ? "text" : "password"}
@@ -677,7 +742,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                           />
                           <button
                             type="button"
-                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                            className="absolute right-3.5 top-1/2 z-10 -translate-y-1/2 cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
                             onClick={() => setShowPassword((value) => !value)}
                             aria-label={showPassword ? "隐藏密码" : "显示密码"}
                           >
@@ -688,9 +753,20 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                             )}
                           </button>
                         </div>
+                        {/* 忘记密码移至密码右下角 */}
+                        {!isRegister ? (
+                          <div className="flex justify-end pt-0.5">
+                            <Link
+                              href="/forgot-password"
+                              className="text-xs font-medium text-slate-500 transition-colors hover:text-primary"
+                            >
+                              忘记密码？
+                            </Link>
+                          </div>
+                        ) : null}
                       </div>
 
-                      {/* 注册多出的表单项：流畅高度展开与回收动画 */}
+                      {/* 注册多出的表单项：密码仅输入一次，原确认密码位置改为邮箱验证码 */}
                       <div
                         className={cn(
                           "grid transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
@@ -701,27 +777,38 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       >
                         <div className="overflow-hidden space-y-4 pt-1">
                           <div className="space-y-1.5">
-                            <Label htmlFor="confirmPassword">确认密码</Label>
-                            <div className="relative">
-                              <LockKeyhole className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Label htmlFor="emailOtp">邮箱验证码</Label>
+                            <div className="relative flex items-center">
+                              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                               <Input
-                                id="confirmPassword"
-                                type={showPassword ? "text" : "password"}
-                                value={confirmPassword}
+                                id="emailOtp"
+                                type="text"
+                                value={emailOtp}
                                 onChange={(event) =>
-                                  setConfirmPassword(event.target.value)
+                                  setEmailOtp(event.target.value.trim())
                                 }
-                                placeholder="请再次输入密码"
-                                className="h-11 rounded-xl bg-slate-50/80 pl-10"
-                                autoComplete="new-password"
-                                required={isRegister}
+                                placeholder="请输入邮箱收到的验证码"
+                                className="h-11 rounded-xl bg-slate-50/80 pl-10 pr-28 font-mono text-sm"
+                                maxLength={8}
                               />
+                              <button
+                                type="button"
+                                onClick={handleSendRegisterOtp}
+                                disabled={otpSending || otpCountdown > 0 || !email.trim()}
+                                className="absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded-lg bg-orange-100/90 px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition-colors hover:bg-orange-200/90 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {otpSending
+                                  ? "发送中..."
+                                  : otpCountdown > 0
+                                  ? `${otpCountdown}s 后重发`
+                                  : "获取验证码"}
+                              </button>
                             </div>
                           </div>
                           <div className="space-y-1.5">
                             <Label htmlFor="inviteCode">邀请码（选填）</Label>
                             <div className="relative">
-                              <KeyRound className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                               <Input
                                 id="inviteCode"
                                 value={inviteCode}
@@ -786,6 +873,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       ) : null}
 
                       <Button
+                        ref={submitBtnRef}
                         type="submit"
                         className="h-11 w-full rounded-xl text-sm font-semibold"
                         disabled={loading}
@@ -798,49 +886,42 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       </Button>
                     </form>
 
-                    <AlternateLoginMethods
-                      mode={currentMode}
-                      redirectTo={
-                        redirectTo === "/" ? "/account" : redirectTo
-                      }
-                      inviteCode={inviteCode}
-                      acceptedTerms={acceptedTerms}
-                    />
+                    {/* 谷歌登录紧跟在登录主按钮正下方 */}
+                    <div className="mt-3">
+                      <AlternateLoginMethods
+                        mode={currentMode}
+                        redirectTo={
+                          redirectTo === "/" ? "/account" : redirectTo
+                        }
+                        inviteCode={inviteCode}
+                        acceptedTerms={acceptedTerms}
+                      />
+                    </div>
                   </>
                 )}
-
-                <div className="mt-5 flex items-center justify-between text-xs">
-                  <button
-                    type="button"
-                    onClick={() => switchMode(isRegister ? "login" : "register")}
-                    className="font-medium text-primary transition-colors hover:text-primary/80"
-                  >
-                    {isRegister ? "已有账号，去登录" : "没有账号，立即注册"}
-                  </button>
-                  {!isRegister ? (
-                    <Link
-                      href="/forgot-password"
-                      className="font-medium text-slate-500 transition-colors hover:text-primary"
-                    >
-                      忘记密码
-                    </Link>
-                  ) : null}
-                </div>
               </div>
             </div>
           </section>
         </div>
       </div>
-      {/* 登录成功同心圆柔光涟漪转场层（参考用户视频动效） */}
+      {/* 登录成功同心圆柔光涟漪转场层（从登录按钮开始扩散，席卷全屏） */}
       {loginSuccess && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center overflow-hidden">
+        <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
           <style
             dangerouslySetInnerHTML={{
               __html: `
-                @keyframes jianlian-auth-ripple {
-                  0% { transform: scale(0.2); opacity: 0.9; }
-                  50% { opacity: 0.55; }
-                  100% { transform: scale(22); opacity: 0; }
+                @keyframes jianlian-auth-btn-ripple {
+                  0% {
+                    transform: translate(-50%, -50%) scale(0.12);
+                    opacity: 0.95;
+                  }
+                  45% {
+                    opacity: 0.7;
+                  }
+                  100% {
+                    transform: translate(-50%, -50%) scale(34);
+                    opacity: 0;
+                  }
                 }
                 @keyframes jianlian-auth-glow {
                   0% { opacity: 0; }
@@ -850,9 +931,31 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               `,
             }}
           />
-          <div className="absolute h-36 w-36 rounded-full border-2 border-orange-400/50 bg-radial from-orange-400/25 to-transparent blur-[1px] animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_forwards]" />
-          <div className="absolute h-36 w-36 rounded-full border-2 border-amber-300/50 bg-radial from-amber-300/25 to-transparent blur-sm animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.2s_forwards]" />
-          <div className="absolute h-36 w-36 rounded-full border-2 border-orange-500/40 bg-radial from-orange-500/20 to-transparent blur-md animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.4s_forwards]" />
+          {/* 以登录按钮为圆心向外喷涌扩散的同心圆涟漪 */}
+          <div
+            style={{
+              position: "absolute",
+              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
+              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+            }}
+            className="h-32 w-32 rounded-full border-2 border-orange-400/60 bg-radial from-orange-400/30 to-transparent blur-[1px] animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_forwards]"
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
+              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+            }}
+            className="h-32 w-32 rounded-full border-2 border-amber-300/60 bg-radial from-amber-300/30 to-transparent blur-sm animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.18s_forwards]"
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
+              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+            }}
+            className="h-32 w-32 rounded-full border-2 border-orange-500/50 bg-radial from-orange-500/25 to-transparent blur-md animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.36s_forwards]"
+          />
           <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] animate-[jianlian-auth-glow_0.9s_ease-out_forwards]" />
         </div>
       )}
