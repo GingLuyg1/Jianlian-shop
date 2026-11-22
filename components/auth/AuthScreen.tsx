@@ -460,7 +460,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         }
         setRegistration(pending);
         setPassword("");
-        
+
         // 若用户已在表单中填入邮箱验证码，则直接尝试校验完成注册
         if (emailOtp.trim()) {
           void verifyRegistration(emailOtp.trim());
