@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -117,6 +117,24 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const [rippleOrigin, setRippleOrigin] = useState<{ x: number; y: number } | null>(null);
+
+  const triggerSuccessWithButtonRipple = () => {
+    if (submitBtnRef.current) {
+      const rect = submitBtnRef.current.getBoundingClientRect();
+      setRippleOrigin({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      });
+    } else if (typeof window !== "undefined") {
+      setRippleOrigin({
+        x: window.innerWidth * 0.72,
+        y: window.innerHeight * 0.58,
+      });
+    }
+    setLoginSuccess(true);
+  };
 
   // 当外部传入的 initialMode 变更时同步
   useEffect(() => {
@@ -245,7 +263,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         }
       }
       toast.success("邮箱已验证，注册完成。");
-      setLoginSuccess(true);
+      triggerSuccessWithButtonRipple();
       forgetPendingSignup();
       router.replace("/account");
       router.refresh();
@@ -487,7 +505,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         }
       }
 
-      setLoginSuccess(true);
+      triggerSuccessWithButtonRipple();
       toast.success("登录成功，正在进入账户中心。");
       setTimeout(() => {
         router.push(redirectTo);
@@ -855,6 +873,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       ) : null}
 
                       <Button
+                        ref={submitBtnRef}
                         type="submit"
                         className="h-11 w-full rounded-xl text-sm font-semibold"
                         disabled={loading}
@@ -885,16 +904,24 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
           </section>
         </div>
       </div>
-      {/* 登录成功同心圆柔光涟漪转场层（参考用户视频动效） */}
+      {/* 登录成功同心圆柔光涟漪转场层（从登录按钮开始扩散，席卷全屏） */}
       {loginSuccess && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center overflow-hidden">
+        <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
           <style
             dangerouslySetInnerHTML={{
               __html: `
-                @keyframes jianlian-auth-ripple {
-                  0% { transform: scale(0.2); opacity: 0.9; }
-                  50% { opacity: 0.55; }
-                  100% { transform: scale(22); opacity: 0; }
+                @keyframes jianlian-auth-btn-ripple {
+                  0% {
+                    transform: translate(-50%, -50%) scale(0.12);
+                    opacity: 0.95;
+                  }
+                  45% {
+                    opacity: 0.7;
+                  }
+                  100% {
+                    transform: translate(-50%, -50%) scale(34);
+                    opacity: 0;
+                  }
                 }
                 @keyframes jianlian-auth-glow {
                   0% { opacity: 0; }
@@ -904,9 +931,31 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               `,
             }}
           />
-          <div className="absolute h-36 w-36 rounded-full border-2 border-orange-400/50 bg-radial from-orange-400/25 to-transparent blur-[1px] animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_forwards]" />
-          <div className="absolute h-36 w-36 rounded-full border-2 border-amber-300/50 bg-radial from-amber-300/25 to-transparent blur-sm animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.2s_forwards]" />
-          <div className="absolute h-36 w-36 rounded-full border-2 border-orange-500/40 bg-radial from-orange-500/20 to-transparent blur-md animate-[jianlian-auth-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.4s_forwards]" />
+          {/* 以登录按钮为圆心向外喷涌扩散的同心圆涟漪 */}
+          <div
+            style={{
+              position: "absolute",
+              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
+              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+            }}
+            className="h-32 w-32 rounded-full border-2 border-orange-400/60 bg-radial from-orange-400/30 to-transparent blur-[1px] animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_forwards]"
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
+              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+            }}
+            className="h-32 w-32 rounded-full border-2 border-amber-300/60 bg-radial from-amber-300/30 to-transparent blur-sm animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.18s_forwards]"
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
+              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+            }}
+            className="h-32 w-32 rounded-full border-2 border-orange-500/50 bg-radial from-orange-500/25 to-transparent blur-md animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.36s_forwards]"
+          />
           <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] animate-[jianlian-auth-glow_0.9s_ease-out_forwards]" />
         </div>
       )}
