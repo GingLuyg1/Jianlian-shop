@@ -78,7 +78,7 @@ function EyeBall({
             backgroundColor: pupilColor,
             borderRadius: "50%",
             transform: `translate(${pupilPos.x}px, ${isSad ? -1 : pupilPos.y}px)`,
-            transition: "transform 0.08s ease-out",
+            transition: "transform 0.32s cubic-bezier(0.25, 1, 0.5, 1)",
           }}
         >
           <span
@@ -160,7 +160,7 @@ function Pupil({
         backgroundColor: pupilColor,
         borderRadius: "50%",
         transform: `translate(${pupilPos.x}px, ${pupilPos.y}px)`,
-        transition: "transform 0.08s ease-out, height 0.15s ease-out",
+        transition: "transform 0.32s cubic-bezier(0.25, 1, 0.5, 1), height 0.15s ease-out",
         boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
       }}
     >
@@ -533,15 +533,6 @@ export default function AnimatedCharacters({
     }
   }, [showPassword, passwordLength, triggerBubble]);
 
-  useEffect(() => {
-    if (isTyping) {
-      setIsLookingAtEachOther(true);
-      const t = setTimeout(() => setIsLookingAtEachOther(false), 850);
-      return () => clearTimeout(t);
-    } else {
-      setIsLookingAtEachOther(false);
-    }
-  }, [isTyping]);
 
   useEffect(() => {
     if (passwordLength > 0 && showPassword && !activeFailPose && !loginSuccess) {
@@ -612,11 +603,18 @@ export default function AnimatedCharacters({
     triggerBubble(pickRandom(SPEECH_LINES.poke), char, 2600);
   };
 
+  // 保持对最新拖拽物理状态的引用，用于全局原生事件与输入看门狗
+  const draggingCharRef = useRef<CharKey | null>(null);
+  const dragPhysicsRef = useRef(dragPhysics);
+  dragPhysicsRef.current = dragPhysics;
+  draggingCharRef.current = draggingChar;
+
   const handlePointerDown = (char: CharKey, e: React.PointerEvent) => {
     try {
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     } catch {}
     setDraggingChar(char);
+    draggingCharRef.current = char;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     hasDraggedRef.current = false;
     setDragPhysics({
@@ -629,58 +627,14 @@ export default function AnimatedCharacters({
     });
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!draggingChar) return;
-    const dx = e.clientX - dragStartRef.current.x;
-    const dy = e.clientY - dragStartRef.current.y;
-    if (Math.hypot(dx, dy) > 4) {
-      hasDraggedRef.current = true;
-    }
-
-    if (dy < 0) {
-      // Dragging UP
-      const pullUpDist = -dy;
-      if (pullUpDist <= 28) {
-        // Elastic stretch tension phase (anchored to ground)
-        setDragPhysics({
-          shiftX: Math.max(-60, Math.min(60, dx * 0.6)),
-          liftY: 0,
-          angle: Math.max(-14, Math.min(14, dx * 0.18)),
-          scaleX: 1 - pullUpDist * 0.0035,
-          scaleY: 1 + pullUpDist * 0.007,
-          isLifted: false,
-        });
-      } else {
-        // Plucked out! ("揪出来！" 拔地而起 离地悬空)
-        const excess = pullUpDist - 28;
-        setDragPhysics({
-          shiftX: Math.max(-85, Math.min(85, dx * 0.75)),
-          liftY: Math.min(110, excess * 0.72),
-          angle: Math.max(-22, Math.min(22, dx * 0.22)),
-          scaleX: 0.91,
-          scaleY: 1.12 + Math.min(0.16, excess * 0.002),
-          isLifted: true,
-        });
-      }
-    } else {
-      // Dragging DOWN: squashes into the floor
-      setDragPhysics({
-        shiftX: Math.max(-45, Math.min(45, dx * 0.5)),
-        liftY: 0,
-        angle: Math.max(-10, Math.min(10, dx * 0.15)),
-        scaleX: 1 + Math.min(0.4, dy * 0.005),
-        scaleY: 1 - Math.min(0.35, dy * 0.0045),
-        isLifted: false,
-      });
-    }
-  };
-
-  const handlePointerUp = (char: CharKey) => {
-    if (draggingChar !== char) return;
+  const endDragGracefully = useCallback(() => {
+    const char = draggingCharRef.current;
+    if (!char) return;
     const wasDragged = hasDraggedRef.current;
-    const { liftY, angle, isLifted } = dragPhysics;
+    const { liftY, angle, isLifted } = dragPhysicsRef.current;
 
     setDraggingChar(null);
+    draggingCharRef.current = null;
     setDragPhysics({
       shiftX: 0,
       liftY: 0,
@@ -706,7 +660,79 @@ export default function AnimatedCharacters({
     } else {
       handlePoke(char);
     }
-  };
+  }, [triggerBubble]);
+
+  // 全局指针事件：无论鼠标移动到右侧表单、屏幕任何地方或窗口外，均 100% 捕获并平滑释放落地！
+  useEffect(() => {
+    if (!draggingChar) return;
+
+    const onPointerMoveGlobal = (e: PointerEvent) => {
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      if (Math.hypot(dx, dy) > 4) {
+        hasDraggedRef.current = true;
+      }
+
+      if (dy < 0) {
+        // Dragging UP
+        const pullUpDist = -dy;
+        if (pullUpDist <= 28) {
+          setDragPhysics({
+            shiftX: Math.max(-60, Math.min(60, dx * 0.6)),
+            liftY: 0,
+            angle: Math.max(-14, Math.min(14, dx * 0.18)),
+            scaleX: 1 - pullUpDist * 0.0035,
+            scaleY: 1 + pullUpDist * 0.007,
+            isLifted: false,
+          });
+        } else {
+          // Plucked out! ("揪出来！" 拔地而起 离地悬空)
+          const excess = pullUpDist - 28;
+          setDragPhysics({
+            shiftX: Math.max(-85, Math.min(85, dx * 0.75)),
+            liftY: Math.min(110, excess * 0.72),
+            angle: Math.max(-22, Math.min(22, dx * 0.22)),
+            scaleX: 0.91,
+            scaleY: 1.12 + Math.min(0.16, excess * 0.002),
+            isLifted: true,
+          });
+        }
+      } else {
+        // Dragging DOWN: squashes into the floor，自然微膨胀，绝不切断底角
+        setDragPhysics({
+          shiftX: Math.max(-45, Math.min(45, dx * 0.5)),
+          liftY: 0,
+          angle: Math.max(-10, Math.min(10, dx * 0.15)),
+          scaleX: 1 + Math.min(0.22, dy * 0.003),
+          scaleY: 1 - Math.min(0.2, dy * 0.0028),
+          isLifted: false,
+        });
+      }
+    };
+
+    const onPointerUpGlobal = () => {
+      endDragGracefully();
+    };
+
+    window.addEventListener("pointermove", onPointerMoveGlobal);
+    window.addEventListener("pointerup", onPointerUpGlobal);
+    window.addEventListener("pointercancel", onPointerUpGlobal);
+    window.addEventListener("blur", onPointerUpGlobal);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMoveGlobal);
+      window.removeEventListener("pointerup", onPointerUpGlobal);
+      window.removeEventListener("pointercancel", onPointerUpGlobal);
+      window.removeEventListener("blur", onPointerUpGlobal);
+    };
+  }, [draggingChar, endDragGracefully]);
+
+  // 双重安全看门狗：当用户开始在右侧输入表单（isTyping 为 true）时，如果此时角色还悬空，立即触发落地，彻底杜绝浮空卡死！
+  useEffect(() => {
+    if (isTyping && draggingCharRef.current) {
+      endDragGracefully();
+    }
+  }, [isTyping, endDragGracefully]);
 
   const getCharTransform = (char: CharKey, baseTransform: string) => {
     if (draggingChar === char) {
@@ -754,7 +780,7 @@ export default function AnimatedCharacters({
   const orangePos = calcPos(orangeRef.current, 0, 0, -38, 38, -24, 20, 0.45);
   const yellowPos = calcPos(yellowRef.current);
 
-  const purpleHeight = activeFailPose ? 365 : isTyping || isHidingPassword ? 440 : 400;
+  const purpleHeight = activeFailPose ? 365 : isTyping ? 430 : 400;
   const blackHeight = activeFailPose ? 284 : 312;
   const orangeHeight = activeFailPose ? 135 : 154;
   const yellowHeight = activeFailPose ? 210 : 232;
@@ -766,12 +792,12 @@ export default function AnimatedCharacters({
       ? -8
       : isRevealingPassword
         ? 0
-        : isTyping || isHidingPassword
-          ? (purplePos.bodySkew || 0) - 12
+        : isTyping
+          ? (purplePos.bodySkew || 0) - 10
           : (purplePos.bodySkew || 0);
   const purpleEffectiveTranslateX =
-    (isTyping || isHidingPassword) && !activeFailPose && !isRevealingPassword && !poked.purple
-      ? 40
+    isTyping && !activeFailPose && !isRevealingPassword && !poked.purple
+      ? 32
       : 0;
   const purpleHeadX = Math.round(
     160 +
@@ -789,14 +815,12 @@ export default function AnimatedCharacters({
       ? 7
       : isRevealingPassword
         ? 0
-        : isLookingAtEachOther
-          ? (blackPos.bodySkew || 0) * 1.5 + 10
-          : isTyping || isHidingPassword
-            ? (blackPos.bodySkew || 0) * 1.5
-            : (blackPos.bodySkew || 0);
+        : isTyping
+          ? (blackPos.bodySkew || 0) * 1.5 + 8
+          : (blackPos.bodySkew || 0);
   const blackEffectiveTranslateX =
-    isLookingAtEachOther && !activeFailPose && !isRevealingPassword && !poked.black
-      ? 20
+    isTyping && !activeFailPose && !isRevealingPassword && !poked.black
+      ? 16
       : 0;
   const blackHeadX = Math.round(
     301 +
@@ -840,21 +864,29 @@ export default function AnimatedCharacters({
     yellowHeight + (draggingChar === "yellow" ? dragPhysics.liftY : 0) + 14
   );
 
-  // Dynamic bottom radius during pluck ("揪出来"): flat on ground, rounded when lifted in air
-  const purpleBottomRadius = draggingChar === "purple" && dragPhysics.liftY > 0 ? Math.min(24, Math.round(dragPhysics.liftY * 0.8)) : 0;
-  const blackBottomRadius = draggingChar === "black" && dragPhysics.liftY > 0 ? Math.min(22, Math.round(dragPhysics.liftY * 0.75)) : 0;
-  const orangeBottomRadius = draggingChar === "orange" && dragPhysics.liftY > 0 ? Math.min(48, Math.round(dragPhysics.liftY * 0.9)) : 0;
-  const yellowBottomRadius = draggingChar === "yellow" && dragPhysics.liftY > 0 ? Math.min(72, Math.round(dragPhysics.liftY * 1.2)) : 0;
+  // 悬空判断：无论是被拖拽拔起，还是松手后的下落弹跳全程，都属于空中悬空状态
+  const isPurpleAirborne = (draggingChar === "purple" && dragPhysics.liftY > 0) || droppingChar === "purple";
+  const isBlackAirborne = (draggingChar === "black" && dragPhysics.liftY > 0) || droppingChar === "black";
+  const isOrangeAirborne = (draggingChar === "orange" && dragPhysics.liftY > 0) || droppingChar === "orange";
+  const isYellowAirborne = (draggingChar === "yellow" && dragPhysics.liftY > 0) || droppingChar === "yellow";
 
-  // Real-time expression gaze: When one buddy is plucked into the air, the other 3 look at it in shock!
+  // 空中时为饱满全圆角胶囊体；落地静止时为柔和圆润底角（绝不是 0px 平切横线）
+  const purpleBottomRadius = isPurpleAirborne ? 24 : 16;
+  const blackBottomRadius = isBlackAirborne ? 22 : 16;
+  const orangeBottomRadius = isOrangeAirborne ? 52 : 24;
+  const yellowBottomRadius = isYellowAirborne ? 72 : 18;
+
+  // Real-time expression gaze: 仅在用户输入账号或密码（isTyping）时柔和向右看，输入完成后恢复平滑跟随
+  const isLookingRight = isTyping && !activeFailPose && !loginSuccess;
+
   const pForceX = activeFailPose
     ? 0
     : loginSuccess
       ? 0
       : isRevealingPassword
         ? (isPurplePeeking ? 4 : -4)
-        : isLookingAtEachOther
-          ? 3
+        : isLookingRight
+          ? 5
           : draggingChar === "purple"
             ? 0
             : draggingChar === "orange"
@@ -871,8 +903,8 @@ export default function AnimatedCharacters({
       ? successLookY
       : isRevealingPassword
         ? (isPurplePeeking ? 5 : -4)
-        : isLookingAtEachOther
-          ? 4
+        : isLookingRight
+          ? 1
           : draggingChar === "purple"
             ? 5 // looking down at the high altitude floor
             : draggingChar === "orange"
@@ -889,8 +921,8 @@ export default function AnimatedCharacters({
       ? 0
       : isRevealingPassword
         ? -4
-        : isLookingAtEachOther
-          ? 0
+        : isLookingRight
+          ? 4
           : draggingChar === "black"
             ? 0
             : draggingChar === "purple"
@@ -907,8 +939,8 @@ export default function AnimatedCharacters({
       ? successLookY
       : isRevealingPassword
         ? -4
-        : isLookingAtEachOther
-          ? -4
+        : isLookingRight
+          ? 1
           : draggingChar === "black"
             ? 4
             : draggingChar === "purple"
@@ -925,15 +957,17 @@ export default function AnimatedCharacters({
       ? 0
       : isRevealingPassword
         ? -5
-        : draggingChar === "orange"
-          ? 0
-          : draggingChar === "purple"
-            ? 4 // looking UP and right at purple!
-            : draggingChar === "black"
-              ? 4
-              : draggingChar === "yellow"
-                ? 5
-                : undefined;
+        : isLookingRight
+          ? 5
+          : draggingChar === "orange"
+            ? 0
+            : draggingChar === "purple"
+              ? 4 // looking UP and right at purple!
+              : draggingChar === "black"
+                ? 4
+                : draggingChar === "yellow"
+                  ? 5
+                  : undefined;
 
   const oForceY = activeFailPose
     ? 4
@@ -941,39 +975,45 @@ export default function AnimatedCharacters({
       ? successLookY
       : isRevealingPassword
         ? -4
-        : draggingChar === "orange"
-          ? 4
-          : draggingChar === "purple"
-            ? -5 // looking UP at purple!
-            : draggingChar === "black"
-              ? -4
-              : draggingChar === "yellow"
-                ? -3
-                : undefined;
+        : isLookingRight
+          ? 1
+          : draggingChar === "orange"
+            ? 4
+            : draggingChar === "purple"
+              ? -5 // looking UP at purple!
+              : draggingChar === "black"
+                ? -4
+                : draggingChar === "yellow"
+                  ? -3
+                  : undefined;
 
   const yForceX = isRevealingPassword
     ? -4
-    : draggingChar === "yellow"
-      ? 0
-      : draggingChar === "purple"
-        ? -5
-        : draggingChar === "black"
-          ? -4
-          : draggingChar === "orange"
-            ? -5
-            : undefined;
+    : isLookingRight
+      ? 5
+      : draggingChar === "yellow"
+        ? 0
+        : draggingChar === "purple"
+          ? -5
+          : draggingChar === "black"
+            ? -4
+            : draggingChar === "orange"
+              ? -5
+              : undefined;
 
   const yForceY = isRevealingPassword
     ? -4
-    : draggingChar === "yellow"
-      ? 4
-      : draggingChar === "purple"
-        ? -5
-        : draggingChar === "black"
-          ? -2
-          : draggingChar === "orange"
-            ? 3
-            : undefined;
+    : isLookingRight
+      ? 1
+      : draggingChar === "yellow"
+        ? 4
+        : draggingChar === "purple"
+          ? -5
+          : draggingChar === "black"
+            ? -2
+            : draggingChar === "orange"
+              ? 3
+              : undefined;
 
   return (
     <div
@@ -1060,7 +1100,6 @@ export default function AnimatedCharacters({
           width: "520px",
           height: "460px",
           transform: compact ? "scale(0.41)" : "scale(0.88)",
-          clipPath: "inset(-600px -300px 0px -300px)",
         }}
       >
         <div
@@ -1072,6 +1111,22 @@ export default function AnimatedCharacters({
               : "none",
           }}
         >
+          {/* 角色立体浮岛展台（Podium Stage）：小人们稳稳站立于展台，彻底消灭生硬悬浮或切断感 */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: "-4px",
+              left: "15px",
+              width: "480px",
+              height: "26px",
+              borderRadius: "50%",
+              background:
+                "radial-gradient(ellipse at center, rgba(235, 115, 30, 0.22) 0%, rgba(254, 215, 170, 0.14) 48%, transparent 75%)",
+              filter: "blur(5px)",
+              pointerEvents: "none",
+              zIndex: 0,
+            }}
+          />
           {/* Ground Shadows for Plucked / Lifted Characters */}
           {draggingChar === "purple" && dragPhysics.liftY > 4 && (
             <div
@@ -1150,9 +1205,6 @@ export default function AnimatedCharacters({
           <div
             ref={purpleRef}
             onPointerDown={(e) => handlePointerDown("purple", e)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={() => handlePointerUp("purple")}
-            onPointerCancel={() => handlePointerUp("purple")}
             className="cursor-grab active:cursor-grabbing select-none touch-none"
             style={{
               position: "absolute",
@@ -1179,8 +1231,8 @@ export default function AnimatedCharacters({
                     ? "skewX(-8deg) scaleY(0.94)"
                     : isRevealingPassword
                       ? "skewX(0deg)"
-                      : isTyping || isHidingPassword
-                        ? `skewX(${(purplePos.bodySkew || 0) - 12}deg) translateX(40px)`
+                      : isTyping
+                        ? `skewX(${(purplePos.bodySkew || 0) - 10}deg) translateX(32px)`
                         : `skewX(${purplePos.bodySkew || 0}deg)`
               ),
               animation: droppingChar === "purple"
@@ -1201,8 +1253,8 @@ export default function AnimatedCharacters({
                   ? -8
                   : isRevealingPassword
                     ? 0
-                    : isTyping || isHidingPassword
-                      ? (purplePos.bodySkew || 0) - 12
+                    : isTyping
+                      ? (purplePos.bodySkew || 0) - 10
                       : (purplePos.bodySkew || 0)
               )}
             />
@@ -1307,7 +1359,7 @@ export default function AnimatedCharacters({
                     ? "18px"
                     : loginSuccess
                       ? "28px"
-                      : (isTyping || isHidingPassword) && !activeFailPose
+                      : isTyping && !activeFailPose
                         ? "8px"
                         : "22px",
                 height:
@@ -1315,7 +1367,7 @@ export default function AnimatedCharacters({
                     ? "18px"
                     : loginSuccess
                       ? "14px"
-                      : (isTyping || isHidingPassword) && !activeFailPose
+                      : isTyping && !activeFailPose
                         ? "26px"
                         : "8px",
                 borderRadius:
@@ -1325,17 +1377,17 @@ export default function AnimatedCharacters({
                       ? "12px 12px 0 0"
                       : loginSuccess
                         ? "0 0 14px 14px"
-                        : isTyping || isHidingPassword
+                        : isTyping
                           ? "4px"
                           : "0 0 11px 11px",
                 transform:
                   draggingChar === "purple" && dragPhysics.isLifted
                     ? "translateX(2px)"
-                    : (isTyping || isHidingPassword) &&
+                    : isTyping &&
                       !activeFailPose &&
                       !loginSuccess &&
                       !poked.purple
-                      ? `translateX(13.5px) translateY(-26px) skewX(${-((purplePos.bodySkew || 0) - 12)}deg)`
+                      ? `translateX(13.5px) translateY(-26px) skewX(${-((purplePos.bodySkew || 0) - 10)}deg)`
                       : "none",
                 transition: "all 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
@@ -1346,9 +1398,6 @@ export default function AnimatedCharacters({
           <div
             ref={blackRef}
             onPointerDown={(e) => handlePointerDown("black", e)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={() => handlePointerUp("black")}
-            onPointerCancel={() => handlePointerUp("black")}
             className="cursor-grab active:cursor-grabbing select-none touch-none"
             style={{
               position: "absolute",
@@ -1375,11 +1424,9 @@ export default function AnimatedCharacters({
                     ? "skewX(7deg) scaleY(0.94)"
                     : isRevealingPassword
                       ? "skewX(0deg)"
-                      : isLookingAtEachOther
-                        ? `skewX(${(blackPos.bodySkew || 0) * 1.5 + 10}deg) translateX(20px)`
-                        : isTyping || isHidingPassword
-                          ? `skewX(${(blackPos.bodySkew || 0) * 1.5}deg)`
-                          : `skewX(${blackPos.bodySkew || 0}deg)`
+                      : isTyping
+                        ? `skewX(${(blackPos.bodySkew || 0) * 1.5 + 8}deg) translateX(16px)`
+                        : `skewX(${blackPos.bodySkew || 0}deg)`
               ),
               animation: droppingChar === "black"
                 ? "jianlian-drop-land 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both"
@@ -1399,11 +1446,9 @@ export default function AnimatedCharacters({
                   ? 7
                   : isRevealingPassword
                     ? 0
-                    : isLookingAtEachOther
-                      ? (blackPos.bodySkew || 0) * 1.5 + 10
-                      : isTyping || isHidingPassword
-                        ? (blackPos.bodySkew || 0) * 1.5
-                        : (blackPos.bodySkew || 0)
+                    : isTyping
+                      ? (blackPos.bodySkew || 0) * 1.5 + 8
+                      : (blackPos.bodySkew || 0)
               )}
             />
             <div
@@ -1457,9 +1502,6 @@ export default function AnimatedCharacters({
           <div
             ref={orangeRef}
             onPointerDown={(e) => handlePointerDown("orange", e)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={() => handlePointerUp("orange")}
-            onPointerCancel={() => handlePointerUp("orange")}
             className="cursor-grab active:cursor-grabbing select-none touch-none"
             style={{
               position: "absolute",
@@ -1596,7 +1638,7 @@ export default function AnimatedCharacters({
                       ? "14px"
                       : loginSuccess
                         ? "28px"
-                        : (isTyping || isHidingPassword) && !activeFailPose
+                        : isTyping && !activeFailPose
                           ? "12px"
                           : "22px",
                   height:
@@ -1604,7 +1646,7 @@ export default function AnimatedCharacters({
                       ? "14px"
                       : loginSuccess
                         ? "14px"
-                        : (isTyping || isHidingPassword) && !activeFailPose
+                        : isTyping && !activeFailPose
                           ? "12px"
                           : "10px",
                   borderRadius:
@@ -1614,7 +1656,7 @@ export default function AnimatedCharacters({
                         ? "10px 10px 0 0"
                         : loginSuccess
                           ? "0 0 14px 14px"
-                          : isTyping || isHidingPassword
+                          : isTyping
                             ? "50%"
                             : "0 0 11px 11px",
                   transform: "none",
@@ -1628,9 +1670,6 @@ export default function AnimatedCharacters({
           <div
             ref={yellowRef}
             onPointerDown={(e) => handlePointerDown("yellow", e)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={() => handlePointerUp("yellow")}
-            onPointerCancel={() => handlePointerUp("yellow")}
             className="cursor-grab active:cursor-grabbing select-none touch-none"
             style={{
               position: "absolute",
