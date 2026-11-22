@@ -177,10 +177,30 @@ wait_for_production_health() {
 }
 
 verify_public_endpoints() {
-  local path http
+  local path bare canonical response location http
   for path in / /login; do
-    http="$(curl -sS -o /dev/null -w '%{http_code}' "https://jianlian.shop$path" || true)"
-    status "PUBLIC_${path//\//_}" "$http"
+    bare="https://jianlian.shop$path"
+    canonical="https://www.jianlian.shop$path"
+    response="$(curl -q --connect-timeout 10 --max-time 20 -sS -D - -o /dev/null -w '\n%{http_code}' "$bare")" || return 1
+    http="${response##*$'\n'}"
+    status "PUBLIC_BARE_${path//\//_}" "$http"
+    location="$(printf '%s\n' "$response" | awk '
+      /^HTTP\// { count = 0; location = "" }
+      tolower($0) ~ /^location:/ {
+        count++; location = $0
+        sub(/^[^:]+:[[:blank:]]*/, "", location)
+        sub(/\r$/, "", location)
+        sub(/[[:blank:]]+$/, "", location)
+      }
+      END { if (count == 1) print location }
+    ')" || return 1
+    if [[ ( "$http" != 301 && "$http" != 308 ) || "$location" != "$canonical" ]]; then
+      status "PUBLIC_BARE_REDIRECT_${path//\//_}" FAIL
+      return 1
+    fi
+    status "PUBLIC_BARE_REDIRECT_${path//\//_}" PASS
+    http="$(curl -q --connect-timeout 10 --max-time 20 -sS -o /dev/null -w '%{http_code}' "$canonical")" || return 1
+    status "PUBLIC_CANONICAL_${path//\//_}" "$http"
     [[ "$http" == 200 ]] || return 1
   done
 }

@@ -4,10 +4,16 @@ import {fulfillKuajingZyCandidate,reconcileKuajingZyAttempt,createKuajingZyFroze
 import {createKuajingZyPurchaseClient} from '../../lib/providers/kuajingzy/purchase-client.mjs';
 import {parseKuajingZyBinding,inspectKuajingZyProduct,KUAJINGZY_PURCHASE_RELEASE_ENABLED} from '../../lib/providers/kuajingzy/purchase-policy.mjs';
 import {canSupplierAutoPurchase} from '../../lib/providers/core/supplier-router-core.mjs';
-import {syntheticCandidate,syntheticEnvironment,syntheticProduct,syntheticOrder,SYNTHETIC_SECRET,ITEM,SKU} from '../fixtures/kuajingzy-mall-synthetic.mjs';
+import {KUAJINGZY_PURCHASE_RELEASE_MODE} from '../../lib/providers/kuajingzy/canary-scope.mjs';
+import {syntheticCandidate,syntheticCanaryEnvironment,syntheticProduct,syntheticOrder,SYNTHETIC_SECRET,ITEM,SKU,
+  CANARY_USER,CANARY_PRODUCT,CANARY_SKU,CANARY_ITEM,CANARY_VARIANT} from '../fixtures/kuajingzy-mall-synthetic.mjs';
 
 function fixture(options={}) {
-  const candidate=syntheticCandidate(),env={...syntheticEnvironment(),...options.env};
+  const candidate=syntheticCandidate({orderUserId:CANARY_USER,paymentMethod:'balance'});
+  Object.assign(candidate.binding,{productId:CANARY_ITEM,sku:CANARY_VARIANT,
+    websiteProductId:CANARY_PRODUCT,websiteSkuId:CANARY_SKU,maxUnitCost:'0.0990'});
+  const env={...syntheticCanaryEnvironment(),...options.env};
+  const providerOrder=patch=>syntheticOrder({itemId:CANARY_ITEM,skuId:CANARY_VARIANT,...patch});
   let attempt=null,units=[],posts=0,gets=0,deliveries=0,cas=0,quoteCalls=0,committed=false,crashed=false;
   const evidence=[],events=[];
   const db={
@@ -25,11 +31,11 @@ function fixture(options={}) {
       attempt.status=to;if(invoice)attempt.external_invoice_id=invoice;if(to==='SUBMITTING')cas++;
       events.push(to);return {result:'TRANSITIONED',status:to};
     },
-    revalidate:async()=>candidate,
+    revalidate:async()=>({...candidate,...options.freshPatch}),
     evidence:async(id,status,resultClass,fingerprint)=>{evidence.push({id,status,resultClass,fingerprint});},
     manualReview:async()=>{attempt.status='MANUAL_REVIEW';},
     async deliver(_attempt,content){
-      assert.equal(content,options.quantity===2?SYNTHETIC_SECRET+'\nSYNTHETIC_SECOND_CARD':SYNTHETIC_SECRET);
+      assert.equal(content,SYNTHETIC_SECRET);
       if(!committed){deliveries++;committed=true;}
       if(options.deliveryCrash&&!crashed){crashed=true;throw Error(SYNTHETIC_SECRET);}
       attempt.status='SUCCEEDED';
@@ -39,16 +45,17 @@ function fixture(options={}) {
     if(init.method==='POST'){posts++;assert.equal(attempt.status,'SUBMITTING');events.push('POST');
       if(options.timeout)throw Error(SYNTHETIC_SECRET+' timeout');
       if(options.http500)return Response.json({error:{code:'INTERNAL_ERROR',message:SYNTHETIC_SECRET}},{status:500});
-      return Response.json({data:{order:syntheticOrder({quantity:candidate.quantity,amount:candidate.quantity===2?0.18:0.09,status:'processing',delivery:''})}});
+      return Response.json({data:{order:providerOrder({status:'processing',delivery:''})}});
     }
-    gets++;return Response.json({data:syntheticOrder({quantity:candidate.quantity,amount:candidate.quantity===2?0.18:0.09,
-      delivery:candidate.quantity===2?SYNTHETIC_SECRET+'\nSYNTHETIC_SECOND_CARD':SYNTHETIC_SECRET,...options.orderPatch})});
+    gets++;return Response.json({data:providerOrder(options.orderPatch)});
   }});
   const client={...transport,
     getProduct:async()=>{
       quoteCalls++;
       if(options.quoteCrash&&!crashed&&quoteCalls===2){crashed=true;throw Error('SYNTHETIC_GET_FAILURE');}
       const p=syntheticProduct();
+      p.item.id=CANARY_ITEM;
+      p.item.variants[0].id=CANARY_VARIANT;
       if(options.outOfStock)p.item.variants[0].stock=0;
       if(options.highCost)p.item.variants[0].unitPrice=p.item.variants[0].prices.CNY=0.11;
       return p;
@@ -104,7 +111,7 @@ test('existing provider order is GET-only even if all purchase flags are now dis
   const r=await f.run();assert.equal(r.next,'QUERY_ONLY');assert.equal(f.stats().posts,n);
 });
 test('frozen cost/binding drift cannot resume CLAIMED',async()=>{
-  const f=fixture({quoteCrash:true});await assert.rejects(f.run());f.candidate.binding.maxUnitCost='0.20';
+  const f=fixture({quoteCrash:true});await assert.rejects(f.run());f.candidate.binding.maxUnitCost='0.098';
   await assert.rejects(f.run(),/DRIFT/);assert.equal(f.stats().posts,0);
 });
 test('private commit crash is retried via GET and cannot duplicate private delivery',async()=>{
@@ -117,17 +124,51 @@ for(const orderPatch of [{delivery:''},{delivery:SYNTHETIC_SECRET+'\nSYNTHETIC_E
     const f=fixture({orderPatch});await f.run();assert.equal(f.stats().deliveries,0);assert.equal(f.stats().posts,1);
   });
 }
-test('quantity N validates exact unique delivery count',async()=>{
-  const f=fixture({quantity:2});await f.run();assert.equal(f.stats().units,2);assert.equal(f.stats().posts,1);assert.equal(f.stats().deliveries,1);
-  const bad=fixture({quantity:2,orderPatch:{delivery:SYNTHETIC_SECRET+'\n'+SYNTHETIC_SECRET}});await bad.run();assert.equal(bad.stats().deliveries,0);
+test('Canary quantity above one fails before claim or POST',async()=>{
+  const f=fixture({quantity:2});
+  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
+  assert.equal(f.attempt(),null);
+  assert.equal(f.stats().posts,0);
+});
+test('Canary rejects an extra provider delivery',async()=>{
+  const f=fixture({orderPatch:{delivery:SYNTHETIC_SECRET+'\nSYNTHETIC_SECOND_CARD'}});
+  await f.run();
+  assert.equal(f.stats().posts,1);
+  assert.equal(f.stats().deliveries,0);
+});
+for(const [name,change] of [
+  ['other persisted user',c=>c.orderUserId='00000000-0000-4000-8000-000000000091'],
+  ['other website SKU',c=>c.binding.websiteSkuId='other'],
+  ['other supplier SKU',c=>c.binding.sku='9'],
+  ...['alipay','wechat','usdt_bep20'].map(method=>[method,c=>c.paymentMethod=method]),
+]) test('internal paid order cannot POST for '+name,async()=>{
+  const f=fixture();
+  change(f.candidate);
+  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
+  assert.equal(f.attempt(),null);
+  assert.equal(f.stats().posts,0);
+});
+test('fresh persisted user drift blocks the durable submit transition',async()=>{
+  const f=fixture({freshPatch:{orderUserId:'00000000-0000-4000-8000-000000000091'}});
+  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
+  assert.equal(f.attempt().status,'CLAIMED');
+  assert.equal(f.stats().cas,0);
+  assert.equal(f.stats().posts,0);
+});
+test('disabled or missing server Canary identity never reaches POST',async()=>{
+  const f=fixture({env:{KUAJINGZY_CANARY_USER_ID:undefined}});
+  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
+  assert.equal(f.attempt(),null);
+  assert.equal(f.stats().posts,0);
 });
 test('rounding allocation uses existing immutable per-unit costs without fractional loss',()=>{
   const c=syntheticCandidate({quantity:3});c.binding.maxUnitCost='1.00';
   const units=createKuajingZyFrozenUnits(c,'root','0.371');
   assert.deepEqual(units.map(x=>x.quoted_unit_cost),['0.123667','0.123667','0.123666']);
 });
-test('registry and literal production release remain closed',()=>{
-  assert.equal(KUAJINGZY_PURCHASE_RELEASE_ENABLED,false);assert.equal(canSupplierAutoPurchase('kuajingzy'),false);
+test('reviewed KuajingZY release gate is enabled while registry purchase stays closed',()=>{
+  assert.equal(KUAJINGZY_PURCHASE_RELEASE_MODE,'single_user_canary');
+  assert.equal(KUAJINGZY_PURCHASE_RELEASE_ENABLED,true);assert.equal(canSupplierAutoPurchase('kuajingzy'),false);
 });
 test('binding owner, supplier and max-cost policy are mandatory',()=>{
   const raw={fulfillment_source:'supplier',supplier:'kuajingzy',website_product_id:'product',website_sku_id:'sku',

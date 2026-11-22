@@ -34,7 +34,7 @@ function balanceFinancialFixture({paymentMethod='balance',evidencePatch={}}={}) 
   supplier_product_id:c.binding.productId,supplier_sku:c.binding.sku,supplier_currency:'CNY',
   supplier_max_unit_cost:c.binding.maxUnitCost,supplier_min_unit_profit:c.binding.minUnitProfit,
   supplier_min_margin_bps:c.binding.minMarginBps,supplier_auto_purchase_enabled:c.binding.enabled};
- const order={id:c.orderId,payment_status:'paid',payment_method:paymentMethod,status:'paid',currency:'CNY',total_amount:'1.000000'};
+ const order={id:c.orderId,user_id:'persisted-test-user',payment_status:'paid',payment_method:paymentMethod,status:'paid',currency:'CNY',total_amount:'1.000000'};
  const item={id:c.orderItemId,order_id:c.orderId,product_id:c.binding.websiteProductId,sku_id:c.binding.websiteSkuId,
   quantity:1,line_total:'1.000000',delivery_type:'automatic',delivery_status:'pending',
   product_snapshot:{supplier_binding:binding}};
@@ -55,6 +55,8 @@ test('paid balance candidate consumes balance-ledger merchant cost evidence with
  const db=createKuajingZyPurchaseStore(f.service,{verifiedCosts:f.verifiedCosts,clock:f.clock});
  const rows=await db.loadCandidates(f.c.orderId);
  assert.equal(rows.length,1);
+ assert.equal(rows[0].orderUserId,'persisted-test-user');
+ assert.equal(rows[0].paymentMethod,'balance');
  assert.equal(rows[0].financials.paymentFee,'0.000000');
  assert.equal(rows[0].financials.otherFees,'0.000000');
  assert.deepEqual(f.verifiedCalls,[f.c.orderId]);

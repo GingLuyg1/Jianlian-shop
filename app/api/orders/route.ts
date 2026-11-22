@@ -378,7 +378,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await authorizeKuajingZyStorefrontOrder(supabase, productId, skuId, quantity);
+      await authorizeKuajingZyStorefrontOrder(supabase, productId, skuId, quantity, user.id, paymentMethod);
     } catch {
       return NextResponse.json({error:"商品当前不可购买",code:"KUAJINGZY_ORDER_UNAVAILABLE"},{status:409});
     }

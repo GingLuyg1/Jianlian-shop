@@ -31,5 +31,4 @@ test("migration anchors and RPC fingerprints fail closed and preserve ACL", () =
   for (const kind of ["create", "release"]) {
     for (const [anchor] of patches(kind)) assert.throws(() => patch(anchor + anchor, kind), /ANCHOR_DRIFT/);
   }
-  assert.match(read("lib/providers/kuajingzy/purchase-policy.mjs"), /KUAJINGZY_PURCHASE_RELEASE_ENABLED = false/);
 });
