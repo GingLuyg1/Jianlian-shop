@@ -508,9 +508,14 @@ function CheckoutPageContent() {
     let active = true;
 
     async function loadProduct() {
-      setProductLoading(true);
+      const cachedPreview = peekPublicProductPreview(productId);
+      if (!cachedPreview) {
+        setProductLoading(true);
+      }
       setError("");
-      setProductRow(peekPublicProductPreview(productId));
+      if (cachedPreview) {
+        setProductRow(cachedPreview);
+      }
       setProductSkus([]);
 
       try {
@@ -538,8 +543,15 @@ function CheckoutPageContent() {
             path.unshift(category.slug);
             category = categories.find((item) => item.id === category?.parent_id);
           }
-          if (path.length) setProductRow((current) => current?.id === detail.product.id
-            ? { ...current, metadata: { ...current.metadata, category_slug: path[0], category_path: path.join("/") } } : current);
+          if (path.length) {
+            setProductRow((current) => {
+              if (!current || current.id !== detail.product.id) return current;
+              if (current.metadata?.category_slug === path[0] && current.metadata?.category_path === path.join("/")) {
+                return current;
+              }
+              return { ...current, metadata: { ...current.metadata, category_slug: path[0], category_path: path.join("/") } };
+            });
+          }
         });
       } catch (loadError) {
         if (!active) return;

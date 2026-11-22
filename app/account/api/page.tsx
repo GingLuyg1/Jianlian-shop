@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import AccountInformation from "@/components/account/AccountInformation";
 import { useAccountEmail } from "@/components/account/AccountEmailContext";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
@@ -270,9 +269,6 @@ export default function AccountApiPage() {
           </div>
         </header>
       </section>
-
-      {/* 商户核心信息 */}
-      <AccountInformation email={email || null} loading={false} />
 
       {/* 未开通状态：展示申请表单 */}
       {apiStatus === "unapplied" ? (

@@ -1310,11 +1310,11 @@ function ProductLoadingPlaceholder({ knownCount }: { knownCount: number | undefi
 
 function ProductEmptyState({ search, onResetFilters }: { search: string; onResetFilters: () => void }) {
   return (
-    <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-dashed bg-slate-50 text-center">
-      <div>
-        <p className="text-base font-semibold text-slate-800">暂无商品</p>
-        <p className="mt-1 break-words px-4 text-sm text-muted-foreground">{search ? `没有找到与“${search}”相关的商品。` : "当前分类还没有可售的商品。"}</p>
-        {search ? <Button type="button" variant="outline" className="mt-4" onClick={onResetFilters}>
+    <div className="flex h-full min-h-[260px] items-center justify-center rounded-2xl border border-dashed border-orange-300/80 bg-gradient-to-r from-orange-100/90 via-orange-50/95 to-orange-100/70 p-8 text-center shadow-xs">
+      <div className="max-w-sm space-y-2">
+        <p className="text-base font-bold text-primary">暂无商品</p>
+        <p className="break-words px-4 text-xs font-medium text-slate-600 leading-relaxed">{search ? `没有找到与“${search}”相关的商品。` : "当前分类还没有可售的商品。"}</p>
+        {search ? <Button type="button" variant="outline" size="sm" className="mt-4 rounded-xl border-orange-200 bg-white/90 hover:bg-white text-xs font-bold text-primary" onClick={onResetFilters}>
           清空搜索
         </Button> : null}
       </div>

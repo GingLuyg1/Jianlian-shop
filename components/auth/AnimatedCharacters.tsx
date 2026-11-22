@@ -318,18 +318,14 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function CharacterBubble({
+function EmbeddedCharacterBubble({
   text,
   bubbleKey,
-  left,
-  bottom,
-  isDragging = false,
+  unskewDeg = 0,
 }: {
   text?: string;
   bubbleKey?: number;
-  left: number;
-  bottom: number;
-  isDragging?: boolean;
+  unskewDeg?: number;
 }) {
   if (!text) return null;
   return (
@@ -337,12 +333,9 @@ function CharacterBubble({
       key={bubbleKey}
       style={{
         position: "absolute",
-        left: `${left}px`,
-        bottom: `${bottom}px`,
-        transform: "translateX(-50%)",
-        transition: isDragging
-          ? "none"
-          : "left 0.28s cubic-bezier(0.25, 1, 0.5, 1), bottom 0.28s cubic-bezier(0.25, 1, 0.5, 1)",
+        bottom: "100%",
+        left: "50%",
+        transform: `translateX(-50%) translateY(-14px) skewX(${unskewDeg}deg)`,
         zIndex: 60,
         pointerEvents: "none",
       }}
@@ -615,8 +608,8 @@ export default function AnimatedCharacters({
     setPoked((prev) => ({ ...prev, [char]: true }));
     setTimeout(() => {
       setPoked((prev) => ({ ...prev, [char]: false }));
-    }, 480);
-    triggerBubble(pickRandom(SPEECH_LINES.poke), char, 3000);
+    }, 280);
+    triggerBubble(pickRandom(SPEECH_LINES.poke), char, 2600);
   };
 
   const handlePointerDown = (char: CharKey, e: React.PointerEvent) => {
@@ -1067,6 +1060,7 @@ export default function AnimatedCharacters({
           width: "520px",
           height: "460px",
           transform: compact ? "scale(0.41)" : "scale(0.88)",
+          clipPath: "inset(-600px -300px 0px -300px)",
         }}
       >
         <div
@@ -1152,36 +1146,6 @@ export default function AnimatedCharacters({
             />
           )}
 
-          {/* Speech Bubbles Layer - 动态精准吸附跟随角色头顶 */}
-          <CharacterBubble
-            text={bubbles.purple?.text}
-            bubbleKey={bubbles.purple?.key}
-            left={purpleHeadX}
-            bottom={purpleHeadY}
-            isDragging={draggingChar === "purple"}
-          />
-          <CharacterBubble
-            text={bubbles.black?.text}
-            bubbleKey={bubbles.black?.key}
-            left={blackHeadX}
-            bottom={blackHeadY}
-            isDragging={draggingChar === "black"}
-          />
-          <CharacterBubble
-            text={bubbles.orange?.text}
-            bubbleKey={bubbles.orange?.key}
-            left={orangeHeadX}
-            bottom={orangeHeadY}
-            isDragging={draggingChar === "orange"}
-          />
-          <CharacterBubble
-            text={bubbles.yellow?.text}
-            bubbleKey={bubbles.yellow?.key}
-            left={yellowHeadX}
-            bottom={yellowHeadY}
-            isDragging={draggingChar === "yellow"}
-          />
-
           {/* 1. Purple Tall Character (Beautified Soft 3D Vinyl Texture) */}
           <div
             ref={purpleRef}
@@ -1210,7 +1174,7 @@ export default function AnimatedCharacters({
               transform: getCharTransform(
                 "purple",
                 poked.purple
-                  ? "scaleY(0.9) scaleX(1.08)"
+                  ? "scaleY(0.96) scaleX(1.03)"
                   : activeFailPose
                     ? "skewX(-8deg) scaleY(0.94)"
                     : isRevealingPassword
@@ -1228,6 +1192,21 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
+            {/* Embedded Speech Bubble directly on Purple's head */}
+            <EmbeddedCharacterBubble
+              text={bubbles.purple?.text}
+              bubbleKey={bubbles.purple?.key}
+              unskewDeg={-(
+                activeFailPose
+                  ? -8
+                  : isRevealingPassword
+                    ? 0
+                    : isTyping || isHidingPassword
+                      ? (purplePos.bodySkew || 0) - 12
+                      : (purplePos.bodySkew || 0)
+              )}
+            />
+
             {/* Eyes */}
             <div
               style={{
@@ -1325,30 +1304,30 @@ export default function AnimatedCharacters({
                       : `${58 + purplePos.faceY}px`,
                 width:
                   draggingChar === "purple" && dragPhysics.isLifted
-                    ? "20px"
-                    : loginSuccess || poked.purple
-                      ? "30px"
+                    ? "18px"
+                    : loginSuccess
+                      ? "28px"
                       : (isTyping || isHidingPassword) && !activeFailPose
                         ? "8px"
-                        : "24px",
+                        : "22px",
                 height:
                   draggingChar === "purple" && dragPhysics.isLifted
-                    ? "22px"
-                    : loginSuccess || poked.purple
-                      ? "16px"
+                    ? "18px"
+                    : loginSuccess
+                      ? "14px"
                       : (isTyping || isHidingPassword) && !activeFailPose
-                        ? "30px"
-                        : "9px",
+                        ? "26px"
+                        : "8px",
                 borderRadius:
                   draggingChar === "purple" && dragPhysics.isLifted
                     ? "50%"
                     : activeFailPose
                       ? "12px 12px 0 0"
-                      : loginSuccess || poked.purple
-                        ? "0 0 15px 15px"
+                      : loginSuccess
+                        ? "0 0 14px 14px"
                         : isTyping || isHidingPassword
                           ? "4px"
-                          : "0 0 12px 12px",
+                          : "0 0 11px 11px",
                 transform:
                   draggingChar === "purple" && dragPhysics.isLifted
                     ? "translateX(2px)"
@@ -1391,7 +1370,7 @@ export default function AnimatedCharacters({
               transform: getCharTransform(
                 "black",
                 poked.black
-                  ? "scaleY(0.92) scaleX(1.07)"
+                  ? "scaleY(0.96) scaleX(1.03)"
                   : activeFailPose
                     ? "skewX(7deg) scaleY(0.94)"
                     : isRevealingPassword
@@ -1411,6 +1390,22 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
+            {/* Embedded Speech Bubble directly on Black's head */}
+            <EmbeddedCharacterBubble
+              text={bubbles.black?.text}
+              bubbleKey={bubbles.black?.key}
+              unskewDeg={-(
+                activeFailPose
+                  ? 7
+                  : isRevealingPassword
+                    ? 0
+                    : isLookingAtEachOther
+                      ? (blackPos.bodySkew || 0) * 1.5 + 10
+                      : isTyping || isHidingPassword
+                        ? (blackPos.bodySkew || 0) * 1.5
+                        : (blackPos.bodySkew || 0)
+              )}
+            />
             <div
               style={{
                 position: "absolute",
@@ -1486,7 +1481,7 @@ export default function AnimatedCharacters({
               transform: getCharTransform(
                 "orange",
                 poked.orange
-                  ? "scaleY(0.88) scaleX(1.08)"
+                  ? "scaleY(0.96) scaleX(1.03)"
                   : activeFailPose
                     ? "scaleY(0.92) scaleX(1.04) skewX(-5deg)"
                     : isRevealingPassword
@@ -1502,6 +1497,19 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
+            {/* Embedded Speech Bubble directly on Orange's head */}
+            <EmbeddedCharacterBubble
+              text={bubbles.orange?.text}
+              bubbleKey={bubbles.orange?.key}
+              unskewDeg={-(
+                activeFailPose
+                  ? -5
+                  : isRevealingPassword
+                    ? 0
+                    : (orangePos.bodySkew || 0)
+              )}
+            />
+
             {/* Orange Face: 眼睛与嘴巴完全组合为单一刚体面部，100% 杜绝眼嘴错位与滞后 */}
             <div
               className="orange-face"
@@ -1581,42 +1589,35 @@ export default function AnimatedCharacters({
                 style={{
                   position: "absolute",
                   backgroundColor: "#231F20",
-                  left: "14px",
+                  left: "22px",
                   top: "32px",
                   width:
                     (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
-                      ? "16px"
-                      : loginSuccess || poked.orange
-                        ? "32px"
+                      ? "14px"
+                      : loginSuccess
+                        ? "28px"
                         : (isTyping || isHidingPassword) && !activeFailPose
-                          ? "14px"
-                          : "26px",
+                          ? "12px"
+                          : "22px",
                   height:
                     (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
-                      ? "16px"
-                      : loginSuccess || poked.orange
-                        ? "18px"
+                      ? "14px"
+                      : loginSuccess
+                        ? "14px"
                         : (isTyping || isHidingPassword) && !activeFailPose
-                          ? "14px"
-                          : "13px",
+                          ? "12px"
+                          : "10px",
                   borderRadius:
                     (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
                       ? "50%"
                       : activeFailPose
-                        ? "13px 13px 0 0"
-                        : loginSuccess || poked.orange
-                          ? "0 0 16px 16px"
+                        ? "10px 10px 0 0"
+                        : loginSuccess
+                          ? "0 0 14px 14px"
                           : isTyping || isHidingPassword
                             ? "50%"
-                            : "0 0 13px 13px",
-                  transform:
-                    (isTyping || isHidingPassword) &&
-                    !activeFailPose &&
-                    !loginSuccess &&
-                    !poked.orange &&
-                    draggingChar !== "orange"
-                      ? "translateX(6px)"
-                      : "none",
+                            : "0 0 11px 11px",
+                  transform: "none",
                   transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
               />
@@ -1651,7 +1652,7 @@ export default function AnimatedCharacters({
               transform: getCharTransform(
                 "yellow",
                 poked.yellow
-                  ? "scaleY(0.9) scaleX(1.08)"
+                  ? "scaleY(0.96) scaleX(1.03)"
                   : activeFailPose
                     ? "skewX(8deg) scaleY(0.93)"
                     : isRevealingPassword
@@ -1667,6 +1668,18 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
+            {/* Embedded Speech Bubble directly on Yellow's head */}
+            <EmbeddedCharacterBubble
+              text={bubbles.yellow?.text}
+              bubbleKey={bubbles.yellow?.key}
+              unskewDeg={-(
+                activeFailPose
+                  ? 8
+                  : isRevealingPassword
+                    ? 0
+                    : (yellowPos.bodySkew || 0)
+              )}
+            />
             <div
               style={{
                 position: "absolute",
@@ -1737,7 +1750,7 @@ export default function AnimatedCharacters({
                       ? "M0 10 Q10 16, 20 4 Q30 16, 40 4 Q50 16, 60 4 Q70 16, 80 10"
                       : activeFailPose
                         ? "M0 10 Q10 2, 20 10 Q30 18, 40 10 Q50 2, 60 10 Q70 18, 80 10"
-                        : loginSuccess || poked.yellow
+                        : loginSuccess
                           ? "M0 2 Q10 10, 20 14 Q30 18, 40 18 Q50 18, 60 14 Q70 10, 80 2"
                           : "M0 10 Q10 10, 20 10 Q30 10, 40 10 Q50 10, 60 10 Q70 10, 80 10"
                   }

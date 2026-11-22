@@ -540,11 +540,11 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_430px]">
           {/* 左侧卡通角色舞台卡片（融合高级晨曦微光与柔和流光背景） */}
           <section className="hidden lg:block">
-            <div className="relative max-w-xl overflow-hidden rounded-[36px] border border-white/90 bg-white/60 p-8 shadow-[0_32px_96px_-12px_rgba(230,120,40,0.18)] backdrop-blur-2xl ring-1 ring-orange-200/50">
+            <div className="relative max-w-xl overflow-hidden rounded-[36px] border border-white/95 bg-gradient-to-b from-white/95 via-white/85 to-[#fff8f0]/90 p-8 shadow-[0_24px_70px_-8px_rgba(235,115,30,0.16),0_4px_16px_rgba(0,0,0,0.02)] backdrop-blur-2xl ring-1 ring-orange-200/40">
               {/* 高级立体微光光晕与晨曦展台氛围 */}
               <div className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full bg-gradient-to-br from-[#ffd59e]/60 to-[#ffb066]/40 blur-2xl" />
               <div className="pointer-events-none absolute -bottom-16 -left-16 h-60 w-60 rounded-full bg-gradient-to-tr from-[#ffe2c4]/70 to-[#ffcaa0]/50 blur-2xl" />
-              <div className="pointer-events-none absolute inset-x-12 bottom-6 h-12 rounded-full bg-gradient-to-t from-orange-200/30 to-transparent blur-lg" />
+              <div className="pointer-events-none absolute inset-x-8 bottom-6 h-10 rounded-full bg-gradient-to-r from-orange-200/20 via-amber-200/40 to-orange-200/20 blur-md" />
               <div className="relative">
                 {/* 重构后的极简高奢品牌微排版与背书 */}
                 <div className="relative z-10 mb-6 space-y-3.5">
@@ -688,7 +688,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       <div className="space-y-1.5">
                         <Label htmlFor="email">邮箱</Label>
                         <div className="relative">
-                          <Mail className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Mail className="pointer-events-none absolute left-3.5 top-1/2 z-30 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
                             id="email"
                             type="email"
@@ -706,7 +706,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                               setIsTyping(false);
                             }}
                             placeholder="请输入邮箱"
-                            className="h-11 rounded-xl bg-slate-50/80 pl-10"
+                            className="relative z-10 h-11 rounded-xl border border-slate-200/90 bg-white/95 pl-10 pr-4 text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-0 focus-visible:outline-none shadow-xs"
                             autoComplete="email"
                             required
                           />
@@ -716,7 +716,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       <div className="space-y-1.5">
                         <Label htmlFor="password">密码</Label>
                         <div className="relative">
-                          <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 z-30 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
                             id="password"
                             type={showPassword ? "text" : "password"}
@@ -734,7 +734,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                               setIsTyping(false);
                             }}
                             placeholder="请输入密码"
-                            className="h-11 rounded-xl bg-slate-50/80 pl-10 pr-11"
+                            className="relative z-10 h-11 rounded-xl border border-slate-200/90 bg-white/95 pl-10 pr-11 text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-0 focus-visible:outline-none shadow-xs"
                             autoComplete={
                               isRegister ? "new-password" : "current-password"
                             }
@@ -742,7 +742,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                           />
                           <button
                             type="button"
-                            className="absolute right-3.5 top-1/2 z-10 -translate-y-1/2 cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
+                            className="absolute right-3.5 top-1/2 z-30 -translate-y-1/2 cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
                             onClick={() => setShowPassword((value) => !value)}
                             aria-label={showPassword ? "隐藏密码" : "显示密码"}
                           >
@@ -775,11 +775,16 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                             : "grid-rows-[0fr] opacity-0 pointer-events-none"
                         )}
                       >
-                        <div className="overflow-hidden space-y-4 pt-1">
+                        <div
+                          className={cn(
+                            "space-y-4 pt-1 px-1 -mx-1",
+                            isRegister ? "overflow-visible" : "overflow-hidden"
+                          )}
+                        >
                           <div className="space-y-1.5">
                             <Label htmlFor="emailOtp">邮箱验证码</Label>
                             <div className="relative flex items-center">
-                              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 z-30 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                               <Input
                                 id="emailOtp"
                                 type="text"
@@ -788,14 +793,14 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                                   setEmailOtp(event.target.value.trim())
                                 }
                                 placeholder="请输入邮箱收到的验证码"
-                                className="h-11 rounded-xl bg-slate-50/80 pl-10 pr-28 font-mono text-sm"
+                                className="relative z-10 h-11 rounded-xl border border-slate-200/90 bg-white/95 pl-10 pr-28 font-mono text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-0 focus-visible:outline-none shadow-xs"
                                 maxLength={8}
                               />
                               <button
                                 type="button"
                                 onClick={handleSendRegisterOtp}
                                 disabled={otpSending || otpCountdown > 0 || !email.trim()}
-                                className="absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded-lg bg-orange-100/90 px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition-colors hover:bg-orange-200/90 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="absolute right-1.5 top-1/2 z-30 -translate-y-1/2 rounded-lg bg-orange-100/90 px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition-colors hover:bg-orange-200/90 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {otpSending
                                   ? "发送中..."
@@ -808,7 +813,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                           <div className="space-y-1.5">
                             <Label htmlFor="inviteCode">邀请码（选填）</Label>
                             <div className="relative">
-                              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 z-30 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                               <Input
                                 id="inviteCode"
                                 value={inviteCode}
@@ -816,7 +821,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                                   setInviteCode(event.target.value)
                                 }
                                 placeholder="请输入邀请码"
-                                className="h-11 rounded-xl bg-slate-50/80 pl-10"
+                                className="relative z-10 h-11 rounded-xl border border-slate-200/90 bg-white/95 pl-10 pr-4 text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-0 focus-visible:outline-none shadow-xs"
                               />
                             </div>
                           </div>
@@ -904,7 +909,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
           </section>
         </div>
       </div>
-      {/* 登录成功同心圆柔光涟漪转场层（从登录按钮开始扩散，席卷全屏） */}
+      {/* 登录成功同心圆柔光涟漪转场层（以登录按钮为圆心扩散，像蒙版一样随着涟漪经过的位置揭开网站页面） */}
       {loginSuccess && (
         <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
           <style
@@ -912,51 +917,149 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               __html: `
                 @keyframes jianlian-auth-btn-ripple {
                   0% {
-                    transform: translate(-50%, -50%) scale(0.12);
+                    transform: translate(-50%, -50%) scale(0.08);
                     opacity: 0.95;
                   }
                   45% {
-                    opacity: 0.7;
+                    opacity: 0.75;
                   }
                   100% {
-                    transform: translate(-50%, -50%) scale(34);
+                    transform: translate(-50%, -50%) scale(36);
                     opacity: 0;
+                  }
+                }
+                @keyframes jianlian-mask-curtain-reveal {
+                  0% {
+                    clip-path: circle(0px at var(--ripple-cx) var(--ripple-cy));
+                    opacity: 0.9;
+                  }
+                  50% {
+                    opacity: 1;
+                  }
+                  100% {
+                    clip-path: circle(160vmax at var(--ripple-cx) var(--ripple-cy));
+                    opacity: 1;
                   }
                 }
                 @keyframes jianlian-auth-glow {
                   0% { opacity: 0; }
-                  40% { opacity: 0.85; }
-                  100% { opacity: 1; }
+                  40% { opacity: 0.6; }
+                  100% { opacity: 0.92; }
                 }
               `,
             }}
           />
-          {/* 以登录按钮为圆心向外喷涌扩散的同心圆涟漪 */}
+          {/* 蒙版扩散揭开层：以登录按钮为圆心，随着涟漪扩散揭开网站真实页面 */}
+          <div
+            style={{
+              ["--ripple-cx" as string]: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
+              ["--ripple-cy" as string]: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+            }}
+            className="fixed inset-0 z-40 bg-[#fdfaf7] animate-[jianlian-mask-curtain-reveal_1.35s_cubic-bezier(0.16,1,0.3,1)_forwards] shadow-2xl overflow-hidden"
+          >
+            {/* 揭开后即时展现的 Jianlian 网站真实版面与欢迎氛围 */}
+            <div className="flex h-full w-full">
+              {/* 真实站点左侧导航栏 */}
+              <aside className="hidden md:flex w-64 flex-col justify-between border-r border-orange-100/80 bg-white/90 p-5 shadow-xs">
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3 px-2">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white font-black text-lg shadow-md shadow-orange-500/25">
+                      JL
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black tracking-tight text-slate-900">Jianlian</h2>
+                      <p className="text-[11px] font-semibold text-slate-600">数字商品服务</p>
+                    </div>
+                  </div>
+                  <nav className="space-y-1.5 text-xs font-semibold">
+                    <div className="flex items-center gap-2.5 rounded-xl bg-orange-50 px-3.5 py-2.5 text-primary shadow-xs">
+                      <Sparkles className="h-4 w-4" />
+                      <span>首页</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-slate-600">
+                      <span>国际 Sim 卡</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-slate-600">
+                      <span>礼品卡 / 充值卡</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-slate-600">
+                      <span>AI 会员充值</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-slate-600">
+                      <span>推广中心</span>
+                    </div>
+                  </nav>
+                </div>
+                <div className="rounded-xl border border-orange-200/60 bg-gradient-to-r from-orange-500 to-amber-500 py-2.5 text-center text-xs font-bold text-white shadow-sm">
+                  在线客服
+                </div>
+              </aside>
+
+              {/* 真实站点主内容区 */}
+              <div className="flex flex-1 flex-col overflow-hidden">
+                {/* 顶部公告与账户栏 */}
+                <header className="flex items-center justify-between border-b border-orange-100/70 bg-white/80 px-6 py-3.5 backdrop-blur-md">
+                  <div className="flex items-center gap-2 rounded-full border border-orange-200/70 bg-orange-50/80 px-3.5 py-1 text-xs font-medium text-slate-700 max-w-lg truncate">
+                    <span className="font-bold text-primary">公告</span>
+                    <span className="truncate">个人或团体合法电商拓客使用，严禁利用购买商品进行任何违法犯罪活动</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs font-bold">
+                    <div className="rounded-full border border-orange-200/70 bg-orange-50/90 px-3 py-1 text-primary">
+                      余额 ¥34.20
+                    </div>
+                    <div className="text-slate-700">{email || "用户"}</div>
+                  </div>
+                </header>
+
+                {/* 页面迎宾与路由就绪 */}
+                <main className="flex flex-1 items-center justify-center p-6">
+                  <div className="rounded-3xl border border-orange-200/90 bg-white/95 p-8 text-center shadow-xl backdrop-blur-md max-w-sm space-y-4 animate-[jianlian-bubble-pop_0.4s_ease-out_forwards]">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-primary shadow-xs">
+                      <Sparkles className="h-7 w-7 animate-spin" style={{ animationDuration: "3s" }} />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-black text-slate-900">欢迎进入 Jianlian</h3>
+                      <p className="text-xs font-medium text-slate-500">验证通过，正在为您载入商户中心...</p>
+                    </div>
+                    <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                      <span>会话已建立</span>
+                    </div>
+                  </div>
+                </main>
+              </div>
+            </div>
+          </div>
+
+          {/* 以登录按钮为圆心向外喷涌扩散的同心圆涟漪光环 */}
           <div
             style={{
               position: "absolute",
               left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+              zIndex: 45,
             }}
-            className="h-32 w-32 rounded-full border-2 border-orange-400/60 bg-radial from-orange-400/30 to-transparent blur-[1px] animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_forwards]"
+            className="h-32 w-32 rounded-full border-2 border-orange-400/80 bg-radial from-orange-400/30 to-transparent blur-[1px] animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_forwards]"
           />
           <div
             style={{
               position: "absolute",
               left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+              zIndex: 45,
             }}
-            className="h-32 w-32 rounded-full border-2 border-amber-300/60 bg-radial from-amber-300/30 to-transparent blur-sm animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.18s_forwards]"
+            className="h-32 w-32 rounded-full border-2 border-amber-300/80 bg-radial from-amber-300/30 to-transparent blur-sm animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.18s_forwards]"
           />
           <div
             style={{
               position: "absolute",
               left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+              zIndex: 45,
             }}
-            className="h-32 w-32 rounded-full border-2 border-orange-500/50 bg-radial from-orange-500/25 to-transparent blur-md animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.36s_forwards]"
+            className="h-32 w-32 rounded-full border-2 border-orange-500/70 bg-radial from-orange-500/25 to-transparent blur-md animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.36s_forwards]"
           />
-          <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] animate-[jianlian-auth-glow_0.9s_ease-out_forwards]" />
+          <div className="absolute inset-0 z-50 bg-white/20 backdrop-blur-[1px] animate-[jianlian-auth-glow_0.9s_ease-out_forwards]" />
         </div>
       )}
     </main>
