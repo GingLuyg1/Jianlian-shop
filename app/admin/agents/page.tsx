@@ -87,7 +87,7 @@ export interface AgentOrder {
 const DEFAULT_APPLICATIONS: ApiApplication[] = [
   {
     id: "APP_1732204801",
-    email: "gac000189@gmail.com",
+    email: "merchant@example.com",
     merchantName: "极客海外数码工作室",
     businessScenario: "自建电商独立站自动采购海外 eSIM 与数字账户",
     serverIps: ["124.220.100.12", "47.98.220.5"],
@@ -122,7 +122,7 @@ const DEFAULT_APPLICATIONS: ApiApplication[] = [
 const DEFAULT_WHITELISTS: WhitelistEntry[] = [
   {
     id: "WL_01",
-    email: "gac000189@gmail.com",
+    email: "merchant@example.com",
     merchantName: "极客海外数码工作室",
     appId: "MCH_10082691",
     ip: "124.220.100.12",
@@ -132,7 +132,7 @@ const DEFAULT_WHITELISTS: WhitelistEntry[] = [
   },
   {
     id: "WL_02",
-    email: "gac000189@gmail.com",
+    email: "merchant@example.com",
     merchantName: "极客海外数码工作室",
     appId: "MCH_10082691",
     ip: "47.98.220.5",
@@ -142,7 +142,7 @@ const DEFAULT_WHITELISTS: WhitelistEntry[] = [
   },
   {
     id: "WL_03",
-    email: "dev_partner@gmail.com",
+    email: "partner@example.com",
     merchantName: "全球数码分销商A",
     appId: "MCH_98210344",
     ip: "154.212.89.10",
@@ -156,7 +156,7 @@ const DEFAULT_AGENT_ORDERS: AgentOrder[] = [
   {
     id: "ORD_AG_1001",
     orderNo: "JL2026112214019283",
-    merchantEmail: "gac000189@gmail.com",
+    merchantEmail: "merchant@example.com",
     appId: "MCH_10082691",
     productName: "Steam账号 | 阿根廷 | 全新账号 | 邮箱可用",
     amount: 2.71,
@@ -167,7 +167,7 @@ const DEFAULT_AGENT_ORDERS: AgentOrder[] = [
   {
     id: "ORD_AG_1002",
     orderNo: "JL2026112213501922",
-    merchantEmail: "gac000189@gmail.com",
+    merchantEmail: "merchant@example.com",
     appId: "MCH_10082691",
     productName: "英国 Giffgaff SIM 卡 原生漫游实体卡",
     amount: 35.00,
@@ -178,7 +178,7 @@ const DEFAULT_AGENT_ORDERS: AgentOrder[] = [
   {
     id: "ORD_AG_1003",
     orderNo: "JL2026112212301990",
-    merchantEmail: "dev_partner@gmail.com",
+    merchantEmail: "partner@example.com",
     appId: "MCH_98210344",
     productName: "ChatGPT Plus 官方代充 / 独享账号",
     amount: 148.00,
@@ -477,7 +477,7 @@ export default function AdminAgentsPage() {
                     <th className="px-4 py-3 font-semibold">联系方式</th>
                     <th className="px-4 py-3 font-semibold">申请时间</th>
                     <th className="px-4 py-3 font-semibold">状态</th>
-                    <th className="px-4 py-3 font-semibold text-right">审核操作</th>
+                    <th className="px-4 py-3 font-semibold text-center">审核操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -525,7 +525,7 @@ export default function AdminAgentsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-right space-x-2">
+                      <td className="px-4 py-3.5 text-center space-x-2">
                         {app.status === "pending" ? (
                           <>
                             <Button
@@ -579,7 +579,7 @@ export default function AdminAgentsPage() {
                       <th className="px-4 py-3 font-semibold">服务器说明 / 备注</th>
                       <th className="px-4 py-3 font-semibold">加白生效时间</th>
                       <th className="px-4 py-3 font-semibold">状态</th>
-                      <th className="px-4 py-3 font-semibold text-right">操作</th>
+                      <th className="px-4 py-3 font-semibold text-center">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -603,7 +603,7 @@ export default function AdminAgentsPage() {
                             <CheckCircle2 className="h-3 w-3" /> 生效运行中
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 text-right">
+                        <td className="px-4 py-3.5 text-center">
                           <Button
                             type="button"
                             variant="ghost"
@@ -695,7 +695,7 @@ export default function AdminAgentsPage() {
               <Input
                 value={addEmail}
                 onChange={(e) => setAddEmail(e.target.value)}
-                placeholder="例如：gac000189@gmail.com"
+                placeholder="例如：merchant@example.com"
                 className="h-10 text-xs"
                 required
               />

@@ -113,7 +113,7 @@ const INITIAL_DEMO_TICKETS: TicketItem[] = [
     priority: "normal",
     status: "completed",
     orderNo: "",
-    email: "gac000189@gmail.com",
+    email: "merchant@example.com",
     description:
       "您好，我们正在接入跨境资源网普通 API (Jianlian Shop)，请协助确认以下四项技术合同：\n1. 目录读取：GET /api/open/v1/catalog/mall?search=礼品卡 会在高峰期超时，服务端最大缓存限制多大？\n2. 扣款保护：POST /api/open/v1/orders/mall 屡次扣款的 expectedAmount 是否校验折扣、会入、服务费扣除后的最终 CNY 钱包总扣款？\n3. 幂等性保障：Idempotency-Key 的保质时长及过期后行为是什么？若超时或 500，未拿到订单 ID 时，能否直接复用同一 key 重试？\n4. 订单状态追踪：请提供 GET /api/open/v1/orders/[id] 的完整响应样例，包括 deliveryFormat 字段定义。感谢协助！",
     createdAt: "2026-11-06 10:30:33",
