@@ -7,9 +7,6 @@ export const dynamic = "force-dynamic";
 
 function validatePassword(value: string) {
   if (value.length < 8) return "新密码长度至少 8 位";
-  if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) {
-    return "新密码需同时包含字母和数字";
-  }
   return null;
 }
 

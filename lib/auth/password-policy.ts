@@ -1,10 +1,7 @@
-﻿export const PASSWORD_POLICY_DESCRIPTION = "密码至少 8 位，并同时包含字母和数字。";
+﻿export const PASSWORD_POLICY_DESCRIPTION = "密码至少 8 位。";
 
 export function validateAuthPassword(value: string) {
   if (value.length < 8) return "密码至少需要 8 位。";
-  if (!/[A-Za-z]/.test(value) || !/[0-9]/.test(value)) {
-    return "密码需要同时包含字母和数字。";
-  }
   return "";
 }
 

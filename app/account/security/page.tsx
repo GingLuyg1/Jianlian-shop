@@ -326,9 +326,6 @@ export default function AccountSecurityPage() {
     const errors: Record<string, string> = {};
     if (!emailPwdForm.code.trim()) errors.code = "请输入邮箱收到的验证码";
     if (emailPwdForm.newPassword.length < 8) errors.newPassword = "新密码长度至少 8 位";
-    if (!/[A-Za-z]/.test(emailPwdForm.newPassword) || !/[0-9]/.test(emailPwdForm.newPassword)) {
-      errors.newPassword = "新密码需同时包含字母和数字";
-    }
     if (emailPwdForm.newPassword !== emailPwdForm.confirmPassword) {
       errors.confirmPassword = "两次输入的新密码不一致";
     }
@@ -375,9 +372,6 @@ export default function AccountSecurityPage() {
     const errors: Record<string, string> = {};
     if (!oldPwdForm.oldPassword) errors.oldPassword = "请输入原密码";
     if (oldPwdForm.newPassword.length < 8) errors.newPassword = "新密码长度至少 8 位";
-    if (!/[A-Za-z]/.test(oldPwdForm.newPassword) || !/[0-9]/.test(oldPwdForm.newPassword)) {
-      errors.newPassword = "新密码需同时包含字母和数字";
-    }
     if (oldPwdForm.newPassword === oldPwdForm.oldPassword) {
       errors.newPassword = "新密码不能与原密码相同";
     }
