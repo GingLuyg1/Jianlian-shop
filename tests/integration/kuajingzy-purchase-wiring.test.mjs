@@ -126,8 +126,8 @@ test('rounding allocation uses existing immutable per-unit costs without fractio
   const units=createKuajingZyFrozenUnits(c,'root','0.371');
   assert.deepEqual(units.map(x=>x.quoted_unit_cost),['0.123667','0.123667','0.123666']);
 });
-test('registry and literal production release remain closed',()=>{
-  assert.equal(KUAJINGZY_PURCHASE_RELEASE_ENABLED,false);assert.equal(canSupplierAutoPurchase('kuajingzy'),false);
+test('reviewed KuajingZY release gate is enabled while registry purchase stays closed',()=>{
+  assert.equal(KUAJINGZY_PURCHASE_RELEASE_ENABLED,true);assert.equal(canSupplierAutoPurchase('kuajingzy'),false);
 });
 test('binding owner, supplier and max-cost policy are mandatory',()=>{
   const raw={fulfillment_source:'supplier',supplier:'kuajingzy',website_product_id:'product',website_sku_id:'sku',
