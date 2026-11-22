@@ -82,7 +82,7 @@ bash scripts/production-release.sh switch <FULL_SHA>
 
 脚本重新检查 SHA、`.next`、env 与 prepare/build/ready marker，记录并验证当前 release 后，使用受控 fresh activation 切换：只删除名为 `jianlian-shop` 的现有 PM2 process，再以目标 `JIANLIAN_RELEASE_DIR` 和唯一的 `ecosystem.production.config.cjs` 执行全新 `pm2 start`。禁止用 `startOrReload` 跨 release 切换，因为 PM2 reload 不会可靠采用新的 cwd 或 script path。
 
-Fresh activation 最多用 60 秒、每 2 秒检查一次 PM2 process、online 状态、PID、`/proc/<pid>/cwd`、`pm_cwd` 和 `pm_exec_path`，随后最多再用 60 秒等待 localhost `3001/api/health`。短暂 Production downtime 是预期行为。目标 health 和正式首页/login 全部通过后才 `pm2 save`；任一步失败只调用一次相同的 fresh activation 恢复已记录的 previous release，恢复版本完整通过后才保存。自动恢复失败时停止并要求人工恢复，禁止递归回滚、`pm2 delete all` 或 `pm2 kill`。
+Fresh activation 最多用 60 秒、每 2 秒检查一次 PM2 process、online 状态、PID、`/proc/<pid>/cwd`、`pm_cwd` 和 `pm_exec_path`，随后最多再用 60 秒等待 localhost `3001/api/health` 直接返回 HTTP 200。短暂 Production downtime 是预期行为。切换、回滚和自动恢复共享公网验收：裸域首页和登录页必须返回 301 或 308，Location 精确指向 HTTPS www 的相同路径，再独立请求 www 验证直接 HTTP 200。全部通过后才 `pm2 save`；任一步失败只调用一次相同的 fresh activation 恢复已记录的 previous release，恢复版本完整通过后才保存。自动恢复失败时停止并要求人工恢复，禁止递归回滚、`pm2 delete all` 或 `pm2 kill`。
 
 成功 switch/rollback 输出 `PM2_SAVE=PASS`；成功自动恢复输出 `RECOVERY_PM2_SAVE=PASS` 和 `PREVIOUS_RELEASE_RESTORED=PASS`，随后原发布仍返回失败。恢复 save 失败不能报告恢复成功；最终 save 失败表示运行目标已切换但持久化未确认，需要人工复查，而不是声称没有运行 save。发布脚本内置验证不等于支付业务验收，继续完成 [只读外部验收清单](operations/production-release-post-switch-verification.md)。
 
