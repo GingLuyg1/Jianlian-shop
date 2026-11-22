@@ -702,13 +702,13 @@ export default function AnimatedCharacters({
           });
         }
       } else {
-        // Dragging DOWN: squashes into the floor，自然微膨胀，绝不切断底角
+        // Dragging DOWN: squashes into the floor，自然微膨胀与纵向压缩，Q弹饱满
         setDragPhysics({
-          shiftX: Math.max(-45, Math.min(45, dx * 0.5)),
+          shiftX: Math.max(-50, Math.min(50, dx * 0.55)),
           liftY: 0,
-          angle: Math.max(-10, Math.min(10, dx * 0.15)),
-          scaleX: 1 + Math.min(0.22, dy * 0.003),
-          scaleY: 1 - Math.min(0.2, dy * 0.0028),
+          angle: Math.max(-12, Math.min(12, dx * 0.16)),
+          scaleX: 1 + Math.min(0.32, dy * 0.004),
+          scaleY: Math.max(0.62, 1 - dy * 0.0036),
           isLifted: false,
         });
       }
@@ -731,15 +731,14 @@ export default function AnimatedCharacters({
     };
   }, [draggingChar, endDragGracefully]);
 
-  // 全局强力看门狗：当用户在右侧开始输入表单（isTyping、输入密码或邮箱）时，如果角色处于浮空或拖拽，立即无条件强制软着陆落地，彻底杜绝浮空卡死！
+  // 优雅看门狗：仅当用户从外部点击输入框敲字（isTyping 从 false 变为 true）时，若角色此前悬空，则平滑放回地面；平时角色完全自由支持拖拽与下拉压缩
+  const prevIsTypingRef = useRef(isTyping);
   useEffect(() => {
-    if (
-      (isTyping || passwordLength > 0) &&
-      (draggingCharRef.current || draggingChar || dragPhysics.liftY > 0)
-    ) {
+    if (!prevIsTypingRef.current && isTyping && (draggingCharRef.current || dragPhysics.liftY > 0)) {
       endDragGracefully();
     }
-  }, [isTyping, passwordLength, draggingChar, dragPhysics.liftY, endDragGracefully]);
+    prevIsTypingRef.current = isTyping;
+  }, [isTyping, dragPhysics.liftY, endDragGracefully]);
 
   const getCharTransform = (char: CharKey, baseTransform: string) => {
     if (draggingChar === char) {
@@ -808,8 +807,8 @@ export default function AnimatedCharacters({
       : 0;
   const purpleHeadX = Math.round(
     160 +
-      purpleEffectiveTranslateX -
-      Math.tan((purpleEffectiveSkew * Math.PI) / 180) * purpleHeight +
+      purpleEffectiveTranslateX +
+      Math.sin(((purpleEffectiveSkew || 0) * Math.PI) / 180) * (purpleHeight * 0.45) +
       (draggingChar === "purple" ? dragPhysics.shiftX : 0)
   );
   const purpleHeadY = Math.round(
@@ -830,26 +829,17 @@ export default function AnimatedCharacters({
       ? 16
       : 0;
   const blackHeadX = Math.round(
-    301 +
-      blackEffectiveTranslateX -
-      Math.tan((blackEffectiveSkew * Math.PI) / 180) * blackHeight +
+    295 +
+      blackEffectiveTranslateX +
+      Math.sin(((blackEffectiveSkew || 0) * Math.PI) / 180) * (blackHeight * 0.35) +
       (draggingChar === "black" ? dragPhysics.shiftX : 0)
   );
   const blackHeadY = Math.round(
     blackHeight + (draggingChar === "black" ? dragPhysics.liftY : 0) + 14
   );
 
-  const orangeEffectiveSkew = poked.orange
-    ? 0
-    : activeFailPose
-      ? -5
-      : isRevealingPassword
-        ? 0
-        : (orangePos.bodySkew || 0);
   const orangeHeadX = Math.round(
-    121 -
-      Math.tan((orangeEffectiveSkew * Math.PI) / 180) * orangeHeight +
-      (draggingChar === "orange" ? dragPhysics.shiftX : 0)
+    120 + (draggingChar === "orange" ? dragPhysics.shiftX : 0)
   );
   const orangeHeadY = Math.round(
     orangeHeight + (draggingChar === "orange" ? dragPhysics.liftY : 0) + 14
@@ -863,8 +853,8 @@ export default function AnimatedCharacters({
         ? 0
         : (yellowPos.bodySkew || 0);
   const yellowHeadX = Math.round(
-    381 -
-      Math.tan((yellowEffectiveSkew * Math.PI) / 180) * yellowHeight +
+    381 +
+      Math.sin(((yellowEffectiveSkew || 0) * Math.PI) / 180) * (yellowHeight * 0.35) +
       (draggingChar === "yellow" ? dragPhysics.shiftX : 0)
   );
   const yellowHeadY = Math.round(
@@ -877,11 +867,11 @@ export default function AnimatedCharacters({
   const isOrangeActive = draggingChar === "orange" || droppingChar === "orange" || poked.orange;
   const isYellowActive = draggingChar === "yellow" || droppingChar === "yellow" || poked.yellow;
 
-  // 饱满全圆角胶囊体：按压、空中、弹跳时100%圆弧胶囊；静止时为大圆弧底角，绝对消灭平直横线！
-  const purpleBottomRadius = isPurpleActive ? 32 : 24;
-  const blackBottomRadius = isBlackActive ? 28 : 22;
-  const orangeBottomRadius = isOrangeActive ? 75 : 45;
-  const yellowBottomRadius = isYellowActive ? 72 : 44;
+  // 饱满全圆角胶囊体：底部完全圆角化，绝无生硬直切横线！
+  const purpleBottomRadius = 36;
+  const blackBottomRadius = 55; // 黑色角色宽 110px，55px 为完美全圆角胶囊底
+  const orangeBottomRadius = 50;
+  const yellowBottomRadius = 71; // 黄色角色宽 142px，71px 为完美全圆角胶囊底，按压和弹跳绝不切横线！
 
   // Real-time expression gaze: 仅在用户输入账号或密码（isTyping）时柔和向右看，输入完成后恢复平滑跟随
   const isLookingRight = isTyping && !activeFailPose && !loginSuccess;
@@ -1116,22 +1106,22 @@ export default function AnimatedCharacters({
             animation: isShakingError
               ? "jianlian-error-shake 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) both"
               : "none",
-            /* 舞台基底裁切：上方与左右允许大范围跳起与气泡展开，下方严格在底座 0px 处切齐，100% 杜绝倾斜穿模露角 */
-            clipPath: "inset(-260px -220px 0px -220px)",
+            /* 舞台基底裁剪：上方与左右允许大范围跳起与气泡展开，下方留出充足缓冲空间，杜绝底部横线切断 */
+            clipPath: "inset(-260px -220px -80px -220px)",
           }}
         >
           {/* 角色立体浮岛展台（Podium Stage）：小人们稳稳站立于展台，彻底消灭生硬悬浮或切断感 */}
           <div
             style={{
               position: "absolute",
-              bottom: "-4px",
-              left: "15px",
-              width: "480px",
-              height: "26px",
+              bottom: "-12px",
+              left: "10px",
+              width: "490px",
+              height: "36px",
               borderRadius: "50%",
               background:
-                "radial-gradient(ellipse at center, rgba(235, 115, 30, 0.22) 0%, rgba(254, 215, 170, 0.14) 48%, transparent 75%)",
-              filter: "blur(5px)",
+                "radial-gradient(ellipse at center, rgba(235, 115, 30, 0.28) 0%, rgba(254, 215, 170, 0.16) 52%, transparent 75%)",
+              filter: "blur(6px)",
               pointerEvents: "none",
               zIndex: 0,
             }}

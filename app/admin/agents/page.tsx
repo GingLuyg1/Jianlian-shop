@@ -361,7 +361,7 @@ export default function AdminAgentsPage() {
       title="代理与分销管理"
       description="统一管理商户 API 接入申请、集中维护服务器 IP 白名单、监控分销代理订单与调用状态。"
     >
-      <div className="space-y-6">
+      <div className="flex flex-col min-h-[calc(100vh-175px)] space-y-6 pb-6">
         {/* 顶部统计面板 */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
@@ -409,46 +409,69 @@ export default function AdminAgentsPage() {
           </div>
         </div>
 
-        {/* 顶部 Tab 切换与操作栏 */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-3">
-          <div className="flex gap-2">
-            <Button
+        {/* 顶部 Tab 切换与操作栏（带丝滑滑动指示器） */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 pb-3">
+          <div className="relative flex rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs">
+            {/* 动态平滑滑动的白色高光药丸背景指示器 */}
+            <div
+              className="absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+              style={{
+                left:
+                  activeTab === "applications"
+                    ? "4px"
+                    : activeTab === "whitelist"
+                    ? "calc(33.333% + 2px)"
+                    : "calc(66.666% + 1px)",
+                width: "calc(33.333% - 4px)",
+              }}
+            />
+
+            <button
               type="button"
-              variant={activeTab === "applications" ? "default" : "outline"}
-              size="sm"
               onClick={() => switchTab("applications")}
-              className="rounded-xl font-bold text-xs"
+              className={cn(
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                activeTab === "applications"
+                  ? "text-primary font-black"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
             >
-              <Code2 className="mr-1.5 h-3.5 w-3.5" />
+              <Code2 className="h-3.5 w-3.5" />
               API 申请记录
               {applications.filter((a) => a.status === "pending").length > 0 && (
-                <span className="ml-1.5 rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] text-white">
+                <span className="rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] text-white font-mono">
                   {applications.filter((a) => a.status === "pending").length}
                 </span>
               )}
-            </Button>
+            </button>
 
-            <Button
+            <button
               type="button"
-              variant={activeTab === "whitelist" ? "default" : "outline"}
-              size="sm"
               onClick={() => switchTab("whitelist")}
-              className="rounded-xl font-bold text-xs"
+              className={cn(
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                activeTab === "whitelist"
+                  ? "text-primary font-black"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
             >
-              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+              <ShieldCheck className="h-3.5 w-3.5" />
               IP 加白管理
-            </Button>
+            </button>
 
-            <Button
+            <button
               type="button"
-              variant={activeTab === "orders" ? "default" : "outline"}
-              size="sm"
               onClick={() => switchTab("orders")}
-              className="rounded-xl font-bold text-xs"
+              className={cn(
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                activeTab === "orders"
+                  ? "text-primary font-black"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
             >
-              <Store className="mr-1.5 h-3.5 w-3.5" />
+              <Store className="h-3.5 w-3.5" />
               分销代理订单
-            </Button>
+            </button>
           </div>
 
           {activeTab === "whitelist" && (
@@ -466,7 +489,7 @@ export default function AdminAgentsPage() {
 
         {/* 1. API 申请记录 Tab */}
         {activeTab === "applications" && (
-          <AdminListSurface>
+          <AdminListSurface className="flex-1 min-h-[460px] flex flex-col justify-between">
             <AdminTableViewport>
               <table className="w-full text-left text-xs">
                 <thead className={adminListTableHeadClass}>
@@ -568,7 +591,7 @@ export default function AdminAgentsPage() {
               </span>
             </div>
 
-            <AdminListSurface>
+            <AdminListSurface className="flex-1 min-h-[460px] flex flex-col justify-between">
               <AdminTableViewport>
                 <table className="w-full text-left text-xs">
                   <thead className={adminListTableHeadClass}>
@@ -626,7 +649,7 @@ export default function AdminAgentsPage() {
 
         {/* 3. 分销代理订单 Tab */}
         {activeTab === "orders" && (
-          <AdminListSurface>
+          <AdminListSurface className="flex-1 min-h-[460px] flex flex-col justify-between">
             <AdminTableViewport>
               <table className="w-full text-left text-xs">
                 <thead className={adminListTableHeadClass}>
@@ -635,7 +658,7 @@ export default function AdminAgentsPage() {
                     <th className="px-4 py-3 font-semibold">代理商户 / 邮箱</th>
                     <th className="px-4 py-3 font-semibold">商品名称</th>
                     <th className="px-4 py-3 font-semibold">实付金额</th>
-                    <th className="px-4 py-3 font-semibold">订单渠道来源</th>
+                    <th className="px-4 py-3 font-semibold">订单金额/利润</th>
                     <th className="px-4 py-3 font-semibold">履约交付状态</th>
                     <th className="px-4 py-3 font-semibold">下单时间</th>
                   </tr>

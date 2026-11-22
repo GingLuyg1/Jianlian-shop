@@ -538,23 +538,13 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         </div>
 
         <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_430px]">
-          {/* 左侧卡通角色舞台卡片（全面升级为符合 Jianlian 品牌高奢质感的轻奢云母流光展舱） */}
+          {/* 左侧卡通角色舞台卡片（全面升级为符合 Jianlian 品牌高奢质感的轻奢晨曦白金微光舱） */}
           <section className="hidden lg:block">
-            <div className="relative max-w-xl overflow-hidden rounded-[36px] border border-white/95 bg-gradient-to-br from-white/95 via-[#fffdfa]/90 to-[#fff5ec]/85 p-8 shadow-[inset_0_2px_4px_rgba(255,255,255,0.9),0_24px_70px_-10px_rgba(235,115,30,0.15),0_4px_16px_rgba(0,0,0,0.02)] backdrop-blur-2xl ring-1 ring-orange-200/50">
-              {/* 高定科技微点阵纹理，完美契合数字商品服务平台风格 */}
-              <div
-                className="pointer-events-none absolute inset-0 opacity-[0.45]"
-                style={{
-                  backgroundImage:
-                    "radial-gradient(rgba(235, 115, 30, 0.14) 1px, transparent 1px)",
-                  backgroundSize: "22px 22px",
-                }}
-              />
-
-              {/* 晨曦流光氛围与柔和展舱光晕 */}
-              <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-to-br from-[#ffdca8]/50 via-[#ffba75]/35 to-transparent blur-3xl" />
-              <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-gradient-to-tr from-[#ffe6cc]/60 via-[#ffd5ab]/40 to-transparent blur-3xl" />
-              <div className="pointer-events-none absolute inset-x-12 bottom-3 h-16 rounded-[40px] bg-gradient-to-r from-orange-200/15 via-amber-300/30 to-orange-200/15 blur-xl" />
+            <div className="relative max-w-xl overflow-hidden rounded-[36px] border border-white/95 bg-gradient-to-br from-white/95 via-[#fffaf5]/90 to-[#fff4ea]/80 p-8 shadow-[inset_0_2px_4px_rgba(255,255,255,0.95),0_24px_64px_-12px_rgba(235,115,30,0.12),0_4px_20px_rgba(0,0,0,0.02)] backdrop-blur-2xl ring-1 ring-orange-200/40">
+              {/* 晨曦流金环境光晕与柔和展舱光感 */}
+              <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-gradient-to-br from-[#ffdca8]/45 via-[#ffba75]/25 to-transparent blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-20 -left-20 h-72 w-72 rounded-full bg-gradient-to-tr from-[#ffe6cc]/50 via-[#ffd5ab]/30 to-transparent blur-3xl" />
+              <div className="pointer-events-none absolute inset-x-12 bottom-2 h-20 rounded-[50px] bg-gradient-to-r from-orange-200/10 via-amber-200/25 to-orange-200/10 blur-2xl" />
 
               <div className="relative">
                 {/* 重构后的极简高奢品牌微排版与背书 */}

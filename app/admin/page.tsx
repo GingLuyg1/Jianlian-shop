@@ -15,6 +15,7 @@ import {
   Database,
   ExternalLink,
   Factory,
+  Headphones,
   Landmark,
   Layers,
   Loader2,
@@ -1595,39 +1596,44 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* 卡片 3: 商品与供应链监控 */}
+              {/* 卡片 3: 工单处理与库存监控（重点突出工单处理与低库存预警） */}
               <div className="flex flex-col rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm transition-all hover:border-slate-300">
                 <div className="mb-2.5 flex items-center justify-between border-b border-slate-100 pb-2">
                   <div className="flex items-center gap-2">
                     <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-50 text-purple-600">
-                      <Factory className="h-3.5 w-3.5" />
+                      <Headphones className="h-3.5 w-3.5" />
                     </span>
-                    <span className="text-xs font-semibold text-slate-900">商品与供应链监控</span>
+                    <span className="text-xs font-semibold text-slate-900">工单处理与库存监控</span>
                   </div>
-                  <span className="text-[11px] text-slate-400">货源库存</span>
+                  <Link href="/admin/tickets" className="text-[11px] font-bold text-primary hover:underline">
+                    进入工单中心 →
+                  </Link>
                 </div>
                 <div className="flex-1 space-y-1.5">
                   {[
+                    {
+                      label: "待处理售后工单",
+                      desc: "客户新提交，需12小时内答复",
+                      value: 1,
+                      href: "/admin/tickets",
+                      tone: "orange" as const,
+                      actionText: "去回复",
+                    },
                     {
                       label: "预警低库存商品",
                       desc: "可用库存 1~5 件",
                       value: data?.lowStock.length ?? 0,
                       href: "/admin/products?stockLevel=low",
                       tone: "orange" as const,
+                      actionText: "去补货",
                     },
                     {
-                      label: "已售罄商品",
-                      desc: "库存归零需下架或补货",
-                      value: data?.soldOut.length ?? 0,
-                      href: "/admin/products?status=sold_out",
-                      tone: "red" as const,
-                    },
-                    {
-                      label: "供应商待绑定",
-                      desc: "未关联外部自动供货源",
-                      value: (data?.rawSeries.products ?? []).filter((p) => (p.operational_summary?.supplier_unbound ?? 0) > 0 || !p.operational_summary?.supplier_bound).length,
-                      href: "/admin/suppliers",
-                      tone: "purple" as const,
+                      label: "已解决完成工单",
+                      desc: "客服已答复并结单归档",
+                      value: 1,
+                      href: "/admin/tickets?tab=completed",
+                      tone: "slate" as const,
+                      actionText: "查看",
                     },
                     {
                       label: "在售正常商品",
@@ -1635,6 +1641,7 @@ export default function AdminDashboardPage() {
                       value: (data?.rawSeries.products ?? []).filter((p) => p.status === "active").length,
                       href: "/admin/products?status=active",
                       tone: "slate" as const,
+                      actionText: undefined,
                     },
                   ].map((item) => (
                     <Link
@@ -1650,18 +1657,16 @@ export default function AdminDashboardPage() {
                         <span
                           className={cn(
                             "rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
-                            item.tone === "red" && item.value > 0
-                              ? "bg-red-50 text-red-700"
-                              : item.tone === "orange" && item.value > 0
-                                ? "bg-amber-50 text-amber-700"
-                                : "bg-slate-100 text-slate-600"
+                            item.tone === "orange" && item.value > 0
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-slate-100 text-slate-600"
                           )}
                         >
                           {item.value}
                         </span>
                         {item.tone !== "slate" && typeof item.value === "number" && item.value > 0 ? (
                           <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-800 transition-colors group-hover:bg-purple-600 group-hover:text-white">
-                            去处理
+                            {item.actionText || "去处理"}
                           </span>
                         ) : (
                           <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />
@@ -1692,10 +1697,10 @@ export default function AdminDashboardPage() {
             <Card className="dashboard-panel dashboard-fixed-card flex min-h-0 flex-col overflow-hidden border-[var(--admin-v2-border)] shadow-none xl:h-[364px]">
               <CardHeader className="shrink-0 px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-base">支付渠道表现</CardTitle>
-                  <span className="text-[11px] text-slate-400">{periodLabel}真实会话</span>
+                  <CardTitle className="text-base">订单金额/利润</CardTitle>
+                  <span className="text-[11px] text-slate-400">{periodLabel}渠道统计</span>
                 </div>
-                <p className="text-xs text-slate-500">按真实支付会话统计（跟随顶部时间筛选），支持内部滚动</p>
+                <p className="text-xs text-slate-500">按订单实付金额、渠道分成与利润统计，支持内部滚动</p>
               </CardHeader>
               <CardContent className="min-h-0 max-h-[290px] flex-1 space-y-2 overflow-y-auto px-4 pb-4 pt-0">
                 {(filteredChannels.length > 0 ? filteredChannels : CHANNELS.map((channel) => ({ ...channel, enabled: null, configured: null, initiated: null, successful: null, amount: null, exceptions: null }))).map((channel) => (

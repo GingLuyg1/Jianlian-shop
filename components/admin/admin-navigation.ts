@@ -101,9 +101,10 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     key: "users",
     label: "用户与通信",
     icon: Users,
-    routePrefixes: ["/admin/users", "/admin/privacy-requests", "/admin/notifications"],
+    routePrefixes: ["/admin/users", "/admin/tickets", "/admin/privacy-requests", "/admin/notifications"],
     children: [
       { label: "用户管理", href: "/admin/users" },
+      { label: "工单处理", href: "/admin/tickets" },
       { label: "隐私请求", href: "/admin/privacy-requests" },
       { label: "邮件通知", href: "/admin/notifications/email-deliveries" },
     ],
