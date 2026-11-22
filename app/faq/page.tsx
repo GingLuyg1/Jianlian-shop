@@ -113,7 +113,7 @@ const INITIAL_DEMO_TICKETS: TicketItem[] = [
     priority: "normal",
     status: "completed",
     orderNo: "",
-    email: "gac000189@gmail.com",
+    email: "merchant@example.com",
     description:
       "您好，我们正在接入跨境资源网普通 API (Jianlian Shop)，请协助确认以下四项技术合同：\n1. 目录读取：GET /api/open/v1/catalog/mall?search=礼品卡 会在高峰期超时，服务端最大缓存限制多大？\n2. 扣款保护：POST /api/open/v1/orders/mall 屡次扣款的 expectedAmount 是否校验折扣、会入、服务费扣除后的最终 CNY 钱包总扣款？\n3. 幂等性保障：Idempotency-Key 的保质时长及过期后行为是什么？若超时或 500，未拿到订单 ID 时，能否直接复用同一 key 重试？\n4. 订单状态追踪：请提供 GET /api/open/v1/orders/[id] 的完整响应样例，包括 deliveryFormat 字段定义。感谢协助！",
     createdAt: "2026-11-06 10:30:33",
@@ -160,6 +160,7 @@ const FAQ_KNOWLEDGE_BASE = [
     group: "交付与售后",
     items: [
       { q: "自动商品付款后多久到账？", a: "系统自动发货商品通常在 10 秒至 1 分钟内直发至您的“我的订单”与接收邮箱。" },
+      { q: "如何确认商品的售后范围？", a: "以商品详情页标注的售后范围和时效为准。" },
       { q: "工单处理时效是多久？", a: "工单中心提供专业技术与售后值班，所有提交的工单均保证在 12 小时内由专员核对并回复。" },
     ],
   },

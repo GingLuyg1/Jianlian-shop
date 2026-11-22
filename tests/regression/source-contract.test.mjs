@@ -88,12 +88,10 @@ test("account overview omits internal identity and unfinished-order summary card
   for (const removedLabel of ["显示名称", "账户角色", "余额来源", "未完成订单"]) {
     assert.doesNotMatch(accountOverview, new RegExp(`label=["']${removedLabel}["']`));
   }
-  const accountInformation = file("components/account/AccountInformation.tsx");
   const accountApi = file("app/account/api/page.tsx");
-  assert.match(accountInformation, /登录邮箱/);
-  assert.match(accountInformation, /商户信息/);
   assert.doesNotMatch(accountOverview, /<AccountInformation/);
-  assert.match(accountApi, /<AccountInformation email=\{email \|\| null\}/);
+  assert.match(accountApi, /data-account-page="\/account\/api"/);
+  assert.match(accountApi, /id="api-credentials-title"/);
   assert.match(accountOverview, /<AccountMembership totalSpend=\{data\?\.summary\.totalSpend \?\? null\}/);
   assert.match(accountOverview, /aria-label="账户余额"/);
   assert.match(accountOverview, /当前余额/);

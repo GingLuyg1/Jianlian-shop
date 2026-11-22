@@ -164,7 +164,7 @@ export function harness({ data = fixture(), backend, beforeReserve = async () =>
     },
     insertRecharge: async (supabase,input) => {
       const rechargeNo="RC_TEST_"+randomUUID();
-      const {error}=await supabase.from("account_recharges").insert({recharge_no:rechargeNo,user_id:input.userId,user_email:input.userEmail,channel:input.channel.code,channel_code:input.channel.code,channel_name:input.channel.name,provider:input.channel.provider,currency:input.channel.currency,amount:input.amount,requested_amount:input.amount,fee_amount:input.fee,payable_amount:input.payableAmount,status:"pending",client_request_id:input.clientRequestId,expires_at:input.expiresAt});
+      const {error}=await supabase.from("account_recharges").insert({...(input.createdAt ? {created_at:input.createdAt} : {}),recharge_no:rechargeNo,user_id:input.userId,user_email:input.userEmail,channel:input.channel.code,channel_code:input.channel.code,channel_name:input.channel.name,provider:input.channel.provider,currency:input.channel.currency,amount:input.amount,requested_amount:input.amount,fee_amount:input.fee,payable_amount:input.payableAmount,status:"pending",client_request_id:input.clientRequestId,expires_at:input.expiresAt});
       if(error) throw error; return rechargeNo;
     },
   };
