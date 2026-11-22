@@ -59,6 +59,12 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  /* 彻底屏蔽 Edge / IE / Chrome 等浏览器自带的原生密码眼睛与清除图标，防止遮盖与双重图标冲突 */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none !important;
+  }
 }
 
 /* Public storefront surfaces only. Keep measurements, spacing and pill/icon

@@ -6,6 +6,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowRight,
+  Check,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -169,6 +170,101 @@ const FAQ_KNOWLEDGE_BASE = [
     ],
   },
 ];
+
+// 高保真自定义下拉组件（100% 还原参考图 9 & 图 10 风格与轻奢触感）
+function CustomTicketSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string; desc?: string }[];
+  onChange: (val: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) {
+      document.addEventListener("mousedown", handleOutsideClick);
+    }
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [open]);
+
+  const currentOption = options.find((opt) => opt.value === value) || options[0];
+
+  return (
+    <div className="relative space-y-1.5" ref={containerRef}>
+      <Label className="text-xs font-bold text-slate-800">{label}</Label>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={cn(
+          "flex h-11 w-full items-center justify-between rounded-xl border bg-white px-3.5 text-xs font-bold text-slate-800 transition-all shadow-xs cursor-pointer",
+          open
+            ? "border-primary ring-2 ring-primary/20"
+            : "border-slate-200/90 hover:border-slate-300"
+        )}
+      >
+        <span>{currentOption?.label}</span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-slate-400 transition-transform duration-200",
+            open ? "rotate-180 text-primary" : ""
+          )}
+        />
+      </button>
+
+      {/* 展开浮层（高度复刻图9 & 图10） */}
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-2xl border border-slate-100 bg-white p-1.5 shadow-[0_16px_36px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.04)] backdrop-blur-xl animate-[jianlian-bubble-pop_0.2s_ease-out_forwards]">
+          <div className="space-y-0.5">
+            {options.map((opt) => {
+              const isSelected = opt.value === value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-bold transition-all cursor-pointer",
+                    isSelected
+                      ? "bg-blue-50/90 text-blue-600 font-black"
+                      : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    {opt.label}
+                    {opt.desc && (
+                      <span className="text-[11px] font-normal text-muted-foreground">
+                        · {opt.desc}
+                      </span>
+                    )}
+                  </span>
+                  {isSelected && (
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xs">
+                      <Check className="h-3 w-3 stroke-[3]" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TicketCenterPage() {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
@@ -784,50 +880,21 @@ export default function TicketCenterPage() {
                     }
                     className="space-y-4 text-left"
                   >
-                    {/* 问题类型与优先级 */}
+                    {/* 问题类型与优先级（高保真还原图9 & 图10精美浮层） */}
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="ticket-type" className="text-xs font-bold text-slate-800">
-                          问题类型
-                        </Label>
-                        <select
-                          id="ticket-type"
-                          value={formData.type}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, type: e.target.value as TicketType }))
-                          }
-                          className="h-10 w-full rounded-xl border border-slate-200/90 bg-white px-3 text-xs font-semibold text-slate-800 transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/25 shadow-xs"
-                        >
-                          {TICKET_TYPES.map((type) => (
-                            <option key={type.value} value={type.value}>
-                              {type.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <CustomTicketSelect<TicketType>
+                        label="问题类型"
+                        value={formData.type}
+                        options={TICKET_TYPES}
+                        onChange={(type) => setFormData((prev) => ({ ...prev, type }))}
+                      />
 
-                      <div className="space-y-1.5">
-                        <Label htmlFor="ticket-priority" className="text-xs font-bold text-slate-800">
-                          处理优先级
-                        </Label>
-                        <select
-                          id="ticket-priority"
-                          value={formData.priority}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              priority: e.target.value as TicketPriority,
-                            }))
-                          }
-                          className="h-10 w-full rounded-xl border border-slate-200/90 bg-white px-3 text-xs font-semibold text-slate-800 transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/25 shadow-xs"
-                        >
-                          {TICKET_PRIORITIES.map((pri) => (
-                            <option key={pri.value} value={pri.value}>
-                              {pri.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <CustomTicketSelect<TicketPriority>
+                        label="处理优先级"
+                        value={formData.priority}
+                        options={TICKET_PRIORITIES}
+                        onChange={(priority) => setFormData((prev) => ({ ...prev, priority }))}
+                      />
                     </div>
 
                     {/* 订单号与联系邮箱 */}

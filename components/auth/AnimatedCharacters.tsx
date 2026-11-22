@@ -318,14 +318,16 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function EmbeddedCharacterBubble({
+function StageSpeechBubble({
   text,
   bubbleKey,
-  unskewDeg = 0,
+  x,
+  y,
 }: {
   text?: string;
   bubbleKey?: number;
-  unskewDeg?: number;
+  x: number;
+  y: number;
 }) {
   if (!text) return null;
   return (
@@ -333,15 +335,17 @@ function EmbeddedCharacterBubble({
       key={bubbleKey}
       style={{
         position: "absolute",
-        bottom: "100%",
-        left: "50%",
-        transform: `translateX(-50%) translateY(-14px) skewX(${unskewDeg}deg)`,
-        zIndex: 60,
+        left: `${x}px`,
+        bottom: `${y + 10}px`,
+        transform: "translateX(-50%)",
+        zIndex: 90,
         pointerEvents: "none",
       }}
+      className="animate-[jianlian-bubble-pop_0.32s_cubic-bezier(0.34,1.56,0.64,1)_forwards]"
     >
-      <div className="relative whitespace-nowrap rounded-[22px] border border-orange-200/90 bg-gradient-to-b from-white via-white to-[#fffaf5] px-4 py-2 text-[13.5px] font-bold tracking-tight text-slate-800 shadow-[0_16px_36px_-6px_rgba(180,95,30,0.22),0_4px_12px_rgba(0,0,0,0.04)] backdrop-blur-md ring-1 ring-white/80 animate-[jianlian-bubble-pop_0.32s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+      <div className="relative whitespace-nowrap rounded-[22px] border border-orange-200/90 bg-gradient-to-b from-white via-white to-[#fffaf5] px-4 py-2 text-[13.5px] font-bold tracking-tight text-slate-800 shadow-[0_16px_36px_-6px_rgba(180,95,30,0.22),0_4px_12px_rgba(0,0,0,0.04)] backdrop-blur-md ring-1 ring-white/80">
         {text}
+        {/* 气泡小尾巴：垂直居中向下指向角色头顶 */}
         <div
           style={{
             position: "absolute",
@@ -727,12 +731,15 @@ export default function AnimatedCharacters({
     };
   }, [draggingChar, endDragGracefully]);
 
-  // 双重安全看门狗：当用户开始在右侧输入表单（isTyping 为 true）时，如果此时角色还悬空，立即触发落地，彻底杜绝浮空卡死！
+  // 全局强力看门狗：当用户在右侧开始输入表单（isTyping、输入密码或邮箱）时，如果角色处于浮空或拖拽，立即无条件强制软着陆落地，彻底杜绝浮空卡死！
   useEffect(() => {
-    if (isTyping && draggingCharRef.current) {
+    if (
+      (isTyping || passwordLength > 0) &&
+      (draggingCharRef.current || draggingChar || dragPhysics.liftY > 0)
+    ) {
       endDragGracefully();
     }
-  }, [isTyping, endDragGracefully]);
+  }, [isTyping, passwordLength, draggingChar, dragPhysics.liftY, endDragGracefully]);
 
   const getCharTransform = (char: CharKey, baseTransform: string) => {
     if (draggingChar === char) {
@@ -864,17 +871,17 @@ export default function AnimatedCharacters({
     yellowHeight + (draggingChar === "yellow" ? dragPhysics.liftY : 0) + 14
   );
 
-  // 悬空判断：无论是被拖拽拔起，还是松手后的下落弹跳全程，都属于空中悬空状态
-  const isPurpleAirborne = (draggingChar === "purple" && dragPhysics.liftY > 0) || droppingChar === "purple";
-  const isBlackAirborne = (draggingChar === "black" && dragPhysics.liftY > 0) || droppingChar === "black";
-  const isOrangeAirborne = (draggingChar === "orange" && dragPhysics.liftY > 0) || droppingChar === "orange";
-  const isYellowAirborne = (draggingChar === "yellow" && dragPhysics.liftY > 0) || droppingChar === "yellow";
+  // 触感按压、悬空、拖拽与落地弹跳全链路状态判定
+  const isPurpleActive = draggingChar === "purple" || droppingChar === "purple" || poked.purple;
+  const isBlackActive = draggingChar === "black" || droppingChar === "black" || poked.black;
+  const isOrangeActive = draggingChar === "orange" || droppingChar === "orange" || poked.orange;
+  const isYellowActive = draggingChar === "yellow" || droppingChar === "yellow" || poked.yellow;
 
-  // 空中时为饱满全圆角胶囊体；落地静止时为柔和圆润底角（绝不是 0px 平切横线）
-  const purpleBottomRadius = isPurpleAirborne ? 24 : 16;
-  const blackBottomRadius = isBlackAirborne ? 22 : 16;
-  const orangeBottomRadius = isOrangeAirborne ? 52 : 24;
-  const yellowBottomRadius = isYellowAirborne ? 72 : 18;
+  // 饱满全圆角胶囊体：按压、空中、弹跳时100%圆弧胶囊；静止时为大圆弧底角，绝对消灭平直横线！
+  const purpleBottomRadius = isPurpleActive ? 32 : 24;
+  const blackBottomRadius = isBlackActive ? 28 : 22;
+  const orangeBottomRadius = isOrangeActive ? 75 : 45;
+  const yellowBottomRadius = isYellowActive ? 72 : 44;
 
   // Real-time expression gaze: 仅在用户输入账号或密码（isTyping）时柔和向右看，输入完成后恢复平滑跟随
   const isLookingRight = isTyping && !activeFailPose && !loginSuccess;
@@ -1109,6 +1116,8 @@ export default function AnimatedCharacters({
             animation: isShakingError
               ? "jianlian-error-shake 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) both"
               : "none",
+            /* 舞台基底裁切：上方与左右允许大范围跳起与气泡展开，下方严格在底座 0px 处切齐，100% 杜绝倾斜穿模露角 */
+            clipPath: "inset(-260px -220px 0px -220px)",
           }}
         >
           {/* 角色立体浮岛展台（Podium Stage）：小人们稳稳站立于展台，彻底消灭生硬悬浮或切断感 */}
@@ -1244,21 +1253,6 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
-            {/* Embedded Speech Bubble directly on Purple's head */}
-            <EmbeddedCharacterBubble
-              text={bubbles.purple?.text}
-              bubbleKey={bubbles.purple?.key}
-              unskewDeg={-(
-                activeFailPose
-                  ? -8
-                  : isRevealingPassword
-                    ? 0
-                    : isTyping
-                      ? (purplePos.bodySkew || 0) - 10
-                      : (purplePos.bodySkew || 0)
-              )}
-            />
-
             {/* Eyes */}
             <div
               style={{
@@ -1437,20 +1431,6 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
-            {/* Embedded Speech Bubble directly on Black's head */}
-            <EmbeddedCharacterBubble
-              text={bubbles.black?.text}
-              bubbleKey={bubbles.black?.key}
-              unskewDeg={-(
-                activeFailPose
-                  ? 7
-                  : isRevealingPassword
-                    ? 0
-                    : isTyping
-                      ? (blackPos.bodySkew || 0) * 1.5 + 8
-                      : (blackPos.bodySkew || 0)
-              )}
-            />
             <div
               style={{
                 position: "absolute",
@@ -1539,19 +1519,6 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
-            {/* Embedded Speech Bubble directly on Orange's head */}
-            <EmbeddedCharacterBubble
-              text={bubbles.orange?.text}
-              bubbleKey={bubbles.orange?.key}
-              unskewDeg={-(
-                activeFailPose
-                  ? -5
-                  : isRevealingPassword
-                    ? 0
-                    : (orangePos.bodySkew || 0)
-              )}
-            />
-
             {/* Orange Face: 眼睛与嘴巴完全组合为单一刚体面部，100% 杜绝眼嘴错位与滞后 */}
             <div
               className="orange-face"
@@ -1707,18 +1674,6 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
-            {/* Embedded Speech Bubble directly on Yellow's head */}
-            <EmbeddedCharacterBubble
-              text={bubbles.yellow?.text}
-              bubbleKey={bubbles.yellow?.key}
-              unskewDeg={-(
-                activeFailPose
-                  ? 8
-                  : isRevealingPassword
-                    ? 0
-                    : (yellowPos.bodySkew || 0)
-              )}
-            />
             <div
               style={{
                 position: "absolute",
@@ -1802,6 +1757,40 @@ export default function AnimatedCharacters({
             </div>
           </div>
         </div>
+
+        {/* 统一高精度气泡浮层：使用物理头顶坐标精确锚定，尾巴直指角色头部，杜绝 skew 几何偏离 */}
+        {bubbles.purple && (
+          <StageSpeechBubble
+            text={bubbles.purple.text}
+            bubbleKey={bubbles.purple.key}
+            x={purpleHeadX}
+            y={purpleHeadY}
+          />
+        )}
+        {bubbles.black && (
+          <StageSpeechBubble
+            text={bubbles.black.text}
+            bubbleKey={bubbles.black.key}
+            x={blackHeadX}
+            y={blackHeadY}
+          />
+        )}
+        {bubbles.orange && (
+          <StageSpeechBubble
+            text={bubbles.orange.text}
+            bubbleKey={bubbles.orange.key}
+            x={orangeHeadX}
+            y={orangeHeadY}
+          />
+        )}
+        {bubbles.yellow && (
+          <StageSpeechBubble
+            text={bubbles.yellow.text}
+            bubbleKey={bubbles.yellow.key}
+            x={yellowHeadX}
+            y={yellowHeadY}
+          />
+        )}
       </div>
     </div>
   );
