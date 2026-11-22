@@ -309,7 +309,7 @@ export default function PublicTopInfoBar({
           <span className="whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
             余额
           </span>
-          {!authReady && !profile ? (
+          {!authReady || (user && !profile) ? (
             <div className="h-4 w-12 animate-pulse rounded bg-orange-100/70" />
           ) : (
             <span className="min-w-[44px] whitespace-nowrap text-center text-[12px] font-bold text-primary sm:min-w-[52px] sm:text-[13px]">

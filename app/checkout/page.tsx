@@ -1496,7 +1496,9 @@ function ProductDetailCard({
           </div>
         </div>
 
-        {loading ? <ProductDetailSkeleton /> : family === "chatgpt" ? (
+        {loading && !product.description && !product.detail ? (
+          <ProductDetailSkeleton />
+        ) : family === "chatgpt" ? (
           product.name.includes("成品") || product.id === "946a345e-c0a1-4a6b-a172-f994c6af2194" ? (
             <GptPremadeAccountDetails product={product} />
           ) : (

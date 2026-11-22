@@ -1174,7 +1174,10 @@ export default function AnimatedCharacters({
               boxShadow:
                 "inset 0 4px 10px rgba(255,255,255,0.34), inset -6px 0 14px rgba(45,14,130,0.22), 0 -4px 24px rgba(108,63,245,0.18)",
               zIndex: 1,
-              transformOrigin: draggingChar === "purple" ? "center 20%" : "bottom center",
+              transformOrigin:
+                draggingChar === "purple" && dragPhysics.liftY > 0
+                  ? "center center"
+                  : "bottom center",
               transition: draggingChar === "purple" ? "none" : "all 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)",
               transform: getCharTransform(
                 "purple",
@@ -1352,7 +1355,10 @@ export default function AnimatedCharacters({
               boxShadow:
                 "inset 0 3px 8px rgba(255,255,255,0.18), inset -5px 0 12px rgba(0,0,0,0.35), -4px 0 20px rgba(0,0,0,0.16)",
               zIndex: 2,
-              transformOrigin: draggingChar === "black" ? "center 20%" : "bottom center",
+              transformOrigin:
+                draggingChar === "black" && dragPhysics.liftY > 0
+                  ? "center center"
+                  : "bottom center",
               transition: draggingChar === "black" ? "none" : "all 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)",
               transform: getCharTransform(
                 "black",
@@ -1444,7 +1450,10 @@ export default function AnimatedCharacters({
               boxShadow:
                 "inset 0 4px 12px rgba(255,255,255,0.42), inset -6px 0 14px rgba(180,65,15,0.18), 0 -4px 20px rgba(240,121,60,0.2)",
               zIndex: 3,
-              transformOrigin: draggingChar === "orange" ? "center 30%" : "bottom center",
+              transformOrigin:
+                draggingChar === "orange" && dragPhysics.liftY > 0
+                  ? "center center"
+                  : "bottom center",
               transition: draggingChar === "orange" ? "none" : "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
               transform: getCharTransform(
                 "orange",
@@ -1465,115 +1474,125 @@ export default function AnimatedCharacters({
               ["--drop-angle" as string]: dropParams.angle,
             }}
           >
-            {/* Orange Eyes: Upgraded to High-Definition EyeBall with Dual Micro-Highlights */}
+            {/* Orange Face: 眼睛与嘴巴完全组合为单一刚体面部，100% 杜绝眼嘴错位与滞后 */}
             <div
+              className="orange-face"
               style={{
                 position: "absolute",
-                display: "flex",
-                gap: "34px",
-                left: isRevealingPassword ? "80px" : `${108 + orangePos.faceX}px`,
+                left: isRevealingPassword ? "80px" : "108px",
                 top: activeFailPose
                   ? "68px"
                   : isRevealingPassword
                     ? "55px"
-                    : `${58 + orangePos.faceY}px`,
-                transition: draggingChar === "orange" ? "none" : "all 0.12s ease-out",
-              }}
-            >
-              <EyeBall
-                size={16.5}
-                pupilSize={7.5}
-                maxDistance={5.5}
-                isBlinking={blinking.orange}
-                isSad={activeFailPose}
-                sadRotate={-15}
-                mouseX={mouse.x}
-                mouseY={mouse.y}
-                forceLookX={oForceX}
-                forceLookY={oForceY}
-              />
-              <EyeBall
-                size={16.5}
-                pupilSize={7.5}
-                maxDistance={5.5}
-                isBlinking={blinking.orange}
-                isSad={activeFailPose}
-                sadRotate={15}
-                mouseX={mouse.x}
-                mouseY={mouse.y}
-                forceLookX={oForceX}
-                forceLookY={oForceY}
-              />
-            </div>
-
-            {/* Cute Rosy Blush on Orange */}
-            <div
-              style={{
-                position: "absolute",
-                display: "flex",
-                gap: "54px",
-                left: isRevealingPassword ? "68px" : `${96 + orangePos.faceX}px`,
-                top: activeFailPose
-                  ? "84px"
-                  : isRevealingPassword
-                    ? "72px"
-                    : `${76 + orangePos.faceY}px`,
-                opacity: activeFailPose ? 0.2 : 0.6,
+                    : "58px",
+                transform: isRevealingPassword
+                  ? "none"
+                  : `translate(${orangePos.faceX}px, ${orangePos.faceY}px)`,
+                transition:
+                  draggingChar === "orange"
+                    ? "none"
+                    : "transform 0.14s ease-out, left 0.4s ease-out, top 0.4s ease-out",
+                width: "68px",
+                height: "56px",
                 pointerEvents: "none",
-                transition: draggingChar === "orange" ? "none" : "all 0.12s ease-out",
               }}
             >
-              <div className="h-2.5 w-4 rounded-full bg-rose-500/55 blur-[1.5px]" />
-              <div className="h-2.5 w-4 rounded-full bg-rose-500/55 blur-[1.5px]" />
-            </div>
+              {/* Eyes */}
+              <div
+                style={{
+                  position: "absolute",
+                  display: "flex",
+                  gap: "34px",
+                  left: "0px",
+                  top: "0px",
+                }}
+              >
+                <EyeBall
+                  size={16.5}
+                  pupilSize={7.5}
+                  maxDistance={5.5}
+                  isBlinking={blinking.orange}
+                  isSad={activeFailPose}
+                  sadRotate={-15}
+                  mouseX={mouse.x}
+                  mouseY={mouse.y}
+                  forceLookX={oForceX}
+                  forceLookY={oForceY}
+                />
+                <EyeBall
+                  size={16.5}
+                  pupilSize={7.5}
+                  maxDistance={5.5}
+                  isBlinking={blinking.orange}
+                  isSad={activeFailPose}
+                  sadRotate={15}
+                  mouseX={mouse.x}
+                  mouseY={mouse.y}
+                  forceLookX={oForceX}
+                  forceLookY={oForceY}
+                />
+              </div>
 
-            <div
-              style={{
-                position: "absolute",
-                backgroundColor: "#231F20",
-                left: isRevealingPassword ? "94px" : `${122 + orangePos.faceX}px`,
-                top: activeFailPose
-                  ? "98px"
-                  : isRevealingPassword
-                    ? "87px"
-                    : `${90 + orangePos.faceY}px`,
-                width:
-                  (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
-                    ? "16px"
-                    : loginSuccess || poked.orange
-                      ? "32px"
-                      : (isTyping || isHidingPassword) && !activeFailPose
-                        ? "14px"
-                        : "26px",
-                height:
-                  (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
-                    ? "16px"
-                    : loginSuccess || poked.orange
-                      ? "18px"
-                      : (isTyping || isHidingPassword) && !activeFailPose
-                        ? "14px"
-                        : "13px",
-                borderRadius:
-                  (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
-                    ? "50%"
-                    : activeFailPose
-                      ? "13px 13px 0 0"
+              {/* Cute Rosy Blush on Orange */}
+              <div
+                style={{
+                  position: "absolute",
+                  display: "flex",
+                  gap: "54px",
+                  left: "-12px",
+                  top: "18px",
+                  opacity: activeFailPose ? 0.2 : 0.6,
+                }}
+              >
+                <div className="h-2.5 w-4 rounded-full bg-rose-500/55 blur-[1.5px]" />
+                <div className="h-2.5 w-4 rounded-full bg-rose-500/55 blur-[1.5px]" />
+              </div>
+
+              {/* Orange Mouth: 位于眼睛正下方，完全随面部整体同步运动 */}
+              <div
+                style={{
+                  position: "absolute",
+                  backgroundColor: "#231F20",
+                  left: "14px",
+                  top: "32px",
+                  width:
+                    (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
+                      ? "16px"
                       : loginSuccess || poked.orange
-                        ? "0 0 16px 16px"
-                        : isTyping || isHidingPassword
-                          ? "50%"
-                          : "0 0 13px 13px",
-                transform:
-                  (isTyping || isHidingPassword) &&
-                  !activeFailPose &&
-                  !loginSuccess &&
-                  !poked.orange &&
-                  draggingChar !== "orange"
-                    ? "translateX(6px)"
-                    : "none",
-                transition: "all 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
-              }}
-            />
+                        ? "32px"
+                        : (isTyping || isHidingPassword) && !activeFailPose
+                          ? "14px"
+                          : "26px",
+                  height:
+                    (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
+                      ? "16px"
+                      : loginSuccess || poked.orange
+                        ? "18px"
+                        : (isTyping || isHidingPassword) && !activeFailPose
+                          ? "14px"
+                          : "13px",
+                  borderRadius:
+                    (draggingChar === "orange" || draggingChar === "purple") && dragPhysics.isLifted
+                      ? "50%"
+                      : activeFailPose
+                        ? "13px 13px 0 0"
+                        : loginSuccess || poked.orange
+                          ? "0 0 16px 16px"
+                          : isTyping || isHidingPassword
+                            ? "50%"
+                            : "0 0 13px 13px",
+                  transform:
+                    (isTyping || isHidingPassword) &&
+                    !activeFailPose &&
+                    !loginSuccess &&
+                    !poked.orange &&
+                    draggingChar !== "orange"
+                      ? "translateX(6px)"
+                      : "none",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              />
+            </div>
           </div>
 
           {/* 4. Yellow Rounded Character (Beautified Warm Golden Pill) */}
@@ -1596,7 +1615,10 @@ export default function AnimatedCharacters({
               boxShadow:
                 "inset 0 4px 10px rgba(255,255,255,0.48), inset -6px 0 14px rgba(170,135,10,0.2), -4px 0 18px rgba(0,0,0,0.1)",
               zIndex: 4,
-              transformOrigin: draggingChar === "yellow" ? "center 25%" : "bottom center",
+              transformOrigin:
+                draggingChar === "yellow" && dragPhysics.liftY > 0
+                  ? "center center"
+                  : "bottom center",
               transition: draggingChar === "yellow" ? "none" : "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
               transform: getCharTransform(
                 "yellow",
