@@ -306,11 +306,9 @@ function TutorialsPageContent() {
   const { isMobile, previewWidth, mobilePreview } = useMobileStorefront();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>(() => {
-    if (typeof window !== "undefined") {
-      const p = new URLSearchParams(window.location.search).get("topic");
-      if (p && tutorialTopics.some((t) => t.id === p)) {
-        return p as (typeof tutorialTopics)[number]["id"];
-      }
+    const p = searchParams?.get("topic");
+    if (p && tutorialTopics.some((t) => t.id === p)) {
+      return p as (typeof tutorialTopics)[number]["id"];
     }
     return "required";
   });
@@ -604,11 +602,13 @@ function TutorialsPageContent() {
                 if (id === "one-nz" && !showOneNz) setOneNzTreeOpen(true);
                 if (id === "chatgpt-guide" && !showChatgpt) setChatgptTreeOpen(true);
                 if (id === "twitter" && !showTwitter) setTwitterTreeOpen(true);
+                if (id === "google-region" && !showGoogle) setGoogleTreeOpen(true);
                 if (id !== "giffgaff") setGiffgaffTreeOpen(false);
                 if (id !== "one-nz") setOneNzTreeOpen(false);
                 if (id !== "chatgpt-guide") setChatgptTreeOpen(false);
                 if (id !== "twitter") setTwitterTreeOpen(false);
-                if (isMobile && id !== "giffgaff" && id !== "one-nz" && id !== "chatgpt-guide" && id !== "twitter") setMobileNavOpen(false);
+                if (id !== "google-region") setGoogleTreeOpen(false);
+                if (isMobile && id !== "giffgaff" && id !== "one-nz" && id !== "chatgpt-guide" && id !== "twitter" && id !== "google-region") setMobileNavOpen(false);
                 resetScroll();
               }}>
                 <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>

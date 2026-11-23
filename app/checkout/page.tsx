@@ -29,6 +29,7 @@ import OneNzProductDetails from "@/components/products/details/OneNzProductDetai
 import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
 import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
 import TMobileProductDetails from "@/components/products/details/TMobileProductDetails";
+import GoogleRegionTutorial from "@/components/account/GoogleRegionTutorial";
 import Link from "next/link";
 import {
   CreditCard,
@@ -646,12 +647,23 @@ function CheckoutPageContent() {
   const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) => legalDocuments.find((doc) => doc.document_type === type));
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
+  const normalizedDeliveryType = String(productRow?.delivery_type ?? "").toLowerCase();
+  const isAutomaticDelivery = normalizedDeliveryType === "automatic";
   const isSimProduct = Boolean(
-    (product?.category && ["sim-cards", "sim", "phone-cards"].includes(String(product.category))) ||
-    (product?.slug && (product.slug.includes("sim") || product.slug.includes("mobile") || product.slug.includes("giffgaff") || product.slug.includes("lucky2") || product.slug.includes("t-mobile") || product.slug.includes("one-nz") || product.slug.includes("haha") || product.slug.includes("european"))) ||
-    (product?.name && (product.name.toLowerCase().includes("sim") || product.name.includes("卡") || product.name.toLowerCase().includes("mobile")))
+    !isAutomaticDelivery &&
+    (
+      (product?.category && ["sim-cards", "sim", "phone-cards"].includes(String(product.category))) ||
+      (product?.slug &&
+        !product.slug.includes("virtual") &&
+        !product.slug.includes("gift") &&
+        !product.slug.includes("topup") &&
+        (product.slug.includes("sim") || product.slug.includes("mobile") || product.slug.includes("giffgaff") || product.slug.includes("lucky2") || product.slug.includes("t-mobile") || product.slug.includes("one-nz") || product.slug.includes("haha") || product.slug.includes("european"))) ||
+      (product?.name && (product.name.toLowerCase().includes("sim") || product.name.toLowerCase().includes("mobile")))
+    )
   );
-  const isShippingProduct = ["shipping", "physical"].includes(String(productRow?.delivery_type ?? "")) || isSimProduct;
+  const isShippingProduct =
+    !isAutomaticDelivery &&
+    (["shipping", "physical"].includes(normalizedDeliveryType) || isSimProduct);
   const selectedPaymentChannel = paymentChannels.find((channel) =>
     getPaymentMethodOption(paymentMethod)?.channelCodes.includes(channel.code)) ?? null;
   const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod)
@@ -1557,7 +1569,7 @@ function ProductDetailCard({
         ) : (
           <div className="mt-8 w-full">
             <h2 className="mb-3 text-base font-semibold">商品详情</h2>
-            <p className="text-sm leading-7 text-muted-foreground">
+            <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">
               {product.detail || product.description}
             </p>
             <div className="mt-4 space-y-2 text-sm font-medium text-red-500">
@@ -2920,7 +2932,123 @@ function ClaudeRechargeDetails({ product }: { product: Product }) {
   );
 }
 
+function renderTextWithLinks(text: string) {
+  const parts = text.split(/(https?:\/\/[^\s，。、）)]+)/g);
+  return parts.map((part, idx) =>
+    /^https?:\/\//.test(part) ? (
+      <a
+        key={idx}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-semibold text-primary underline underline-offset-4 break-all hover:text-primary/80"
+      >
+        {part}
+      </a>
+    ) : (
+      <span key={idx}>{part}</span>
+    )
+  );
+}
+
+function GeminiCustomDetailSections({ detailText }: { detailText: string }) {
+  const blocks = detailText
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="space-y-4">
+      {blocks.map((block, index) => {
+        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+        const firstLine = lines[0] ?? "";
+        const headingMatch = firstLine.match(/^【(.+?)】$/);
+        const heading = headingMatch ? headingMatch[1] : null;
+        const bodyLines = heading ? lines.slice(1) : lines;
+        const isHighlightBox = heading && /兑换|使用地址|教程/.test(heading);
+        const isWarningBox = heading && /必读|须知|售后|注意/.test(heading);
+
+        return (
+          <section
+            key={index}
+            className={cn(
+              "rounded-2xl border p-5",
+              isHighlightBox
+                ? "border-orange-200 bg-orange-50/60"
+                : isWarningBox
+                  ? "border-rose-200/80 bg-rose-50/40"
+                  : "border-slate-200/90 bg-white"
+            )}
+          >
+            {heading ? (
+              <h3
+                className={cn(
+                  "mb-3 flex items-center gap-2 text-base font-bold",
+                  isHighlightBox
+                    ? "text-orange-900"
+                    : isWarningBox
+                      ? "text-rose-700"
+                      : "text-slate-900"
+                )}
+              >
+                {isHighlightBox ? (
+                  <Zap className="h-4 w-4 text-primary" />
+                ) : isWarningBox ? (
+                  <ShieldAlert className="h-4 w-4 text-rose-600" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4 text-indigo-600" />
+                )}
+                {heading}
+              </h3>
+            ) : null}
+            <div className="space-y-2 text-sm leading-7 text-slate-700">
+              {bodyLines.map((line, lineIdx) => (
+                <p key={lineIdx}>{renderTextWithLinks(line)}</p>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function GeminiGoogleTutorialFooter() {
+  return (
+    <section className="mt-8 rounded-2xl border border-slate-200/90 bg-slate-50/50 p-5 sm:p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-5 w-5 text-blue-600" />
+          <h3 className="text-base font-bold text-slate-900">
+            Google 使用与修改国家/地区绑卡教程
+          </h3>
+        </div>
+        <Link
+          href="/tutorials?topic=google-region"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+        >
+          <span>查看完整教程页</span>
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+      <GoogleRegionTutorial />
+    </section>
+  );
+}
+
 function GeminiRechargeDetails({ product }: { product: Product }) {
+  const isLegacyPixelTemplate = GEMINI_RECHARGE_PRODUCT_IDS.includes(product.id);
+  const customDetail = (product.detail || "").trim();
+
+  if (!isLegacyPixelTemplate && customDetail) {
+    return (
+      <div className="mt-8 w-full space-y-5">
+        <GeminiCustomDetailSections detailText={customDetail} />
+        <GeminiGoogleTutorialFooter />
+      </div>
+    );
+  }
+
   const isYearAccount = product.id.includes("1y");
   const planLabel = isYearAccount
     ? "Google One Pro 一年高权重成品号"
@@ -3106,6 +3234,8 @@ function GeminiRechargeDetails({ product }: { product: Product }) {
           ))}
         </ul>
       </section>
+
+      <GeminiGoogleTutorialFooter />
     </div>
   );
 }
