@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { notifySupplierInsufficientBalance } from "@/lib/providers/core/supplier-balance-alert";
 import { createDajuClient } from "@/lib/providers/daju/client";
 import { getSafeDajuError } from "@/lib/providers/daju/errors";
 
@@ -25,6 +26,16 @@ export async function GET(request: Request) {
     const resource = url.searchParams.get("resource") ?? "balance";
     if (resource === "balance") {
       const balance = await client.getBalance();
+      const numericBalance = Number(balance?.balance);
+      if (Number.isFinite(numericBalance) && numericBalance < 10) {
+        void notifySupplierInsufficientBalance({
+          supplierCode: "daju",
+          supplierName: "大橘AI",
+          availableBalance: balance.balance,
+          currency: "CNY",
+          reason: "LOW_BALANCE_THRESHOLD (< 10 CNY)",
+        });
+      }
       return json({ supplier: "大橘AI", balance, requestId });
     }
     if (resource === "products") {

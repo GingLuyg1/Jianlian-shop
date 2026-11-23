@@ -16,6 +16,12 @@ export type CategoryStatus = "active" | "inactive";
 export type ProductStatus = "draft" | "active" | "inactive" | "sold_out";
 export type DeliveryType = "manual" | "automatic" | "shipping";
 
+export type AdminCategorySubcategoryItem = {
+  name: string;
+  slug: string;
+  sort_order: number;
+};
+
 export type AdminCategory = {
   id: string;
   parent_id: string | null;
@@ -27,6 +33,7 @@ export type AdminCategory = {
   sort_order: number;
   status?: CategoryStatus | null;
   is_active?: boolean | null;
+  metadata?: { subcategories?: AdminCategorySubcategoryItem[]; [key: string]: unknown } | null;
   updated_at?: string | null;
   created_at?: string | null;
 };
@@ -175,6 +182,7 @@ export type CategoryPayload = {
   description: string | null;
   sort_order: number;
   is_active?: boolean;
+  metadata?: Record<string, unknown> | null;
 };
 
 function getClient(client?: SupabaseClient) {
@@ -336,8 +344,51 @@ function assertApiRecord(value: unknown, fallback: string) {
   return value as Record<string, unknown>;
 }
 
+function parseAdminCategorySubcategories(metadataValue: unknown, descriptionValue?: string | null): AdminCategorySubcategoryItem[] {
+  const fromMeta =
+    metadataValue && typeof metadataValue === "object" && !Array.isArray(metadataValue)
+      ? (metadataValue as Record<string, unknown>).subcategories
+      : null;
+  if (Array.isArray(fromMeta) && fromMeta.length > 0) {
+    const items: AdminCategorySubcategoryItem[] = [];
+    for (let i = 0; i < fromMeta.length; i++) {
+      const entry = fromMeta[i];
+      if (typeof entry === "string" && entry.trim()) {
+        const name = entry.trim();
+        items.push({ name, slug: name, sort_order: (i + 1) * 10 });
+      } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        const rec = entry as Record<string, unknown>;
+        const name = typeof rec.name === "string" ? rec.name.trim() : "";
+        if (!name) continue;
+        const slug = typeof rec.slug === "string" && rec.slug.trim() ? rec.slug.trim() : name;
+        const sortOrder = Number.isFinite(Number(rec.sort_order)) ? Number(rec.sort_order) : (i + 1) * 10;
+        items.push({ name, slug, sort_order: sortOrder });
+      }
+    }
+    if (items.length > 0) return items.sort((a, b) => a.sort_order - b.sort_order);
+  }
+  if (typeof descriptionValue === "string" && descriptionValue.includes("[SUBCATEGORIES:")) {
+    const match = descriptionValue.match(/\[SUBCATEGORIES:([^\]]+)\]/);
+    if (match?.[1]) {
+      return match[1]
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((name, idx) => ({ name, slug: name, sort_order: (idx + 1) * 10 }));
+    }
+  }
+  return [];
+}
+
 function normalizeCategory(row: Record<string, unknown>): AdminCategory {
   const rawLevel = normalizeNumber(row.level, 1);
+  const rawDesc = row.description ? String(row.description) : null;
+  const subcategories = parseAdminCategorySubcategories(row.metadata, rawDesc);
+  const cleanDescription = rawDesc ? rawDesc.replace(/\s*\[SUBCATEGORIES:[^\]]*\]/g, "").trim() || null : null;
+  const baseMeta =
+    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : {};
   return {
     id: String(row.id),
     parent_id: row.parent_id ? String(row.parent_id) : null,
@@ -345,10 +396,13 @@ function normalizeCategory(row: Record<string, unknown>): AdminCategory {
     name: String(row.name ?? ""),
     slug: String(row.slug ?? ""),
     icon: row.icon ? String(row.icon) : null,
-    description: row.description ? String(row.description) : null,
+    description: cleanDescription,
     sort_order: normalizeNumber(row.sort_order),
     status: (row.status as CategoryStatus | null | undefined) ?? null,
     is_active: typeof row.is_active === "boolean" ? Boolean(row.is_active) : null,
+    metadata: subcategories.length > 0 || Object.keys(baseMeta).length > 0
+      ? { ...baseMeta, ...(subcategories.length > 0 ? { subcategories } : {}) }
+      : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
     created_at: row.created_at ? String(row.created_at) : null,
   };

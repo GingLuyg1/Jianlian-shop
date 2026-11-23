@@ -239,6 +239,22 @@ export function normalizeCategoryPayload(body: Record<string, unknown>, partial 
     else payload.sort_order = sortOrder;
   }
   if (!partial || "is_active" in body) payload.is_active = Boolean(body.is_active);
+  if ("metadata" in body && isPlainObject(body.metadata) && Array.isArray(body.metadata.subcategories)) {
+    const subNames = body.metadata.subcategories
+      .map((item: unknown) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object" && "name" in item && typeof (item as { name?: unknown }).name === "string") {
+          return String((item as { name: string }).name).trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+    const stripped = (payload.description ?? cleanNullableText(body.description) ?? "")
+      .replace(/\s*\[SUBCATEGORIES:[^\]]*\]/g, "")
+      .trim();
+    const tag = subNames.length > 0 ? `[SUBCATEGORIES:${subNames.join("|")}]` : "";
+    payload.description = [stripped, tag].filter(Boolean).join(" ") || null;
+  }
 
   if (payload.level === 1) payload.parent_id = null;
   if (payload.level === 2 && !payload.parent_id) errors.parent_id = "二级分类必须选择所属一级分类";

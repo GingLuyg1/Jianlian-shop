@@ -15,6 +15,12 @@ import type {
 export const FRONTEND_ACTIVE_PRODUCT_STATUS = "active";
 export const FRONTEND_VISIBLE_PRODUCT_STATUSES = ["active", "sold_out"];
 
+export type PublicCategorySubcategoryItem = {
+  name: string;
+  slug: string;
+  sort_order: number;
+};
+
 export type PublicCategory = {
   id: string;
   parent_id: string | null;
@@ -26,6 +32,7 @@ export type PublicCategory = {
   sort_order: number;
   status?: string | null;
   is_active?: boolean | null;
+  metadata?: { subcategories?: PublicCategorySubcategoryItem[] } | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -132,8 +139,45 @@ export function publicProductMetadata(value: unknown): Record<string, unknown> |
   return Object.keys(result).length ? result : null;
 }
 
+export function parseCategorySubcategories(metadataValue: unknown, descriptionValue?: string | null): PublicCategorySubcategoryItem[] {
+  const fromMeta =
+    metadataValue && typeof metadataValue === "object" && !Array.isArray(metadataValue)
+      ? (metadataValue as Record<string, unknown>).subcategories
+      : null;
+  if (Array.isArray(fromMeta) && fromMeta.length > 0) {
+    const items: PublicCategorySubcategoryItem[] = [];
+    for (let i = 0; i < fromMeta.length; i++) {
+      const entry = fromMeta[i];
+      if (typeof entry === "string" && entry.trim()) {
+        const name = entry.trim();
+        items.push({ name, slug: name, sort_order: (i + 1) * 10 });
+      } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        const rec = entry as Record<string, unknown>;
+        const name = typeof rec.name === "string" ? rec.name.trim() : "";
+        if (!name) continue;
+        const slug = typeof rec.slug === "string" && rec.slug.trim() ? rec.slug.trim() : name;
+        const sortOrder = Number.isFinite(Number(rec.sort_order)) ? Number(rec.sort_order) : (i + 1) * 10;
+        items.push({ name, slug, sort_order: sortOrder });
+      }
+    }
+    if (items.length > 0) return items.sort((a, b) => a.sort_order - b.sort_order);
+  }
+  if (typeof descriptionValue === "string" && descriptionValue.includes("[SUBCATEGORIES:")) {
+    const match = descriptionValue.match(/\[SUBCATEGORIES:([^\]]+)\]/);
+    if (match?.[1]) {
+      return match[1]
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((name, idx) => ({ name, slug: name, sort_order: (idx + 1) * 10 }));
+    }
+  }
+  return [];
+}
+
 function normalizeCategory(row: Record<string, unknown>): PublicCategory {
   const rawLevel = normalizeNumber(row.level, 1);
+  const subcategories = parseCategorySubcategories(row.metadata, row.description ? String(row.description) : null);
   return {
     id: String(row.id),
     parent_id: row.parent_id ? String(row.parent_id) : null,
@@ -145,6 +189,7 @@ function normalizeCategory(row: Record<string, unknown>): PublicCategory {
     sort_order: normalizeNumber(row.sort_order),
     status: row.status ? String(row.status) : null,
     is_active: typeof row.is_active === "boolean" ? Boolean(row.is_active) : null,
+    ...(subcategories.length > 0 ? { metadata: { subcategories } } : {}),
     created_at: row.created_at ? String(row.created_at) : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
   };

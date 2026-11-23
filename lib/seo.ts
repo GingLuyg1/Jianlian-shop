@@ -7,7 +7,7 @@ import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase
 export const SITE_URL = "https://www.jianlian.shop";
 export const SITE_NAME = "Jianlian Shop";
 export const SITE_DESCRIPTION =
-  "Jianlian Shop 提供数字账号、AI 会员充值、礼品卡和国际电话卡等数字商品与通信服务。";
+  "轻松连接全球数字生活。Jianlian Shop 为您提供 AI 会员、精选数字账号与全球礼品卡服务，让每一次数字探索都简单、即时。";
 export const DEFAULT_OG_IMAGE = "/assets/jianlian-brand-logo.png";
 
 export type SeoProduct = {

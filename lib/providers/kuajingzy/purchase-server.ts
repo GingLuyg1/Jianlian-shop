@@ -8,6 +8,7 @@ import { fulfillKuajingZyCandidate, reconcileKuajingZyAttempt, createKuajingZyRe
 import { zeroSupplierSummary } from "../core/supplier-router-core.mjs";
 import type { SupplierFulfillmentSummary } from "../core/types";
 import { getVerifiedMerchantCostsForOrder, type VerifiedBalanceMerchantCosts } from "../../payments/verified-merchant-costs";
+import { isSupplierInsufficientBalanceError, notifySupplierInsufficientBalance } from "../core/supplier-balance-alert";
 
 type VerifiedCosts = (orderId:string) => Promise<VerifiedBalanceMerchantCosts>;
 
@@ -97,8 +98,33 @@ export function createKuajingZyProductionRuntime(input: {
         summary.handled++;
         try {
           const result=await fulfillKuajingZyCandidate({db,client,candidate,env,releaseGate:KUAJINGZY_PURCHASE_RELEASE_ENABLED});
-          if(result.fulfilled)summary.fulfilled++;else summary.uncertain++;
-        } catch {summary.failed++;}
+          if(result.fulfilled)summary.fulfilled++;
+          else {
+            summary.uncertain++;
+            if (result.classification === "NO_DEBIT_INSUFFICIENT_BALANCE") {
+              void notifySupplierInsufficientBalance({
+                supplierCode: "kuajingzy",
+                supplierName: "跨境资源网",
+                orderId: candidate.orderId,
+                orderItemId: candidate.orderItemId,
+                productId: candidate.binding?.productId ?? null,
+                reason: "NO_DEBIT_INSUFFICIENT_BALANCE",
+              });
+            }
+          }
+        } catch (error) {
+          summary.failed++;
+          if (isSupplierInsufficientBalanceError(error)) {
+            void notifySupplierInsufficientBalance({
+              supplierCode: "kuajingzy",
+              supplierName: "跨境资源网",
+              orderId: candidate.orderId,
+              orderItemId: candidate.orderItemId,
+              productId: candidate.binding?.productId ?? null,
+              reason: error instanceof Error ? error.message : "KUAJINGZY_BALANCE_INSUFFICIENT",
+            });
+          }
+        }
       }
       return summary;
     },

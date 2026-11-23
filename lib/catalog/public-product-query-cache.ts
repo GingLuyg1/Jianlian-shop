@@ -117,7 +117,7 @@ export function prefetchDefaultPublicProductPage(href: string, rows: PublicCateg
   if (!primary) return Promise.resolve(false);
   const first = getChildCategories(rows, primary.id)[0];
   const selected = first ?? primary;
-  const query = { primaryCategoryId: primary.id, secondaryCategoryId: first?.id ?? "", keyword: "", page: 1, pageSize: 20 };
+  const query = { primaryCategoryId: primary.id, secondaryCategoryId: first?.id ?? "", keyword: "", page: 1, pageSize: 200 };
   const key = publicProductQueryKey(query);
   const entry = entries.get(key);
   if (background) backgroundInFlight += 1;
@@ -128,7 +128,7 @@ export function prefetchDefaultPublicProductPage(href: string, rows: PublicCateg
   return request.then((result) => {
     if (entries.get(key) !== requestedEntry) return false;
     // Count hints use the exact same filters and route identity as the page.
-    rememberPublicProductCount(JSON.stringify([productCategory, selected.id, "", 1, 20]), href, selected.id, result.products.length);
+    rememberPublicProductCount(JSON.stringify([productCategory, selected.id, "", 1, 200]), href, selected.id, result.products.length);
     return true;
   }).catch(() => false).finally(() => { if (background) backgroundInFlight -= 1; });
 }

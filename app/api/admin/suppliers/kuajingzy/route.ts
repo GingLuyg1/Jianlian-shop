@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
+import { notifySupplierInsufficientBalance } from "@/lib/providers/core/supplier-balance-alert";
 import { normalizeKuajingZyCatalog } from "@/lib/providers/kuajingzy/catalog-mapping.mjs";
 import { getKuajingZyReadonlyRuntime } from "@/lib/providers/kuajingzy/production-server";
 
@@ -90,6 +91,16 @@ export async function GET(request: Request) {
 
     if (resource === "balance") {
       const balance = await client.readBalance();
+      const numericBalance = Number(balance?.availableBalance);
+      if (Number.isFinite(numericBalance) && numericBalance < 10) {
+        void notifySupplierInsufficientBalance({
+          supplierCode: "kuajingzy",
+          supplierName: "跨境资源网",
+          availableBalance: balance.availableBalance,
+          currency: "CNY",
+          reason: "LOW_BALANCE_THRESHOLD (< 10 CNY)",
+        });
+      }
       return json({
         supplier: "跨境资源网",
         balance: {

@@ -71,12 +71,15 @@ type CategoryForm = {
   description: string;
   sort_order: string;
   is_active: boolean;
+  subcategories: string[];
+  rawMetadata?: Record<string, unknown> | null;
 };
 
 type ProductForm = {
   id?: string;
   primaryCategoryId: string;
   category_id: string;
+  subcategory: string;
   name: string;
   slug: string;
   short_description: string;
@@ -93,6 +96,35 @@ type ProductForm = {
 
 type FieldErrors = Record<string, string>;
 
+function extractSubcategoriesFromCategory(category?: AdminCategory | null): string[] {
+  const raw = category?.metadata?.subcategories as unknown;
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const item of raw as unknown[]) {
+    if (typeof item === "string" && item.trim()) {
+      names.push(item.trim());
+    } else if (
+      item &&
+      typeof item === "object" &&
+      "name" in item &&
+      typeof (item as { name?: unknown }).name === "string" &&
+      (item as { name: string }).name.trim()
+    ) {
+      names.push((item as { name: string }).name.trim());
+    }
+  }
+  return Array.from(new Set(names));
+}
+
+function extractSubcategoryFromShortDescription(shortDesc?: string | null): { subcategory: string; cleanShortDescription: string } {
+  const raw = String(shortDesc ?? "").trim();
+  const match = raw.match(/^【([^】]{1,40})】\s*(.*)$/);
+  if (match) {
+    return { subcategory: match[1].trim(), cleanShortDescription: match[2].trim() };
+  }
+  return { subcategory: "", cleanShortDescription: raw };
+}
+
 function emptyCategoryForm(parentId = ""): CategoryForm {
   return {
     parent_id: parentId,
@@ -103,13 +135,16 @@ function emptyCategoryForm(parentId = ""): CategoryForm {
     description: "",
     sort_order: "0",
     is_active: true,
+    subcategories: [],
+    rawMetadata: null,
   };
 }
 
-function emptyProductForm(rootId = "", categoryId = ""): ProductForm {
+function emptyProductForm(rootId = "", categoryId = "", subcategory = ""): ProductForm {
   return {
     primaryCategoryId: rootId,
     category_id: categoryId,
+    subcategory,
     name: "",
     slug: "",
     short_description: "",
@@ -174,6 +209,7 @@ function normalizeProductForm(form: ProductForm | null) {
     id: form.id ?? "",
     primaryCategoryId: form.primaryCategoryId,
     category_id: form.category_id,
+    subcategory: form.subcategory.trim(),
     name: form.name.trim(),
     slug: form.slug.trim().toLowerCase(),
     short_description: form.short_description.trim(),
@@ -196,13 +232,16 @@ function isProductDirty(form: ProductForm, initialForm: ProductForm | null) {
 function toProductForm(product: AdminProduct, categoryMap: Map<string, AdminCategory>): ProductForm {
   const category = product.category_id ? categoryMap.get(product.category_id) : null;
   const rootId = category?.level === 1 ? category.id : category?.parent_id ?? "";
+  const parsedShort = extractSubcategoryFromShortDescription(product.short_description);
+  const metaSub = product.metadata && typeof product.metadata.subcategory === "string" ? product.metadata.subcategory.trim() : "";
   return {
     id: product.id,
     primaryCategoryId: rootId,
     category_id: category?.level === 2 ? category.id : "",
+    subcategory: parsedShort.subcategory || metaSub,
     name: product.name,
     slug: product.slug,
-    short_description: product.short_description ?? "",
+    short_description: parsedShort.cleanShortDescription,
     description: product.description ?? "",
     image_url: product.image_url ?? "",
     price: String(product.price ?? ""),
@@ -244,6 +283,7 @@ function AdminCategoriesPageInner() {
   const [productCount, setProductCount] = useState(0);
   const [selectedRootId, setSelectedRootId] = useState("");
   const [selectedChildId, setSelectedChildId] = useState("");
+  const [selectedSubcategoryFilter, setSelectedSubcategoryFilter] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [productStatus, setProductStatusFilter] = useState<ProductStatus | "all">("all");
@@ -357,11 +397,13 @@ function AdminCategoriesPageInner() {
   function selectRoot(categoryId: string) {
     setSelectedRootId(categoryId);
     setSelectedChildId("");
+    setSelectedSubcategoryFilter("");
     updateUrl(categoryId);
   }
 
   function selectChild(categoryId: string) {
     setSelectedChildId(categoryId);
+    setSelectedSubcategoryFilter("");
     updateUrl(selectedRootId, categoryId);
   }
 
@@ -393,6 +435,8 @@ function AdminCategoriesPageInner() {
       description: category.description ?? "",
       sort_order: String(category.sort_order ?? 0),
       is_active: isCategoryEnabled(category),
+      subcategories: extractSubcategoriesFromCategory(category),
+      rawMetadata: category.metadata ?? null,
     });
   }
 
@@ -413,6 +457,16 @@ function AdminCategoriesPageInner() {
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
+    const cleanSubs = Array.from(new Set(categoryForm.subcategories.map((s) => s.trim()).filter(Boolean)));
+    const nextMetadata: Record<string, unknown> = {
+      ...(categoryForm.rawMetadata ?? {}),
+      subcategories: cleanSubs.map((name, idx) => ({
+        name,
+        slug: name,
+        sort_order: (idx + 1) * 10,
+      })),
+    };
+
     const payload: CategoryPayload = {
       parent_id: categoryForm.level === 1 ? null : categoryForm.parent_id,
       level: categoryForm.level,
@@ -422,6 +476,7 @@ function AdminCategoriesPageInner() {
       description: categoryForm.description.trim() || null,
       sort_order: parseNumber(categoryForm.sort_order),
       is_active: categoryForm.is_active,
+      ...(categoryForm.level === 2 ? { metadata: nextMetadata } : {}),
     };
 
     setSaving(true);
@@ -580,11 +635,26 @@ function AdminCategoriesPageInner() {
       return;
     }
 
+    const cleanSub = productForm.subcategory.trim();
+    const cleanShort = productForm.short_description.trim();
+    const composedShortDescription = cleanSub
+      ? `【${cleanSub}】${cleanShort ? ` ${cleanShort}` : ""}`
+      : cleanShort || null;
+
+    const existingMeta =
+      editingProduct?.metadata && typeof editingProduct.metadata === "object" && !Array.isArray(editingProduct.metadata)
+        ? { ...editingProduct.metadata }
+        : {};
+    if (productForm.metadata_note.trim()) existingMeta.note = productForm.metadata_note.trim();
+    else delete existingMeta.note;
+    if (cleanSub) existingMeta.subcategory = cleanSub;
+    else delete existingMeta.subcategory;
+
     const payload: ProductPayload = {
       name: productForm.name.trim(),
       slug: productForm.slug.trim().toLowerCase(),
       category_id: resolveProductCategoryId(productForm),
-      short_description: productForm.short_description.trim() || null,
+      short_description: composedShortDescription,
       description: productForm.description.trim() || null,
       image_url: productForm.image_url.trim() || null,
       price: parseNumber(productForm.price),
@@ -593,7 +663,7 @@ function AdminCategoriesPageInner() {
       delivery_type: productForm.delivery_type,
       status: productForm.status,
       sort_order: parseNumber(productForm.sort_order),
-      metadata: productForm.metadata_note.trim() ? { note: productForm.metadata_note.trim() } : null,
+      metadata: Object.keys(existingMeta).length > 0 ? existingMeta : null,
     };
 
     setSaving(true);
@@ -637,8 +707,32 @@ function AdminCategoriesPageInner() {
     }
   }
 
+  const selectedChildSubcategories = useMemo(() => {
+    const configured = extractSubcategoriesFromCategory(selectedChild);
+    const seen = new Set(configured);
+    const result = [...configured];
+    for (const prod of products) {
+      const parsed = extractSubcategoryFromShortDescription(prod.short_description);
+      const sub = parsed.subcategory || (typeof prod.metadata?.subcategory === "string" ? prod.metadata.subcategory.trim() : "");
+      if (sub && !seen.has(sub)) {
+        seen.add(sub);
+        result.push(sub);
+      }
+    }
+    return result;
+  }, [selectedChild, products]);
+
+  const displayedProducts = useMemo(() => {
+    if (!selectedSubcategoryFilter) return products;
+    return products.filter((prod) => {
+      const parsed = extractSubcategoryFromShortDescription(prod.short_description);
+      const sub = parsed.subcategory || (typeof prod.metadata?.subcategory === "string" ? prod.metadata.subcategory.trim() : "");
+      return sub === selectedSubcategoryFilter;
+    });
+  }, [products, selectedSubcategoryFilter]);
+
   const canReorderProducts = Boolean(
-    selectedProductCategoryId && productCount === products.length && !productSearch.trim() && productStatus === "all" && !loadingProducts && !reordering
+    selectedProductCategoryId && productCount === products.length && !productSearch.trim() && productStatus === "all" && !selectedSubcategoryFilter && !loadingProducts && !reordering
   );
 
   async function moveProduct(sourceId: string, targetId: string) {
@@ -835,7 +929,47 @@ function AdminCategoriesPageInner() {
                 ))}
               </select>
             </div>
-            {!canReorderProducts && selectedProductCategoryId && (productSearch.trim() || productStatus !== "all") ? (
+            {selectedChild && selectedChildSubcategories.length > 0 ? (
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-xs font-medium text-slate-500">子分类筛选：</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubcategoryFilter("")}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                    !selectedSubcategoryFilter
+                      ? "bg-orange-100 text-orange-800 ring-1 ring-orange-300"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  )}
+                >
+                  全部 ({products.length})
+                </button>
+                {selectedChildSubcategories.map((subName) => {
+                  const subCount = products.filter((p) => {
+                    const parsed = extractSubcategoryFromShortDescription(p.short_description);
+                    const s = parsed.subcategory || (typeof p.metadata?.subcategory === "string" ? p.metadata.subcategory.trim() : "");
+                    return s === subName;
+                  }).length;
+                  const active = selectedSubcategoryFilter === subName;
+                  return (
+                    <button
+                      key={subName}
+                      type="button"
+                      onClick={() => setSelectedSubcategoryFilter(active ? "" : subName)}
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                        active
+                          ? "bg-orange-100 text-orange-800 ring-1 ring-orange-300"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      )}
+                    >
+                      {subName} ({subCount})
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            {!canReorderProducts && selectedProductCategoryId && (productSearch.trim() || productStatus !== "all" || selectedSubcategoryFilter) ? (
               <p className="mt-2 text-xs text-slate-500">清除搜索和状态筛选后可拖拽排序</p>
             ) : null}
           </div>
@@ -864,7 +998,7 @@ function AdminCategoriesPageInner() {
                   <div className="text-center">更新时间</div>
                   <div className="text-center">操作</div>
                 </div>
-                {products.map((product) => (
+                {displayedProducts.map((product) => (
                   <div
                     key={product.id}
                     onDragOver={(event) => {
@@ -911,8 +1045,20 @@ function AdminCategoriesPageInner() {
                       />
                     </div>
                     <div className="min-w-0">
-                      <div className="truncate font-medium text-slate-950" title={product.name}>
-                        {product.name}
+                      <div className="flex items-center gap-1.5">
+                        <div className="truncate font-medium text-slate-950" title={product.name}>
+                          {product.name}
+                        </div>
+                        {(() => {
+                          const sub =
+                            extractSubcategoryFromShortDescription(product.short_description).subcategory ||
+                            (typeof product.metadata?.subcategory === "string" ? product.metadata.subcategory.trim() : "");
+                          return sub ? (
+                            <span className="shrink-0 rounded bg-orange-50 px-1.5 py-0.5 text-[11px] font-medium text-orange-700 ring-1 ring-inset ring-orange-200">
+                              {sub}
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="truncate text-xs text-slate-500" title={product.slug}>
                         {product.slug}
@@ -1104,6 +1250,18 @@ function CategoryCard({
         <div className="mt-1 truncate text-xs text-slate-500">
           {category.level === 1 ? `${count} 个二级分类` : `${count} 个商品`}
         </div>
+        {category.level === 2 && extractSubcategoriesFromCategory(category).length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {extractSubcategoriesFromCategory(category).map((subName) => (
+              <span
+                key={subName}
+                className="inline-flex items-center rounded bg-orange-100/70 px-1.5 py-0.5 text-[11px] font-medium text-orange-800"
+              >
+                • {subName}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </button>
       </div>
       <div data-category-actions className="mt-3 flex flex-nowrap items-center gap-1.5">
@@ -1210,6 +1368,21 @@ function CategoryDialog({
               <option value="0">停用</option>
             </select>
           </Field>
+          {form.level === 2 ? (
+            <Field label="子分类目录（一行一个子分类名称，前台点击该二级分类后展开下拉目录）" className="sm:col-span-2">
+              <Textarea
+                rows={5}
+                value={form.subcategories.join("\n")}
+                placeholder={"例如：\nFacebook脸书 新号\nFacebook脸书 混合账号\nFacebook脸书 老号"}
+                onChange={(event) =>
+                  onUpdate({
+                    ...form,
+                    subcategories: event.target.value.split(/\r?\n/),
+                  })
+                }
+              />
+            </Field>
+          ) : null}
         </div>
         <DialogActions saving={saving} onClose={onClose} />
       </form>
@@ -1295,7 +1468,7 @@ function ProductDialog({
             <select
               value={form.category_id}
               disabled={!form.primaryCategoryId || secondaries.length === 0}
-              onChange={(event) => onUpdate({ ...form, category_id: event.target.value })}
+              onChange={(event) => onUpdate({ ...form, category_id: event.target.value, subcategory: "" })}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:bg-slate-50"
             >
               <option value="">
@@ -1307,6 +1480,35 @@ function ProductDialog({
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="所属子分类（选填，用于二级分类下拉子目录分组）" className="sm:col-span-2">
+            {(() => {
+              const selectedSec = secondaries.find((c) => c.id === form.category_id);
+              const subOptions = extractSubcategoriesFromCategory(selectedSec);
+              return (
+                <div className="flex gap-2">
+                  {subOptions.length > 0 ? (
+                    <select
+                      value={subOptions.includes(form.subcategory) ? form.subcategory : ""}
+                      onChange={(event) => onUpdate({ ...form, subcategory: event.target.value })}
+                      className="h-10 w-1/2 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="">不指定 / 手动输入子分类</option>
+                      {subOptions.map((subName) => (
+                        <option key={subName} value={subName}>
+                          {subName}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  <Input
+                    value={form.subcategory}
+                    placeholder="输入或选择子分类名称（如：Facebook脸书 老号）"
+                    onChange={(event) => onUpdate({ ...form, subcategory: event.target.value })}
+                  />
+                </div>
+              );
+            })()}
           </Field>
           <Field label="简短说明" className="sm:col-span-2">
             <Input

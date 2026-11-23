@@ -90,7 +90,18 @@ type FilterState = {
   pageSize: number;
 };
 
-const CATALOG_PAGE_SIZE = 20;
+const CATALOG_PAGE_SIZE = 200;
+
+export function extractProductSubcategoryLabel(product: { description?: string | null; detail?: string | null }): string {
+  const raw = String(product.description || product.detail || "").trim();
+  const match = raw.match(/^【([^】]{1,40})】/);
+  return match?.[1]?.trim() ?? "";
+}
+
+export function stripProductSubcategoryPrefix(text: string | null | undefined): string {
+  if (!text) return "";
+  return text.replace(/^【[^】]{1,40}】\s*/, "").trim();
+}
 
 function matchCategoryByRouteKey(category: DisplayCategory, rawRouteKey: string) {
   const key = normalizeText(rawRouteKey);
@@ -170,6 +181,7 @@ function SupabaseMallContentInner({
   useSyncExternalStore(subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion);
   const [activeCategory, setActiveCategory] = useState<DisplayCategory | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [pendingSelectedCategoryId, setPendingSelectedCategoryId] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
@@ -389,7 +401,10 @@ function SupabaseMallContentInner({
         ? current
         : selected
     );
-    setSelectedCategoryId(selected.id);
+    setSelectedCategoryId((prev) => {
+      if (prev !== selected.id) setSelectedSubcategory("");
+      return selected.id;
+    });
   }, [activeCategoryPool, attachFallbackVisual, categorySnapshot.rows, categorySnapshot.status, config, routeCategoryKey, secondaryCategories]);
 
   const productQueryKey = JSON.stringify([productCategory, resolvedCategory?.id ?? "", filters.search, filters.page, filters.pageSize]);
@@ -509,9 +524,15 @@ function SupabaseMallContentInner({
     clearCatalogRoutePending();
     const shell = document.querySelector<HTMLElement>('[data-testid="storefront-category-layout"]');
     shell?.removeAttribute("data-route-exiting");
-    if (selectedCategoryId === category.id && !filters.search) return;
+    if (selectedCategoryId === category.id && !filters.search) {
+      if (selectedSubcategory) {
+        setSelectedSubcategory("");
+      }
+      return;
+    }
     productRequestIdRef.current += 1;
     setSelectedCategoryId(category.id);
+    setSelectedSubcategory("");
     setActiveCategory(category);
     setProductError("");
 
@@ -612,6 +633,34 @@ function SupabaseMallContentInner({
     pendingFilters.search, pendingFilters.page, pendingFilters.pageSize,
   ]) : "";
 
+  const availableSubcategories = useMemo(() => {
+    const configured = resolvedCategory?.metadata?.subcategories ?? [];
+    const seen = new Set<string>();
+    const list: Array<{ name: string; slug: string; sort_order: number }> = [];
+    for (const item of configured) {
+      const name = item.name.trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      list.push(item);
+    }
+    for (const prod of products) {
+      const label = extractProductSubcategoryLabel(prod);
+      if (label && !seen.has(label)) {
+        seen.add(label);
+        list.push({ name: label, slug: label, sort_order: (list.length + 1) * 10 });
+      }
+    }
+    return list;
+  }, [resolvedCategory?.metadata?.subcategories, products]);
+
+  const filteredProducts = useMemo(() => {
+    if (!selectedSubcategory) return products;
+    return products.filter((prod) => {
+      const label = extractProductSubcategoryLabel(prod);
+      return label === selectedSubcategory;
+    });
+  }, [products, selectedSubcategory]);
+
   return (
     <PublicLayout contentClassName={cn(mallContentClassName, isMobile && "!px-3 !py-2.5 !overflow-visible")}>
       <CategoryContentBoundary>
@@ -629,13 +678,20 @@ function SupabaseMallContentInner({
           pendingDestination={Boolean(routePending && pendingSecondaryCategories)}
           selectionReady={!routePending && (getPublicProductCount(productQueryKey) !== undefined || countReadyKey === productQueryKey || (!isLoadingProducts && loadedProductKey === productQueryKey)) && !productError}
           selectedCategoryId={routePending ? (pendingSelectedCategoryId || pendingSecondaryCategories?.[0]?.id || "") : (resolvedCategory?.id ?? "")}
+          selectedSubcategory={selectedSubcategory}
+          activeCategorySubcategories={availableSubcategories}
           onSelectCategory={routePending ? handlePendingCategorySelect : handleCategorySelect}
+          onSelectSubcategory={(subName) => {
+            setSelectedSubcategory((current) => (current === subName ? "" : subName));
+            productListTopRef.current?.scrollIntoView({ block: "nearest" });
+          }}
           onPrefetchCategory={(category) => { void prefetchPublicProductPage({ primaryCategoryId: category.level === 1 ? category.id : category.parent_id ?? "", secondaryCategoryId: category.level === 2 ? category.id : "", keyword: "", page: 1, pageSize: CATALOG_PAGE_SIZE }); }}
           onRetry={retryLoad}
         />
         <ProductPanel
           pageRoute={`/products/${productCategory}`}
           activeCategory={resolvedCategory}
+          selectedSubcategory={selectedSubcategory}
           currencySymbol={settings.currency_symbol}
           draftSearch={draftSearch}
           appliedSearch={filters.search}
@@ -653,11 +709,11 @@ function SupabaseMallContentInner({
           currentProductKey={productQueryKey}
           knownProductCount={getPublicProductCount(productQueryKey)}
           knownRouteProductCount={pendingCountKey ? getPublicProductCount(pendingCountKey) : routePending?.target ? getPublicProductCountForRoute(routePending.target) : undefined}
-          products={products}
+          products={filteredProducts}
           routePendingTarget={routePending?.target ?? ""}
           productListTopRef={productListTopRef}
           showStock={settings.show_stock}
-          total={total}
+          total={selectedSubcategory ? filteredProducts.length : total}
           onDraftSearchChange={setDraftSearch}
           onResetFilters={resetFilters}
           onSearchSubmit={submitSearch}
@@ -678,8 +734,11 @@ function CategoryPanel({
   pendingDestination,
   selectionReady,
   selectedCategoryId,
+  selectedSubcategory = "",
+  activeCategorySubcategories = [],
   onPrefetchCategory,
   onSelectCategory,
+  onSelectSubcategory,
   onRetry,
 }: {
   pageRoute: string;
@@ -691,8 +750,11 @@ function CategoryPanel({
   pendingDestination: boolean;
   selectionReady: boolean;
   selectedCategoryId: string;
+  selectedSubcategory?: string;
+  activeCategorySubcategories?: Array<{ name: string; slug: string; sort_order: number }>;
   onPrefetchCategory: (category: DisplayCategory) => void;
   onSelectCategory: (category: DisplayCategory) => void;
+  onSelectSubcategory?: (subName: string) => void;
   onRetry: () => void;
 }) {
   const placeholderPhase = useDelayedLoading(isLoading);
@@ -778,17 +840,25 @@ function CategoryPanel({
               <div className="rounded-xl border border-dashed bg-white p-3 text-center text-xs text-muted-foreground">
                 暂无分类
               </div>
-            ) : categories.length > 0 ? categories.map((category, index) => (
+            ) : categories.length > 0 ? categories.map((category, index) => {
+              const isSelected = visualSelectionId === category.id;
+              const subItems = isSelected
+                ? (activeCategorySubcategories.length > 0 ? activeCategorySubcategories : (category.metadata?.subcategories ?? []))
+                : (category.metadata?.subcategories ?? []);
+              const hasSubcategories = subItems.length > 0;
+              return (
               <div key={category.id} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && "!w-full")}>
                 <div className={animatedInitialRows.current || isMobile ? undefined : "catalog-enter-item"} style={animatedInitialRows.current || isMobile ? undefined : { animationDelay: `${Math.min(index * 30, 200)}ms` }}>
                   <CategoryButton
                     category={category}
-                    active={visualSelectionId === category.id}
+                    active={isSelected}
+                    hasSubcategories={hasSubcategories}
+                    expanded={isSelected && hasSubcategories}
                     loading={
                       clickPulseId === category.id ||
                       navigatingProductCategoryId === category.id ||
-                      (Boolean(navigatingProductCategoryId) && visualSelectionId === category.id) ||
-                      ((clickedCategoryId === category.id || (!clickedCategoryId && visualSelectionId === category.id)) && isLoadingProducts)
+                      (Boolean(navigatingProductCategoryId) && isSelected) ||
+                      ((clickedCategoryId === category.id || (!clickedCategoryId && isSelected)) && isLoadingProducts)
                     }
                     disabled={disabled}
                     isMobile={isMobile}
@@ -804,9 +874,41 @@ function CategoryPanel({
                       onSelectCategory(category);
                     }}
                   />
+                  {isSelected && hasSubcategories && !isMobile ? (
+                    <div
+                      data-testid="storefront-subcategory-tree"
+                      className="relative ml-6 mt-1.5 mb-2 space-y-1 border-l-2 border-[#ead5c3] pl-3 py-0.5"
+                    >
+                      {subItems.map((sub) => {
+                        const subActive = selectedSubcategory === sub.name;
+                        return (
+                          <button
+                            key={sub.slug || sub.name}
+                            type="button"
+                            onClick={() => onSelectSubcategory?.(sub.name)}
+                            className={cn(
+                              "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-all duration-150",
+                              subActive
+                                ? "bg-gradient-to-r from-[#fde8d7] via-[#fef2e8] to-[#fce3cd] font-bold text-[#c85e22] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_-2px_rgba(161,92,42,0.14)] ring-1 ring-[#e6a679]/50"
+                                : "font-medium text-slate-600 hover:bg-[#fff7f0]/90 hover:text-[#b4531a]"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
+                                subActive ? "bg-[#d96927]" : "bg-slate-300 group-hover:bg-[#e59866]"
+                              )}
+                            />
+                            <span className="truncate leading-snug">{sub.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            )) : null}
+              );
+            }) : null}
           </div>
         </div>
       </CardContent>
@@ -830,6 +932,8 @@ function CategoryLoadingPlaceholder({ count }: { count: number }) {
 function CategoryButton({
   active,
   loading = false,
+  hasSubcategories = false,
+  expanded = false,
   category,
   disabled,
   isMobile = false,
@@ -839,6 +943,8 @@ function CategoryButton({
 }: {
   active: boolean;
   loading?: boolean;
+  hasSubcategories?: boolean;
+  expanded?: boolean;
   category: DisplayCategory;
   disabled: boolean;
   isMobile?: boolean;
@@ -933,7 +1039,18 @@ function CategoryButton({
         <span className="min-w-0 flex-1 truncate text-left text-xs font-semibold leading-tight sm:text-sm lg:text-base">{category.name}</span>
       </div>
       <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-        <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block transition-opacity duration-150", active ? "text-primary" : "text-muted-foreground/60", loading && "opacity-0")} />
+        {hasSubcategories ? (
+          <ChevronDown
+            className={cn(
+              "hidden h-5 w-5 shrink-0 lg:block transition-transform duration-200",
+              active ? "text-primary" : "text-muted-foreground/60",
+              !expanded && "-rotate-90",
+              loading && "opacity-0"
+            )}
+          />
+        ) : (
+          <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block transition-opacity duration-150", active ? "text-primary" : "text-muted-foreground/60", loading && "opacity-0")} />
+        )}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center">
             <OptionLoadingSpinner active size="sm" />
@@ -947,6 +1064,7 @@ function CategoryButton({
 function ProductPanel({
   pageRoute,
   activeCategory,
+  selectedSubcategory = "",
   currencySymbol,
   draftSearch,
   appliedSearch,
@@ -971,6 +1089,7 @@ function ProductPanel({
 }: {
   pageRoute: string;
   activeCategory: DisplayCategory | null;
+  selectedSubcategory?: string;
   currencySymbol: string;
   draftSearch: string;
   appliedSearch: string;
@@ -1019,7 +1138,14 @@ function ProductPanel({
       <CardContent className={cn(productPanelContentClassName, isMobile && "!p-2.5")}>
         <div ref={productListTopRef} className={cn("mb-2 flex flex-col justify-between gap-2 sm:mb-3 sm:gap-3", !isMobile && "xl:flex-row xl:items-start")}>
           <div className={cn("flex min-w-0 items-center justify-between gap-2", !isMobile && "xl:block")}>
-            <h1 className={cn("min-h-6 truncate text-base font-bold sm:min-h-7 sm:text-xl", resultReady && "catalog-title-enter")}>{activeCategory?.name || ""}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className={cn("min-h-6 truncate text-base font-bold sm:min-h-7 sm:text-xl", resultReady && "catalog-title-enter")}>{activeCategory?.name || ""}</h1>
+              {selectedSubcategory ? (
+                <span className="inline-flex items-center rounded-full border border-[#e6a679]/60 bg-[#fef0e4] px-2.5 py-0.5 text-xs font-bold text-[#c85e22]">
+                  {selectedSubcategory}
+                </span>
+              ) : null}
+            </div>
             <div data-testid="catalog-product-result-bar" className={cn("flex min-h-4 shrink-0 items-center gap-1.5 text-xs text-muted-foreground", !isMobile && "xl:mt-1.5 xl:gap-2")}>
               <span data-testid="catalog-product-result-dot" className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
               <span>{`当前 ${resultText} 个商品`}</span>

@@ -118,11 +118,14 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   const [rows, setRows] = useState<EditorRow[]>([]);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+  const onSummaryRef = useRef(onSummary);
+  onSummaryRef.current = onSummary;
   const normalizedProductSlug = (productSlug ?? product?.slug ?? "").trim();
   const productSlugRef = useRef(normalizedProductSlug);
   productSlugRef.current = normalizedProductSlug;
+  const prevSlugForSyncRef = useRef(normalizedProductSlug);
 
-  const syncSingleSkuCode = useCallback((candidateRows: EditorRow[], slugValue = productSlugRef.current) => {
+  const syncSingleSkuCode = useCallback((candidateRows: EditorRow[], slugValue = productSlugRef.current, forceOverwrite = false) => {
     const cleanSlug = slugValue.trim();
     if (!cleanSlug) return { rows: candidateRows, autoSynced: false };
     const nonEmptyIndices = candidateRows
@@ -131,7 +134,11 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     if (nonEmptyIndices.length !== 1) return { rows: candidateRows, autoSynced: false };
     const targetIdx = nonEmptyIndices[0];
     const targetRow = candidateRows[targetIdx];
-    if (targetRow.draft.sku_code.trim() === cleanSlug) return { rows: candidateRows, autoSynced: false };
+    const currentCode = targetRow.draft.sku_code.trim();
+    if (currentCode === cleanSlug) return { rows: candidateRows, autoSynced: false };
+    if (!forceOverwrite && targetRow.draft.touched && currentCode.length > 0) {
+      return { rows: candidateRows, autoSynced: false };
+    }
     const updated = candidateRows.map((row, idx) =>
       idx === targetIdx
         ? { ...row, draft: { ...row.draft, sku_code: cleanSlug, touched: true } }
@@ -172,31 +179,34 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
           return { ...previous, sku, draft: { ...previous.draft, ...(previous.draft.stock === String(previous.sku?.stock) ? { stock: String(sku.stock) } : {}) } };
         });
         const merged = [...persisted, ...current.filter((row) => !row.sku && row.key !== "legacy" && !isSkuDraftEmpty(row.draft)), emptyRow()];
-        const synced = syncSingleSkuCode(merged);
+        const synced = syncSingleSkuCode(merged, productSlugRef.current, false);
         if (synced.autoSynced) {
           queueMicrotask(() => {
-            onSummary(deriveSkuProductSummary(synced.rows.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft)));
+            onSummaryRef.current(deriveSkuProductSummary(synced.rows.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft)));
           });
         }
         return synced.rows;
       });
     } catch (error) { setDiagnostics(null); setLoadError(error instanceof Error ? error.message : "商品规格读取失败"); }
     finally { setLoading(false); }
-  }, [onSummary, productId, syncSingleSkuCode]);
+  }, [productId, syncSingleSkuCode]);
   useEffect(() => {
     if (!normalizedProductSlug || loading) return;
-    const synced = syncSingleSkuCode(rowsRef.current, normalizedProductSlug);
+    if (prevSlugForSyncRef.current === normalizedProductSlug) return;
+    prevSlugForSyncRef.current = normalizedProductSlug;
+    const synced = syncSingleSkuCode(rowsRef.current, normalizedProductSlug, true);
     if (synced.autoSynced) {
       rowsRef.current = synced.rows;
       setRows(synced.rows);
-      onSummary(deriveSkuProductSummary(synced.rows.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft)));
+      onSummaryRef.current(deriveSkuProductSummary(synced.rows.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft)));
     }
-  }, [loading, normalizedProductSlug, onSummary, syncSingleSkuCode]);
+  }, [loading, normalizedProductSlug, syncSingleSkuCode]);
   useEffect(() => {
     if (previousProductId.current !== productId) {
       setRows([]); rowsRef.current = [];
       setSelectedSkuIds(new Set());
       setBulkPreview(null);
+      prevSlugForSyncRef.current = normalizedProductSlug;
     }
     previousProductId.current = productId;
     void load();

@@ -111,6 +111,7 @@ type ProductFormState = {
   slug: string;
   primaryCategoryId: string;
   category_id: string;
+  subcategory: string;
   short_description: string;
   description: string;
   image_url: string;
@@ -134,7 +135,37 @@ type CategoryFormState = {
   description: string;
   sort_order: string;
   is_active: boolean;
+  subcategories: string[];
+  rawMetadata?: Record<string, unknown> | null;
 };
+
+function extractSubcategoriesFromCategory(category?: AdminCategory | null): string[] {
+  const raw = category?.metadata?.subcategories as unknown;
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const item of raw as unknown[]) {
+    if (typeof item === "string" && item.trim()) names.push(item.trim());
+    else if (
+      item &&
+      typeof item === "object" &&
+      "name" in item &&
+      typeof (item as { name?: unknown }).name === "string" &&
+      (item as { name: string }).name.trim()
+    ) {
+      names.push((item as { name: string }).name.trim());
+    }
+  }
+  return Array.from(new Set(names));
+}
+
+function extractSubcategoryFromShortDescription(shortDesc?: string | null): { subcategory: string; cleanShortDescription: string } {
+  const raw = String(shortDesc ?? "").trim();
+  const match = raw.match(/^【([^】]{1,40})】\s*(.*)$/);
+  if (match) {
+    return { subcategory: match[1].trim(), cleanShortDescription: match[2].trim() };
+  }
+  return { subcategory: "", cleanShortDescription: raw };
+}
 
 type FieldErrors = Record<string, string>;
 
@@ -153,6 +184,7 @@ function emptyProductForm(): ProductFormState {
     slug: "",
     primaryCategoryId: "",
     category_id: "",
+    subcategory: "",
     short_description: "",
     description: "",
     image_url: "",
@@ -177,6 +209,8 @@ function emptyCategoryForm(): CategoryFormState {
     description: "",
     sort_order: "0",
     is_active: true,
+    subcategories: [],
+    rawMetadata: null,
   };
 }
 
@@ -660,11 +694,20 @@ export default function AdminProductsPage() {
     if (note) metadata.note = note;
     else delete metadata.note;
 
+    const cleanSub = productForm.subcategory.trim();
+    if (cleanSub) metadata.subcategory = cleanSub;
+    else delete metadata.subcategory;
+
+    const cleanShort = productForm.short_description.trim();
+    const composedShortDescription = cleanSub
+      ? `【${cleanSub}】${cleanShort ? ` ${cleanShort}` : ""}`
+      : cleanShort || null;
+
     return {
       name: productForm.name.trim(),
       slug: productForm.slug.trim(),
       category_id: resolveProductCategoryId(productForm),
-      short_description: productForm.short_description.trim() || null,
+      short_description: composedShortDescription,
       description: productForm.description.trim() || null,
       image_url: productForm.image_url.trim() || null,
       price: parseNumber(productForm.price),
@@ -772,6 +815,16 @@ export default function AdminProductsPage() {
     setCategoryErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return null;
 
+    const cleanSubs = Array.from(new Set(categoryForm.subcategories.map((s) => s.trim()).filter(Boolean)));
+    const nextMetadata: Record<string, unknown> = {
+      ...(categoryForm.rawMetadata ?? {}),
+      subcategories: cleanSubs.map((name, idx) => ({
+        name,
+        slug: name,
+        sort_order: (idx + 1) * 10,
+      })),
+    };
+
     return {
       parent_id: categoryForm.level === "1" ? null : categoryForm.parent_id,
       level: Number(categoryForm.level) as 1 | 2,
@@ -781,6 +834,7 @@ export default function AdminProductsPage() {
       description: categoryForm.description.trim() || null,
       sort_order: parseNumber(categoryForm.sort_order),
       is_active: categoryForm.is_active,
+      ...(categoryForm.level === "2" ? { metadata: nextMetadata } : {}),
     };
   }
 
@@ -1804,7 +1858,7 @@ function ProductFormDialog({
                   <NativeSelect
                     value={form.category_id}
                     disabled={!form.primaryCategoryId || secondaryCategories.length === 0}
-                    onChange={(value) => onUpdate({ ...form, category_id: value })}
+                    onChange={(value) => onUpdate({ ...form, category_id: value, subcategory: "" })}
                   >
                     <option value="">
                       {!form.primaryCategoryId
@@ -1819,6 +1873,35 @@ function ProductFormDialog({
                       </option>
                     ))}
                   </NativeSelect>
+                </Field>
+                <Field label="所属子分类（选填，用于二级分类下拉子目录分组）" className="md:col-span-2">
+                  {(() => {
+                    const selectedSec = secondaryCategories.find((c) => c.id === form.category_id);
+                    const subOptions = extractSubcategoriesFromCategory(selectedSec);
+                    return (
+                      <div className="flex gap-2">
+                        {subOptions.length > 0 ? (
+                          <NativeSelect
+                            className="w-1/2"
+                            value={subOptions.includes(form.subcategory) ? form.subcategory : ""}
+                            onChange={(value) => onUpdate({ ...form, subcategory: value })}
+                          >
+                            <option value="">不指定 / 手动输入子分类</option>
+                            {subOptions.map((subName) => (
+                              <option key={subName} value={subName}>
+                                {subName}
+                              </option>
+                            ))}
+                          </NativeSelect>
+                        ) : null}
+                        <Input
+                          value={form.subcategory}
+                          placeholder="输入或选择子分类名称（如：Facebook脸书 老号）"
+                          onChange={(event) => onUpdate({ ...form, subcategory: event.target.value })}
+                        />
+                      </div>
+                    );
+                  })()}
                 </Field>
               </div>
             </FormSection>
@@ -1968,6 +2051,21 @@ function CategoryFormDialog({
             <Field label="描述" className="md:col-span-2">
               <Textarea rows={3} value={form.description} onChange={(event) => onUpdate({ ...form, description: event.target.value })} />
             </Field>
+            {form.level === "2" && (
+              <Field label="子分类目录（一行一个子分类名称，前台点击该二级分类后展开下拉目录）" className="md:col-span-2">
+                <Textarea
+                  rows={5}
+                  value={form.subcategories.join("\n")}
+                  placeholder={"例如：\nFacebook脸书 新号\nFacebook脸书 混合账号\nFacebook脸书 老号"}
+                  onChange={(event) =>
+                    onUpdate({
+                      ...form,
+                      subcategories: event.target.value.split(/\r?\n/),
+                    })
+                  }
+                />
+              </Field>
+            )}
           </div>
           <DialogActions disableSave={!isDirty} isSaving={isSaving} saveLabel="保存分类" onCancel={onClose} />
         </form>
@@ -2095,6 +2193,18 @@ function CategoryTreeNode({
             {category.icon ? ` · icon: ${category.icon}` : ""}
           </p>
           {category.description && <p className="mt-1 text-sm text-slate-500">{category.description}</p>}
+          {category.level === 2 && extractSubcategoriesFromCategory(category).length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {extractSubcategoriesFromCategory(category).map((subName) => (
+                <span
+                  key={subName}
+                  className="inline-flex items-center rounded-md bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800 ring-1 ring-inset ring-orange-200/80"
+                >
+                  • {subName}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex shrink-0 gap-1">
           <Button variant="ghost" size="sm" onClick={() => onEdit(category)}>
@@ -2251,6 +2361,8 @@ function toProductForm(
   const parent = category?.parent_id ? categoryMap.get(category.parent_id) : null;
   const primaryCategoryId =
     category?.level === 1 ? category.id : parent?.level === 1 ? parent.id : "";
+  const parsedShort = extractSubcategoryFromShortDescription(product.short_description);
+  const metaSub = product.metadata && typeof product.metadata.subcategory === "string" ? product.metadata.subcategory.trim() : "";
 
   return {
     id: product.id,
@@ -2258,7 +2370,8 @@ function toProductForm(
     slug: product.slug,
     primaryCategoryId,
     category_id: category?.level === 1 ? "" : product.category_id ?? "",
-    short_description: product.short_description ?? "",
+    subcategory: parsedShort.subcategory || metaSub,
+    short_description: parsedShort.cleanShortDescription,
     description: product.description ?? "",
     image_url: product.image_url ?? "",
     price: String(product.price ?? ""),
@@ -2292,6 +2405,8 @@ function toCategoryForm(category: AdminCategory): CategoryFormState {
     description: category.description ?? "",
     sort_order: String(category.sort_order ?? 0),
     is_active: isCategoryEnabled(category),
+    subcategories: extractSubcategoriesFromCategory(category),
+    rawMetadata: category.metadata ?? null,
   };
 }
 
@@ -2319,6 +2434,7 @@ function normalizeProductFormValues(form: ProductFormState) {
     slug: form.slug.trim().toLowerCase(),
     primaryCategoryId: form.primaryCategoryId || null,
     category_id: form.category_id || null,
+    subcategory: normalizeOptionalText(form.subcategory),
     short_description: normalizeOptionalText(form.short_description),
     description: normalizeOptionalText(form.description),
     image_url: normalizeOptionalText(form.image_url),
@@ -2343,6 +2459,7 @@ function normalizeCategoryFormValues(form: CategoryFormState) {
     description: normalizeOptionalText(form.description),
     sort_order: Math.trunc(normalizeFormNumber(form.sort_order)),
     is_active: Boolean(form.is_active),
+    subcategories: form.subcategories.map((s) => s.trim()).filter(Boolean).join("|"),
   };
 }
 

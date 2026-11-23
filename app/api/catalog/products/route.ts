@@ -83,7 +83,7 @@ export async function GET(request: Request) {
     const keyword = normalizeSearch(url.searchParams.get("keyword"));
     const excludeId = normalizeToken(url.searchParams.get("excludeId"));
     const page = clampNumber(url.searchParams.get("page"), 1, 1, 100000);
-    const pageSize = clampNumber(url.searchParams.get("pageSize"), 20, 1, 60);
+    const pageSize = clampNumber(url.searchParams.get("pageSize"), 20, 1, 500);
 
     if (url.searchParams.get("primaryCategoryId") && !primaryCategoryId) {
       return productError("CATEGORY_ID_INVALID", "一级分类参数不正确", requestId, 400);
