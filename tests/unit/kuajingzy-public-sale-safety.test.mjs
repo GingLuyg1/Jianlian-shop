@@ -37,7 +37,7 @@ test('authenticated Canary user may submit one balance order for the fixed SKU',
 for(const [name,change] of [
  ['wrong user',({input})=>input.userId='00000000-0000-4000-8000-000000000091'],
  ['another bound SKU',({s,input})=>input.skuId=s.id='other'],
- ['wrong supplier SKU',({s})=>s.metadata.supplier_sku='9'],
+ ['retired supplier SKU',({s})=>s.metadata.supplier_sku='16'],
  ['quantity two',({input})=>input.quantity=2],
  ['sellable cap above one',({s})=>s.stock=2],
  ['missing private env',({input})=>{

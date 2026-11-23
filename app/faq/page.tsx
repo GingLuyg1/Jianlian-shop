@@ -1078,7 +1078,7 @@ export default function FAQPage() {
                     </li>
                     <li>
                       <strong className="text-slate-800">账号售后：</strong>
-                      说明购买商品、登录网络环境及具体异常。
+                      说明购买商品、登录网络环境及具体异常。以商品详情页标注的售后范围和时效为准。
                     </li>
                     <li>
                       <strong className="text-slate-800">接口问题：</strong>
