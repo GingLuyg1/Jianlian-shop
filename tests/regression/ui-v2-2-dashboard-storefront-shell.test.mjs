@@ -12,7 +12,8 @@ test("Dashboard trend selectors are accessible, selectable, and retain one metri
 
   assert.doesNotMatch(dashboard, /近 7 天真实数据走势；无可用序列时不绘制曲线。/);
   assert.doesNotMatch(dashboard, />对比昨日</);
-  assert.match(dashboard, /useState<TrendMetricKey\[]>\(\["payAmount", "rechargeAmount", "orderCount", "views"\]\)/);
+  assert.match(dashboard, /useState<TrendMetricKey\[]>\(\[\s*"payAmount",\s*"orderCount",\s*"visitors",\s*"views",?\s*\]\)/);
+  assert.match(dashboard, /key: "rechargeAmount", label: "充值金额"/);
   assert.match(dashboard, /aria-pressed=\{selected\}/);
   assert.match(dashboard, /onClick=\{\(\) => toggleMetric\(item\.key\)\}/);
   assert.match(dashboard, /if \(current\.length === 1\) return current/);

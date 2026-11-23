@@ -48,9 +48,9 @@ test("tutorial and FAQ prioritize actual product-specific delivery and aftersale
   const tutorial = read("app/tutorials/page.tsx");
   for (const text of ["购买与交付指南", "核对详情", "填写并提交", "交付后核验", "联系在线客服"]) assert.ok(tutorial.includes(text));
   const faq = read("app/faq/page.tsx");
-  const guidance = faq.match(/const FAQ_KNOWLEDGE_BASE = \[([\s\S]*?)\n\];/)?.[1];
-  assert.ok(guidance, "ticket center has an FAQ knowledge base");
-  for (const copy of ["购买与下单", "交付与售后", "安全与凭据", "登录密码", "以商品详情页标注的售后范围和时效为准"]) {
+  const guidance = faq.match(/>提交建议<\/h3>\s*<\/div>\s*<ul\b[^>]*>([\s\S]*?)<\/ul>/)?.[1];
+  assert.ok(guidance, "ticket center has submission guidance");
+  for (const copy of ["订单问题", "账号售后", "接口问题", "请勿提交账号密码", "以商品详情页标注的售后范围和时效为准"]) {
     assert.ok(guidance.includes(copy), copy);
   }
   for (const source of [tutorial, guidance]) assert.doesNotMatch(source, /24 小时|不退不换|电商拓客/);
