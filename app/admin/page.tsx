@@ -149,7 +149,7 @@ type TrendPoint = {
   newUsers: number | null;
 };
 
-type TrendMetricKey = "payAmount" | "rechargeAmount" | "orderCount" | "views";
+type TrendMetricKey = "payAmount" | "rechargeAmount" | "orderCount" | "visitors" | "views";
 
 type TodoItem = {
   label: string;
@@ -1063,6 +1063,27 @@ export default function AdminDashboardPage() {
       productCostMap.set(pid, cur);
     }
 
+    // 计入 API 开放分销订单利润核算
+    let apiOrdersGmv = 0;
+    let apiOrdersCost = 0;
+    const allFilteredOrders = (data.rawSeries.orders ?? []).filter((o) => inDateFilterRange(o.created_at));
+    for (const ord of allFilteredOrders) {
+      const isApi =
+        (ord as any).source === "api" ||
+        (ord as any).channel === "api" ||
+        (ord as any).order_source === "api" ||
+        Boolean((ord as any).app_id);
+      if (isApi) {
+        const amt = safeNumber(ord.total_amount);
+        const cost = safeNumber(
+          (ord as any).cost_amount ?? (ord as any).supplier_cost ?? amt * 0.72
+        );
+        apiOrdersGmv += amt;
+        apiOrdersCost += cost;
+      }
+    }
+    totalCost += apiOrdersCost;
+
     const grossProfit = gmv - totalCost;
     const grossMargin = gmv > 0 ? `${((grossProfit / gmv) * 100).toFixed(1)}%` : "—";
     const gatewayFee = Number((gmv * 0.03).toFixed(2));
@@ -1079,6 +1100,8 @@ export default function AdminDashboardPage() {
       grossMargin,
       gatewayFee,
       netProfit,
+      apiOrdersGmv,
+      apiOrdersCost,
       productCostRows,
     };
   }, [data, inDateFilterRange, rangeGmv, rangeRecharge]);
@@ -1751,7 +1774,7 @@ export default function AdminDashboardPage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="text-xs">
-                            <TableHead className="min-w-[180px] text-center">商品标题</TableHead>
+                            <TableHead className="min-w-[180px] text-left">商品标题</TableHead>
                             <TableHead className="text-right">售价</TableHead>
                             <TableHead
                               className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
@@ -1823,7 +1846,7 @@ export default function AdminDashboardPage() {
                         <TableBody>
                           {pagedProductRows.map((row) => (
                             <TableRow key={row.id} className="text-xs">
-                              <TableCell className="max-w-[220px] truncate text-center font-medium text-slate-900" title={row.name}>
+                              <TableCell className="max-w-[220px] truncate text-left font-medium text-slate-900" title={row.name}>
                                 {row.name}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(row.price)}</TableCell>
@@ -1934,18 +1957,30 @@ function QuickLink({ href, label }: { href: string; label: string }) {
 }
 
 function TrendChart({ points, loading }: { points: TrendPoint[]; loading: boolean }) {
-  const [selectedMetricKeys, setSelectedMetricKeys] = useState<TrendMetricKey[]>(["payAmount", "rechargeAmount", "orderCount", "views"]);
+  const [selectedMetricKeys, setSelectedMetricKeys] = useState<TrendMetricKey[]>([
+    "payAmount",
+    "orderCount",
+    "visitors",
+    "views",
+  ]);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   if (loading) return <div className="h-full min-h-[220px] animate-pulse rounded-[var(--admin-v2-surface-radius)] bg-[var(--admin-v2-surface-muted)]" />;
   if (points.length === 0) return <AdminEmptyState title="暂无趋势数据" description="有真实订单、充值或访问记录后会显示趋势。" />;
 
-  const series = [
+  const series: ReadonlyArray<{
+    key: TrendMetricKey;
+    label: string;
+    color: string;
+    values: Array<number | null>;
+    format: (val: number | null) => string;
+  }> = [
     { key: "payAmount", label: "支付金额", color: "#2563eb", values: points.map((point) => point.payAmount), format: formatMoney },
     { key: "rechargeAmount", label: "充值金额", color: "#0ea5e9", values: points.map((point) => point.rechargeAmount), format: formatMoney },
     { key: "orderCount", label: "订单数量", color: "#6366f1", values: points.map((point) => point.orderCount), format: (value: number | null) => value === null ? "—" : `${Math.trunc(value).toLocaleString("zh-CN")} 单` },
+    { key: "visitors", label: "访客数量", color: "#0d9488", values: points.map((point) => point.visitors), format: (value: number | null) => value === null ? "—" : `${Math.trunc(value).toLocaleString("zh-CN")} 人` },
     { key: "views", label: "访问量", color: "#64748b", values: points.map((point) => point.views), format: (value: number | null) => value === null ? "—" : `${Math.trunc(value).toLocaleString("zh-CN")} PV` },
-  ] as const;
+  ];
   const chartWidth = 720;
   const chartHeight = 220;
   const padding = { top: 24, right: 16, bottom: 30, left: 16 };
@@ -2252,7 +2287,7 @@ function RecentOrdersCard({ rows, loading }: { rows: DashboardOrder[]; loading: 
       title="最近订单"
       loading={loading}
       emptyTitle="暂无订单"
-      headers={["时间", "订单号", "成交商品", "金额", "状态"]}
+      headers={["时间", "订单号", "商品名称", "金额", "状态"]}
       rows={rows.slice(0, 7).map((order) => [
         formatDateTime(order.created_at),
         order.order_no,
@@ -2373,6 +2408,8 @@ function FinanceOverviewCard({
     grossMargin: string;
     gatewayFee: number;
     netProfit: number;
+    apiOrdersGmv?: number;
+    apiOrdersCost?: number;
     productCostRows: Array<{
       id: string;
       name: string;
@@ -2441,7 +2478,7 @@ function FinanceOverviewCard({
                 {formatMoney(stats.totalCost)}
               </div>
               <div className="mt-1 text-[10px] text-slate-400">
-                按 SKU 原价/供货底价 × 件数
+                按 SKU 底价及 API 分销成本合并核算
               </div>
             </div>
 
@@ -2451,7 +2488,7 @@ function FinanceOverviewCard({
                 {formatMoney(stats.grossProfit)}
               </div>
               <div className="mt-1 text-[10px] text-emerald-600/80">
-                GMV - 商品总成本
+                含商城 + API 分销订单利润
               </div>
             </div>
 

@@ -248,7 +248,7 @@ export default function AdminAgentsPage() {
     setWhitelists(cleanWls);
     notifySidebarBadgesUpdated();
 
-    // 从后台真实订单 API 拉取真实订单并整合利润数据
+    // 从后台真实订单 API 拉取真实开放 API 订单并整合利润数据
     setLoadingOrders(true);
     try {
       const res = await fetch("/api/admin/orders?page=1&pageSize=50", {
@@ -257,7 +257,15 @@ export default function AdminAgentsPage() {
       if (res.ok) {
         const payload = await res.json().catch(() => null);
         const apiRows = Array.isArray(payload?.orders) ? payload.orders : [];
-        const mappedRealOrders: AgentOrder[] = apiRows.map((row: any) => {
+        const apiOnlyRows = apiRows.filter((row: any) => {
+          const isApi =
+            row.source === "api" ||
+            row.channel === "api" ||
+            row.order_source === "api" ||
+            (row.app_id && row.app_id !== "DIRECT_ORDER");
+          return Boolean(isApi);
+        });
+        const mappedRealOrders: AgentOrder[] = apiOnlyRows.map((row: any) => {
           const itemSummary =
             Array.isArray(row.order_items) && row.order_items.length > 0
               ? row.order_items
@@ -861,13 +869,6 @@ export default function AdminAgentsPage() {
         {/* 2. IP 加白管理 Tab（flex-1 撑满到底部，与左侧栏完全持平） */}
         {activeTab === "whitelist" && (
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-            <div className="shrink-0 rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-2.5 text-xs text-blue-900 leading-relaxed flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 shrink-0 text-blue-600" />
-              <span>
-                <strong>风控安全边界</strong>：商户前台不提供自主添加 IP 白名单入口。所有调用订单与扣费 API 的出口公网 IP 均须在此由管理员审核录入，非加白 IP 请求系统将直接阻断拦截。
-              </span>
-            </div>
-
             <AdminListSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <AdminTableViewport>
                 <table className="w-full text-left text-xs">

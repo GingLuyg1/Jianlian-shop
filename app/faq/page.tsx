@@ -37,6 +37,7 @@ import {
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,53 +57,15 @@ import {
   STORAGE_KEY,
 } from "@/lib/tickets/types";
 
-// 官方预置真实高保真演示工单
-const INITIAL_DEMO_TICKETS: TicketItem[] = [
-  {
-    id: "GD-20261106-103033-3A25",
-    title: "Jianlian Shop 普通 API 接入咨询：目录、扣款、幂等与交付",
-    type: "api",
-    priority: "normal",
-    status: "completed",
-    orderNo: "",
-    email: "gac000189@gmail.com",
-    description:
-      "您好，我们正在接入跨境资源网普通 API (Jianlian Shop)，请协助确认以下四项技术合同：\n1. 目录读取：GET /api/open/v1/catalog/mall?search=礼品卡 会在高峰期超时，服务端最大缓存限制多大？\n2. 扣款保护：POST /api/open/v1/orders/mall 屡次扣款的 expectedAmount 是否校验折扣、会入、服务费扣除后的最终 CNY 钱包总扣款？\n3. 幂等性保障：Idempotency-Key 的保质时长及过期后行为是什么？若超时或 500，未拿到订单 ID 时，能否直接复用同一 key 重试？\n4. 订单状态追踪：请提供 GET /api/open/v1/orders/[id] 的完整响应样例，包括 deliveryFormat 字段定义。感谢协助！",
-    createdAt: "2026-11-06 10:30:33",
-    updatedAt: "2026-11-06 17:24:20",
-    hasUnreadReply: false,
-    messages: [
-      {
-        id: "m-1",
-        sender: "user",
-        senderName: "我",
-        content:
-          "您好，我们正在接入跨境资源网普通 API (Jianlian Shop)，请协助确认以下四项技术合同：\n1. 目录读取：GET /api/open/v1/catalog/mall?search=礼品卡 会在高峰期超时，服务端最大缓存限制多大？\n2. 扣款保护：POST /api/open/v1/orders/mall 屡次扣款的 expectedAmount 是否校验折扣、会入、服务费扣除后的最终 CNY 钱包总扣款？\n3. 幂等性保障：Idempotency-Key 的保质时长及过期后行为是什么？若超时或 500，未拿到订单 ID 时，能否直接复用同一 key 重试？\n4. 订单状态追踪：请提供 GET /api/open/v1/orders/[id] 的完整响应样例，包括 deliveryFormat 字段定义。感谢协助！",
-        createdAt: "2026-11-06 10:30:33",
-      },
-      {
-        id: "m-2",
-        sender: "support",
-        senderName: "Jianlian 官方客服",
-        content: "好的，已收到您的 API 对接咨询，技术团队正在逐项核验文档与参数规范，稍后给您详细回复。",
-        createdAt: "2026-11-06 13:23:27",
-      },
-      {
-        id: "m-3",
-        sender: "support",
-        senderName: "Jianlian 官方客服",
-        content:
-          "您好，技术团队已完成排查与技术方案确认：\n1. 目录读取：推荐使用 category 与 keyword 结合小分页查询，单次推荐 limit=20，避免一次性拉取全量导致网关防爬流控拦截；\n2. 扣款安全：expectedAmount 属于严格强校验，服务端对比当前最新价格与优惠折扣后计算，若有价格变动会自动 fail-closed 并返回 PRICE_MISMATCH，绝对不会多扣余额；\n3. 幂等性：Idempotency-Key 有效期为 24 小时，网络超时请务必携带相同 key 重试，系统自动返回已存在单据结果；\n4. 交付结构：订单成功后 delivery 包含 items[]，每项含 cardCode 与 cardPin。已为您开启 API 沙箱调试权限，祝对接顺利！",
-        createdAt: "2026-11-06 17:24:20",
-      },
-    ],
-  },
-];
+// 历史测试假工单 ID 过滤器
+const FAKE_DEMO_IDS = new Set(["GD-20261106-103033-3A25"]);
+const INITIAL_DEMO_TICKETS: TicketItem[] = [];
 
 export default function FAQPage() {
+  const { isMobile } = useMobileStorefront();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>("GD-20261106-103033-3A25");
-  const [isCreating, setIsCreating] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(true);
   const [activeTabFilter, setActiveTabFilter] = useState<"all" | "processing" | "completed">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -139,17 +102,29 @@ export default function FAQPage() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // 兼容历史数据状态：旧的 pending_reply / processing -> processing，replied / completed -> completed
-          const normalized: TicketItem[] = parsed.map((t: any) => ({
-            ...t,
-            status: t.status === "completed" || t.status === "replied" ? "completed" : "processing",
-          }));
-          setTickets(normalized);
-          return;
+          // 过滤开发测试用的假工单
+          const cleanUserTickets = parsed.filter(
+            (t: any) => t && t.id && !FAKE_DEMO_IDS.has(t.id)
+          );
+          if (cleanUserTickets.length !== parsed.length) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanUserTickets));
+          }
+          if (cleanUserTickets.length > 0) {
+            const normalized: TicketItem[] = cleanUserTickets.map((t: any) => ({
+              ...t,
+              status: t.status === "completed" || t.status === "replied" ? "completed" : "processing",
+            }));
+            setTickets(normalized);
+            setSelectedTicketId(normalized[0].id);
+            setIsCreating(false);
+            return;
+          }
         }
       }
     } catch {}
-    setTickets(INITIAL_DEMO_TICKETS);
+    setTickets([]);
+    setSelectedTicketId(null);
+    setIsCreating(true);
   }, []);
 
   // 读取 Supabase 用户邮箱
@@ -421,15 +396,23 @@ export default function FAQPage() {
   };
 
   return (
-    <PublicLayout>
-      <main className="relative min-h-[calc(100vh-80px)] w-full overflow-hidden bg-[#fffdfa] px-3.5 py-4 sm:px-6 lg:px-8">
+    <PublicLayout
+      mobileNavigationUntilLg
+      viewportLocked={!isMobile}
+      contentClassName={
+        isMobile
+          ? "max-w-none !pt-2 !px-3 pb-6"
+          : "max-w-none px-4 py-2 md:px-6 h-[calc(100dvh-4.5rem)] flex flex-col overflow-hidden"
+      }
+    >
+      <main className="relative flex-1 min-h-0 w-full overflow-hidden bg-[#fffdfa] flex flex-col">
         {/* 背景柔暖晨曦流光光晕 */}
         <div className="pointer-events-none fixed -left-32 -top-24 h-[440px] w-[440px] rounded-full bg-gradient-to-br from-[#ffdca8]/35 via-[#ffba75]/20 to-transparent blur-3xl" />
         <div className="pointer-events-none fixed -right-24 top-1/3 h-[500px] w-[500px] rounded-full bg-gradient-to-tr from-[#ffe6cc]/40 via-[#ffd5ab]/25 to-transparent blur-3xl" />
 
-        <div className="relative mx-auto max-w-7xl space-y-4">
+        <div className="relative mx-auto w-full max-w-[1640px] flex-1 min-h-0 flex flex-col gap-3">
           {/* 1. 顶部工单中心 Header（精炼紧凑） */}
-          <div className="relative overflow-hidden rounded-[24px] border border-orange-100/70 bg-gradient-to-r from-white/95 via-[#fffaf5]/90 to-white/95 px-5 py-3.5 shadow-[0_8px_24px_rgba(240,115,36,0.04)] backdrop-blur-xl ring-1 ring-white/80">
+          <div className="relative shrink-0 overflow-hidden rounded-[22px] border border-orange-100/70 bg-gradient-to-r from-white/95 via-[#fffaf5]/90 to-white/95 px-5 py-3 shadow-[0_8px_24px_rgba(240,115,36,0.04)] backdrop-blur-xl ring-1 ring-white/80">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2.5">
@@ -474,7 +457,7 @@ export default function FAQPage() {
           </div>
 
           {/* 2. 主体响应式一页屏工作台 */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:h-[calc(100vh-175px)]">
+          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-12 flex-1 min-h-0 overflow-hidden">
             {/* 左栏：我的工单列表 (4 列，支持内部独立平滑滚动) */}
             <div className="lg:col-span-4 flex flex-col rounded-[24px] border border-orange-100/70 bg-white/90 p-4 shadow-[0_8px_24px_rgba(240,115,36,0.03)] backdrop-blur-xl h-full overflow-hidden">
               {/* 列表头部 */}

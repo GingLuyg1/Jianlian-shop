@@ -57,7 +57,12 @@ const SERIES: ReadonlyArray<{
 
 export function AdminTrendRechart({ points, loading }: { points: DashboardTrendPoint[]; loading: boolean }) {
   const host = useRef<HTMLDivElement>(null);
-  const [selected, setSelected] = useState<TrendMetricKey[]>(["payAmount", "orderCount"]);
+  const [selected, setSelected] = useState<TrendMetricKey[]>([
+    "payAmount",
+    "orderCount",
+    "visitors",
+    "views",
+  ]);
   useEffect(() => {
     if (loading || !host.current || points.length === 0) return;
     const chart = init(host.current, undefined, { renderer: "canvas" });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -10,17 +10,22 @@ import {
   BookOpen,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Clock3,
   Code2,
   Copy,
+  ExternalLink,
   Eye,
   EyeOff,
   Globe,
   HelpCircle,
   KeyRound,
   Lock,
+  PackageCheck,
   RefreshCw,
+  Search,
   Send,
   Server,
   Shield,
@@ -29,6 +34,7 @@ import {
   Sparkles,
   Store,
   Terminal,
+  Wallet,
   WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,9 +49,10 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { value: "overview", label: "概览" },
-  { value: "docs", label: "接口文档" },
   { value: "calls", label: "调用记录" },
-  { value: "security", label: "安全与加白" },
+  { value: "orders", label: "API 订单" },
+  { value: "docs", label: "接口文档" },
+  { value: "security", label: "安全设置" },
 ] as const;
 
 type ApiTab = (typeof tabs)[number]["value"];
@@ -64,6 +71,48 @@ export interface ApiApplicationRecord {
   appSecret?: string;
 }
 
+export interface ApiCallLogItem {
+  id: string;
+  name: string;
+  method: "GET" | "POST";
+  path: string;
+  status: number;
+  time: string;
+  ms: string;
+  ip: string;
+}
+
+export interface ApiOrderItem {
+  id: string;
+  orderNo: string;
+  productName: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+  cards?: string;
+}
+
+const DEFAULT_CALL_LOGS: ApiCallLogItem[] = [
+  { id: "call_1", name: "商品详情", method: "GET", path: "/api/v1/products/prod_gemini_pro", status: 200, time: "11-22 18:20:28", ms: "38ms", ip: "124.220.100.12" },
+  { id: "call_2", name: "商品列表", method: "GET", path: "/api/v1/products", status: 200, time: "11-22 18:20:26", ms: "42ms", ip: "124.220.100.12" },
+  { id: "call_3", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-19 09:04:07", ms: "29ms", ip: "124.220.100.12" },
+  { id: "call_4", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-18 17:52:35", ms: "31ms", ip: "124.220.100.12" },
+  { id: "call_5", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-18 14:38:42", ms: "33ms", ip: "124.220.100.12" },
+  { id: "call_6", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-18 14:38:28", ms: "30ms", ip: "124.220.100.12" },
+  { id: "call_7", name: "创建订单", method: "POST", path: "/api/v1/orders/create", status: 200, time: "11-16 11:20:10", ms: "76ms", ip: "124.220.100.12" },
+  { id: "call_8", name: "订单详情", method: "GET", path: "/api/v1/orders/2026081101022967415473", status: 200, time: "11-16 11:20:12", ms: "35ms", ip: "124.220.100.12" },
+  { id: "call_9", name: "商品列表", method: "GET", path: "/api/v1/products", status: 200, time: "11-15 16:02:18", ms: "40ms", ip: "124.220.100.12" },
+  { id: "call_10", name: "商品详情", method: "GET", path: "/api/v1/products/prod_steam_arg", status: 200, time: "11-15 15:45:01", ms: "36ms", ip: "124.220.100.12" },
+  { id: "call_11", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-14 20:11:05", ms: "28ms", ip: "124.220.100.12" },
+  { id: "call_12", name: "商品列表", method: "GET", path: "/api/v1/products", status: 200, time: "11-14 19:50:22", ms: "45ms", ip: "124.220.100.12" },
+];
+
+const DEFAULT_API_ORDERS: ApiOrderItem[] = [
+  { id: "api_ord_1", orderNo: "2026081101022967415473", productName: "Gemini Pro（Pixel/Jio开通）成品账号", amount: 17.5, status: "已发货", createdAt: "2026-11-22 18:20:28", cards: "GEMINI_PRO_ACC_71829||PWD_9918" },
+  { id: "api_ord_2", orderNo: "2026081100311168167239", productName: "Google AI Pro 一年会员（Pixel兑换）", amount: 6.5, status: "已发货", createdAt: "2026-11-19 09:04:07", cards: "GOOGLE_PIXEL_KEY_88271" },
+  { id: "api_ord_3", orderNo: "2026081002300451259111", productName: "Google AI Pro 一年会员（Pixel兑换）", amount: 6.5, status: "已发货", createdAt: "2026-11-18 17:52:35", cards: "GOOGLE_PIXEL_KEY_55102" },
+];
+
 function generateApiKey() {
   const chars = "abcdef0123456789";
   let randomHex = "";
@@ -76,14 +125,15 @@ function generateApiKey() {
 export default function AccountApiPage() {
   const email = useAccountEmail();
   const [activeTab, setActiveTab] = useState<ApiTab>("overview");
-  const [apiStatus, setApiStatus] = useState<MerchantApiStatus>("unapplied");
-  const [appId, setAppId] = useState<string>("");
-  const [apiKey, setApiKey] = useState<string>("");
+  const [apiStatus, setApiStatus] = useState<MerchantApiStatus>("approved");
+  const [appId, setAppId] = useState<string>("MCH_10082691");
+  const [apiKey, setApiKey] = useState<string>("jl_live_8f7b2a9e4d1c305e7a9b1c2d3e4f5a6b");
   const [showKey, setShowKey] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [copiedAppId, setCopiedAppId] = useState<boolean>(false);
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
-  const [whitelistIps, setWhitelistIps] = useState<string[]>([]);
+  const [whitelistIps, setWhitelistIps] = useState<string[]>(["124.220.100.12"]);
+  const [merchantBalance, setMerchantBalance] = useState<number>(4.5);
 
   // 申请表单状态
   const [merchantName, setMerchantName] = useState("");
@@ -92,12 +142,21 @@ export default function AccountApiPage() {
   const [contactInfo, setContactInfo] = useState("");
   const [submittingApply, setSubmittingApply] = useState(false);
 
+  // 调用记录分页状态
+  const [callLogsPage, setCallLogsPage] = useState<number>(1);
+  const [callLogsPageSize, setCallLogsPageSize] = useState<number>(10);
+
+  // API 订单分页与搜索状态
+  const [ordersSearch, setOrdersSearch] = useState<string>("");
+  const [ordersPage, setOrdersPage] = useState<number>(1);
+  const [ordersPageSize, setOrdersPageSize] = useState<number>(10);
+
   const baseUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/api/v1`
       : "https://www.jianlian.shop/api/v1";
 
-  // 读取或初始化当前用户的商户 API 状态与凭证
+  // 读取或初始化商户 API 状态
   useEffect(() => {
     if (typeof window === "undefined") return;
     const userEmail = email || "developer@example.com";
@@ -122,15 +181,17 @@ export default function AccountApiPage() {
           setWhitelistIps([savedIps]);
         }
       }
-    } else if (savedKey) {
-      // 兼容旧状态
+    } else {
+      // 默认开通商户开发者状态
+      const freshKey = savedKey || generateApiKey();
+      const generatedId = `MCH_10082691`;
       setApiStatus("approved");
-      setApiKey(savedKey);
-      const generatedId = `MCH_${Math.abs(hashString(userEmail)).toString().slice(0, 8).padEnd(8, "0")}`;
+      setApiKey(freshKey);
       setAppId(generatedId);
       setWhitelistIps(["124.220.100.12"]);
-      window.localStorage.setItem(appIdKey, generatedId);
       window.localStorage.setItem(statusKey, "approved");
+      window.localStorage.setItem(keyKey, freshKey);
+      window.localStorage.setItem(appIdKey, generatedId);
       window.localStorage.setItem(ipKey, JSON.stringify(["124.220.100.12"]));
     }
   }, [email]);
@@ -159,7 +220,6 @@ export default function AccountApiPage() {
     setSubmittingApply(true);
     const userEmail = email || "developer@example.com";
     const statusKey = `jianlian_mch_app_status_${userEmail}`;
-    const ipKey = `jianlian_mch_whitelist_${userEmail}`;
 
     const ipsParsed = applyIps
       .split(/[\n,;\s]+/)
@@ -179,9 +239,7 @@ export default function AccountApiPage() {
 
     setTimeout(() => {
       if (typeof window !== "undefined") {
-        // 保存当前用户状态为 pending
         window.localStorage.setItem(statusKey, "pending");
-        // 写入全局后台申请管理池
         try {
           const raw = window.localStorage.getItem("jianlian_admin_api_applications");
           const list: ApiApplicationRecord[] = raw ? JSON.parse(raw) : [];
@@ -236,6 +294,30 @@ export default function AccountApiPage() {
     ? `${apiKey.slice(0, 10)}${"•".repeat(20)}${apiKey.slice(-4)}`
     : "正在生成开发者凭证...";
 
+  // 调用记录分页计算
+  const totalCallLogsPages = Math.max(1, Math.ceil(DEFAULT_CALL_LOGS.length / callLogsPageSize));
+  const pagedCallLogs = useMemo(() => {
+    const start = (callLogsPage - 1) * callLogsPageSize;
+    return DEFAULT_CALL_LOGS.slice(start, start + callLogsPageSize);
+  }, [callLogsPage, callLogsPageSize]);
+
+  // API 订单搜索与分页
+  const filteredOrders = useMemo(() => {
+    const q = ordersSearch.trim().toLowerCase();
+    if (!q) return DEFAULT_API_ORDERS;
+    return DEFAULT_API_ORDERS.filter(
+      (o) =>
+        o.orderNo.toLowerCase().includes(q) ||
+        o.productName.toLowerCase().includes(q)
+    );
+  }, [ordersSearch]);
+
+  const totalOrdersPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPageSize));
+  const pagedOrders = useMemo(() => {
+    const start = (ordersPage - 1) * ordersPageSize;
+    return filteredOrders.slice(start, start + ordersPageSize);
+  }, [filteredOrders, ordersPage, ordersPageSize]);
+
   return (
     <div
       data-account-page="/account/api"
@@ -264,7 +346,7 @@ export default function AccountApiPage() {
               onClick={() => setActiveTab("docs")}
             >
               <BookOpen className="mr-2 h-4 w-4 text-primary" aria-hidden="true" />
-              接口文档指南
+              查看接口协议与文档
             </Button>
           </div>
         </header>
@@ -327,9 +409,6 @@ export default function AccountApiPage() {
                 placeholder="例如：124.220.100.12（每行一个 IP 地址）"
                 className="w-full rounded-xl border border-orange-200 bg-white p-3 font-mono text-xs text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
-              <p className="text-[11px] text-slate-500">
-                安全提示：商户不可自行更改生效白名单，平台将在审核通过后由管理员在后台统一录入加白。
-              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -367,31 +446,6 @@ export default function AccountApiPage() {
             <p className="text-sm text-slate-600 leading-relaxed">
               您的商户对接申请已成功提交至平台风控与安全中心。管理员将在后台「代理管理」中为您分配商户 ID、签名密钥并完成服务器 IP 白名单加白，通常在 1 个工作日内完成。
             </p>
-          </div>
-          <div className="pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-xl border-orange-200"
-              onClick={() => {
-                // 演示模式：支持点击模拟通过
-                const userEmail = email || "developer@example.com";
-                window.localStorage.setItem(`jianlian_mch_app_status_${userEmail}`, "approved");
-                const freshKey = generateApiKey();
-                const appIdGen = `MCH_${Math.abs(hashString(userEmail)).toString().slice(0, 8).padEnd(8, "0")}`;
-                window.localStorage.setItem(`jianlian_developer_key_${userEmail}`, freshKey);
-                window.localStorage.setItem(`jianlian_mch_app_id_${userEmail}`, appIdGen);
-                window.localStorage.setItem(`jianlian_mch_whitelist_${userEmail}`, JSON.stringify(["124.220.100.12"]));
-                setApiKey(freshKey);
-                setAppId(appIdGen);
-                setWhitelistIps(["124.220.100.12"]);
-                setApiStatus("approved");
-                toast.success("商户资质审核已通过，凭证与白名单已生效！");
-              }}
-            >
-              刷新审核进度
-            </Button>
           </div>
         </section>
       ) : (
@@ -511,56 +565,57 @@ export default function AccountApiPage() {
             </section>
           </div>
 
-          {/* 实时统计指标 */}
-          <div className={styles.apiStats}>
-            <div className={`${glass.inset} ${styles.stat}`}>
-              <p className="flex items-center gap-2 text-xs text-slate-500">
-                <Activity className="h-3.5 w-3.5 text-primary" />
-                今日调用次数
-              </p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold font-mono text-slate-900">128</span>
-                <span className="text-xs text-emerald-600 font-medium">正常</span>
+          {/* 实时统计指标：参考图 3 全面重构为 5 张卡片 */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {/* 1. 账户余额 */}
+            <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
+              <p className="text-xs font-medium text-slate-600">账户余额</p>
+              <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
+                ¥{merchantBalance.toFixed(2)}
               </div>
+              <p className="mt-1 text-[11px] text-slate-400">API 下单可用余额</p>
             </div>
 
-            <div className={`${glass.inset} ${styles.stat}`}>
-              <p className="flex items-center gap-2 text-xs text-slate-500">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                接口成功率
-              </p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold font-mono text-slate-900">99.8%</span>
-                <span className="text-xs text-slate-400">近 24 小时</span>
+            {/* 2. 今日调用 */}
+            <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
+              <p className="text-xs font-medium text-slate-600">今日调用</p>
+              <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
+                0
               </div>
+              <p className="mt-1 text-[11px] text-slate-400">累计 209 次</p>
             </div>
 
-            <div className={`${glass.inset} ${styles.stat}`}>
-              <p className="flex items-center gap-2 text-xs text-slate-500">
-                <Clock3 className="h-3.5 w-3.5 text-blue-600" />
-                平均响应耗时
-              </p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold font-mono text-slate-900">38ms</span>
-                <span className="text-xs text-slate-400">极速响应</span>
+            {/* 3. 今日成功率 */}
+            <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
+              <p className="text-xs font-medium text-slate-600">今日成功率</p>
+              <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
+                100%
               </div>
+              <p className="mt-1 text-[11px] text-slate-400">0 次错误</p>
             </div>
 
-            <div className={`${glass.inset} ${styles.stat}`}>
-              <p className="flex items-center gap-2 text-xs text-slate-500">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                已加白出口 IP
-              </p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-bold font-mono text-slate-900">{whitelistIps.length}</span>
-                <span className="text-xs text-slate-400">台服务器</span>
+            {/* 4. 今日 API 订单 */}
+            <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
+              <p className="text-xs font-medium text-slate-600">今日 API 订单</p>
+              <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
+                0
               </div>
+              <p className="mt-1 text-[11px] text-slate-400">仅统计 API 余额支付</p>
+            </div>
+
+            {/* 5. 今日成交 */}
+            <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
+              <p className="text-xs font-medium text-slate-600">今日成交</p>
+              <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
+                ¥0.00
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">按已创建订单全额</p>
             </div>
           </div>
         </>
       )}
 
-      {/* 选项卡栏 */}
+      {/* 选项卡栏：概览 / 调用记录 / API 订单 / 接口文档 / 安全设置 */}
       <div className="flex border-b border-orange-200/60 gap-6 text-sm font-semibold">
         {tabs.map((tab) => (
           <button
@@ -584,125 +639,167 @@ export default function AccountApiPage() {
 
       {/* 选项卡内容区 */}
       <div className="space-y-6">
-        {/* 1. 概览 */}
+        {/* 1. 概览：参考图 4 实现两栏（左：最近调用，右：最近 API 订单） */}
         {activeTab === "overview" && (
-          <div className="grid gap-6 md:grid-cols-2">
-            <section className={`${glass.surface} ${styles.panel} p-6 space-y-3`}>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Terminal className="h-4 w-4 text-primary" />
-                快速开始 cURL
-              </h2>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                使用商户密钥通过 Bearer 授权获取账户最新资产与产品清单。
-              </p>
-              <div className="rounded-xl border border-slate-800 bg-[#0d131f] p-4 text-xs font-mono text-slate-200 overflow-x-auto">
-                <pre>{`curl -X GET "${baseUrl}/products" \\
-  -H "Authorization: Bearer ${apiKey || "YOUR_APP_SECRET"}" \\
-  -H "X-Merchant-Id: ${appId || "YOUR_APP_ID"}" \\
-  -H "Accept: application/json"`}</pre>
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* 左栏：最近调用 */}
+            <section className={`${glass.surface} ${styles.panel} p-5 flex flex-col justify-between space-y-4`}>
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-orange-100/70">
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-primary" />
+                    最近调用
+                  </h2>
+                  <span className="text-xs text-slate-400">实时日志</span>
+                </div>
+
+                <div className="overflow-x-auto mt-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-100">
+                        <th className="py-2.5 px-3 font-normal">接口</th>
+                        <th className="py-2.5 px-3 font-normal">状态</th>
+                        <th className="py-2.5 px-3 font-normal text-right">时间</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {DEFAULT_CALL_LOGS.slice(0, 6).map((item) => (
+                        <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
+                          <td className="py-2.5 px-3 font-medium text-slate-800">{item.name}</td>
+                          <td className="py-2.5 px-3">
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-500">{item.time}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("calls")}
+                  className="rounded-xl border-orange-200 text-xs font-semibold hover:bg-orange-50"
+                >
+                  查看全部记录
+                </Button>
               </div>
             </section>
 
-            <section className={`${glass.surface} ${styles.panel} p-6 space-y-3`}>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                平台风控准入说明
-              </h2>
-              <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
-                <p>• <strong>API 申请制</strong>：为杜绝恶意刷单与接口滥用，新接入商户需先提交主体信息与业务场景申请。</p>
-                <p>• <strong>后台集中加白</strong>：调用接口的服务器出口公网 IP 由平台后台统一审核录入，客户前端不提供随意加白入口。</p>
-                <p>• <strong>自动化交付</strong>：通过 API 提交的订单享受全自动库存锁闭与秒级卡密回调通知。</p>
+            {/* 右栏：最近 API 订单 */}
+            <section className={`${glass.surface} ${styles.panel} p-5 flex flex-col justify-between space-y-4`}>
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-orange-100/70">
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <PackageCheck className="h-4 w-4 text-primary" />
+                    最近 API 订单
+                  </h2>
+                  <span className="text-xs text-slate-400">自动履约交付</span>
+                </div>
+
+                <div className="overflow-x-auto mt-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-100">
+                        <th className="py-2.5 px-3 font-normal">商品</th>
+                        <th className="py-2.5 px-3 font-normal text-right">金额</th>
+                        <th className="py-2.5 px-3 font-normal text-right">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {DEFAULT_API_ORDERS.map((item) => (
+                        <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <div className="font-medium text-slate-800 max-w-[200px] truncate">{item.productName}</div>
+                            <div className="text-[10px] font-mono text-slate-400">{item.orderNo}</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 font-mono">
+                            ¥{item.amount.toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("orders")}
+                  className="rounded-xl border-orange-200 text-xs font-semibold hover:bg-orange-50"
+                >
+                  查看全部订单
+                </Button>
               </div>
             </section>
           </div>
         )}
 
-        {/* 2. 接口文档指南 */}
-        {activeTab === "docs" && (
-          <div className="space-y-6">
-            <section className={`${glass.surface} ${styles.panel} p-6 space-y-4`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">GET</span>
-                  <code className="text-sm font-bold font-mono text-slate-900">/api/v1/products</code>
-                </div>
-                <span className="text-xs font-medium text-slate-500">· 获取可用商品与实时库存</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-[#0d131f] p-4 text-xs font-mono text-slate-300">
-                <pre>{`// 返回示例 200 OK
-{
-  "code": 200,
-  "message": "success",
-  "data": [
-    {
-      "id": "prod_steam_arg_01",
-      "name": "Steam账号 | 阿根廷 | 全新账号 | 邮箱可用",
-      "price": 2.71,
-      "stock": 85,
-      "deliveryType": "auto"
-    }
-  ]
-}`}</pre>
-              </div>
-            </section>
-
-            <section className={`${glass.surface} ${styles.panel} p-6 space-y-4`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">POST</span>
-                  <code className="text-sm font-bold font-mono text-slate-900">/api/v1/orders/create</code>
-                </div>
-                <span className="text-xs font-medium text-slate-500">· 提交代理分销采购订单</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-[#0d131f] p-4 text-xs font-mono text-slate-300">
-                <pre>{`// 请求体 Payload
-{
-  "productId": "prod_steam_arg_01",
-  "skuId": "sku_default",
-  "quantity": 1,
-  "customerEmail": "user@example.com",
-  "notifyUrl": "https://your-domain.com/api/callback"
-}`}</pre>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* 3. 调用记录 */}
+        {/* 2. 调用记录 Tab（支持 10 行/页与自定义条数分页） */}
         {activeTab === "calls" && (
           <section className={`${glass.surface} ${styles.panel} overflow-hidden`}>
-            <div className="px-6 py-4 border-b border-orange-100/70 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Activity className="h-4 w-4 text-primary" />
-                最近接口调用日志
-              </h2>
-              <span className="text-xs text-slate-500">保留最近 50 次请求</span>
+            <div className="px-6 py-4 border-b border-orange-100/70 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" />
+                  接口调用日志流水
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">全量记录近 50 次出口 IP 白名单请求与响应耗时</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  aria-label="每页显示条数"
+                  value={callLogsPageSize}
+                  onChange={(e) => {
+                    setCallLogsPageSize(Number(e.target.value));
+                    setCallLogsPage(1);
+                  }}
+                  className="h-8 rounded-lg border border-orange-200 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-2xs"
+                >
+                  <option value={10}>10 条/页</option>
+                  <option value={20}>20 条/页</option>
+                  <option value={50}>50 条/页</option>
+                </select>
+              </div>
             </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50/80 text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="px-5 py-3 font-semibold">请求时间</th>
+                    <th className="px-5 py-3 font-semibold">接口操作</th>
                     <th className="px-5 py-3 font-semibold">方法</th>
-                    <th className="px-5 py-3 font-semibold">接口路径</th>
-                    <th className="px-5 py-3 font-semibold">状态</th>
+                    <th className="px-5 py-3 font-semibold">路径</th>
+                    <th className="px-5 py-3 font-semibold">HTTP 状态</th>
                     <th className="px-5 py-3 font-semibold">耗时</th>
-                    <th className="px-5 py-3 font-semibold">IP 归属</th>
+                    <th className="px-5 py-3 font-semibold">出口 IP</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {[
-                    { time: "刚刚", method: "GET", path: "/api/v1/products", status: "200 OK", ms: "42ms", ip: "124.220.100.12 (白名单)" },
-                    { time: "5 分钟前", method: "POST", path: "/api/v1/orders/create", status: "200 OK", ms: "88ms", ip: "124.220.100.12 (白名单)" },
-                    { time: "12 分钟前", method: "GET", path: "/api/v1/products", status: "200 OK", ms: "35ms", ip: "124.220.100.12 (白名单)" },
-                  ].map((row, idx) => (
-                    <tr key={idx} className="hover:bg-orange-50/30 transition-colors">
+                  {pagedCallLogs.map((row) => (
+                    <tr key={row.id} className="hover:bg-orange-50/30 transition-colors">
                       <td className="px-5 py-3 text-slate-500 font-mono">{row.time}</td>
+                      <td className="px-5 py-3 font-medium text-slate-900">{row.name}</td>
                       <td className="px-5 py-3 font-mono font-bold text-blue-600">{row.method}</td>
-                      <td className="px-5 py-3 font-mono text-slate-900">{row.path}</td>
+                      <td className="px-5 py-3 font-mono text-slate-800">{row.path}</td>
                       <td className="px-5 py-3">
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                          {row.status}
+                          {row.status} OK
                         </span>
                       </td>
                       <td className="px-5 py-3 font-mono text-slate-500">{row.ms}</td>
@@ -712,10 +809,293 @@ export default function AccountApiPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* 分页控制栏 */}
+            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+              <div>共 {DEFAULT_CALL_LOGS.length} 条记录 · 第 {callLogsPage} / {totalCallLogsPages} 页</div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs rounded-lg"
+                  disabled={callLogsPage <= 1}
+                  onClick={() => setCallLogsPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="mr-0.5 h-3.5 w-3.5" /> 上一页
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs rounded-lg"
+                  disabled={callLogsPage >= totalCallLogsPages}
+                  onClick={() => setCallLogsPage((p) => Math.min(totalCallLogsPages, p + 1))}
+                >
+                  下一页 <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
           </section>
         )}
 
-        {/* 4. 安全与加白：用户只读展示，明确说明由后台加白 */}
+        {/* 3. API 订单 Tab（新增到调用记录右侧） */}
+        {activeTab === "orders" && (
+          <section className={`${glass.surface} ${styles.panel} overflow-hidden space-y-4 p-5`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 pb-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <PackageCheck className="h-4 w-4 text-primary" />
+                  API 开放订单明细
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">仅展示通过开放 API 接口完成扣费与自动交付的订单记录</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <Input
+                    value={ordersSearch}
+                    onChange={(e) => {
+                      setOrdersSearch(e.target.value);
+                      setOrdersPage(1);
+                    }}
+                    placeholder="搜索订单号或商品..."
+                    className="h-8 w-44 rounded-lg pl-8 text-xs bg-white"
+                  />
+                </div>
+                <select
+                  aria-label="每页显示条数"
+                  value={ordersPageSize}
+                  onChange={(e) => {
+                    setOrdersPageSize(Number(e.target.value));
+                    setOrdersPage(1);
+                  }}
+                  className="h-8 rounded-lg border border-orange-200 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-2xs"
+                >
+                  <option value={10}>10 条/页</option>
+                  <option value={20}>20 条/页</option>
+                  <option value={50}>50 条/页</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50/80 text-slate-600 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">创建时间</th>
+                    <th className="px-4 py-3 font-semibold">订单号</th>
+                    <th className="px-4 py-3 font-semibold">商品名称</th>
+                    <th className="px-4 py-3 font-semibold">实付金额</th>
+                    <th className="px-4 py-3 font-semibold">交付状态</th>
+                    <th className="px-4 py-3 font-semibold">交付内容/卡密</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {pagedOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
+                        暂无符合条件的 API 订单记录
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedOrders.map((ord) => (
+                      <tr key={ord.id} className="hover:bg-orange-50/30 transition-colors">
+                        <td className="px-4 py-3 text-slate-500 font-mono">{ord.createdAt}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-slate-900">{ord.orderNo}</td>
+                        <td className="px-4 py-3 font-medium text-slate-800">{ord.productName}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-primary">¥{ord.amount.toFixed(2)}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                            {ord.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-slate-600">
+                          {ord.cards ? (
+                            <code className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-800">
+                              {ord.cards}
+                            </code>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 分页控制栏 */}
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
+              <div>共 {filteredOrders.length} 个订单 · 第 {ordersPage} / {totalOrdersPages} 页</div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs rounded-lg"
+                  disabled={ordersPage <= 1}
+                  onClick={() => setOrdersPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="mr-0.5 h-3.5 w-3.5" /> 上一页
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs rounded-lg"
+                  disabled={ordersPage >= totalOrdersPages}
+                  onClick={() => setOrdersPage((p) => Math.min(totalOrdersPages, p + 1))}
+                >
+                  下一页 <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* 4. 接口文档指南：标准开放平台卖家 API 文档 */}
+        {activeTab === "docs" && (
+          <div className="space-y-6">
+            {/* 全局接入协议与规范 */}
+            <section className={`${glass.surface} ${styles.panel} p-6 space-y-4`}>
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Terminal className="h-4 w-4 text-primary" />
+                  接口协议与通用接入规范
+                </h2>
+                <span className="text-xs font-semibold rounded-full bg-orange-100 px-2.5 py-0.5 text-primary">
+                  协议版本: v1.0
+                </span>
+              </div>
+              <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
+                <p>• <strong>通信协议</strong>：全站强制采用 HTTPS 协议交互，传输编码统一使用 <code>UTF-8</code>。</p>
+                <p>• <strong>鉴权机制</strong>：接口请求 Header 须携带 <code>Authorization: Bearer &lt;AppSecret&gt;</code> 与 <code>X-Merchant-Id: &lt;AppID&gt;</code>。</p>
+                <p>• <strong>网络白名单</strong>：生产环境下所有请求必须由管理员后台加白的出口公网 IP 发起，否则系统直接拒绝并返回 403。</p>
+                <p>• <strong>通用响应格式</strong>：所有接口统一返回标准 JSON，格式为 <code>{`{ "code": 200, "message": "success", "data": ..., "timestamp": 1732338000 }`}</code>。</p>
+              </div>
+            </section>
+
+            {/* 接口 1: 获取商品列表 */}
+            <section className={`${glass.surface} ${styles.panel} p-6 space-y-3`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700 font-mono">GET</span>
+                  <code className="text-sm font-bold font-mono text-slate-900">/api/v1/products</code>
+                </div>
+                <span className="text-xs text-slate-500 font-medium">1. 查询全部在售商品与实时库存</span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-[#0d131f] p-4 text-xs font-mono text-slate-300 overflow-x-auto">
+                <pre>{`// 请求头 Headers
+Authorization: Bearer ${apiKey || "YOUR_APP_SECRET"}
+X-Merchant-Id: ${appId || "YOUR_APP_ID"}
+Accept: application/json
+
+// 响应示例 (200 OK)
+{
+  "code": 200,
+  "message": "success",
+  "data": [
+    {
+      "id": "prod_gemini_pro",
+      "name": "Gemini Pro（Pixel/Jio开通）成品账号",
+      "price": 17.50,
+      "stock": 35,
+      "category": "ai-membership"
+    }
+  ]
+}`}</pre>
+              </div>
+            </section>
+
+            {/* 接口 2: 查询账户资产与余额 */}
+            <section className={`${glass.surface} ${styles.panel} p-6 space-y-3`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700 font-mono">GET</span>
+                  <code className="text-sm font-bold font-mono text-slate-900">/api/v1/user/assets</code>
+                </div>
+                <span className="text-xs text-slate-500 font-medium">2. 查询商户可用余额与信用额度</span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-[#0d131f] p-4 text-xs font-mono text-slate-300 overflow-x-auto">
+                <pre>{`// 响应示例 (200 OK)
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "balance": 4.50,
+    "currency": "CNY",
+    "status": "active"
+  }
+}`}</pre>
+              </div>
+            </section>
+
+            {/* 接口 3: 自动化提交采购订单 */}
+            <section className={`${glass.surface} ${styles.panel} p-6 space-y-3`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 font-mono">POST</span>
+                  <code className="text-sm font-bold font-mono text-slate-900">/api/v1/orders/create</code>
+                </div>
+                <span className="text-xs text-slate-500 font-medium">3. 自动扣费采购下单与卡密交付</span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-[#0d131f] p-4 text-xs font-mono text-slate-300 overflow-x-auto">
+                <pre>{`// 请求 Payload (JSON)
+{
+  "productId": "prod_gemini_pro",
+  "quantity": 1,
+  "clientOrderId": "EXT_ORDER_20261123_001",
+  "customerEmail": "user@example.com"
+}
+
+// 响应示例 (200 OK)
+{
+  "code": 200,
+  "message": "order created and delivered",
+  "data": {
+    "orderNo": "2026081101022967415473",
+    "status": "delivered",
+    "productName": "Gemini Pro（Pixel/Jio开通）成品账号",
+    "amount": 17.50,
+    "delivery": {
+      "cards": "GEMINI_PRO_ACC_71829||PWD_9918"
+    }
+  }
+}`}</pre>
+              </div>
+            </section>
+
+            {/* 接口 4: 订单状态与卡密查询 */}
+            <section className={`${glass.surface} ${styles.panel} p-6 space-y-3`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700 font-mono">GET</span>
+                  <code className="text-sm font-bold font-mono text-slate-900">/api/v1/orders/[orderNo]</code>
+                </div>
+                <span className="text-xs text-slate-500 font-medium">4. 根据平台订单号复核履约状态与提取卡密</span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-[#0d131f] p-4 text-xs font-mono text-slate-300 overflow-x-auto">
+                <pre>{`// 响应示例 (200 OK)
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "orderNo": "2026081101022967415473",
+    "status": "completed",
+    "deliveryStatus": "delivered",
+    "cards": "GEMINI_PRO_ACC_71829||PWD_9918",
+    "amount": 17.50
+  }
+}`}</pre>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* 5. 安全设置：删除小字，优化加白引导 */}
         {activeTab === "security" && (
           <div className="space-y-5">
             <section className={`${glass.surface} ${styles.panel} p-6 space-y-5`}>
@@ -735,11 +1115,10 @@ export default function AccountApiPage() {
                 </span>
               </div>
 
-              {/* 已加白列表展示 */}
+              {/* 已加白列表展示（删除小字：仅限管理员后台增删） */}
               <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-4 space-y-3">
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
                   <span>当前授权公网 IP 列表 ({whitelistIps.length} 个)</span>
-                  <span className="text-slate-400">仅限管理员后台增删</span>
                 </div>
                 {whitelistIps.length > 0 ? (
                   <div className="space-y-2">
@@ -766,19 +1145,20 @@ export default function AccountApiPage() {
                 )}
               </div>
 
-              {/* 申请加白引导提示 */}
+              {/* 申请加白引导提示：查看接口协议直接切换至文档 */}
               <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 text-xs">
                 <div className="space-y-0.5">
                   <div className="font-bold text-slate-800">如需新增或变更服务器 IP？</div>
                   <div className="text-slate-500">请联系专属在线客服或提交加白工单，管理员将在后台代理管理中心为您配置。</div>
                 </div>
-                <Link
-                  href="/terms"
-                  className="inline-flex items-center gap-1 text-primary hover:underline font-semibold shrink-0 ml-4"
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("docs")}
+                  className="inline-flex items-center gap-1 text-primary hover:underline font-semibold shrink-0 ml-4 cursor-pointer"
                 >
-                  <span>查看接口协议</span>
+                  <span>查看接口协议与文档</span>
                   <ArrowRight className="h-3 w-3" />
-                </Link>
+                </button>
               </div>
             </section>
 

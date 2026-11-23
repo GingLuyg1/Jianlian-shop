@@ -116,8 +116,7 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     icon: Share2,
     routePrefixes: ["/admin/agents"],
     children: [
-      { label: "代理管理概览", href: "/admin/agents" },
-      { label: "API申请记录", href: "/admin/agents?tab=applications" },
+      { label: "API申请记录", href: "/admin/agents" },
       { label: "IP加白管理", href: "/admin/agents?tab=whitelist" },
       { label: "分销代理订单", href: "/admin/agents?tab=orders" },
     ],
@@ -159,11 +158,8 @@ export function isAdminNavigationLinkActive(
   }
   if (pathname === "/admin/agents" && href.startsWith("/admin/agents")) {
     const tabInHref = href.includes("?tab=") ? href.split("?tab=")[1] : null;
-    const normalizedTab =
-      agentTab === "applications" || agentTab === "whitelist" || agentTab === "orders"
-        ? agentTab
-        : null;
-    return tabInHref === normalizedTab;
+    const currentTab = agentTab === "whitelist" || agentTab === "orders" ? agentTab : null;
+    return tabInHref === currentTab;
   }
   return isPathActive(pathname, href);
 }
