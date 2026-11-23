@@ -152,21 +152,8 @@ export default function MobileTopBarAuth() {
           <DropdownMenuContent
             align="end"
             sideOffset={6}
-            className="w-52 rounded-2xl border border-orange-100/90 bg-white/95 p-1.5 shadow-[0_18px_42px_-12px_rgba(124,72,32,0.18)] backdrop-blur-xl"
+            className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[136px] rounded-2xl border border-orange-100/90 bg-white/95 p-1.5 shadow-[0_18px_42px_-12px_rgba(124,72,32,0.18)] backdrop-blur-xl"
           >
-            <div className="mb-1 flex items-center gap-2 rounded-xl bg-orange-50/70 px-2.5 py-2 border border-orange-100/60">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#df7334] to-[#c85f22] text-[11px] font-extrabold uppercase text-white">
-                {(user.email?.[0] || "U").toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[11px] font-bold text-slate-900">
-                  {user.email || "我的账号"}
-                </div>
-                <div className="text-[10px] font-semibold text-primary">
-                  余额 ¥{balance.toFixed(2)}
-                </div>
-              </div>
-            </div>
             <div className="space-y-0.5">
               {accountNavigation.map((item) => {
                 const Icon = item.icon;

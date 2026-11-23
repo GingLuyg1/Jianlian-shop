@@ -342,22 +342,8 @@ export default function PublicTopInfoBar({
                 <DropdownMenuContent
                   align="end"
                   sideOffset={8}
-                  className="w-56 rounded-2xl border border-orange-100/90 bg-white/95 p-1.5 shadow-[0_18px_42px_-12px_rgba(124,72,32,0.18),0_4px_12px_-4px_rgba(15,23,42,0.06)] ring-1 ring-white/90 backdrop-blur-xl"
+                  className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[var(--radix-dropdown-menu-trigger-width)] rounded-2xl border border-orange-100/90 bg-white/95 p-1.5 shadow-[0_18px_42px_-12px_rgba(124,72,32,0.18),0_4px_12px_-4px_rgba(15,23,42,0.06)] ring-1 ring-white/90 backdrop-blur-xl"
                 >
-                  <div className="mb-1 flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-orange-50/90 via-amber-50/60 to-orange-50/30 px-2.5 py-2 border border-orange-100/60">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#df7334] to-[#c85f22] text-xs font-extrabold uppercase text-white shadow-xs">
-                      {(user.email?.[0] || "U").toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-bold text-slate-900">
-                        {getDisplayName(user)}
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-orange-700">
-                        <span>可用余额</span>
-                        <span className="font-mono font-bold text-primary">¥{balance.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
                   <div className="space-y-0.5">
                     {accountNavigation.map((item) => {
                       const Icon = item.icon;

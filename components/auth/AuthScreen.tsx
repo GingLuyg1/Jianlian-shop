@@ -123,19 +123,57 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const [rippleOrigin, setRippleOrigin] = useState<{ x: number; y: number } | null>(null);
 
   const triggerSuccessWithButtonRipple = () => {
+    let originX = typeof window !== "undefined" ? window.innerWidth * 0.72 : 800;
+    let originY = typeof window !== "undefined" ? window.innerHeight * 0.58 : 500;
     if (submitBtnRef.current) {
       const rect = submitBtnRef.current.getBoundingClientRect();
-      setRippleOrigin({
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      });
-    } else if (typeof window !== "undefined") {
-      setRippleOrigin({
-        x: window.innerWidth * 0.72,
-        y: window.innerHeight * 0.58,
-      });
+      originX = rect.left + rect.width / 2;
+      originY = rect.top + rect.height / 2;
     }
+    setRippleOrigin({ x: originX, y: originY });
     setLoginSuccess(true);
+
+    // 将明显的多层同心圆光学水波纹挂载到 document.body 顶层，全程 pointer-events: none：
+    // 1. 路由立即跳转至真实首页后，水波纹在真实首页上方继续完整扩散 1.2s，视觉效果与之前一样明显饱满；
+    // 2. 没有任何遮挡蒙版，鼠标可随时穿透水波纹直接点击首页任意分类与商品。
+    if (typeof document !== "undefined") {
+      try {
+        const existing = document.getElementById("jianlian-login-ripple-portal");
+        if (existing) existing.remove();
+        const host = document.createElement("div");
+        host.id = "jianlian-login-ripple-portal";
+        host.setAttribute("aria-hidden", "true");
+        host.style.cssText =
+          "position:fixed;inset:0;z-index:9999;pointer-events:none;overflow:hidden;";
+        host.innerHTML = `
+          <style>
+            @keyframes jianlian-optical-shockwave-portal {
+              0% {
+                transform: translate(-50%, -50%) scale(0.05);
+                opacity: 0.96;
+              }
+              35% {
+                opacity: 0.88;
+              }
+              70% {
+                opacity: 0.48;
+              }
+              100% {
+                transform: translate(-50%, -50%) scale(28);
+                opacity: 0;
+              }
+            }
+          </style>
+          <div style="position:absolute;left:${originX}px;top:${originY}px;width:176px;height:176px;border-radius:9999px;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(253,224,71,0.38) 42%,rgba(251,146,60,0.18) 70%,transparent 100%);box-shadow:0 0 90px 28px rgba(255,255,255,0.92),0 0 160px 52px rgba(245,158,11,0.38);filter:blur(8px);animation:jianlian-optical-shockwave-portal 1.15s cubic-bezier(0.16,1,0.3,1) forwards;"></div>
+          <div style="position:absolute;left:${originX}px;top:${originY}px;width:176px;height:176px;border-radius:9999px;pointer-events:none;border:2.5px solid rgba(255,255,255,0.95);background:radial-gradient(circle,rgba(255,255,255,0.32) 0%,rgba(254,215,170,0.22) 55%,transparent 100%);box-shadow:inset 0 0 42px rgba(255,255,255,0.85),0 0 64px 18px rgba(251,191,36,0.34);filter:blur(2px);animation:jianlian-optical-shockwave-portal 1.15s cubic-bezier(0.16,1,0.3,1) 0.08s forwards;"></div>
+          <div style="position:absolute;left:${originX}px;top:${originY}px;width:176px;height:176px;border-radius:9999px;pointer-events:none;border:1.5px solid rgba(253,186,116,0.72);background:transparent;box-shadow:0 0 36px 8px rgba(234,88,12,0.18);filter:blur(3px);animation:jianlian-optical-shockwave-portal 1.15s cubic-bezier(0.16,1,0.3,1) 0.18s forwards;"></div>
+        `;
+        document.body.appendChild(host);
+        window.setTimeout(() => {
+          host.remove();
+        }, 1400);
+      } catch {}
+    }
   };
 
   // 当外部传入的 initialMode 变更时同步，并预热真实首页路由
@@ -1076,7 +1114,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
           </section>
         </div>
       </div>
-      {/* 登录成功同心圆轻盈水波光环：仅保留纯 pointer-events-none 的透明光波反馈，不挂载任何遮挡点击的首页蒙版 */}
+      {/* 登录成功同心圆多层水波光环：仅保留纯 pointer-events-none 的饱满光波反馈，不挂载任何遮挡点击的首页蒙版 */}
       {loginSuccess && (
         <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" aria-hidden="true">
           <style
@@ -1085,13 +1123,16 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                 @keyframes jianlian-optical-shockwave {
                   0% {
                     transform: translate(-50%, -50%) scale(0.05);
+                    opacity: 0.95;
+                  }
+                  35% {
                     opacity: 0.85;
                   }
-                  40% {
-                    opacity: 0.55;
+                  70% {
+                    opacity: 0.45;
                   }
                   100% {
-                    transform: translate(-50%, -50%) scale(22);
+                    transform: translate(-50%, -50%) scale(28);
                     opacity: 0;
                   }
                 }
@@ -1105,7 +1146,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
               zIndex: 45,
             }}
-            className="pointer-events-none h-36 w-36 rounded-full bg-radial from-white/70 via-amber-200/30 to-transparent blur-md animate-[jianlian-optical-shockwave_0.55s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+            className="pointer-events-none h-44 w-44 rounded-full bg-radial from-white via-amber-200/40 to-transparent shadow-[0_0_90px_24px_rgba(255,255,255,0.9),0_0_160px_48px_rgba(245,158,11,0.35)] blur-md animate-[jianlian-optical-shockwave_1.15s_cubic-bezier(0.16,1,0.3,1)_forwards]"
           />
           <div
             style={{
@@ -1114,7 +1155,16 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
               zIndex: 46,
             }}
-            className="pointer-events-none h-36 w-36 rounded-full border-2 border-orange-200/70 bg-transparent blur-xs animate-[jianlian-optical-shockwave_0.55s_cubic-bezier(0.16,1,0.3,1)_0.05s_forwards]"
+            className="pointer-events-none h-44 w-44 rounded-full border-2 border-white/90 bg-radial from-white/30 to-transparent shadow-[inset_0_0_40px_rgba(255,255,255,0.8),0_0_60px_16px_rgba(251,191,36,0.3)] blur-xs animate-[jianlian-optical-shockwave_1.15s_cubic-bezier(0.16,1,0.3,1)_0.08s_forwards]"
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
+              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
+              zIndex: 47,
+            }}
+            className="pointer-events-none h-44 w-44 rounded-full border border-orange-200/60 bg-transparent blur-sm animate-[jianlian-optical-shockwave_1.15s_cubic-bezier(0.16,1,0.3,1)_0.18s_forwards]"
           />
         </div>
       )}

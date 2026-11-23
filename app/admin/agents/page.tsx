@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-type AgentTab = "applications" | "whitelist" | "orders";
+type AgentTab = "applications" | "management" | "whitelist" | "orders";
 
 export interface ApiApplication {
   id: string;
@@ -157,7 +157,7 @@ export default function AdminAgentsPage() {
   const searchParams = useSearchParams();
   const rawTab = searchParams.get("tab");
   const activeTab: AgentTab =
-    rawTab === "whitelist" || rawTab === "orders" || rawTab === "applications"
+    rawTab === "management" || rawTab === "whitelist" || rawTab === "orders" || rawTab === "applications"
       ? rawTab
       : "applications";
 
@@ -205,6 +205,46 @@ export default function AdminAgentsPage() {
             );
           }
         }
+      }
+      // 自动扫描前台已开通的商户（jianlian_mch_app_status_<email> === "approved"）并同步到后台列表中，确保前后台信息完全同步
+      let syncedNew = false;
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (!key || !key.startsWith("jianlian_mch_app_status_")) continue;
+        const emailKey = key.replace("jianlian_mch_app_status_", "").trim();
+        if (!emailKey) continue;
+        const statusVal = window.localStorage.getItem(key);
+        if (statusVal === "approved" && !cleanApps.some((a) => a.email === emailKey)) {
+          const savedAppId = window.localStorage.getItem(`jianlian_mch_app_id_${emailKey}`) || `MCH_${Math.floor(10000000 + Math.random() * 90000000)}`;
+          const savedSecret = window.localStorage.getItem(`jianlian_developer_key_${emailKey}`) || "";
+          let savedIps: string[] = [];
+          try {
+            const rawIps = window.localStorage.getItem(`jianlian_mch_whitelist_${emailKey}`);
+            if (rawIps) {
+              const parsedIps = JSON.parse(rawIps);
+              if (Array.isArray(parsedIps)) savedIps = parsedIps.filter(Boolean);
+            }
+          } catch {}
+          cleanApps.unshift({
+            id: `APP_SYNC_${Date.now()}_${i}`,
+            email: emailKey,
+            merchantName: emailKey.split("@")[0] || "平台认证商户",
+            businessScenario: "开放平台标准 API 自动化订单与库存对接",
+            serverIps: savedIps,
+            contact: emailKey,
+            status: "approved",
+            appliedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+            appId: savedAppId,
+            appSecret: savedSecret,
+          });
+          syncedNew = true;
+        }
+      }
+      if (syncedNew) {
+        window.localStorage.setItem(
+          "jianlian_admin_api_applications",
+          JSON.stringify(cleanApps)
+        );
       }
     } catch {}
 
@@ -381,11 +421,9 @@ export default function AdminAgentsPage() {
     toast.success(`商户 ${app.merchantName} API 申请已批准！已分配 AppID: ${freshAppId}`);
   };
 
-  // 驳回
+  // 忽略 API 申请（从待办申请中移除，前台恢复为未申请状态）
   const handleReject = (app: ApiApplication) => {
-    const updatedApps = applications.map((item) =>
-      item.id === app.id ? { ...item, status: "rejected" as const } : item
-    );
+    const updatedApps = applications.filter((item) => item.id !== app.id);
     setApplications(updatedApps);
     window.localStorage.setItem(
       "jianlian_admin_api_applications",
@@ -393,23 +431,23 @@ export default function AdminAgentsPage() {
     );
     window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "unapplied");
     notifySidebarBadgesUpdated();
-    toast.error(`已驳回商户 ${app.merchantName} 的接入申请`);
+    toast.info(`已忽略商户 ${app.merchantName} 的 API 申请`);
   };
 
-  // 回收已开通商户的 API 接入权限
+  // 移除已开通商户的 API 接入权限（移除后需要重新申请）
   const handleRevoke = (app: ApiApplication) => {
-    if (!window.confirm(`确定要回收商户【${app.merchantName}】的 API 接入权限吗？回收后该商户的 AppSecret 将失效且已加白 IP 将被停用。`)) {
+    if (!window.confirm(`确定要移除商户【${app.merchantName}】的 API 权限吗？移除后该商户的 API 凭证将失效，需要重新提交申请才能再次开通。`)) {
       return;
     }
-    const updatedApps = applications.map((item) =>
-      item.id === app.id ? { ...item, status: "revoked" as const } : item
-    );
+    const updatedApps = applications.filter((item) => item.id !== app.id);
     setApplications(updatedApps);
     window.localStorage.setItem(
       "jianlian_admin_api_applications",
       JSON.stringify(updatedApps)
     );
-    window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "revoked");
+    window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "unapplied");
+    window.localStorage.removeItem(`jianlian_mch_app_id_${app.email}`);
+    window.localStorage.removeItem(`jianlian_developer_key_${app.email}`);
 
     // 联动清除该商户的白名单 IP
     const nextWl = whitelists.filter((w) => w.email !== app.email);
@@ -418,7 +456,7 @@ export default function AdminAgentsPage() {
     window.localStorage.removeItem(`jianlian_mch_whitelist_${app.email}`);
 
     notifySidebarBadgesUpdated();
-    toast.success(`已回收商户 ${app.merchantName} 的 API 接入权限及白名单`);
+    toast.success(`已移除商户 ${app.merchantName} 的 API 权限，该商户需重新申请方可开通`);
   };
 
   // 删除白名单 IP
@@ -484,9 +522,23 @@ export default function AdminAgentsPage() {
   );
 
   const filteredApplications = useMemo(() => {
+    const pendingOnly = applications.filter((a) => a.status === "pending");
     const q = search.trim().toLowerCase();
-    if (!q) return applications;
-    return applications.filter(
+    if (!q) return pendingOnly;
+    return pendingOnly.filter(
+      (a) =>
+        a.merchantName.toLowerCase().includes(q) ||
+        a.email.toLowerCase().includes(q) ||
+        a.businessScenario.toLowerCase().includes(q) ||
+        (a.appId && a.appId.toLowerCase().includes(q))
+    );
+  }, [applications, search]);
+
+  const filteredMerchants = useMemo(() => {
+    const approvedOnly = applications.filter((a) => a.status === "approved");
+    const q = search.trim().toLowerCase();
+    if (!q) return approvedOnly;
+    return approvedOnly.filter(
       (a) =>
         a.merchantName.toLowerCase().includes(q) ||
         a.email.toLowerCase().includes(q) ||
@@ -523,6 +575,8 @@ export default function AdminAgentsPage() {
   const currentTotalCount =
     activeTab === "applications"
       ? filteredApplications.length
+      : activeTab === "management"
+      ? filteredMerchants.length
       : activeTab === "whitelist"
       ? filteredWhitelists.length
       : filteredOrders.length;
@@ -533,6 +587,11 @@ export default function AdminAgentsPage() {
   const pagedApplications = useMemo(
     () => filteredApplications.slice((safePage - 1) * pageSize, safePage * pageSize),
     [filteredApplications, safePage, pageSize]
+  );
+
+  const pagedMerchants = useMemo(
+    () => filteredMerchants.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filteredMerchants, safePage, pageSize]
   );
 
   const pagedWhitelists = useMemo(
@@ -679,17 +738,19 @@ export default function AdminAgentsPage() {
 
         {/* 顶部 Tab 切换、搜索框与操作栏（带丝滑滑动指示器） */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-          <div className="relative flex rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs">
+          <div className="relative grid grid-cols-4 rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs">
             <div
               className="absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
               style={{
                 left:
                   activeTab === "applications"
                     ? "4px"
+                    : activeTab === "management"
+                    ? "calc(25% + 2px)"
                     : activeTab === "whitelist"
-                    ? "calc(33.333% + 2px)"
-                    : "calc(66.666% + 1px)",
-                width: "calc(33.333% - 4px)",
+                    ? "calc(50% + 1px)"
+                    : "calc(75% + 0px)",
+                width: "calc(25% - 4px)",
               }}
             />
 
@@ -697,7 +758,7 @@ export default function AdminAgentsPage() {
               type="button"
               onClick={() => switchTab("applications")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
                 activeTab === "applications"
                   ? "text-primary font-black"
                   : "text-slate-600 hover:text-slate-900"
@@ -714,9 +775,23 @@ export default function AdminAgentsPage() {
 
             <button
               type="button"
+              onClick={() => switchTab("management")}
+              className={cn(
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
+                activeTab === "management"
+                  ? "text-primary font-black"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              API管理
+            </button>
+
+            <button
+              type="button"
               onClick={() => switchTab("whitelist")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
                 activeTab === "whitelist"
                   ? "text-primary font-black"
                   : "text-slate-600 hover:text-slate-900"
@@ -730,7 +805,7 @@ export default function AdminAgentsPage() {
               type="button"
               onClick={() => switchTab("orders")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
                 activeTab === "orders"
                   ? "text-primary font-black"
                   : "text-slate-600 hover:text-slate-900"
@@ -748,7 +823,7 @@ export default function AdminAgentsPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={
-                  activeTab === "applications"
+                  activeTab === "applications" || activeTab === "management"
                     ? "搜索商户名称、邮箱或场景..."
                     : activeTab === "whitelist"
                     ? "搜索白名单 IP、商户或备注..."
@@ -772,7 +847,7 @@ export default function AdminAgentsPage() {
           </div>
         </div>
 
-        {/* 1. API 申请记录 Tab（flex-1 撑满到底部，与左侧栏完全持平） */}
+        {/* 1. API 申请记录 Tab（仅管理待审核的 API 申请，审核操作：通过 / 忽略） */}
         {activeTab === "applications" && (
           <AdminListSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <AdminTableViewport>
@@ -795,11 +870,6 @@ export default function AdminAgentsPage() {
                         <td className="px-4 py-3.5">
                           <div className="font-bold text-slate-900">{app.merchantName}</div>
                           <div className="text-[11px] font-mono text-slate-500">{app.email}</div>
-                          {app.appId && (
-                            <div className="mt-0.5 inline-block rounded bg-orange-50 px-1 text-[10px] font-mono font-bold text-primary border border-orange-200">
-                              {app.appId}
-                            </div>
-                          )}
                         </td>
                         <td
                           className="px-4 py-3.5 max-w-[220px] truncate"
@@ -828,67 +898,28 @@ export default function AdminAgentsPage() {
                           {app.appliedAt}
                         </td>
                         <td className="px-4 py-3.5">
-                          {app.status === "approved" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="h-3 w-3" /> 已批准开通
-                            </span>
-                          ) : app.status === "revoked" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700 border border-slate-300">
-                              <XCircle className="h-3 w-3 text-slate-500" /> 已回收权限
-                            </span>
-                          ) : app.status === "pending" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
-                              <Clock className="h-3 w-3 animate-pulse" /> 待管理员审核
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700 border border-red-200">
-                              <XCircle className="h-3 w-3" /> 已拒绝
-                            </span>
-                          )}
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
+                            <Clock className="h-3 w-3 animate-pulse" /> 待管理员审核
+                          </span>
                         </td>
                         <td className="px-4 py-3.5 text-center space-x-2">
-                          {app.status === "pending" ? (
-                            <>
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() => handleApprove(app)}
-                                className="h-7 px-2.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-                              >
-                                通过并加白
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleReject(app)}
-                                className="h-7 px-2.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50"
-                              >
-                                驳回
-                              </Button>
-                            </>
-                          ) : app.status === "approved" ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRevoke(app)}
-                              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
-                            >
-                              回收权限
-                            </Button>
-                          ) : app.status === "revoked" ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => handleApprove(app)}
-                              className="h-7 px-2.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-                            >
-                              重新开通
-                            </Button>
-                          ) : (
-                            <span className="text-slate-400 text-xs">已归档</span>
-                          )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => handleApprove(app)}
+                            className="h-7 px-3 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            通过
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleReject(app)}
+                            className="h-7 px-3 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                          >
+                            忽略
+                          </Button>
                         </td>
                       </tr>
                     ))
@@ -898,10 +929,112 @@ export default function AdminAgentsPage() {
                         <div className="flex flex-col items-center justify-center space-y-1.5">
                           <Code2 className="h-7 w-7 text-slate-300" />
                           <p className="text-sm font-semibold text-slate-700">
-                            暂无商户 API 接入申请记录
+                            暂无待审核的 API 接入申请记录
                           </p>
                           <p className="text-xs text-slate-400">
-                            当真实用户在前台「个人中心 - API 接口」提交申请后，将实时展示在此处并触发红色待办提醒。
+                            当用户在前台「个人中心 - API 接口」提交申请后，将实时展示在此处；审核通过的商户可在「API管理」中查看与管理。
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </AdminTableViewport>
+            {renderPaginationBar()}
+          </AdminListSurface>
+        )}
+
+        {/* 2. API管理 Tab（管理已开通 API 的商户，支持移除 API，移除后需重新申请） */}
+        {activeTab === "management" && (
+          <AdminListSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <AdminTableViewport>
+              <table className="w-full text-left text-xs">
+                <thead className={adminListTableHeadClass}>
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">商户主体 / 邮箱</th>
+                    <th className="px-4 py-3 font-semibold">商户 AppID</th>
+                    <th className="px-4 py-3 font-semibold">业务场景说明</th>
+                    <th className="px-4 py-3 font-semibold">已加白服务器 IP</th>
+                    <th className="px-4 py-3 font-semibold">开通时间</th>
+                    <th className="px-4 py-3 font-semibold">状态</th>
+                    <th className="px-4 py-3 font-semibold text-center">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {pagedMerchants.length > 0 ? (
+                    pagedMerchants.map((app) => {
+                      const merchantWls = whitelists.filter((w) => w.email === app.email);
+                      const displayIps =
+                        merchantWls.length > 0
+                          ? merchantWls.map((w) => w.ip)
+                          : app.serverIps || [];
+                      return (
+                        <tr key={app.id} className={adminListRowClass}>
+                          <td className="px-4 py-3.5">
+                            <div className="font-bold text-slate-900">{app.merchantName}</div>
+                            <div className="text-[11px] font-mono text-slate-500">{app.email}</div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="inline-block rounded bg-orange-50 px-2 py-0.5 text-xs font-mono font-bold text-primary border border-orange-200">
+                              {app.appId || "MCH_ACTIVE"}
+                            </span>
+                          </td>
+                          <td
+                            className="px-4 py-3.5 max-w-[220px] truncate"
+                            title={app.businessScenario}
+                          >
+                            {app.businessScenario}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-slate-800">
+                            {displayIps.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {displayIps.map((ip, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px]"
+                                  >
+                                    {ip}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">暂未加白</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-slate-500 text-[11px]">
+                            {app.appliedAt}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="h-3 w-3" /> 已开通运行中
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRevoke(app)}
+                              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" />
+                              移除 API
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="h-64 text-center text-slate-500">
+                        <div className="flex flex-col items-center justify-center space-y-1.5">
+                          <UserCheck className="h-7 w-7 text-slate-300" />
+                          <p className="text-sm font-semibold text-slate-700">
+                            暂无已开通 API 的商户
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            在「API 申请记录」中审核通过的商户将展示在此处，支持随时移除 API 权限（移除后需重新申请）。
                           </p>
                         </div>
                       </td>

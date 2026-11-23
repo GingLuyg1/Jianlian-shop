@@ -908,8 +908,8 @@ function CategoryButton({
         selectionMotion.item,
         "flex items-center justify-between rounded-xl px-3 py-2 text-left disabled:cursor-default lg:w-full lg:px-3.5 lg:py-3 [-webkit-tap-highlight-color:transparent] transition-all duration-150",
         active
-          ? "border border-[#df8349] bg-gradient-to-r from-[#fddcc2] via-[#fee6d2] to-[#fcd5b5] hover:from-[#fcd3b4] hover:via-[#fde0c8] hover:to-[#fbcba5] text-[#b4480e] shadow-[0_3px_12px_-2px_rgba(216,110,49,0.28)] ring-1 ring-[#e5925d]/55 font-bold"
-          : "border border-slate-100/90 bg-white/80 text-foreground hover:border-orange-200/70 hover:bg-orange-50/55"
+          ? "border border-[#e6a679]/65 bg-gradient-to-r from-[#fde6d4] via-[#fef0e4] to-[#fce1ca] hover:from-[#fcdec7] hover:via-[#fee9d9] hover:to-[#fbd9be] text-[#c85e22] shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_4px_12px_-3px_rgba(161,92,42,0.16)] font-bold"
+          : "border border-slate-100/90 bg-white/80 text-foreground hover:border-orange-200/55 hover:bg-[#fff7f0]/90"
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-3">

@@ -144,7 +144,7 @@ export default function AdminSidebar() {
   };
 
   const getChildBadgeCount = (href: string) => {
-    if (href === "/admin/agents?tab=applications") return pendingBadges.apiApplications;
+    if (href === "/admin/agents" || href === "/admin/agents?tab=applications") return pendingBadges.apiApplications;
     if (href === "/admin/tickets") return pendingBadges.tickets;
     return 0;
   };

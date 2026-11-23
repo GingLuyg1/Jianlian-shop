@@ -393,13 +393,13 @@ export default function AdminTicketsPage() {
               </span>
             </button>
 
-            {/* 4. 标记（黄色） */}
+            {/* 4. 标记（黄色，始终预留数量位置并固定最小宽度，避免标记与取消标记跳动） */}
             <button
               ref={(el) => { tabBtnRefs.current.flagged = el; }}
               type="button"
               onClick={() => setActiveTab("flagged")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
+                "relative z-10 flex min-w-[92px] items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
                 activeTab === "flagged"
                   ? "text-amber-600 font-black"
                   : "text-slate-600 hover:text-amber-600"
@@ -407,11 +407,14 @@ export default function AdminTicketsPage() {
             >
               <Bookmark className="h-3.5 w-3.5 shrink-0 text-amber-500" />
               <span>标记</span>
-              {stats.flagged > 0 && (
-                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] text-white font-mono font-bold">
-                  {stats.flagged}
-                </span>
-              )}
+              <span
+                className={cn(
+                  "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-mono font-bold transition-colors",
+                  stats.flagged > 0 ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-600"
+                )}
+              >
+                {stats.flagged}
+              </span>
             </button>
           </div>
 
@@ -567,31 +570,20 @@ export default function AdminTicketsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-100">
-                        <Paperclip className="mr-1.5 h-3.5 w-3.5 text-primary" />
-                        <span>上传附件/图片</span>
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*,.pdf,.txt,.csv,.zip,.json,.doc,.docx,.xls,.xlsx"
-                          onChange={handleAttachmentFiles}
-                          className="hidden"
-                        />
-                      </label>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={handleToggleFlag}
                         className={cn(
-                          "rounded-xl text-xs font-bold transition-all",
+                          "w-[104px] justify-center rounded-xl text-xs font-bold transition-all",
                           currentTicket.isFlagged
                             ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
                             : "text-slate-700 hover:bg-slate-100"
                         )}
                       >
-                        <Bookmark className={cn("h-3.5 w-3.5 mr-1.5", currentTicket.isFlagged ? "fill-amber-500 text-amber-500" : "text-slate-400")} />
-                        {currentTicket.isFlagged ? "已标记 (取消标记)" : "标记工单"}
+                        <Bookmark className={cn("h-3.5 w-3.5 mr-1.5 shrink-0", currentTicket.isFlagged ? "fill-amber-500 text-amber-500" : "text-slate-400")} />
+                        <span>{currentTicket.isFlagged ? "取消标记" : "标记工单"}</span>
                       </Button>
                     </div>
                   </div>
@@ -699,7 +691,7 @@ export default function AdminTicketsPage() {
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       onPaste={handlePasteImages}
-                      placeholder="输入官方处理结果、答复方案或操作指引（支持直接 Ctrl+V 粘贴截图，或点击右上角/下方添加附件）..."
+                      placeholder="输入官方处理结果、答复方案或操作指引（支持直接 Ctrl+V 粘贴截图，或点击左下方添加图片/文件附件）..."
                       className="rounded-xl border-slate-200 bg-white text-xs shadow-none resize-none"
                     />
 

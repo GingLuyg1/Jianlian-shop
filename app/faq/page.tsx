@@ -302,23 +302,19 @@ export default function FAQPage() {
   // 提交新建工单
   const handleSubmitTicket = (e: FormEvent) => {
     e.preventDefault();
-    const trimmedTitle = formData.title.trim();
     const trimmedDesc = formData.description.trim();
-
-    if (!trimmedTitle || trimmedTitle.length < 4) {
-      toast.error("请填写完整的问题标题（至少4个字）");
+    if (!trimmedDesc || trimmedDesc.length < 6) {
+      toast.error("请详细描述遇到的问题（至少6个字）");
       return;
     }
-    if (!trimmedDesc || trimmedDesc.length < 10) {
-      toast.error("请详细描述遇到的问题（至少10个字）");
-      return;
-    }
+    const firstLine = trimmedDesc.split(/\r?\n/)[0]?.trim() || trimmedDesc;
+    const derivedTitle = formData.title.trim() || (firstLine.length > 28 ? `${firstLine.slice(0, 28)}...` : firstLine);
 
     setSubmitting(true);
     const newId = generateTicketId();
     const newTicket: TicketItem = {
       id: newId,
-      title: trimmedTitle,
+      title: derivedTitle,
       type: formData.type,
       priority: formData.priority,
       status: "processing",
@@ -712,7 +708,7 @@ export default function FAQPage() {
                       </div>
                     </div>
 
-                    <div className="flex-1 space-y-3.5 overflow-y-auto py-3 pr-1 text-xs">
+                    <div className="flex-1 space-y-3.5 overflow-y-auto px-1 py-3 text-xs">
                       {/* 问题类型与优先级 */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div ref={typeDropdownRef} className="space-y-1 relative">
@@ -821,33 +817,18 @@ export default function FAQPage() {
                         </div>
                       </div>
 
-                      {/* 问题标题 */}
-                      <div className="space-y-1">
-                        <Label htmlFor="title" className="text-xs font-bold text-slate-800">
-                          问题标题
-                        </Label>
-                        <Input
-                          id="title"
-                          value={formData.title}
-                          onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
-                          placeholder="例如：订单已支付但未收到激活卡密 / USDT充值未到账"
-                          className="h-9 rounded-xl border-slate-200/90 text-xs shadow-none"
-                          required
-                        />
-                      </div>
-
-                      {/* 问题详细描述 */}
+                      {/* 问题描述（合并原标题与详细描述，默认和最低高度为 5 行，右下角支持拖拽调整高度） */}
                       <div className="space-y-1">
                         <Label htmlFor="description" className="text-xs font-bold text-slate-800">
                           问题描述
                         </Label>
                         <Textarea
                           id="description"
-                          rows={4}
+                          rows={5}
                           value={formData.description}
                           onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                          placeholder="请详细描述遇到的问题、页面报错信息、已尝试的操作；可在当前页面直接 Ctrl+V 粘贴截图..."
-                          className="rounded-xl border-slate-200/90 text-xs shadow-none resize-none"
+                          placeholder="请详细描述遇到的问题（如：订单已支付但未收到激活卡密 / USDT充值未到账、页面报错信息等）；可在当前页面直接 Ctrl+V 粘贴截图..."
+                          className="min-h-[120px] resize-y rounded-xl border-slate-200/90 text-xs leading-5 shadow-none"
                           required
                         />
                       </div>

@@ -65,7 +65,7 @@ export interface ApiApplicationRecord {
   businessScenario: string;
   serverIps: string[];
   contact: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "revoked";
   appliedAt: string;
   appId?: string;
   appSecret?: string;
@@ -139,7 +139,7 @@ export default function AccountApiPage() {
       ? `${window.location.origin}/api/v1`
       : "https://www.jianlian.shop/api/v1";
 
-  // 读取或初始化商户 API 状态
+  // 读取或初始化商户 API 状态（与后台「代理与分销 - API管理 / API申请记录」保持严格同步）
   useEffect(() => {
     if (typeof window === "undefined") return;
     const userEmail = email || "developer@example.com";
@@ -148,35 +148,84 @@ export default function AccountApiPage() {
     const appIdKey = `jianlian_mch_app_id_${userEmail}`;
     const ipKey = `jianlian_mch_whitelist_${userEmail}`;
 
-    const savedStatus = window.localStorage.getItem(statusKey) as MerchantApiStatus | null;
+    const savedStatus = window.localStorage.getItem(statusKey);
     const savedKey = window.localStorage.getItem(keyKey);
     const savedAppId = window.localStorage.getItem(appIdKey);
     const savedIps = window.localStorage.getItem(ipKey);
 
-    if (savedStatus) {
-      setApiStatus(savedStatus);
-      if (savedKey) setApiKey(savedKey);
-      if (savedAppId) setAppId(savedAppId);
-      if (savedIps) {
-        try {
-          const parsedIps = JSON.parse(savedIps);
-          setWhitelistIps(Array.isArray(parsedIps) ? parsedIps.filter((ip) => ip && ip !== "124.220.100.12") : []);
-        } catch {
-          setWhitelistIps(savedIps !== "124.220.100.12" ? [savedIps] : []);
+    const ensureAdminMerchantSynced = (targetAppId: string, targetSecret: string, ips: string[]) => {
+      try {
+        const raw = window.localStorage.getItem("jianlian_admin_api_applications");
+        const list: ApiApplicationRecord[] = raw ? JSON.parse(raw) : [];
+        const existingIdx = list.findIndex((item) => item && item.email === userEmail);
+        if (existingIdx >= 0) {
+          if (list[existingIdx].status === "revoked" || list[existingIdx].status === "rejected") {
+            window.localStorage.setItem(statusKey, "unapplied");
+            setApiStatus("unapplied");
+            return false;
+          }
+          if (list[existingIdx].status !== "approved" || !list[existingIdx].appId) {
+            list[existingIdx] = {
+              ...list[existingIdx],
+              status: "approved",
+              appId: list[existingIdx].appId || targetAppId,
+              appSecret: list[existingIdx].appSecret || targetSecret,
+            };
+            window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(list));
+          }
+        } else {
+          list.unshift({
+            id: `APP_SYNC_${Math.abs(hashString(userEmail))}`,
+            email: userEmail,
+            merchantName: userEmail.split("@")[0] || "平台认证商户",
+            businessScenario: "开放平台标准 API 自动化订单与库存对接",
+            serverIps: ips,
+            contact: userEmail,
+            status: "approved",
+            appliedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+            appId: targetAppId,
+            appSecret: targetSecret,
+          });
+          window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(list));
         }
+      } catch {}
+      return true;
+    };
+
+    if (savedStatus === "revoked" || savedStatus === "unapplied") {
+      setApiStatus("unapplied");
+      setWhitelistIps([]);
+      return;
+    }
+
+    if (savedStatus === "pending") {
+      setApiStatus("pending");
+      return;
+    }
+
+    const freshKey = savedKey || generateApiKey();
+    const generatedId = savedAppId || `MCH_${Math.abs(hashString(userEmail)).toString().slice(0, 8).padEnd(8, "0")}`;
+    let parsedIpsList: string[] = [];
+    if (savedIps) {
+      try {
+        const parsedIps = JSON.parse(savedIps);
+        parsedIpsList = Array.isArray(parsedIps) ? parsedIps.filter((ip) => ip && ip !== "124.220.100.12") : [];
+      } catch {
+        parsedIpsList = savedIps !== "124.220.100.12" ? [savedIps] : [];
       }
-    } else {
-      // 默认开通商户开发者状态
-      const freshKey = savedKey || generateApiKey();
-      const generatedId = `MCH_${Math.abs(hashString(userEmail)).toString().slice(0, 8).padEnd(8, "0")}`;
+    }
+
+    if (ensureAdminMerchantSynced(generatedId, freshKey, parsedIpsList)) {
       setApiStatus("approved");
       setApiKey(freshKey);
       setAppId(generatedId);
-      setWhitelistIps([]);
+      setWhitelistIps(parsedIpsList);
       window.localStorage.setItem(statusKey, "approved");
       window.localStorage.setItem(keyKey, freshKey);
       window.localStorage.setItem(appIdKey, generatedId);
-      window.localStorage.setItem(ipKey, JSON.stringify([]));
+      if (!savedIps) {
+        window.localStorage.setItem(ipKey, JSON.stringify([]));
+      }
     }
   }, [email]);
 
@@ -245,9 +294,10 @@ export default function AccountApiPage() {
         window.localStorage.setItem(statusKey, "pending");
         try {
           const raw = window.localStorage.getItem("jianlian_admin_api_applications");
-          const list: ApiApplicationRecord[] = raw ? JSON.parse(raw) : [];
+          const list: ApiApplicationRecord[] = raw ? JSON.parse(raw).filter((item: ApiApplicationRecord) => item && item.email !== userEmail) : [];
           list.unshift(newRecord);
           window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(list));
+          window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
         } catch {}
       }
       setApiStatus("pending");
@@ -678,7 +728,7 @@ export default function AccountApiPage() {
                       {DEFAULT_CALL_LOGS.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="py-10 text-center text-xs text-slate-400">
-                            暂无真实接口调用记录
+                            暂无接口调用记录
                           </td>
                         </tr>
                       ) : (
@@ -737,7 +787,7 @@ export default function AccountApiPage() {
                       {DEFAULT_API_ORDERS.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="py-10 text-center text-xs text-slate-400">
-                            暂无真实 API 订单记录
+                            暂无API 订单记录
                           </td>
                         </tr>
                       ) : (
@@ -826,7 +876,7 @@ export default function AccountApiPage() {
                   {pagedCallLogs.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
-                        暂无真实接口调用日志
+                        暂无接口调用日志
                       </td>
                     </tr>
                   ) : (
@@ -935,7 +985,7 @@ export default function AccountApiPage() {
                   {pagedOrders.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
-                        暂无符合条件的 API 订单记录
+                        暂无 API 订单记录
                       </td>
                     </tr>
                   ) : (

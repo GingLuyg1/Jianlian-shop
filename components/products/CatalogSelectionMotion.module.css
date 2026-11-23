@@ -11,9 +11,11 @@
   transition:opacity 180ms ease-out,transform 220ms cubic-bezier(.22,1,.36,1),box-shadow 220ms ease-out;
 }
 .card::after {
-  content:""; position:absolute; pointer-events:none; left:0; top:50%;
-  width:3px; height:calc(100% - 28px); border-radius:999px;
-  background:#df7334; transform:translateY(-50%) scaleY(0); transform-origin:center;
+  content:""; position:absolute; pointer-events:none; left:5px; top:50%;
+  width:3px; height:calc(100% - 36px); border-radius:999px;
+  background:linear-gradient(180deg,#e98a4e 0%,#df7334 50%,#c85e22 100%);
+  box-shadow:0 1px 4px rgb(223 115 52 / 28%);
+  transform:translateY(-50%) scaleY(0); transform-origin:center;
   opacity:0; transition:transform 260ms cubic-bezier(.22,1,.36,1),opacity 180ms ease-out;
 }
 .card [data-selection-icon] { transform-origin:center; transition:transform 260ms cubic-bezier(.22,1,.36,1); }
