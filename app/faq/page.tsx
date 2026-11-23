@@ -89,7 +89,35 @@ export default function FAQPage() {
   // 下拉与大图预览
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
+  const typeDropdownRef = useRef<HTMLDivElement>(null);
+  const priorityDropdownRef = useRef<HTMLDivElement>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  // 下拉弹窗点空白区域或按 ESC 自动收回
+  useEffect(() => {
+    if (!typeDropdownOpen && !priorityDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as Node | null;
+      if (typeDropdownOpen && typeDropdownRef.current && !typeDropdownRef.current.contains(target)) {
+        setTypeDropdownOpen(false);
+      }
+      if (priorityDropdownOpen && priorityDropdownRef.current && !priorityDropdownRef.current.contains(target)) {
+        setPriorityDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setTypeDropdownOpen(false);
+        setPriorityDropdownOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [typeDropdownOpen, priorityDropdownOpen]);
 
   // 用户登录信息
   const [userEmail, setUserEmail] = useState<string>("");
@@ -410,7 +438,7 @@ export default function FAQPage() {
         <div className="pointer-events-none fixed -left-32 -top-24 h-[440px] w-[440px] rounded-full bg-gradient-to-br from-[#ffdca8]/35 via-[#ffba75]/20 to-transparent blur-3xl" />
         <div className="pointer-events-none fixed -right-24 top-1/3 h-[500px] w-[500px] rounded-full bg-gradient-to-tr from-[#ffe6cc]/40 via-[#ffd5ab]/25 to-transparent blur-3xl" />
 
-        <div className="relative mx-auto w-full max-w-[1640px] flex-1 min-h-0 flex flex-col gap-3">
+        <div className="relative mx-auto w-full max-w-[1540px] flex-1 min-h-0 flex flex-col gap-3">
           {/* 1. 顶部工单中心 Header（精炼紧凑） */}
           <div className="relative shrink-0 overflow-hidden rounded-[22px] border border-orange-100/70 bg-gradient-to-r from-white/95 via-[#fffaf5]/90 to-white/95 px-5 py-3 shadow-[0_8px_24px_rgba(240,115,36,0.04)] backdrop-blur-xl ring-1 ring-white/80">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -457,9 +485,9 @@ export default function FAQPage() {
           </div>
 
           {/* 2. 主体响应式一页屏工作台 */}
-          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-12 flex-1 min-h-0 overflow-hidden">
-            {/* 左栏：我的工单列表 (4 列，支持内部独立平滑滚动) */}
-            <div className="lg:col-span-4 flex flex-col rounded-[24px] border border-orange-100/70 bg-white/90 p-4 shadow-[0_8px_24px_rgba(240,115,36,0.03)] backdrop-blur-xl h-full overflow-hidden">
+          <div className="flex flex-col lg:flex-row gap-3.5 flex-1 min-h-0 overflow-hidden">
+            {/* 左栏：我的工单列表 (320px 黄金宽度，支持内部独立平滑滚动) */}
+            <div className="w-full lg:w-[320px] shrink-0 flex flex-col rounded-[24px] border border-orange-100/70 bg-white/90 p-4 shadow-[0_8px_24px_rgba(240,115,36,0.03)] backdrop-blur-xl h-full overflow-hidden">
               {/* 列表头部 */}
               <div className="mb-3 flex items-center justify-between border-b border-orange-50/80 pb-2.5 shrink-0">
                 <div>
@@ -627,7 +655,7 @@ export default function FAQPage() {
             </div>
 
             {/* 中栏与右栏组合：自适应一页屏 */}
-            <div className="lg:col-span-8 flex flex-col lg:flex-row gap-4 h-full overflow-hidden">
+            <div className="flex-1 min-w-0 flex flex-col lg:flex-row gap-3.5 h-full overflow-hidden">
               {/* 中栏：新建工单表单 OR 工单消息互动流 */}
               <div className="flex-1 flex flex-col rounded-[24px] border border-orange-100/70 bg-white/90 p-5 shadow-[0_8px_24px_rgba(240,115,36,0.03)] backdrop-blur-xl h-full overflow-hidden">
                 {isCreating ? (
@@ -650,7 +678,7 @@ export default function FAQPage() {
                     <div className="flex-1 space-y-3.5 overflow-y-auto py-3 pr-1 text-xs">
                       {/* 问题类型与优先级 */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1 relative">
+                        <div ref={typeDropdownRef} className="space-y-1 relative">
                           <Label className="text-xs font-bold text-slate-800">问题类型</Label>
                           <div
                             onClick={() => setTypeDropdownOpen(!typeDropdownOpen)}
@@ -689,7 +717,7 @@ export default function FAQPage() {
                           )}
                         </div>
 
-                        <div className="space-y-1 relative">
+                        <div ref={priorityDropdownRef} className="space-y-1 relative">
                           <Label className="text-xs font-bold text-slate-800">处理优先级</Label>
                           <div
                             onClick={() => setPriorityDropdownOpen(!priorityDropdownOpen)}

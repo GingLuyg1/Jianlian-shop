@@ -32,10 +32,32 @@ function displayValue(kind: Kind, key: string, row: Row) {
   if (key === 'business_type') return businessTypeLabel(v);
   if (key === 'direction') return directionLabel(v);
   if (key === 'currency') return currencyLabel(v);
-  if (key === 'status') return kind === 'supplier-queue' ? supplierStatusLabel(v, row.retryable) : statusLabel(v);
+  if (key === 'status') {
+    if (kind === 'supplier-queue') {
+      const s = String(v);
+      const isOk = s === 'completed';
+      const isFailed = s === 'permanent_failed' || s === 'retryable_failed';
+      const isProc = s === 'processing';
+      const cls = isOk
+        ? 'inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200'
+        : isFailed
+        ? 'inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700 border border-rose-200'
+        : isProc
+        ? 'inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700 border border-blue-200'
+        : 'inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700 border border-amber-200';
+      return <span className={cls}>{supplierStatusLabel(v, row.retryable)}</span>;
+    }
+    return statusLabel(v);
+  }
   if (key === 'heartbeat_status') return workerStatusLabel(v);
   if (['timer_enabled','timer_active','snapshot_fresh','heartbeat_stale','retryable'].includes(key)) return booleanLabel(v);
-  if (key.endsWith('_at') || key === 'last_successful_run') return beijingDateTime(v);
+  if (key.endsWith('_at') || key === 'last_successful_run') {
+    if (v == null || v === '') return '—';
+    const date = new Date(String(v));
+    if (Number.isNaN(date.getTime())) return String(v);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  }
   return value(v);
 }
 
@@ -67,9 +89,31 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
   }, [kind, filters, page, revision]);
   const change = (key: string, next: string) => { setFilters(old => ({ ...old, [key]: next })); setPage(1); };
   const columns = kind === 'ledger' ? ledgerColumns : queueColumns;
-  const title = kind === 'worker' ? '自动任务运行状态' : kind === 'ledger' ? '全历史余额流水' : '供应商自动采购任务';
+  const title = kind === 'worker' ? '自动任务运行状态' : kind === 'ledger' ? '全历史余额流水' : '供应商采购订单';
+  const description = kind === 'ledger'
+    ? '查看全部历史余额流水，不提供调账或删除。'
+    : kind === 'worker'
+    ? workerHelpText
+    : '查看供应商采购订单执行进度、平台回传单号与耗时流水，数据只读受控。';
   const stats = listPagination(total, page, 50);
-  return <AdminPageShell variant="v2" title={title} description={kind === 'ledger' ? '查看全部历史余额流水，不提供调账或删除。' : kind === 'worker' ? workerHelpText : '这里只用于查看自动采购进度，不能在这里重新采购或强制完成。'}
+
+  const setQuickDate = (days: number | null) => {
+    if (days === null) {
+      setFilters(old => ({ ...old, start: '', end: '' }));
+      setPage(1);
+      return;
+    }
+    const endD = new Date();
+    const startD = new Date();
+    startD.setDate(startD.getDate() - days);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const startStr = `${startD.getFullYear()}-${pad(startD.getMonth() + 1)}-${pad(startD.getDate())}`;
+    const endStr = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+    setFilters(old => ({ ...old, start: startStr, end: endStr }));
+    setPage(1);
+  };
+
+  return <AdminPageShell variant="v2" title={title} description={description}
     actions={<Button variant="outline" onClick={() => setRevision(v => v + 1)} disabled={loading}>刷新</Button>}>
     <AdminListSurface>
       {kind !== 'worker' && <div className="grid shrink-0 grid-cols-1 gap-2 border-b p-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -79,6 +123,15 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
         </select>
         <Input aria-label="开始日期（范围见说明）" type="date" value={filters.start ?? ''} onChange={e => change('start', e.target.value)} />
         <Input aria-label="结束日期（范围见说明）" type="date" value={filters.end ?? ''} onChange={e => change('end', e.target.value)} />
+        {kind === 'supplier-queue' && (
+          <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2 lg:col-span-4 pt-1">
+            <span className="text-xs font-semibold text-slate-500 mr-1">快捷时间：</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => setQuickDate(0)} className="h-7 px-2.5 rounded-lg text-xs">今天</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setQuickDate(7)} className="h-7 px-2.5 rounded-lg text-xs">近 7 天</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setQuickDate(30)} className="h-7 px-2.5 rounded-lg text-xs">近 30 天</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setQuickDate(null)} className="h-7 px-2.5 rounded-lg text-xs text-slate-500">重置日期</Button>
+          </div>
+        )}
         {kind === 'ledger' && <>
           <select aria-label="业务类型" className="min-h-11 rounded-md border px-3" value={filters.business_type ?? ''} onChange={e => change('business_type', e.target.value)}><option value="">全部业务类型</option>{ledgerBusinessOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
           <select aria-label="方向" className="min-h-11 rounded-md border px-3" value={filters.direction ?? ''} onChange={e => change('direction', e.target.value)}><option value="">全部方向</option><option value="credit">余额增加</option><option value="debit">余额扣减</option></select>

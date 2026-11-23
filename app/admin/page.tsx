@@ -807,7 +807,13 @@ export default function AdminDashboardPage() {
         .order("created_at", { ascending: false }).limit(7);
       if (rechargeResult.error) throw new Error("RECENT_RECHARGES_UNAVAILABLE");
       setData({ ...nextData,
-        recentOrders: recent.orders.slice(0, 7).map(order => ({ ...order, product_name: order.items?.map(item => item.product_name).filter(Boolean).join("、") || order.product_name || "数字商品" })),
+        recentOrders: recent.orders.slice(0, 7).map((order: any) => {
+          const items = order.order_items || order.items;
+          const resolvedName = Array.isArray(items) && items.length > 0
+            ? items.map((i: any) => i.product_name).filter(Boolean).join("、")
+            : (order.product_name || "数字商品");
+          return { ...order, product_name: resolvedName };
+        }),
         recentRecharges: (rechargeResult.data ?? []) as DashboardRecharge[],
       });
       setLastRefreshedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
@@ -2291,7 +2297,7 @@ function RecentOrdersCard({ rows, loading }: { rows: DashboardOrder[]; loading: 
       rows={rows.slice(0, 7).map((order) => [
         formatDateTime(order.created_at),
         order.order_no,
-        order.product_name ?? "数字商品",
+        order.product_name || (order as any).order_items?.map((i: any) => i.product_name).filter(Boolean).join("、") || "数字商品",
         formatMoney(order.total_amount),
         `${getPaymentStatusLabel(order.payment_status as any)} / ${getOrderStatusLabel(order.status as any)}`,
       ])}

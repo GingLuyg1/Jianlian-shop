@@ -68,7 +68,7 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     routePrefixes: ["/admin/suppliers", "/admin/supplier-fulfillment"],
     children: [
       { label: "供应商管理", href: "/admin/suppliers" },
-      { label: "供应商履约", href: "/admin/supplier-fulfillment" },
+      { label: "供应商采购订单", href: "/admin/supplier-fulfillment" },
     ],
   },
   {

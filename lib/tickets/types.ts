@@ -43,6 +43,7 @@ export interface TicketItem {
   createdAt: string;
   updatedAt: string;
   hasUnreadReply?: boolean;
+  isFlagged?: boolean;
   messages: TicketMessage[];
 }
 

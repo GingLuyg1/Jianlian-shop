@@ -48,7 +48,7 @@ export interface ApiApplication {
   businessScenario: string;
   serverIps: string[];
   contact: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "revoked";
   appliedAt: string;
   appId?: string;
   appSecret?: string;
@@ -394,6 +394,31 @@ export default function AdminAgentsPage() {
     window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "unapplied");
     notifySidebarBadgesUpdated();
     toast.error(`已驳回商户 ${app.merchantName} 的接入申请`);
+  };
+
+  // 回收已开通商户的 API 接入权限
+  const handleRevoke = (app: ApiApplication) => {
+    if (!window.confirm(`确定要回收商户【${app.merchantName}】的 API 接入权限吗？回收后该商户的 AppSecret 将失效且已加白 IP 将被停用。`)) {
+      return;
+    }
+    const updatedApps = applications.map((item) =>
+      item.id === app.id ? { ...item, status: "revoked" as const } : item
+    );
+    setApplications(updatedApps);
+    window.localStorage.setItem(
+      "jianlian_admin_api_applications",
+      JSON.stringify(updatedApps)
+    );
+    window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "revoked");
+
+    // 联动清除该商户的白名单 IP
+    const nextWl = whitelists.filter((w) => w.email !== app.email);
+    setWhitelists(nextWl);
+    window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(nextWl));
+    window.localStorage.removeItem(`jianlian_mch_whitelist_${app.email}`);
+
+    notifySidebarBadgesUpdated();
+    toast.success(`已回收商户 ${app.merchantName} 的 API 接入权限及白名单`);
   };
 
   // 删除白名单 IP
@@ -807,6 +832,10 @@ export default function AdminAgentsPage() {
                             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
                               <CheckCircle2 className="h-3 w-3" /> 已批准开通
                             </span>
+                          ) : app.status === "revoked" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700 border border-slate-300">
+                              <XCircle className="h-3 w-3 text-slate-500" /> 已回收权限
+                            </span>
                           ) : app.status === "pending" ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
                               <Clock className="h-3 w-3 animate-pulse" /> 待管理员审核
@@ -838,6 +867,25 @@ export default function AdminAgentsPage() {
                                 驳回
                               </Button>
                             </>
+                          ) : app.status === "approved" ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRevoke(app)}
+                              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                            >
+                              回收权限
+                            </Button>
+                          ) : app.status === "revoked" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleApprove(app)}
+                              className="h-7 px-2.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                            >
+                              重新开通
+                            </Button>
                           ) : (
                             <span className="text-slate-400 text-xs">已归档</span>
                           )}

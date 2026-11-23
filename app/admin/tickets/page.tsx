@@ -6,6 +6,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowRight,
+  Bookmark,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -113,10 +114,12 @@ const INITIAL_DEMO_TICKETS: TicketItem[] = [
   },
 ];
 
+type AdminTicketTab = "all" | "processing" | "completed" | "flagged";
+
 export default function AdminTicketsPage() {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>("GD-20261122-140215-9F1C");
-  const [activeTab, setActiveTab] = useState<"all" | "processing" | "completed">("processing");
+  const [activeTab, setActiveTab] = useState<AdminTicketTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   // 回复表单状态
@@ -173,11 +176,14 @@ export default function AdminTicketsPage() {
   const stats = useMemo(() => {
     const processing = tickets.filter((t) => t.status === "processing").length;
     const completed = tickets.filter((t) => t.status === "completed").length;
+    const flagged = tickets.filter((t) => Boolean(t.isFlagged)).length;
     const urgent = tickets.filter((t) => t.priority === "urgent" || t.priority === "emergency").length;
     return {
+      all: tickets.length,
       total: tickets.length,
       processing,
       completed,
+      flagged,
       urgent,
     };
   }, [tickets]);
@@ -187,6 +193,7 @@ export default function AdminTicketsPage() {
     return tickets.filter((t) => {
       if (activeTab === "processing" && t.status !== "processing") return false;
       if (activeTab === "completed" && t.status !== "completed") return false;
+      if (activeTab === "flagged" && !t.isFlagged) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchId = t.id.toLowerCase().includes(q);
@@ -206,7 +213,7 @@ export default function AdminTicketsPage() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   };
 
-  // 管理员发送官方答复
+  // 管理员发送官方答复（自动转换为已解决/已处理状态）
   const handleAdminReply = (e: FormEvent) => {
     e.preventDefault();
     if (!currentTicket || submittingReply) return;
@@ -225,10 +232,10 @@ export default function AdminTicketsPage() {
       createdAt: getNowFormatted(),
     };
 
-    const nextStatus: TicketStatus = markAsCompleted ? "completed" : "processing";
+    // 给客户回复后，处理状态自动转换为已处理（completed）
     const updatedTicket: TicketItem = {
       ...currentTicket,
-      status: nextStatus,
+      status: "completed",
       updatedAt: getNowFormatted(),
       hasUnreadReply: true, // 前台用户端显示有未读
       messages: [...currentTicket.messages, newMsg],
@@ -239,14 +246,24 @@ export default function AdminTicketsPage() {
     setReplyText("");
     setSubmittingReply(false);
 
-    toast.success(
-      markAsCompleted
-        ? `答复已发送并已将工单【${currentTicket.id}】标记为已完成！`
-        : `官方答复已发送给客户！`
-    );
+    toast.success(`答复已发送，工单【${currentTicket.id}】状态已自动更新为「已处理」！`);
   };
 
-  // 快速结单
+  // 切换工单标记状态（用于收录进“标记”选项卡）
+  const handleToggleFlag = () => {
+    if (!currentTicket) return;
+    const nextFlag = !currentTicket.isFlagged;
+    const updatedTicket: TicketItem = {
+      ...currentTicket,
+      isFlagged: nextFlag,
+      updatedAt: getNowFormatted(),
+    };
+    const nextTickets = tickets.map((t) => (t.id === currentTicket.id ? updatedTicket : t));
+    saveTickets(nextTickets);
+    toast.success(nextFlag ? "已标记此工单（已收录至「标记」选项卡）" : "已取消对该工单的标记");
+  };
+
+  // 快速切换结单/处理中状态
   const handleToggleStatus = () => {
     if (!currentTicket) return;
     const nextStatus: TicketStatus = currentTicket.status === "completed" ? "processing" : "completed";
@@ -271,54 +288,7 @@ export default function AdminTicketsPage() {
       description="统一处理前台用户提交的订单售后、充值异常、账号咨询与接口对接工单，12 小时内快速答复并闭环解决。"
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        {/* 顶部统计面板 */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-semibold">待处理工单</span>
-              <Clock className="h-4 w-4 text-orange-500" />
-            </div>
-            <div className="mt-2 text-2xl font-black font-mono text-orange-600">
-              {stats.processing}
-            </div>
-            <div className="mt-1 text-[11px] text-orange-600/90 font-medium">需在 12 小时内给答复</div>
-          </div>
-
-          <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-semibold">已解决完成工单</span>
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            </div>
-            <div className="mt-2 text-2xl font-black font-mono text-slate-900">
-              {stats.completed}
-            </div>
-            <div className="mt-1 text-[11px] text-emerald-600 font-medium">已答复并结单归档</div>
-          </div>
-
-          <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-semibold">高优先级 / 加急单</span>
-              <Zap className="h-4 w-4 text-amber-500" />
-            </div>
-            <div className="mt-2 text-2xl font-black font-mono text-slate-900">
-              {stats.urgent}
-            </div>
-            <div className="mt-1 text-[11px] text-amber-600 font-medium">包含充值未到账与紧急工单</div>
-          </div>
-
-          <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-semibold">12小时 SLA 达标率</span>
-              <ShieldCheck className="h-4 w-4 text-blue-600" />
-            </div>
-            <div className="mt-2 text-2xl font-black font-mono text-blue-600">
-              100%
-            </div>
-            <div className="mt-1 text-[11px] text-blue-600 font-medium">客服服务满意度 99.8%</div>
-          </div>
-        </div>
-
-        {/* 顶部 Tab 切换与搜索栏（带丝滑滑动指示器） */}
+        {/* 顶部 Tab 切换与搜索栏（带丝滑滑动指示器：全部工单 · 待处理 · 已处理 · 标记） */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 pb-3">
           <div className="relative flex rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs">
             {/* 动态平滑滑动的白色高光药丸背景指示器 */}
@@ -326,27 +296,48 @@ export default function AdminTicketsPage() {
               className="absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
               style={{
                 left:
-                  activeTab === "processing"
+                  activeTab === "all"
                     ? "4px"
-                    : activeTab === "all"
-                    ? "calc(33.333% + 2px)"
-                    : "calc(66.666% + 1px)",
-                width: "calc(33.333% - 4px)",
+                    : activeTab === "processing"
+                    ? "calc(25% + 2px)"
+                    : activeTab === "completed"
+                    ? "calc(50% + 1px)"
+                    : "calc(75% + 0px)",
+                width: "calc(25% - 4px)",
               }}
             />
 
+            {/* 1. 全部工单 */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("all")}
+              className={cn(
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                activeTab === "all"
+                  ? "text-slate-900 font-black"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              全部工单
+              <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-slate-200 px-1.5 text-[10px] text-slate-700 font-mono font-bold">
+                {stats.all}
+              </span>
+            </button>
+
+            {/* 2. 待处理（红色） */}
             <button
               type="button"
               onClick={() => setActiveTab("processing")}
               className={cn(
                 "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
                 activeTab === "processing"
-                  ? "text-primary font-black"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "text-red-600 font-black"
+                  : "text-slate-600 hover:text-red-600"
               )}
             >
-              <Clock className="h-3.5 w-3.5" />
-              待处理中
+              <Clock className="h-3.5 w-3.5 text-red-500" />
+              待处理
               {stats.processing > 0 && (
                 <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] text-white font-mono font-bold">
                   {stats.processing}
@@ -354,32 +345,42 @@ export default function AdminTicketsPage() {
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("all")}
-              className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
-                activeTab === "all"
-                  ? "text-primary font-black"
-                  : "text-slate-600 hover:text-slate-900"
-              )}
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-              全部工单 ({stats.total})
-            </button>
-
+            {/* 3. 已处理（绿色） */}
             <button
               type="button"
               onClick={() => setActiveTab("completed")}
               className={cn(
                 "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
                 activeTab === "completed"
-                  ? "text-primary font-black"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "text-emerald-600 font-black"
+                  : "text-slate-600 hover:text-emerald-600"
               )}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              已解决完成 ({stats.completed})
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              已处理
+              <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-100 text-emerald-700 px-1.5 text-[10px] font-mono font-bold">
+                {stats.completed}
+              </span>
+            </button>
+
+            {/* 4. 标记（黄色） */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("flagged")}
+              className={cn(
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                activeTab === "flagged"
+                  ? "text-amber-600 font-black"
+                  : "text-slate-600 hover:text-amber-600"
+              )}
+            >
+              <Bookmark className="h-3.5 w-3.5 text-amber-500" />
+              标记
+              {stats.flagged > 0 && (
+                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] text-white font-mono font-bold">
+                  {stats.flagged}
+                </span>
+              )}
             </button>
           </div>
 
@@ -443,9 +444,16 @@ export default function AdminTicketsPage() {
                           <span className="font-mono text-[11px] font-bold text-slate-900 truncate">
                             {t.id}
                           </span>
-                          <span className={cn("rounded px-1.5 py-0.2 text-[10px] font-bold border", statusObj?.badgeClass)}>
-                            {statusObj?.label}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            {t.isFlagged && (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.2 text-[10px] font-bold text-amber-800 border border-amber-300">
+                                标记
+                              </span>
+                            )}
+                            <span className={cn("rounded px-1.5 py-0.2 text-[10px] font-bold border", statusObj?.badgeClass)}>
+                              {statusObj?.label}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="text-xs font-bold text-slate-800 line-clamp-1 mb-1">
@@ -500,6 +508,11 @@ export default function AdminTicketsPage() {
                         >
                           {TICKET_STATUSES.find((s) => s.value === currentTicket.status)?.label}
                         </span>
+                        {currentTicket.isFlagged && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 border border-amber-300">
+                            已标记
+                          </span>
+                        )}
                         {currentTicket.priority === "urgent" || currentTicket.priority === "emergency" ? (
                           <span className="rounded bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700 border border-rose-200">
                             加急件
@@ -521,10 +534,16 @@ export default function AdminTicketsPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={handleToggleStatus}
-                        className="rounded-xl text-xs font-bold text-slate-700"
+                        onClick={handleToggleFlag}
+                        className={cn(
+                          "rounded-xl text-xs font-bold transition-all",
+                          currentTicket.isFlagged
+                            ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                            : "text-slate-700 hover:bg-slate-100"
+                        )}
                       >
-                        {currentTicket.status === "completed" ? "重开为处理中" : "直接标记已解决"}
+                        <Bookmark className={cn("h-3.5 w-3.5 mr-1.5", currentTicket.isFlagged ? "fill-amber-500 text-amber-500" : "text-slate-400")} />
+                        {currentTicket.isFlagged ? "已标记 (取消标记)" : "标记工单"}
                       </Button>
                     </div>
                   </div>
@@ -614,15 +633,9 @@ export default function AdminTicketsPage() {
                     />
 
                     <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-700 font-medium">
-                        <input
-                          type="checkbox"
-                          checked={markAsCompleted}
-                          onChange={(e) => setMarkAsCompleted(e.target.checked)}
-                          className="rounded border-slate-300 text-primary focus:ring-primary"
-                        />
-                        <span>答复后同时将工单标记为「已解决/已完成」</span>
-                      </label>
+                      <span className="text-xs text-slate-500 font-medium">
+                        💡 发送官方答复后，此工单处理状态将<strong className="text-emerald-700 font-bold">自动转换为「已处理」</strong>
+                      </span>
 
                       <Button
                         type="submit"

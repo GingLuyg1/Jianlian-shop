@@ -703,12 +703,13 @@ export default function AnimatedCharacters({
         }
       } else {
         // Dragging DOWN: squashes into the floor，自然微膨胀与纵向压缩，Q弹饱满
+        // 贴地按压严禁 angle 旋转与 skew，确保底边 100% 紧咬展台水平线，彻底杜绝底角穿模
         setDragPhysics({
-          shiftX: Math.max(-50, Math.min(50, dx * 0.55)),
+          shiftX: Math.max(-25, Math.min(25, dx * 0.3)),
           liftY: 0,
-          angle: Math.max(-12, Math.min(12, dx * 0.16)),
-          scaleX: 1 + Math.min(0.32, dy * 0.004),
-          scaleY: Math.max(0.62, 1 - dy * 0.0036),
+          angle: 0,
+          scaleX: 1 + Math.min(0.16, dy * 0.002),
+          scaleY: Math.max(0.68, 1 - dy * 0.003),
           isLifted: false,
         });
       }
@@ -742,8 +743,13 @@ export default function AnimatedCharacters({
 
   const getCharTransform = (char: CharKey, baseTransform: string) => {
     if (draggingChar === char) {
-      const { shiftX, liftY, angle, scaleX, scaleY } = dragPhysics;
-      return `translateX(${shiftX}px) translateY(${-liftY}px) rotate(${angle}deg) scale(${scaleX}, ${scaleY})`;
+      const { shiftX, liftY, angle, scaleX, scaleY, isLifted } = dragPhysics;
+      if (isLifted || liftY > 0) {
+        // 悬空：以中心为原点自由旋转
+        return `translateX(${shiftX}px) translateY(${-liftY}px) rotate(${angle}deg) scale(${scaleX}, ${scaleY})`;
+      }
+      // 贴地（下压 / 轻提）：底边锚定地面线，严格使用 scale，不使用 rotate 与 skew（彻底消除底角压穿舞台）
+      return `translateX(${shiftX}px) scale(${scaleX}, ${scaleY})`;
     }
     if (droppingChar === char) {
       return "none";
@@ -1138,10 +1144,10 @@ export default function AnimatedCharacters({
               bottom: "-6px",
               left: "-12px",
               width: "484px",
-              height: "12px",
+              height: "18px",
               borderRadius: "999px",
               background:
-                "linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(226,232,240,0.92) 100%)",
+                "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(235,240,248,0.96) 100%)",
               boxShadow:
                 "0 6px 16px -2px rgba(15, 23, 42, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.95)",
               pointerEvents: "none",

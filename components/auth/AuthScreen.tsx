@@ -513,7 +513,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       }
 
       triggerSuccessWithButtonRipple();
-      toast.success("登录成功，欢迎进入 Jianlian。");
       setTimeout(() => {
         router.replace(redirectTo || "/");
         router.refresh();
