@@ -15,6 +15,7 @@ import {
   type AdminNavigationGroupKey,
 } from "./admin-navigation";
 import { toggleNavigationGroup } from "./admin-navigation-state.mjs";
+import { getAdminTicketCounts } from "@/lib/tickets/types";
 
 const DEMO_APP_IDS = new Set(["APP_1732204801", "APP_1732203920", "APP_1732198000"]);
 
@@ -57,15 +58,7 @@ export default function AdminSidebar() {
     } catch {}
 
     try {
-      const rawTickets = window.localStorage.getItem("jianlian_shop_tickets_v1");
-      if (rawTickets) {
-        const parsed = JSON.parse(rawTickets);
-        if (Array.isArray(parsed)) {
-          ticketPending = parsed.filter(
-            (t: any) => t && t.status !== "completed" && t.status !== "replied"
-          ).length;
-        }
-      }
+      ticketPending = getAdminTicketCounts().processing;
     } catch {}
 
     setPendingBadges({

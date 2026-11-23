@@ -92,33 +92,9 @@ export interface ApiOrderItem {
   cards?: string;
 }
 
-const DEFAULT_CALL_LOGS: ApiCallLogItem[] = [
-  { id: "call_1", name: "商品详情", method: "GET", path: "/api/v1/products/prod_gemini_pro", status: 200, time: "11-22 18:20:28", ms: "38ms", ip: "124.220.100.12" },
-  { id: "call_2", name: "商品列表", method: "GET", path: "/api/v1/products", status: 200, time: "11-22 18:20:26", ms: "42ms", ip: "124.220.100.12" },
-  { id: "call_3", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-19 09:04:07", ms: "29ms", ip: "124.220.100.12" },
-  { id: "call_4", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-18 17:52:35", ms: "31ms", ip: "124.220.100.12" },
-  { id: "call_5", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-18 14:38:42", ms: "33ms", ip: "124.220.100.12" },
-  { id: "call_6", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-18 14:38:28", ms: "30ms", ip: "124.220.100.12" },
-  { id: "call_7", name: "创建订单", method: "POST", path: "/api/v1/orders/create", status: 200, time: "11-16 11:20:10", ms: "76ms", ip: "124.220.100.12" },
-  { id: "call_8", name: "订单详情", method: "GET", path: "/api/v1/orders/2026081101022967415473", status: 200, time: "11-16 11:20:12", ms: "35ms", ip: "124.220.100.12" },
-  { id: "call_9", name: "商品列表", method: "GET", path: "/api/v1/products", status: 200, time: "11-15 16:02:18", ms: "40ms", ip: "124.220.100.12" },
-  { id: "call_10", name: "商品详情", method: "GET", path: "/api/v1/products/prod_steam_arg", status: 200, time: "11-15 15:45:01", ms: "36ms", ip: "124.220.100.12" },
-  { id: "call_11", name: "余额查询", method: "GET", path: "/api/v1/user/assets", status: 200, time: "11-14 20:11:05", ms: "28ms", ip: "124.220.100.12" },
-  { id: "call_12", name: "商品列表", method: "GET", path: "/api/v1/products", status: 200, time: "11-14 19:50:22", ms: "45ms", ip: "124.220.100.12" },
-];
+const DEFAULT_CALL_LOGS: ApiCallLogItem[] = [];
 
-const DEFAULT_API_ORDERS: ApiOrderItem[] = [
-  { id: "api_ord_1", orderNo: "2026081101022967415473", productName: "Gemini Pro（Pixel/Jio开通）成品账号", amount: 17.5, status: "已发货", createdAt: "2026-11-22 18:20:28" },
-  { id: "api_ord_2", orderNo: "2026081100311168167239", productName: "Google AI Pro 一年会员（Pixel兑换）", amount: 6.5, status: "已发货", createdAt: "2026-11-19 09:04:07" },
-  { id: "api_ord_3", orderNo: "2026081002300451259111", productName: "Google AI Pro 一年会员（Pixel兑换）", amount: 6.5, status: "已发货", createdAt: "2026-11-18 17:52:35" },
-  { id: "api_ord_4", orderNo: "2026080922150341829103", productName: "ChatGPT Plus (iOS自动订阅充值)", amount: 137.0, status: "已发货", createdAt: "2026-11-18 14:38:28" },
-  { id: "api_ord_5", orderNo: "2026080816041289410294", productName: "Claude Pro (官方独占号/质保30天)", amount: 145.0, status: "已发货", createdAt: "2026-11-16 11:20:10" },
-  { id: "api_ord_6", orderNo: "2026080709452271829031", productName: "Apple 礼品卡 50 USD (美区充值卡)", amount: 355.0, status: "已发货", createdAt: "2026-11-15 16:02:18" },
-  { id: "api_ord_7", orderNo: "2026080614120938192019", productName: "Steam 礼品卡 100 HKD (港币充值)", amount: 92.5, status: "已发货", createdAt: "2026-11-14 20:11:05" },
-  { id: "api_ord_8", orderNo: "2026080518334419283746", productName: "Google Play 礼品卡 2000 JPY (日区)", amount: 98.0, status: "已发货", createdAt: "2026-11-13 15:40:22" },
-  { id: "api_ord_9", orderNo: "2026080410115582910382", productName: "英国 Giffgaff 原生实体电话卡", amount: 28.0, status: "已发货", createdAt: "2026-11-12 11:25:39" },
-  { id: "api_ord_10", orderNo: "2026080312501938472910", productName: "新西兰 One NZ 实体电话卡 (漫游包邮)", amount: 35.0, status: "已发货", createdAt: "2026-11-11 09:18:44" },
-];
+const DEFAULT_API_ORDERS: ApiOrderItem[] = [];
 
 function generateApiKey() {
   const chars = "abcdef0123456789";
@@ -139,8 +115,8 @@ export default function AccountApiPage() {
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [copiedAppId, setCopiedAppId] = useState<boolean>(false);
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
-  const [whitelistIps, setWhitelistIps] = useState<string[]>(["124.220.100.12"]);
-  const [merchantBalance, setMerchantBalance] = useState<number>(4.5);
+  const [whitelistIps, setWhitelistIps] = useState<string[]>([]);
+  const [merchantBalance, setMerchantBalance] = useState<number>(0);
 
   // 申请表单状态
   const [merchantName, setMerchantName] = useState("");
@@ -183,24 +159,44 @@ export default function AccountApiPage() {
       if (savedAppId) setAppId(savedAppId);
       if (savedIps) {
         try {
-          setWhitelistIps(JSON.parse(savedIps));
+          const parsedIps = JSON.parse(savedIps);
+          setWhitelistIps(Array.isArray(parsedIps) ? parsedIps.filter((ip) => ip && ip !== "124.220.100.12") : []);
         } catch {
-          setWhitelistIps([savedIps]);
+          setWhitelistIps(savedIps !== "124.220.100.12" ? [savedIps] : []);
         }
       }
     } else {
       // 默认开通商户开发者状态
       const freshKey = savedKey || generateApiKey();
-      const generatedId = `MCH_10082691`;
+      const generatedId = `MCH_${Math.abs(hashString(userEmail)).toString().slice(0, 8).padEnd(8, "0")}`;
       setApiStatus("approved");
       setApiKey(freshKey);
       setAppId(generatedId);
-      setWhitelistIps(["124.220.100.12"]);
+      setWhitelistIps([]);
       window.localStorage.setItem(statusKey, "approved");
       window.localStorage.setItem(keyKey, freshKey);
       window.localStorage.setItem(appIdKey, generatedId);
-      window.localStorage.setItem(ipKey, JSON.stringify(["124.220.100.12"]));
+      window.localStorage.setItem(ipKey, JSON.stringify([]));
     }
+  }, [email]);
+
+  // 读取真实用户账户余额
+  useEffect(() => {
+    let active = true;
+    fetch("/api/account/assets", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        if (!active || !payload) return;
+        const rawBal = payload?.summary?.availableBalance ?? payload?.profile?.balance ?? payload?.balance;
+        const num = Number(rawBal);
+        if (Number.isFinite(num) && num >= 0) {
+          setMerchantBalance(num);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [email]);
 
   function hashString(str: string): number {
@@ -585,7 +581,7 @@ export default function AccountApiPage() {
               <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
                 0
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">累计 209 次</p>
+              <p className="mt-1 text-[11px] text-slate-400">累计 {DEFAULT_CALL_LOGS.length} 次</p>
             </div>
 
             {/* 3. 今日成功率 */}
@@ -679,17 +675,25 @@ export default function AccountApiPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {DEFAULT_CALL_LOGS.slice(0, 6).map((item) => (
-                        <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
-                          <td className="py-2.5 px-3 font-medium text-slate-800">{item.name}</td>
-                          <td className="py-2.5 px-3">
-                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                              {item.status}
-                            </span>
+                      {DEFAULT_CALL_LOGS.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="py-10 text-center text-xs text-slate-400">
+                            暂无真实接口调用记录
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-500">{item.time}</td>
                         </tr>
-                      ))}
+                      ) : (
+                        DEFAULT_CALL_LOGS.slice(0, 6).map((item) => (
+                          <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
+                            <td className="py-2.5 px-3 font-medium text-slate-800">{item.name}</td>
+                            <td className="py-2.5 px-3">
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-500">{item.time}</td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -730,25 +734,33 @@ export default function AccountApiPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {DEFAULT_API_ORDERS.slice(0, 10).map((item) => (
-                        <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
-                          <td className="py-2.5 px-3">
-                            <div className="font-medium text-slate-800 max-w-[200px] truncate">{item.productName}</div>
-                            <div className="text-[10px] font-mono text-slate-400">{item.orderNo}</div>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 font-mono">
-                            ¥{item.amount.toFixed(2)}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                            {item.createdAt.slice(5, 16)}
-                          </td>
-                          <td className="py-2.5 px-3 text-right">
-                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                              {item.status}
-                            </span>
+                      {DEFAULT_API_ORDERS.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-10 text-center text-xs text-slate-400">
+                            暂无真实 API 订单记录
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        DEFAULT_API_ORDERS.slice(0, 10).map((item) => (
+                          <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
+                            <td className="py-2.5 px-3">
+                              <div className="font-medium text-slate-800 max-w-[200px] truncate">{item.productName}</div>
+                              <div className="text-[10px] font-mono text-slate-400">{item.orderNo}</div>
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-bold text-slate-900 font-mono">
+                              ¥{item.amount.toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                              {item.createdAt.slice(5, 16)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                                {item.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -811,21 +823,29 @@ export default function AccountApiPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {pagedCallLogs.map((row) => (
-                    <tr key={row.id} className="hover:bg-orange-50/30 transition-colors">
-                      <td className="px-5 py-3 text-slate-500 font-mono">{row.time}</td>
-                      <td className="px-5 py-3 font-medium text-slate-900">{row.name}</td>
-                      <td className="px-5 py-3 font-mono font-bold text-blue-600">{row.method}</td>
-                      <td className="px-5 py-3 font-mono text-slate-800">{row.path}</td>
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                          {row.status} OK
-                        </span>
+                  {pagedCallLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                        暂无真实接口调用日志
                       </td>
-                      <td className="px-5 py-3 font-mono text-slate-500">{row.ms}</td>
-                      <td className="px-5 py-3 text-slate-600 font-mono">{row.ip}</td>
                     </tr>
-                  ))}
+                  ) : (
+                    pagedCallLogs.map((row) => (
+                      <tr key={row.id} className="hover:bg-orange-50/30 transition-colors">
+                        <td className="px-5 py-3 text-slate-500 font-mono">{row.time}</td>
+                        <td className="px-5 py-3 font-medium text-slate-900">{row.name}</td>
+                        <td className="px-5 py-3 font-mono font-bold text-blue-600">{row.method}</td>
+                        <td className="px-5 py-3 font-mono text-slate-800">{row.path}</td>
+                        <td className="px-5 py-3">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                            {row.status} OK
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 font-mono text-slate-500">{row.ms}</td>
+                        <td className="px-5 py-3 text-slate-600 font-mono">{row.ip}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

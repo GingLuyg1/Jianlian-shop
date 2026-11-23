@@ -37,6 +37,7 @@ import {
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import glass from "@/components/account/AccountGlass.module.css";
+import styles from "@/components/account/AccountCenter.module.css";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   type TicketType,
@@ -65,7 +68,7 @@ export default function FAQPage() {
   const { isMobile } = useMobileStorefront();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
   const [activeTabFilter, setActiveTabFilter] = useState<"all" | "processing" | "completed">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -143,7 +146,7 @@ export default function FAQPage() {
               status: t.status === "completed" || t.status === "replied" ? "completed" : "processing",
             }));
             setTickets(normalized);
-            setSelectedTicketId(normalized[0].id);
+            setSelectedTicketId(null);
             setIsCreating(false);
             return;
           }
@@ -152,7 +155,7 @@ export default function FAQPage() {
     } catch {}
     setTickets([]);
     setSelectedTicketId(null);
-    setIsCreating(true);
+    setIsCreating(false);
   }, []);
 
   // 读取 Supabase 用户邮箱
@@ -172,6 +175,7 @@ export default function FAQPage() {
     setTickets(newTickets);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newTickets));
+      window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
     } catch {}
   };
 
@@ -426,68 +430,65 @@ export default function FAQPage() {
   return (
     <PublicLayout
       mobileNavigationUntilLg
-      viewportLocked={!isMobile}
-      contentClassName={
-        isMobile
-          ? "max-w-none !pt-2 !px-3 pb-6"
-          : "max-w-none px-4 py-2 md:px-6 h-[calc(100dvh-4.5rem)] flex flex-col overflow-hidden"
-      }
+      contentClassName={cn("mx-auto max-w-none px-4 py-3 md:px-6", isMobile && "!px-3 !pt-2 pb-6")}
     >
-      <main className="relative flex-1 min-h-0 w-full overflow-hidden bg-[#fffdfa] flex flex-col">
-        {/* 背景柔暖晨曦流光光晕 */}
-        <div className="pointer-events-none fixed -left-32 -top-24 h-[440px] w-[440px] rounded-full bg-gradient-to-br from-[#ffdca8]/35 via-[#ffba75]/20 to-transparent blur-3xl" />
-        <div className="pointer-events-none fixed -right-24 top-1/3 h-[500px] w-[500px] rounded-full bg-gradient-to-tr from-[#ffe6cc]/40 via-[#ffd5ab]/25 to-transparent blur-3xl" />
-
-        <div className="relative mx-auto w-full max-w-[1540px] flex-1 min-h-0 flex flex-col gap-3">
-          {/* 1. 顶部工单中心 Header（精炼紧凑） */}
-          <div className="relative shrink-0 overflow-hidden rounded-[22px] border border-orange-100/70 bg-gradient-to-r from-white/95 via-[#fffaf5]/90 to-white/95 px-5 py-3 shadow-[0_8px_24px_rgba(240,115,36,0.04)] backdrop-blur-xl ring-1 ring-white/80">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20">
-                    <Headphones className="h-4.5 w-4.5" />
-                  </div>
-                  <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
-                    工单中心
-                  </h1>
-                  <span className="rounded-full border border-orange-200/60 bg-orange-50/80 px-2 py-0.5 text-xs font-bold text-orange-700">
-                    专属售后服务通道
-                  </span>
+      <div
+        data-testid="faq-glass-page"
+        className={cn(
+          "mx-auto flex w-full min-w-0 max-w-[1540px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden",
+          publicMainPanelHeightClassName,
+          isMobile && "!h-auto !min-h-0 !overflow-visible"
+        )}
+      >
+        {/* 1. 顶部工单中心 Header（与账号充值/推广中心一致的玻璃质感） */}
+        <section className={cn(glass.surface, styles.panel, "relative shrink-0 overflow-hidden px-5 py-4")}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <div className={cn(glass.icon, "h-10 w-10")}>
+                  <Headphones className="h-5 w-5" />
                 </div>
-                <p className="text-xs font-medium text-slate-600">
-                  这里集中查看工单列表、客服回复和售后处理进度。工单会在{" "}
-                  <strong className="text-orange-600 font-bold">12 小时内回复</strong>
-                  ，后台答复后会同步更新状态。
-                </p>
+                <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+                  工单中心
+                </h1>
+                <span className="rounded-full border border-orange-200/80 bg-orange-50/90 px-2.5 py-0.5 text-xs font-bold text-orange-700 shadow-2xs">
+                  专属售后服务通道
+                </span>
               </div>
+              <p className="text-xs font-medium text-slate-600">
+                这里集中查看工单列表、客服回复和售后处理进度。工单会在{" "}
+                <strong className="text-orange-600 font-bold">12 小时内回复</strong>
+                ，后台答复后会同步更新状态。
+              </p>
+            </div>
 
-              {/* 顶部指标统计徽章 */}
-              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-                <div className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200/70 bg-blue-50/70 px-3 py-1.5 text-xs font-bold text-blue-700 shadow-xs backdrop-blur-md">
-                  <span className="flex h-2 w-2 relative">
-                    {stats.unread > 0 && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    )}
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                  </span>
-                  <span>未读回复 ({stats.unread})</span>
-                </div>
-                <div className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200/70 bg-amber-50/70 px-3 py-1.5 text-xs font-bold text-amber-700 shadow-xs backdrop-blur-md">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span>处理中 ({stats.processing})</span>
-                </div>
-                <div className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200/70 bg-emerald-50/70 px-3 py-1.5 text-xs font-bold text-emerald-700 shadow-xs backdrop-blur-md">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>已完成 ({stats.completed})</span>
-                </div>
+            {/* 顶部指标统计徽章 */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <div className={cn(glass.inset, "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-blue-700")}>
+                <span className="flex h-2 w-2 relative">
+                  {stats.unread > 0 && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  )}
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+                <span>未读回复 ({stats.unread})</span>
+              </div>
+              <div className={cn(glass.inset, "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-700")}>
+                <Clock className="h-3.5 w-3.5" />
+                <span>处理中 ({stats.processing})</span>
+              </div>
+              <div className={cn(glass.inset, "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-emerald-700")}>
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>已完成 ({stats.completed})</span>
               </div>
             </div>
           </div>
+        </section>
 
-          {/* 2. 主体响应式一页屏工作台 */}
-          <div className="flex flex-col lg:flex-row gap-3.5 flex-1 min-h-0 overflow-hidden">
-            {/* 左栏：我的工单列表 (320px 黄金宽度，支持内部独立平滑滚动) */}
-            <div className="w-full lg:w-[320px] shrink-0 flex flex-col rounded-[24px] border border-orange-100/70 bg-white/90 p-4 shadow-[0_8px_24px_rgba(240,115,36,0.03)] backdrop-blur-xl h-full overflow-hidden">
+        {/* 2. 主体响应式一页屏工作台 */}
+        <div className="flex flex-col lg:flex-row gap-3.5 flex-1 min-h-0 overflow-hidden">
+          {/* 左栏：我的工单列表 (320px 黄金宽度，支持内部独立平滑滚动) */}
+          <section className={cn(glass.surface, styles.panel, "w-full lg:w-[320px] shrink-0 flex flex-col p-4 h-full overflow-hidden")}>
               {/* 列表头部 */}
               <div className="mb-3 flex items-center justify-between border-b border-orange-50/80 pb-2.5 shrink-0">
                 <div>
@@ -652,12 +653,12 @@ export default function FAQPage() {
                   })
                 )}
               </div>
-            </div>
+            </section>
 
             {/* 中栏与右栏组合：自适应一页屏 */}
             <div className="flex-1 min-w-0 flex flex-col lg:flex-row gap-3.5 h-full overflow-hidden">
               {/* 中栏：新建工单表单 OR 工单消息互动流 */}
-              <div className="flex-1 flex flex-col rounded-[24px] border border-orange-100/70 bg-white/90 p-5 shadow-[0_8px_24px_rgba(240,115,36,0.03)] backdrop-blur-xl h-full overflow-hidden">
+              <section className={cn(glass.surface, styles.panel, "flex-1 flex flex-col p-5 h-full overflow-hidden")}>
                 {isCreating ? (
                   /* 新建工单表单（简洁清爽，无多余小字） */
                   <form
@@ -1043,35 +1044,37 @@ export default function FAQPage() {
                     </form>
                   </div>
                 ) : (
-                  <div className="flex flex-1 flex-col items-center justify-center rounded-[20px] border border-orange-100/70 bg-white/80 p-8 text-center backdrop-blur-xl">
-                    <Headphones className="h-10 w-10 text-orange-400/80 mb-2.5" />
-                    <h3 className="text-sm font-bold text-slate-800">请选择工单或新建工单</h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      点击左侧列表查看处理进度，或点击新建工单提交新问题。
+                  <div className={cn(glass.inset, "flex flex-1 flex-col items-center justify-center rounded-[22px] p-8 text-center")}>
+                    <div className={cn(glass.icon, "mb-4 h-14 w-14 rounded-2xl")}>
+                      <FileText className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-lg font-extrabold text-slate-900">请选择一个工单</h3>
+                    <p className="mt-2 max-w-[340px] text-xs leading-relaxed text-slate-500">
+                      点击左侧工单后查看聊天记录、客服回复和处理进度；需要提交新问题时点击“新建工单”。
                     </p>
                     <Button
                       type="button"
                       onClick={() => setIsCreating(true)}
-                      className="mt-3 gap-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 text-xs font-bold text-white shadow-sm"
+                      className="mt-5 h-10 gap-1.5 rounded-full bg-gradient-to-r from-[#df7334] to-[#c85f22] px-6 text-xs font-bold text-white shadow-md shadow-orange-900/15 hover:from-[#d26728] hover:to-[#b85319]"
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Plus className="h-4 w-4" />
                       新建工单
                     </Button>
                   </div>
                 )}
-              </div>
+              </section>
 
               {/* 右栏：提交建议与处理流程指南（紧凑舒展，彻底移除冗余FAQ） */}
-              <div className="lg:w-64 flex flex-col gap-3 shrink-0 h-full overflow-y-auto">
+              <div className="lg:w-64 flex flex-col gap-3.5 shrink-0 h-full overflow-y-auto">
                 {/* 提交建议 */}
-                <div className="rounded-[22px] border border-orange-100/70 bg-white/90 p-4 shadow-[0_8px_24px_rgba(240,115,36,0.03)] backdrop-blur-xl text-left">
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
-                      <Sparkles className="h-3 w-3" />
+                <section className={cn(glass.surface, styles.panel, "p-4 text-left")}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={cn(glass.icon, "h-7 w-7 rounded-lg")}>
+                      <Sparkles className="h-3.5 w-3.5" />
                     </div>
                     <h3 className="text-xs font-bold text-slate-900">提交建议</h3>
                   </div>
-                  <ul className="space-y-1.5 text-[11px] text-slate-600 leading-relaxed list-disc list-inside">
+                  <ul className="space-y-2 text-[11px] text-slate-600 leading-relaxed list-disc list-inside">
                     <li>
                       <strong className="text-slate-800">订单问题：</strong>
                       尽量填写订单号，保留支付截图与报错提示。
@@ -1084,45 +1087,44 @@ export default function FAQPage() {
                       <strong className="text-slate-800">接口问题：</strong>
                       附上请求时间、接口路径及返回报错报文。
                     </li>
-                    <li className="text-amber-800 bg-amber-50/80 p-1.5 rounded-lg list-none mt-1.5 border border-amber-200/60 font-medium">
+                    <li className="text-amber-800 bg-amber-50/90 p-2 rounded-xl list-none mt-2 border border-amber-200/70 font-medium shadow-2xs">
                       ⚠️ 请勿提交账号密码、私钥等敏感凭据。
                     </li>
                   </ul>
-                </div>
+                </section>
 
                 {/* 处理流程 */}
-                <div className="rounded-[22px] border border-orange-100/70 bg-white/90 p-4 shadow-[0_8px_24px_rgba(240,115,36,0.03)] backdrop-blur-xl text-left">
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                      <Clock3 className="h-3 w-3" />
+                <section className={cn(glass.surface, styles.panel, "p-4 text-left")}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={cn(glass.icon, "h-7 w-7 rounded-lg")}>
+                      <Clock3 className="h-3.5 w-3.5" />
                     </div>
                     <h3 className="text-xs font-bold text-slate-900">处理流程</h3>
                   </div>
 
-                  <div className="relative pl-3.5 space-y-3 before:absolute before:bottom-1 before:left-[5px] before:top-1.5 before:w-[2px] before:bg-orange-100">
+                  <div className="relative pl-3.5 space-y-3.5 before:absolute before:bottom-1 before:left-[5px] before:top-1.5 before:w-[2px] before:bg-orange-200/70">
                     <div className="relative">
-                      <div className="absolute -left-3.5 top-1 h-2 w-2 rounded-full border-2 border-white bg-orange-500 shadow-xs" />
+                      <div className="absolute -left-3.5 top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-orange-500 shadow-xs" />
                       <div className="text-[11px] font-bold text-slate-800">1. 提交工单</div>
                       <div className="text-[10px] text-slate-500">填写信息并上传相关凭据截图</div>
                     </div>
 
                     <div className="relative">
-                      <div className="absolute -left-3.5 top-1 h-2 w-2 rounded-full border-2 border-white bg-amber-500 shadow-xs" />
+                      <div className="absolute -left-3.5 top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-amber-500 shadow-xs" />
                       <div className="text-[11px] font-bold text-slate-800">2. 客服核验</div>
                       <div className="text-[10px] text-slate-500">核对订单、余额扣费与调用日志</div>
                     </div>
 
                     <div className="relative">
-                      <div className="absolute -left-3.5 top-1 h-2 w-2 rounded-full border-2 border-white bg-emerald-500 shadow-xs" />
+                      <div className="absolute -left-3.5 top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 shadow-xs" />
                       <div className="text-[11px] font-bold text-slate-800">3. 答复完成</div>
                       <div className="text-[10px] text-slate-500">12 小时内回复并更新处理结果</div>
                     </div>
                   </div>
-                </div>
+                </section>
               </div>
             </div>
           </div>
-        </div>
 
         {/* 3. 图片全屏 Lightbox 大图预览 Modal */}
         {previewImage && (
@@ -1146,7 +1148,7 @@ export default function FAQPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </PublicLayout>
   );
 }

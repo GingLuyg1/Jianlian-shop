@@ -76,6 +76,7 @@ import {
 } from "@/lib/supabase/client";
 import type { AdminProduct } from "@/lib/supabase/admin-catalog";
 import { requiresRechargeAdminAttention } from "@/lib/recharges/admin-attention";
+import { getAdminTicketCounts } from "@/lib/tickets/types";
 import { cn } from "@/lib/utils";
 import { listProducts } from "@/lib/supabase/admin-catalog";
 
@@ -776,6 +777,22 @@ export default function AdminDashboardPage() {
   const [productSortOrder, setProductSortOrder] = useState<"desc" | "asc">("desc");
   const [productPage, setProductPage] = useState(1);
   const [productPageSize, setProductPageSize] = useState(15);
+  const [ticketCounts, setTicketCounts] = useState<{ processing: number; completed: number; total: number }>({
+    processing: 1,
+    completed: 1,
+    total: 2,
+  });
+
+  useEffect(() => {
+    const syncTickets = () => setTicketCounts(getAdminTicketCounts());
+    syncTickets();
+    window.addEventListener("storage", syncTickets);
+    window.addEventListener("jianlian-admin-badges-updated", syncTickets);
+    return () => {
+      window.removeEventListener("storage", syncTickets);
+      window.removeEventListener("jianlian-admin-badges-updated", syncTickets);
+    };
+  }, []);
 
   useEffect(() => {
     setProductPage(1);
@@ -1643,7 +1660,7 @@ export default function AdminDashboardPage() {
                     {
                       label: "待处理售后工单",
                       desc: "客户新提交，需12小时内答复",
-                      value: 1,
+                      value: ticketCounts.processing,
                       href: "/admin/tickets",
                       tone: "orange" as const,
                       actionText: "去回复",
@@ -1659,7 +1676,7 @@ export default function AdminDashboardPage() {
                     {
                       label: "已解决完成工单",
                       desc: "客服已答复并结单归档",
-                      value: 1,
+                      value: ticketCounts.completed,
                       href: "/admin/tickets?tab=completed",
                       tone: "slate" as const,
                       actionText: "查看",

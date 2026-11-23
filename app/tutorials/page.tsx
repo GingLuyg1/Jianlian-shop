@@ -1,9 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import {
+  ArrowRight,
   ArrowUp,
   ArrowUpRight,
   BookOpen,
@@ -16,6 +18,7 @@ import {
   PackageCheck,
   Search,
   ShieldCheck,
+  ShoppingBag,
   Smartphone,
   X,
 } from "lucide-react";
@@ -102,6 +105,33 @@ const tutorialTopics = [
   { id: "twitter", label: "X (Twitter)", title: "X (Twitter) 账号使用与管理教程", description: "X Token 电脑免密直登、2FA 两步动态验证码安全登录、以及修改密码后重新提取最新 Token 全流程指引", icon: TwitterWireframeIcon, keywords: ["X", "Twitter", "推特", "Token", "auth_token", "X Token", "X 2fa", "2FA", "两步验证", "重新获取Token", "改密", "修改密码", "插件登录", "Cookie", "Application", "F12", "开发者工具"] },
   { id: "rakuten-mobile", label: "Rakuten Mobile", title: "日本乐天 Rakuten Mobile 安装与配置教程", description: "日本乐天原生实体卡安装、关漫游防扣费、网络搜网与高清视频教程", icon: Smartphone, keywords: ["日本", "乐天", "Rakuten", "Rakutenmobile", "Rakuten Mobile", "乐天移动", "煤炉", "Mercari", "Line", "抽票", "视频教程", "APN", "漫游", "防扣费", "实体卡", "原生卡"] },
 ] as const;
+
+function getTutorialPurchaseAction(topicId: string): { href: string; label: string } | null {
+  switch (topicId) {
+    case "apple-id":
+      return { href: "/products/digital-accounts?category=apple-id", label: "去购买" };
+    case "giffgaff":
+      return { href: "/products/sim-cards?country=uk", label: "去购买" };
+    case "haha-sim":
+      return { href: "/products/sim-cards?country=hk", label: "去购买" };
+    case "one-nz":
+      return { href: "/products/sim-cards?country=nz", label: "去购买" };
+    case "chatgpt-guide":
+      return { href: "/products/ai-membership?category=chatgpt", label: "去购买" };
+    case "google-region":
+      return { href: "/products/ai-membership?category=gemini", label: "去购买" };
+    case "facebook":
+      return { href: "/products/digital-accounts?category=facebook", label: "去购买" };
+    case "twitter":
+      return { href: "/products/digital-accounts?category=x", label: "去购买" };
+    case "rakuten-mobile":
+      return { href: "/products/sim-cards?country=jp", label: "去购买" };
+    case "binance":
+      return { href: "/account/recharge", label: "去充值" };
+    default:
+      return null;
+  }
+}
 
 function getTutorialTitleMeta({
   topicId,
@@ -639,9 +669,9 @@ function TutorialsPageContent() {
         <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}>
           <div
             key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showTwitter ? twitterGuide : ""}`}
-            className={tutorial.topicEnter}
+            className={`${tutorial.topicEnter} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}
           >
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <h1 className="text-lg font-extrabold tracking-tight text-slate-900 sm:text-xl md:text-2xl">
                 {titleMeta.mainTitle}
               </h1>
@@ -656,6 +686,21 @@ function TutorialsPageContent() {
                 </p>
               ) : null}
             </div>
+            {(() => {
+              const purchaseAction = getTutorialPurchaseAction(topic.id);
+              if (!purchaseAction) return null;
+              return (
+                <Link
+                  href={purchaseAction.href}
+                  data-testid="tutorial-go-buy-button"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full bg-gradient-to-r from-[#df7334] to-[#c85f22] px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-900/15 transition-all hover:-translate-y-0.5 hover:from-[#d26728] hover:to-[#b85319] hover:shadow-lg sm:self-center sm:text-sm"
+                >
+                  <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{purchaseAction.label}</span>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                </Link>
+              );
+            })()}
           </div>
         </header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>

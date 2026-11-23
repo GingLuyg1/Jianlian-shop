@@ -92,6 +92,27 @@ type FilterState = {
 
 const CATALOG_PAGE_SIZE = 20;
 
+function matchCategoryByRouteKey(category: DisplayCategory, rawRouteKey: string) {
+  const key = normalizeText(rawRouteKey);
+  if (!key) return false;
+  const slug = normalizeText(category.slug);
+  const name = normalizeText(category.name);
+  const code = category.displayCode ? normalizeText(category.displayCode) : "";
+  const strippedSlug = slug.replace(/^sim-cards?-|^digital-accounts?-|^ai-membership-|^gift-cards?-/, "");
+  return (
+    category.slug === rawRouteKey ||
+    category.id === rawRouteKey ||
+    slug === key ||
+    strippedSlug === key ||
+    name === key ||
+    code === key ||
+    (key === "giffgaff" && (code === "uk" || slug.includes("uk") || name.includes("英国"))) ||
+    (key === "one-nz" && (code === "nz" || slug.includes("nz") || name.includes("新西兰"))) ||
+    (key === "haha-sim" && (code === "hk" || slug.includes("hk") || name.includes("香港"))) ||
+    (key === "rakuten-mobile" && (code === "jp" || slug.includes("jp") || name.includes("日本")))
+  );
+}
+
 function useDelayedLoading(loading: boolean, delay = 140) {
   const [phase, setPhase] = useState<"hidden" | "visible" | "leaving">("hidden");
   const phaseRef = useRef(phase);
@@ -286,7 +307,7 @@ function SupabaseMallContentInner({
     if (!categorySnapshot.rows) return null;
     const primary = findPrimaryCategory(categorySnapshot.rows, config);
     if (!primary) return null;
-    const routeChoice = activeCategoryPool.find((category) => category.slug === routeCategoryKey || category.id === routeCategoryKey);
+    const routeChoice = activeCategoryPool.find((category) => matchCategoryByRouteKey(category, routeCategoryKey));
     const currentChoice = activeCategoryPool.find((category) => category.id === activeCategory?.id);
     return routeChoice ?? currentChoice ?? secondaryCategories[0] ?? attachFallbackVisual(primary);
   }, [activeCategory?.id, activeCategoryPool, attachFallbackVisual, categorySnapshot.rows, config, routeCategoryKey, secondaryCategories]);
@@ -354,7 +375,7 @@ function SupabaseMallContentInner({
     }
 
     const selected =
-      activeCategoryPool.find((category) => category.slug === routeCategoryKey || category.id === routeCategoryKey) ??
+      activeCategoryPool.find((category) => matchCategoryByRouteKey(category, routeCategoryKey)) ??
       (routeCategoryKey === primary.slug || routeCategoryKey === primary.id ? attachFallbackVisual(primary) : null) ??
       secondaryCategories[0] ??
       attachFallbackVisual(primary);
@@ -680,6 +701,25 @@ function CategoryPanel({
   const [visualSelectionId, setVisualSelectionId] = useState("");
   const [clickedCategoryId, setClickedCategoryId] = useState("");
   const [clickPulseId, setClickPulseId] = useState("");
+  const [navigatingProductCategoryId, setNavigatingProductCategoryId] = useState("");
+
+  useEffect(() => {
+    const handleProductNavStart = (event: Event) => {
+      const custom = event as CustomEvent<{ categoryId?: string }>;
+      const targetCatId = custom.detail?.categoryId || selectedCategoryId || visualSelectionId;
+      if (targetCatId) {
+        setNavigatingProductCategoryId(targetCatId);
+      }
+    };
+    window.addEventListener("jianlian:product-navigation-start", handleProductNavStart);
+    return () => {
+      window.removeEventListener("jianlian:product-navigation-start", handleProductNavStart);
+    };
+  }, [selectedCategoryId, visualSelectionId]);
+
+  useEffect(() => {
+    setNavigatingProductCategoryId("");
+  }, [selectedCategoryId, pageRoute]);
 
   useEffect(() => {
     if (!clickedCategoryId) return;
@@ -746,6 +786,8 @@ function CategoryPanel({
                     active={visualSelectionId === category.id}
                     loading={
                       clickPulseId === category.id ||
+                      navigatingProductCategoryId === category.id ||
+                      (Boolean(navigatingProductCategoryId) && visualSelectionId === category.id) ||
                       ((clickedCategoryId === category.id || (!clickedCategoryId && visualSelectionId === category.id)) && isLoadingProducts)
                     }
                     disabled={disabled}
@@ -866,8 +908,8 @@ function CategoryButton({
         selectionMotion.item,
         "flex items-center justify-between rounded-xl px-3 py-2 text-left disabled:cursor-default lg:w-full lg:px-3.5 lg:py-3 [-webkit-tap-highlight-color:transparent] transition-all duration-150",
         active
-          ? "border border-orange-300/80 bg-gradient-to-r from-orange-100/90 via-orange-50/95 to-orange-100/70 text-primary shadow-[0_2px_10px_-2px_rgba(216,110,49,0.22)] ring-1 ring-orange-300/40 font-semibold"
-          : "border border-slate-100/90 bg-white/80 text-foreground hover:border-orange-200/60 hover:bg-white"
+          ? "border border-[#df8349] bg-gradient-to-r from-[#fddcc2] via-[#fee6d2] to-[#fcd5b5] hover:from-[#fcd3b4] hover:via-[#fde0c8] hover:to-[#fbcba5] text-[#b4480e] shadow-[0_3px_12px_-2px_rgba(216,110,49,0.28)] ring-1 ring-[#e5925d]/55 font-bold"
+          : "border border-slate-100/90 bg-white/80 text-foreground hover:border-orange-200/70 hover:bg-orange-50/55"
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-3">
@@ -1064,8 +1106,14 @@ function ProductPanel({
 
 let activeNavigationTimer: number | null = null;
 
-function safeNavigate(router: any, href: string) {
+function safeNavigate(router: any, href: string, categoryId?: string) {
   if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("jianlian:start-top-loading"));
+  window.dispatchEvent(
+    new CustomEvent("jianlian:product-navigation-start", {
+      detail: { categoryId: categoryId || "" },
+    })
+  );
   if (activeNavigationTimer) {
     window.clearTimeout(activeNavigationTimer);
     activeNavigationTimer = null;
@@ -1076,7 +1124,7 @@ function safeNavigate(router: any, href: string) {
     if (window.location.pathname !== targetPath) {
       window.location.assign(href);
     }
-  }, 380);
+  }, 2400);
 
   try {
     router.push(href);
@@ -1171,7 +1219,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
       product.slug || product.id,
       typeof window !== "undefined" ? window.location.pathname + window.location.search : ""
     );
-    safeNavigate(router, href);
+    safeNavigate(router, href, category?.id);
   };
 
   if (isMobile) {

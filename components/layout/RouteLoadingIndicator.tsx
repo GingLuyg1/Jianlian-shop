@@ -138,33 +138,42 @@ export default function RouteLoadingIndicator() {
     setVisible(false);
   };
 
-  const startLoading = (waitForCurrentPage = false, targetPath = window.location.pathname) => {
+  const startLoading = (
+    waitForCurrentPage = false,
+    targetPath = window.location.pathname,
+    immediate = false
+  ) => {
     clearTimers();
     accountTargetRef.current = isAccountDataPage(targetPath) ? targetPath : null;
     startedAtRef.current = Date.now();
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
 
-    showTimerRef.current = window.setTimeout(() => {
-      if (loadId !== loadIdRef.current) return;
+    if (immediate) {
       visibleRef.current = true;
       setVisible(true);
-      showTimerRef.current = null;
-    }, SHOW_DELAY_MS);
+    } else {
+      showTimerRef.current = window.setTimeout(() => {
+        if (loadId !== loadIdRef.current) return;
+        visibleRef.current = true;
+        setVisible(true);
+        showTimerRef.current = null;
+      }, SHOW_DELAY_MS);
+    }
 
     if (!accountTargetRef.current) {
       maxTimerRef.current = window.setTimeout(() => {
-      if (loadId === loadIdRef.current) {
-        visibleRef.current = false;
-        setVisible(false);
-      }
-      maxTimerRef.current = null;
-    }, MAX_VISIBLE_MS);
+        if (loadId === loadIdRef.current) {
+          visibleRef.current = false;
+          setVisible(false);
+        }
+        maxTimerRef.current = null;
+      }, MAX_VISIBLE_MS);
 
-    stallTimerRef.current = window.setTimeout(() => {
-      finishLoading(loadId);
-      stallTimerRef.current = null;
-    }, NAVIGATION_STALL_MS);
+      stallTimerRef.current = window.setTimeout(() => {
+        finishLoading(loadId);
+        stallTimerRef.current = null;
+      }, NAVIGATION_STALL_MS);
     }
 
     if (waitForCurrentPage) {
@@ -203,6 +212,11 @@ export default function RouteLoadingIndicator() {
       }
 
       const button = target?.closest("button") as HTMLButtonElement | null;
+      if (button && !button.disabled && button.hasAttribute("data-catalog-card")) {
+        startLoading(false, "/checkout", true);
+        return;
+      }
+
       const shouldHintButtonRoute =
         button &&
         !button.disabled &&
@@ -212,12 +226,12 @@ export default function RouteLoadingIndicator() {
           (button.hasAttribute("data-route-loading") && Boolean(button.closest("main"))));
 
       if (shouldHintButtonRoute) {
-        startLoading(true);
+        startLoading(false, window.location.pathname, true);
       }
     };
 
     const handleCustomStart = () => {
-      startLoading(true);
+      startLoading(false, window.location.pathname, true);
     };
 
     const handlePopState = () => {

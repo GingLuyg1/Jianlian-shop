@@ -1842,9 +1842,17 @@ function ProductFormDialog({
                 </Button>
               }
             >
-              <AdminProductSkuManager ref={skuManagerRef} product={product} refreshKey={skuRefreshKey}
+              <AdminProductSkuManager ref={skuManagerRef} product={product} productSlug={form.slug} refreshKey={skuRefreshKey}
                 defaults={{ price: form.price, original_price: form.original_price, stock: form.stock, delivery_type: form.delivery_type, status: form.status }}
-                onSummary={(summary) => { onSkuDirty(); onUpdate({ ...form, price: String(summary.price ?? form.price), stock: String(summary.stock) }); }}
+                onSummary={(summary) => {
+                  onSkuDirty();
+                  onUpdate({
+                    ...form,
+                    price: String(summary.price ?? form.price),
+                    stock: String(summary.stock),
+                    delivery_type: summary.delivery_type ?? form.delivery_type,
+                  });
+                }}
                 onSupplierBinding={onSupplierBinding} />
             </FormSection>
 

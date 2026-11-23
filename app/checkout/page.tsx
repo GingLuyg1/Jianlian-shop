@@ -646,10 +646,17 @@ function CheckoutPageContent() {
   const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) => legalDocuments.find((doc) => doc.document_type === type));
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
-  const normalizedDeliveryType = String(productRow?.delivery_type ?? "").toLowerCase();
-  const isAutomaticDelivery = normalizedDeliveryType === "automatic";
+  const selectedDatabaseSkuRow = selectedDatabaseSkuId
+    ? productSkus.find((sku) => sku.id === selectedDatabaseSkuId) ?? null
+    : productSkus[0] ?? null;
+  const rawEffectiveDeliveryType = String(
+    selectedDatabaseSkuRow?.delivery_type || productRow?.delivery_type || ""
+  ).trim().toLowerCase();
+  const isExplicitNonShippingDelivery = ["automatic", "manual", "card", "account", "digital"].includes(rawEffectiveDeliveryType);
+  const isExplicitShippingDelivery = ["shipping", "physical"].includes(rawEffectiveDeliveryType);
+  const isAutomaticDelivery = rawEffectiveDeliveryType === "automatic";
   const isSimProduct = Boolean(
-    !isAutomaticDelivery &&
+    !isExplicitNonShippingDelivery &&
     (
       (product?.category && ["sim-cards", "sim", "phone-cards"].includes(String(product.category))) ||
       (product?.slug &&
@@ -660,9 +667,17 @@ function CheckoutPageContent() {
       (product?.name && (product.name.toLowerCase().includes("sim") || product.name.toLowerCase().includes("mobile")))
     )
   );
-  const isShippingProduct =
-    !isAutomaticDelivery &&
-    (["shipping", "physical"].includes(normalizedDeliveryType) || isSimProduct);
+  const isShippingProduct = isExplicitShippingDelivery || (!isExplicitNonShippingDelivery && isSimProduct);
+  const effectiveDeliveryLabel =
+    rawEffectiveDeliveryType === "automatic"
+      ? "自动发货"
+      : isShippingProduct
+        ? "物流发货"
+        : "人工处理";
+  const displayProduct = useMemo(
+    () => (product ? { ...product, deliveryLabel: effectiveDeliveryLabel } : null),
+    [product, effectiveDeliveryLabel]
+  );
   const selectedPaymentChannel = paymentChannels.find((channel) =>
     getPaymentMethodOption(paymentMethod)?.channelCodes.includes(channel.code)) ?? null;
   const selectedPaymentUnavailable = !ORDER_ENABLED_PAYMENT_METHODS.has(paymentMethod)
@@ -937,7 +952,7 @@ function CheckoutPageContent() {
     <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden lg:py-4 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
       <div data-testid="checkout-layout" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isMobile && "!grid-cols-1 !h-auto")}>
         <ProductDetailCard
-          product={product}
+          product={displayProduct}
           loading={productLoading}
           priceLabel={priceLabel}
           closeHref={

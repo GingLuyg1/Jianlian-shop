@@ -3,8 +3,6 @@ import TutorialImage from "@/components/account/TutorialImage";
 import tutorial from "@/components/account/TutorialsGlass.module.css";
 
 const official = {
-  product: "https://www.fortress.com.hk/en/product/roaming-data-haha-sim-card-reusable-with-50-balance/p/BP_11953923",
-  faq: "https://image.fortress.com.hk/www_media/promo/hahasim_en.pdf",
   registration: "https://web.three.com.hk/prepaid/realnameregistration/index.html",
 };
 
@@ -25,11 +23,6 @@ const examplePrices = [
 
 export default function HahaSimTutorial() {
   return <article className="min-w-0 space-y-7 text-sm leading-7 text-slate-600" aria-label="Haha SIM 实体卡激活与保号教程">
-    <div className="flex flex-wrap gap-x-5 gap-y-1">
-      <a href={official.product} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-[#9f5327] underline underline-offset-4">查看官方商品资料<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></a>
-      <a href={official.faq} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-[#9f5327] underline underline-offset-4">查看官方常见问题 (PDF)<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></a>
-    </div>
-
     <section aria-labelledby="haha-overview"><h2 id="haha-overview" className="text-lg font-semibold text-slate-900">套餐与费用</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{examplePrices.map(([label, value]) => <div key={label} className={tutorial.guideStep}><h3 className="font-semibold text-slate-900">{label}</h3><p className="mt-2">{value}</p></div>)}</div>
       <div className="mt-3 rounded-2xl border border-orange-200/70 bg-orange-50/50 p-4">日包、月包、流量包的有效期与高速流量额度可能因版本和目的地变化；请在 haha TRAVEL App 的结算页核对。通话和短信按实际资费计费。</div>

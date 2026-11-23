@@ -22,7 +22,7 @@ import { evaluateSkuActivationReadiness, formatSkuActivationReasons, SKU_ACTIVAT
 type Draft = { sku_title: string; sku_code: string; price: string; stock: string; original_price: string; image_url: string; sort_order: string; status: ProductStatus; delivery_type: DeliveryType | ""; touched?: boolean };
 type EditorRow = { key: string; sku?: AdminProductSku; draft: Draft };
 export type ProductSkuManagerHandle = { validate: () => boolean; prepareSave: () => Promise<boolean>; saveAll: (product: AdminProduct) => Promise<void>; reload?: () => Promise<void> };
-type Props = { product: AdminProduct | null; refreshKey?: number; defaults: { price: string; original_price: string; stock: string; delivery_type: DeliveryType; status: ProductStatus }; onSummary: (summary: { price: number | null; stock: number }) => void; onSupplierBinding: (product: AdminProduct, sku: AdminProductSku) => void };
+type Props = { product: AdminProduct | null; productSlug?: string; refreshKey?: number; defaults: { price: string; original_price: string; stock: string; delivery_type: DeliveryType; status: ProductStatus }; onSummary: (summary: { price: number | null; stock: number; delivery_type?: DeliveryType }) => void; onSupplierBinding: (product: AdminProduct, sku: AdminProductSku) => void };
 const emptyDraft = (): Draft => ({ sku_title: "", sku_code: "", price: "", stock: "", original_price: "", image_url: "", sort_order: "0", status: "active", delivery_type: "manual" });
 const emptyRow = (): EditorRow => ({ key: crypto.randomUUID(), draft: emptyDraft() });
 const toDraft = (sku: AdminProductSku): Draft => ({ sku_title: sku.sku_title ?? "", sku_code: sku.sku_code ?? "", price: String(sku.price), stock: String(sku.stock), original_price: sku.original_price == null ? "" : String(sku.original_price), image_url: sku.image_url ?? "", sort_order: String(sku.sort_order), status: sku.status, delivery_type: sku.delivery_type ?? "manual" });
@@ -110,10 +110,31 @@ function SkuOperationalDiagnostics({ diagnostic }: { diagnostic?: SkuOperational
   );
 }
 
-const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(function AdminProductSkuManager({ product, refreshKey = 0, defaults, onSummary, onSupplierBinding }, ref) {
+const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(function AdminProductSkuManager({ product, productSlug, refreshKey = 0, defaults, onSummary, onSupplierBinding }, ref) {
   const [rows, setRows] = useState<EditorRow[]>([]);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+  const normalizedProductSlug = (productSlug ?? product?.slug ?? "").trim();
+  const productSlugRef = useRef(normalizedProductSlug);
+  productSlugRef.current = normalizedProductSlug;
+
+  const syncSingleSkuCode = useCallback((candidateRows: EditorRow[], slugValue = productSlugRef.current) => {
+    const cleanSlug = slugValue.trim();
+    if (!cleanSlug) return { rows: candidateRows, autoSynced: false };
+    const nonEmptyIndices = candidateRows
+      .map((row, idx) => (row.sku || !isSkuDraftEmpty(row.draft) ? idx : -1))
+      .filter((idx) => idx >= 0);
+    if (nonEmptyIndices.length !== 1) return { rows: candidateRows, autoSynced: false };
+    const targetIdx = nonEmptyIndices[0];
+    const targetRow = candidateRows[targetIdx];
+    if (targetRow.draft.sku_code.trim() === cleanSlug) return { rows: candidateRows, autoSynced: false };
+    const updated = candidateRows.map((row, idx) =>
+      idx === targetIdx
+        ? { ...row, draft: { ...row.draft, sku_code: cleanSlug, touched: true } }
+        : row
+    );
+    return { rows: updated, autoSynced: true };
+  }, []);
   const [errors, setErrors] = useState<Record<string, Record<string, string>>>({});
   const [diagnostics, setDiagnostics] = useState<CatalogSkuDiagnostics | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -146,11 +167,27 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
           if (!previous || !previous.draft.touched) return { key: sku.id, sku, draft: toDraft(sku) };
           return { ...previous, sku, draft: { ...previous.draft, ...(previous.draft.stock === String(previous.sku?.stock) ? { stock: String(sku.stock) } : {}) } };
         });
-        return [...persisted, ...current.filter((row) => !row.sku && row.key !== "legacy" && !isSkuDraftEmpty(row.draft)), emptyRow()];
+        const merged = [...persisted, ...current.filter((row) => !row.sku && row.key !== "legacy" && !isSkuDraftEmpty(row.draft)), emptyRow()];
+        const synced = syncSingleSkuCode(merged);
+        if (synced.autoSynced) {
+          queueMicrotask(() => {
+            onSummary(deriveSkuProductSummary(synced.rows.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft)));
+          });
+        }
+        return synced.rows;
       });
     } catch (error) { setDiagnostics(null); setLoadError(error instanceof Error ? error.message : "商品规格读取失败"); }
     finally { setLoading(false); }
-  }, [productId]);
+  }, [onSummary, productId, syncSingleSkuCode]);
+  useEffect(() => {
+    if (!normalizedProductSlug || loading) return;
+    const synced = syncSingleSkuCode(rowsRef.current, normalizedProductSlug);
+    if (synced.autoSynced) {
+      rowsRef.current = synced.rows;
+      setRows(synced.rows);
+      onSummary(deriveSkuProductSummary(synced.rows.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft)));
+    }
+  }, [loading, normalizedProductSlug, onSummary, syncSingleSkuCode]);
   useEffect(() => {
     if (previousProductId.current !== productId) {
       setRows([]); rowsRef.current = [];
@@ -248,7 +285,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       rowsRef.current = next; setRows(next);
       setActivationBlocked([]);
       setSelectedSkuIds((current) => new Set(Array.from(current).filter((id) => result.skus.some((sku) => sku.id === id))));
-      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock });
+      const derived = deriveSkuProductSummary(next.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft));
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: derived.delivery_type as DeliveryType | undefined });
       toast.success(`商品规格已保存：新增 ${result.created_count}，更新 ${result.updated_count}`);
     } catch (error) {
       if (error instanceof ProductSkuWorkspaceError || error instanceof SkuWorkspaceInputError) {
@@ -302,7 +340,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       const next = ensureTrailingEmptySkuRow(result.skus.map((sku) => ({ key: sku.id, sku, draft: toDraft(sku) })), emptyRow);
       rowsRef.current = next;
       setRows(next);
-      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock });
+      const derived = deriveSkuProductSummary(next.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft));
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: derived.delivery_type as DeliveryType | undefined });
       const createdSku = result.skus.find((sku) => (sku.sku_code ?? "").toLowerCase() === targetCode.toLowerCase());
       if (createdSku) {
         toast.success("规格已创建，请选择要绑定的供应商");
@@ -368,7 +407,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       toast.success(bulkPreview.action === "activate"
         ? `批量激活完成：激活 ${result.updated_count}，无需修改 ${result.no_change_count}`
         : `批量更新完成：修改 ${result.updated_count}，无需修改 ${result.no_change_count}`);
-      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock });
+      const derived = deriveSkuProductSummary(rowsRef.current.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft));
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: derived.delivery_type as DeliveryType | undefined });
       setSelectedSkuIds(new Set());
       setBulkPreview(null);
       await load();
