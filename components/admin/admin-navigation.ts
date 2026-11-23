@@ -145,12 +145,25 @@ export function isAdminNavigationGroup(item: AdminNavigationItem): item is Admin
   return item.type === "group";
 }
 
-export function isAdminNavigationLinkActive(pathname: string, href: string, productView: string | null) {
+export function isAdminNavigationLinkActive(
+  pathname: string,
+  href: string,
+  productView: string | null,
+  agentTab?: string | null
+) {
   if (href === "/admin/categories") {
     return isPathActive(pathname, href) || (isPathActive(pathname, "/admin/products") && productView === "categories");
   }
   if (href === "/admin/products") {
     return isPathActive(pathname, href) && productView !== "categories";
+  }
+  if (pathname === "/admin/agents" && href.startsWith("/admin/agents")) {
+    const tabInHref = href.includes("?tab=") ? href.split("?tab=")[1] : null;
+    const normalizedTab =
+      agentTab === "applications" || agentTab === "whitelist" || agentTab === "orders"
+        ? agentTab
+        : null;
+    return tabInHref === normalizedTab;
   }
   return isPathActive(pathname, href);
 }

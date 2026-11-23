@@ -891,10 +891,11 @@ function CategoryButton({
         <span className="min-w-0 flex-1 truncate text-left text-xs font-semibold leading-tight sm:text-sm lg:text-base">{category.name}</span>
       </div>
       <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-        {loading ? (
-          <OptionLoadingSpinner active size="sm" />
-        ) : (
-          <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block", active ? "text-primary" : "text-muted-foreground/60")} />
+        <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block transition-opacity duration-150", active ? "text-primary" : "text-muted-foreground/60", loading && "opacity-0")} />
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <OptionLoadingSpinner active size="sm" />
+          </div>
         )}
       </div>
     </button>
@@ -1310,7 +1311,7 @@ function ProductLoadingPlaceholder({ knownCount }: { knownCount: number | undefi
 
 function ProductEmptyState({ search, onResetFilters }: { search: string; onResetFilters: () => void }) {
   return (
-    <div className="flex h-full min-h-[260px] items-center justify-center rounded-2xl border border-dashed border-orange-300/80 bg-gradient-to-r from-orange-100/90 via-orange-50/95 to-orange-100/70 p-8 text-center shadow-xs">
+    <div className="flex h-full min-h-[260px] flex-1 items-center justify-center rounded-2xl bg-white p-8 text-center">
       <div className="max-w-sm space-y-2">
         <p className="text-base font-bold text-primary">暂无商品</p>
         <p className="break-words px-4 text-xs font-medium text-slate-600 leading-relaxed">{search ? `没有找到与“${search}”相关的商品。` : "当前分类还没有可售的商品。"}</p>

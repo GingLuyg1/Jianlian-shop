@@ -867,11 +867,16 @@ export default function AnimatedCharacters({
   const isOrangeActive = draggingChar === "orange" || droppingChar === "orange" || poked.orange;
   const isYellowActive = draggingChar === "yellow" || droppingChar === "yellow" || poked.yellow;
 
-  // 饱满全圆角胶囊体：底部完全圆角化，绝无生硬直切横线！
-  const purpleBottomRadius = 36;
-  const blackBottomRadius = 55; // 黑色角色宽 110px，55px 为完美全圆角胶囊底
-  const orangeBottomRadius = 50;
-  const yellowBottomRadius = 71; // 黄色角色宽 142px，71px 为完美全圆角胶囊底，按压和弹跳绝不切横线！
+  // 角色底部圆角优化：站立在地面舞台时采用稳固整齐的微圆角平底基座，被抓起悬空时平滑过渡为果冻圆弧底
+  const isPurpleLifted = draggingChar === "purple" && dragPhysics.isLifted;
+  const isBlackLifted = draggingChar === "black" && dragPhysics.isLifted;
+  const isOrangeLifted = draggingChar === "orange" && dragPhysics.isLifted;
+  const isYellowLifted = draggingChar === "yellow" && dragPhysics.isLifted;
+
+  const purpleBottomRadius = isPurpleLifted ? 34 : 14;
+  const blackBottomRadius = isBlackLifted ? 36 : 14;
+  const orangeBottomRadius = isOrangeLifted ? 42 : 18;
+  const yellowBottomRadius = isYellowLifted ? 46 : 16;
 
   // Real-time expression gaze: 仅在用户输入账号或密码（isTyping）时柔和向右看，输入完成后恢复平滑跟随
   const isLookingRight = isTyping && !activeFailPose && !loginSuccess;
@@ -1110,20 +1115,37 @@ export default function AnimatedCharacters({
             clipPath: "inset(-260px -220px -80px -220px)",
           }}
         >
-          {/* 角色立体浮岛展台（Podium Stage）：小人们稳稳站立于展台，彻底消灭生硬悬浮或切断感 */}
+          {/* 角色立体地面阴影与高质感悬浮底座承托 */}
           <div
             style={{
               position: "absolute",
-              bottom: "-12px",
-              left: "10px",
-              width: "490px",
-              height: "36px",
-              borderRadius: "50%",
+              bottom: "-10px",
+              left: "-8px",
+              width: "476px",
+              height: "24px",
+              borderRadius: "999px",
               background:
-                "radial-gradient(ellipse at center, rgba(235, 115, 30, 0.28) 0%, rgba(254, 215, 170, 0.16) 52%, transparent 75%)",
-              filter: "blur(6px)",
+                "radial-gradient(ellipse at center, rgba(15, 23, 42, 0.22) 0%, rgba(15, 23, 42, 0.08) 58%, transparent 80%)",
+              filter: "blur(5px)",
               pointerEvents: "none",
               zIndex: 0,
+            }}
+          />
+          {/* 前景磨砂琉璃舞台唇边（遮挡倾斜时底角微翘，让四个角色底部整齐稳固立于舞台） */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: "-6px",
+              left: "-12px",
+              width: "484px",
+              height: "12px",
+              borderRadius: "999px",
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(226,232,240,0.92) 100%)",
+              boxShadow:
+                "0 6px 16px -2px rgba(15, 23, 42, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.95)",
+              pointerEvents: "none",
+              zIndex: 10,
             }}
           />
           {/* Ground Shadows for Plucked / Lifted Characters */}

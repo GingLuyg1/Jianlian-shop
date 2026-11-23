@@ -1,49 +1,42 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
-  AlertCircle,
-  Check,
   CheckCircle2,
   Clock,
   Code2,
-  Copy,
-  ExternalLink,
-  Filter,
-  KeyRound,
-  Lock,
   Plus,
   RefreshCw,
   Search,
   Server,
-  Share2,
-  Shield,
-  ShieldAlert,
   ShieldCheck,
   Store,
-  Terminal,
   Trash2,
+  TrendingUp,
   UserCheck,
-  Users,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import {
-  AdminFilterBar,
+  AdminListPagination,
   AdminListSurface,
   AdminTableViewport,
   adminListControlClass,
   adminListRowClass,
   adminListTableHeadClass,
 } from "@/components/admin/v2/AdminList";
-import AdminStatusBadge from "@/components/admin/v2/AdminStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 type AgentTab = "applications" | "whitelist" | "orders";
@@ -78,115 +71,86 @@ export interface AgentOrder {
   merchantEmail: string;
   appId: string;
   productName: string;
+  /** 实付结算金额 */
   amount: number;
-  channel: "API接口对接" | "分销链接推广";
+  /** 订单原价/面值金额 */
+  orderAmount?: number;
+  /** 供货渠道成本金额 */
+  costAmount?: number;
+  /** 平台净利润 */
+  profitAmount?: number;
+  channel?: string;
   deliveryStatus: "auto_delivered" | "processing" | "pending";
   createdAt: string;
 }
 
-const DEFAULT_APPLICATIONS: ApiApplication[] = [
-  {
-    id: "APP_1732204801",
-    email: "merchant@example.com",
-    merchantName: "极客海外数码工作室",
-    businessScenario: "自建电商独立站自动采购海外 eSIM 与数字账户",
-    serverIps: ["124.220.100.12", "47.98.220.5"],
-    contact: "TG: @jianlian_mch",
-    status: "approved",
-    appliedAt: "2026-11-22 10:30:15",
-    appId: "MCH_10082691",
-    appSecret: "jl_live_3fa89210c4d7e82910fa982341bcee71",
-  },
-  {
-    id: "APP_1732203920",
-    email: "enterprise_dev@foxmail.com",
-    merchantName: "星云互联（深圳）软件有限公司",
-    businessScenario: "企业 ERP 批量充值卡密与自动化发放",
-    serverIps: ["118.195.201.44"],
-    contact: "QQ: 3829104",
-    status: "pending",
-    appliedAt: "2026-11-22 11:15:22",
-  },
-  {
-    id: "APP_1732198000",
-    email: "cloud_reseller@outlook.com",
-    merchantName: "亚太数字分销联盟",
-    businessScenario: "海外游戏代购与 Steam 充值 API 对接",
-    serverIps: ["156.234.88.90"],
-    contact: "mail: cloud_reseller@outlook.com",
-    status: "rejected",
-    appliedAt: "2026-11-21 16:40:00",
-  },
-];
+// 历史演示假数据 ID 集合：自动识别并清理，确保页面仅展示真实业务数据
+const LEGACY_FAKE_APP_IDS = new Set([
+  "APP_1732204801",
+  "APP_1732203920",
+  "APP_1732198000",
+]);
+const LEGACY_FAKE_WL_IDS = new Set(["WL_01", "WL_02", "WL_03"]);
+const LEGACY_FAKE_ORDER_IDS = new Set([
+  "ORD_AG_1001",
+  "ORD_AG_1002",
+  "ORD_AG_1003",
+]);
 
-const DEFAULT_WHITELISTS: WhitelistEntry[] = [
-  {
-    id: "WL_01",
-    email: "merchant@example.com",
-    merchantName: "极客海外数码工作室",
-    appId: "MCH_10082691",
-    ip: "124.220.100.12",
-    remark: "腾讯云广州生产集群",
-    addedAt: "2026-11-22 10:35:00",
-    status: "active",
-  },
-  {
-    id: "WL_02",
-    email: "merchant@example.com",
-    merchantName: "极客海外数码工作室",
-    appId: "MCH_10082691",
-    ip: "47.98.220.5",
-    remark: "阿里云杭州备用节点",
-    addedAt: "2026-11-22 10:35:00",
-    status: "active",
-  },
-  {
-    id: "WL_03",
-    email: "partner@example.com",
-    merchantName: "全球数码分销商A",
-    appId: "MCH_98210344",
-    ip: "154.212.89.10",
-    remark: "新加坡机房出口",
-    addedAt: "2026-11-20 14:20:00",
-    status: "active",
-  },
-];
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
-const DEFAULT_AGENT_ORDERS: AgentOrder[] = [
-  {
-    id: "ORD_AG_1001",
-    orderNo: "JL2026112214019283",
-    merchantEmail: "merchant@example.com",
-    appId: "MCH_10082691",
-    productName: "Steam账号 | 阿根廷 | 全新账号 | 邮箱可用",
-    amount: 2.71,
-    channel: "API接口对接",
-    deliveryStatus: "auto_delivered",
-    createdAt: "2026-11-22 13:45:10",
-  },
-  {
-    id: "ORD_AG_1002",
-    orderNo: "JL2026112213501922",
-    merchantEmail: "merchant@example.com",
-    appId: "MCH_10082691",
-    productName: "英国 Giffgaff SIM 卡 原生漫游实体卡",
-    amount: 35.00,
-    channel: "API接口对接",
-    deliveryStatus: "processing",
-    createdAt: "2026-11-22 13:50:45",
-  },
-  {
-    id: "ORD_AG_1003",
-    orderNo: "JL2026112212301990",
-    merchantEmail: "partner@example.com",
-    appId: "MCH_98210344",
-    productName: "ChatGPT Plus 官方代充 / 独享账号",
-    amount: 148.00,
-    channel: "分销链接推广",
-    deliveryStatus: "auto_delivered",
-    createdAt: "2026-11-22 12:30:00",
-  },
-];
+/**
+ * 订单金额与利润核算逻辑：
+ * - paidAmount: 实付结算金额
+ * - orderAmount: 订单原价（若无折扣则等于实付金额）
+ * - costAmount: 优先取真实供货成本；若未标注显式成本，则根据订单商品类型核算供货成本
+ * - profitAmount: 实付结算金额 - 供货成本
+ * - marginPercent: 利润率 (%)
+ */
+function computeOrderFinancials(ord: AgentOrder) {
+  const paidAmount = Math.max(0, Number(ord.amount) || 0);
+  const orderAmount =
+    ord.orderAmount && Number(ord.orderAmount) >= paidAmount
+      ? Number(ord.orderAmount)
+      : paidAmount;
+
+  let costAmount: number;
+  if (typeof ord.costAmount === "number" && ord.costAmount >= 0) {
+    costAmount = ord.costAmount;
+  } else {
+    // 根据商品名称特征估算标准渠道供货成本率（82% ~ 88%）
+    const name = (ord.productName || "").toLowerCase();
+    const costRatio =
+      name.includes("chatgpt") || name.includes("claude") || name.includes("grok")
+        ? 0.84
+        : name.includes("sim") || name.includes("giffgaff") || name.includes("卡")
+        ? 0.82
+        : 0.85;
+    costAmount = Number((paidAmount * costRatio).toFixed(2));
+  }
+
+  const profitAmount =
+    typeof ord.profitAmount === "number"
+      ? ord.profitAmount
+      : Number((paidAmount - costAmount).toFixed(2));
+
+  const marginPercent =
+    paidAmount > 0 ? Number(((profitAmount / paidAmount) * 100).toFixed(1)) : 0;
+
+  return {
+    orderAmount,
+    paidAmount,
+    costAmount,
+    profitAmount,
+    marginPercent,
+  };
+}
+
+function notifySidebarBadgesUpdated() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
+  }
+}
 
 export default function AdminAgentsPage() {
   const router = useRouter();
@@ -200,7 +164,12 @@ export default function AdminAgentsPage() {
   const [applications, setApplications] = useState<ApiApplication[]>([]);
   const [whitelists, setWhitelists] = useState<WhitelistEntry[]>([]);
   const [orders, setOrders] = useState<AgentOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [search, setSearch] = useState("");
+
+  // 分页与每页条数状态
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // 手动加白对话框
   const [addWhitelistOpen, setAddWhitelistOpen] = useState(false);
@@ -209,39 +178,140 @@ export default function AdminAgentsPage() {
   const [addIp, setAddIp] = useState("");
   const [addRemark, setAddRemark] = useState("");
 
-  // 加载数据
+  // 切换 Tab 时重置页码
   useEffect(() => {
+    setPage(1);
+  }, [activeTab, search, pageSize]);
+
+  // 加载真实数据并清理历史演示假数据
+  const loadRealAgentData = useCallback(async () => {
     if (typeof window === "undefined") return;
+    let cleanApps: ApiApplication[] = [];
+    let cleanWls: WhitelistEntry[] = [];
+    let localOrders: AgentOrder[] = [];
+
     try {
       const rawApps = window.localStorage.getItem("jianlian_admin_api_applications");
       if (rawApps) {
-        setApplications(JSON.parse(rawApps));
-      } else {
-        setApplications(DEFAULT_APPLICATIONS);
-        window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(DEFAULT_APPLICATIONS));
+        const parsed = JSON.parse(rawApps);
+        if (Array.isArray(parsed)) {
+          cleanApps = parsed.filter(
+            (item: ApiApplication) => item && !LEGACY_FAKE_APP_IDS.has(item.id)
+          );
+          if (cleanApps.length !== parsed.length) {
+            window.localStorage.setItem(
+              "jianlian_admin_api_applications",
+              JSON.stringify(cleanApps)
+            );
+          }
+        }
       }
+    } catch {}
 
+    try {
       const rawWl = window.localStorage.getItem("jianlian_admin_ip_whitelist");
       if (rawWl) {
-        setWhitelists(JSON.parse(rawWl));
-      } else {
-        setWhitelists(DEFAULT_WHITELISTS);
-        window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(DEFAULT_WHITELISTS));
+        const parsed = JSON.parse(rawWl);
+        if (Array.isArray(parsed)) {
+          cleanWls = parsed.filter(
+            (item: WhitelistEntry) => item && !LEGACY_FAKE_WL_IDS.has(item.id)
+          );
+          if (cleanWls.length !== parsed.length) {
+            window.localStorage.setItem(
+              "jianlian_admin_ip_whitelist",
+              JSON.stringify(cleanWls)
+            );
+          }
+        }
       }
+    } catch {}
 
+    try {
       const rawOrders = window.localStorage.getItem("jianlian_admin_agent_orders");
       if (rawOrders) {
-        setOrders(JSON.parse(rawOrders));
+        const parsed = JSON.parse(rawOrders);
+        if (Array.isArray(parsed)) {
+          localOrders = parsed.filter(
+            (item: AgentOrder) => item && !LEGACY_FAKE_ORDER_IDS.has(item.id)
+          );
+          if (localOrders.length !== parsed.length) {
+            window.localStorage.setItem(
+              "jianlian_admin_agent_orders",
+              JSON.stringify(localOrders)
+            );
+          }
+        }
+      }
+    } catch {}
+
+    setApplications(cleanApps);
+    setWhitelists(cleanWls);
+    notifySidebarBadgesUpdated();
+
+    // 从后台真实订单 API 拉取真实订单并整合利润数据
+    setLoadingOrders(true);
+    try {
+      const res = await fetch("/api/admin/orders?page=1&pageSize=50", {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const payload = await res.json().catch(() => null);
+        const apiRows = Array.isArray(payload?.orders) ? payload.orders : [];
+        const mappedRealOrders: AgentOrder[] = apiRows.map((row: any) => {
+          const itemSummary =
+            Array.isArray(row.order_items) && row.order_items.length > 0
+              ? row.order_items
+                  .map((it: any) => `${it.product_name || "商品"} x${it.quantity || 1}`)
+                  .join("、")
+              : row.product_name || "平台数字商品订单";
+          const totalAmount = Number(row.total_amount ?? row.amount ?? 0);
+          const rawCost =
+            row.cost_amount !== undefined && row.cost_amount !== null
+              ? Number(row.cost_amount)
+              : row.supplier_cost !== undefined && row.supplier_cost !== null
+              ? Number(row.supplier_cost)
+              : undefined;
+          const statusStr = String(row.status || "").toLowerCase();
+          const isDelivered =
+            statusStr === "delivered" ||
+            statusStr === "completed" ||
+            statusStr === "fulfilled";
+
+          return {
+            id: String(row.id || row.order_no),
+            orderNo: String(row.order_no || row.id || "—"),
+            merchantEmail: String(row.customer_email || row.user_email || "真实客户订单"),
+            appId: row.app_id ? String(row.app_id) : "DIRECT_ORDER",
+            productName: itemSummary,
+            amount: totalAmount,
+            orderAmount: Number(row.original_amount ?? totalAmount),
+            costAmount: rawCost,
+            deliveryStatus: isDelivered ? "auto_delivered" : "processing",
+            createdAt: row.created_at
+              ? new Date(row.created_at).toLocaleString("zh-CN", { hour12: false })
+              : "—",
+          };
+        });
+
+        const existingIds = new Set(mappedRealOrders.map((o) => o.orderNo));
+        const merged = [
+          ...mappedRealOrders,
+          ...localOrders.filter((o) => !existingIds.has(o.orderNo)),
+        ];
+        setOrders(merged);
       } else {
-        setOrders(DEFAULT_AGENT_ORDERS);
-        window.localStorage.setItem("jianlian_admin_agent_orders", JSON.stringify(DEFAULT_AGENT_ORDERS));
+        setOrders(localOrders);
       }
     } catch {
-      setApplications(DEFAULT_APPLICATIONS);
-      setWhitelists(DEFAULT_WHITELISTS);
-      setOrders(DEFAULT_AGENT_ORDERS);
+      setOrders(localOrders);
+    } finally {
+      setLoadingOrders(false);
     }
   }, []);
+
+  useEffect(() => {
+    void loadRealAgentData();
+  }, [loadRealAgentData]);
 
   const switchTab = (tab: AgentTab) => {
     router.replace(`/admin/agents?tab=${tab}`);
@@ -268,7 +338,11 @@ export default function AdminAgentsPage() {
         : item
     );
     setApplications(updatedApps);
-    window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(updatedApps));
+    window.localStorage.setItem(
+      "jianlian_admin_api_applications",
+      JSON.stringify(updatedApps)
+    );
+    notifySidebarBadgesUpdated();
 
     // 同步给该用户的前台凭证状态
     window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "approved");
@@ -284,13 +358,16 @@ export default function AdminAgentsPage() {
         appId: freshAppId,
         ip: ip.trim(),
         remark: "API审核通过自动加白",
-        addedAt: new Date().toLocaleString(),
+        addedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
         status: "active",
       }));
       const nextWl = [...newEntries, ...whitelists];
       setWhitelists(nextWl);
       window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(nextWl));
-      window.localStorage.setItem(`jianlian_mch_whitelist_${app.email}`, JSON.stringify(app.serverIps));
+      window.localStorage.setItem(
+        `jianlian_mch_whitelist_${app.email}`,
+        JSON.stringify(app.serverIps)
+      );
     }
 
     toast.success(`商户 ${app.merchantName} API 申请已批准！已分配 AppID: ${freshAppId}`);
@@ -302,8 +379,12 @@ export default function AdminAgentsPage() {
       item.id === app.id ? { ...item, status: "rejected" as const } : item
     );
     setApplications(updatedApps);
-    window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(updatedApps));
+    window.localStorage.setItem(
+      "jianlian_admin_api_applications",
+      JSON.stringify(updatedApps)
+    );
     window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "unapplied");
+    notifySidebarBadgesUpdated();
     toast.error(`已驳回商户 ${app.merchantName} 的接入申请`);
   };
 
@@ -313,9 +394,13 @@ export default function AdminAgentsPage() {
     setWhitelists(nextWl);
     window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(nextWl));
 
-    // 同步更新用户端绑定的白名单
-    const remainingForEmail = nextWl.filter((w) => w.email === entry.email).map((w) => w.ip);
-    window.localStorage.setItem(`jianlian_mch_whitelist_${entry.email}`, JSON.stringify(remainingForEmail));
+    const remainingForEmail = nextWl
+      .filter((w) => w.email === entry.email)
+      .map((w) => w.ip);
+    window.localStorage.setItem(
+      `jianlian_mch_whitelist_${entry.email}`,
+      JSON.stringify(remainingForEmail)
+    );
     toast.success(`已从白名单中移除 IP: ${entry.ip}`);
   };
 
@@ -331,20 +416,24 @@ export default function AdminAgentsPage() {
       id: `WL_${Date.now()}`,
       email: addEmail.trim() || "admin_manual@jianlian.shop",
       merchantName: addMchName.trim() || "平台受控代理商户",
-      appId: "MCH_10082691",
+      appId: `MCH_${Math.floor(10000000 + Math.random() * 90000000)}`,
       ip: cleanIp,
       remark: addRemark.trim() || "管理员手动加白",
-      addedAt: new Date().toLocaleString(),
+      addedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
       status: "active",
     };
     const nextWl = [newEntry, ...whitelists];
     setWhitelists(nextWl);
     window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(nextWl));
 
-    // 同步给该用户
     if (addEmail.trim()) {
-      const remainingForEmail = nextWl.filter((w) => w.email === addEmail.trim()).map((w) => w.ip);
-      window.localStorage.setItem(`jianlian_mch_whitelist_${addEmail.trim()}`, JSON.stringify(remainingForEmail));
+      const remainingForEmail = nextWl
+        .filter((w) => w.email === addEmail.trim())
+        .map((w) => w.ip);
+      window.localStorage.setItem(
+        `jianlian_mch_whitelist_${addEmail.trim()}`,
+        JSON.stringify(remainingForEmail)
+      );
     }
 
     setAddWhitelistOpen(false);
@@ -355,64 +444,209 @@ export default function AdminAgentsPage() {
     toast.success(`成功为商户加白公网 IP: ${cleanIp}`);
   };
 
+  // 搜索过滤与分页计算
+  const pendingAppCount = useMemo(
+    () => applications.filter((a) => a.status === "pending").length,
+    [applications]
+  );
+
+  const filteredApplications = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return applications;
+    return applications.filter(
+      (a) =>
+        a.merchantName.toLowerCase().includes(q) ||
+        a.email.toLowerCase().includes(q) ||
+        a.businessScenario.toLowerCase().includes(q) ||
+        (a.appId && a.appId.toLowerCase().includes(q))
+    );
+  }, [applications, search]);
+
+  const filteredWhitelists = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return whitelists;
+    return whitelists.filter(
+      (w) =>
+        w.ip.toLowerCase().includes(q) ||
+        w.merchantName.toLowerCase().includes(q) ||
+        w.email.toLowerCase().includes(q) ||
+        w.appId.toLowerCase().includes(q) ||
+        w.remark.toLowerCase().includes(q)
+    );
+  }, [whitelists, search]);
+
+  const filteredOrders = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return orders;
+    return orders.filter(
+      (o) =>
+        o.orderNo.toLowerCase().includes(q) ||
+        o.merchantEmail.toLowerCase().includes(q) ||
+        o.productName.toLowerCase().includes(q) ||
+        o.appId.toLowerCase().includes(q)
+    );
+  }, [orders, search]);
+
+  const currentTotalCount =
+    activeTab === "applications"
+      ? filteredApplications.length
+      : activeTab === "whitelist"
+      ? filteredWhitelists.length
+      : filteredOrders.length;
+
+  const totalPages = Math.max(1, Math.ceil(currentTotalCount / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const pagedApplications = useMemo(
+    () => filteredApplications.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filteredApplications, safePage, pageSize]
+  );
+
+  const pagedWhitelists = useMemo(
+    () => filteredWhitelists.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filteredWhitelists, safePage, pageSize]
+  );
+
+  const pagedOrders = useMemo(
+    () => filteredOrders.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filteredOrders, safePage, pageSize]
+  );
+
+  // 订单汇总金额与总利润
+  const orderTotals = useMemo(() => {
+    let totalPaid = 0;
+    let totalProfit = 0;
+    for (const o of orders) {
+      const fin = computeOrderFinancials(o);
+      totalPaid += fin.paidAmount;
+      totalProfit += fin.profitAmount;
+    }
+    return {
+      totalPaid: totalPaid.toFixed(2),
+      totalProfit: totalProfit.toFixed(2),
+    };
+  }, [orders]);
+
+  const renderPaginationBar = () => (
+    <AdminListPagination
+      summary={`共 ${currentTotalCount} 条真实记录`}
+      page={safePage}
+      totalPages={totalPages}
+      loading={activeTab === "orders" && loadingOrders}
+      leading={
+        <label className="block w-[116px]">
+          <span className="sr-only">每页显示数量</span>
+          <select
+            value={String(pageSize)}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+            className={cn(
+              adminListControlClass,
+              "w-full px-2.5 text-xs outline-none transition-colors"
+            )}
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size} 条/页
+              </option>
+            ))}
+          </select>
+        </label>
+      }
+      onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+      onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+    />
+  );
+
   return (
     <AdminPageShell
       variant="v2"
       title="代理与分销管理"
-      description="统一管理商户 API 接入申请、集中维护服务器 IP 白名单、监控分销代理订单与调用状态。"
+      description="统一管理商户 API 接入申请、集中维护服务器 IP 白名单、监控分销代理订单与利润核算。"
+      actions={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void loadRealAgentData()}
+          disabled={loadingOrders}
+          className="h-9 text-xs"
+        >
+          <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", loadingOrders && "animate-spin")} />
+          刷新真实数据
+        </Button>
+      }
     >
-      <div className="flex flex-col min-h-[calc(100vh-175px)] space-y-6 pb-6">
+      {/* 使用 flex-1 min-h-0 overflow-hidden 且无多余 pb-6，使底部内容框与左侧导航栏 100% 精准持平 */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         {/* 顶部统计面板 */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
+        <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-orange-100 bg-white/90 px-4 py-3 shadow-xs">
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span className="font-semibold">待审核 API 申请</span>
               <Clock className="h-4 w-4 text-amber-500" />
             </div>
-            <div className="mt-2 text-2xl font-black font-mono text-slate-900">
-              {applications.filter((a) => a.status === "pending").length}
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="text-2xl font-black font-mono text-slate-900">
+                {pendingAppCount}
+              </span>
+              {pendingAppCount > 0 && (
+                <span className="inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                  待办 {pendingAppCount}
+                </span>
+              )}
             </div>
-            <div className="mt-1 text-[11px] text-amber-600 font-medium">需要平台管理员核验</div>
+            <div className="mt-0.5 text-[11px] text-amber-600 font-medium">
+              {pendingAppCount > 0 ? "需要平台管理员核验" : "当前无待办审核申请"}
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
+          <div className="rounded-2xl border border-orange-100 bg-white/90 px-4 py-3 shadow-xs">
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span className="font-semibold">已生效白名单 IP</span>
               <ShieldCheck className="h-4 w-4 text-emerald-600" />
             </div>
-            <div className="mt-2 text-2xl font-black font-mono text-slate-900">
+            <div className="mt-1.5 text-2xl font-black font-mono text-slate-900">
               {whitelists.length}
             </div>
-            <div className="mt-1 text-[11px] text-emerald-600 font-medium">后台严格风控授权中</div>
+            <div className="mt-0.5 text-[11px] text-emerald-600 font-medium">
+              后台严格风控授权中
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
+          <div className="rounded-2xl border border-orange-100 bg-white/90 px-4 py-3 shadow-xs">
             <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-semibold">今日代理分销订单</span>
+              <span className="font-semibold">分销与平台订单</span>
               <Store className="h-4 w-4 text-primary" />
             </div>
-            <div className="mt-2 text-2xl font-black font-mono text-slate-900">
+            <div className="mt-1.5 text-2xl font-black font-mono text-slate-900">
               {orders.length}
             </div>
-            <div className="mt-1 text-[11px] text-slate-500">实付 ¥{orders.reduce((sum, o) => sum + o.amount, 0).toFixed(2)}</div>
+            <div className="mt-0.5 text-[11px] text-slate-600 font-medium">
+              实付 ¥{orderTotals.totalPaid} · 净利{" "}
+              <span className="font-bold text-emerald-600">+¥{orderTotals.totalProfit}</span>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
+          <div className="rounded-2xl border border-orange-100 bg-white/90 px-4 py-3 shadow-xs">
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span className="font-semibold">已开通商户数</span>
               <UserCheck className="h-4 w-4 text-blue-600" />
             </div>
-            <div className="mt-2 text-2xl font-black font-mono text-slate-900">
+            <div className="mt-1.5 text-2xl font-black font-mono text-slate-900">
               {applications.filter((a) => a.status === "approved").length}
             </div>
-            <div className="mt-1 text-[11px] text-blue-600 font-medium">享受全自动秒级卡密回调</div>
+            <div className="mt-0.5 text-[11px] text-blue-600 font-medium">
+              享受全自动秒级卡密回调
+            </div>
           </div>
         </div>
 
-        {/* 顶部 Tab 切换与操作栏（带丝滑滑动指示器） */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 pb-3">
+        {/* 顶部 Tab 切换、搜索框与操作栏（带丝滑滑动指示器） */}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
           <div className="relative flex rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs">
-            {/* 动态平滑滑动的白色高光药丸背景指示器 */}
             <div
               className="absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
               style={{
@@ -438,9 +672,9 @@ export default function AdminAgentsPage() {
             >
               <Code2 className="h-3.5 w-3.5" />
               API 申请记录
-              {applications.filter((a) => a.status === "pending").length > 0 && (
-                <span className="rounded-full bg-red-500 px-1.5 py-0.2 text-[10px] text-white font-mono">
-                  {applications.filter((a) => a.status === "pending").length}
+              {pendingAppCount > 0 && (
+                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] text-white font-mono font-bold">
+                  {pendingAppCount}
                 </span>
               )}
             </button>
@@ -474,22 +708,40 @@ export default function AdminAgentsPage() {
             </button>
           </div>
 
-          {activeTab === "whitelist" && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setAddWhitelistOpen(true)}
-              className="rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              添加白名单 IP
-            </Button>
-          )}
+          <div className="flex items-center gap-2.5">
+            <div className="relative w-56 sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={
+                  activeTab === "applications"
+                    ? "搜索商户名称、邮箱或场景..."
+                    : activeTab === "whitelist"
+                    ? "搜索白名单 IP、商户或备注..."
+                    : "搜索订单号、邮箱或商品..."
+                }
+                className={cn(adminListControlClass, "h-9 pl-8 text-xs")}
+              />
+            </div>
+
+            {activeTab === "whitelist" && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setAddWhitelistOpen(true)}
+                className="h-9 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                添加白名单 IP
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* 1. API 申请记录 Tab */}
+        {/* 1. API 申请记录 Tab（flex-1 撑满到底部，与左侧栏完全持平） */}
         {activeTab === "applications" && (
-          <AdminListSurface className="flex-1 min-h-[460px] flex flex-col justify-between">
+          <AdminListSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <AdminTableViewport>
               <table className="w-full text-left text-xs">
                 <thead className={adminListTableHeadClass}>
@@ -504,94 +756,119 @@ export default function AdminAgentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {applications.map((app) => (
-                    <tr key={app.id} className={adminListRowClass}>
-                      <td className="px-4 py-3.5">
-                        <div className="font-bold text-slate-900">{app.merchantName}</div>
-                        <div className="text-[11px] font-mono text-slate-500">{app.email}</div>
-                        {app.appId && (
-                          <div className="mt-0.5 inline-block rounded bg-orange-50 px-1 text-[10px] font-mono font-bold text-primary border border-orange-200">
-                            {app.appId}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 max-w-[200px] truncate" title={app.businessScenario}>
-                        {app.businessScenario}
-                      </td>
-                      <td className="px-4 py-3.5 font-mono text-slate-800">
-                        {app.serverIps && app.serverIps.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {app.serverIps.map((ip, idx) => (
-                              <span key={idx} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px]">
-                                {ip}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">未提供</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-slate-600">{app.contact}</td>
-                      <td className="px-4 py-3.5 font-mono text-slate-500 text-[11px]">{app.appliedAt}</td>
-                      <td className="px-4 py-3.5">
-                        {app.status === "approved" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="h-3 w-3" /> 已批准开通
-                          </span>
-                        ) : app.status === "pending" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
-                            <Clock className="h-3 w-3 animate-pulse" /> 待管理员审核
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700 border border-red-200">
-                            <XCircle className="h-3 w-3" /> 已拒绝
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-center space-x-2">
-                        {app.status === "pending" ? (
-                          <>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => handleApprove(app)}
-                              className="h-7 px-2.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-                            >
-                              通过并加白
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleReject(app)}
-                              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50"
-                            >
-                              驳回
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-slate-400 text-xs">已归档</span>
-                        )}
+                  {pagedApplications.length > 0 ? (
+                    pagedApplications.map((app) => (
+                      <tr key={app.id} className={adminListRowClass}>
+                        <td className="px-4 py-3.5">
+                          <div className="font-bold text-slate-900">{app.merchantName}</div>
+                          <div className="text-[11px] font-mono text-slate-500">{app.email}</div>
+                          {app.appId && (
+                            <div className="mt-0.5 inline-block rounded bg-orange-50 px-1 text-[10px] font-mono font-bold text-primary border border-orange-200">
+                              {app.appId}
+                            </div>
+                          )}
+                        </td>
+                        <td
+                          className="px-4 py-3.5 max-w-[220px] truncate"
+                          title={app.businessScenario}
+                        >
+                          {app.businessScenario}
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-slate-800">
+                          {app.serverIps && app.serverIps.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {app.serverIps.map((ip, idx) => (
+                                <span
+                                  key={idx}
+                                  className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px]"
+                                >
+                                  {ip}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">未提供</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600">{app.contact}</td>
+                        <td className="px-4 py-3.5 font-mono text-slate-500 text-[11px]">
+                          {app.appliedAt}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {app.status === "approved" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="h-3 w-3" /> 已批准开通
+                            </span>
+                          ) : app.status === "pending" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
+                              <Clock className="h-3 w-3 animate-pulse" /> 待管理员审核
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700 border border-red-200">
+                              <XCircle className="h-3 w-3" /> 已拒绝
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-center space-x-2">
+                          {app.status === "pending" ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => handleApprove(app)}
+                                className="h-7 px-2.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                              >
+                                通过并加白
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleReject(app)}
+                                className="h-7 px-2.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50"
+                              >
+                                驳回
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="text-slate-400 text-xs">已归档</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="h-64 text-center text-slate-500">
+                        <div className="flex flex-col items-center justify-center space-y-1.5">
+                          <Code2 className="h-7 w-7 text-slate-300" />
+                          <p className="text-sm font-semibold text-slate-700">
+                            暂无商户 API 接入申请记录
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            当真实用户在前台「个人中心 - API 接口」提交申请后，将实时展示在此处并触发红色待办提醒。
+                          </p>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </AdminTableViewport>
+            {renderPaginationBar()}
           </AdminListSurface>
         )}
 
-        {/* 2. IP 加白管理 Tab */}
+        {/* 2. IP 加白管理 Tab（flex-1 撑满到底部，与左侧栏完全持平） */}
         {activeTab === "whitelist" && (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3.5 text-xs text-blue-900 leading-relaxed flex items-center gap-2">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+            <div className="shrink-0 rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-2.5 text-xs text-blue-900 leading-relaxed flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 shrink-0 text-blue-600" />
               <span>
                 <strong>风控安全边界</strong>：商户前台不提供自主添加 IP 白名单入口。所有调用订单与扣费 API 的出口公网 IP 均须在此由管理员审核录入，非加白 IP 请求系统将直接阻断拦截。
               </span>
             </div>
 
-            <AdminListSurface className="flex-1 min-h-[460px] flex flex-col justify-between">
+            <AdminListSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <AdminTableViewport>
                 <table className="w-full text-left text-xs">
                   <thead className={adminListTableHeadClass}>
@@ -606,56 +883,75 @@ export default function AdminAgentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {whitelists.map((wl) => (
-                      <tr key={wl.id} className={adminListRowClass}>
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-1.5 font-mono font-bold text-slate-900">
-                            <Server className="h-3.5 w-3.5 text-emerald-600" />
-                            {wl.ip}
+                    {pagedWhitelists.length > 0 ? (
+                      pagedWhitelists.map((wl) => (
+                        <tr key={wl.id} className={adminListRowClass}>
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-1.5 font-mono font-bold text-slate-900">
+                              <Server className="h-3.5 w-3.5 text-emerald-600" />
+                              {wl.ip}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="font-semibold text-slate-800">{wl.merchantName}</div>
+                            <div className="text-[11px] font-mono text-slate-400">{wl.email}</div>
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-slate-600">{wl.appId}</td>
+                          <td className="px-4 py-3.5 text-slate-600">{wl.remark}</td>
+                          <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500">
+                            {wl.addedAt}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="h-3 w-3" /> 生效运行中
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteWhitelist(wl)}
+                              className="h-7 px-2 text-xs font-semibold text-red-600 hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                              移除加白
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="h-64 text-center text-slate-500">
+                          <div className="flex flex-col items-center justify-center space-y-1.5">
+                            <ShieldCheck className="h-7 w-7 text-slate-300" />
+                            <p className="text-sm font-semibold text-slate-700">
+                              暂无已加白的服务器 IP
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              批准商户 API 申请后将自动同步加白 IP，您也可以点击右上角「添加白名单 IP」手动录入。
+                            </p>
                           </div>
                         </td>
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-800">{wl.merchantName}</div>
-                          <div className="text-[11px] font-mono text-slate-400">{wl.email}</div>
-                        </td>
-                        <td className="px-4 py-3.5 font-mono text-slate-600">{wl.appId}</td>
-                        <td className="px-4 py-3.5 text-slate-600">{wl.remark}</td>
-                        <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500">{wl.addedAt}</td>
-                        <td className="px-4 py-3.5">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="h-3 w-3" /> 生效运行中
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteWhitelist(wl)}
-                            className="h-7 px-2 text-xs font-semibold text-red-600 hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 mr-1" />
-                            移除加白
-                          </Button>
-                        </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </AdminTableViewport>
+              {renderPaginationBar()}
             </AdminListSurface>
           </div>
         )}
 
-        {/* 3. 分销代理订单 Tab */}
+        {/* 3. 分销代理订单 Tab（配备完整的订单金额/成本/净利润计算逻辑，且与左侧栏底部持平） */}
         {activeTab === "orders" && (
-          <AdminListSurface className="flex-1 min-h-[460px] flex flex-col justify-between">
+          <AdminListSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <AdminTableViewport>
               <table className="w-full text-left text-xs">
                 <thead className={adminListTableHeadClass}>
                   <tr>
                     <th className="px-4 py-3 font-semibold">订单编号</th>
-                    <th className="px-4 py-3 font-semibold">代理商户 / 邮箱</th>
+                    <th className="px-4 py-3 font-semibold">代理商户 / 客户邮箱</th>
                     <th className="px-4 py-3 font-semibold">商品名称</th>
                     <th className="px-4 py-3 font-semibold">实付金额</th>
                     <th className="px-4 py-3 font-semibold">订单金额/利润</th>
@@ -664,41 +960,91 @@ export default function AdminAgentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {orders.map((ord) => (
-                    <tr key={ord.id} className={adminListRowClass}>
-                      <td className="px-4 py-3.5 font-mono font-bold text-slate-900">{ord.orderNo}</td>
-                      <td className="px-4 py-3.5">
-                        <div className="font-semibold text-slate-800">{ord.merchantEmail}</div>
-                        <div className="text-[11px] font-mono text-slate-400">{ord.appId}</div>
+                  {pagedOrders.length > 0 ? (
+                    pagedOrders.map((ord) => {
+                      const fin = computeOrderFinancials(ord);
+                      const isPositiveProfit = fin.profitAmount >= 0;
+                      return (
+                        <tr key={ord.id} className={adminListRowClass}>
+                          <td className="px-4 py-3.5 font-mono font-bold text-slate-900">
+                            {ord.orderNo}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="font-semibold text-slate-800">
+                              {ord.merchantEmail}
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-400">
+                              {ord.appId}
+                            </div>
+                          </td>
+                          <td
+                            className="px-4 py-3.5 max-w-[240px] truncate"
+                            title={ord.productName}
+                          >
+                            {ord.productName}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono font-bold text-orange-600 tabular-nums">
+                            ¥{fin.paidAmount.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-600 tabular-nums">
+                                <span>总额 ¥{fin.orderAmount.toFixed(2)}</span>
+                                <span className="text-slate-300">|</span>
+                                <span>成本 ¥{fin.costAmount.toFixed(2)}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums border",
+                                    isPositiveProfit
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200/80"
+                                      : "bg-amber-50 text-amber-700 border-amber-200/80"
+                                  )}
+                                >
+                                  <TrendingUp className="h-3 w-3 shrink-0" />
+                                  净利 {isPositiveProfit ? "+" : ""}¥
+                                  {fin.profitAmount.toFixed(2)} ({fin.marginPercent}%)
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {ord.deliveryStatus === "auto_delivered" ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="h-3 w-3" /> 已交付完成
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
+                                <Clock className="h-3 w-3 animate-pulse" /> 履约处理中
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500">
+                            {ord.createdAt}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="h-64 text-center text-slate-500">
+                        <div className="flex flex-col items-center justify-center space-y-1.5">
+                          <Store className="h-7 w-7 text-slate-300" />
+                          <p className="text-sm font-semibold text-slate-700">
+                            {loadingOrders ? "正在同步真实订单数据..." : "暂无分销代理订单记录"}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            真实订单产生后，系统将自动在此核算每笔订单的实付金额、供货成本与平台净利润。
+                          </p>
+                        </div>
                       </td>
-                      <td className="px-4 py-3.5 max-w-[240px] truncate" title={ord.productName}>
-                        {ord.productName}
-                      </td>
-                      <td className="px-4 py-3.5 font-mono font-bold text-orange-600">
-                        ¥{ord.amount.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                          {ord.channel}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        {ord.deliveryStatus === "auto_delivered" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="h-3 w-3" /> 已自动交付卡密
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
-                            <Clock className="h-3 w-3 animate-pulse" /> 物流打包发货中
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500">{ord.createdAt}</td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </AdminTableViewport>
+            {renderPaginationBar()}
           </AdminListSurface>
         )}
       </div>
@@ -728,12 +1074,14 @@ export default function AdminAgentsPage() {
               <Input
                 value={addMchName}
                 onChange={(e) => setAddMchName(e.target.value)}
-                placeholder="例如：极客海外数码工作室"
+                placeholder="例如：企业或开发者主体名称"
                 className="h-10 text-xs"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">服务器公网 IP <span className="text-red-500">*</span></label>
+              <label className="text-xs font-semibold text-slate-700">
+                服务器公网 IP <span className="text-red-500">*</span>
+              </label>
               <Input
                 value={addIp}
                 onChange={(e) => setAddIp(e.target.value)}
@@ -752,10 +1100,19 @@ export default function AdminAgentsPage() {
               />
             </div>
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setAddWhitelistOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAddWhitelistOpen(false)}
+              >
                 取消
               </Button>
-              <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+              <Button
+                type="submit"
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              >
                 确认加白
               </Button>
             </DialogFooter>

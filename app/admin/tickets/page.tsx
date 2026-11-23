@@ -155,6 +155,7 @@ export default function AdminTicketsPage() {
     setTickets(newTickets);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newTickets));
+      window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
     } catch {}
   };
 
@@ -269,7 +270,7 @@ export default function AdminTicketsPage() {
       title="工单处理中心"
       description="统一处理前台用户提交的订单售后、充值异常、账号咨询与接口对接工单，12 小时内快速答复并闭环解决。"
     >
-      <div className="flex flex-col min-h-[calc(100vh-175px)] space-y-5 pb-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         {/* 顶部统计面板 */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-xs">
@@ -347,7 +348,7 @@ export default function AdminTicketsPage() {
               <Clock className="h-3.5 w-3.5" />
               待处理中
               {stats.processing > 0 && (
-                <span className="rounded-full bg-orange-500 px-1.5 py-0.2 text-[10px] text-white font-mono">
+                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] text-white font-mono font-bold">
                   {stats.processing}
                 </span>
               )}

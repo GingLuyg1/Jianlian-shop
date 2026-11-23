@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import AnimatedCharacters from "@/components/auth/AnimatedCharacters";
+import HomePage from "@/app/page";
 import {
   getOrCreateProfile,
   getSupabaseBrowserClient,
@@ -136,10 +137,16 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     setLoginSuccess(true);
   };
 
-  // 当外部传入的 initialMode 变更时同步
+  // 当外部传入的 initialMode 变更时同步，并预热真实首页路由
   useEffect(() => {
     setCurrentMode(initialMode);
   }, [initialMode]);
+
+  useEffect(() => {
+    try {
+      router.prefetch(redirectTo || "/");
+    } catch {}
+  }, [redirectTo, router]);
 
   useEffect(() => {
     if (!isRegister) return;
@@ -506,11 +513,11 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       }
 
       triggerSuccessWithButtonRipple();
-      toast.success("登录成功，正在进入账户中心。");
+      toast.success("登录成功，欢迎进入 Jianlian。");
       setTimeout(() => {
-        router.push(redirectTo);
+        router.replace(redirectTo || "/");
         router.refresh();
-      }, 850);
+      }, 1150);
     } catch (authException) {
       console.warn("[Supabase Auth] Network or runtime exception");
       setError(getSafeNetworkAuthMessage(authException));
@@ -538,22 +545,37 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         </div>
 
         <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_430px]">
-          {/* 左侧卡通角色舞台卡片（全面升级为符合 Jianlian 品牌高奢质感的轻奢晨曦白金微光舱） */}
+          {/* 左侧卡通角色舞台卡片（全新升级：极光星云琉璃剧场 Aurora Spatial Glass Studio 风格背景） */}
           <section className="hidden lg:block">
-            <div className="relative max-w-xl overflow-hidden rounded-[36px] border border-white/95 bg-gradient-to-br from-white/95 via-[#fffaf5]/90 to-[#fff4ea]/80 p-8 shadow-[inset_0_2px_4px_rgba(255,255,255,0.95),0_24px_64px_-12px_rgba(235,115,30,0.12),0_4px_20px_rgba(0,0,0,0.02)] backdrop-blur-2xl ring-1 ring-orange-200/40">
-              {/* 晨曦流金环境光晕与柔和展舱光感 */}
-              <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-gradient-to-br from-[#ffdca8]/45 via-[#ffba75]/25 to-transparent blur-3xl" />
-              <div className="pointer-events-none absolute -bottom-20 -left-20 h-72 w-72 rounded-full bg-gradient-to-tr from-[#ffe6cc]/50 via-[#ffd5ab]/30 to-transparent blur-3xl" />
-              <div className="pointer-events-none absolute inset-x-12 bottom-2 h-20 rounded-[50px] bg-gradient-to-r from-orange-200/10 via-amber-200/25 to-orange-200/10 blur-2xl" />
+            <div className="relative max-w-xl overflow-hidden rounded-[36px] border border-white/95 bg-[linear-gradient(145deg,#f8fafc_0%,#eef2ff_38%,#f5f3ff_72%,#fff7ed_100%)] p-8 shadow-[inset_0_2px_6px_rgba(255,255,255,0.98),0_28px_72px_-16px_rgba(79,70,229,0.14),0_12px_32px_-8px_rgba(234,88,12,0.08)] backdrop-blur-2xl ring-1 ring-indigo-100/80">
+              {/* 建筑感空间微网格纹理 */}
+              <div
+                className="pointer-events-none absolute inset-0 opacity-[0.38]"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(to right, rgba(99, 102, 241, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(99, 102, 241, 0.08) 1px, transparent 1px)",
+                  backgroundSize: "32px 32px",
+                  maskImage:
+                    "radial-gradient(ellipse 85% 75% at 50% 55%, #000 35%, transparent 100%)",
+                  WebkitMaskImage:
+                    "radial-gradient(ellipse 85% 75% at 50% 55%, #000 35%, transparent 100%)",
+                }}
+              />
+              {/* 极光冷暖撞色弥散光球 */}
+              <div className="pointer-events-none absolute -left-16 -top-16 h-72 w-72 rounded-full bg-gradient-to-br from-sky-300/35 via-indigo-300/25 to-transparent blur-3xl" />
+              <div className="pointer-events-none absolute -right-16 top-12 h-80 w-80 rounded-full bg-gradient-to-bl from-violet-300/30 via-fuchsia-200/20 to-transparent blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-20 left-1/4 h-64 w-80 rounded-full bg-gradient-to-t from-amber-300/35 via-orange-200/25 to-transparent blur-3xl" />
+              {/* 舞台底部高光反射底座舱 */}
+              <div className="pointer-events-none absolute inset-x-6 bottom-4 h-24 rounded-[32px] border border-white/80 bg-gradient-to-b from-white/75 to-indigo-50/50 shadow-[0_8px_24px_-6px_rgba(30,41,59,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)] backdrop-blur-md" />
 
               <div className="relative">
-                {/* 重构后的极简高奢品牌微排版与背书 */}
+                {/* 极简品牌微排版与背书 */}
                 <div className="relative z-10 mb-6 space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-orange-200/80 bg-white/95 px-3.5 py-1 text-xs font-bold text-slate-800 shadow-xs backdrop-blur-md">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/70 bg-white/90 px-3.5 py-1 text-xs font-bold text-slate-800 shadow-2xs backdrop-blur-md">
                       <span className="flex h-2 w-2 relative">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
                       </span>
                       <span>Jianlian Hub · 全球数字商品与网络服务</span>
                     </div>
@@ -754,34 +776,38 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                             )}
                           </button>
                         </div>
-                        {/* 忘记密码移至密码右下角 */}
-                        {!isRegister ? (
-                          <div className="flex justify-end pt-0.5">
+                        {/* 忘记密码移至密码右下角：使用双向平滑 Grid 高度折叠，避免登录<->注册切换时高度瞬跳 */}
+                        <div
+                          className={cn(
+                            "grid transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                            !isRegister
+                              ? "grid-rows-[1fr] opacity-100 pt-0.5"
+                              : "grid-rows-[0fr] opacity-0 pointer-events-none pt-0"
+                          )}
+                        >
+                          <div className="min-h-0 overflow-hidden flex justify-end">
                             <Link
                               href="/forgot-password"
+                              tabIndex={isRegister ? -1 : 0}
                               className="text-xs font-medium text-slate-500 transition-colors hover:text-primary"
                             >
                               忘记密码？
                             </Link>
                           </div>
-                        ) : null}
+                        </div>
                       </div>
 
-                      {/* 注册多出的表单项：密码仅输入一次，原确认密码位置改为邮箱验证码 */}
+                      {/* 注册多出的表单项：始终保持 min-h-0 overflow-hidden 以保证 登录->注册 与 注册->登录 双向展开/收起都丝滑过渡 */}
                       <div
                         className={cn(
-                          "grid transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                          "grid transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
                           isRegister
-                            ? "grid-rows-[1fr] opacity-100"
-                            : "grid-rows-[0fr] opacity-0 pointer-events-none"
+                            ? "grid-rows-[1fr] opacity-100 translate-y-0"
+                            : "grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none !mt-0"
                         )}
                       >
-                        <div
-                          className={cn(
-                            "space-y-4 pt-1 px-1 -mx-1",
-                            isRegister ? "overflow-visible" : "overflow-hidden"
-                          )}
-                        >
+                        <div className="min-h-0 overflow-hidden">
+                          <div className="space-y-4 pt-1 pb-1 px-1 -mx-1">
                           <div className="space-y-1.5">
                             <Label htmlFor="emailOtp">邮箱验证码</Label>
                             <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
@@ -855,6 +881,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                               </Link>
                             </Label>
                           </div>
+                          </div>
                         </div>
                       </div>
 
@@ -910,7 +937,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
           </section>
         </div>
       </div>
-      {/* 登录成功同心圆柔光涟漪转场层（以登录按钮为圆心扩散，像蒙版一样随着涟漪经过的位置揭开网站页面） */}
+      {/* 登录成功同心圆涟漪遮罩转场层：以登录按钮为圆心扩散，涟漪扫过之处直接揭开 100% 真实的网站首页 DOM */}
       {loginSuccess && (
         <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
           <style
@@ -922,7 +949,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                     opacity: 0.95;
                   }
                   45% {
-                    opacity: 0.75;
+                    opacity: 0.72;
                   }
                   100% {
                     transform: translate(-50%, -50%) scale(36);
@@ -932,107 +959,26 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                 @keyframes jianlian-mask-curtain-reveal {
                   0% {
                     clip-path: circle(0px at var(--ripple-cx) var(--ripple-cy));
-                    opacity: 0.9;
-                  }
-                  50% {
-                    opacity: 1;
                   }
                   100% {
-                    clip-path: circle(160vmax at var(--ripple-cx) var(--ripple-cy));
-                    opacity: 1;
+                    clip-path: circle(155vmax at var(--ripple-cx) var(--ripple-cy));
                   }
-                }
-                @keyframes jianlian-auth-glow {
-                  0% { opacity: 0; }
-                  40% { opacity: 0.6; }
-                  100% { opacity: 0.92; }
                 }
               `,
             }}
           />
-          {/* 蒙版扩散揭开层：以登录按钮为圆心，随着涟漪扩散揭开网站真实页面 */}
+          {/* 圆形涟漪遮罩蒙版：涟漪扩散经过的区域直接实时透出真实的网站首页 <HomePage />，结束即无缝处在真实首页 */}
           <div
             style={{
               ["--ripple-cx" as string]: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
               ["--ripple-cy" as string]: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
             }}
-            className="fixed inset-0 z-40 bg-[#fdfaf7] animate-[jianlian-mask-curtain-reveal_1.35s_cubic-bezier(0.16,1,0.3,1)_forwards] shadow-2xl overflow-hidden"
+            className="fixed inset-0 z-40 bg-[#fdfaf7] animate-[jianlian-mask-curtain-reveal_1.15s_cubic-bezier(0.22,1,0.36,1)_forwards] overflow-hidden"
           >
-            {/* 揭开后即时展现的 Jianlian 网站真实版面与欢迎氛围 */}
-            <div className="flex h-full w-full">
-              {/* 真实站点左侧导航栏 */}
-              <aside className="hidden md:flex w-64 flex-col justify-between border-r border-orange-100/80 bg-white/90 p-5 shadow-xs">
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3 px-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white font-black text-lg shadow-md shadow-orange-500/25">
-                      JL
-                    </div>
-                    <div>
-                      <h2 className="text-base font-black tracking-tight text-slate-900">Jianlian</h2>
-                      <p className="text-[11px] font-semibold text-slate-600">数字商品服务</p>
-                    </div>
-                  </div>
-                  <nav className="space-y-1.5 text-xs font-semibold">
-                    <div className="flex items-center gap-2.5 rounded-xl bg-orange-50 px-3.5 py-2.5 text-primary shadow-xs">
-                      <Sparkles className="h-4 w-4" />
-                      <span>首页</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-slate-600">
-                      <span>国际 Sim 卡</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-slate-600">
-                      <span>礼品卡 / 充值卡</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-slate-600">
-                      <span>AI 会员充值</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-slate-600">
-                      <span>推广中心</span>
-                    </div>
-                  </nav>
-                </div>
-                <div className="rounded-xl border border-orange-200/60 bg-gradient-to-r from-orange-500 to-amber-500 py-2.5 text-center text-xs font-bold text-white shadow-sm">
-                  在线客服
-                </div>
-              </aside>
-
-              {/* 真实站点主内容区 */}
-              <div className="flex flex-1 flex-col overflow-hidden">
-                {/* 顶部公告与账户栏 */}
-                <header className="flex items-center justify-between border-b border-orange-100/70 bg-white/80 px-6 py-3.5 backdrop-blur-md">
-                  <div className="flex items-center gap-2 rounded-full border border-orange-200/70 bg-orange-50/80 px-3.5 py-1 text-xs font-medium text-slate-700 max-w-lg truncate">
-                    <span className="font-bold text-primary">公告</span>
-                    <span className="truncate">个人或团体合法电商拓客使用，严禁利用购买商品进行任何违法犯罪活动</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs font-bold">
-                    <div className="rounded-full border border-orange-200/70 bg-orange-50/90 px-3 py-1 text-primary">
-                      余额 ¥34.20
-                    </div>
-                    <div className="text-slate-700">{email || "用户"}</div>
-                  </div>
-                </header>
-
-                {/* 页面迎宾与路由就绪 */}
-                <main className="flex flex-1 items-center justify-center p-6">
-                  <div className="rounded-3xl border border-orange-200/90 bg-white/95 p-8 text-center shadow-xl backdrop-blur-md max-w-sm space-y-4 animate-[jianlian-bubble-pop_0.4s_ease-out_forwards]">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-primary shadow-xs">
-                      <Sparkles className="h-7 w-7 animate-spin" style={{ animationDuration: "3s" }} />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-xl font-black text-slate-900">欢迎进入 Jianlian</h3>
-                      <p className="text-xs font-medium text-slate-500">验证通过，正在为您载入商户中心...</p>
-                    </div>
-                    <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-                      <span>会话已建立</span>
-                    </div>
-                  </div>
-                </main>
-              </div>
-            </div>
+            <HomePage />
           </div>
 
-          {/* 以登录按钮为圆心向外喷涌扩散的同心圆涟漪光环 */}
+          {/* 伴随圆形遮罩边缘向外扩散的同心圆水波纹涟漪光环 */}
           <div
             style={{
               position: "absolute",
@@ -1040,7 +986,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
               zIndex: 45,
             }}
-            className="h-32 w-32 rounded-full border-2 border-orange-400/80 bg-radial from-orange-400/30 to-transparent blur-[1px] animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_forwards]"
+            className="h-32 w-32 rounded-full border-2 border-orange-400/85 bg-radial from-orange-400/20 to-transparent blur-[1px] animate-[jianlian-auth-btn-ripple_1.15s_cubic-bezier(0.22,1,0.36,1)_forwards]"
           />
           <div
             style={{
@@ -1049,7 +995,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
               zIndex: 45,
             }}
-            className="h-32 w-32 rounded-full border-2 border-amber-300/80 bg-radial from-amber-300/30 to-transparent blur-sm animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.18s_forwards]"
+            className="h-32 w-32 rounded-full border-2 border-amber-300/80 bg-radial from-amber-300/20 to-transparent blur-xs animate-[jianlian-auth-btn-ripple_1.15s_cubic-bezier(0.22,1,0.36,1)_0.12s_forwards]"
           />
           <div
             style={{
@@ -1058,9 +1004,8 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
               zIndex: 45,
             }}
-            className="h-32 w-32 rounded-full border-2 border-orange-500/70 bg-radial from-orange-500/25 to-transparent blur-md animate-[jianlian-auth-btn-ripple_1.3s_cubic-bezier(0.1,0.8,0.2,1)_0.36s_forwards]"
+            className="h-32 w-32 rounded-full border border-white/90 bg-radial from-white/25 to-transparent blur-sm animate-[jianlian-auth-btn-ripple_1.15s_cubic-bezier(0.22,1,0.36,1)_0.24s_forwards]"
           />
-          <div className="absolute inset-0 z-50 bg-white/20 backdrop-blur-[1px] animate-[jianlian-auth-glow_0.9s_ease-out_forwards]" />
         </div>
       )}
     </main>
