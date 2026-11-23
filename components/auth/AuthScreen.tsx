@@ -113,6 +113,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [registration, setRegistration] = useState<PendingSignup | null>(null);
   const [inlinePendingSignup, setInlinePendingSignup] = useState<PendingSignup | null>(null);
+  const pendingDesiredPasswordRef = useRef<string>("");
 
   // 卡通角色动效状态
   const [isEmailFocused, setIsEmailFocused] = useState(false);
@@ -182,11 +183,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       setError("请输入正确的邮箱地址后再获取验证码。");
       return;
     }
-    const passwordError = validateAuthPassword(password);
-    if (passwordError) {
-      setError("请先输入至少 8 位密码，再点击获取验证码。");
-      return;
-    }
     const config = getSupabaseConfigStatus();
     if (!config.ok) {
       setError("登录服务暂时不可用，请稍后重试。");
@@ -220,10 +216,19 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         return;
       }
 
-      // 首次注册：必须调用 signUp 才会真正触发 Supabase 发送注册验证码邮件
+      // 允许用户仅填写邮箱即可先获取验证码：若此时尚未填写8位密码，先使用一次性高强度临时密码发起 signUp，待用户点击注册验证成功后自动同步更新为用户填写的真实密码
+      const hasValidTypedPassword = !validateAuthPassword(password);
+      const bootstrapPassword = hasValidTypedPassword
+        ? password
+        : `Jl_${
+            typeof crypto !== "undefined" && "randomUUID" in crypto
+              ? crypto.randomUUID()
+              : `${Date.now()}_${Math.random().toString(36).slice(2)}`
+          }_9A!`;
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
-        password,
+        password: bootstrapPassword,
         options: {
           emailRedirectTo: getAuthRedirectUrl(
             `/auth/callback?next=${encodeURIComponent("/account")}`
@@ -295,13 +300,21 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     }
   };
 
-  async function verifyRegistration(code: string, overridePending?: PendingSignup) {
+  async function verifyRegistration(
+    code: string,
+    overridePending?: PendingSignup,
+    desiredPassword?: string
+  ) {
     const activeTarget = overridePending ?? registration;
     if ((!overridePending && loading) || !activeTarget) return;
-    return verifyPendingRegistration(code, activeTarget);
+    return verifyPendingRegistration(code, activeTarget, desiredPassword);
   }
 
-  async function verifyPendingRegistration(code: string, registration: PendingSignup) {
+  async function verifyPendingRegistration(
+    code: string,
+    registration: PendingSignup,
+    desiredPassword?: string
+  ) {
     setError("");
     setMessage("");
     setLoading(true);
@@ -326,6 +339,23 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         setError("无法确认此注册，请重新开始。");
         return;
       }
+      const effectiveDesiredPassword = desiredPassword || pendingDesiredPasswordRef.current;
+      if (effectiveDesiredPassword && !validateAuthPassword(effectiveDesiredPassword)) {
+        const { error: updatePwdError } = await supabase.auth.updateUser({
+          password: effectiveDesiredPassword,
+        });
+        if (updatePwdError) {
+          await supabase.auth.signOut({ scope: "local" });
+          setError(
+            getSafeAuthErrorMessage(
+              updatePwdError,
+              "密码设置失败，请稍后重试。"
+            )
+          );
+          return;
+        }
+      }
+      pendingDesiredPasswordRef.current = "";
       await getOrCreateProfile(supabase, data.user);
       const restriction = await getLoginRestrictionMessage(supabase, data.user.id, true);
       if (restriction) {
@@ -498,14 +528,16 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       if (isRegister) {
         const normalizedInviteCode = inviteCode.trim().toUpperCase();
 
-        // 若用户已点击「获取验证码」完成了 signUp，则直接校验验证码或进入验证页，避免重复 signUp
+        // 若用户已点击「获取验证码」完成了 signUp，则直接校验验证码并将用户输入的密码同步写入账户
         if (inlinePendingSignup && inlinePendingSignup.email === normalizedEmail) {
           const pendingWithInvite: PendingSignup = {
             ...inlinePendingSignup,
             invite: normalizedInviteCode || inlinePendingSignup.invite,
           };
+          const typedPassword = password;
+          pendingDesiredPasswordRef.current = typedPassword;
           if (emailOtp.trim()) {
-            await verifyRegistration(emailOtp.trim(), pendingWithInvite);
+            await verifyRegistration(emailOtp.trim(), pendingWithInvite, typedPassword);
             return;
           }
           setRegistration(pendingWithInvite);
@@ -831,6 +863,50 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                         </div>
                       </div>
 
+                      {/* 注册模式下：邮箱下方紧跟邮箱验证码（填完邮箱即可直接获取并输入验证码），验证码下方才是密码 */}
+                      <div
+                        className={cn(
+                          "grid transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                          isRegister
+                            ? "grid-rows-[1fr] opacity-100 translate-y-0"
+                            : "grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none !mt-0"
+                        )}
+                      >
+                        <div className="min-h-0 overflow-hidden">
+                          <div className="space-y-1.5 pt-0.5 pb-0.5 px-1 -mx-1">
+                            <Label htmlFor="emailOtp">邮箱验证码</Label>
+                            <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
+                              <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
+                              <input
+                                id="emailOtp"
+                                type="text"
+                                value={emailOtp}
+                                onChange={(event) =>
+                                  setEmailOtp(event.target.value.trim())
+                                }
+                                placeholder="请输入邮箱收到的验证码"
+                                className="flex-1 min-w-0 bg-transparent font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
+                                maxLength={8}
+                                tabIndex={isRegister ? 0 : -1}
+                              />
+                              <button
+                                type="button"
+                                onClick={handleSendRegisterOtp}
+                                disabled={otpSending || otpCountdown > 0 || !email.trim()}
+                                tabIndex={isRegister ? 0 : -1}
+                                className="shrink-0 ml-2 rounded-lg bg-orange-100/90 px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition-colors hover:bg-orange-200/90 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {otpSending
+                                  ? "发送中..."
+                                  : otpCountdown > 0
+                                  ? `${otpCountdown}s 后重发`
+                                  : "获取验证码"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="space-y-1.5">
                         <Label htmlFor="password">密码</Label>
                         <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
@@ -892,7 +968,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                         </div>
                       </div>
 
-                      {/* 注册多出的表单项：始终保持 min-h-0 overflow-hidden 以保证 登录->注册 与 注册->登录 双向展开/收起都丝滑过渡 */}
+                      {/* 密码下方的注册附加项：邀请码与用户协议 */}
                       <div
                         className={cn(
                           "grid transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -903,35 +979,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       >
                         <div className="min-h-0 overflow-hidden">
                           <div className="space-y-4 pt-1 pb-1 px-1 -mx-1">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="emailOtp">邮箱验证码</Label>
-                            <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
-                              <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
-                              <input
-                                id="emailOtp"
-                                type="text"
-                                value={emailOtp}
-                                onChange={(event) =>
-                                  setEmailOtp(event.target.value.trim())
-                                }
-                                placeholder="请输入邮箱收到的验证码"
-                                className="flex-1 min-w-0 bg-transparent font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
-                                maxLength={8}
-                              />
-                              <button
-                                type="button"
-                                onClick={handleSendRegisterOtp}
-                                disabled={otpSending || otpCountdown > 0 || !email.trim()}
-                                className="shrink-0 ml-2 rounded-lg bg-orange-100/90 px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition-colors hover:bg-orange-200/90 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {otpSending
-                                  ? "发送中..."
-                                  : otpCountdown > 0
-                                  ? `${otpCountdown}s 后重发`
-                                  : "获取验证码"}
-                              </button>
-                            </div>
-                          </div>
                           <div className="space-y-1.5">
                             <Label htmlFor="inviteCode">邀请码（选填）</Label>
                             <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
