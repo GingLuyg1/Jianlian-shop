@@ -20,7 +20,7 @@ test('recent order records keep mobile and desktop views with product, order num
   assert.match(html, /space-y-3 md:hidden/);
   assert.match(html, /hidden md:block/);
   assert.match(html, /<dt[^>]*>订单号<\/dt>/);
-  assert.match(html, /<dt[^>]*>成交商品<\/dt>/);
+  assert.match(html, /<dt[^>]*>商品名称<\/dt>/);
   assert.match(html, /Synthetic Product/);
   assert.match(html, /JL_SYNTHETIC_VERY_LONG_IDENTIFIER_123456/);
   assert.match(html, /<table/);
@@ -58,9 +58,10 @@ test('channel amounts stay visible and payment stats use the current four-column
   assert.match(lists, /role="region" aria-label="数据表，可左右滑动" tabIndex=\{0\}/);
 });
 
-test('dashboard queries, aggregation and business rules match the current Production base digest', () => {
-  // SHA-256 of app/admin/page.tsx before the component after the approved admin dashboard baseline.
-  const baseDigest = 'ef57b94dcc5766c6d416664e9a57984ed099200c552b66bbcfcec4aac395a25f';
+test('dashboard queries, aggregation and business rules match the reviewed main prefix digest', () => {
+  // Since 10e7016 the prefix only gained the support icon import (0778e4a)
+  // and visitors in TrendMetricKey (920d8fd). Its query helpers did not change.
+  const baseDigest = '37af810d2f7b07a319450dcb55b4d14f4d116481161bbe1a7396cb1ec5af1c5b';
   const prefix = text => text.replaceAll('\r\n', '\n').split('export default function AdminDashboardPage')[0];
   const digest = createHash('sha256').update(prefix(source('app/admin/page.tsx'))).digest('hex');
   assert.equal(digest, baseDigest);

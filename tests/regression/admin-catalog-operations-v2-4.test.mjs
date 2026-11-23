@@ -14,7 +14,7 @@ test("Admin sidebar keeps shell width while using centered 43px navigation items
   assert.match(layout, /--admin-main-offset:204px/);
   assert.match(sidebar, /min-h-\[43px\]/);
   assert.match(sidebar, /mx-auto flex min-h-\[43px\] w-\[calc\(100%-5px\)\]/);
-  assert.match(sidebar, /mx-auto block min-h-\[43px\] w-\[calc\(100%-5px\)\]/);
+  assert.match(sidebar, /mx-auto flex items-center justify-between min-h-\[43px\] w-\[calc\(100%-5px\)\]/);
 });
 
 test("category workspace reserves equal compact category panels and safe sortable product area", () => {
