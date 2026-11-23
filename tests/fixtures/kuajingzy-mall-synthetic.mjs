@@ -23,9 +23,9 @@ export function syntheticCandidate(patch={}) {
 export const syntheticEnvironment=()=>({SUPPLIER_AUTO_PURCHASE_ENABLED:'true',KUAJINGZY_REAL_PURCHASE_ENABLED:'true',KUAJINGZY_MAX_ORDER_COST_CNY:'1.00'});
 
 export const CANARY_USER='00000000-0000-4000-8000-000000000090';
-export const CANARY_PRODUCT='23126f0e-d4ad-44c6-a6ef-cc5956e50087';
-export const CANARY_SKU='0a4e35ee-21bf-4503-b184-c46fca099363';
-export const CANARY_ITEM='imp_9b99e012b51156686bbda185';
-export const CANARY_VARIANT='16';
+export const CANARY_PRODUCT='ab4930de-5eef-4a40-9362-83ed6da9ea71';
+export const CANARY_SKU='c34de5ce-bd2a-4356-aa2a-ca7ed4c3e4cd';
+export const CANARY_ITEM='imp_8f97c91003b23347934cb14e';
+export const CANARY_VARIANT='9';
 export const syntheticCanaryEnvironment=()=>({...syntheticEnvironment(),
   KUAJINGZY_CANARY_USER_ID:CANARY_USER,KUAJINGZY_MAX_ORDER_COST_CNY:'0.10'});
