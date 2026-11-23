@@ -29,7 +29,6 @@ import OneNzProductDetails from "@/components/products/details/OneNzProductDetai
 import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
 import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
 import TMobileProductDetails from "@/components/products/details/TMobileProductDetails";
-import GoogleRegionTutorial from "@/components/account/GoogleRegionTutorial";
 import Link from "next/link";
 import {
   CreditCard,
@@ -3015,23 +3014,29 @@ function GeminiCustomDetailSections({ detailText }: { detailText: string }) {
 
 function GeminiGoogleTutorialFooter() {
   return (
-    <section className="mt-8 rounded-2xl border border-slate-200/90 bg-slate-50/50 p-5 sm:p-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5 text-blue-600" />
-          <h3 className="text-base font-bold text-slate-900">
-            Google 使用与修改国家/地区绑卡教程
-          </h3>
+    <section className="mt-6 rounded-2xl border border-blue-200/90 bg-gradient-to-r from-blue-50/90 via-indigo-50/55 to-blue-50/90 p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs">
+            <BookOpen className="h-4.5 w-4.5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">
+              需要 Google 账号改区、绑卡或扫码降级短信教程？
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-600">
+              点击前往站内 Google 使用教程中心查看完整图文指引。
+            </p>
+          </div>
         </div>
         <Link
           href="/tutorials?topic=google-region"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-blue-700"
         >
-          <span>查看完整教程页</span>
-          <ExternalLink className="h-3.5 w-3.5" />
+          <span>查看 Google 教程</span>
+          <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
-      <GoogleRegionTutorial />
     </section>
   );
 }

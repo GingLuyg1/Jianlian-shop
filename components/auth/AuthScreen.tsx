@@ -112,6 +112,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [registration, setRegistration] = useState<PendingSignup | null>(null);
+  const [inlinePendingSignup, setInlinePendingSignup] = useState<PendingSignup | null>(null);
 
   // 卡通角色动效状态
   const [isEmailFocused, setIsEmailFocused] = useState(false);
@@ -181,6 +182,11 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       setError("请输入正确的邮箱地址后再获取验证码。");
       return;
     }
+    const passwordError = validateAuthPassword(password);
+    if (passwordError) {
+      setError("请先输入至少 8 位密码，再点击获取验证码。");
+      return;
+    }
     const config = getSupabaseConfigStatus();
     if (!config.ok) {
       setError("登录服务暂时不可用，请稍后重试。");
@@ -191,20 +197,86 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     setOtpSending(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error: resendError } = await supabase.auth.resend({
-        type: "signup",
-        email: normalizedEmail,
-      });
-      setOtpCountdown(60);
-      if (resendError) {
-        // 若尚未提交过 signUp，resend 可能会提示用户不存在，此时提示直接点击下方注册获取首次验证码
-        toast.info("验证码请求已提交，若首次注册请填写完整后点击下方注册按钮。");
-      } else {
-        toast.success("验证码已发送至您的邮箱，请查收（如未收到请检查垃圾箱）。");
+      const normalizedInviteCode = inviteCode.trim().toUpperCase();
+
+      // 若同一邮箱已通过本表单发起过 signUp，则调用 resend 重发验证码
+      if (inlinePendingSignup && inlinePendingSignup.email === normalizedEmail) {
+        const { error: resendError } = await supabase.auth.resend({
+          type: "signup",
+          email: normalizedEmail,
+        });
+        if (resendError) {
+          setError(
+            getSafeAuthErrorMessage(
+              resendError,
+              "验证码发送过于频繁或服务暂不可用，请稍后重试。"
+            )
+          );
+          return;
+        }
+        setOtpCountdown(60);
+        setMessage("验证码已重新发送至您的邮箱，请查收（如未收到请检查垃圾箱）。");
+        toast.success("验证码已重新发送至您的邮箱，请查收。");
+        return;
       }
-    } catch {
+
+      // 首次注册：必须调用 signUp 才会真正触发 Supabase 发送注册验证码邮件
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          emailRedirectTo: getAuthRedirectUrl(
+            `/auth/callback?next=${encodeURIComponent("/account")}`
+          ),
+          data: {
+            ...(normalizedInviteCode
+              ? { invite_code: normalizedInviteCode }
+              : {}),
+          },
+        },
+      });
+
+      if (signUpError) {
+        setError(
+          getSafeAuthErrorMessage(
+            signUpError,
+            "验证码发送失败，请稍后重试。"
+          )
+        );
+        return;
+      }
+
+      if (data.session) {
+        await supabase.auth.signOut({ scope: "local" });
+        setError("注册服务尚未启用邮箱确认，请稍后重试。");
+        return;
+      }
+
+      if (!data.user) {
+        setError("无法发起邮箱验证，请稍后重试。");
+        return;
+      }
+
+      const pending: PendingSignup = {
+        email: normalizedEmail,
+        userId: data.user.id,
+        invite: normalizedInviteCode,
+      };
+      setInlinePendingSignup(pending);
+      try {
+        window.sessionStorage.setItem(
+          PENDING_SIGNUP_KEY,
+          encodePendingSignup(pending)
+        );
+      } catch {
+        /* No password/token persistence. */
+      }
+
       setOtpCountdown(60);
-      toast.info("验证码请求已提交，请查看您的邮箱。");
+      setMessage("验证码已发送至您的邮箱，请查收（如未收到请检查垃圾箱或拦截列表）。");
+      toast.success("验证码已发送至您的邮箱，请查收。");
+    } catch (sendException) {
+      setError(getSafeNetworkAuthMessage(sendException));
     } finally {
       setOtpSending(false);
     }
@@ -223,8 +295,13 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     }
   };
 
-  async function verifyRegistration(code: string) {
-    if (loading || !registration) return;
+  async function verifyRegistration(code: string, overridePending?: PendingSignup) {
+    const activeTarget = overridePending ?? registration;
+    if ((!overridePending && loading) || !activeTarget) return;
+    return verifyPendingRegistration(code, activeTarget);
+  }
+
+  async function verifyPendingRegistration(code: string, registration: PendingSignup) {
     setError("");
     setMessage("");
     setLoading(true);
@@ -272,6 +349,8 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       toast.success("邮箱已验证，注册完成。");
       triggerSuccessWithButtonRipple();
       forgetPendingSignup();
+      setRegistration(null);
+      setInlinePendingSignup(null);
       router.replace("/account");
       router.refresh();
     } catch {
@@ -418,6 +497,22 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
 
       if (isRegister) {
         const normalizedInviteCode = inviteCode.trim().toUpperCase();
+
+        // 若用户已点击「获取验证码」完成了 signUp，则直接校验验证码或进入验证页，避免重复 signUp
+        if (inlinePendingSignup && inlinePendingSignup.email === normalizedEmail) {
+          const pendingWithInvite: PendingSignup = {
+            ...inlinePendingSignup,
+            invite: normalizedInviteCode || inlinePendingSignup.invite,
+          };
+          if (emailOtp.trim()) {
+            await verifyRegistration(emailOtp.trim(), pendingWithInvite);
+            return;
+          }
+          setRegistration(pendingWithInvite);
+          setPassword("");
+          return;
+        }
+
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
@@ -465,12 +560,13 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         } catch {
           /* No password/token persistence. */
         }
+        setInlinePendingSignup(pending);
         setRegistration(pending);
         setPassword("");
 
-        // 若用户已在表单中填入邮箱验证码，则直接尝试校验完成注册
+        // 若用户已在表单中填入邮箱验证码，则直接校验完成注册
         if (emailOtp.trim()) {
-          void verifyRegistration(emailOtp.trim());
+          await verifyRegistration(emailOtp.trim(), pending);
           return;
         }
         return;
