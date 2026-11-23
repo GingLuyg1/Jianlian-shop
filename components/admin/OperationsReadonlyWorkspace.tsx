@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { format } from 'date-fns';
 import AdminPageShell from '@/components/admin/AdminPageShell';
+import {
+  AdminDateRangeFilter,
+  getPresetDateRange,
+  type DashboardDateFilterValue,
+} from '@/components/admin/dashboard/AdminDateRangeFilter';
 import { AdminListPagination, AdminListSurface, AdminTableViewport } from '@/components/admin/v2/AdminList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,6 +69,8 @@ function displayValue(kind: Kind, key: string, row: Row) {
 
 export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [dateRangeFilter, setDateRangeFilter] = useState<DashboardDateFilterValue>(() => getPresetDateRange("30d"));
+  const [dateRangeActive, setDateRangeActive] = useState(false);
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [rows, setRows] = useState<Row[]>([]);
@@ -97,40 +105,58 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
     : '查看供应商采购订单执行进度、平台回传单号与耗时流水，数据只读受控。';
   const stats = listPagination(total, page, 50);
 
-  const setQuickDate = (days: number | null) => {
-    if (days === null) {
-      setFilters(old => ({ ...old, start: '', end: '' }));
-      setPage(1);
-      return;
-    }
-    const endD = new Date();
-    const startD = new Date();
-    startD.setDate(startD.getDate() - days);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const startStr = `${startD.getFullYear()}-${pad(startD.getMonth() + 1)}-${pad(startD.getDate())}`;
-    const endStr = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
-    setFilters(old => ({ ...old, start: startStr, end: endStr }));
+  const handleDateRangeChange = (next: DashboardDateFilterValue) => {
+    setDateRangeFilter(next);
+    setDateRangeActive(true);
+    setFilters((old) => ({
+      ...old,
+      start: format(next.from, 'yyyy-MM-dd'),
+      end: format(next.to, 'yyyy-MM-dd'),
+    }));
+    setPage(1);
+  };
+
+  const handleResetDateRange = () => {
+    setDateRangeActive(false);
+    setFilters((old) => ({ ...old, start: '', end: '' }));
     setPage(1);
   };
 
   return <AdminPageShell variant="v2" title={title} description={description}
-    actions={<Button variant="outline" onClick={() => setRevision(v => v + 1)} disabled={loading}>刷新</Button>}>
+    actions={
+      <div className="flex flex-wrap items-center gap-2">
+        {kind === 'supplier-queue' && (
+          <>
+            <AdminDateRangeFilter value={dateRangeFilter} onChange={handleDateRangeChange} size="sm" />
+            {dateRangeActive && (
+              <Button type="button" variant="ghost" size="sm" onClick={handleResetDateRange} className="h-8 px-2.5 text-xs text-slate-600">
+                全部时间
+              </Button>
+            )}
+          </>
+        )}
+        <Button variant="outline" size={kind === 'supplier-queue' ? 'sm' : 'default'} className={kind === 'supplier-queue' ? 'h-8' : undefined} onClick={() => setRevision(v => v + 1)} disabled={loading}>刷新</Button>
+      </div>
+    }>
     <AdminListSurface>
       {kind !== 'worker' && <div className="grid shrink-0 grid-cols-1 gap-2 border-b p-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Input aria-label="搜索" placeholder={kind === 'ledger' ? '邮箱 / 用户名 / 用户ID / 流水号' : '订单号 / 采购任务号 / 上游平台订单号'} value={filters.q ?? ''} onChange={e => change('q', e.target.value)} />
+        <Input aria-label="搜索" className={kind === 'supplier-queue' ? 'sm:col-span-1 lg:col-span-2' : undefined} placeholder={kind === 'ledger' ? '邮箱 / 用户名 / 用户ID / 流水号' : '订单号 / 采购任务号 / 上游平台订单号'} value={filters.q ?? ''} onChange={e => change('q', e.target.value)} />
         <select aria-label="状态" className="min-h-11 rounded-md border px-3" value={filters.status ?? ''} onChange={e => change('status', e.target.value)}>
           <option value="">全部状态</option>{(kind === 'ledger' ? ['pending','completed','failed','cancelled'] : ['pending','processing','retryable_failed','permanent_failed','completed','uncertain','needs_input']).map(s => <option key={s} value={s}>{kind === 'ledger' ? statusLabel(s) : supplierStatusLabel(s)}</option>)}
         </select>
-        <Input aria-label="开始日期（范围见说明）" type="date" value={filters.start ?? ''} onChange={e => change('start', e.target.value)} />
-        <Input aria-label="结束日期（范围见说明）" type="date" value={filters.end ?? ''} onChange={e => change('end', e.target.value)} />
-        {kind === 'supplier-queue' && (
-          <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2 lg:col-span-4 pt-1">
-            <span className="text-xs font-semibold text-slate-500 mr-1">快捷时间：</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => setQuickDate(0)} className="h-7 px-2.5 rounded-lg text-xs">今天</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setQuickDate(7)} className="h-7 px-2.5 rounded-lg text-xs">近 7 天</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setQuickDate(30)} className="h-7 px-2.5 rounded-lg text-xs">近 30 天</Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setQuickDate(null)} className="h-7 px-2.5 rounded-lg text-xs text-slate-500">重置日期</Button>
+        {kind === 'supplier-queue' ? (
+          <div className="flex items-center justify-end text-xs text-slate-500">
+            {dateRangeActive ? (
+              <span>当前时间范围：{filters.start} ~ {filters.end}</span>
+            ) : (
+              <span>当前显示：全部历史采购记录</span>
+            )}
           </div>
+        ) : (
+          <>
+            <Input aria-label="开始日期（范围见说明）" type="date" value={filters.start ?? ''} onChange={e => change('start', e.target.value)} />
+            <Input aria-label="结束日期（范围见说明）" type="date" value={filters.end ?? ''} onChange={e => change('end', e.target.value)} />
+          </>
         )}
         {kind === 'ledger' && <>
           <select aria-label="业务类型" className="min-h-11 rounded-md border px-3" value={filters.business_type ?? ''} onChange={e => change('business_type', e.target.value)}><option value="">全部业务类型</option>{ledgerBusinessOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>

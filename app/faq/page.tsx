@@ -58,6 +58,8 @@ import {
   TICKET_PRIORITIES,
   TICKET_STATUSES,
   STORAGE_KEY,
+  TICKET_RETENTION_DAYS,
+  filterRetainedTickets,
 } from "@/lib/tickets/types";
 
 // 历史测试假工单 ID 过滤器
@@ -69,7 +71,7 @@ export default function FAQPage() {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [activeTabFilter, setActiveTabFilter] = useState<"all" | "processing" | "completed">("all");
+  const [activeTabFilter, setActiveTabFilter] = useState<"all" | "unread" | "processing" | "completed">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   // 新建工单表单
@@ -126,16 +128,16 @@ export default function FAQPage() {
   const [userEmail, setUserEmail] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 初始化加载工单
+  // 初始化加载工单（自动过滤过期超过 7 天的工单记录）
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // 过滤开发测试用的假工单
-          const cleanUserTickets = parsed.filter(
-            (t: any) => t && t.id && !FAKE_DEMO_IDS.has(t.id)
+          // 过滤开发测试用的假工单与超过 7 天保存期的工单
+          const cleanUserTickets = filterRetainedTickets(
+            parsed.filter((t: any) => t && t.id && !FAKE_DEMO_IDS.has(t.id))
           );
           if (cleanUserTickets.length !== parsed.length) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanUserTickets));
@@ -212,6 +214,7 @@ export default function FAQPage() {
   // 过滤后的工单列表
   const filteredTickets = useMemo(() => {
     return tickets.filter((ticket) => {
+      if (activeTabFilter === "unread" && !ticket.hasUnreadReply) return false;
       if (activeTabFilter === "processing" && ticket.status !== "processing") return false;
       if (activeTabFilter === "completed" && ticket.status !== "completed") return false;
       if (searchQuery.trim()) {
@@ -462,25 +465,58 @@ export default function FAQPage() {
               </p>
             </div>
 
-            {/* 顶部指标统计徽章 */}
+            {/* 顶部可点击快捷状态筛选标签 */}
             <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-              <div className={cn(glass.inset, "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-blue-700")}>
+              <button
+                type="button"
+                onClick={() => setActiveTabFilter((prev) => (prev === "unread" ? "all" : "unread"))}
+                title="点击筛选未读回复工单（再次点击恢复全部）"
+                className={cn(
+                  glass.inset,
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all active:scale-95",
+                  activeTabFilter === "unread"
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 ring-2 ring-blue-300"
+                    : "text-blue-700 hover:bg-blue-50/90 hover:border-blue-200"
+                )}
+              >
                 <span className="flex h-2 w-2 relative">
                   {stats.unread > 0 && (
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", activeTabFilter === "unread" ? "bg-white" : "bg-blue-400")}></span>
                   )}
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                  <span className={cn("relative inline-flex rounded-full h-2 w-2", activeTabFilter === "unread" ? "bg-white" : "bg-blue-500")}></span>
                 </span>
                 <span>未读回复 ({stats.unread})</span>
-              </div>
-              <div className={cn(glass.inset, "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-700")}>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTabFilter((prev) => (prev === "processing" ? "all" : "processing"))}
+                title="点击筛选处理中工单（再次点击恢复全部）"
+                className={cn(
+                  glass.inset,
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all active:scale-95",
+                  activeTabFilter === "processing"
+                    ? "bg-amber-500 text-white shadow-sm shadow-amber-500/20 ring-2 ring-amber-300"
+                    : "text-amber-700 hover:bg-amber-50/90 hover:border-amber-200"
+                )}
+              >
                 <Clock className="h-3.5 w-3.5" />
                 <span>处理中 ({stats.processing})</span>
-              </div>
-              <div className={cn(glass.inset, "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-emerald-700")}>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTabFilter((prev) => (prev === "completed" ? "all" : "completed"))}
+                title="点击筛选已完成工单（再次点击恢复全部）"
+                className={cn(
+                  glass.inset,
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all active:scale-95",
+                  activeTabFilter === "completed"
+                    ? "bg-emerald-600 text-white shadow-sm shadow-emerald-500/20 ring-2 ring-emerald-300"
+                    : "text-emerald-700 hover:bg-emerald-50/90 hover:border-emerald-200"
+                )}
+              >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 <span>已完成 ({stats.completed})</span>
-              </div>
+              </button>
             </div>
           </div>
         </section>
@@ -1120,6 +1156,16 @@ export default function FAQPage() {
                       <div className="text-[11px] font-bold text-slate-800">3. 答复完成</div>
                       <div className="text-[10px] text-slate-500">12 小时内回复并更新处理结果</div>
                     </div>
+                  </div>
+
+                  <div className="mt-3.5 rounded-xl border border-orange-200/75 bg-orange-50/75 px-3 py-2.5 text-[11px] leading-relaxed text-orange-900">
+                    <div className="flex items-center gap-1.5 font-bold text-orange-800">
+                      <Clock className="h-3.5 w-3.5 shrink-0 text-orange-600" />
+                      <span>工单记录保存 {TICKET_RETENTION_DAYS} 天</span>
+                    </div>
+                    <p className="mt-0.5 text-[10.5px] text-orange-700/90">
+                      工单对话与附件记录默认保存 {TICKET_RETENTION_DAYS} 天，超期系统将自动归档清理，重要卡密或处理结果请及时保存。
+                    </p>
                   </div>
                 </section>
               </div>

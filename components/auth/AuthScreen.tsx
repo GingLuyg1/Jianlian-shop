@@ -36,7 +36,6 @@ import { cn } from "@/lib/utils";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import AnimatedCharacters from "@/components/auth/AnimatedCharacters";
-import HomePage from "@/app/page";
 import {
   getOrCreateProfile,
   getSupabaseBrowserClient,
@@ -641,10 +640,8 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       }
 
       triggerSuccessWithButtonRipple();
-      setTimeout(() => {
-        router.replace(redirectTo || "/");
-        router.refresh();
-      }, 1150);
+      router.replace(redirectTo || "/");
+      router.refresh();
     } catch (authException) {
       console.warn("[Supabase Auth] Network or runtime exception");
       setError(getSafeNetworkAuthMessage(authException));
@@ -1079,68 +1076,28 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
           </section>
         </div>
       </div>
-      {/* 登录成功同心圆高级水幕涟漪转场层：以登录按钮为圆心光学扩散，高奢晨曦微光，扫过之处自然呈现 100% 真实首页 */}
+      {/* 登录成功同心圆轻盈水波光环：仅保留纯 pointer-events-none 的透明光波反馈，不挂载任何遮挡点击的首页蒙版 */}
       {loginSuccess && (
-        <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
+        <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" aria-hidden="true">
           <style
             dangerouslySetInnerHTML={{
               __html: `
                 @keyframes jianlian-optical-shockwave {
                   0% {
                     transform: translate(-50%, -50%) scale(0.05);
-                    opacity: 0.95;
-                  }
-                  35% {
                     opacity: 0.85;
                   }
-                  70% {
-                    opacity: 0.45;
+                  40% {
+                    opacity: 0.55;
                   }
                   100% {
-                    transform: translate(-50%, -50%) scale(28);
+                    transform: translate(-50%, -50%) scale(22);
                     opacity: 0;
-                  }
-                }
-                @keyframes jianlian-mask-curtain-reveal {
-                  0% {
-                    clip-path: circle(0px at var(--ripple-cx) var(--ripple-cy));
-                    filter: brightness(1.08) saturate(1.05);
-                  }
-                  50% {
-                    filter: brightness(1.03) saturate(1.02);
-                  }
-                  100% {
-                    clip-path: circle(165vmax at var(--ripple-cx) var(--ripple-cy));
-                    filter: brightness(1) saturate(1);
-                  }
-                }
-                @keyframes jianlian-homepage-subtle-settle {
-                  0% {
-                    transform: scale(0.982);
-                    opacity: 0.85;
-                  }
-                  100% {
-                    transform: scale(1);
-                    opacity: 1;
                   }
                 }
               `,
             }}
           />
-          {/* 高级水幕遮罩蒙版：涟漪扩散经过的区域直接实时透出真实的网站首页 <HomePage />，结束即无缝处在真实首页 */}
-          <div
-            style={{
-              ["--ripple-cx" as string]: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
-              ["--ripple-cy" as string]: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
-            }}
-            className="fixed inset-0 z-40 bg-[#fdfaf7] animate-[jianlian-mask-curtain-reveal_1.2s_cubic-bezier(0.16,1,0.3,1)_forwards] overflow-hidden"
-          >
-            <div className="h-full w-full animate-[jianlian-homepage-subtle-settle_1.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-              <HomePage />
-            </div>
-          </div>
-
-          {/* 伴随水幕前缘向外推进的高奢香槟白金光学冲击波晕轮 */}
           <div
             style={{
               position: "absolute",
@@ -1148,7 +1105,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
               zIndex: 45,
             }}
-            className="h-44 w-44 rounded-full bg-radial from-white via-amber-200/40 to-transparent shadow-[0_0_90px_24px_rgba(255,255,255,0.9),0_0_160px_48px_rgba(245,158,11,0.35)] blur-md animate-[jianlian-optical-shockwave_1.2s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+            className="pointer-events-none h-36 w-36 rounded-full bg-radial from-white/70 via-amber-200/30 to-transparent blur-md animate-[jianlian-optical-shockwave_0.55s_cubic-bezier(0.16,1,0.3,1)_forwards]"
           />
           <div
             style={{
@@ -1157,16 +1114,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
               zIndex: 46,
             }}
-            className="h-44 w-44 rounded-full border-2 border-white/90 bg-radial from-white/30 to-transparent shadow-[inset_0_0_40px_rgba(255,255,255,0.8),0_0_60px_16px_rgba(251,191,36,0.3)] blur-xs animate-[jianlian-optical-shockwave_1.2s_cubic-bezier(0.16,1,0.3,1)_0.08s_forwards]"
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
-              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
-              zIndex: 47,
-            }}
-            className="h-44 w-44 rounded-full border border-orange-200/60 bg-transparent blur-sm animate-[jianlian-optical-shockwave_1.2s_cubic-bezier(0.16,1,0.3,1)_0.18s_forwards]"
+            className="pointer-events-none h-36 w-36 rounded-full border-2 border-orange-200/70 bg-transparent blur-xs animate-[jianlian-optical-shockwave_0.55s_cubic-bezier(0.16,1,0.3,1)_0.05s_forwards]"
           />
         </div>
       )}

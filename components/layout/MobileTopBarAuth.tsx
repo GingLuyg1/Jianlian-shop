@@ -143,37 +143,61 @@ export default function MobileTopBarAuth() {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 max-w-[85px] sm:max-w-[110px] justify-between rounded-lg border-slate-200 bg-white px-1.5 text-[11px] font-medium text-slate-700 shadow-none hover:bg-slate-50"
+              className="group h-7 max-w-[85px] sm:max-w-[110px] justify-between rounded-lg border-orange-100 bg-white px-1.5 text-[11px] font-medium text-slate-700 shadow-none hover:bg-orange-50/70"
             >
               <span className="truncate">{getDisplayName(user)}</span>
-              <ChevronDown className="ml-0.5 h-3 w-3 shrink-0 text-slate-400" />
+              <ChevronDown className="ml-0.5 h-3 w-3 shrink-0 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            {accountNavigation.map((item) => {
-              const Icon = item.icon;
-              const active =
-                item.href === "/account"
-                  ? pathname === "/account"
-                  : Boolean(pathname?.startsWith(item.href));
+          <DropdownMenuContent
+            align="end"
+            sideOffset={6}
+            className="w-52 rounded-2xl border border-orange-100/90 bg-white/95 p-1.5 shadow-[0_18px_42px_-12px_rgba(124,72,32,0.18)] backdrop-blur-xl"
+          >
+            <div className="mb-1 flex items-center gap-2 rounded-xl bg-orange-50/70 px-2.5 py-2 border border-orange-100/60">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#df7334] to-[#c85f22] text-[11px] font-extrabold uppercase text-white">
+                {(user.email?.[0] || "U").toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-bold text-slate-900">
+                  {user.email || "我的账号"}
+                </div>
+                <div className="text-[10px] font-semibold text-primary">
+                  余额 ¥{balance.toFixed(2)}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-0.5">
+              {accountNavigation.map((item) => {
+                const Icon = item.icon;
+                const active =
+                  item.href === "/account"
+                    ? pathname === "/account"
+                    : Boolean(pathname?.startsWith(item.href));
 
-              return (
-                <DropdownMenuItem key={item.href} asChild>
-                  <Link
-                    href={item.href}
-                    className={active ? "bg-orange-50 font-medium text-primary" : undefined}
+                return (
+                  <DropdownMenuItem
+                    key={item.href}
+                    asChild
+                    className="cursor-pointer rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:bg-orange-50/90 focus:text-primary"
                   >
-                    <Icon className="mr-2 h-4 w-4" />
-                    {item.label}
-                  </Link>
-                </DropdownMenuItem>
-              );
-            })}
+                    <Link
+                      href={item.href}
+                      className={active ? "bg-orange-50/95 font-bold text-primary" : undefined}
+                    >
+                      <Icon className="mr-2 h-3.5 w-3.5" />
+                      {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </div>
+            <div className="my-1 h-px bg-orange-100/80" />
             <DropdownMenuItem
               onClick={handleSignOut}
-              className="mt-1 border-t border-border pt-2 text-red-600 focus:text-red-600"
+              className="cursor-pointer rounded-xl px-2.5 py-1.5 text-xs font-semibold text-rose-600 focus:bg-rose-50 focus:text-rose-700"
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut className="mr-2 h-3.5 w-3.5" />
               退出登录
             </DropdownMenuItem>
           </DropdownMenuContent>

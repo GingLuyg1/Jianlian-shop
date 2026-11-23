@@ -331,44 +331,79 @@ export default function PublicTopInfoBar({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 max-w-[180px] min-w-0 justify-between rounded-xl border-orange-100 bg-white px-2.5 text-[12px] font-semibold shadow-sm shadow-orange-100/60 hover:bg-orange-50 sm:h-9 sm:w-full sm:max-w-none sm:px-3 sm:text-[13px]"
+                    className="group h-8 max-w-[180px] min-w-0 justify-between rounded-xl border-orange-100 bg-white px-2.5 text-[12px] font-semibold shadow-sm shadow-orange-100/60 transition-all hover:border-orange-200 hover:bg-orange-50/70 data-[state=open]:border-orange-300 data-[state=open]:bg-orange-50/80 sm:h-9 sm:w-full sm:max-w-none sm:px-3 sm:text-[13px]"
                   >
-                    <span className="min-w-0 flex-1 truncate text-left">
+                    <span className="min-w-0 flex-1 truncate text-left text-slate-800">
                       {getDisplayName(user)}
                     </span>
-                    <ChevronDown className="ml-1 h-3 w-3 shrink-0" />
+                    <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180 group-data-[state=open]:text-primary" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  {accountNavigation.map((item) => {
-                    const Icon = item.icon;
-                    const active =
-                      item.href === "/account"
-                        ? pathname === "/account"
-                        : Boolean(pathname?.startsWith(item.href));
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={8}
+                  className="w-56 rounded-2xl border border-orange-100/90 bg-white/95 p-1.5 shadow-[0_18px_42px_-12px_rgba(124,72,32,0.18),0_4px_12px_-4px_rgba(15,23,42,0.06)] ring-1 ring-white/90 backdrop-blur-xl"
+                >
+                  <div className="mb-1 flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-orange-50/90 via-amber-50/60 to-orange-50/30 px-2.5 py-2 border border-orange-100/60">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#df7334] to-[#c85f22] text-xs font-extrabold uppercase text-white shadow-xs">
+                      {(user.email?.[0] || "U").toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-bold text-slate-900">
+                        {getDisplayName(user)}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-orange-700">
+                        <span>可用余额</span>
+                        <span className="font-mono font-bold text-primary">¥{balance.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    {accountNavigation.map((item) => {
+                      const Icon = item.icon;
+                      const active =
+                        item.href === "/account"
+                          ? pathname === "/account"
+                          : Boolean(pathname?.startsWith(item.href));
 
-                    return (
-                      <DropdownMenuItem key={item.href} asChild>
-                        <Link
-                          href={item.href}
-                          className={
-                            active
-                              ? "bg-orange-50 font-medium text-primary"
-                              : undefined
-                          }
+                      return (
+                        <DropdownMenuItem
+                          key={item.href}
+                          asChild
+                          className="cursor-pointer rounded-xl px-2.5 py-2 text-[13px] font-medium text-slate-700 transition-all focus:bg-orange-50/90 focus:text-primary"
                         >
-                          <Icon className="mr-2 h-4 w-4" />
-                          {item.label}
-                        </Link>
-                      </DropdownMenuItem>
-                    );
-                  })}
+                          <Link
+                            href={item.href}
+                            className={cn(
+                              "flex items-center gap-2.5",
+                              active && "bg-orange-50/95 font-bold text-primary shadow-2xs"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                                active
+                                  ? "border-orange-200 bg-white text-primary shadow-2xs"
+                                  : "border-orange-100/70 bg-orange-50/50 text-slate-600"
+                              )}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="flex-1 truncate">{item.label}</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
+                  <div className="my-1.5 h-px bg-gradient-to-r from-transparent via-orange-100 to-transparent" />
                   <DropdownMenuItem
                     onClick={handleSignOut}
-                    className="mt-1 border-t border-border pt-2 text-red-600 focus:text-red-600"
+                    className="group cursor-pointer rounded-xl px-2.5 py-2 text-[13px] font-semibold text-rose-600 transition-all focus:bg-rose-50/90 focus:text-rose-700"
                   >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    退出登录
+                    <span className="mr-2.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-rose-100 bg-rose-50/70 text-rose-600 transition-colors group-focus:border-rose-200 group-focus:bg-rose-100/80">
+                      <LogOut className="h-3.5 w-3.5" />
+                    </span>
+                    <span>退出登录</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

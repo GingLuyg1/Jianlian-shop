@@ -653,7 +653,8 @@ function CheckoutPageContent() {
     selectedDatabaseSkuRow?.delivery_type || productRow?.delivery_type || ""
   ).trim().toLowerCase();
   const isExplicitNonShippingDelivery = ["automatic", "manual", "card", "account", "digital"].includes(rawEffectiveDeliveryType);
-  const isExplicitShippingDelivery = ["shipping", "physical"].includes(rawEffectiveDeliveryType);
+  const isExplicitShippingDelivery = ["shipping", "physical"].includes(String(productRow?.delivery_type ?? "").trim().toLowerCase())
+    || ["shipping", "physical"].includes(rawEffectiveDeliveryType);
   const isAutomaticDelivery = rawEffectiveDeliveryType === "automatic";
   const isSimProduct = Boolean(
     !isExplicitNonShippingDelivery &&
@@ -749,6 +750,15 @@ function CheckoutPageContent() {
       </PublicLayout>
     );
   }
+
+  const handleSelectPaymentMethod = (nextMethod: PaymentMethodCode) => {
+    setPaymentMethod(nextMethod);
+    if (pendingBalanceOrder && nextMethod !== "balance") {
+      window.sessionStorage.removeItem(checkoutSessionKey);
+      setPendingBalanceOrder(null);
+      clientRequestIdRef.current = createCheckoutClientRequestId();
+    }
+  };
 
   const handleSubmit = async () => {
     if (productLoading) return;
@@ -922,6 +932,8 @@ function CheckoutPageContent() {
         // Continue with that order instead of inviting a second submission.
         if (orderNo) {
           router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
+          window.sessionStorage.removeItem(checkoutSessionKey);
+          setPendingBalanceOrder(null);
           return;
         }
         throw new Error(message);
@@ -930,6 +942,7 @@ function CheckoutPageContent() {
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
       window.sessionStorage.removeItem(checkoutSessionKey);
+      setPendingBalanceOrder(null);
       if (result?.paymentSession?.submitForm
         && submitPaymentForm(result.paymentSession.submitForm)) return;
       if (
@@ -941,7 +954,11 @@ function CheckoutPageContent() {
       }
       router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
     } catch (submitError) {
-      toast.error(getErrorText(submitError, "订单创建失败，请稍后重试"));
+      const submitMessage =
+        submitError instanceof Error && submitError.message.trim()
+          ? submitError.message.trim()
+          : getErrorText(submitError, "订单创建失败，请稍后重试");
+      toast.error(submitMessage);
     } finally {
       submissionGuardRef.current.finish();
       setSubmitLoading(false);
@@ -952,7 +969,7 @@ function CheckoutPageContent() {
     <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden lg:py-4 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
       <div data-testid="checkout-layout" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isMobile && "!grid-cols-1 !h-auto")}>
         <ProductDetailCard
-          product={displayProduct}
+          product={displayProduct ?? product}
           loading={productLoading}
           priceLabel={priceLabel}
           closeHref={
@@ -1067,9 +1084,9 @@ function CheckoutPageContent() {
                   selected={paymentMethod}
                   rootRef={paymentDropdownRef}
                   onOpenChange={setPaymentDropdownOpen}
-                  onSelect={setPaymentMethod}
+                  onSelect={handleSelectPaymentMethod}
                   channels={paymentChannels}
-                  disabled={orderConfigurationLocked}
+                  disabled={productLoading || submitLoading}
                 />
                 {selectedPaymentUnavailable ? (
                   <p className="mt-2 text-xs text-amber-700">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import React, { FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -13,8 +13,11 @@ import {
   Clock,
   Clock3,
   Copy,
+  Download,
   ExternalLink,
+  FileText,
   Headphones,
+  Image as ImageIcon,
   Mail,
   MessageCircle,
   MessageSquare,
@@ -24,6 +27,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Upload,
   User,
   X,
   Zap,
@@ -45,6 +49,8 @@ import {
   TICKET_STATUSES,
   INITIAL_ADMIN_DEMO_TICKETS,
   getAdminTicketsFromStorage,
+  filterRetainedTickets,
+  type TicketAttachment,
   type TicketItem,
   type TicketMessage,
   type TicketStatus,
@@ -64,33 +70,42 @@ export default function AdminTicketsPage() {
 
   // 回复表单状态
   const [replyText, setReplyText] = useState("");
+  const [replyImages, setReplyImages] = useState<string[]>([]);
+  const [replyAttachments, setReplyAttachments] = useState<TicketAttachment[]>([]);
   const [markAsCompleted, setMarkAsCompleted] = useState(true);
   const [submittingReply, setSubmittingReply] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  const tabBtnRefs = useRef<Record<AdminTicketTab, HTMLButtonElement | null>>({
+    all: null,
+    processing: null,
+    completed: null,
+    flagged: null,
+  });
+  const [sliderStyle, setSliderStyle] = useState<{ left: number; width: number }>({ left: 4, width: 108 });
+  const [leftColWidth, setLeftColWidth] = useState<number>(384);
 
-  // 初始化加载工单
+  const updateTabGeometry = useCallback(() => {
+    const bar = tabBarRef.current;
+    const activeBtn = tabBtnRefs.current[activeTab];
+    if (bar && activeBtn) {
+      setSliderStyle({
+        left: activeBtn.offsetLeft,
+        width: activeBtn.offsetWidth,
+      });
+      setLeftColWidth(Math.max(320, Math.round(bar.getBoundingClientRect().width)));
+    }
+  }, [activeTab]);
+
+  // 初始化加载工单（自动清理超过 7 天的记录）
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // 归并为两态
-          const normalized: TicketItem[] = parsed.map((t: any) => ({
-            ...t,
-            status: t.status === "completed" || t.status === "replied" ? "completed" : "processing",
-          }));
-          setTickets(normalized);
-          if (normalized.length > 0 && !normalized.some((t) => t.id === selectedTicketId)) {
-            setSelectedTicketId(normalized[0].id);
-          }
-          return;
-        }
-      }
-    } catch {}
-    setTickets(INITIAL_DEMO_TICKETS);
+    const loaded = getAdminTicketsFromStorage();
+    setTickets(loaded);
+    if (loaded.length > 0 && !loaded.some((t) => t.id === selectedTicketId)) {
+      setSelectedTicketId(loaded[0].id);
+    }
   }, []);
 
   // 持久化存储
@@ -128,6 +143,19 @@ export default function AdminTicketsPage() {
     };
   }, [tickets]);
 
+  useLayoutEffect(() => {
+    updateTabGeometry();
+    const bar = tabBarRef.current;
+    if (!bar || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(updateTabGeometry);
+    ro.observe(bar);
+    window.addEventListener("resize", updateTabGeometry);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateTabGeometry);
+    };
+  }, [updateTabGeometry, stats.all, stats.processing, stats.completed, stats.flagged]);
+
   // 过滤工单
   const filteredTickets = useMemo(() => {
     return tickets.filter((t) => {
@@ -153,13 +181,69 @@ export default function AdminTicketsPage() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   };
 
+  // 粘贴图片支持 (Ctrl+V)
+  const handlePasteImages = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (!file) continue;
+        if (file.size > 4 * 1024 * 1024) {
+          toast.error("粘贴的截图不能超过 4MB");
+          continue;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64 = event.target?.result as string;
+          if (base64) {
+            setReplyImages((prev) => (prev.length < 6 ? [...prev, base64] : prev));
+            toast.success("已粘贴图片附件");
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  // 上传图片或文件附件
+  const handleAttachmentFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file) => {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`附件 ${file.name} 超过 5MB 限制`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        if (!base64) return;
+        if (file.type.startsWith("image/")) {
+          setReplyImages((prev) => (prev.length < 6 ? [...prev, base64] : prev));
+          toast.success(`已添加图片：${file.name}`);
+        } else {
+          setReplyAttachments((prev) =>
+            prev.length < 6
+              ? [...prev, { name: file.name, url: base64, mimeType: file.type || "application/octet-stream", size: file.size }]
+              : prev
+          );
+          toast.success(`已添加文件附件：${file.name}`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  };
+
   // 管理员发送官方答复（自动转换为已解决/已处理状态）
   const handleAdminReply = (e: FormEvent) => {
     e.preventDefault();
     if (!currentTicket || submittingReply) return;
     const text = replyText.trim();
-    if (!text) {
-      toast.error("请输入官方答复内容");
+    if (!text && replyImages.length === 0 && replyAttachments.length === 0) {
+      toast.error("请输入官方答复内容或添加图片/文件附件");
       return;
     }
 
@@ -168,7 +252,9 @@ export default function AdminTicketsPage() {
       id: `admin-reply-${Date.now()}`,
       sender: "support",
       senderName: "Jianlian 官方客服",
-      content: text,
+      content: text || (replyImages.length > 0 ? "（已发送图片附件）" : "（已发送文件附件）"),
+      images: replyImages.length > 0 ? [...replyImages] : undefined,
+      attachments: replyAttachments.length > 0 ? [...replyAttachments] : undefined,
       createdAt: getNowFormatted(),
     };
 
@@ -184,6 +270,8 @@ export default function AdminTicketsPage() {
     const nextTickets = tickets.map((t) => (t.id === currentTicket.id ? updatedTicket : t));
     saveTickets(nextTickets);
     setReplyText("");
+    setReplyImages([]);
+    setReplyAttachments([]);
     setSubmittingReply(false);
 
     toast.success(`答复已发送，工单【${currentTicket.id}】状态已自动更新为「已处理」！`);
@@ -228,38 +316,35 @@ export default function AdminTicketsPage() {
       description="统一处理前台用户提交的订单售后、充值异常、账号咨询与接口对接工单，12 小时内快速答复并闭环解决。"
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        {/* 顶部 Tab 切换与搜索栏（带丝滑滑动指示器：全部工单 · 待处理 · 已处理 · 标记） */}
+        {/* 顶部 Tab 切换与搜索栏（带精确 DOM 测量的丝滑滑动指示器：全部工单 · 待处理 · 已处理 · 标记） */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 pb-3">
-          <div className="relative flex rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs">
-            {/* 动态平滑滑动的白色高光药丸背景指示器 */}
+          <div
+            ref={tabBarRef}
+            className="relative flex rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs"
+          >
+            {/* 动态平滑滑动的白色高光药丸背景指示器（按实际按钮宽度精确对齐） */}
             <div
-              className="absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+              className="pointer-events-none absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
               style={{
-                left:
-                  activeTab === "all"
-                    ? "4px"
-                    : activeTab === "processing"
-                    ? "calc(25% + 2px)"
-                    : activeTab === "completed"
-                    ? "calc(50% + 1px)"
-                    : "calc(75% + 0px)",
-                width: "calc(25% - 4px)",
+                left: `${sliderStyle.left}px`,
+                width: `${sliderStyle.width}px`,
               }}
             />
 
             {/* 1. 全部工单 */}
             <button
+              ref={(el) => { tabBtnRefs.current.all = el; }}
               type="button"
               onClick={() => setActiveTab("all")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
                 activeTab === "all"
                   ? "text-slate-900 font-black"
                   : "text-slate-600 hover:text-slate-900"
               )}
             >
-              <MessageSquare className="h-3.5 w-3.5" />
-              全部工单
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+              <span>全部工单</span>
               <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-slate-200 px-1.5 text-[10px] text-slate-700 font-mono font-bold">
                 {stats.all}
               </span>
@@ -267,37 +352,42 @@ export default function AdminTicketsPage() {
 
             {/* 2. 待处理（红色） */}
             <button
+              ref={(el) => { tabBtnRefs.current.processing = el; }}
               type="button"
               onClick={() => setActiveTab("processing")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
                 activeTab === "processing"
                   ? "text-red-600 font-black"
                   : "text-slate-600 hover:text-red-600"
               )}
             >
-              <Clock className="h-3.5 w-3.5 text-red-500" />
-              待处理
-              {stats.processing > 0 && (
-                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] text-white font-mono font-bold">
-                  {stats.processing}
-                </span>
-              )}
+              <Clock className="h-3.5 w-3.5 shrink-0 text-red-500" />
+              <span>待处理</span>
+              <span
+                className={cn(
+                  "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-mono font-bold",
+                  stats.processing > 0 ? "bg-red-500 text-white" : "bg-slate-200 text-slate-600"
+                )}
+              >
+                {stats.processing}
+              </span>
             </button>
 
             {/* 3. 已处理（绿色） */}
             <button
+              ref={(el) => { tabBtnRefs.current.completed = el; }}
               type="button"
               onClick={() => setActiveTab("completed")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
                 activeTab === "completed"
                   ? "text-emerald-600 font-black"
                   : "text-slate-600 hover:text-emerald-600"
               )}
             >
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-              已处理
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+              <span>已处理</span>
               <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-100 text-emerald-700 px-1.5 text-[10px] font-mono font-bold">
                 {stats.completed}
               </span>
@@ -305,17 +395,18 @@ export default function AdminTicketsPage() {
 
             {/* 4. 标记（黄色） */}
             <button
+              ref={(el) => { tabBtnRefs.current.flagged = el; }}
               type="button"
               onClick={() => setActiveTab("flagged")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer",
+                "relative z-10 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap",
                 activeTab === "flagged"
                   ? "text-amber-600 font-black"
                   : "text-slate-600 hover:text-amber-600"
               )}
             >
-              <Bookmark className="h-3.5 w-3.5 text-amber-500" />
-              标记
+              <Bookmark className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+              <span>标记</span>
               {stats.flagged > 0 && (
                 <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] text-white font-mono font-bold">
                   {stats.flagged}
@@ -346,11 +437,14 @@ export default function AdminTicketsPage() {
           </div>
         </div>
 
-        {/* 主体两栏客服处理工作台（内容框置底） */}
+        {/* 主体两栏客服处理工作台（左侧宽度精确对齐顶部「标记」选项卡容器右边界，剩余空间全部给右侧内容框） */}
         <AdminListSurface className="flex-1 min-h-[500px] flex flex-col p-0 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 h-full min-h-[500px]">
-            {/* 左侧：工单列表栏 (4 列) */}
-            <div className="lg:col-span-4 border-r border-slate-100 flex flex-col h-full overflow-hidden bg-slate-50/40">
+          <div
+            style={{ ["--ticket-left-width" as string]: `${leftColWidth}px` }}
+            className="grid grid-cols-1 lg:grid-cols-[var(--ticket-left-width)_minmax(0,1fr)] flex-1 h-full min-h-[500px]"
+          >
+            {/* 左侧：工单列表栏 */}
+            <div className="border-r border-slate-100 flex flex-col h-full overflow-hidden bg-slate-50/40">
               <div className="p-3 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700 shrink-0">
                 <span>工单列表 ({filteredTickets.length})</span>
                 <span className="text-[11px] font-normal text-slate-400">点击进入详情回复</span>
@@ -421,10 +515,13 @@ export default function AdminTicketsPage() {
               </div>
             </div>
 
-            {/* 右侧：工单详情与客服回复工作区 (8 列) */}
-            <div className="lg:col-span-8 flex flex-col h-full overflow-hidden bg-white">
+            {/* 右侧：工单详情与客服回复工作区 */}
+            <div className="min-w-0 flex flex-col h-full overflow-hidden bg-white">
               {currentTicket ? (
-                <div className="flex flex-col h-full overflow-hidden">
+                <div
+                  onPaste={handlePasteImages}
+                  className="flex flex-col h-full overflow-hidden"
+                >
                   {/* 工单头部状态栏 */}
                   <div className="p-4 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-3 shrink-0">
                     <div>
@@ -470,6 +567,17 @@ export default function AdminTicketsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-100">
+                        <Paperclip className="mr-1.5 h-3.5 w-3.5 text-primary" />
+                        <span>上传附件/图片</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*,.pdf,.txt,.csv,.zip,.json,.doc,.docx,.xls,.xlsx"
+                          onChange={handleAttachmentFiles}
+                          className="hidden"
+                        />
+                      </label>
                       <Button
                         type="button"
                         variant="outline"
@@ -546,8 +654,29 @@ export default function AdminTicketsPage() {
                                       src={img}
                                       alt="截图"
                                       onClick={() => setPreviewImage(img)}
-                                      className="h-14 w-14 cursor-zoom-in rounded-lg object-cover"
+                                      className="h-14 w-14 cursor-zoom-in rounded-lg object-cover border border-white/20"
                                     />
+                                  ))}
+                                </div>
+                              )}
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div className="mt-2 space-y-1.5">
+                                  {msg.attachments.map((att, i) => (
+                                    <a
+                                      key={i}
+                                      href={att.url}
+                                      download={att.name}
+                                      className={cn(
+                                        "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors",
+                                        isSupport
+                                          ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                                      )}
+                                    >
+                                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                                      <span className="truncate max-w-[200px]">{att.name}</span>
+                                      <Download className="ml-auto h-3 w-3 shrink-0 opacity-75" />
+                                    </a>
                                   ))}
                                 </div>
                               )}
@@ -559,27 +688,86 @@ export default function AdminTicketsPage() {
                     </div>
                   </div>
 
-                  {/* 官方答复输入底栏 */}
+                  {/* 官方答复输入底栏（支持 Ctrl+V 粘贴图片与上传图片/文件） */}
                   <form
                     onSubmit={handleAdminReply}
+                    onPaste={handlePasteImages}
                     className="p-3.5 border-t border-slate-100 bg-slate-50/40 shrink-0 space-y-2.5"
                   >
                     <Textarea
                       rows={3}
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="输入官方处理结果、答复方案或操作指引... 发送后客户在工单中心可即时查阅"
+                      onPaste={handlePasteImages}
+                      placeholder="输入官方处理结果、答复方案或操作指引（支持直接 Ctrl+V 粘贴截图，或点击右上角/下方添加附件）..."
                       className="rounded-xl border-slate-200 bg-white text-xs shadow-none resize-none"
                     />
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 font-medium">
-                        💡 发送官方答复后，此工单处理状态将<strong className="text-emerald-700 font-bold">自动转换为「已处理」</strong>
-                      </span>
+                    {(replyImages.length > 0 || replyAttachments.length > 0) && (
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        {replyImages.map((img, i) => (
+                          <div
+                            key={`img-${i}`}
+                            className="group relative h-12 w-12 overflow-hidden rounded-lg border border-orange-200 bg-white"
+                          >
+                            <img
+                              src={img}
+                              alt="待发图片"
+                              onClick={() => setPreviewImage(img)}
+                              className="h-full w-full cursor-zoom-in object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setReplyImages((prev) => prev.filter((_, idx) => idx !== i))}
+                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/65 text-white hover:bg-black"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {replyAttachments.map((att, i) => (
+                          <div
+                            key={`att-${i}`}
+                            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700"
+                          >
+                            <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span className="max-w-[160px] truncate">{att.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setReplyAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                              className="ml-1 text-slate-400 hover:text-rose-600"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <label className="inline-flex cursor-pointer items-center gap-1 text-xs font-semibold text-slate-600 hover:text-primary transition-colors">
+                          <Paperclip className="h-3.5 w-3.5" />
+                          <span>添加图片/文件</span>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,.pdf,.txt,.csv,.zip,.json,.doc,.docx,.xls,.xlsx"
+                            onChange={handleAttachmentFiles}
+                            className="hidden"
+                          />
+                        </label>
+                        <span className="text-xs text-slate-500 font-medium">
+                          💡 发送官方答复后，此工单处理状态将<strong className="text-emerald-700 font-bold">自动转换为「已处理」</strong>
+                        </span>
+                      </div>
 
                       <Button
                         type="submit"
-                        disabled={submittingReply || !replyText.trim()}
+                        disabled={
+                          submittingReply ||
+                          (!replyText.trim() && replyImages.length === 0 && replyAttachments.length === 0)
+                        }
                         size="sm"
                         className="gap-1.5 rounded-xl bg-primary text-white font-bold text-xs px-5 shadow-xs hover:bg-primary/90"
                       >

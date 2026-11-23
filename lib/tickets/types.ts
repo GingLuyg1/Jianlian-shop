@@ -21,12 +21,20 @@ export const TICKET_STATUSES: { value: TicketStatus; label: string; badgeClass: 
   { value: "completed", label: "已完成", badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200/80" },
 ];
 
+export interface TicketAttachment {
+  name: string;
+  url: string;
+  mimeType: string;
+  size?: number;
+}
+
 export interface TicketMessage {
   id: string;
   sender: "user" | "support";
   senderName: string;
   content: string;
   images?: string[];
+  attachments?: TicketAttachment[];
   createdAt: string;
 }
 
@@ -40,6 +48,7 @@ export interface TicketItem {
   email: string;
   description: string;
   images?: string[];
+  attachments?: TicketAttachment[];
   createdAt: string;
   updatedAt: string;
   hasUnreadReply?: boolean;
@@ -48,6 +57,22 @@ export interface TicketItem {
 }
 
 export const STORAGE_KEY = "jianlian_shop_tickets_v1";
+export const TICKET_RETENTION_DAYS = 7;
+export const TICKET_RETENTION_MS = TICKET_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+export function isTicketWithinRetention(ticket: Partial<TicketItem> | null | undefined, nowMs = Date.now()): boolean {
+  if (!ticket) return false;
+  const rawTime = ticket.updatedAt || ticket.createdAt;
+  if (!rawTime) return true;
+  const normalized = String(rawTime).trim().replace(" ", "T");
+  const parsedMs = new Date(normalized).getTime();
+  if (!Number.isFinite(parsedMs)) return true;
+  return nowMs - parsedMs <= TICKET_RETENTION_MS;
+}
+
+export function filterRetainedTickets<T extends Partial<TicketItem>>(tickets: T[], nowMs = Date.now()): T[] {
+  return tickets.filter((ticket) => isTicketWithinRetention(ticket, nowMs));
+}
 
 export const INITIAL_ADMIN_DEMO_TICKETS: TicketItem[] = [
   {
@@ -120,7 +145,11 @@ export function getAdminTicketsFromStorage(): TicketItem[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((t: any) => ({
+        const retained = filterRetainedTickets(parsed);
+        if (retained.length !== parsed.length) {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(retained));
+        }
+        return retained.map((t: any) => ({
           ...t,
           status: t.status === "completed" || t.status === "replied" ? "completed" : "processing",
         }));

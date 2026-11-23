@@ -27,6 +27,10 @@ const emptyDraft = (): Draft => ({ sku_title: "", sku_code: "", price: "", stock
 const emptyRow = (): EditorRow => ({ key: crypto.randomUUID(), draft: emptyDraft() });
 const toDraft = (sku: AdminProductSku): Draft => ({ sku_title: sku.sku_title ?? "", sku_code: sku.sku_code ?? "", price: String(sku.price), stock: String(sku.stock), original_price: sku.original_price == null ? "" : String(sku.original_price), image_url: sku.image_url ?? "", sort_order: String(sku.sort_order), status: sku.status, delivery_type: sku.delivery_type ?? "manual" });
 const payload = (draft: Draft): ProductSkuPayload => ({ sku_title: draft.sku_title.trim(), sku_code: draft.sku_code.trim(), price: Number(draft.price), stock: Number(draft.stock), original_price: draft.original_price === "" ? null : Number(draft.original_price), image_url: draft.image_url.trim() || null, sort_order: Number(draft.sort_order), status: draft.status, delivery_type: draft.delivery_type || "manual" });
+const getDerivedDeliveryType = (summary: unknown): DeliveryType | undefined =>
+  summary && typeof summary === "object" && "delivery_type" in summary && typeof (summary as { delivery_type?: unknown }).delivery_type === "string"
+    ? ((summary as { delivery_type: DeliveryType }).delivery_type)
+    : undefined;
 
 const fulfillmentSourceLabel: Record<SkuOperationalDiagnostic["fulfillment_source"], string> = {
   local_inventory: "本地库存", supplier: "供应商", hybrid: "本地与供应商", none: "没有供货来源",
@@ -286,7 +290,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       setActivationBlocked([]);
       setSelectedSkuIds((current) => new Set(Array.from(current).filter((id) => result.skus.some((sku) => sku.id === id))));
       const derived = deriveSkuProductSummary(next.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft));
-      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: derived.delivery_type as DeliveryType | undefined });
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: getDerivedDeliveryType(derived) });
       toast.success(`商品规格已保存：新增 ${result.created_count}，更新 ${result.updated_count}`);
     } catch (error) {
       if (error instanceof ProductSkuWorkspaceError || error instanceof SkuWorkspaceInputError) {
@@ -341,7 +345,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       rowsRef.current = next;
       setRows(next);
       const derived = deriveSkuProductSummary(next.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft));
-      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: derived.delivery_type as DeliveryType | undefined });
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: getDerivedDeliveryType(derived) });
       const createdSku = result.skus.find((sku) => (sku.sku_code ?? "").toLowerCase() === targetCode.toLowerCase());
       if (createdSku) {
         toast.success("规格已创建，请选择要绑定的供应商");
@@ -407,8 +411,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       toast.success(bulkPreview.action === "activate"
         ? `批量激活完成：激活 ${result.updated_count}，无需修改 ${result.no_change_count}`
         : `批量更新完成：修改 ${result.updated_count}，无需修改 ${result.no_change_count}`);
-      const derived = deriveSkuProductSummary(rowsRef.current.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft));
-      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: derived.delivery_type as DeliveryType | undefined });
+      const derived = deriveSkuProductSummary( rowsRef.current.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft));
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: getDerivedDeliveryType(derived) });
       setSelectedSkuIds(new Set());
       setBulkPreview(null);
       await load();

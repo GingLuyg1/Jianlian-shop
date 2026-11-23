@@ -20,6 +20,7 @@ import { createBep20PaymentSession, getBep20ErrorMessage } from "@/lib/payments/
 import { getUserBep20UnderpaymentWalletCredits } from "@/lib/payments/bep20-underpayment-user";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 import { evaluateOrderRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
 
@@ -378,7 +379,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await authorizeKuajingZyStorefrontOrder(supabase, productId, skuId, quantity, user.id, paymentMethod);
+      await authorizeKuajingZyStorefrontOrder(getSupabaseServiceRoleClient() ?? supabase, productId, skuId, quantity, user.id, paymentMethod);
     } catch {
       return NextResponse.json({error:"商品当前不可购买",code:"KUAJINGZY_ORDER_UNAVAILABLE"},{status:409});
     }
@@ -393,10 +394,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const { count: activeSkuCount, error: skuCountError } = await supabase
+    const trustedReader = getSupabaseServiceRoleClient() ?? supabase;
+
+    const { count: activeSkuCount, error: skuCountError } = await trustedReader
       .from("product_skus")
       .select("id", { count: "exact", head: true })
-      .eq("product_id", productId);
+      .eq("product_id", productId)
+      .eq("status", "active");
 
     if (skuCountError) {
       return NextResponse.json(
@@ -405,15 +409,30 @@ export async function POST(request: Request) {
       );
     }
 
-    const {data: skuMode,error: skuModeError}=await supabase.from("products").select("has_skus").eq("id",productId).maybeSingle();
+    const {data: skuMode,error: skuModeError}=await trustedReader.from("products").select("has_skus").eq("id",productId).maybeSingle();
     if(skuModeError) return NextResponse.json({error:"商品规格校验失败"},{status:503});
-    if (((activeSkuCount ?? 0) > 0 || skuMode?.has_skus===true) && !skuId) {
-      return NextResponse.json({ error: "Please select a complete product SKU." }, { status: 400 });
+    let resolvedSkuId = skuId;
+    if (((activeSkuCount ?? 0) > 0 || skuMode?.has_skus===true) && !resolvedSkuId) {
+      if ((activeSkuCount ?? 0) === 1) {
+        const { data: onlyActiveSku } = await trustedReader
+          .from("product_skus")
+          .select("id")
+          .eq("product_id", productId)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle();
+        if (onlyActiveSku?.id) {
+          resolvedSkuId = String(onlyActiveSku.id);
+        }
+      }
+      if (!resolvedSkuId) {
+        return NextResponse.json({ error: "请选择商品规格后再提交订单" }, { status: 400 });
+      }
     }
 
     if (isLiuhaoyiPaymentMethod(paymentMethod) || paymentMethod === "usdt_bep20") {
       const channelCode = paymentMethod === "usdt_bep20" ? "usdt_bep20" : paymentMethod === "wechat_pay" ? "wechat" : "alipay";
-      const { data: channelData, error: channelError } = await supabase
+      const { data: channelData, error: channelError } = await trustedReader
         .from("payment_channels")
         .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")
         .or(`code.eq.${channelCode},channel.eq.${channelCode}`)
@@ -424,11 +443,11 @@ export async function POST(request: Request) {
       if (channelError || !channel?.enabled) {
         return NextResponse.json({ error: "支付渠道当前不可用", code: "CHANNEL_UNAVAILABLE" }, { status: 503 });
       }
-      const priceResult = skuId
-        ? await supabase.from("product_skus").select("price").eq("id", skuId).eq("product_id", productId).eq("status", "active").maybeSingle()
-        : await supabase.from("products").select("price").eq("id", productId).eq("status", "active").maybeSingle();
+      const priceResult = resolvedSkuId
+        ? await trustedReader.from("product_skus").select("price").eq("id", resolvedSkuId).eq("product_id", productId).eq("status", "active").maybeSingle()
+        : await trustedReader.from("products").select("price").eq("id", productId).eq("status", "active").maybeSingle();
       if (priceResult.error || !priceResult.data) {
-        return NextResponse.json({ error: "无法确认支付宝/微信支付金额，请刷新后重试", code: "LIUHAOYI_AMOUNT_UNAVAILABLE" }, { status: 503 });
+        return NextResponse.json({ error: "无法确认商品支付金额，请刷新页面后重试", code: "LIUHAOYI_AMOUNT_UNAVAILABLE" }, { status: 503 });
       }
       const payableAmount = onlineOrderPrincipal(priceResult.data.price, quantity);
       if (!payableAmount) {
@@ -464,10 +483,10 @@ export async function POST(request: Request) {
       businessId: clientRequestId,
       requestId: clientRequestId,
       productId,
-      skuId,
+      skuId: resolvedSkuId,
       quantity,
       riskContext: {
-        has_sku: Boolean(skuId),
+        has_sku: Boolean(resolvedSkuId),
         has_shipping_address: Boolean(body.shipping_address),
       },
     });
@@ -500,13 +519,13 @@ export async function POST(request: Request) {
       p_client_request_id: clientRequestId,
     };
 
-    if (skuId) {
-      orderPayload.p_sku_id = skuId;
+    if (resolvedSkuId) {
+      orderPayload.p_sku_id = resolvedSkuId;
     }
 
     // Narrow PIN-only preflight. Existing Daju/payment branches are unchanged.
     try {
-      await authorizeBitrefillStorefrontOrder({ userId:user.id, productId, skuId, quantity, clientRequestId });
+      await authorizeBitrefillStorefrontOrder({ userId:user.id, productId, skuId: resolvedSkuId, quantity, clientRequestId });
     } catch {
       return NextResponse.json({ error:"This PIN product is not currently available for purchase.", code:"BITREFILL_PIN_ORDER_UNAVAILABLE" }, { status:503 });
     }
