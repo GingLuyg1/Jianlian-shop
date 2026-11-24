@@ -1,4 +1,5 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getExtendedDeliveryLabel, getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
 import {
   buildEffectiveCategoryVisibility,
   filterEffectivelyVisibleCategories,
@@ -133,7 +134,7 @@ export function publicProductMetadata(value: unknown): Record<string, unknown> |
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
   const result: Record<string, unknown> = {};
-  for (const field of ["category", "category_slug", "subcategory_slug", "category_path"]) {
+  for (const field of ["category", "category_slug", "subcategory_slug", "category_path", "delivery_mode"]) {
     const item = source[field];
     if (typeof item === "string" && item.length <= 512) result[field] = item;
   }
@@ -499,10 +500,14 @@ export function mapPublicProductToProduct(
     price: minPrice,
     explicitSales: Number.isFinite(rawSales) && rawSales > 0 ? rawSales : null,
   });
+  const stockDisplay = getPublicStockDisplay(effectiveStock, {
+    deliveryType: row.delivery_type,
+    metadata: row.metadata,
+  });
   const stockStatus: StockStatus =
-    row.status === "sold_out" || effectiveStock <= 0
+    stockDisplay.code === "out" || (row.status === "sold_out" && stockDisplay.code !== "preorder")
       ? "out-of-stock"
-      : effectiveStock <= 10
+      : stockDisplay.code === "tight"
         ? "low-stock"
         : "in-stock";
   const deliveryMethod: DeliveryMethod =
@@ -527,14 +532,17 @@ export function mapPublicProductToProduct(
     currency: "CNY",
     stockStatus,
     stockLabel:
-      row.status === "sold_out"
-        ? "已售罄"
-        : effectiveStock <= 0
-          ? "暂时缺货"
-          : `库存：${effectiveStock}`,
-    processingTime: row.delivery_type === "automatic" ? "自动发货" : "联系客服确认",
+      row.status === "sold_out" && stockDisplay.code !== "preorder"
+        ? "暂无库存"
+        : stockDisplay.label,
+    processingTime:
+      stockDisplay.code === "preorder"
+        ? "预约发货"
+        : row.delivery_type === "automatic"
+          ? "自动发货"
+          : "联系客服确认",
     deliveryMethod,
-    deliveryLabel: getDeliveryLabel(row.delivery_type),
+    deliveryLabel: getExtendedDeliveryLabel(row.delivery_type, row.metadata),
     productType,
     listingStatus: row.status === FRONTEND_ACTIVE_PRODUCT_STATUS ? "active" : "inactive",
     detail: row.description ?? row.short_description ?? "",

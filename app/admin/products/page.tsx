@@ -99,6 +99,15 @@ const productStatusClass: Record<ProductStatus, string> = {
   sold_out: "border-orange-200 bg-orange-50 text-orange-700",
 };
 
+import {
+  EXTENDED_DELIVERY_OPTIONS,
+  getExtendedDeliveryLabel,
+  resolveExtendedDeliveryMode,
+  toBaseDeliveryType,
+  withDeliveryModeMetadata,
+  type ExtendedDeliveryMode,
+} from "@/lib/products/delivery-and-stock";
+
 const deliveryLabel: Record<DeliveryType, string> = {
   manual: "人工处理",
   automatic: "自动发货",
@@ -119,6 +128,7 @@ type ProductFormState = {
   original_price: string;
   stock: string;
   delivery_type: DeliveryType;
+  delivery_mode: ExtendedDeliveryMode;
   status: ProductStatus;
   sort_order: string;
   metadata_note: string;
@@ -192,6 +202,7 @@ function emptyProductForm(): ProductFormState {
     original_price: "",
     stock: "0",
     delivery_type: "manual",
+    delivery_mode: "manual",
     status: "draft",
     sort_order: "0",
     metadata_note: "",
@@ -715,10 +726,10 @@ export default function AdminProductsPage() {
         ? parseNumber(productForm.original_price)
         : null,
       stock: parseNumber(productForm.stock),
-      delivery_type: productForm.delivery_type,
+      delivery_type: toBaseDeliveryType(productForm.delivery_mode || productForm.delivery_type),
       status: productForm.status,
       sort_order: parseNumber(productForm.sort_order),
-      metadata,
+      metadata: withDeliveryModeMetadata(metadata, productForm.delivery_mode || productForm.delivery_type),
     };
   }
 
@@ -1648,7 +1659,7 @@ function ProductTable({
                   {product.metadata?.supplier_stock_sync_status === "synced" ? <div className="mt-0.5 text-[10px] font-normal text-blue-600" title={typeof product.metadata.supplier_stock_synced_at === "string" ? `最后同步：${formatAdminDate(product.metadata.supplier_stock_synced_at)}` : "供应商同步"}>供应商同步</div> : null}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>
-                  {deliveryLabel[product.delivery_type]}
+                  {getExtendedDeliveryLabel(product.delivery_type, product.metadata)}
                 </TableCell>
                 <TableCell className="px-3 py-2 text-center">
                   <SupplierBindingBadge product={product} />
@@ -1926,14 +1937,16 @@ function ProductFormDialog({
               }
             >
               <AdminProductSkuManager ref={skuManagerRef} product={product} productSlug={form.slug} refreshKey={skuRefreshKey}
-                defaults={{ price: form.price, original_price: form.original_price, stock: form.stock, delivery_type: form.delivery_type, status: form.status }}
+                defaults={{ price: form.price, original_price: form.original_price, stock: form.stock, delivery_type: form.delivery_type, delivery_mode: form.delivery_mode, status: form.status }}
                 onSummary={(summary) => {
                   onSkuDirty();
+                  const nextMode = summary.delivery_mode ?? form.delivery_mode;
                   onUpdate({
                     ...form,
                     price: String(summary.price ?? form.price),
                     stock: String(summary.stock),
-                    delivery_type: summary.delivery_type ?? form.delivery_type,
+                    delivery_type: summary.delivery_type ?? toBaseDeliveryType(nextMode),
+                    delivery_mode: nextMode,
                   });
                 }}
                 onSupplierBinding={onSupplierBinding} />
@@ -2381,6 +2394,7 @@ function toProductForm(
         : String(product.original_price),
     stock: String(product.stock ?? 0),
     delivery_type: product.delivery_type,
+    delivery_mode: resolveExtendedDeliveryMode(product.delivery_type, product.metadata),
     status: product.status,
     sort_order: String(product.sort_order ?? 0),
     metadata_note:
@@ -2441,7 +2455,8 @@ function normalizeProductFormValues(form: ProductFormState) {
     price: normalizeFormNumber(form.price),
     original_price: normalizeOptionalFormNumber(form.original_price),
     stock: Math.max(0, Math.trunc(normalizeFormNumber(form.stock))),
-    delivery_type: form.delivery_type,
+    delivery_type: toBaseDeliveryType(form.delivery_mode || form.delivery_type),
+    delivery_mode: form.delivery_mode || form.delivery_type,
     status: form.status,
     sort_order: Math.trunc(normalizeFormNumber(form.sort_order)),
     metadata_note: normalizeOptionalText(form.metadata_note),

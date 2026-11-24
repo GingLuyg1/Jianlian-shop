@@ -9,12 +9,15 @@ import {
   filterEffectivelyVisibleCategories,
 } from "@/lib/catalog/effective-category-visibility.mjs";
 import { derivePublicCatalogSkuSummary } from "@/lib/products/public-catalog-sku-summary.mjs";
+import { extractDeliveryModeFromMetadata, isPreorderDeliveryMode } from "@/lib/products/delivery-and-stock";
 
 export const dynamic = "force-dynamic";
 
 const PRODUCT_STATUSES = ["active", "sold_out"];
 const SKU_STATUSES = ["active", "sold_out"];
-const MAX_INTERNAL_PRODUCTS = 1000;
+const PRODUCT_PAGE_CHUNK = 1000;
+const MAX_INTERNAL_PRODUCTS = 5000;
+const IN_QUERY_CHUNK_SIZE = 80;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type CategoryRow = {
@@ -68,6 +71,8 @@ type ProductView = ProductRow & {
   max_price: number;
   effective_stock: number;
   sales_count: number;
+  delivery_mode?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export async function GET(request: Request) {
@@ -99,7 +104,7 @@ export async function GET(request: Request) {
     // Capture speculative failures so invalid categories keep their 404 and
     // early returns cannot leave an unhandled rejected request.
     const secondaryProductRead = secondaryCategoryId
-      ? Promise.resolve().then(() => buildProductQuery(supabase, [secondaryCategoryId]))
+      ? Promise.resolve().then(() => loadAllProducts(supabase, [secondaryCategoryId]))
         .catch((error: unknown) => ({ data: null, error }))
       : null;
     const { data: categoryRows, error: categoryError } = await supabase
@@ -124,7 +129,7 @@ export async function GET(request: Request) {
       return productSuccess([], 0, page, pageSize, requestId);
     }
 
-    const { data: productRows, error: productErrorResult } = await (secondaryProductRead ?? buildProductQuery(supabase, categoryIds));
+    const { data: productRows, error: productErrorResult } = await (secondaryProductRead ?? loadAllProducts(supabase, categoryIds));
     if (productErrorResult) throw productErrorResult;
 
     const products = ((productRows ?? []) as ProductRow[]).filter((product) => {
@@ -135,14 +140,17 @@ export async function GET(request: Request) {
     });
 
     const productIds = products.map((product) => product.id);
-    const skuRows = await loadSkus(supabase, productIds);
+    const [skuRows, deliveryModeByProduct] = await Promise.all([
+      loadSkus(supabase, productIds),
+      loadPublicDeliveryModes(productIds),
+    ]);
     const skuMap = groupSkusByProduct(skuRows);
     const deliveryTypes = Array.from(
       new Set(products.map((product) => product.delivery_type).filter((value): value is string => Boolean(value)))
     ).sort();
 
     const visible = products
-      .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap))
+      .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap, deliveryModeByProduct.get(product.id) ?? null))
       .filter((product) => matchSearch(product, skuMap.get(product.id) ?? [], keyword))
       .sort((a, b) => compareProducts(a, b, categoryMap));
 
@@ -169,34 +177,81 @@ export async function GET(request: Request) {
   }
 }
 
-function buildProductQuery(supabase: ReturnType<typeof getSupabaseServerClient>, categoryIds: string[]) {
-  let query = supabase
-    .from("products")
-    .select("id,category_id,name,slug,short_description,price,original_price,stock,has_skus,status,delivery_type,image_url,sort_order,updated_at")
-    .in("status", PRODUCT_STATUSES)
-    .order("sort_order", { ascending: true })
-    .limit(MAX_INTERNAL_PRODUCTS);
+async function loadAllProducts(supabase: ReturnType<typeof getSupabaseServerClient>, categoryIds: string[]) {
+  const allRows: ProductRow[] = [];
+  for (let offset = 0; offset < MAX_INTERNAL_PRODUCTS; offset += PRODUCT_PAGE_CHUNK) {
+    let query = supabase
+      .from("products")
+      .select("id,category_id,name,slug,short_description,price,original_price,stock,has_skus,status,delivery_type,image_url,sort_order,updated_at")
+      .in("status", PRODUCT_STATUSES)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + PRODUCT_PAGE_CHUNK - 1);
 
-  if (categoryIds.length > 0) query = query.in("category_id", categoryIds);
-  return query;
+    if (categoryIds.length > 0) query = query.in("category_id", categoryIds);
+    const { data, error } = await query;
+    if (error) return { data: null, error };
+    const batch = (data ?? []) as ProductRow[];
+    allRows.push(...batch);
+    if (batch.length < PRODUCT_PAGE_CHUNK) break;
+  }
+  return { data: allRows, error: null };
 }
 
 async function loadSkus(supabase: ReturnType<typeof getSupabaseServerClient>, productIds: string[]) {
   if (productIds.length === 0) return [];
 
   try {
-    const { data, error } = await supabase
-      .from("product_skus")
-      .select("id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order")
-      .in("product_id", productIds)
-      .in("status", SKU_STATUSES)
-      .limit(5000);
-
-    if (error) return [];
-    return (data ?? []) as SkuRow[];
+    const chunks: string[][] = [];
+    for (let i = 0; i < productIds.length; i += IN_QUERY_CHUNK_SIZE) {
+      chunks.push(productIds.slice(i, i + IN_QUERY_CHUNK_SIZE));
+    }
+    const results = await Promise.all(
+      chunks.map(async (chunk) => {
+        const { data, error } = await supabase
+          .from("product_skus")
+          .select("id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order")
+          .in("product_id", chunk)
+          .in("status", SKU_STATUSES)
+          .limit(1000);
+        if (error) return [] as SkuRow[];
+        return (data ?? []) as SkuRow[];
+      })
+    );
+    return results.flat();
   } catch {
     return [];
   }
+}
+
+async function loadPublicDeliveryModes(productIds: string[]) {
+  const output = new Map<string, string>();
+  if (productIds.length === 0) return output;
+  const service = getSupabaseServiceRoleClient();
+  if (!service) return output;
+
+  try {
+    const chunks: string[][] = [];
+    for (let i = 0; i < productIds.length; i += IN_QUERY_CHUNK_SIZE) {
+      chunks.push(productIds.slice(i, i + IN_QUERY_CHUNK_SIZE));
+    }
+    await Promise.all(
+      chunks.map(async (chunk) => {
+        const { data } = await service
+          .from("products")
+          .select("id,metadata")
+          .in("id", chunk);
+        for (const row of data ?? []) {
+          const pid = typeof row.id === "string" ? row.id : "";
+          const mode = extractDeliveryModeFromMetadata(row.metadata);
+          if (pid && mode) output.set(pid, mode);
+        }
+      })
+    );
+  } catch {
+    // Best-effort delivery mode enrichment
+  }
+  return output;
 }
 
 
@@ -261,7 +316,12 @@ function groupSkusByProduct(skus: SkuRow[]) {
   return output;
 }
 
-function enrichProduct(product: ProductRow, skus: SkuRow[], categoryMap: Map<string, CategoryRow>): ProductView {
+function enrichProduct(
+  product: ProductRow,
+  skus: SkuRow[],
+  categoryMap: Map<string, CategoryRow>,
+  deliveryMode: string | null = null
+): ProductView {
   const activeSkus = skus.filter((sku) => sku.status === "active" || sku.status === "sold_out");
   const { productHasSkus: hasSkus, minPrice, maxPrice, effectiveStock } =
     derivePublicCatalogSkuSummary(product, activeSkus);
@@ -278,6 +338,8 @@ function enrichProduct(product: ProductRow, skus: SkuRow[], categoryMap: Map<str
     original_price: product.original_price === null ? null : numberOrNull(product.original_price),
     stock: effectiveStock,
     delivery_type: deliveryType,
+    delivery_mode: deliveryMode,
+    metadata: deliveryMode ? { delivery_mode: deliveryMode } : null,
     status: product.status ?? "draft",
     sort_order: Number(product.sort_order ?? 0),
     category_path: getCategoryPath(categoryMap, product.category_id),
@@ -346,6 +408,14 @@ function matchSearch(product: ProductView, skus: SkuRow[], keyword: string) {
 }
 
 function compareProducts(a: ProductView, b: ProductView, categories: Map<string, CategoryRow>) {
+  const aOutOfStock =
+    !isPreorderDeliveryMode(a.delivery_mode ?? a.delivery_type, a.metadata) &&
+    (a.status === "sold_out" || a.effective_stock <= 0);
+  const bOutOfStock =
+    !isPreorderDeliveryMode(b.delivery_mode ?? b.delivery_type, b.metadata) &&
+    (b.status === "sold_out" || b.effective_stock <= 0);
+  const stockWeight = Number(aOutOfStock) - Number(bOutOfStock);
+  if (stockWeight !== 0) return stockWeight;
   const aCategory = a.category_id ? categories.get(a.category_id) : undefined;
   const bCategory = b.category_id ? categories.get(b.category_id) : undefined;
   const aRoot = aCategory?.parent_id ? categories.get(aCategory.parent_id) : aCategory;
@@ -353,10 +423,6 @@ function compareProducts(a: ProductView, b: ProductView, categories: Map<string,
   const categoryOrder = (aRoot?.sort_order ?? 0) - (bRoot?.sort_order ?? 0)
     || (aCategory?.sort_order ?? 0) - (bCategory?.sort_order ?? 0);
   if (categoryOrder !== 0) return categoryOrder;
-  const stockWeight =
-    Number(a.status === "sold_out" || a.effective_stock <= 0) -
-    Number(b.status === "sold_out" || b.effective_stock <= 0);
-  if (stockWeight !== 0) return stockWeight;
   const productOrder = (a.sort_order ?? 0) - (b.sort_order ?? 0);
   if (productOrder !== 0) return productOrder;
   const updatedAt = (Date.parse(b.updated_at ?? "") || 0) - (Date.parse(a.updated_at ?? "") || 0);

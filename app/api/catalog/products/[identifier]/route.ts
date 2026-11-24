@@ -209,13 +209,18 @@ export async function GET(
           ? (metaRow.metadata as Record<string, unknown>)
           : null;
         const boost = Math.max(0, Math.trunc(Number(meta?.sales_boost ?? meta?.salesCount ?? 0) || 0));
+        const deliveryMode = typeof meta?.delivery_mode === "string" ? meta.delivery_mode : null;
         const paidQty = (orderRows ?? []).reduce((sum, r) => {
           const q = Number((r as { quantity?: unknown }).quantity ?? 0);
           return Number.isSafeInteger(q) && q > 0 ? sum + q : sum;
         }, 0);
         product.sales_count = boost + paidQty;
-        if (boost > 0) {
-          product.metadata = { ...(product.metadata ?? {}), sales_boost: boost };
+        if (boost > 0 || deliveryMode) {
+          product.metadata = {
+            ...(product.metadata ?? {}),
+            ...(boost > 0 ? { sales_boost: boost } : {}),
+            ...(deliveryMode ? { delivery_mode: deliveryMode } : {}),
+          };
         }
       } catch {
         // Best-effort sales enrichment

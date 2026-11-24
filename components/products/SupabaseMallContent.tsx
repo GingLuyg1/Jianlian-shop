@@ -3,6 +3,7 @@
 import { Suspense, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { checkoutHref } from "@/lib/products/checkout-navigation";
+import { getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
 import {
   Bot,
   ChevronDown,
@@ -1424,12 +1425,18 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
         </div>
         {showStock ? (
           <div className="hidden shrink-0 items-center gap-2 text-sm text-slate-600 md:flex">
-            {product.stockStatus === "out-of-stock" ? "暂时缺货" : product.stockStatus === "low-stock" ? "低库存" : "有库存"}
-            <span className={stock > 0 ? "text-green-600" : "text-slate-400"}>{stock}</span>
+            {(() => {
+              const sd = getPublicStockDisplay(stock, { metadata: product.metadata });
+              return (
+                <span className={cn("rounded-full border px-2 py-0.5 text-xs font-semibold", sd.badgeClassName)}>
+                  {sd.label}
+                </span>
+              );
+            })()}
           </div>
         ) : null}
         <div className={cn("shrink-0 text-lg font-bold", product.stockStatus === "out-of-stock" ? "text-slate-400" : "text-slate-950")}>
-          {product.stockStatus === "out-of-stock" ? "已售罄" : priceText}
+          {product.stockStatus === "out-of-stock" ? "暂无库存" : priceText}
         </div>
       </div>
     </button>
@@ -1462,7 +1469,8 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
-  const hasStock = stock > 0 && product.stockStatus !== "out-of-stock";
+  const stockDisplay = getPublicStockDisplay(stock, { metadata: product.metadata });
+  const hasStock = stockDisplay.available && (product.stockStatus !== "out-of-stock" || stockDisplay.code === "preorder");
   const priceText = hasSkus && maxPrice > minPrice
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
@@ -1512,13 +1520,11 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
             {showStock ? (
               <span
                 className={cn(
-                  "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10.5px] font-semibold",
-                  hasStock
-                    ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/60"
-                    : "bg-red-50 text-red-600 ring-1 ring-inset ring-red-200/60"
+                  "inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold",
+                  stockDisplay.badgeClassName
                 )}
               >
-                <span>{hasStock ? `库存 ${stock}` : "库存 0"}</span>
+                <span>{stockDisplay.label}</span>
               </span>
             ) : null}
             <span className="inline-flex items-center rounded-full bg-orange-50/90 px-1.5 py-0.5 text-[10.5px] font-semibold text-[#9a552b] ring-1 ring-inset ring-orange-200/60">
@@ -1527,7 +1533,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <span className={cn("text-[14px] sm:text-base font-extrabold tracking-tight", hasStock ? "text-slate-950" : "text-slate-400")}>
-              {hasStock ? priceText : "已售罄"}
+              {hasStock ? priceText : "暂无库存"}
             </span>
           </div>
         </div>
@@ -1557,21 +1563,17 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
           ) : null}
           {showStock ? (
             <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium md:hidden">
-              <span className={hasStock ? "text-emerald-600" : "text-red-500"}>
-                {hasStock ? `库存 ${stock}` : "暂时缺货"}
+              <span className={stockDisplay.textClassName}>
+                {stockDisplay.label}
               </span>
             </div>
           ) : null}
         </div>
         {showStock ? (
-          <div
-            className={cn(
-              "hidden min-w-[90px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold md:flex",
-              hasStock ? "text-green-600" : "text-red-500"
-            )}
-          >
-            <span>库存</span>
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">{stock}</span>
+          <div className="hidden min-w-[90px] shrink-0 items-center justify-center text-center md:flex">
+            <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-semibold", stockDisplay.badgeClassName)}>
+              {stockDisplay.label}
+            </span>
           </div>
         ) : null}
         <div className="hidden min-w-[80px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold text-[#9a552b] md:flex">
@@ -1579,7 +1581,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
           <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-[#9a552b]">{salesCount}</span>
         </div>
         <div className={cn("shrink-0 text-right text-base font-bold min-w-[120px] sm:min-w-[140px] sm:text-right pr-2", hasStock ? "text-slate-950" : "text-slate-400")}>
-          {hasStock ? priceText : "已售罄"}
+          {hasStock ? priceText : "暂无库存"}
         </div>
       </div>
     </button>

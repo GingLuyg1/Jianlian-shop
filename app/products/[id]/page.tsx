@@ -28,6 +28,7 @@ import TMobileProductDetails from "@/components/products/details/TMobileProductD
 import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
 import VodafoneSimProductDetails from "@/components/products/details/VodafoneSimProductDetails";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
+import { getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,10 +106,11 @@ function getSkuLabel(sku: PublicProductSkuRow, index: number) {
   return sku.sku_title || sku.sku_code || `规格 ${index + 1}`;
 }
 
-function getStockLabel(stock: number, soldOut: boolean) {
-  if (soldOut || stock <= 0) return "已售罄";
-  if (stock <= 10) return "低库存";
-  return "有库存";
+function getStockLabel(stock: number, soldOut: boolean, metadata?: unknown, deliveryType?: string | null) {
+  const display = getPublicStockDisplay(stock, { deliveryType, metadata });
+  if (display.code === "preorder") return display.label;
+  if (soldOut) return "暂无库存";
+  return display.label;
 }
 
 function getStatusLabel(product: PublicProductRow, soldOut: boolean) {
@@ -679,7 +681,10 @@ export default function ProductDetailPage() {
                                   <span>{formatPrice(settings.currency_symbol, sku.price)}</span>
                                 </div>
                                 <div className="mt-1 text-xs text-muted-foreground">
-                                  库存：{Number(sku.stock ?? 0)}
+                                  {getPublicStockDisplay(sku.stock, {
+                                    deliveryType: sku.delivery_type ?? product.delivery_type,
+                                    metadata: sku.metadata ?? product.metadata,
+                                  }).label}
                                   {disabled ? "，暂不可购买" : ""}
                                 </div>
                               </button>

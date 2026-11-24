@@ -13,6 +13,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
+import { getExtendedDeliveryLabel, getPublicStockDisplay, isPreorderDeliveryMode } from "@/lib/products/delivery-and-stock";
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
 import { resolveProductImageSrc } from "@/components/products/product-ui";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
@@ -319,21 +320,23 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     currency: "CNY",
-    stockStatus: stock <= 0 ? "out-of-stock" : stock <= 10 ? "low-stock" : "in-stock",
-    stockLabel: `库存：${stock}`,
-    processingTime: row.delivery_type === "automatic" ? "自动发货" : "联系客服确认",
+    stockStatus: (() => {
+      const sd = getPublicStockDisplay(stock, { deliveryType: row.delivery_type, metadata: row.metadata });
+      return sd.code === "out" ? "out-of-stock" : sd.code === "tight" ? "low-stock" : "in-stock";
+    })(),
+    stockLabel: getPublicStockDisplay(stock, { deliveryType: row.delivery_type, metadata: row.metadata }).label,
+    processingTime: isPreorderDeliveryMode(row.delivery_type, row.metadata)
+      ? "预约发货"
+      : row.delivery_type === "automatic"
+        ? "自动发货"
+        : "联系客服确认",
     deliveryMethod:
       row.delivery_type === "shipping"
         ? "physical"
         : row.delivery_type === "manual"
           ? "hybrid"
           : "digital",
-    deliveryLabel:
-      row.delivery_type === "automatic"
-        ? "自动发货"
-        : row.delivery_type === "shipping"
-          ? "物流发货"
-          : "人工处理",
+    deliveryLabel: getExtendedDeliveryLabel(row.delivery_type, row.metadata),
     productType: row.delivery_type === "shipping" ? "physical" : "digital",
     listingStatus: "active",
     detail: row.description ?? row.short_description ?? "",
@@ -707,12 +710,14 @@ function CheckoutPageContent() {
     )
   );
   const isShippingProduct = isExplicitShippingDelivery || (!isExplicitNonShippingDelivery && isSimProduct);
-  const effectiveDeliveryLabel =
-    rawEffectiveDeliveryType === "automatic"
-      ? "自动发货"
-      : isShippingProduct
-        ? "物流发货"
-        : "人工处理";
+  const effectiveDeliveryLabel = getExtendedDeliveryLabel(
+    rawEffectiveDeliveryType,
+    productRow?.metadata ?? product?.metadata
+  );
+  const effectiveStockDisplay = getPublicStockDisplay(effectiveStock, {
+    deliveryType: rawEffectiveDeliveryType,
+    metadata: productRow?.metadata ?? product?.metadata,
+  });
   const displayProduct = useMemo(
     (): Product | null =>
       product
@@ -720,11 +725,16 @@ function CheckoutPageContent() {
             ...product,
             deliveryLabel: effectiveDeliveryLabel,
             stock: effectiveStock,
-            stockLabel: `库存：${effectiveStock}`,
-            stockStatus: effectiveStock <= 0 ? "out-of-stock" : effectiveStock <= 10 ? "low-stock" : "in-stock",
+            stockLabel: effectiveStockDisplay.label,
+            stockStatus:
+              effectiveStockDisplay.code === "out"
+                ? "out-of-stock"
+                : effectiveStockDisplay.code === "tight"
+                  ? "low-stock"
+                  : "in-stock",
           }
         : null,
-    [product, effectiveDeliveryLabel, effectiveStock]
+    [product, effectiveDeliveryLabel, effectiveStock, effectiveStockDisplay]
   );
   const selectedPaymentChannel = paymentChannels.find((channel) =>
     getPaymentMethodOption(paymentMethod)?.channelCodes.includes(channel.code)) ?? null;
@@ -1028,8 +1038,8 @@ function CheckoutPageContent() {
 
         <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden lg:h-full">
           <CardContent className="flex h-full min-h-0 flex-col p-0">
-            <div className="flex min-h-0 flex-1 flex-col bg-white p-3.5 lg:overflow-hidden">
-              <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <div className="min-h-0 flex-1 bg-white p-4 lg:overflow-y-auto sidebar-scroll">
+              <div className="flex flex-col gap-3">
               {hasSku ? (
                 <div
                   data-testid="checkout-sku-scroll"
@@ -1130,7 +1140,7 @@ function CheckoutPageContent() {
                 </div>
               ) : null}
 
-              <div className="mt-auto shrink-0 border-t border-border pt-2.5">
+              <div className="shrink-0 border-t border-border pt-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">
                   支付方式
                 </div>

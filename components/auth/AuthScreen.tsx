@@ -847,8 +847,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               <div className="pointer-events-none absolute -left-16 -top-16 h-72 w-72 rounded-full bg-gradient-to-br from-sky-300/35 via-indigo-300/25 to-transparent blur-3xl" />
               <div className="pointer-events-none absolute -right-16 top-12 h-80 w-80 rounded-full bg-gradient-to-bl from-violet-300/30 via-fuchsia-200/20 to-transparent blur-3xl" />
               <div className="pointer-events-none absolute -bottom-20 left-1/4 h-64 w-80 rounded-full bg-gradient-to-t from-amber-300/35 via-orange-200/25 to-transparent blur-3xl" />
-              {/* 舞台底部高光反射底座舱 */}
-              <div className="pointer-events-none absolute inset-x-6 bottom-4 h-24 rounded-[32px] border border-white/80 bg-gradient-to-b from-white/75 to-indigo-50/50 shadow-[0_8px_24px_-6px_rgba(30,41,59,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)] backdrop-blur-md" />
 
               <div className="relative">
                 {/* 极简品牌微排版与背书 */}

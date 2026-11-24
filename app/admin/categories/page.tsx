@@ -55,6 +55,14 @@ const productStatusClass: Record<ProductStatus, string> = {
   sold_out: "border-orange-200 bg-orange-50 text-orange-700",
 };
 
+import {
+  EXTENDED_DELIVERY_OPTIONS,
+  resolveExtendedDeliveryMode,
+  toBaseDeliveryType,
+  withDeliveryModeMetadata,
+  type ExtendedDeliveryMode,
+} from "@/lib/products/delivery-and-stock";
+
 const deliveryLabel: Record<DeliveryType, string> = {
   manual: "人工处理",
   automatic: "自动发货",
@@ -89,6 +97,7 @@ type ProductForm = {
   original_price: string;
   stock: string;
   delivery_type: DeliveryType;
+  delivery_mode: ExtendedDeliveryMode;
   status: ProductStatus;
   sort_order: string;
   metadata_note: string;
@@ -154,6 +163,7 @@ function emptyProductForm(rootId = "", categoryId = "", subcategory = ""): Produ
     original_price: "",
     stock: "0",
     delivery_type: "manual",
+    delivery_mode: "manual",
     status: "draft",
     sort_order: "0",
     metadata_note: "",
@@ -218,7 +228,8 @@ function normalizeProductForm(form: ProductForm | null) {
     price: Number(form.price || 0),
     original_price: form.original_price.trim() ? Number(form.original_price) : null,
     stock: Number(form.stock || 0),
-    delivery_type: form.delivery_type,
+    delivery_type: toBaseDeliveryType(form.delivery_mode || form.delivery_type),
+    delivery_mode: form.delivery_mode || form.delivery_type,
     status: form.status,
     sort_order: Number(form.sort_order || 0),
     metadata_note: form.metadata_note.trim(),
@@ -248,6 +259,7 @@ function toProductForm(product: AdminProduct, categoryMap: Map<string, AdminCate
     original_price: product.original_price === null || product.original_price === undefined ? "" : String(product.original_price),
     stock: String(product.stock ?? 0),
     delivery_type: product.delivery_type,
+    delivery_mode: resolveExtendedDeliveryMode(product.delivery_type, product.metadata),
     status: product.status,
     sort_order: String(product.sort_order ?? 0),
     metadata_note: product.metadata && typeof product.metadata.note === "string" ? product.metadata.note : "",
@@ -740,6 +752,7 @@ function AdminCategoriesPageInner() {
     if (cleanSub) existingMeta.subcategory = cleanSub;
     else delete existingMeta.subcategory;
 
+    const nextMeta = withDeliveryModeMetadata(existingMeta, productForm.delivery_mode || productForm.delivery_type);
     const payload: ProductPayload = {
       name: productForm.name.trim(),
       slug: productForm.slug.trim().toLowerCase(),
@@ -750,10 +763,10 @@ function AdminCategoriesPageInner() {
       price: parseNumber(productForm.price),
       original_price: productForm.original_price.trim() ? parseNumber(productForm.original_price) : null,
       stock: parseNumber(productForm.stock),
-      delivery_type: productForm.delivery_type,
+      delivery_type: toBaseDeliveryType(productForm.delivery_mode || productForm.delivery_type),
       status: productForm.status,
       sort_order: parseNumber(productForm.sort_order),
-      metadata: Object.keys(existingMeta).length > 0 ? existingMeta : null,
+      metadata: Object.keys(nextMeta).length > 0 ? nextMeta : null,
     };
 
     setSaving(true);
@@ -1641,13 +1654,16 @@ function ProductDialog({
           </Field>
           <Field label="交付方式" required>
             <select
-              value={form.delivery_type}
-              onChange={(event) => onUpdate({ ...form, delivery_type: event.target.value as DeliveryType })}
+              value={form.delivery_mode || form.delivery_type}
+              onChange={(event) => {
+                const mode = event.target.value as ExtendedDeliveryMode;
+                onUpdate({ ...form, delivery_mode: mode, delivery_type: toBaseDeliveryType(mode) });
+              }}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
-              {Object.entries(deliveryLabel).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
+              {EXTENDED_DELIVERY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

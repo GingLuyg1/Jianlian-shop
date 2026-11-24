@@ -18,15 +18,19 @@ import { deleteProductSku, executeProductSkuBulkAction, getProductSkuWorkspace, 
 import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
 import type { SkuOperationalDiagnostic } from "@/lib/products/fulfillment-inventory-diagnostics.mjs";
 import { evaluateSkuActivationReadiness, formatSkuActivationReasons, SKU_ACTIVATION_REASON_LABELS, summarizeSkuReadiness } from "@/lib/products/sku-activation-readiness.mjs";
+import { EXTENDED_DELIVERY_OPTIONS, resolveExtendedDeliveryMode, toBaseDeliveryType, type ExtendedDeliveryMode } from "@/lib/products/delivery-and-stock";
 
-type Draft = { sku_title: string; sku_code: string; price: string; stock: string; original_price: string; image_url: string; sort_order: string; status: ProductStatus; delivery_type: DeliveryType | ""; touched?: boolean };
+type Draft = { sku_title: string; sku_code: string; price: string; stock: string; original_price: string; image_url: string; sort_order: string; status: ProductStatus; delivery_type: DeliveryType | ""; delivery_mode?: ExtendedDeliveryMode; touched?: boolean };
 type EditorRow = { key: string; sku?: AdminProductSku; draft: Draft };
 export type ProductSkuManagerHandle = { validate: () => boolean; prepareSave: () => Promise<boolean>; saveAll: (product: AdminProduct) => Promise<void>; reload?: () => Promise<void> };
-type Props = { product: AdminProduct | null; productSlug?: string; refreshKey?: number; defaults: { price: string; original_price: string; stock: string; delivery_type: DeliveryType; status: ProductStatus }; onSummary: (summary: { price: number | null; stock: number; delivery_type?: DeliveryType }) => void; onSupplierBinding: (product: AdminProduct, sku: AdminProductSku) => void };
-const emptyDraft = (): Draft => ({ sku_title: "", sku_code: "", price: "", stock: "", original_price: "", image_url: "", sort_order: "0", status: "active", delivery_type: "manual" });
+type Props = { product: AdminProduct | null; productSlug?: string; refreshKey?: number; defaults: { price: string; original_price: string; stock: string; delivery_type: DeliveryType; delivery_mode?: ExtendedDeliveryMode; status: ProductStatus }; onSummary: (summary: { price: number | null; stock: number; delivery_type?: DeliveryType; delivery_mode?: ExtendedDeliveryMode }) => void; onSupplierBinding: (product: AdminProduct, sku: AdminProductSku) => void };
+const emptyDraft = (): Draft => ({ sku_title: "", sku_code: "", price: "", stock: "", original_price: "", image_url: "", sort_order: "0", status: "active", delivery_type: "manual", delivery_mode: "manual" });
 const emptyRow = (): EditorRow => ({ key: crypto.randomUUID(), draft: emptyDraft() });
-const toDraft = (sku: AdminProductSku): Draft => ({ sku_title: sku.sku_title ?? "", sku_code: sku.sku_code ?? "", price: String(sku.price), stock: String(sku.stock), original_price: sku.original_price == null ? "" : String(sku.original_price), image_url: sku.image_url ?? "", sort_order: String(sku.sort_order), status: sku.status, delivery_type: sku.delivery_type ?? "manual" });
-const payload = (draft: Draft): ProductSkuPayload => ({ sku_title: draft.sku_title.trim(), sku_code: draft.sku_code.trim(), price: Number(draft.price), stock: Number(draft.stock), original_price: draft.original_price === "" ? null : Number(draft.original_price), image_url: draft.image_url.trim() || null, sort_order: Number(draft.sort_order), status: draft.status, delivery_type: draft.delivery_type || "manual" });
+const toDraft = (sku: AdminProductSku, productMetadata?: Record<string, unknown> | null): Draft => {
+  const mode = resolveExtendedDeliveryMode(sku.delivery_type, sku.metadata ?? productMetadata);
+  return { sku_title: sku.sku_title ?? "", sku_code: sku.sku_code ?? "", price: String(sku.price), stock: String(sku.stock), original_price: sku.original_price == null ? "" : String(sku.original_price), image_url: sku.image_url ?? "", sort_order: String(sku.sort_order), status: sku.status, delivery_type: sku.delivery_type ?? toBaseDeliveryType(mode), delivery_mode: mode };
+};
+const payload = (draft: Draft): ProductSkuPayload => ({ sku_title: draft.sku_title.trim(), sku_code: draft.sku_code.trim(), price: Number(draft.price), stock: Number(draft.stock), original_price: draft.original_price === "" ? null : Number(draft.original_price), image_url: draft.image_url.trim() || null, sort_order: Number(draft.sort_order), status: draft.status, delivery_type: toBaseDeliveryType(draft.delivery_mode ?? draft.delivery_type) });
 const getDerivedDeliveryType = (summary: unknown): DeliveryType | undefined =>
   summary && typeof summary === "object" && "delivery_type" in summary && typeof (summary as { delivery_type?: unknown }).delivery_type === "string"
     ? ((summary as { delivery_type: DeliveryType }).delivery_type)
@@ -175,7 +179,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
         }
         const persisted = skus.map((sku) => {
           const previous = current.find((row) => row.sku?.id === sku.id);
-          if (!previous || !previous.draft.touched) return { key: sku.id, sku, draft: toDraft(sku) };
+          if (!previous || !previous.draft.touched) return { key: sku.id, sku, draft: toDraft(sku, product?.metadata ?? null) };
           return { ...previous, sku, draft: { ...previous.draft, ...(previous.draft.stock === String(previous.sku?.stock) ? { stock: String(sku.stock) } : {}) } };
         });
         const merged = [...persisted, ...current.filter((row) => !row.sku && row.key !== "legacy" && !isSkuDraftEmpty(row.draft)), emptyRow()];
@@ -370,9 +374,30 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   }
 
   function change(row: EditorRow, key: keyof Draft, value: string) {
-    const next = ensureTrailingEmptySkuRow(rowsRef.current.map((item) => item.key === row.key ? { ...item, draft: { ...item.draft, [key]: value, touched: true } } : item), emptyRow);
+    const next = ensureTrailingEmptySkuRow(
+      rowsRef.current.map((item) => {
+        if (item.key !== row.key) return item;
+        if (key === "delivery_mode") {
+          const mode = value as ExtendedDeliveryMode;
+          return {
+            ...item,
+            draft: {
+              ...item.draft,
+              delivery_mode: mode,
+              delivery_type: toBaseDeliveryType(mode),
+              touched: true,
+            },
+          };
+        }
+        return { ...item, draft: { ...item.draft, [key]: value, touched: true } };
+      }),
+      emptyRow
+    );
     rowsRef.current = next; setRows(next);
-    onSummary(deriveSkuProductSummary(next.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft)));
+    const activeDrafts = next.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft);
+    const derived = deriveSkuProductSummary(activeDrafts);
+    const firstMode = activeDrafts.find((d) => d.delivery_mode)?.delivery_mode;
+    onSummary({ ...derived, delivery_mode: firstMode });
   }
   async function removeRow() {
     if (!deleting || !product || flight.current) return;
@@ -539,7 +564,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
         <tbody>{rows.map((row) => <tr key={row.key} className="border-t border-slate-100 align-top hover:bg-slate-50/50">
           <td className="p-2"><Checkbox aria-label={`选择商品规格 ${row.draft.sku_code || row.draft.sku_title || "未保存"}`} checked={row.sku ? selectedSkuIds.has(row.sku.id) : false} disabled={!row.sku || busy || bulkBusy} onCheckedChange={(checked) => { if (row.sku) toggleSkuSelection(row.sku.id, checked === true); }} /></td>
           {(["sku_title", "sku_code", "price", "stock"] as const).map((key) => <td key={key} className="p-2"><Input aria-label={key === "sku_title" ? "商品规格名称" : key === "sku_code" ? "商品规格编码" : key === "price" ? "售价" : "库存"} aria-invalid={Boolean(errors[row.key]?.[key])} className="h-8 px-2 text-xs" type={key === "price" || key === "stock" ? "number" : "text"} min="0" step={key === "price" ? "0.01" : "1"} value={row.draft[key]} placeholder={key === "sku_title" ? "商品规格名称" : key === "sku_code" ? "商品规格编码" : ""} disabled={busy} onChange={(e) => change(row, key, e.target.value)} />{errors[row.key]?.[key] ? <p className="mt-1 text-red-600">{errors[row.key][key]}</p> : null}</td>)}
-          <td className="p-2"><select aria-label="商品规格交付方式" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.delivery_type || "manual"} disabled={busy} onChange={(e) => change(row, "delivery_type", e.target.value)}><option value="manual">人工处理</option><option value="automatic">自动发货</option><option value="shipping">物流发货</option></select></td>
+          <td className="p-2"><select aria-label="商品规格交付方式" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.delivery_mode || row.draft.delivery_type || "manual"} disabled={busy} onChange={(e) => change(row, "delivery_mode", e.target.value)}>{EXTENDED_DELIVERY_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></td>
           <td className="p-2"><select aria-label="商品规格状态" className="h-8 w-full rounded-md border bg-white px-2 text-xs" value={row.draft.status} disabled={busy} onChange={(e) => change(row, "status", e.target.value)}><option value="active">启用</option><option value="inactive">停用</option><option value="sold_out">售罄</option><option value="draft">草稿</option></select></td>
           <td className="p-2">{row.sku && product ? <Button type="button" variant="outline" className="h-auto min-h-[32px] w-full justify-start whitespace-normal px-2 text-left text-xs" disabled={busy} onClick={() => onSupplierBinding(product, row.sku!)}>{row.sku.metadata?.supplier === "daju" ? `大橘 #${String(row.sku.metadata.supplier_product_id)} · ${String(row.sku.metadata.supplier_sku ?? "无规格")}${row.sku.metadata?.supplier_binding_candidate ? " · Bitrefill 候选待审" : ""}` : row.sku.metadata?.supplier_binding_candidate ? "Bitrefill 候选待审 · 采购关闭" : "未绑定 · 绑定"}</Button> : product && !isSkuDraftEmpty(row.draft) ? <Button type="button" variant="outline" className="h-8 w-full px-2 text-xs text-primary hover:bg-orange-50" disabled={busy} onClick={() => void createAndBindRow(row)}>创建并绑定</Button> : <span className="inline-flex h-8 items-center text-slate-400">{product ? "填写规格后可绑定（保存后绑定）" : "保存后绑定"}</span>}
             {row.sku ? <SkuOperationalDiagnostics diagnostic={operationalBySku.get(row.sku.id)} /> : null}
