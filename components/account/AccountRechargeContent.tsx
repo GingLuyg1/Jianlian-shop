@@ -113,8 +113,8 @@ export default function AccountRechargeContent() {
     ? compareRechargeDecimals(expectedUsdtAmount, String(selectedChannel.minimumAmount))
     : null;
   const reachesMin = isUsdtCnyRecharge
-    ? Boolean(requestedCnyAmount) && minimumComparison !== null && minimumComparison >= 0
-    : Boolean(selectedChannel && summary && summary.amount >= selectedChannel.minimumAmount);
+    ? Boolean(requestedCnyAmount && Number(requestedCnyAmount) > 0)
+    : Boolean(selectedChannel && summary && summary.amount > 0);
   const hasValidAmount = isUsdtCnyRecharge
     ? Boolean(requestedCnyAmount && expectedUsdtAmount && dailyRate && reachesMin)
     : Boolean(summary && summary.amount > 0 && reachesMin);
@@ -398,7 +398,7 @@ export default function AccountRechargeContent() {
                     inputMode="decimal"
                     onChange={(event) => updateAmount(event.target.value)}
                     disabled={!selectedChannel}
-                    placeholder={isUsdtCnyRecharge ? `请输入金额（最低折合 ${selectedChannel?.minimumAmount ?? 1} USDT）` : selectedChannel ? `请输入充值金额（${selectedChannel.currency}）` : "请先选择支付渠道"}
+                    placeholder={isUsdtCnyRecharge ? "请输入充值金额（CNY）" : selectedChannel ? `请输入充值金额（${selectedChannel.currency}）` : "请先选择支付渠道"}
                     className={cn("h-11", !isUsdtCnyRecharge && selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16", (isUsdtCnyRecharge || selectedChannel?.currency === "CNY") && "pr-16")}
                   />
                   {isUsdtCnyRecharge || selectedChannel?.currency === "CNY" ? (
