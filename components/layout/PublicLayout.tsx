@@ -203,6 +203,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       <main className={cn(
         viewportLocked && !isMobile ? "flex h-[calc(100dvh-57px)] min-w-0 flex-col overflow-hidden md:h-dvh" : "flex min-h-screen min-w-0 flex-col",
         mobileNavigationUntilLg ? "lg:ml-[var(--storefront-main-offset)]" : "md:ml-[var(--storefront-main-offset)]",
+        pathname === "/" && !isMobile && "lg:pt-[10px]",
         isMobile && "!ml-0 !h-auto !overflow-visible pb-20",
       )}>
         <PublicTopInfoBar announcementText={announcement || undefined} mobileNavigationUntilLg={mobileNavigationUntilLg} />

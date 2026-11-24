@@ -106,63 +106,117 @@ function HeroCarousel() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const mascotAnchorClassName =
+    "hidden lg:flex items-end -space-x-2 pointer-events-none select-none absolute top-0 -translate-y-[58%] left-[21.5%] -translate-x-1/2";
+  const mascotImgClassName =
+    "h-[108px] xl:h-[118px] w-auto object-contain select-none pointer-events-none";
+
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm h-[200px] xl:h-[220px] 2xl:h-[270px]">
+    <div data-testid="hero-carousel-outer" className="relative overflow-visible">
+      {/* 1. 后景虚层（尾巴 + GPT 下半截长裙摆与龙尾）：z-[12] 位于 Hero 卡片背景之上、文字之下 */}
       <div
-        className={cn(
-          "flex h-full w-[200%]",
-          isMoving && "transition-transform duration-700 ease-out"
-        )}
-        style={{ transform: isMoving ? "translateX(-50%)" : "translateX(0)" }}
+        aria-hidden="true"
+        data-testid="hero-mascots-back"
+        className={cn(mascotAnchorClassName, "z-[12] opacity-35 blur-[2px] saturate-90")}
       >
-        {orderedSlides.map((slide) => (
-          <div
-            key={slide.title}
-            className="relative h-full w-1/2 shrink-0 overflow-hidden px-6 py-5 2xl:px-8 2xl:py-7"
-          >
-            <div className="relative z-10 flex h-full max-w-4xl flex-col justify-center pb-4 lg:max-w-[55%] lg:pb-0">
-              <h1 className="max-w-3xl text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl lg:text-3xl 2xl:text-4xl">
-                {slide.title}
-              </h1>
-              <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground sm:mt-2.5 sm:text-sm sm:leading-6 2xl:text-base">
-                {slide.desc}
-              </p>
-              <div className="mt-3 2xl:mt-5 flex flex-wrap gap-2 text-xs 2xl:text-sm font-medium text-primary">
-                <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
-                  安全合规
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
-                  快速交付
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
-                  专业售后
-                </span>
+        <img
+          src="/mascots/gemini-back.png"
+          alt=""
+          draggable={false}
+          className={mascotImgClassName}
+        />
+        <img
+          src="/mascots/chatgpt-back.png"
+          alt=""
+          draggable={false}
+          className={mascotImgClassName}
+        />
+      </div>
+
+      {/* 2. 内层轮播轨道容器（圆角和轮播溢出裁剪只放在内层） */}
+      <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm h-[200px] xl:h-[220px] 2xl:h-[270px]">
+        <div
+          className={cn(
+            "flex h-full w-[200%]",
+            isMoving && "transition-transform duration-700 ease-out"
+          )}
+          style={{ transform: isMoving ? "translateX(-50%)" : "translateX(0)" }}
+        >
+          {orderedSlides.map((slide) => (
+            <div
+              key={slide.title}
+              className="relative h-full w-1/2 shrink-0 overflow-hidden px-6 py-5 2xl:px-8 2xl:py-7"
+            >
+              <div className="relative z-[15] flex h-full max-w-4xl flex-col justify-center pb-4 lg:max-w-[55%] lg:pb-0 lg:pt-2">
+                <h1 className="max-w-3xl text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl lg:text-3xl 2xl:text-4xl">
+                  {slide.title}
+                </h1>
+                <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground sm:mt-2.5 sm:text-sm sm:leading-6 2xl:text-base">
+                  {slide.desc}
+                </p>
+                <div className="mt-3 2xl:mt-5 flex flex-wrap gap-2 text-xs 2xl:text-sm font-medium text-primary">
+                  <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
+                    安全合规
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
+                    快速交付
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
+                    专业售后
+                  </span>
+                </div>
               </div>
+
+              <HeroVisual type={slide.visual} />
             </div>
+          ))}
+        </div>
 
-            <HeroVisual type={slide.visual} />
-          </div>
-        ))}
-      </div>
+        <div className="absolute bottom-3.5 left-6 z-20 flex gap-2">
+          {heroSlides.map((slide, index) => (
+            <button
+              key={slide.title}
+              type="button"
+              aria-label={`切换到第 ${index + 1} 张首页图`}
+              onClick={() => {
+                if (index === activeIndex || isMoving) return;
+                setActiveIndex(index);
+              }}
+              className={cn(
+                "h-2 rounded-full transition-all",
+                index === visibleIndex ? "w-8 bg-primary" : "w-2 bg-primary/25"
+              )}
+            />
+          ))}
+        </div>
+      </section>
 
-      <div className="absolute bottom-3.5 left-6 z-20 flex gap-2">
-        {heroSlides.map((slide, index) => (
-          <button
-            key={slide.title}
-            type="button"
-            aria-label={`切换到第 ${index + 1} 张首页图`}
-            onClick={() => {
-              if (index === activeIndex || isMoving) return;
-              setActiveIndex(index);
-            }}
-            className={cn(
-              "h-2 rounded-full transition-all",
-              index === visibleIndex ? "w-8 bg-primary" : "w-2 bg-primary/25"
-            )}
-          />
-        ))}
+      {/* 3. 上边框物理接触暗影（z-20） */}
+      <div
+        aria-hidden="true"
+        className="hidden lg:block pointer-events-none select-none absolute top-0 left-[21.5%] -translate-x-1/2 -translate-y-1/2 z-20 h-2 w-28 bg-[#4a2e3e]/12 blur-[4px] rounded-full"
+      />
+
+      {/* 4. 前景实层（上半身 + 龙尾上方拱起段 + 垂落双腿与鞋子，z-30） */}
+      <div
+        aria-hidden="true"
+        data-testid="hero-mascots-front"
+        className={cn(mascotAnchorClassName, "z-30 drop-shadow-[2px_5px_7px_rgba(65,38,58,0.18)]")}
+      >
+        <img
+          src="/mascots/gemini-front.png"
+          alt="Gemini 吉祥物"
+          draggable={false}
+          className={mascotImgClassName}
+        />
+        <img
+          src="/mascots/chatgpt-front.png"
+          alt="ChatGPT 吉祥物"
+          draggable={false}
+          className={mascotImgClassName}
+        />
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -322,8 +376,8 @@ export default function HomePage() {
     <PublicLayout contentClassName={cn("mx-auto max-w-[1540px] px-4 py-3 md:px-5 md:py-4 pb-12", isMobile && "!px-3 !py-2.5 !pb-16")}>
       <div className={cn("flex flex-col gap-3.5 md:gap-4", isMobile && "!gap-3")}>
         <div className={cn(
-          "[&_h1]:text-xl [&_h1]:sm:text-2xl [&_h1]:lg:text-3xl [&_h1]:2xl:text-4xl [&_p]:mt-2 [&_p]:text-xs [&_p]:leading-5 [&_p]:sm:mt-2.5 [&_p]:sm:text-sm [&_p]:sm:leading-6 [&_p]:2xl:text-base [&>section>div:first-child>div]:px-5 [&>section>div:first-child>div]:py-4 [&>section>div:first-child>div]:pb-8 [&>section>div:first-child>div]:lg:px-7 [&>section>div:first-child>div]:lg:py-6 [&>section>div:last-child]:bottom-3 [&>section>div:last-child]:left-5 [&>section>div:last-child]:lg:bottom-4 [&>section>div:last-child]:lg:left-7",
-          isMobile && "[&_h1]:!text-xl [&_h1]:!leading-7 [&_p]:!mt-2 [&_p]:!text-xs [&_p]:!leading-5 [&>section]:!min-h-0 [&>section>div:first-child]:!min-h-[168px] [&>section>div:first-child>div]:!px-4 [&>section>div:first-child>div]:!py-3.5 [&>section>div:first-child>div]:!pb-9 [&>section>div:last-child]:!bottom-2.5 [&>section>div:last-child]:!left-4 [&_.hero-visual-desktop]:!hidden"
+          "[&_h1]:text-xl [&_h1]:sm:text-2xl [&_h1]:lg:text-3xl [&_h1]:2xl:text-4xl [&_p]:mt-2 [&_p]:text-xs [&_p]:leading-5 [&_p]:sm:mt-2.5 [&_p]:sm:text-sm [&_p]:sm:leading-6 [&_p]:2xl:text-base [&_section>div:first-child>div]:px-5 [&_section>div:first-child>div]:py-4 [&_section>div:first-child>div]:pb-8 [&_section>div:first-child>div]:lg:px-7 [&_section>div:first-child>div]:lg:py-6 [&_section>div:last-child]:bottom-3 [&_section>div:last-child]:left-5 [&_section>div:last-child]:lg:bottom-4 [&_section>div:last-child]:lg:left-7",
+          isMobile && "[&_h1]:!text-xl [&_h1]:!leading-7 [&_p]:!mt-2 [&_p]:!text-xs [&_p]:!leading-5 [&_section]:!min-h-0 [&_section>div:first-child]:!min-h-[168px] [&_section>div:first-child>div]:!px-4 [&_section>div:first-child>div]:!py-3.5 [&_section>div:first-child>div]:!pb-9 [&_section>div:last-child]:!bottom-2.5 [&_section>div:last-child]:!left-4 [&_.hero-visual-desktop]:!hidden"
         )}>
           <HeroCarousel />
         </div>

@@ -68,7 +68,7 @@ export async function GET() {
     }).map((channel) => {
       const capability = getPaymentProviderCapabilities(channel.provider);
       const normalizedMin = channel.code === "usdt_bep20"
-        ? 0.0001
+        ? 0.01
         : Math.min(0.01, Math.max(channel.minimumAmount, capability.minimumAmount ?? 0));
       const normalizedMax = channel.code === "usdt_bep20"
         ? undefined

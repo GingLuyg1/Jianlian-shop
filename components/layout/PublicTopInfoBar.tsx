@@ -262,7 +262,8 @@ export default function PublicTopInfoBar({
     <div
       data-storefront-topbar
       className={cn(
-        "sticky top-[53px] z-30 bg-[#fcf8f3]/90 backdrop-blur-sm",
+        "sticky top-[53px] bg-[#fcf8f3]/90 backdrop-blur-sm",
+        pathname === "/" ? "z-10" : "z-30",
         mobileNavigationUntilLg ? "lg:top-0" : "md:top-0",
         isMobile && "relative !top-0"
       )}
@@ -273,7 +274,7 @@ export default function PublicTopInfoBar({
         !isMobile && "sm:h-[62px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 sm:py-0 xl:grid-cols-[minmax(0,1fr)_142px_150px]"
       )}>
         {announcementText && (
-          <div className={cn("col-span-2 min-w-0 flex-1 overflow-hidden", !isMobile && "sm:col-span-1")}>
+          <div className={cn("relative z-10 col-span-2 min-w-0 flex-1 overflow-hidden", !isMobile && "sm:col-span-1")}>
             <div className="flex h-8 items-center gap-2 rounded-xl border border-orange-100 bg-white px-2.5 shadow-sm shadow-orange-100/60 sm:h-9 sm:px-3">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-primary">
                 <Megaphone className="h-3.5 w-3.5" />
