@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { buildPageMetadata, getSeoProduct, productJsonLd, SITE_NAME } from "@/lib/seo";
+import {
+  buildPageMetadata,
+  getSeoProduct,
+  listSeoCategories,
+  productBreadcrumbJsonLd,
+  productJsonLd,
+  type SeoCategory,
+  SITE_NAME,
+} from "@/lib/seo";
 
 type ProductRouteProps = {
   children: React.ReactNode;
@@ -48,15 +56,49 @@ export default async function ProductDetailLayout(props: ProductRouteProps) {
     children
   } = props;
 
-  const product = await getSeoProduct(params.id).catch(() => null);
+  const [product, categories] = await Promise.all([
+    getSeoProduct(params.id).catch(() => null),
+    listSeoCategories().catch(() => []),
+  ]);
   if (!product || !isIndexableProduct(product.status)) notFound();
+
+  let categoryPath = "";
+  let primaryBreadcrumb: { name: string; path: string } | null = null;
+  if (product.category_id && categories.length > 0) {
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    const chain: SeoCategory[] = [];
+    let cursor = byId.get(product.category_id) ?? null;
+    const seen = new Set<string>();
+    while (cursor && !seen.has(cursor.id)) {
+      seen.add(cursor.id);
+      chain.unshift(cursor);
+      cursor = cursor.parent_id ? byId.get(cursor.parent_id) ?? null : null;
+    }
+    if (chain.length > 0) {
+      categoryPath = chain.map((c) => c.name).join(" / ");
+      const rootSlug = chain[0].slug;
+      const rootPathMap: Record<string, string> = {
+        "digital-accounts": "/products/digital-accounts",
+        "ai-membership": "/products/ai-membership",
+        "gift-cards": "/products/gift-cards",
+        "sim-cards": "/products/sim-cards",
+        "account-recharge": "/products/account-recharge",
+      };
+      if (rootSlug && rootPathMap[rootSlug]) {
+        primaryBreadcrumb = { name: chain[0].name, path: rootPathMap[rootSlug] };
+      }
+    }
+  }
 
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(productJsonLd(product)),
+          __html: JSON.stringify([
+            productJsonLd(product, categoryPath),
+            productBreadcrumbJsonLd(product, primaryBreadcrumb),
+          ]),
         }}
       />
       {children}

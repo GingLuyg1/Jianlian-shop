@@ -18,6 +18,11 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     path: "/",
   }),
+  // Use relative canonical "./" on root layout so child pages without explicit
+  // alternates resolve to their own canonical URL instead of pointing to "/".
+  alternates: {
+    canonical: "./",
+  },
   title: {
     default: `${SITE_NAME} | 数字商品服务`,
     template: `%s | ${SITE_NAME}`,

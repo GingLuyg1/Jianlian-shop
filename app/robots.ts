@@ -11,6 +11,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/admin/",
           "/api/",
+          "/auth/",
           "/account/",
           "/login",
           "/register",
@@ -20,11 +21,15 @@ export default function robots(): MetadataRoute.Robots {
           "/payment",
           "/order-success",
           "/order-tracking",
+          "/order-query",
           "/my-orders",
+          "/promotion",
+          "/preview",
+          "/maintenance",
+          "/r/",
         ],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
-    host: SITE_URL,
   };
 }

@@ -29,6 +29,17 @@ const nextConfig = {
         headers: [
           ...securityHeaders,
           { key: "Cache-Control", value: "no-store, max-age=0" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+      // Prevent static chunks and font files (.woff2) from appearing as
+      // "Crawled - currently not indexed" in Google Search Console while
+      // still allowing Googlebot to fetch them for page rendering.
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          ...securityHeaders,
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
       // Tutorial screenshots and brand assets rarely change: let browsers
