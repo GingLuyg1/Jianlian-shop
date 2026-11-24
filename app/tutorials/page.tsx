@@ -38,6 +38,7 @@ import GeminiTutorial from "@/components/account/GeminiTutorial";
 import AppleIdTutorial, { appleChapters } from "@/components/account/AppleIdTutorial";
 import GoogleRegionTutorial from "@/components/account/GoogleRegionTutorial";
 import GoogleQrSmsTutorial from "@/components/account/GoogleQrSmsTutorial";
+import GoogleAppealTutorial from "@/components/account/GoogleAppealTutorial";
 import FacebookTutorial from "@/components/account/FacebookTutorial";
 import TwitterTutorial, { type TwitterSection } from "@/components/account/TwitterTutorial";
 import RakutenMobileTutorial from "@/components/account/RakutenMobileTutorial";
@@ -103,7 +104,7 @@ const tutorialTopics = [
   { id: "one-nz", label: "One NZ", title: "新西兰 One NZ 电话卡教程", description: "0月租、免费收短信、国内5G漫游防扣费与保号指南", icon: OneNzWireframeIcon, keywords: ["One NZ", "OneNZ", "新西兰", "已激活使用与账户绑定教程", "卡使用指南与常见问题", "Vodafone", "沃达丰", "激活", "0月租", "短信免费", "mytype", "mynum", "521", "充值保号", "iMessage", "关闭数据漫游"] },
   { id: "chatgpt-guide", label: "Chat Gpt", title: "ChatGPT 综合使用与保号教程", description: "账号登录、2FA 安全验证、密码管理、陌生设备剔除、防封禁与官方解封申诉指南", icon: ChatGptWireframeIcon, keywords: ["ChatGPT", "Plus", "成品号", "保号", "Codex", "客户端下载", "防封", "403", "接码", "短信验证", "节点", "Access Denied", "2FA", "改密", "安全设置", "解封", "申诉", "账号解封", "账号停用", "身份验证错误", "OpenAI申诉", "撤销警告"] },
   { id: "gemini", label: "Gemini", title: "Gemini 无法使用教程", description: "排查提示「在你所在的国家/地区不可用」与「Something went wrong」报错的完整解决方法", icon: GeminiWireframeIcon, keywords: ["Gemini", "Google AI", "谷歌AI", "Gemini无法使用", "无法使用", "打不开", "提示在你所在的国家/地区不可用", "国家/地区不可用", "地区不可用", "Something went wrong", "节点", "无痕窗口", "归属地", "改区", "Google 修改国家/地区"] },
-  { id: "google-region", label: "Google", title: "Google · 扫码降级为短信与修改国家区域教程", description: "Google 扫码降级为短信验证码神器、服务条款归属地与 Play 商店锁区改区完整指南", icon: GoogleWireframeIcon, keywords: ["Google", "谷歌", "Google账号", "改区", "换区", "Play商店", "Google Play", "美国", "美区", "免税州", "绑卡", "虚拟信用卡", "境外银行卡", "服务条款", "关联地区", "关闭支付资料", "google-qr-sms-helper", "扫码降级", "短信验证码", "Cloud Shell", "降级插件", "跨设备验证", "MO-SMS"] },
+  { id: "google-region", label: "Google", title: "Google · 扫码降级、改区与账号停用申诉教程", description: "Google 扫码降级为短信验证码、修改国家/地区以及账号被停用英文申诉模板全指南", icon: GoogleWireframeIcon, keywords: ["Google", "谷歌", "Google账号", "改区", "换区", "Play商店", "Google Play", "美国", "美区", "免税州", "绑卡", "虚拟信用卡", "境外银行卡", "服务条款", "关联地区", "关闭支付资料", "google-qr-sms-helper", "扫码降级", "短信验证码", "Cloud Shell", "降级插件", "跨设备验证", "MO-SMS", "账号被停用", "账号已停用", "停用申诉", "申诉教程", "申诉模板", "Start appeal", "开始申诉", "解封"] },
   { id: "facebook", label: "Facebook", title: "Facebook · 账号与 2FA 登录教程", description: "Facebook 账号卡密格式解析、2FA 双重身份验证码获取与安全登录全流程指引", icon: FacebookWireframeIcon, keywords: ["Facebook", "FB", "脸书", "2FA", "两步验证", "TOTP", "双重认证", "UID", "账号", "登录", "尝试其他方法", "身份验证应用程序", "2fa.cn", "2fa.show", "2fa.live", "2fa.web-ai.top", "验证码", "养号", "防封"] },
   { id: "twitter", label: "X (Twitter)", title: "X (Twitter) 账号使用与管理教程", description: "X Token 电脑免密直登、2FA 两步动态验证码安全登录、以及修改密码后重新提取最新 Token 全流程指引", icon: TwitterWireframeIcon, keywords: ["X", "Twitter", "推特", "Token", "auth_token", "X Token", "X 2fa", "2FA", "两步验证", "重新获取Token", "改密", "修改密码", "插件登录", "Cookie", "Application", "F12", "开发者工具"] },
   { id: "rakuten-mobile", label: "Rakuten Mobile", title: "日本乐天 Rakuten Mobile 安装与配置教程", description: "日本乐天原生实体卡安装、关漫游防扣费、网络搜网与高清视频教程", icon: Smartphone, keywords: ["日本", "乐天", "Rakuten", "Rakutenmobile", "Rakuten Mobile", "乐天移动", "煤炉", "Mercari", "Line", "抽票", "视频教程", "APN", "漫游", "防扣费", "实体卡", "原生卡"] },
@@ -146,7 +147,7 @@ function getTutorialTitleMeta({
   twitterGuide,
   googleGuide,
 }: {
-  googleGuide: "qr-sms" | "region";
+  googleGuide: "qr-sms" | "region" | "appeal";
   topicId: string;
   giffgaffGuide: "activation" | "keeper";
   oneNzGuide: OneNzSection;
@@ -186,6 +187,13 @@ function getTutorialTitleMeta({
         desc: "排查提示「在你所在的国家/地区不可用」与页面显示「Something went wrong」的完整解决方法",
       };
     case "google-region": {
+      if (googleGuide === "appeal") {
+        return {
+          mainTitle: "Google 使用教程",
+          subTitle: "Google 账号被停用申诉教程",
+          desc: "谷歌账号提示「账号已停用」的 5 步官方申诉流程与可一键复制的英文申诉模板",
+        };
+      }
       const isQrSms = googleGuide === "qr-sms";
       return {
         mainTitle: "Google 使用教程",
@@ -363,7 +371,7 @@ function TutorialsPageContent() {
   const [twitterTreeOpen, setTwitterTreeOpen] = useState(false);
   const [twitterGuide, setTwitterGuide] = useState<TwitterSection>("x-token");
   const [googleTreeOpen, setGoogleTreeOpen] = useState(false);
-  const [googleGuide, setGoogleGuide] = useState<"qr-sms" | "region">("qr-sms");
+  const [googleGuide, setGoogleGuide] = useState<"qr-sms" | "region" | "appeal">("qr-sms");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -390,6 +398,8 @@ function TutorialsPageContent() {
       setGoogleGuide("qr-sms");
     } else if (paramGuide === "region") {
       setGoogleGuide("region");
+    } else if (paramGuide === "appeal") {
+      setGoogleGuide("appeal");
     }
   }, [searchParams]);
 
@@ -577,6 +587,7 @@ function TutorialsPageContent() {
                 {[
                   { guide: "qr-sms", label: "扫码降级为短信(推荐)" },
                   { guide: "region", label: "修改国家/地区教程" },
+                  { guide: "appeal", label: "账号被停用申诉教程" },
                 ].map((item) => (
                   <button
                     key={item.guide}
@@ -666,7 +677,7 @@ function TutorialsPageContent() {
                 return <Collapsible.Root key={id} asChild open={showChatgpt && chatgptTreeOpen} onOpenChange={setChatgptTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="ChatGPT 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={chatgptGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={chatgptGuide === "login" ? "page" : undefined} title="登录与 2FA 验证" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("login"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>登录与 2FA 验证</button><button type="button" aria-current={chatgptGuide === "security" ? "page" : undefined} title="改密与安全设置" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("security"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>改密与安全设置</button><button type="button" aria-current={chatgptGuide === "rebind" ? "page" : undefined} title="设备与 2FA 换绑" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("rebind"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>设备与 2FA 换绑</button><button type="button" aria-current={chatgptGuide === "anti-ban" ? "page" : undefined} title="防封与保号指南" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("anti-ban"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>防封与保号指南</button><button type="button" aria-current={chatgptGuide === "unban" ? "page" : undefined} title="账号解封申诉教程" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setChatgptGuide("unban"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>账号解封申诉教程</button></nav></Collapsible.Content></div></Collapsible.Root>;
               }
               if (id === "google-region") {
-                return <Collapsible.Root key={id} asChild open={showGoogle && googleTreeOpen} onOpenChange={setGoogleTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Google 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={googleGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={googleGuide === "qr-sms" ? "page" : undefined} title="Google 扫码降级为短信验证码" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGoogleGuide("qr-sms"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>扫码降级为短信(推荐)</button><button type="button" aria-current={googleGuide === "region" ? "page" : undefined} title="修改国家/地区教程" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGoogleGuide("region"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>修改国家/地区教程</button></nav></Collapsible.Content></div></Collapsible.Root>;
+                return <Collapsible.Root key={id} asChild open={showGoogle && googleTreeOpen} onOpenChange={setGoogleTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Google 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={googleGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={googleGuide === "qr-sms" ? "page" : undefined} title="Google 扫码降级为短信验证码" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGoogleGuide("qr-sms"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>扫码降级为短信(推荐)</button><button type="button" aria-current={googleGuide === "region" ? "page" : undefined} title="修改国家/地区教程" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGoogleGuide("region"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>修改国家/地区教程</button><button type="button" aria-current={googleGuide === "appeal" ? "page" : undefined} title="Google 账号被停用申诉教程" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGoogleGuide("appeal"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>账号被停用申诉教程</button></nav></Collapsible.Content></div></Collapsible.Root>;
               }
               if (id === "twitter") {
                 return <Collapsible.Root key={id} asChild open={showTwitter && twitterTreeOpen} onOpenChange={setTwitterTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="X (Twitter) 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={twitterGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={twitterGuide === "x-token" ? "page" : undefined} title="X Token 使用教程(仅电脑)" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setTwitterGuide("x-token"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>X Token 使用教程(仅电脑)</button><button type="button" aria-current={twitterGuide === "x-2fa" ? "page" : undefined} title="X 2fa 使用教程(手机/电脑)" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setTwitterGuide("x-2fa"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>X 2fa 使用教程(手机/电脑)</button><button type="button" aria-current={twitterGuide === "x-renew-token" ? "page" : undefined} title="X 修改密码后重新获取Token" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setTwitterGuide("x-renew-token"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>X 修改密码后重新获取Token</button></nav></Collapsible.Content></div></Collapsible.Root>;
@@ -679,7 +690,7 @@ function TutorialsPageContent() {
       <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content} ${isMobile ? "!overflow-visible" : ""}`}>
         <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}>
           <div
-            key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showTwitter ? twitterGuide : ""}`}
+            key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}`}
             className={`${tutorial.topicEnter} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}
           >
             <div className="flex min-w-0 flex-col gap-1">
@@ -715,8 +726,8 @@ function TutorialsPageContent() {
           </div>
         </header>
         <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
-          <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "gemini" ? <GeminiTutorial onGoToGoogleRegion={() => { setSelected("google-region"); setSearch(""); setGoogleTreeOpen(true); setGoogleGuide("region"); setGiffgaffTreeOpen(false); setOneNzTreeOpen(false); setChatgptTreeOpen(false); setTwitterTreeOpen(false); resetScroll(); }} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : <GoogleRegionTutorial onSwitchToQrSms={() => setGoogleGuide("qr-sms")} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-6">
+          <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "gemini" ? <GeminiTutorial onGoToGoogleRegion={() => { setSelected("google-region"); setSearch(""); setGoogleTreeOpen(true); setGoogleGuide("region"); setGiffgaffTreeOpen(false); setOneNzTreeOpen(false); setChatgptTreeOpen(false); setTwitterTreeOpen(false); resetScroll(); }} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : googleGuide === "appeal" ? <GoogleAppealTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} onSwitchToRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : <GoogleRegionTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-6">
             {/* 1. 平台服务说明与三大核心准则 */}
             <section aria-labelledby="tutorial-service-title" className="space-y-4">
               <div className="flex items-center justify-between">

@@ -49,6 +49,7 @@
 }
 .subtopics[data-guide=rebind] .subtopicIndicator,
 .subtopics[data-guide=rates] .subtopicIndicator,
+.subtopics[data-guide=appeal] .subtopicIndicator,
 .subtopics[data-guide=x-renew-token] .subtopicIndicator {
   transform: translateY(72px);
 }
