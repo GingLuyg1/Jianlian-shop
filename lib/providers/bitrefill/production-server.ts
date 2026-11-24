@@ -10,6 +10,7 @@ let installed = false;
 export async function authorizeBitrefillStorefrontOrder(input: {
   userId: string; productId: string; skuId: string | null; quantity: number; clientRequestId: string;
 }) {
+  if (process.env.BITREFILL_REAL_PURCHASE_ENABLED === 'true') return { applicable: false };
   if (!GIFFGAFF_PIN_SKUS.includes(input.skuId ?? '')) return { applicable: false };
   return authorizePinLocalOrPurchase({ input, service: getSupabaseServiceRoleClient(), authorizePurchase: async () => {
     ensureBitrefillProductionRuntime(input.skuId);

@@ -296,7 +296,7 @@ export async function getPaymentSessionStatus(
   const service = getRequiredServiceClient();
   const { data, error } = await service
     .from("payment_sessions")
-    .select("session_no,business_type,business_no,channel_code,status,provider_transaction_id,paid_at,expires_at,user_id")
+    .select("id,session_no,business_type,business_no,channel_code,provider,provider_order_no,status,provider_transaction_id,paid_at,expires_at,user_id")
     .eq("session_no", sessionNo)
     .maybeSingle();
 
@@ -306,8 +306,41 @@ export async function getPaymentSessionStatus(
     throw new PaymentSessionError("SESSION_FORBIDDEN", "无权查看该支付会话");
   }
 
-  let status = normalizeSessionStatus(data.status);
-  if (["pending", "processing"].includes(status) && isExpiredAt(data.expires_at)) {
+  let currentData = data;
+  let status = normalizeSessionStatus(currentData.status);
+
+  // Active fallback verification for SNPay when async callback is delayed or missed
+  if (
+    ["pending", "processing"].includes(status)
+    && !isExpiredAt(currentData.expires_at)
+    && currentData.provider === "snpay"
+    && currentData.provider_order_no
+    && process.env.SNPAY_RECONCILIATION_EXECUTE_ENABLED === "true"
+  ) {
+    try {
+      const { reconcileSnpaySession } = await import("@/lib/payments/snpay-reconciliation-service");
+      const rec = await reconcileSnpaySession({
+        sessionId: String(currentData.id),
+        execute: true,
+        interactive: true,
+      });
+      if (rec.completed || rec.paid) {
+        const refreshed = await service
+          .from("payment_sessions")
+          .select("id,session_no,business_type,business_no,channel_code,provider,provider_order_no,status,provider_transaction_id,paid_at,expires_at,user_id")
+          .eq("session_no", sessionNo)
+          .maybeSingle();
+        if (!refreshed.error && refreshed.data) {
+          currentData = refreshed.data;
+          status = normalizeSessionStatus(currentData.status);
+        }
+      }
+    } catch {
+      // Best-effort active check; never break status polling
+    }
+  }
+
+  if (["pending", "processing"].includes(status) && isExpiredAt(currentData.expires_at)) {
     const expiredAt = new Date().toISOString();
     const { error: expireError } = await service
       .from("payment_sessions")
@@ -316,25 +349,25 @@ export async function getPaymentSessionStatus(
       .in("status", ACTIVE_SESSION_STATUSES);
     if (expireError) throw expireError;
     status = "expired";
-    if (String(data.business_type) === "recharge" && isLiuhaoyiPaymentMethod(data.channel_code)) {
+    if (String(currentData.business_type) === "recharge" && isLiuhaoyiPaymentMethod(currentData.channel_code)) {
       const { error: rechargeExpireError } = await service
         .from("account_recharges")
         .update({ status: "expired", error_summary: "充值订单已过期" })
-        .eq("recharge_no", data.business_no)
+        .eq("recharge_no", currentData.business_no)
         .in("status", ["pending", "waiting_payment", "processing"]);
       if (rechargeExpireError) throw rechargeExpireError;
     }
   }
 
   return {
-    sessionNo: String(data.session_no),
-    businessType: String(data.business_type),
-    businessNo: textOrNull(data.business_no),
-    channel: String(data.channel_code),
+    sessionNo: String(currentData.session_no),
+    businessType: String(currentData.business_type),
+    businessNo: textOrNull(currentData.business_no),
+    channel: String(currentData.channel_code),
     status,
-    providerTransactionId: textOrNull(data.provider_transaction_id),
-    paidAt: textOrNull(data.paid_at),
-    expiresAt: textOrNull(data.expires_at),
+    providerTransactionId: textOrNull(currentData.provider_transaction_id),
+    paidAt: textOrNull(currentData.paid_at),
+    expiresAt: textOrNull(currentData.expires_at),
   };
 }
 

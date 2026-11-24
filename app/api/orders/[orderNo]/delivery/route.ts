@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { createKuajingZyProductionRuntime } from "@/lib/providers/kuajingzy/purchase-server";
+import { reconcileBitrefillOrder } from "@/lib/providers/bitrefill/live-fulfillment";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
@@ -125,10 +126,13 @@ export async function GET(_request: Request, context: RouteContext) {
             .eq("payment_status", "paid")
             .maybeSingle();
           if (paidOrder?.id) {
-            const summary = await createKuajingZyProductionRuntime({ service }).reconcileExistingOrder(
+            const kSummary = await createKuajingZyProductionRuntime({ service }).reconcileExistingOrder(
               String(paidOrder.id)
             );
-            if (summary.fulfilled > 0) {
+            const bSummary = kSummary.fulfilled > 0
+              ? { fulfilled: 0 }
+              : await reconcileBitrefillOrder(service, String(paidOrder.id));
+            if (kSummary.fulfilled > 0 || bSummary.fulfilled > 0) {
               const refreshed = await supabase.rpc("get_order_delivery_for_user", {
                 p_order_no: orderNo,
               });

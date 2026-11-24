@@ -23,6 +23,7 @@ export function isCatalogCategoryPath(pathname: string) {
 
 let pendingNavigation: ReturnType<typeof setTimeout> | null = null;
 let pendingRoute: CatalogRoutePending | null = null;
+let intendedCategorySelection: { path: string; slug: string; id: string; queryParam: string; at: number } | null = null;
 const listeners = new Set<() => void>();
 
 export function subscribeCatalogRoutePending(listener: () => void) {
@@ -77,13 +78,43 @@ export function startCatalogPopstate(currentPath: string, targetPath: string) {
   }
 }
 
+/** Consume an intended 2nd-level category chosen during a pending 1st-level transition. */
+export function consumeIntendedCatalogCategory(pathname: string) {
+  if (!intendedCategorySelection) return null;
+  const fresh = Date.now() - intendedCategorySelection.at < 10_000;
+  if (fresh && intendedCategorySelection.path === pathname) {
+    const match = intendedCategorySelection;
+    intendedCategorySelection = null;
+    return match;
+  }
+  if (!fresh) intendedCategorySelection = null;
+  return null;
+}
+
 /** A verified destination rail may be used while its page payload is pending.
  * Supersede the scheduled default navigation instead of briefly locking the
  * secondary cards; the old product rail remains inert until route commit. */
-export function selectPendingCatalogCategory(sourcePath: string, targetPath: string, navigate: () => void) {
+export function selectPendingCatalogCategory(
+  sourcePath: string,
+  targetPath: string,
+  navigate: () => void,
+  selection?: { slug: string; id: string; queryParam: string }
+) {
   if (!pendingRoute || pendingRoute.source !== sourcePath || pendingRoute.target.split("?")[0] !== targetPath) return false;
   if (pendingNavigation) clearTimeout(pendingNavigation);
   pendingNavigation = null;
+  if (selection?.slug) {
+    intendedCategorySelection = {
+      path: targetPath,
+      slug: selection.slug,
+      id: selection.id,
+      queryParam: selection.queryParam,
+      at: Date.now(),
+    };
+    const qs = new URLSearchParams();
+    qs.set(selection.queryParam, selection.slug);
+    publishPendingRoute({ source: sourcePath, target: `${targetPath}?${qs.toString()}` });
+  }
   navigate();
   return true;
 }

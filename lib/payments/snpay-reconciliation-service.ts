@@ -56,7 +56,7 @@ async function evidence(service:SupabaseClient,s:Row,q:Row|null,kind:string,reas
   if(error) throw Error("evidence_write_failed");
 }
 export async function reconcileSnpaySession(
-  options:{sessionId:string;execute?:boolean}, deps:Dependencies = {},
+  options:{sessionId:string;execute?:boolean;interactive?:boolean}, deps:Dependencies = {},
 ):Promise<SnpayReconciliationResult> {
   const service = deps.client ?? getSupabaseServiceRoleClient();
   if(!service) throw Error("configuration_missing");
@@ -65,7 +65,7 @@ export async function reconcileSnpaySession(
   const nowMs = deps.nowMs ?? Date.now(), checkedAt = new Date(nowMs).toISOString();
   const s = await read(service,"payment_sessions",options.sessionId);
   if(!s) return result("skipped","session_missing");
-  const exclusion = snpayCandidateReason(s,nowMs);
+  const exclusion = snpayCandidateReason(s,nowMs,{interactive:options.interactive === true});
   if(exclusion) return result("skipped",exclusion);
   const isOrder = s.business_type === "order", parentTable = isOrder ? "orders" : "account_recharges";
   const r = await read(service,parentTable,s.business_id);

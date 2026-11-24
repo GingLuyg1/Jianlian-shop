@@ -118,9 +118,46 @@ export async function GET(_request: Request, context: RouteContext) {
       return jsonError("Please sign in first.", 401);
     }
 
-    const order = await getUserOrderByNo(supabase, user.id, (await context.params).orderNo);
+    let order = await getUserOrderByNo(supabase, user.id, (await context.params).orderNo);
     if (!order) {
       return jsonError("Order does not exist or you do not have permission to view it.", 404);
+    }
+
+    // Active fallback verification for SNPay when user returns to /payment or refreshes /account/orders
+    if (
+      order.payment_status === "unpaid"
+      && order.status === "pending_payment"
+      && process.env.SNPAY_RECONCILIATION_EXECUTE_ENABLED === "true"
+    ) {
+      try {
+        const service = getSupabaseServiceRoleClient();
+        if (service) {
+          const { data: snpaySession } = await service
+            .from("payment_sessions")
+            .select("id")
+            .eq("business_id", order.id)
+            .eq("business_type", "order")
+            .eq("provider", "snpay")
+            .in("status", ["pending", "processing"])
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (snpaySession?.id) {
+            const { reconcileSnpaySession } = await import("@/lib/payments/snpay-reconciliation-service");
+            const rec = await reconcileSnpaySession({
+              sessionId: String(snpaySession.id),
+              execute: true,
+              interactive: true,
+            });
+            if (rec.completed || rec.paid) {
+              const refreshed = await getUserOrderByNo(supabase, user.id, order.order_no);
+              if (refreshed) order = refreshed;
+            }
+          }
+        }
+      } catch {
+        // Best-effort active check; never break order loading
+      }
     }
 
     const walletCredit = await getUserBep20UnderpaymentWalletCredit(order.id, user.id);

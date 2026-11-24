@@ -1,6 +1,7 @@
 import { authorizeKuajingZyStorefrontOrder } from "@/lib/providers/kuajingzy/storefront";
 import { NextResponse } from "next/server";
 import { authorizeBitrefillStorefrontOrder } from "@/lib/providers/bitrefill/production-server";
+import { freezeBitrefillOrderBinding } from "@/lib/providers/bitrefill/live-fulfillment";
 
 import { checkOrderProductAvailability } from "@/lib/catalog/order-product-visibility.mjs";
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
@@ -607,6 +608,12 @@ export async function POST(request: Request) {
 
     completedOrder = { requestId: clientRequestId, orderId, orderNo: rpcOrderNo };
     logOrderPostProcess({ requestId: clientRequestId, stage: "RPC_COMPLETED", orderId, orderNo: rpcOrderNo });
+
+    await freezeBitrefillOrderBinding(getSupabaseServiceRoleClient(), {
+      orderId,
+      productId,
+      skuId: resolvedSkuId,
+    });
 
     // The controlled RPC already persists payment_method. A second user-scoped
     // UPDATE would require a broad orders UPDATE policy and can leave a hidden

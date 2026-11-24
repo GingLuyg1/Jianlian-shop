@@ -34,7 +34,7 @@ import { forgetPublicProductPage, getPublicProductPage, peekPublicProductPage, p
 import { useProgressiveWheelMotion } from "@/hooks/use-progressive-wheel-motion";
 import { WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 import { findVisibleStorefrontPrimaryCategory, storefrontCategoryPaths } from "@/lib/catalog/visible-storefront-category-routes";
-import { clearCatalogRoutePending, getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
+import { clearCatalogRoutePending, consumeIntendedCatalogCategory, getCatalogRoutePending, getServerCatalogRoutePending, selectPendingCatalogCategory, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
 import {
   computeProductSalesCount,
   findPrimaryCategory,
@@ -168,14 +168,31 @@ function SupabaseMallContentInner({
   const routePending = pendingRoute?.source === pathname && routeTargetBase !== pathname ? pendingRoute : null;
   const searchParams = useSearchParams();
   const routeSearch = searchParams.toString();
-  const [localParams, setLocalParams] = useState(() => new URLSearchParams(routeSearch));
+  const [localParams, setLocalParams] = useState(() => {
+    const initial = new URLSearchParams(routeSearch);
+    const intended = consumeIntendedCatalogCategory(pathname);
+    if (intended && !initial.get(intended.queryParam)) {
+      initial.set(intended.queryParam, intended.slug);
+    }
+    return initial;
+  });
+  const lastRouteSearchRef = useRef(routeSearch);
   const { settings } = usePublicSettings();
   const { isMobile } = useMobileStorefront();
 
   useEffect(() => {
+    const intended = consumeIntendedCatalogCategory(pathname);
     clearCatalogRoutePending();
     const shell = document.querySelector<HTMLElement>('[data-testid="storefront-category-layout"]');
     shell?.removeAttribute("data-route-exiting");
+    if (intended) {
+      const next = new URLSearchParams(window.location.search);
+      if (!next.get(intended.queryParam)) {
+        next.set(intended.queryParam, intended.slug);
+        window.history.replaceState(window.history.state, "", `${pathname}?${next.toString()}`);
+        setLocalParams(next);
+      }
+    }
   }, [pathname]);
   const categorySnapshot = usePublicCategorySnapshot();
   useSyncExternalStore(subscribePublicProductCounts, getPublicProductCountVersion, getServerPublicProductCountVersion);
@@ -197,7 +214,22 @@ function SupabaseMallContentInner({
 
   const routeCategoryKey = localParams.get(queryParam) ?? "";
   const filters = useMemo(() => readFilters(localParams), [localParams]);
-  useEffect(() => { setLocalParams(new URLSearchParams(routeSearch)); }, [routeSearch]);
+  useEffect(() => {
+    if (routeSearch === lastRouteSearchRef.current) return;
+    lastRouteSearchRef.current = routeSearch;
+    if (typeof window !== "undefined") {
+      const currentWindowParams = new URLSearchParams(window.location.search);
+      const nextRouteParams = new URLSearchParams(routeSearch);
+      // Preserve an in-page replaceState category selection if Next.js emits an empty late routeSearch
+      if (!nextRouteParams.get(queryParam) && currentWindowParams.get(queryParam)) {
+        setLocalParams(currentWindowParams);
+        return;
+      }
+      setLocalParams(nextRouteParams);
+    } else {
+      setLocalParams(new URLSearchParams(routeSearch));
+    }
+  }, [queryParam, routeSearch]);
   useEffect(() => {
     const sync = () => setLocalParams(new URLSearchParams(window.location.search));
     window.addEventListener("popstate", sync);
@@ -427,31 +459,27 @@ function SupabaseMallContentInner({
     };
   }, [filters.page, filters.pageSize, filters.search, loadedProductKey, productQueryKey, resolvedCategory]);
 
+  const resolvedCategoryId = resolvedCategory?.id ?? "";
+  const resolvedCategoryLevel = resolvedCategory?.level ?? 0;
+  const resolvedCategoryParentId = resolvedCategory?.parent_id ?? "";
+  const resolvedCategoryName = resolvedCategory?.name ?? "";
+
   useEffect(() => {
-    if (!resolvedCategory) {
+    if (!resolvedCategoryId) {
       setIsLoadingProducts(false);
       return;
     }
 
-    const currentCategory = resolvedCategory;
     const currentQueryKey = productQueryKey;
     let mounted = true;
     const requestId = productRequestIdRef.current + 1;
     productRequestIdRef.current = requestId;
 
     async function loadProducts() {
-      if (products.length === 0) {
-        setIsLoadingProducts(true);
-        setCountReadyKey("");
-        setLoadedProductKey("");
-        setLoadedCategoryId("");
-        setProducts([]);
-        setTotal(0);
-      }
       setProductError("");
       try {
-        const primaryCategoryId = currentCategory.level === 1 ? currentCategory.id : currentCategory.parent_id ?? "";
-        const secondaryCategoryId = currentCategory.level === 2 ? currentCategory.id : "";
+        const primaryCategoryId = resolvedCategoryLevel === 1 ? resolvedCategoryId : resolvedCategoryParentId;
+        const secondaryCategoryId = resolvedCategoryLevel === 2 ? resolvedCategoryId : "";
         if (!primaryCategoryId) {
           forgetPublicProductCount(currentQueryKey);
           setProducts([]);
@@ -468,22 +496,29 @@ function SupabaseMallContentInner({
         const cachedPage = peekPublicProductPage(query);
         const cacheHit = Boolean(cachedPage);
         if (cachedPage) {
-          rememberPublicProductCount(currentQueryKey, `${window.location.pathname}${window.location.search}`, currentCategory.id, cachedPage.products.length);
+          rememberPublicProductCount(currentQueryKey, `${window.location.pathname}${window.location.search}`, resolvedCategoryId, cachedPage.products.length);
           setCountReadyKey(currentQueryKey);
           setProducts(
             cachedPage.products.map((row) =>
-              mapPublicProductToProduct(row, productCategory, row.category_path || currentCategory.name)
+              mapPublicProductToProduct(row, productCategory, row.category_path || resolvedCategoryName)
             )
           );
           setTotal(cachedPage.total);
           setLoadedProductKey(currentQueryKey);
-          setLoadedCategoryId(currentCategory.id);
+          setLoadedCategoryId(resolvedCategoryId);
           setIsLoadingProducts(false);
+        } else {
+          setIsLoadingProducts(true);
+          setCountReadyKey("");
+          setLoadedProductKey("");
+          setLoadedCategoryId("");
+          setProducts([]);
+          setTotal(0);
         }
         const countWasKnown = getPublicProductCount(currentQueryKey) !== undefined;
         const result = await getPublicProductPage(query);
         if (!mounted || requestId !== productRequestIdRef.current) return;
-        rememberPublicProductCount(currentQueryKey, `${window.location.pathname}${window.location.search}`, currentCategory.id, result.products.length);
+        rememberPublicProductCount(currentQueryKey, `${window.location.pathname}${window.location.search}`, resolvedCategoryId, result.products.length);
         // The existing response contains both count and rows. Commit its exact
         // count and the secondary indicator first; paint matching placeholders
         // before mounting rows. No second count query or fixed delay is needed.
@@ -494,12 +529,12 @@ function SupabaseMallContentInner({
         }
         setProducts(
           result.products.map((row) =>
-            mapPublicProductToProduct(row, productCategory, row.category_path || currentCategory.name)
+            mapPublicProductToProduct(row, productCategory, row.category_path || resolvedCategoryName)
           )
         );
         setTotal(result.total);
         setLoadedProductKey(currentQueryKey);
-        setLoadedCategoryId(currentCategory.id);
+        setLoadedCategoryId(resolvedCategoryId);
       } catch (loadError) {
         if (!mounted || requestId !== productRequestIdRef.current) return;
         forgetPublicProductCount(currentQueryKey);
@@ -518,7 +553,7 @@ function SupabaseMallContentInner({
     return () => {
       mounted = false;
     };
-  }, [resolvedCategory, filters.search, filters.page, filters.pageSize, productCategory, productQueryKey, retryNonce]);
+  }, [resolvedCategoryId, resolvedCategoryLevel, resolvedCategoryParentId, resolvedCategoryName, filters.search, filters.page, filters.pageSize, productCategory, productQueryKey, retryNonce]);
 
   function handleCategorySelect(category: DisplayCategory) {
     clearCatalogRoutePending();
@@ -563,7 +598,8 @@ function SupabaseMallContentInner({
       setIsLoadingProducts(true);
       setLoadedProductKey("");
       setLoadedCategoryId("");
-      // Keep previous products visible while loading to eliminate blank-screen flashing
+      setProducts([]);
+      setTotal(0);
     }
     updateUrl({ categorySlug: category.slug, search: "", page: 1 });
   }
@@ -575,7 +611,24 @@ function SupabaseMallContentInner({
     const params = new URLSearchParams(routePending?.target.split("?")[1] ?? "");
     params.set(targetQueryParam, category.slug);
     const href = `${targetPath}?${params.toString()}`;
-    if (selectPendingCatalogCategory(pathname, targetPath, () => router.push(href))) {
+    const primaryId = category.level === 1 ? category.id : category.parent_id ?? "";
+    const secondaryId = category.level === 2 ? category.id : "";
+    if (primaryId) {
+      void prefetchPublicProductPage({
+        primaryCategoryId: primaryId,
+        secondaryCategoryId: secondaryId,
+        keyword: "",
+        page: 1,
+        pageSize: CATALOG_PAGE_SIZE,
+      });
+    }
+    if (
+      selectPendingCatalogCategory(pathname, targetPath, () => router.push(href), {
+        slug: category.slug,
+        id: category.id,
+        queryParam: targetQueryParam,
+      })
+    ) {
       setPendingSelectedCategoryId(category.id);
     }
   }
