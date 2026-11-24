@@ -97,3 +97,11 @@ export function TwitterWireframeIcon({ className = "h-5 w-5" }: { className?: st
     </svg>
   );
 }
+
+export function GeminiWireframeIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 2.5C12.9 7.8 16.2 11.1 21.5 12C16.2 12.9 12.9 16.2 12 21.5C11.1 16.2 7.8 12.9 2.5 12C7.8 11.1 11.1 7.8 12 2.5Z" />
+    </svg>
+  );
+}
