@@ -137,19 +137,19 @@ test('Canary rejects an extra provider delivery',async()=>{
   assert.equal(f.stats().deliveries,0);
 });
 const retiredCanaryBinding = {
-  websiteProductId:'23126f0e-d4ad-44c6-a6ef-cc5956e50087',
-  websiteSkuId:'0a4e35ee-21bf-4503-b184-c46fca099363',
-  productId:'imp_9b99e012b51156686bbda185',
-  sku:'16',
+  websiteProductId:'ab4930de-5eef-4a40-9362-83ed6da9ea71',
+  websiteSkuId:'c34de5ce-bd2a-4356-aa2a-ca7ed4c3e4cd',
+  productId:'imp_8f97c91003b23347934cb14e',
+  sku:'9',
 };
 
 for(const [name,change] of [
   ['other persisted user',c=>c.orderUserId='00000000-0000-4000-8000-000000000091'],
-  ['retired Hotmail binding',c=>Object.assign(c.binding,retiredCanaryBinding)],
+  ['retired Outlook binding',c=>Object.assign(c.binding,retiredCanaryBinding)],
   ['old website product',c=>c.binding.websiteProductId=retiredCanaryBinding.websiteProductId],
   ['old website SKU',c=>c.binding.websiteSkuId=retiredCanaryBinding.websiteSkuId],
   ['old supplier product',c=>c.binding.productId=retiredCanaryBinding.productId],
-  ['old supplier SKU 16',c=>c.binding.sku=retiredCanaryBinding.sku],
+  ['old supplier SKU 9',c=>c.binding.sku=retiredCanaryBinding.sku],
   ['unit cost ceiling above 0.0990',c=>c.binding.maxUnitCost='0.0991'],
   ...['alipay','wechat','usdt_bep20'].map(method=>[method,c=>c.paymentMethod=method]),
 ]) test('internal paid order cannot POST for '+name,async()=>{
