@@ -43,13 +43,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 import {
-  STORAGE_KEY,
   TICKET_TYPES,
   TICKET_PRIORITIES,
   TICKET_STATUSES,
-  INITIAL_ADMIN_DEMO_TICKETS,
-  getAdminTicketsFromStorage,
-  filterRetainedTickets,
+  clearLegacyLocalTickets,
   type TicketAttachment,
   type TicketItem,
   type TicketMessage,
@@ -58,13 +55,12 @@ import {
   type TicketPriority,
 } from "@/lib/tickets/types";
 
-const INITIAL_DEMO_TICKETS: TicketItem[] = INITIAL_ADMIN_DEMO_TICKETS;
-
 type AdminTicketTab = "all" | "processing" | "completed" | "flagged";
 
 export default function AdminTicketsPage() {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>("GD-20261122-140215-9F1C");
+  const [loadingTickets, setLoadingTickets] = useState(true);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTicketTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -99,20 +95,38 @@ export default function AdminTicketsPage() {
     }
   }, [activeTab]);
 
-  // 初始化加载工单（自动清理超过 7 天的记录）
-  useEffect(() => {
-    const loaded = getAdminTicketsFromStorage();
-    setTickets(loaded);
-    if (loaded.length > 0 && !loaded.some((t) => t.id === selectedTicketId)) {
-      setSelectedTicketId(loaded[0].id);
+  const loadTicketsFromServer = useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingTickets(true);
+    try {
+      clearLegacyLocalTickets();
+      const response = await fetch("/api/admin/tickets", { cache: "no-store" });
+      if (!response.ok) {
+        if (!quiet) toast.error("工单列表加载失败，请刷新重试");
+        return;
+      }
+      const data = (await response.json()) as { tickets?: TicketItem[] };
+      const loaded = Array.isArray(data.tickets) ? data.tickets : [];
+      setTickets(loaded);
+      setSelectedTicketId((prev) => {
+        if (prev && loaded.some((t) => t.id === prev)) return prev;
+        return loaded.length > 0 ? loaded[0].id : null;
+      });
+    } catch {
+      if (!quiet) toast.error("工单列表加载失败，请稍后重试");
+    } finally {
+      if (!quiet) setLoadingTickets(false);
     }
   }, []);
 
-  // 持久化存储
-  const saveTickets = (newTickets: TicketItem[]) => {
+  // 初始化从服务端数据库加载真实工单（电脑端与手机端实时同步，不再读取本地假数据）
+  useEffect(() => {
+    void loadTicketsFromServer();
+  }, [loadTicketsFromServer]);
+
+  // 通知侧边栏和控制台刷新未处理徽章
+  const syncAdminTicketsState = (newTickets: TicketItem[]) => {
     setTickets(newTickets);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newTickets));
       window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
     } catch {}
   };
@@ -237,8 +251,8 @@ export default function AdminTicketsPage() {
     e.target.value = "";
   };
 
-  // 管理员发送官方答复（自动转换为已解决/已处理状态）
-  const handleAdminReply = (e: FormEvent) => {
+  // 管理员发送官方答复（自动转换为已解决/已处理状态，实时写入服务端数据库）
+  const handleAdminReply = async (e: FormEvent) => {
     e.preventDefault();
     if (!currentTicket || submittingReply) return;
     const text = replyText.trim();
@@ -248,61 +262,91 @@ export default function AdminTicketsPage() {
     }
 
     setSubmittingReply(true);
-    const newMsg: TicketMessage = {
-      id: `admin-reply-${Date.now()}`,
-      sender: "support",
-      senderName: "Jianlian 官方客服",
-      content: text || (replyImages.length > 0 ? "（已发送图片附件）" : "（已发送文件附件）"),
-      images: replyImages.length > 0 ? [...replyImages] : undefined,
-      attachments: replyAttachments.length > 0 ? [...replyAttachments] : undefined,
-      createdAt: getNowFormatted(),
-    };
-
-    // 给客户回复后，处理状态自动转换为已处理（completed）
-    const updatedTicket: TicketItem = {
-      ...currentTicket,
-      status: "completed",
-      updatedAt: getNowFormatted(),
-      hasUnreadReply: true, // 前台用户端显示有未读
-      messages: [...currentTicket.messages, newMsg],
-    };
-
-    const nextTickets = tickets.map((t) => (t.id === currentTicket.id ? updatedTicket : t));
-    saveTickets(nextTickets);
-    setReplyText("");
-    setReplyImages([]);
-    setReplyAttachments([]);
-    setSubmittingReply(false);
-
-    toast.success(`答复已发送，工单【${currentTicket.id}】状态已自动更新为「已处理」！`);
+    try {
+      const response = await fetch("/api/admin/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticketId: currentTicket.id,
+          content: text,
+          images: replyImages.length > 0 ? replyImages : undefined,
+          attachments: replyAttachments.length > 0 ? replyAttachments : undefined,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        tickets?: TicketItem[];
+      };
+      if (!response.ok || !Array.isArray(payload.tickets)) {
+        toast.error(payload.error || "发送官方答复失败，请重试");
+        return;
+      }
+      syncAdminTicketsState(payload.tickets);
+      setReplyText("");
+      setReplyImages([]);
+      setReplyAttachments([]);
+      toast.success(`答复已发送，工单【${currentTicket.id}】状态已自动更新为「已处理」！`);
+    } catch {
+      toast.error("网络异常，发送官方答复失败");
+    } finally {
+      setSubmittingReply(false);
+    }
   };
 
-  // 切换工单标记状态（用于收录进“标记”选项卡）
-  const handleToggleFlag = () => {
+  // 切换工单标记状态（用于收录进“标记”选项卡，实时同步服务端）
+  const handleToggleFlag = async () => {
     if (!currentTicket) return;
     const nextFlag = !currentTicket.isFlagged;
-    const updatedTicket: TicketItem = {
-      ...currentTicket,
-      isFlagged: nextFlag,
-      updatedAt: getNowFormatted(),
-    };
-    const nextTickets = tickets.map((t) => (t.id === currentTicket.id ? updatedTicket : t));
-    saveTickets(nextTickets);
-    toast.success(nextFlag ? "已标记此工单（已收录至「标记」选项卡）" : "已取消对该工单的标记");
+    try {
+      const response = await fetch("/api/admin/tickets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticketId: currentTicket.id,
+          isFlagged: nextFlag,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        tickets?: TicketItem[];
+      };
+      if (!response.ok || !Array.isArray(payload.tickets)) {
+        toast.error(payload.error || "更新标记状态失败");
+        return;
+      }
+      syncAdminTicketsState(payload.tickets);
+      toast.success(nextFlag ? "已标记此工单（已收录至「标记」选项卡）" : "已取消对该工单的标记");
+    } catch {
+      toast.error("网络异常，更新标记状态失败");
+    }
   };
 
   // 快速切换结单/处理中状态
-  const handleToggleStatus = () => {
+  const handleToggleStatus = async () => {
     if (!currentTicket) return;
     const nextStatus: TicketStatus = currentTicket.status === "completed" ? "processing" : "completed";
-    const updatedTicket: TicketItem = {
-      ...currentTicket,
-      status: nextStatus,
-      updatedAt: getNowFormatted(),
-    };
-    const nextTickets = tickets.map((t) => (t.id === currentTicket.id ? updatedTicket : t));
-    saveTickets(nextTickets);
-    toast.success(nextStatus === "completed" ? "已将工单标记为已解决归档" : "已将工单恢复为处理中");
+    try {
+      const response = await fetch("/api/admin/tickets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticketId: currentTicket.id,
+          status: nextStatus,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        tickets?: TicketItem[];
+      };
+      if (!response.ok || !Array.isArray(payload.tickets)) {
+        toast.error(payload.error || "更新工单状态失败");
+        return;
+      }
+      syncAdminTicketsState(payload.tickets);
+      toast.success(nextStatus === "completed" ? "已将工单标记为已解决归档" : "已将工单恢复为处理中");
+    } catch {
+      toast.error("网络异常，更新工单状态失败");
+    }
   };
 
   const handleCopy = (val: string, label: string) => {
@@ -450,11 +494,25 @@ export default function AdminTicketsPage() {
             <div className="border-r border-slate-100 flex flex-col h-full overflow-hidden bg-slate-50/40">
               <div className="p-3 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700 shrink-0">
                 <span>工单列表 ({filteredTickets.length})</span>
-                <span className="text-[11px] font-normal text-slate-400">点击进入详情回复</span>
+                <button
+                  type="button"
+                  onClick={() => void loadTicketsFromServer()}
+                  disabled={loadingTickets}
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+                  title="刷新服务端工单列表"
+                >
+                  <RefreshCw className={cn("h-3 w-3", loadingTickets && "animate-spin")} />
+                  <span>{loadingTickets ? "同步中..." : "刷新"}</span>
+                </button>
               </div>
 
               <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 space-y-1">
-                {filteredTickets.length === 0 ? (
+                {loadingTickets && filteredTickets.length === 0 ? (
+                  <div className="flex h-64 flex-col items-center justify-center text-center p-4">
+                    <RefreshCw className="h-6 w-6 text-slate-300 mb-2 animate-spin" />
+                    <p className="text-xs font-semibold text-slate-500">正在同步服务端工单...</p>
+                  </div>
+                ) : filteredTickets.length === 0 ? (
                   <div className="flex h-64 flex-col items-center justify-center text-center p-4">
                     <Headphones className="h-8 w-8 text-slate-300 mb-2" />
                     <p className="text-xs font-semibold text-slate-600">暂无匹配的工单</p>

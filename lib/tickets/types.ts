@@ -40,6 +40,7 @@ export interface TicketMessage {
 
 export interface TicketItem {
   id: string;
+  userId?: string;
   title: string;
   type: TicketType;
   priority: TicketPriority;
@@ -56,16 +57,70 @@ export interface TicketItem {
   messages: TicketMessage[];
 }
 
+export interface TicketCounts {
+  processing: number;
+  completed: number;
+  flagged: number;
+  unread: number;
+  total: number;
+}
+
 export const STORAGE_KEY = "jianlian_shop_tickets_v1";
 export const TICKET_RETENTION_DAYS = 7;
 export const TICKET_RETENTION_MS = TICKET_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
+export const FAKE_DEMO_TICKET_IDS = new Set([
+  "GD-20261106-103033-3A25",
+  "GD-20261122-140215-9F1C",
+]);
+
+export const FAKE_DEMO_EMAILS = new Set([
+  "merchant@example.com",
+  "vip_buyer@outlook.com",
+]);
+
+export function isFakeDemoTicket(ticket: Partial<TicketItem> | null | undefined): boolean {
+  if (!ticket) return true;
+  if (ticket.id && FAKE_DEMO_TICKET_IDS.has(String(ticket.id).trim())) return true;
+  if (ticket.email && FAKE_DEMO_EMAILS.has(String(ticket.email).trim().toLowerCase())) return true;
+  return false;
+}
+
+export function normalizeTicketStatus(raw: unknown): TicketStatus {
+  return raw === "completed" || raw === "replied" ? "completed" : "processing";
+}
+
+export function formatTicketTimestamp(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  const hour = pick("hour") === "24" ? "00" : pick("hour");
+  return `${pick("year")}-${pick("month")}-${pick("day")} ${hour}:${pick("minute")}:${pick("second")}`;
+}
+
+export function generateTicketId(date = new Date()): string {
+  const ts = formatTicketTimestamp(date);
+  const dateStr = ts.slice(0, 10).replace(/-/g, "");
+  const timeStr = ts.slice(11, 19).replace(/:/g, "");
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase().padEnd(4, "X");
+  return `GD-${dateStr}-${timeStr}-${rand}`;
+}
+
 export function isTicketWithinRetention(ticket: Partial<TicketItem> | null | undefined, nowMs = Date.now()): boolean {
-  if (!ticket) return false;
+  if (!ticket || isFakeDemoTicket(ticket)) return false;
   const rawTime = ticket.updatedAt || ticket.createdAt;
   if (!rawTime) return true;
   const normalized = String(rawTime).trim().replace(" ", "T");
-  const parsedMs = new Date(normalized).getTime();
+  const withTz = /(?:Z|[+-]\d{2}:?\d{2})$/.test(normalized) ? normalized : `${normalized}+08:00`;
+  const parsedMs = new Date(withTz).getTime();
   if (!Number.isFinite(parsedMs)) return true;
   return nowMs - parsedMs <= TICKET_RETENTION_MS;
 }
@@ -74,94 +129,64 @@ export function filterRetainedTickets<T extends Partial<TicketItem>>(tickets: T[
   return tickets.filter((ticket) => isTicketWithinRetention(ticket, nowMs));
 }
 
-export const INITIAL_ADMIN_DEMO_TICKETS: TicketItem[] = [
-  {
-    id: "GD-20261106-103033-3A25",
-    title: "Jianlian Shop 普通 API 接入咨询：目录、扣款、幂等与交付",
-    type: "api",
-    priority: "normal",
-    status: "completed",
-    orderNo: "",
-    email: "merchant@example.com",
-    description:
-      "您好，我们正在接入跨境资源网普通 API (Jianlian Shop)，请协助确认以下四项技术合同：\n1. 目录读取：GET /api/open/v1/catalog/mall?search=礼品卡 会在高峰期超时，服务端最大缓存限制多大？\n2. 扣款保护：POST /api/open/v1/orders/mall 屡次扣款的 expectedAmount 是否校验折扣、会入、服务费扣除后的最终 CNY 钱包总扣款？\n3. 幂等性保障：Idempotency-Key 的保质时长及过期后行为是什么？若超时或 500，未拿到订单 ID 时，能否直接复用同一 key 重试？\n4. 订单状态追踪：请提供 GET /api/open/v1/orders/[id] 的完整响应样例，包括 deliveryFormat 字段定义。感谢协助！",
-    createdAt: "2026-11-06 10:30:33",
-    updatedAt: "2026-11-06 17:24:20",
-    hasUnreadReply: false,
-    messages: [
-      {
-        id: "m-1",
-        sender: "user",
-        senderName: "merchant@example.com",
-        content:
-          "您好，我们正在接入跨境资源网普通 API (Jianlian Shop)，请协助确认以下四项技术合同：\n1. 目录读取：GET /api/open/v1/catalog/mall?search=礼品卡 会在 2026-11-05 23:27:43 至 23:27:56 (北京时间) 于客户端 12 秒超时边界未收到响应头。官方推荐如何小范围读取？\n2. 金额保护：POST /api/open/v1/orders/mall 校验规则与扣款上限。\n3. 幂等与重试规范：Idempotency-Key 有效期。\n4. 订单交付格式样例与多卡卡密格式。",
-        createdAt: "2026-11-06 10:30:33",
-      },
-      {
-        id: "m-2",
-        sender: "support",
-        senderName: "官方客服",
-        content: "好的，已收到您的 API 对接咨询，技术团队正在逐项核验文档与参数规范，稍后给您详细回复。",
-        createdAt: "2026-11-06 13:23:27",
-      },
-      {
-        id: "m-3",
-        sender: "support",
-        senderName: "官方客服",
-        content:
-          "您好，技术团队已完成排查与技术方案确认：\n1. 目录读取：推荐使用 category 与 keyword 结合小分页查询，单次推荐 limit=20；\n2. 扣款安全：expectedAmount 属于严格强校验，服务端对比当前最新价格与优惠折扣后计算，若有价格变动会自动 fail-closed 并返回 PRICE_MISMATCH，绝对不会多扣余额；\n3. 幂等性：Idempotency-Key 有效期为 24 小时，网络超时请务必携带相同 key 重试；\n4. 交付结构：订单成功后 delivery 包含 items[]，每项含 cardCode 与 cardPin。已为您开启 API 沙箱调试权限，祝对接顺利！",
-        createdAt: "2026-11-06 17:24:20",
-      },
-    ],
-  },
-  {
-    id: "GD-20261122-140215-9F1C",
-    title: "USDT 充值到账延迟咨询（交易哈希已确认）",
-    type: "recharge",
-    priority: "urgent",
-    status: "processing",
-    orderNo: "RCG-20261122-88129",
-    email: "vip_buyer@outlook.com",
-    description: "您好，我于下午通过 BEP20 转账 50 USDT，区块链浏览器显示已达 25 个确认数，但控制台余额尚未刷新，麻烦客服专员协助核查链上流水并入账，谢谢！",
-    createdAt: "2026-11-22 14:02:15",
-    updatedAt: "2026-11-22 14:02:15",
-    hasUnreadReply: true,
-    messages: [
-      {
-        id: "m-rcg-1",
-        sender: "user",
-        senderName: "vip_buyer@outlook.com",
-        content: "您好，我于下午通过 BEP20 转账 50 USDT，区块链浏览器显示已达 25 个确认数，但控制台余额尚未刷新，麻烦客服专员协助核查链上流水并入账，谢谢！",
-        createdAt: "2026-11-22 14:02:15",
-      },
-    ],
-  },
-];
+export function computeTicketCounts(tickets: TicketItem[]): TicketCounts {
+  let processing = 0;
+  let completed = 0;
+  let flagged = 0;
+  let unread = 0;
+  for (const t of tickets) {
+    if (!t) continue;
+    if (t.status === "completed") completed += 1;
+    else processing += 1;
+    if (t.isFlagged) flagged += 1;
+    if (t.hasUnreadReply) unread += 1;
+  }
+  return {
+    processing,
+    completed,
+    flagged,
+    unread,
+    total: tickets.length,
+  };
+}
+
+// 禁止在生产或任意设备注入任何写死的演示/测试假工单
+export const INITIAL_ADMIN_DEMO_TICKETS: TicketItem[] = [];
+
+export function clearLegacyLocalTickets(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {}
+}
 
 export function getAdminTicketsFromStorage(): TicketItem[] {
-  if (typeof window === "undefined") return INITIAL_ADMIN_DEMO_TICKETS;
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const retained = filterRetainedTickets(parsed);
+      if (Array.isArray(parsed)) {
+        const retained = filterRetainedTickets(parsed).filter((t) => !isFakeDemoTicket(t));
         if (retained.length !== parsed.length) {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(retained));
+          if (retained.length === 0) window.localStorage.removeItem(STORAGE_KEY);
+          else window.localStorage.setItem(STORAGE_KEY, JSON.stringify(retained));
         }
         return retained.map((t: any) => ({
           ...t,
-          status: t.status === "completed" || t.status === "replied" ? "completed" : "processing",
+          status: normalizeTicketStatus(t.status),
         }));
       }
     }
   } catch {}
-  return INITIAL_ADMIN_DEMO_TICKETS;
+  return [];
 }
 
 export function getAdminTicketCounts(): { processing: number; completed: number; total: number } {
-  const tickets = getAdminTicketsFromStorage();
-  const processing = tickets.filter((t) => t && t.status === "processing").length;
-  const completed = tickets.filter((t) => t && t.status === "completed").length;
-  return { processing, completed, total: tickets.length };
+  const counts = computeTicketCounts(getAdminTicketsFromStorage());
+  return {
+    processing: counts.processing,
+    completed: counts.completed,
+    total: counts.total,
+  };
 }

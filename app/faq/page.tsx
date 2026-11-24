@@ -1,6 +1,6 @@
 "use client";
 
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -58,14 +58,9 @@ import {
   TICKET_TYPES,
   TICKET_PRIORITIES,
   TICKET_STATUSES,
-  STORAGE_KEY,
   TICKET_RETENTION_DAYS,
-  filterRetainedTickets,
+  clearLegacyLocalTickets,
 } from "@/lib/tickets/types";
-
-// 历史测试假工单 ID 过滤器
-const FAKE_DEMO_IDS = new Set(["GD-20261106-103033-3A25"]);
-const INITIAL_DEMO_TICKETS: TicketItem[] = [];
 
 export default function FAQPage() {
   const { isMobile } = useMobileStorefront();
@@ -133,45 +128,37 @@ export default function FAQPage() {
 
   // 用户登录信息
   const [userEmail, setUserEmail] = useState<string>("");
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 初始化加载工单（自动过滤过期超过 7 天的工单记录）
-  useEffect(() => {
+  const loadUserTickets = useCallback(async () => {
+    clearLegacyLocalTickets();
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // 过滤开发测试用的假工单与超过 7 天保存期的工单
-          const cleanUserTickets = filterRetainedTickets(
-            parsed.filter((t: any) => t && t.id && !FAKE_DEMO_IDS.has(t.id))
-          );
-          if (cleanUserTickets.length !== parsed.length) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanUserTickets));
-          }
-          if (cleanUserTickets.length > 0) {
-            const normalized: TicketItem[] = cleanUserTickets.map((t: any) => ({
-              ...t,
-              status: t.status === "completed" || t.status === "replied" ? "completed" : "processing",
-            }));
-            setTickets(normalized);
-            setSelectedTicketId(null);
-            setIsCreating(false);
-            return;
-          }
-        }
+      const response = await fetch("/api/tickets", { cache: "no-store" });
+      if (response.status === 401) {
+        setIsAuthenticated(false);
+        setTickets([]);
+        return;
       }
+      if (!response.ok) return;
+      const payload = (await response.json()) as { tickets?: TicketItem[] };
+      setIsAuthenticated(true);
+      setTickets(Array.isArray(payload.tickets) ? payload.tickets : []);
     } catch {}
-    setTickets([]);
-    setSelectedTicketId(null);
-    setIsCreating(false);
   }, []);
+
+  // 初始化加载服务端工单（多端实时同步）
+  useEffect(() => {
+    void loadUserTickets();
+  }, [loadUserTickets]);
 
   // 读取 Supabase 用户邮箱
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     supabase.auth.getSession().then(({ data }) => {
-      const email = data.session?.user?.email;
+      const user = data.session?.user;
+      setIsAuthenticated(Boolean(user));
+      const email = user?.email;
       if (email) {
         setUserEmail(email);
         setFormData((prev) => ({ ...prev, email }));
@@ -179,28 +166,23 @@ export default function FAQPage() {
     });
   }, []);
 
-  // 持久化存储
-  const saveTickets = (newTickets: TicketItem[]) => {
-    setTickets(newTickets);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newTickets));
-      window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
-    } catch {}
-  };
-
   // 当前选中工单
   const currentTicket = useMemo(() => {
     return tickets.find((t) => t.id === selectedTicketId) || null;
   }, [tickets, selectedTicketId]);
 
-  // 标记未读回复为已读
+  // 标记未读回复为已读（同步服务端）
   useEffect(() => {
-    if (currentTicket && currentTicket.hasUnreadReply) {
-      const nextTickets = tickets.map((t) =>
-        t.id === currentTicket.id ? { ...t, hasUnreadReply: false } : t
-      );
-      saveTickets(nextTickets);
-    }
+    if (!currentTicket || !currentTicket.hasUnreadReply) return;
+    const ticketId = currentTicket.id;
+    setTickets((prev) =>
+      prev.map((t) => (t.id === ticketId ? { ...t, hasUnreadReply: false } : t))
+    );
+    void fetch("/api/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mark_read", ticketId }),
+    }).catch(() => {});
   }, [currentTicket]);
 
   // 滚动到最新消息
@@ -306,94 +288,72 @@ export default function FAQPage() {
     e.target.value = "";
   };
 
-  // 提交新建工单
-  const handleSubmitTicket = (e: FormEvent) => {
+  // 提交新建工单（写入服务端数据库，多端实时同步）
+  const handleSubmitTicket = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    if (!isAuthenticated) {
+      toast.error("请先登录账号后再提交工单");
+      return;
+    }
     const trimmedDesc = formData.description.trim();
     if (!trimmedDesc || trimmedDesc.length < 6) {
       toast.error("请详细描述遇到的问题（至少6个字）");
       return;
     }
-    const firstLine = trimmedDesc.split(/\r?\n/)[0]?.trim() || trimmedDesc;
-    const derivedTitle = formData.title.trim() || (firstLine.length > 28 ? `${firstLine.slice(0, 28)}...` : firstLine);
 
     setSubmitting(true);
-    const newId = generateTicketId();
-    const newTicket: TicketItem = {
-      id: newId,
-      title: derivedTitle,
-      type: formData.type,
-      priority: formData.priority,
-      status: "processing",
-      orderNo: formData.orderNo.trim() || undefined,
-      email: formData.email.trim() || userEmail || "未登记邮箱",
-      description: trimmedDesc,
-      images: formData.images,
-      createdAt: getNowFormatted(),
-      updatedAt: getNowFormatted(),
-      hasUnreadReply: false,
-      messages: [
-        {
-          id: `msg-${Date.now()}`,
-          sender: "user",
-          senderName: "我",
-          content: trimmedDesc,
-          images: formData.images.length > 0 ? [...formData.images] : undefined,
-          createdAt: getNowFormatted(),
-        },
-      ],
-    };
-
-    const nextTickets = [newTicket, ...tickets];
-    saveTickets(nextTickets);
-    setSelectedTicketId(newId);
-    setIsCreating(false);
-    setSubmitting(false);
-
-    // 重置表单
-    setFormData({
-      type: "order",
-      priority: "normal",
-      orderNo: "",
-      email: userEmail,
-      title: "",
-      description: "",
-      images: [],
-    });
-
-    toast.success("工单提交成功！客服团队将在 12 小时内为您回复。");
-
-    // 仿真客服排查接入
-    setTimeout(() => {
-      setTickets((latest) => {
-        const found = latest.find((t) => t.id === newId);
-        if (!found) return latest;
-        const autoReplyMsg: TicketMessage = {
-          id: `msg-reply-${Date.now()}`,
-          sender: "support",
-          senderName: "Jianlian 官方客服",
-          content: `您好！系统已接收到您的工单【${newId}】。客服专员已接入排查（类型：${TICKET_TYPES.find((t) => t.value === newTicket.type)?.label}），我们将在 12 小时内通过此工单及邮箱与您同步进展。`,
-          createdAt: getNowFormatted(),
-        };
-        const updatedFound: TicketItem = {
-          ...found,
-          status: "processing",
-          updatedAt: getNowFormatted(),
-          hasUnreadReply: true,
-          messages: [...found.messages, autoReplyMsg],
-        };
-        const res = latest.map((t) => (t.id === newId ? updatedFound : t));
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(res));
-        } catch {}
-        return res;
+    try {
+      const response = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          type: formData.type,
+          priority: formData.priority,
+          orderNo: formData.orderNo.trim() || undefined,
+          email: formData.email.trim() || userEmail || undefined,
+          title: formData.title.trim() || undefined,
+          description: trimmedDesc,
+          images: formData.images.length > 0 ? formData.images : undefined,
+        }),
       });
-      toast.info(`您有 1 条新的客服工单回复 (${newId})`);
-    }, 4500);
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        ticket?: TicketItem;
+        tickets?: TicketItem[];
+      };
+      if (!response.ok || !payload.ticket || !Array.isArray(payload.tickets)) {
+        toast.error(payload.error || "工单提交失败，请稍后重试");
+        return;
+      }
+
+      setTickets(payload.tickets);
+      setSelectedTicketId(payload.ticket.id);
+      setIsCreating(false);
+      window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
+
+      // 重置表单
+      setFormData({
+        type: "order",
+        priority: "normal",
+        orderNo: "",
+        email: userEmail,
+        title: "",
+        description: "",
+        images: [],
+      });
+
+      toast.success("工单提交成功！客服团队将在 12 小时内为您回复。");
+    } catch {
+      toast.error("网络异常，工单提交失败，请重试");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // 追加发送回复
-  const handleSendReply = (e: FormEvent) => {
+  // 追加发送回复（写入服务端数据库）
+  const handleSendReply = async (e: FormEvent) => {
     e.preventDefault();
     if (!currentTicket || sendingReply) return;
     const text = replyText.trim();
@@ -403,28 +363,36 @@ export default function FAQPage() {
     }
 
     setSendingReply(true);
-    const newMsg: TicketMessage = {
-      id: `msg-${Date.now()}`,
-      sender: "user",
-      senderName: "我",
-      content: text || "（补充附件截图）",
-      images: replyImages.length > 0 ? [...replyImages] : undefined,
-      createdAt: getNowFormatted(),
-    };
+    try {
+      const response = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reply",
+          ticketId: currentTicket.id,
+          content: text,
+          images: replyImages.length > 0 ? replyImages : undefined,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        tickets?: TicketItem[];
+      };
+      if (!response.ok || !Array.isArray(payload.tickets)) {
+        toast.error(payload.error || "回复发送失败，请重试");
+        return;
+      }
 
-    const updatedTicket: TicketItem = {
-      ...currentTicket,
-      status: "processing",
-      updatedAt: getNowFormatted(),
-      messages: [...currentTicket.messages, newMsg],
-    };
-
-    const nextTickets = tickets.map((t) => (t.id === currentTicket.id ? updatedTicket : t));
-    saveTickets(nextTickets);
-    setReplyText("");
-    setReplyImages([]);
-    setSendingReply(false);
-    toast.success("回复已发送");
+      setTickets(payload.tickets);
+      window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
+      setReplyText("");
+      setReplyImages([]);
+      toast.success("回复已发送");
+    } catch {
+      toast.error("网络异常，回复发送失败");
+    } finally {
+      setSendingReply(false);
+    }
   };
 
   // 复制工单号

@@ -15,7 +15,7 @@ import {
   type AdminNavigationGroupKey,
 } from "./admin-navigation";
 import { toggleNavigationGroup } from "./admin-navigation-state.mjs";
-import { getAdminTicketCounts } from "@/lib/tickets/types";
+import { clearLegacyLocalTickets } from "@/lib/tickets/types";
 
 const DEMO_APP_IDS = new Set(["APP_1732204801", "APP_1732203920", "APP_1732198000"]);
 
@@ -41,8 +41,9 @@ export default function AdminSidebar() {
   const navRef = useRef<HTMLElement>(null);
   const indicatorRef = useRef<HTMLSpanElement>(null);
 
-  const syncPendingBadges = useCallback(() => {
+  const syncPendingBadges = useCallback(async () => {
     if (typeof window === "undefined") return;
+    clearLegacyLocalTickets();
     let apiPending = 0;
     let ticketPending = 0;
     try {
@@ -58,7 +59,11 @@ export default function AdminSidebar() {
     } catch {}
 
     try {
-      ticketPending = getAdminTicketCounts().processing;
+      const res = await fetch("/api/admin/tickets?summary=1", { cache: "no-store" });
+      if (res.ok) {
+        const payload = (await res.json()) as { counts?: { processing?: number } };
+        ticketPending = Number(payload?.counts?.processing ?? 0);
+      }
     } catch {}
 
     setPendingBadges({
@@ -68,13 +73,15 @@ export default function AdminSidebar() {
   }, []);
 
   useEffect(() => {
-    syncPendingBadges();
-    const onStorage = () => syncPendingBadges();
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("jianlian-admin-badges-updated", onStorage);
+    void syncPendingBadges();
+    const onRefresh = () => {
+      void syncPendingBadges();
+    };
+    window.addEventListener("storage", onRefresh);
+    window.addEventListener("jianlian-admin-badges-updated", onRefresh);
     return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("jianlian-admin-badges-updated", onStorage);
+      window.removeEventListener("storage", onRefresh);
+      window.removeEventListener("jianlian-admin-badges-updated", onRefresh);
     };
   }, [syncPendingBadges, pathname, agentTab]);
 

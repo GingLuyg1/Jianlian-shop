@@ -76,7 +76,7 @@ import {
 } from "@/lib/supabase/client";
 import type { AdminProduct } from "@/lib/supabase/admin-catalog";
 import { requiresRechargeAdminAttention } from "@/lib/recharges/admin-attention";
-import { getAdminTicketCounts } from "@/lib/tickets/types";
+import { clearLegacyLocalTickets } from "@/lib/tickets/types";
 import { cn } from "@/lib/utils";
 import { listProducts } from "@/lib/supabase/admin-catalog";
 
@@ -778,19 +778,38 @@ export default function AdminDashboardPage() {
   const [productPage, setProductPage] = useState(1);
   const [productPageSize, setProductPageSize] = useState(15);
   const [ticketCounts, setTicketCounts] = useState<{ processing: number; completed: number; total: number }>({
-    processing: 1,
-    completed: 1,
-    total: 2,
+    processing: 0,
+    completed: 0,
+    total: 0,
   });
 
   useEffect(() => {
-    const syncTickets = () => setTicketCounts(getAdminTicketCounts());
-    syncTickets();
-    window.addEventListener("storage", syncTickets);
-    window.addEventListener("jianlian-admin-badges-updated", syncTickets);
+    clearLegacyLocalTickets();
+    let cancelled = false;
+    const syncTickets = async () => {
+      try {
+        const res = await fetch("/api/admin/tickets?summary=1", { cache: "no-store" });
+        if (!res.ok) return;
+        const payload = (await res.json()) as {
+          counts?: { processing?: number; completed?: number; total?: number };
+        };
+        if (!cancelled && payload?.counts) {
+          setTicketCounts({
+            processing: Number(payload.counts.processing ?? 0),
+            completed: Number(payload.counts.completed ?? 0),
+            total: Number(payload.counts.total ?? 0),
+          });
+        }
+      } catch {}
+    };
+    void syncTickets();
+    const onRefresh = () => {
+      void syncTickets();
+    };
+    window.addEventListener("jianlian-admin-badges-updated", onRefresh);
     return () => {
-      window.removeEventListener("storage", syncTickets);
-      window.removeEventListener("jianlian-admin-badges-updated", syncTickets);
+      cancelled = true;
+      window.removeEventListener("jianlian-admin-badges-updated", onRefresh);
     };
   }, []);
 
