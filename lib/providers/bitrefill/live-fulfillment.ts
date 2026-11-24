@@ -28,7 +28,7 @@ type BitrefillOrderCandidate = {
 };
 
 function createBitrefillLogicalKey(orderId: string, orderItemId: string) {
-  return `bitrefill_live:${orderId}:${orderItemId}`;
+  return `jianlian:${orderId}:${orderItemId}`;
 }
 
 function getUsdCnyRate(env: NodeJS.ProcessEnv): number {
@@ -389,6 +389,10 @@ export async function fulfillBitrefillLiveOrderWithSupabase(
         }))
         .digest("hex");
 
+      const maxUnitCostForItem = Math.max(unitUsdCost, candidate.maxUnitCostUsd ?? unitUsdCost);
+      const faceValText = String(candidate.supplierSku).trim();
+      const validFaceVal = /^(0|[1-9][0-9]*)(\.[0-9]{1,6})?$/.test(faceValText) ? faceValText : null;
+
       const units = Array.from({ length: candidate.quantity }, (_, idx) => ({
         fulfillment_request_id: root.id,
         order_item_id: candidate.orderItemId,
@@ -396,7 +400,9 @@ export async function fulfillBitrefillLiveOrderWithSupabase(
         frozen_product_id: candidate.supplierProductId,
         frozen_package_id: candidate.supplierSku,
         frozen_currency: "USD",
-        frozen_face_value: String(candidate.supplierSku),
+        frozen_face_value: validFaceVal,
+        quoted_unit_cost: unitUsdCost.toFixed(6),
+        max_unit_cost: maxUnitCostForItem.toFixed(6),
       }));
 
       const { data: claimData, error: attemptErr } = await service.rpc("internal_supplier_purchase_claim", {
@@ -437,18 +443,13 @@ export async function fulfillBitrefillLiveOrderWithSupabase(
           sku: candidate.supplierSku,
           code: msg,
         });
-        const submitted = Boolean((buyErr as { submitted?: boolean })?.submitted);
-        if (!submitted) {
-          await service.rpc("internal_supplier_purchase_transition", {
-            p_attempt_id: attemptId,
-            p_expected_status: "SUBMITTING",
-            p_next_status: "FAILED_PRE_SUBMIT",
-            p_external_invoice_id: null,
-          });
-          summary.failed++;
-        } else {
-          summary.uncertain++;
-        }
+        await service.rpc("internal_supplier_purchase_transition", {
+          p_attempt_id: attemptId,
+          p_expected_status: "SUBMITTING",
+          p_next_status: "UNCERTAIN",
+          p_external_invoice_id: null,
+        });
+        summary.uncertain++;
         continue;
       }
 
