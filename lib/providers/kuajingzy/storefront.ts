@@ -1,13 +1,15 @@
 import 'server-only';
 import type {SupabaseClient} from '@supabase/supabase-js';
+import {getSupabaseServiceRoleClient} from '@/lib/supabase/service-role';
 import {authorizeKuajingZyStorefrontOrderCore} from './storefront-core.mjs';
 import {KUAJINGZY_PURCHASE_RELEASE_ENABLED} from './purchase-policy.mjs';
 import {createKuajingZyServerClient} from './purchase-server';
 
 export async function authorizeKuajingZyStorefrontOrder(service:SupabaseClient,productId:string,skuId:string|null,quantity:number,userId:string,paymentMethod:string) {
+  const reader=getSupabaseServiceRoleClient()??service;
   const read=async(table:string,id:string,parent?:string)=>{
     const fields=table==='products'?'id,status,stock,delivery_type,metadata':'id,product_id,status,stock,delivery_type,metadata';
-    let query=service.from(table).select(fields).eq('id',id);
+    let query=reader.from(table).select(fields).eq('id',id);
     if(parent) query=query.eq('product_id',parent);
     const {data,error}=await query.maybeSingle();
     if(error)throw new Error('KUAJINGZY_ORDER_UNAVAILABLE');return data;
