@@ -390,7 +390,7 @@ export default function AccountRechargeContent() {
                   <span className="text-red-500">*</span>充值金额
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+                  <span className="pointer-events-none absolute left-4 top-1/2 z-20 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
                     {amountSymbol}
                   </span>
                   <Input
@@ -402,7 +402,7 @@ export default function AccountRechargeContent() {
                     className={cn("h-11", !isUsdtCnyRecharge && selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16", (isUsdtCnyRecharge || selectedChannel?.currency === "CNY") && "pr-16")}
                   />
                   {isUsdtCnyRecharge || selectedChannel?.currency === "CNY" ? (
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">CNY</span>
+                    <span className="pointer-events-none absolute right-4 top-1/2 z-20 -translate-y-1/2 text-xs font-medium text-muted-foreground">CNY</span>
                   ) : null}
                 </div>
                 {(isUsdtCnyRecharge ? requestedCnyAmount !== null : legacyChannelAmount > 0) && !reachesMin ? (
@@ -434,7 +434,7 @@ export default function AccountRechargeContent() {
                 ) : null}
 
                 <label className="mt-3 block text-sm font-medium">充值备注（可选）</label>
-                <div className="relative mt-1.5"><Input value={customerNote} maxLength={100} onChange={(event) => { setCustomerNote(event.target.value.slice(0, 100)); clientRequestIdRef.current = null; }} placeholder="填写必要的付款说明，最多 100 字" className="h-11 pr-16" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{customerNote.length}/100</span></div>
+                <div className="relative mt-1.5"><Input value={customerNote} maxLength={100} onChange={(event) => { setCustomerNote(event.target.value.slice(0, 100)); clientRequestIdRef.current = null; }} placeholder="填写必要的付款说明，最多 100 字" className="h-11 pr-16" /><span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 text-xs text-slate-400">{customerNote.length}/100</span></div>
 
                 <div data-testid="recharge-summary" className="mt-4 flex flex-col gap-5 rounded-2xl bg-gradient-to-r from-orange-50/80 to-orange-50/40 p-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-orange-200/60 text-xs text-slate-500">

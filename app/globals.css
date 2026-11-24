@@ -386,7 +386,8 @@ html[data-mobile-preview="true"] .hero-visual-desktop {
   }
 }
 
-/* Universal form control focus stacking to prevent border/ring clipping by adjacent siblings */
+/* Universal form control focus stacking to prevent border/ring clipping by adjacent siblings,
+   while keeping inner prefix/suffix icons and labels (inside .relative) visible above the input */
 input:focus,
 input:focus-visible,
 select:focus,
@@ -396,5 +397,12 @@ textarea:focus-visible,
 [role="combobox"]:focus,
 [role="combobox"]:focus-visible {
   position: relative;
-  z-index: 15;
+  z-index: 1;
+}
+
+.relative > svg.absolute,
+.relative > span.absolute,
+.relative > div.absolute,
+.relative > button.absolute {
+  z-index: 2;
 }

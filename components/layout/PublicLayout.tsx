@@ -207,44 +207,47 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       )}>
         <PublicTopInfoBar announcementText={announcement || undefined} mobileNavigationUntilLg={mobileNavigationUntilLg} />
         <div
-          className={viewportLocked && !isMobile ? `min-h-0 flex-1 ${contentClassName}` : `flex-1 ${contentClassName}`}
+          className={cn(
+            "w-full md:!pb-0",
+            viewportLocked && !isMobile ? "min-h-0 flex-1" : "flex-1",
+            contentClassName,
+          )}
           style={{ paddingInline: "var(--storefront-content-padding-x)" }}
         >
           {children}
         </div>
-        {(!viewportLocked || isMobile) && (
-          <footer
-            data-testid="public-site-footer"
-            className="mt-auto shrink-0 border-t border-orange-100/80 bg-white/60 px-4 py-3 text-xs text-slate-500 backdrop-blur-xs"
-          >
-            <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
-              <span className="font-medium text-slate-600">
-                © {new Date().getFullYear()} {settings.site_name || "Jianlian Shop"} · 7×24h 自动发货与售后质保
-              </span>
-              <div className="flex flex-wrap items-center gap-3">
-                <Link href="/account/orders" className="transition-colors hover:text-primary">
-                  订单查询
-                </Link>
-                <span aria-hidden="true" className="text-slate-300">·</span>
-                <Link href="/terms" className="transition-colors hover:text-primary">
-                  用户协议
-                </Link>
-                <span aria-hidden="true" className="text-slate-300">·</span>
-                <Link href="/privacy" className="transition-colors hover:text-primary">
-                  隐私政策
-                </Link>
-                <span aria-hidden="true" className="text-slate-300">·</span>
-                <button
-                  type="button"
-                  onClick={openSupport}
-                  className="font-medium text-primary transition-colors hover:underline"
-                >
-                  在线客服
-                </button>
-              </div>
+        <footer
+          data-testid="public-site-footer"
+          style={{ paddingInline: "var(--storefront-content-padding-x)" }}
+          className="mt-auto w-full shrink-0 bg-transparent py-1.5 text-[11px] leading-none text-[#8c7a6b] md:flex md:h-[18px] md:items-center md:py-0"
+        >
+          <div className="mx-auto flex w-full max-w-[1640px] flex-wrap items-center justify-between gap-2 px-1">
+            <span className="truncate">
+              © {new Date().getFullYear()} {settings.site_name || "Jianlian"} · 7×24h 自动发货与售后质保
+            </span>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Link href="/account/orders" className="transition-colors hover:text-primary">
+                订单查询
+              </Link>
+              <span aria-hidden="true" className="text-[#c9b8a8]">·</span>
+              <Link href="/terms" className="transition-colors hover:text-primary">
+                用户协议
+              </Link>
+              <span aria-hidden="true" className="text-[#c9b8a8]">·</span>
+              <Link href="/privacy" className="transition-colors hover:text-primary">
+                隐私政策
+              </Link>
+              <span aria-hidden="true" className="text-[#c9b8a8]">·</span>
+              <button
+                type="button"
+                onClick={openSupport}
+                className="font-medium text-primary transition-colors hover:underline"
+              >
+                在线客服
+              </button>
             </div>
-          </footer>
-        )}
+          </div>
+        </footer>
       </main>
 
       {/* Floating preview controls on localhost / preview */}

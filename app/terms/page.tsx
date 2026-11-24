@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CheckCircle2, FileText, PackageCheck, ShieldAlert, ShieldCheck } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildPageMetadata } from "@/lib/seo";
 
@@ -53,61 +54,63 @@ const sections = [
 
 export default function TermsPage() {
   return (
-    <PublicLayout contentClassName="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-8">
-      <Card className="overflow-hidden rounded-2xl border-orange-100/90 bg-white shadow-sm">
-        <div className="border-b border-orange-100 bg-gradient-to-r from-[#fff6ed] via-[#fffaf5] to-white px-6 py-6 sm:px-8 sm:py-8">
-          <div className="inline-flex items-center gap-2 rounded-full border border-orange-200/80 bg-white px-3 py-1 text-xs font-semibold text-primary shadow-2xs">
-            <FileText className="h-3.5 w-3.5" />
-            <span>官方服务条款 · 交易与售后保障</span>
-          </div>
-          <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-            用户服务协议与退款政策
-          </h1>
-          <p className="mt-2 text-xs leading-5 text-slate-500 sm:text-sm">
-            适用范围：Jianlian Shop 全站数字商品、AI 会员服务、礼品卡与国际 SIM 卡订单。
-          </p>
-        </div>
-
-        <CardContent className="space-y-6 p-6 sm:p-8">
-          {sections.map((section) => {
-            const Icon = section.icon;
-            return (
-              <section
-                key={section.title}
-                className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 sm:p-6"
-              >
-                <h2 className="flex items-center gap-2.5 text-base font-bold text-slate-900 sm:text-lg">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-100/80 text-primary">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span>{section.title}</span>
-                </h2>
-                <ul className="mt-3.5 space-y-2.5 text-xs leading-6 text-slate-600 sm:text-sm">
-                  {section.items.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2.5">
-                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
-
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-orange-100 bg-orange-50/40 px-5 py-4 text-xs text-slate-600 sm:text-sm">
-            <span>您还可以查阅我们的《隐私政策》了解个人数据与订单隐私保护措施。</span>
-            <div className="flex items-center gap-3 font-semibold text-primary">
-              <Link href="/privacy" className="underline underline-offset-4 hover:opacity-80">
-                查看隐私政策
-              </Link>
-              <span>·</span>
-              <Link href="/" className="underline underline-offset-4 hover:opacity-80">
-                返回商城首页
-              </Link>
+    <PublicLayout contentClassName="w-full max-w-none px-4 py-3 md:px-6">
+      <div className={`mx-auto flex w-full max-w-[1640px] flex-col overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`}>
+        <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border-orange-100/90 bg-white shadow-sm">
+          <div className="shrink-0 border-b border-orange-100 bg-gradient-to-r from-[#fff6ed] via-[#fffaf5] to-white px-6 py-4 sm:px-8 sm:py-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-orange-200/80 bg-white px-3 py-1 text-xs font-semibold text-primary shadow-2xs">
+              <FileText className="h-3.5 w-3.5" />
+              <span>官方服务条款 · 交易与售后保障</span>
             </div>
+            <h1 className="mt-2 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+              用户服务协议与退款政策
+            </h1>
+            <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
+              适用范围：Jianlian Shop 全站数字商品、AI 会员服务、礼品卡与国际 SIM 卡订单。
+            </p>
           </div>
-        </CardContent>
-      </Card>
+
+          <CardContent className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6 sidebar-scroll sm:p-8">
+            {sections.map((section) => {
+              const Icon = section.icon;
+              return (
+                <section
+                  key={section.title}
+                  className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 sm:p-6"
+                >
+                  <h2 className="flex items-center gap-2.5 text-base font-bold text-slate-900 sm:text-lg">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-100/80 text-primary">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span>{section.title}</span>
+                  </h2>
+                  <ul className="mt-3.5 space-y-2.5 text-xs leading-6 text-slate-600 sm:text-sm">
+                    {section.items.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2.5">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-orange-100 bg-orange-50/40 px-5 py-4 text-xs text-slate-600 sm:text-sm">
+              <span>您还可以查阅我们的《隐私政策》了解个人数据与订单隐私保护措施。</span>
+              <div className="flex items-center gap-3 font-semibold text-primary">
+                <Link href="/privacy" className="underline underline-offset-4 hover:opacity-80">
+                  查看隐私政策
+                </Link>
+                <span>·</span>
+                <Link href="/" className="underline underline-offset-4 hover:opacity-80">
+                  返回商城首页
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </PublicLayout>
   );
 }

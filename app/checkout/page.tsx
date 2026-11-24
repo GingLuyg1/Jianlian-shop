@@ -1013,7 +1013,7 @@ function CheckoutPageContent() {
   };
 
   return (
-    <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden lg:py-4 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
+    <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-75px)] lg:overflow-hidden lg:pt-3 lg:pb-0 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
       <div data-testid="checkout-layout" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isMobile && "!grid-cols-1 !h-auto")}>
         <ProductDetailCard
           product={displayProduct ?? product}
@@ -1028,22 +1028,30 @@ function CheckoutPageContent() {
 
         <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden lg:h-full">
           <CardContent className="flex h-full min-h-0 flex-col p-0">
-            <div className="min-h-0 flex-1 bg-white p-4 lg:overflow-y-auto">
-              <div className="flex min-h-full flex-col gap-4">
+            <div className="flex min-h-0 flex-1 flex-col bg-white p-3.5 lg:overflow-hidden">
+              <div className="flex min-h-0 flex-1 flex-col gap-2">
               {hasSku ? (
-                <SkuSelector
-                  options={skuOptions}
-                  selectedSkuId={selectedSku.id}
-                  onSelectSku={setSelectedSkuId}
-                  disabled={orderConfigurationLocked}
-                />
+                <div
+                  data-testid="checkout-sku-scroll"
+                  className={cn(
+                    "min-h-[58px] overflow-y-auto pr-1 sidebar-scroll",
+                    isShippingProduct ? "max-h-[126px] shrink-0" : "max-h-[220px] shrink-0"
+                  )}
+                >
+                  <SkuSelector
+                    options={skuOptions}
+                    selectedSkuId={selectedSku.id}
+                    onSelectSku={setSelectedSkuId}
+                    disabled={orderConfigurationLocked}
+                  />
+                </div>
               ) : null}
 
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">
+                <div className="shrink-0">
+                  <label className="mb-1 block text-xs font-medium">
                     <span className="text-red-500">*</span>联系邮箱
                     {isShippingProduct && (
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                      <span className="ml-1 text-[11px] font-normal text-muted-foreground">
                         （用于接收订单及物流发货单号）
                       </span>
                     )}
@@ -1056,56 +1064,56 @@ function CheckoutPageContent() {
                         ? "请输入接收物流通知的邮箱"
                         : "请输入接收卡密的邮箱"
                     }
-                    className="h-10 bg-slate-50 text-sm"
+                    className="h-9 bg-slate-50 text-xs sm:text-sm"
                     disabled={orderConfigurationLocked}
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="checkout-coupon" className="mb-1.5 block text-sm font-medium">优惠券</label>
-                  <Input id="checkout-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} maxLength={40} autoComplete="off" placeholder="请输入优惠券" className="h-10 bg-slate-50 text-sm" />
+                <div className="shrink-0">
+                  <label htmlFor="checkout-coupon" className="mb-1 block text-xs font-medium">优惠券</label>
+                  <Input id="checkout-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} maxLength={40} autoComplete="off" placeholder="请输入优惠券" className="h-9 bg-slate-50 text-xs sm:text-sm" />
                 </div>
 
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">
+                <div className="shrink-0">
+                  <label className="mb-1 block text-xs font-medium">
                     提交信息或备注
                   </label>
                   <Input
                     value={customerNote}
                     onChange={(event) => setCustomerNote(event.target.value)}
                     placeholder={settings.default_order_note_hint}
-                    className="h-10 bg-slate-50 text-sm"
+                    className="h-9 bg-slate-50 text-xs sm:text-sm"
                   />
                 </div>
 
               {isShippingProduct ? (
-                <div className="grid gap-3">
+                <div className="grid shrink-0 grid-cols-2 gap-2">
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium">
+                    <label className="mb-1 block text-xs font-medium">
                       <span className="text-red-500">*</span>收件人姓名
                     </label>
                     <Input
                       value={customerName}
                       onChange={(event) => setCustomerName(event.target.value)}
                       placeholder="收件人姓名"
-                      className="h-10 w-full bg-slate-50 text-sm"
+                      className="h-9 w-full bg-slate-50 px-2.5 text-xs sm:text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium">
+                    <label className="mb-1 block text-xs font-medium">
                       <span className="text-red-500">*</span>联系电话
                     </label>
                     <Input
                       value={customerPhone}
                       onChange={(event) => setCustomerPhone(event.target.value)}
-                      placeholder="手机号 / 联系电话"
+                      placeholder="联系电话"
                       inputMode="tel"
                       autoComplete="tel"
-                      className="h-10 w-full bg-slate-50 text-sm"
+                      className="h-9 w-full bg-slate-50 px-2.5 text-xs sm:text-sm"
                     />
                   </div>
-                  <div className="sm:col-span-2">
-                    <label className="mb-1.5 block text-xs font-medium">
+                  <div className="col-span-2">
+                    <label className="mb-1 block text-xs font-medium">
                       <span className="text-red-500">*</span>详细地址
                     </label>
                     <Input
@@ -1116,14 +1124,14 @@ function CheckoutPageContent() {
                         setShippingRegion(nextAddress);
                       }}
                       placeholder="请输入省市区街道门牌等详细收货地址"
-                      className="h-10 w-full bg-slate-50 text-sm"
+                      className="h-9 w-full bg-slate-50 text-xs sm:text-sm"
                     />
                   </div>
                 </div>
               ) : null}
 
-              <div className="mt-auto border-t border-border pt-4">
-                <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+              <div className="mt-auto shrink-0 border-t border-border pt-2.5">
+                <div className="mb-1 text-xs font-medium text-muted-foreground">
                   支付方式
                 </div>
                 <PaymentMethodSelect
@@ -1137,12 +1145,12 @@ function CheckoutPageContent() {
                   disabled={productLoading || submitLoading}
                 />
                 {selectedPaymentUnavailable ? (
-                  <p className="mt-2 text-xs text-amber-700">
+                  <p className="mt-1.5 text-xs text-amber-700">
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
                   </p>
                 ) : null}
                 {orderAmount > 4000 && (paymentMethod === "alipay" || paymentMethod === "wechat_pay") ? (
-                  <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-5 text-amber-800">
+                  <div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50/90 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800">
                     单笔订单超过 ¥4000 建议分单购买，或切换为 <strong>余额支付 / USDT-BEP20</strong> 以免第三方收银台风控拦截。
                   </div>
                 ) : null}
@@ -1153,7 +1161,7 @@ function CheckoutPageContent() {
                   </div>
                 ) : null}
                 {paymentMethod === "balance" && balanceStatus === "error" ? (
-                  <div className="mt-2 flex items-center justify-between gap-3 text-xs text-red-700">
+                  <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-red-700">
                     <span>{balanceError}</span>
                     <button type="button" className="shrink-0 font-medium underline" onClick={() => balanceRequiresLogin ? router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`) : void loadAccountBalance()}>
                       {balanceRequiresLogin ? "去登录" : "重新加载"}
@@ -1162,16 +1170,16 @@ function CheckoutPageContent() {
                 ) : null}
               </div>
 
-              <div id="checkout-submit-feedback" aria-live="polite">
+              <div id="checkout-submit-feedback" aria-live="polite" className="shrink-0">
                 {pendingBalanceOrder ? (
-                  <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800">
                     原订单 {pendingBalanceOrder.orderNo} 已保留；余额充足后将继续处理该订单，不会创建第二个订单。
                   </div>
                 ) : null}
               </div>
 
-              <div className="border-t border-border pt-4">
-                <div data-testid="checkout-submit-controls" className="grid grid-cols-[100px_minmax(0,1fr)] items-center gap-2">
+              <div className="shrink-0 border-t border-border pt-2.5">
+                <div data-testid="checkout-submit-controls" className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2">
                   <div className="flex h-10 items-center rounded-lg border border-border bg-white">
                     <button
                       type="button"
@@ -1200,7 +1208,7 @@ function CheckoutPageContent() {
 
                   <Button
                     type="button"
-                    className="h-11 min-w-0 rounded-full px-3 text-sm font-semibold"
+                    className="h-10 min-w-0 rounded-full px-3 text-sm font-semibold"
                     onClick={handleSubmit}
                     disabled={productLoading || submitLoading || (Boolean(balanceSubmissionBlockReason) && balanceSubmissionBlockReason !== "BALANCE_INSUFFICIENT")}
                     aria-describedby="checkout-submit-feedback"
@@ -1212,7 +1220,7 @@ function CheckoutPageContent() {
                 </div>
               </div>
 
-              <div className="flex min-w-0 items-start gap-2 border-t border-border pt-4 text-[11px] leading-5">
+              <div className="flex min-w-0 shrink-0 items-start gap-2 border-t border-border pt-2.5 text-[11px] leading-4">
                 <input
                   id="checkout-agreement-confirmation"
                   type="checkbox"
@@ -1390,7 +1398,7 @@ function PaymentMethodSelect({
       <button
         type="button"
         role="combobox"
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-[#ead9cc] bg-[#fffaf6] px-3 py-2 text-left text-sm transition hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
+        className="flex h-14 min-h-[56px] w-full items-center justify-between gap-3 rounded-lg border border-[#ead9cc] bg-[#fffaf6] px-3 py-2 text-left text-sm transition hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls="checkout-payment-method-options"
@@ -1553,7 +1561,7 @@ function ProductDetailSkeleton() {
 }
 
 function CheckoutLoadingShell() {
-  return <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-62px)] lg:overflow-hidden lg:py-4 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
+  return <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-75px)] lg:overflow-hidden lg:pt-3 lg:pb-0 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
     <div data-testid="checkout-progressive-loading" className="grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
       <Card className="min-h-0 overflow-auto"><CardContent className="p-4 sm:p-6"><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
       <Card className="min-h-0"><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
@@ -3412,19 +3420,19 @@ function SkuSelector({
               onClick={() => onSelectSku(sku.id)}
               disabled={disabled || sku.status !== "active" || Number(sku.stock ?? 0) <= 0}
               className={cn(
-                "min-w-0 rounded-lg border bg-white px-3 py-3 text-center transition-colors disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-70",
+                "min-w-0 rounded-lg border bg-white px-2.5 py-2 text-center transition-colors disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-70",
                 selected
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/30"
               )}
             >
-              <div className="truncate text-base font-bold text-foreground">
+              <div className="truncate text-sm font-bold text-foreground">
                 {sku.label}
               </div>
-              <div className="mt-1 break-words text-[13px] font-bold leading-tight text-slate-950">
+              <div className="mt-0.5 break-words text-xs font-bold leading-tight text-slate-950">
                 ¥{sku.rmb.toFixed(2)}
               </div>
-              {sku.status !== "active" || Number(sku.stock ?? 0) <= 0 ? <div className="mt-1 text-xs text-slate-500">已售罄</div> : null}
+              {sku.status !== "active" || Number(sku.stock ?? 0) <= 0 ? <div className="mt-0.5 text-[11px] text-slate-500">已售罄</div> : null}
             </button>
           );
         })}

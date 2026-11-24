@@ -404,12 +404,12 @@ export default function FAQPage() {
   return (
     <PublicLayout
       mobileNavigationUntilLg
-      contentClassName={cn("mx-auto max-w-none px-4 py-3 md:px-6", isMobile && "!px-3 !pt-2 pb-6")}
+      contentClassName={cn("w-full max-w-none px-4 py-3 md:px-6", isMobile && "!px-3 !pt-2 pb-6")}
     >
       <div
         data-testid="faq-glass-page"
         className={cn(
-          "mx-auto flex w-full min-w-0 max-w-[1540px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden",
+          "mx-auto flex w-full min-w-0 max-w-[1640px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden",
           publicMainPanelHeightClassName,
           isMobile && "!h-auto !min-h-0 !overflow-visible"
         )}
