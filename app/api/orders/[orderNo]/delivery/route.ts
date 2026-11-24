@@ -1,6 +1,8 @@
 ﻿import { NextResponse } from "next/server";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
+import { createKuajingZyProductionRuntime } from "@/lib/providers/kuajingzy/purchase-server";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 
 export const dynamic = "force-dynamic";
@@ -108,7 +110,38 @@ export async function GET(_request: Request, context: RouteContext) {
       return json({ error: classified.message, request_id: requestId }, { status: classified.status });
     }
 
-    const rows = (data ?? []) as DeliveryRow[];
+    let rows = (data ?? []) as DeliveryRow[];
+    if (rows.length === 0) {
+      // Best-effort GET-only reconciliation for already-created supplier orders
+      // whose upstream fulfillment finished asynchronously after checkout.
+      try {
+        const service = getSupabaseServiceRoleClient();
+        if (service) {
+          const { data: paidOrder } = await service
+            .from("orders")
+            .select("id")
+            .eq("order_no", orderNo)
+            .eq("user_id", user.id)
+            .eq("payment_status", "paid")
+            .maybeSingle();
+          if (paidOrder?.id) {
+            const summary = await createKuajingZyProductionRuntime({ service }).reconcileExistingOrder(
+              String(paidOrder.id)
+            );
+            if (summary.fulfilled > 0) {
+              const refreshed = await supabase.rpc("get_order_delivery_for_user", {
+                p_order_no: orderNo,
+              });
+              if (!refreshed.error && Array.isArray(refreshed.data)) {
+                rows = refreshed.data as DeliveryRow[];
+              }
+            }
+          }
+        }
+      } catch {
+        // Reconciliation is best-effort; never break delivery polling.
+      }
+    }
     if (rows.length === 0) {
       return json({ status: "pending", deliveries: [], message: "正在处理" });
     }

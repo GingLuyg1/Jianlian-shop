@@ -33,29 +33,29 @@ function orderCase({change=()=>{},releaseGate=true,freshChange=()=>{}}={}){
 }
 for(const [name,change] of [['draft',({s})=>s.status='draft'],['inactive',({s})=>s.status='inactive'],['zero',({s})=>s.stock=0],['quantity',({input})=>input.quantity=6],['missing SKU',({input})=>input.skuId=null],['wrong SKU',({input})=>input.skuId='wrong']])test('order rejects '+name,async()=>{const c=orderCase({change});await assert.rejects(c.invoke,/KUAJINGZY_ORDER_UNAVAILABLE/);assert.deepEqual(c.counts(),{reads:0,rpcs:0});});
 test('literal release default blocks before fetch and RPC',async()=>{const c=orderCase({releaseGate:false});await assert.rejects(c.invoke);assert.deepEqual(c.counts(),{reads:0,rpcs:0});});
-test('authenticated Canary user may submit one balance order for the fixed SKU',async()=>{const c=orderCase();await c.invoke();assert.deepEqual(c.counts(),{reads:1,rpcs:1});});
+test('authenticated user may submit balance or online order for active bound SKU',async()=>{
+ for(const paymentMethod of ['balance','alipay','wechat_pay','usdt_bep20']) {
+  const c=orderCase({change:({s,input})=>{s.stock=10;input.quantity=2;input.paymentMethod=paymentMethod;input.env.KUAJINGZY_MAX_ORDER_COST_CNY='500';}});
+  await c.invoke();assert.deepEqual(c.counts(),{reads:1,rpcs:1});
+ }
+});
 for(const [name,change] of [
- ['wrong user',({input})=>input.userId='00000000-0000-4000-8000-000000000091'],
- ['another bound SKU',({s,input})=>input.skuId=s.id='other'],
- ['retired supplier SKU',({s})=>s.metadata.supplier_sku='9'],
- ['quantity two',({input})=>input.quantity=2],
- ['sellable cap above one',({s})=>s.stock=2],
- ['missing private env',({input})=>{
-   delete input.env.KUAJINGZY_CANARY_USER_ID;
-   input.env.NEXT_PUBLIC_KUAJINGZY_CANARY_USER_ID=CANARY_USER;
- }],
- ['order cap above ten fen',({input})=>input.env.KUAJINGZY_MAX_ORDER_COST_CNY='0.11'],
- ...['alipay','wechat_pay','usdt_bep20'].map(method=>[method,({input})=>input.paymentMethod=method]),
-]) test('Canary storefront denies '+name+' before supplier GET or order RPC',async()=>{
+ ['invalid user id',({input})=>input.userId='not-a-uuid'],
+ ['disabled binding',({s})=>s.metadata.supplier_auto_purchase_enabled=false],
+ ['quantity above 20',({s,input})=>{s.stock=30;input.quantity=21;}],
+ ['stock below quantity',({s,input})=>{s.stock=1;input.quantity=2;}],
+ ['unsupported payment method',({input})=>input.paymentMethod='unsupported_cash'],
+ ['missing order cap',({input})=>delete input.env.KUAJINGZY_MAX_ORDER_COST_CNY],
+]) test('full production storefront denies '+name+' before supplier GET or order RPC',async()=>{
  const c=orderCase({change});
  await assert.rejects(c.invoke,/KUAJINGZY_ORDER_UNAVAILABLE/);
  assert.deepEqual(c.counts(),{reads:0,rpcs:0});
 });
-for(const [name,change] of [['out of stock',x=>x.item.variants[0].stock=0],['price drift',x=>{x.item.variants[0].unitPrice='0.20';x.item.variants[0].prices.CNY='0.20';}],['identity',x=>x.item.id='other']])test('fresh failure prevents order RPC '+name,async()=>{const c=orderCase({freshChange:change});await assert.rejects(c.invoke);assert.deepEqual(c.counts(),{reads:1,rpcs:0});});
+for(const [name,change] of [['out of stock',x=>x.item.variants[0].stock=0],['top-level out of stock',x=>x.item.stock=0],['price drift',x=>{x.item.variants[0].unitPrice='0.20';x.item.variants[0].prices.CNY='0.20';}],['identity',x=>x.item.id='other']])test('fresh failure prevents order RPC '+name,async()=>{const c=orderCase({freshChange:change});await assert.rejects(c.invoke);assert.deepEqual(c.counts(),{reads:1,rpcs:0});});
 test('ordinary providers remain outside KuajingZY interlock',async()=>{for(const supplier of ['daju','bitrefill',undefined]){const c=orderCase({change:({p,s})=>{p.metadata={supplier};s.metadata={supplier};}});assert.deepEqual(await authorize(c.input),{applicable:false});assert.equal(c.counts().reads,0);}});
-test('orders POST rejects body overrides and ignores spoofed headers and cookies',async()=>{
+test('orders POST rejects body overrides and enforces storefront gate before order writes',async()=>{
  const path='app/api/orders/route.ts', source=fs.readFileSync(path,'utf8');
- const c=orderCase();
+ const c=orderCase({change:({s})=>{s.metadata.supplier_auto_purchase_enabled=false;}});
  const wrongUser='00000000-0000-4000-8000-000000000091';
  let authorizationCalls=0, orderWrites=0, payments=0;
  const imports=Object.fromEntries(Array.from(source.matchAll(/from "([^"]+)"/g),([,name])=>[name,{}]));

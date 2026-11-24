@@ -124,58 +124,41 @@ for(const orderPatch of [{delivery:''},{delivery:SYNTHETIC_SECRET+'\nSYNTHETIC_E
     const f=fixture({orderPatch});await f.run();assert.equal(f.stats().deliveries,0);assert.equal(f.stats().posts,1);
   });
 }
-test('Canary quantity above one fails before claim or POST',async()=>{
-  const f=fixture({quantity:2});
-  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
+test('quantity above 20 fails before claim or POST',async()=>{
+  const f=fixture({quantity:21});
+  await assert.rejects(f.run(),/CANDIDATE_INVALID|CANARY_SCOPE_DENIED/);
   assert.equal(f.attempt(),null);
   assert.equal(f.stats().posts,0);
 });
-test('Canary rejects an extra provider delivery',async()=>{
+test('full production rejects an extra provider delivery',async()=>{
   const f=fixture({orderPatch:{delivery:SYNTHETIC_SECRET+'\nSYNTHETIC_SECOND_CARD'}});
   await f.run();
   assert.equal(f.stats().posts,1);
   assert.equal(f.stats().deliveries,0);
 });
-const retiredCanaryBinding = {
-  websiteProductId:'ab4930de-5eef-4a40-9362-83ed6da9ea71',
-  websiteSkuId:'c34de5ce-bd2a-4356-aa2a-ca7ed4c3e4cd',
-  productId:'imp_8f97c91003b23347934cb14e',
-  sku:'9',
-};
-
 for(const [name,change] of [
-  ['other persisted user',c=>c.orderUserId='00000000-0000-4000-8000-000000000091'],
-  ['retired Outlook binding',c=>Object.assign(c.binding,retiredCanaryBinding)],
-  ['old website product',c=>c.binding.websiteProductId=retiredCanaryBinding.websiteProductId],
-  ['old website SKU',c=>c.binding.websiteSkuId=retiredCanaryBinding.websiteSkuId],
-  ['old supplier product',c=>c.binding.productId=retiredCanaryBinding.productId],
-  ['old supplier SKU 9',c=>c.binding.sku=retiredCanaryBinding.sku],
-  ['unit cost ceiling above 0.0990',c=>c.binding.maxUnitCost='0.0991'],
-  ...['alipay','wechat','usdt_bep20'].map(method=>[method,c=>c.paymentMethod=method]),
+  ['invalid user id',c=>c.orderUserId='not-a-uuid'],
+  ['disabled binding',c=>c.binding.enabled=false],
+  ['unsupported payment method',c=>c.paymentMethod='unsupported_cash'],
 ]) test('internal paid order cannot POST for '+name,async()=>{
   const f=fixture();
   change(f.candidate);
-  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
+  await assert.rejects(f.run());
   assert.equal(f.attempt(),null);
   assert.equal(f.stats().posts,0);
 });
 test('fresh persisted user drift blocks the durable submit transition',async()=>{
   const f=fixture({freshPatch:{orderUserId:'00000000-0000-4000-8000-000000000091'}});
-  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
+  await assert.rejects(f.run(),/PRE_SUBMIT_IDENTITY_CHANGED/);
   assert.equal(f.attempt().status,'CLAIMED');
   assert.equal(f.stats().cas,0);
   assert.equal(f.stats().posts,0);
 });
-test('disabled or missing server Canary identity never reaches POST',async()=>{
-  const f=fixture({env:{KUAJINGZY_CANARY_USER_ID:undefined}});
-  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
-  assert.equal(f.attempt(),null);
-  assert.equal(f.stats().posts,0);
-});
-test('order cap above 0.10 denies Outlook Canary before claim or POST',async()=>{
-  const f=fixture({env:{KUAJINGZY_MAX_ORDER_COST_CNY:'0.1001'}});
-  await assert.rejects(f.run(),/CANARY_SCOPE_DENIED/);
-  assert.equal(f.attempt(),null);
+test('top-level item stock zero fails closed before POST',async()=>{
+  const f=fixture();
+  const origGetProduct=f.client.getProduct;
+  f.client.getProduct=async()=>{const p=await origGetProduct();p.item.stock=0;return p;};
+  await assert.rejects(f.run(),/NO_DEBIT_OUT_OF_STOCK/);
   assert.equal(f.stats().posts,0);
 });
 test('rounding allocation uses existing immutable per-unit costs without fractional loss',()=>{
@@ -183,9 +166,9 @@ test('rounding allocation uses existing immutable per-unit costs without fractio
   const units=createKuajingZyFrozenUnits(c,'root','0.371');
   assert.deepEqual(units.map(x=>x.quoted_unit_cost),['0.123667','0.123667','0.123666']);
 });
-test('reviewed KuajingZY release gate is enabled while registry purchase stays closed',()=>{
-  assert.equal(KUAJINGZY_PURCHASE_RELEASE_MODE,'single_user_canary');
-  assert.equal(KUAJINGZY_PURCHASE_RELEASE_ENABLED,true);assert.equal(canSupplierAutoPurchase('kuajingzy'),false);
+test('reviewed KuajingZY full production release gate and registry purchase are enabled',()=>{
+  assert.equal(KUAJINGZY_PURCHASE_RELEASE_MODE,'full_production');
+  assert.equal(KUAJINGZY_PURCHASE_RELEASE_ENABLED,true);assert.equal(canSupplierAutoPurchase('kuajingzy'),true);
 });
 test('binding owner, supplier and max-cost policy are mandatory',()=>{
   const raw={fulfillment_source:'supplier',supplier:'kuajingzy',website_product_id:'product',website_sku_id:'sku',

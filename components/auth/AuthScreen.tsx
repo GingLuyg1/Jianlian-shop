@@ -125,11 +125,19 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const triggerSuccessWithButtonRipple = () => {
     setLoginSuccess(true);
 
+    // 手机端不应用登录后的水幕涟漪转场效果，直接流畅进入目标页
+    if (typeof document === "undefined" || typeof window === "undefined") return;
+    const isMobileViewport =
+      window.innerWidth < 1024 ||
+      document.documentElement.dataset.mobilePreview === "true" ||
+      window.matchMedia?.("(pointer: coarse)").matches === true;
+    if (isMobileViewport) return;
+
     // 严格按照打磨实验室黄金参数挂载全屏水幕涟漪转场到 document.body（全程 pointer-events: none，底层瞬间切入 100% 真实可交互首页）：
     // - 扩散总时长 (Duration): 2.8s
     // - 水幕羽化虚化度 (Blur): 40px
     // - 冲击波环数 (Wave Rings): 2 环（从登录按钮精确边框轮廓向外泛起涟漪）
-    if (typeof document !== "undefined" && typeof window !== "undefined") {
+    {
       try {
         const DURATION_MS = 2800;
         const BLUR_PX = 40;

@@ -63,15 +63,15 @@ test('paid balance candidate consumes balance-ledger merchant cost evidence with
  assert(!f.seen.includes('payment_sessions'));
 });
 
-test('unsupported payment method and malformed balance-ledger evidence fail closed',async()=>{
- const external=balanceFinancialFixture({paymentMethod:'alipay'});
+test('unsupported payment method and malformed merchant cost evidence fail closed',async()=>{
+ const external=balanceFinancialFixture({paymentMethod:'unsupported_card'});
  await assert.rejects(
   createKuajingZyPurchaseStore(external.service,{verifiedCosts:external.verifiedCosts,clock:external.clock}).loadCandidates(external.c.orderId),
   /VERIFIED_PAYMENT_METHOD_UNSUPPORTED/
  );
  assert.equal(external.verifiedCalls.length,0);
  for(const evidencePatch of [
-  {settlementKind:'payment_session'},
+  {settlementKind:'unknown_settlement'},
   {provider:'external'},
   {costScope:'funding_and_settlement'},
   {paymentFee:'0.010000'},

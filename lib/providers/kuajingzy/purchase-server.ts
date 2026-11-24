@@ -97,7 +97,7 @@ export function createKuajingZyProductionRuntime(input: {
       for(const candidate of candidates) {
         summary.handled++;
         try {
-          const result=await fulfillKuajingZyCandidate({db,client,candidate,env,releaseGate:KUAJINGZY_PURCHASE_RELEASE_ENABLED});
+          const result=await fulfillKuajingZyCandidate({db,client,candidate,env,releaseGate:KUAJINGZY_PURCHASE_RELEASE_ENABLED,pollDelaysMs:[1500,2000,2500,3000]});
           if(result.fulfilled)summary.fulfilled++;
           else {
             summary.uncertain++;

@@ -14,7 +14,7 @@ test('real ledger identity, exact delta and zero order settlement cost, no fake 
  assert.equal(r.transactionNo,'BT_SYNTHETIC');assert.equal(r.paymentFee,'0.000000');assert.equal(r.otherFees,'0.000000');assert.equal(r.costScope,'order_settlement_only');
  assert(!('paymentSessionId'in r));assert(!('BALANCE_FUNDING_COST_VERIFIED_ZERO'in r));assert.deepEqual(f.calls,['orders','balance_transactions','orders']);
 });
-for(const [label,options] of Object.entries({zero:{count:0},duplicate:{count:2},unpaid:{orderPatch:{payment_status:'unpaid'}},wrongMethod:{orderPatch:{payment_method:'alipay'}},
+for(const [label,options] of Object.entries({zero:{count:0},duplicate:{count:2},unpaid:{orderPatch:{payment_status:'unpaid'}},wrongMethod:{orderPatch:{payment_method:'unsupported_cash'}},
  wrongOrder:{ledgerPatch:{business_id:user}},wrongUser:{ledgerPatch:{user_id:id}},direction:{ledgerPatch:{direction:'credit'}},
  amount:{ledgerPatch:{amount:'0.10'}},delta:{ledgerPatch:{balance_after:'19.543'}},currency:{ledgerPatch:{currency:'USD'}},
  pending:{ledgerPatch:{status:'pending'}},negative:{ledgerPatch:{amount:'-0.09'}},identity:{ledgerPatch:{id:null}},changed:{change:true}}))
@@ -23,7 +23,7 @@ test('stale or backwards clock evidence fails closed',async()=>{
  for(const times of [[0,30001],[100,99]]){let i=0;await assert.rejects(get(fixture().service,id,{clock:()=>times[i++]}),/STALE/);}
 });
 test('customer fee metadata does not supply merchant cost or enable unsupported method',async()=>{
- await assert.rejects(get(fixture({orderPatch:{payment_method:'wechat',fee_amount:0,metadata:{merchant_fee:0}}}).service,id));
+ await assert.rejects(get(fixture({orderPatch:{payment_method:'unsupported_card',fee_amount:0,metadata:{merchant_fee:0}}}).service,id));
  const f=fixture({ledgerPatch:{fee_amount:-1,metadata:{fee_amount:999}}});assert.equal((await get(f.service,id)).paymentFee,'0.000000');
 });
 test('six-place comparisons are exact, unsafe numbers and invalid decimals reject',()=>{
