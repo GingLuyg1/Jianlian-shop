@@ -52,6 +52,7 @@ export type PublicProductRow = {
   delivery_type: string;
   status: string;
   sort_order: number;
+  sales_count?: number | null;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
@@ -136,6 +137,10 @@ export function publicProductMetadata(value: unknown): Record<string, unknown> |
     const item = source[field];
     if (typeof item === "string" && item.length <= 512) result[field] = item;
   }
+  const salesBoost = Number(source.sales_boost ?? source.salesCount ?? 0);
+  if (Number.isFinite(salesBoost) && salesBoost > 0) {
+    result.sales_boost = Math.trunc(salesBoost);
+  }
   return Object.keys(result).length ? result : null;
 }
 
@@ -214,6 +219,7 @@ export function normalizePublicProduct(row: Record<string, unknown>): PublicProd
     delivery_type: row.delivery_type ? String(row.delivery_type) : "manual",
     status: row.status ? String(row.status) : "draft",
     sort_order: normalizeNumber(row.sort_order),
+    ...(typeof row.sales_count === "number" && Number.isFinite(row.sales_count) ? { sales_count: row.sales_count } : {}),
     metadata: publicProductMetadata(row.metadata),
     created_at: row.created_at ? String(row.created_at) : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
@@ -479,14 +485,19 @@ export function mapPublicProductToProduct(
     typeof (row as PublicCatalogProductRow).max_price === "number"
       ? Number((row as PublicCatalogProductRow).max_price)
       : row.price;
-  const rawSales = (row as PublicCatalogProductRow).sales_count;
+  const rawSales = Number(
+    (row as PublicCatalogProductRow).sales_count ??
+    row.metadata?.sales_boost ??
+    row.metadata?.salesCount ??
+    0
+  );
   const salesCount = computeProductSalesCount({
     id: row.id,
     slug: row.slug,
     name: row.name,
     category: `${productCategory} ${categoryLabel}`,
     price: minPrice,
-    explicitSales: typeof rawSales === "number" && rawSales > 0 ? rawSales : null,
+    explicitSales: Number.isFinite(rawSales) && rawSales > 0 ? rawSales : null,
   });
   const stockStatus: StockStatus =
     row.status === "sold_out" || effectiveStock <= 0

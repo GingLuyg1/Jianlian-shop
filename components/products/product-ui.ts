@@ -23,7 +23,7 @@ export const compactSearchWrapperClassName =
   "flex w-full gap-3 md:w-[520px]";
 
 export const compactSearchInputClassName =
-  "h-10 sm:h-11 rounded-lg border-[#ead9cc] bg-[#fffaf6] pl-9 sm:pl-11 text-xs sm:text-base text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25";
+  "h-10 sm:h-11 rounded-lg border-[#ead9cc] bg-[#fffaf6] pl-10 sm:pl-11 text-xs sm:text-base text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25";
 
 export const compactSearchButtonClassName =
   "h-10 sm:h-11 w-16 sm:w-[104px] shrink-0 rounded-lg bg-[#df7334] text-xs sm:text-base font-medium hover:bg-[#d7672a]";
@@ -41,6 +41,7 @@ export const productImageFallbackSrc = "/assets/jianlian-brand-logo.png";
 
 export function resolveProductImageSrc(url?: string | null): string {
   if (!url) return productImageFallbackSrc;
+  if (url === "/assets/giftcard-apple.svg") return "/assets/apple-gift-card-icon.svg";
   if (url.includes("/storage/v1/object/public/product-images/")) {
     const filename = url.split("/").pop();
     if (filename) return `/assets/products/${filename}`;

@@ -356,7 +356,7 @@ export default function FacebookTutorial() {
               <span className="text-primary font-bold">Q:</span> 登录后提示要求验证手机号？
             </h3>
             <p className="mt-1.5 text-xs text-slate-600 leading-relaxed pl-5 border-l-2 border-primary/30">
-              这通常是因为当前网络节点被 Facebook 标记为高风险或万人骑机房 IP。请更换为干净的住宅原生 IP，清理浏览器 Cookie 或开启无痕模式重新登录。
+              这通常是因为当前网络节点被 Facebook 标记为高风险或多人共用的公共共享 IP。请更换为干净的住宅原生 IP，清理浏览器 Cookie 或开启无痕模式重新登录。
             </p>
           </div>
         </div>

@@ -282,7 +282,7 @@ export default function PublicTopInfoBar({
                 公告
               </span>
               <span className="h-3.5 w-px shrink-0 bg-orange-200" />
-              <div className="flex-1 overflow-hidden whitespace-nowrap">
+              <div className="flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,transparent_0%,black_12px,black_calc(100%-36px),transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0%,black_12px,black_calc(100%-36px),transparent_100%)]">
                 <div
                   className="animate-marquee-track inline-flex min-w-max"
                   style={{ animationDelay: `${announcementDelay}s` }}

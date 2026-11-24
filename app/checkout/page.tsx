@@ -31,6 +31,7 @@ import UltraMobileProductDetails from "@/components/products/details/UltraMobile
 import TMobileProductDetails from "@/components/products/details/TMobileProductDetails";
 import Link from "next/link";
 import {
+  ArrowLeft,
   CreditCard,
   Gift,
   HelpCircle,
@@ -287,11 +288,19 @@ const GEMINI_RECHARGE_PRODUCT_IDS = [
 
 function mapCheckoutProduct(row: PublicProductRow): Product {
   const stock = Number(row.stock ?? 0);
+  const explicitSales = Number(
+    row.sales_count ??
+    row.metadata?.sales_count ??
+    row.metadata?.sales_boost ??
+    row.metadata?.salesCount ??
+    0
+  );
   const salesCount = computeProductSalesCount({
     id: row.id,
     slug: row.slug,
     name: row.name,
     price: Number(row.price ?? 0),
+    explicitSales: explicitSales > 0 ? explicitSales : null,
   });
 
   return {
@@ -333,7 +342,7 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">结算页面加载中...</div>}>
+    <Suspense fallback={<CheckoutLoadingShell />}>
       <CheckoutPageContent />
     </Suspense>
   );
@@ -406,6 +415,13 @@ function CheckoutPageContent() {
       }
 
       const parsed = parseAccountAssetsBalance(payload);
+      const profileEmail =
+        payload && typeof payload === "object" && "profile" in payload && payload.profile && typeof payload.profile === "object" && "email" in payload.profile
+          ? String((payload.profile as { email?: unknown }).email ?? "").trim()
+          : "";
+      if (profileEmail) {
+        setEmail((current) => current.trim() ? current : profileEmail);
+      }
       if (parsed.kind !== "ready") {
         setAvailableBalance(null);
         setBalanceStatus("error");
@@ -612,9 +628,24 @@ function CheckoutPageContent() {
   }, []);
 
   const product = useMemo(
-    () => (productRow && (productRow.id === productId || productRow.slug === productId) ? mapCheckoutProduct(productRow) : null),
+    () => {
+      if (!productRow) return null;
+      const normalizedPid = productId.toLowerCase();
+      const isMatched =
+        productRow.id === productId ||
+        productRow.slug === productId ||
+        (normalizedPid === "sim-001" && productRow.slug === "giffgaff-sim-blank") ||
+        (normalizedPid === "sim-002" && productRow.slug === "giffgaff-sim-5gbp") ||
+        (normalizedPid === "sim-003" && productRow.slug === "giffgaff-sim-active-15gbp");
+      return isMatched ? mapCheckoutProduct(productRow) : null;
+    },
     [productRow, productId]
   );
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !product?.name) return;
+    document.title = `${product.name} - Jianlian Shop`;
+  }, [product?.name]);
 
   const databaseSkuOptions: SkuOption[] = productSkus.map((sku) => ({
     id: sku.id,
@@ -634,6 +665,13 @@ function CheckoutPageContent() {
     : [];
   const selectedSku =
     findCheckoutSkuOption(skuOptions, selectedSkuId) ??
+    skuOptions.find(
+      (sku) =>
+        sku.status === "active" &&
+        Number(sku.stock ?? 0) > 0 &&
+        productRow?.slug &&
+        String(sku.code ?? "").trim().toLowerCase() === productRow.slug.trim().toLowerCase()
+    ) ??
     skuOptions.find((sku) => sku.status === "active" && Number(sku.stock ?? 0) > 0) ??
     skuOptions[0];
   const hasSku = skuOptions.length > 0;
@@ -676,8 +714,17 @@ function CheckoutPageContent() {
         ? "物流发货"
         : "人工处理";
   const displayProduct = useMemo(
-    () => (product ? { ...product, deliveryLabel: effectiveDeliveryLabel } : null),
-    [product, effectiveDeliveryLabel]
+    (): Product | null =>
+      product
+        ? {
+            ...product,
+            deliveryLabel: effectiveDeliveryLabel,
+            stock: effectiveStock,
+            stockLabel: `库存：${effectiveStock}`,
+            stockStatus: effectiveStock <= 0 ? "out-of-stock" : effectiveStock <= 10 ? "low-stock" : "in-stock",
+          }
+        : null,
+    [product, effectiveDeliveryLabel, effectiveStock]
   );
   const selectedPaymentChannel = paymentChannels.find((channel) =>
     getPaymentMethodOption(paymentMethod)?.channelCodes.includes(channel.code)) ?? null;
@@ -1032,7 +1079,7 @@ function CheckoutPageContent() {
                 </div>
 
               {isShippingProduct ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3">
                   <div>
                     <label className="mb-1.5 block text-xs font-medium">
                       <span className="text-red-500">*</span>收件人姓名
@@ -1040,8 +1087,8 @@ function CheckoutPageContent() {
                     <Input
                       value={customerName}
                       onChange={(event) => setCustomerName(event.target.value)}
-                      placeholder="请输入收件人姓名"
-                      className="h-10 bg-slate-50 text-sm"
+                      placeholder="收件人姓名"
+                      className="h-10 w-full bg-slate-50 text-sm"
                     />
                   </div>
                   <div>
@@ -1051,10 +1098,10 @@ function CheckoutPageContent() {
                     <Input
                       value={customerPhone}
                       onChange={(event) => setCustomerPhone(event.target.value)}
-                      placeholder="请输入收件人联系电话"
+                      placeholder="手机号 / 联系电话"
                       inputMode="tel"
                       autoComplete="tel"
-                      className="h-10 bg-slate-50 text-sm"
+                      className="h-10 w-full bg-slate-50 text-sm"
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -1086,12 +1133,18 @@ function CheckoutPageContent() {
                   onOpenChange={setPaymentDropdownOpen}
                   onSelect={handleSelectPaymentMethod}
                   channels={paymentChannels}
+                  rechargeHref={rechargeReturnTo}
                   disabled={productLoading || submitLoading}
                 />
                 {selectedPaymentUnavailable ? (
                   <p className="mt-2 text-xs text-amber-700">
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
                   </p>
+                ) : null}
+                {orderAmount > 4000 && (paymentMethod === "alipay" || paymentMethod === "wechat_pay") ? (
+                  <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-5 text-amber-800">
+                    单笔订单超过 ¥4000 建议分单购买，或切换为 <strong>余额支付 / USDT-BEP20</strong> 以免第三方收银台风控拦截。
+                  </div>
                 ) : null}
                 {selectedPaymentChannel?.providerExternalFeeDisclosure ? (
                   <div className="sr-only" aria-hidden="true">
@@ -1244,6 +1297,7 @@ function PaymentMethodSelect({
   onOpenChange,
   onSelect,
   channels,
+  rechargeHref,
   disabled,
 }: {
   open: boolean;
@@ -1252,16 +1306,23 @@ function PaymentMethodSelect({
   onOpenChange: (open: boolean) => void;
   onSelect: (method: PaymentMethodCode) => void;
   channels: PaymentChannel[];
+  rechargeHref?: string;
   disabled?: boolean;
 }) {
+  const router = useRouter();
   const selectedOption = getPaymentMethodOption(selected) ?? CHECKOUT_PAYMENT_OPTIONS[0];
+  const [hasExplicitlySelected, setHasExplicitlySelected] = useState(false);
   const available = (index: number) => {
     const option = CHECKOUT_PAYMENT_OPTIONS[index];
     return Boolean(option && ORDER_ENABLED_PAYMENT_METHODS.has(option.code)
       && (option.code === "balance" || channels.some((channel) => option.channelCodes.includes(channel.code) && channel.enabled)));
   };
   const descriptionFor = (option: typeof selectedOption) => {
+    if (option.code === "balance") return "";
     const channel = channels.find((item) => option.channelCodes.includes(item.code));
+    if (channel && channel.currency === "CNY") {
+      return `${option.label}（即时到账 · 无最低限额）`;
+    }
     return channel?.maximumAmount && channel.currency === "CNY"
       ? `${option.label}，单笔最高 ¥${channel.maximumAmount}`
       : option.description;
@@ -1314,17 +1375,22 @@ function PaymentMethodSelect({
     if (event.key === "Enter" && open) {
       event.preventDefault();
       const option = CHECKOUT_PAYMENT_OPTIONS[activeIndex];
-      if (option && available(activeIndex)) onSelect(option.code);
+      if (option && available(activeIndex)) {
+        setHasExplicitlySelected(true);
+        onSelect(option.code);
+      }
       onOpenChange(false);
     }
   }
+
+  const triggerSubtitle = descriptionFor(selectedOption);
 
   return (
     <div ref={rootRef} className="relative z-30" onKeyDown={handleKeyDown}>
       <button
         type="button"
         role="combobox"
-        className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-[#ead9cc] bg-[#fffaf6] px-3 py-2 text-left text-sm transition hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-[#ead9cc] bg-[#fffaf6] px-3 py-2 text-left text-sm transition hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls="checkout-payment-method-options"
@@ -1335,8 +1401,12 @@ function PaymentMethodSelect({
         <span className="flex min-w-0 items-center gap-2">
           <PaymentMethodIcon method={selectedOption.code} />
           <span className="min-w-0">
-            <span className="block truncate font-medium text-slate-900">{selectedOption.label}</span>
-            <span className="block truncate text-xs text-muted-foreground">{descriptionFor(selectedOption)}</span>
+            <span className="block truncate font-medium text-slate-900">
+              {hasExplicitlySelected ? selectedOption.label : "余额 / 支付宝 / 微信 / USDT"}
+            </span>
+            {hasExplicitlySelected && triggerSubtitle ? (
+              <span className="block truncate text-xs text-muted-foreground">{triggerSubtitle}</span>
+            ) : null}
           </span>
         </span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open ? "rotate-180" : "")} />
@@ -1352,6 +1422,7 @@ function PaymentMethodSelect({
             const active = option.code === selected;
             const keyboardActive = index === activeIndex;
             const unavailable = !available(index);
+            const desc = descriptionFor(option);
             return (
               <button
                 key={option.code}
@@ -1372,6 +1443,7 @@ function PaymentMethodSelect({
                 onMouseEnter={() => { if (!unavailable) setActiveIndex(index); }}
                 onClick={() => {
                   if (unavailable) return;
+                  setHasExplicitlySelected(true);
                   onSelect(option.code);
                   onOpenChange(false);
                 }}
@@ -1380,18 +1452,37 @@ function PaymentMethodSelect({
                   <PaymentMethodIcon method={option.code} />
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{option.label}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{descriptionFor(option)}</span>
+                    {desc ? (
+                      <span className="block truncate text-xs text-muted-foreground">{desc}</span>
+                    ) : null}
                   </span>
                 </span>
                 {unavailable ? (
                   <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
                     暂未开放
                   </span>
-                ) : (
-                  <span className="shrink-0 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
-                    可用
+                ) : option.code === "balance" ? (
+                  <span
+                    role="link"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenChange(false);
+                      router.push(rechargeHref || "/products/account-recharge");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onOpenChange(false);
+                        router.push(rechargeHref || "/products/account-recharge");
+                      }
+                    }}
+                    className="shrink-0 cursor-pointer rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary transition hover:border-orange-300 hover:bg-orange-100"
+                  >
+                    去充值
                   </span>
-                )}
+                ) : null}
               </button>
             );
           })}
@@ -1489,7 +1580,7 @@ function ProductDetailCard({
       <button
         type="button"
         data-route-loading="true"
-        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition-all hover:scale-105 hover:bg-muted hover:text-foreground active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:w-9"
+        className="absolute right-3 top-3 z-10 inline-flex h-8 items-center gap-1.5 rounded-full border border-orange-200/80 bg-white/95 px-3 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-primary/40 hover:bg-orange-50/80 hover:text-primary active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:px-3.5 sm:text-[13px]"
         onClick={() => {
           // 点击一次立即退出返回分类列表页面，触发顶部横条加载动画
           if (typeof window !== "undefined") {
@@ -1497,18 +1588,19 @@ function ProductDetailCard({
           }
           router.push(closeHref);
         }}
-        aria-label="关闭下单页面"
+        aria-label="返回列表"
       >
-        <X className="h-4 w-4" />
+        <ArrowLeft className="h-3.5 w-3.5" />
+        <span>返回列表</span>
       </button>
       <CardContent className={cn("h-auto p-4 sm:p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]", isMobile && "!h-auto !overflow-visible !p-3.5", loading && "flex flex-col")}>
         <div data-testid="checkout-product-detail-content" className={cn("mx-auto w-full max-w-[1040px]", loading && "flex min-h-0 flex-1 flex-col")}>
-        <div className="mb-3 pr-9 shrink-0 text-xs font-medium text-muted-foreground sm:mb-5 sm:text-sm">
+        <div className="mb-3 pr-24 shrink-0 text-xs font-medium text-muted-foreground sm:mb-5 sm:text-sm">
           {product.categoryLabel}
         </div>
 
-        <div className={cn("grid shrink-0 gap-4 sm:gap-6 lg:grid-cols-[240px_minmax(0,1fr)]", isMobile && "!grid-cols-1 !gap-3.5")}>
-          <div className="flex min-h-[140px] items-center justify-center rounded-xl bg-slate-50 py-3 sm:min-h-[210px] sm:py-0">
+        <div className={cn("grid shrink-0 gap-4 sm:gap-6 lg:grid-cols-[220px_minmax(0,1fr)]", isMobile && "!grid-cols-1 !gap-3.5")}>
+          <div className="relative aspect-square w-full max-w-[160px] mx-auto overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 shadow-sm sm:max-w-[220px]">
             <ProductArtwork product={product} />
           </div>
 
@@ -1520,13 +1612,13 @@ function ProductDetailCard({
 
             <div className="mt-4 grid w-full grid-cols-2 gap-3 rounded-xl border border-border bg-white p-3.5 sm:mt-8 sm:gap-4 sm:p-5">
               <DetailMetric
-                label="商品分类"
-                value={`销量 ${computeProductSalesCount({
+                label="商品销量"
+                value={`已售 ${computeProductSalesCount({
                   id: product.id,
                   name: product.name,
                   price: product.price,
                   explicitSales: Number(product.metadata?.salesCount ?? 0),
-                })}`}
+                })} 件`}
               />
               <DetailMetric label="商品单价" value={priceLabel} highlight />
               <DetailMetric
@@ -1535,7 +1627,11 @@ function ProductDetailCard({
                 success={product.stockStatus === "in-stock"}
                 danger={product.stockStatus === "out-of-stock"}
               />
-              <DetailMetric label="商品发货方式" value={product.deliveryLabel} />
+              <DetailMetric
+                label="商品发货方式"
+                value={product.deliveryLabel}
+                badge={product.deliveryLabel === "物流发货" ? "下单24小时内发货" : undefined}
+              />
             </div>
 
             <div className={cn("mt-3.5 lg:hidden", isMobile && "!block")}>
@@ -2308,7 +2404,7 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
           <div className="rounded-xl border border-amber-100 bg-white/90 p-3.5 text-xs sm:text-sm">
             <strong className="text-amber-900">1. 节点纯净度是生命线：</strong>
             <span className="text-slate-600">
-              绝不使用公共免费节点或低质万人挤机房节点。推荐美、日、新等合规优质住宅或正规小众节点，切忌短时间内在不同国家地区频繁跳跃漂移！
+              绝不使用公共免费节点或高风险共享数据中心节点。推荐美、日、新等合规优质住宅或正规独享节点，切忌短时间内在不同国家地区频繁跳跃漂移！
             </span>
           </div>
           <div className="rounded-xl border border-amber-100 bg-white/90 p-3.5 text-xs sm:text-sm">
@@ -3345,15 +3441,15 @@ function ProductArtwork({ product }: { product: Product }) {
       <img
         src={imageSrc}
         alt={product.name}
-        className="h-40 w-40 rounded-2xl object-cover shadow-sm"
+        className="h-full w-full rounded-2xl object-cover"
       />
     );
   }
 
   const Icon = getProductFallbackIcon(product);
   return (
-    <div className="flex h-40 w-40 items-center justify-center rounded-2xl bg-primary/10">
-      <Icon className="h-16 w-16 text-primary" />
+    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-primary/10">
+      <Icon className="h-20 w-20 text-primary" />
     </div>
   );
 }
@@ -3361,12 +3457,14 @@ function ProductArtwork({ product }: { product: Product }) {
 function DetailMetric({
   label,
   value,
+  badge,
   highlight,
   success,
   danger,
 }: {
   label: string;
   value: string;
+  badge?: string;
   highlight?: boolean;
   success?: boolean;
   danger?: boolean;
@@ -3376,13 +3474,18 @@ function DetailMetric({
       <div className="text-sm text-muted-foreground">{label}</div>
       <div
         className={[
-          "mt-2 text-sm font-semibold",
+          "mt-2 flex flex-wrap items-center gap-1.5 text-sm font-semibold",
           highlight ? "font-bold text-slate-950" : "",
           success ? "text-green-600" : "",
           danger ? "text-red-500" : "",
         ].join(" ")}
       >
-        {value}
+        <span>{value}</span>
+        {badge ? (
+          <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            {badge}
+          </span>
+        ) : null}
       </div>
     </div>
   );

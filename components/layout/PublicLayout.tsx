@@ -55,14 +55,30 @@ export default function PublicLayout({
 // admin-managed support settings intact for their other consumers.
 const SUPPORT_TELEGRAM_URL = "https://t.me/Ezeasl";
 const SUPPORT_EMAIL = "Yac0000189@gmail.com";
-const SUPPORT_HOURS = "12:00 AM - 24:00 PM GMT+8";
+const SUPPORT_HOURS = "12:00 - 24:00 (GMT+8)";
 
 function PublicLayoutContent({ children, contentClassName, viewportLocked = false, mobileNavigationUntilLg = false }: PublicLayoutProps) {
   const [supportOpen, setSupportOpen] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false);
   const supportTrigger = useRef<HTMLElement | null>(null);
   const openSupport = useCallback(() => {
     supportTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSupportOpen(true);
+  }, []);
+  useEffect(() => {
+    let scrollTimer: number | null = null;
+    const handleScroll = () => {
+      setIsScrolling(true);
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        setIsScrolling(false);
+      }, 360);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+    };
   }, []);
   useEffect(() => {
     if (!hasSupabaseConfig()) return;
@@ -105,8 +121,14 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   const pagePlacement = pathname === "/" ? "home" : pathname.startsWith("/checkout") ? "checkout" : pathname.startsWith("/account") ? "account" : null;
   const pageAnnouncement = pagePlacement ? settings.announcements?.find((item) => item.placement === pagePlacement) : undefined;
   const globalAnnouncement = settings.announcements?.find((item) => item.placement === "global_top");
-  const announcement = pageAnnouncement?.content.trim() || globalAnnouncement?.content.trim() || settings.top_announcement.trim();
+  const homeAnnouncement = settings.announcements?.find((item) => item.placement === "home");
+  const announcement =
+    pageAnnouncement?.content.trim() ||
+    globalAnnouncement?.content.trim() ||
+    homeAnnouncement?.content.trim() ||
+    settings.top_announcement.trim();
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
+  const hideMobileSupportFab = pathname.startsWith("/tutorials");
 
   return (
     <div
@@ -179,17 +201,50 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       />
 
       <main className={cn(
-        viewportLocked && !isMobile ? "flex h-[calc(100dvh-57px)] min-w-0 flex-col overflow-hidden md:h-dvh" : "min-h-screen min-w-0",
+        viewportLocked && !isMobile ? "flex h-[calc(100dvh-57px)] min-w-0 flex-col overflow-hidden md:h-dvh" : "flex min-h-screen min-w-0 flex-col",
         mobileNavigationUntilLg ? "lg:ml-[var(--storefront-main-offset)]" : "md:ml-[var(--storefront-main-offset)]",
-        isMobile && "!ml-0 !h-auto !overflow-visible pb-16",
+        isMobile && "!ml-0 !h-auto !overflow-visible pb-20",
       )}>
         <PublicTopInfoBar announcementText={announcement || undefined} mobileNavigationUntilLg={mobileNavigationUntilLg} />
         <div
-          className={viewportLocked && !isMobile ? `min-h-0 flex-1 ${contentClassName}` : contentClassName}
+          className={viewportLocked && !isMobile ? `min-h-0 flex-1 ${contentClassName}` : `flex-1 ${contentClassName}`}
           style={{ paddingInline: "var(--storefront-content-padding-x)" }}
         >
           {children}
         </div>
+        {(!viewportLocked || isMobile) && (
+          <footer
+            data-testid="public-site-footer"
+            className="mt-auto shrink-0 border-t border-orange-100/80 bg-white/60 px-4 py-3 text-xs text-slate-500 backdrop-blur-xs"
+          >
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
+              <span className="font-medium text-slate-600">
+                © {new Date().getFullYear()} {settings.site_name || "Jianlian Shop"} · 7×24h 自动发货与售后质保
+              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <Link href="/account/orders" className="transition-colors hover:text-primary">
+                  订单查询
+                </Link>
+                <span aria-hidden="true" className="text-slate-300">·</span>
+                <Link href="/terms" className="transition-colors hover:text-primary">
+                  用户协议
+                </Link>
+                <span aria-hidden="true" className="text-slate-300">·</span>
+                <Link href="/privacy" className="transition-colors hover:text-primary">
+                  隐私政策
+                </Link>
+                <span aria-hidden="true" className="text-slate-300">·</span>
+                <button
+                  type="button"
+                  onClick={openSupport}
+                  className="font-medium text-primary transition-colors hover:underline"
+                >
+                  在线客服
+                </button>
+              </div>
+            </div>
+          </footer>
+        )}
       </main>
 
       {/* Floating preview controls on localhost / preview */}
@@ -265,26 +320,29 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
       ) : null}
 
-      {/* Floating customer service FAB for mobile: 左侧，距边缘 20px (不贴边、不被截断) */}
-      <button
-        type="button"
-        onClick={openSupport}
-        data-testid="floating-support-btn"
-        style={
-          mobilePreview && previewWidth
-            ? { left: `calc(50% - ${previewWidth / 2}px + 20px)`, bottom: "24px" }
-            : { left: "20px", bottom: "24px" }
-        }
-        className={cn(
-          "fixed z-40 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-orange-500/35 transition-transform active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-          mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
-          isMobile && "!flex",
-        )}
-        aria-label="在线客服"
-        title="在线客服"
-      >
-        <Headphones className="h-6 w-6" />
-      </button>
+      {/* Floating customer service FAB for mobile: 右下角轻量圆形图标，教程页隐藏，滚动时向右侧缩进半隐藏 */}
+      {!hideMobileSupportFab ? (
+        <button
+          type="button"
+          onClick={openSupport}
+          data-testid="floating-support-btn"
+          style={
+            mobilePreview && previewWidth
+              ? { right: `calc(50% - ${previewWidth / 2}px + 16px)`, bottom: "24px" }
+              : { right: "16px", bottom: "24px" }
+          }
+          className={cn(
+            "fixed z-40 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-orange-500/30 transition-all duration-200 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+            isScrolling ? "translate-x-6 opacity-55" : "translate-x-0 opacity-100",
+            mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
+            isMobile && "!flex",
+          )}
+          aria-label="在线客服"
+          title="在线客服"
+        >
+          <Headphones className="h-5 w-5" />
+        </button>
+      ) : null}
 
       <Dialog open={supportOpen} onOpenChange={setSupportOpen}>
         <DialogContent onCloseAutoFocus={(event) => {

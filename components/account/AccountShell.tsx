@@ -31,7 +31,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   const [emailVerified, setEmailVerified] = useState(true);
   const [resendSeconds, setResendSeconds] = useState(0);
   const redirectPath = useMemo(() => pathname || "/account", [pathname]);
-  const contentRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const desktopQuery = window.matchMedia("(min-width: 768px)");
@@ -233,21 +233,21 @@ export default function AccountShell({ children }: { children: ReactNode }) {
           <div className={cn("min-w-0 md:hidden", isMobile && "!block")}>
             <div className={`${glass.surface} ${center.panel} overflow-hidden p-2`}>
               <AccountIdentity compact />
-              <div className="flex gap-2 overflow-x-auto">
-              <AccountNav pathname={pathname || "/account"} compact />
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm text-slate-500"
-              >
-                <LogOut className="h-4 w-4" />
-                退出登录
-              </button>
+              <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                <AccountNav pathname={pathname || "/account"} compact />
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-500 sm:px-3 sm:text-sm"
+                >
+                  <LogOut className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  退出登录
+                </button>
               </div>
             </div>
           </div>
 
-          <main ref={contentRef} className={cn(`${center.content} ${center.contentFrame} min-w-0 overflow-visible md:min-h-0 md:overflow-y-auto`, isMobile && "!h-auto !overflow-visible")}><AccountEmailContext.Provider value={email}>{children}</AccountEmailContext.Provider></main>
+          <div ref={contentRef} className={cn(`${center.content} ${center.contentFrame} min-w-0 overflow-visible md:min-h-0 md:overflow-y-auto`, isMobile && "!h-auto !overflow-visible")}><AccountEmailContext.Provider value={email}>{children}</AccountEmailContext.Provider></div>
         </div>
       </div>
     </PublicLayout>

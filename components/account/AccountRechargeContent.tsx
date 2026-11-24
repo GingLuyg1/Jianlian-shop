@@ -113,7 +113,7 @@ export default function AccountRechargeContent() {
     ? compareRechargeDecimals(expectedUsdtAmount, String(selectedChannel.minimumAmount))
     : null;
   const reachesMin = isUsdtCnyRecharge
-    ? Boolean(requestedCnyAmount && (compareRechargeDecimals(requestedCnyAmount, "21.00") ?? -1) >= 0) && minimumComparison !== null && minimumComparison >= 0
+    ? Boolean(requestedCnyAmount) && minimumComparison !== null && minimumComparison >= 0
     : Boolean(selectedChannel && summary && summary.amount >= selectedChannel.minimumAmount);
   const hasValidAmount = isUsdtCnyRecharge
     ? Boolean(requestedCnyAmount && expectedUsdtAmount && dailyRate && reachesMin)
@@ -301,7 +301,7 @@ export default function AccountRechargeContent() {
   return (
     <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none px-4 py-3 md:px-6", isMobile && "!px-3")}>
       <div data-testid="recharge-layout" className={cn("mx-auto flex w-full max-w-[1540px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden", publicMainPanelHeightClassName, isMobile && "!h-auto !min-h-0 !overflow-visible !gap-3")}>
-            <Card data-testid="recharge-notice-glass" className={cn(channelGridStyles.noticeGlass, "shrink-0 rounded-2xl")}>
+            <Card data-testid="recharge-notice-glass" className={cn(channelGridStyles.noticeGlass, "order-2 shrink-0 rounded-2xl md:order-1")}>
               <CardContent className="p-3.5 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2"><Info className="h-4 w-4 text-primary" /><h2 className="text-base font-semibold leading-6 whitespace-nowrap sm:text-[18px]">充值须知</h2></div>
@@ -310,12 +310,12 @@ export default function AccountRechargeContent() {
                 <div className="mt-3 grid grid-cols-2 gap-2.5 text-xs leading-5 text-slate-500 sm:mt-4 sm:gap-3 xl:grid-cols-4">
                   <Notice icon={FileText} title="付款说明"><span className="block">收款页无法显示，请关闭代理后重试。</span><span className="block">二维码超限，请关闭支付页重新获取。</span></Notice>
                   <Notice icon={WalletCards} title="到账与异常"><span className="block">支付成功后，等待1分钟再刷新页面。</span><span className="block">未到账，请发付款截图及用户名给客服。</span></Notice>
-                  <Notice icon={Coins} title="单笔限制"><span className="block">支付宝/微信单笔上限2000元。</span><span className="block">超额请联系客服，USDT无限制。</span></Notice>
-                  <Notice icon={Clock3} title="费用说明"><span className="block">支付宝 / 微信：手续费3%</span><span className="block">USDT BEP20：无手续费</span></Notice>
+                  <Notice icon={Coins} title="单笔限制"><span className="block">单笔超 ¥4000 建议分单或用 USDT。</span><span className="block">超额请联系客服，USDT无限制。</span></Notice>
+                  <Notice icon={Clock3} title="费用说明"><span className="block">支付宝 / 微信：手续费 3%</span><span className="block">USDT BEP20：无手续费</span></Notice>
                 </div>
               </CardContent>
             </Card>
-        <div className={cn("grid min-w-0 flex-1 gap-4 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,calc((100%_-_1rem)/3.1_-_38px))] md:overflow-hidden", isMobile && "!grid-cols-1 !h-auto !overflow-visible !gap-3")}>
+        <div className={cn("order-1 grid min-w-0 flex-1 gap-4 md:order-2 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,calc((100%_-_1rem)/3.1_-_38px))] md:overflow-hidden", isMobile && "!grid-cols-1 !h-auto !overflow-visible !gap-3")}>
           <div data-testid="recharge-form-panel" className={cn("min-w-0 md:min-h-0 md:overflow-hidden", isMobile && "!h-auto !overflow-visible")}>
             <Card className={cn(channelGridStyles.formGlass, "flex h-full min-w-0 flex-col overflow-hidden rounded-2xl md:overflow-y-auto", isMobile && "!h-auto !overflow-visible")}>
               <div className={cn(channelGridStyles.hero, "relative flex min-h-[88px] shrink-0 items-center gap-3.5 px-4 py-4 sm:min-h-[112px] sm:gap-4 sm:px-6 sm:py-6", isMobile && "!min-h-0 !px-3.5 !py-3.5")}>
@@ -398,7 +398,7 @@ export default function AccountRechargeContent() {
                     inputMode="decimal"
                     onChange={(event) => updateAmount(event.target.value)}
                     disabled={!selectedChannel}
-                    placeholder={isUsdtCnyRecharge ? "请输入金额，最低 21 CNY" : selectedChannel ? `请输入金额，最低 ${selectedChannel.minimumAmount} ${selectedChannel.currency}` : "请先选择支付渠道"}
+                    placeholder={isUsdtCnyRecharge ? `请输入金额（最低折合 ${selectedChannel?.minimumAmount ?? 1} USDT）` : selectedChannel ? `请输入充值金额（${selectedChannel.currency}）` : "请先选择支付渠道"}
                     className={cn("h-11", !isUsdtCnyRecharge && selectedChannel?.currency === "USDT" ? "pl-20" : "pl-16", (isUsdtCnyRecharge || selectedChannel?.currency === "CNY") && "pr-16")}
                   />
                   {isUsdtCnyRecharge || selectedChannel?.currency === "CNY" ? (
@@ -407,7 +407,12 @@ export default function AccountRechargeContent() {
                 </div>
                 {(isUsdtCnyRecharge ? requestedCnyAmount !== null : legacyChannelAmount > 0) && !reachesMin ? (
                   <p className="mt-2 text-xs text-red-500">
-                    {isUsdtCnyRecharge ? "最低充值 21 元，且须满足渠道实时最低金额。" : <>当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。</>}
+                    {isUsdtCnyRecharge ? `当前渠道最低充值金额需折合不少于 ${selectedChannel?.minimumAmount ?? 1} USDT。` : <>当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。</>}
+                  </p>
+                ) : null}
+                {!isUsdtCnyRecharge && legacyChannelAmount > 4000 ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    单笔充值超过 ¥4000 建议分笔充值或切换为 USDT BEP20 渠道（无上限、免手续费）。
                   </p>
                 ) : null}
                 {channelOverLimit ? (

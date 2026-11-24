@@ -251,14 +251,22 @@ export async function POST(request: Request) {
         );
       }
     }
-    if (summary && (!providerSupportsChannel(getPaymentProviderCapabilities(channel.provider), channel.code, channel.currency)
-      || !providerAmountWithinLimits(getPaymentProviderCapabilities(channel.provider), channel, summary.payableAmount))) {
+    const capability = getPaymentProviderCapabilities(channel.provider);
+    const effectiveChannel = {
+      ...channel,
+      minimumAmount: channel.currency === "CNY" ? 0.01 : channel.minimumAmount,
+      maximumAmount: channel.currency === "CNY"
+        ? Math.max(channel.maximumAmount ?? 1000000, capability.maximumAmount ?? 1000000)
+        : channel.maximumAmount,
+    };
+    if (summary && (!providerSupportsChannel(capability, channel.code, channel.currency)
+      || !providerAmountWithinLimits(capability, effectiveChannel, summary.payableAmount))) {
       return NextResponse.json({ error: "支付渠道不支持该金额或币种", code: "PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED" }, { status: 400 });
     }
     const amountRange = isUsdtCnyRecharge && theoreticalUsdtAmount
       ? classifyExactRange(theoreticalUsdtAmount, channel.minimumAmount, 0)
       : summary
-        ? classifyPublicRechargeAmountRange(summary.amount, channel.minimumAmount, channel.maximumAmount)
+        ? classifyPublicRechargeAmountRange(summary.amount, effectiveChannel.minimumAmount, effectiveChannel.maximumAmount)
         : "invalid";
     if (amountRange === "invalid") {
       return NextResponse.json({ error: "充值金额格式无效", code: "RECHARGE_AMOUNT_INVALID" }, { status: 400 });

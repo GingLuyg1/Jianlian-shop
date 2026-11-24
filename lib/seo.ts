@@ -55,10 +55,12 @@ export function buildPageMetadata(input: {
     .slice(0, 160);
   const url = absoluteUrl(input.path || "/");
   const image = absoluteUrl(input.image || DEFAULT_OG_IMAGE);
+  const formattedTitle =
+    input.title.includes(SITE_NAME) ? input.title : `${input.title} | ${SITE_NAME}`;
 
   return {
     metadataBase: new URL(SITE_URL),
-    title: input.title,
+    title: formattedTitle,
     description: rawDescription,
     alternates: { canonical: url },
     robots: input.noIndex
@@ -67,15 +69,15 @@ export function buildPageMetadata(input: {
     openGraph: {
       type: "website",
       locale: "zh_CN",
-      title: input.title,
+      title: formattedTitle,
       description: rawDescription,
       url,
       siteName: SITE_NAME,
-      images: [{ url: image, alt: input.title }],
+      images: [{ url: image, alt: formattedTitle }],
     },
     twitter: {
       card: "summary_large_image",
-      title: input.title,
+      title: formattedTitle,
       description: rawDescription,
       images: [image],
     },

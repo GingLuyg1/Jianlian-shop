@@ -208,13 +208,30 @@ async function loadVerifiedSalesCounts(productIds: string[]) {
   if (!service) return output;
 
   try {
-    const { data, error } = await service
-      .from("order_items")
-      .select("product_id,quantity,orders!inner(payment_status,refund_status)")
-      .in("product_id", productIds)
-      .eq("orders.payment_status", "paid")
-      .eq("orders.refund_status", "none")
-      .limit(10000);
+    const [{ data, error }, { data: metaRows }] = await Promise.all([
+      service
+        .from("order_items")
+        .select("product_id,quantity,orders!inner(payment_status,refund_status)")
+        .in("product_id", productIds)
+        .eq("orders.payment_status", "paid")
+        .eq("orders.refund_status", "none")
+        .limit(10000),
+      service
+        .from("products")
+        .select("id,metadata")
+        .in("id", productIds),
+    ]);
+
+    for (const mRow of metaRows ?? []) {
+      const pid = typeof mRow.id === "string" ? mRow.id : "";
+      const meta = mRow.metadata && typeof mRow.metadata === "object" && !Array.isArray(mRow.metadata)
+        ? (mRow.metadata as Record<string, unknown>)
+        : null;
+      const boost = Number(meta?.sales_boost ?? meta?.salesCount ?? 0);
+      if (pid && Number.isSafeInteger(boost) && boost > 0) {
+        output.set(pid, (output.get(pid) ?? 0) + boost);
+      }
+    }
 
     if (error) return output;
 

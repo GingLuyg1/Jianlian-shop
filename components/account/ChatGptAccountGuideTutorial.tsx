@@ -427,7 +427,7 @@ function AntiBanSection({ onSelectSection }: { onSelectSection?: (section: ChatG
   const rules = [
     {
       title: "规则一：节点纯净度是生命线",
-      desc: "绝不要使用公共免费节点或低端万人骑机房机场（数据中心 IP / Data Center IP）。OpenAI 对 Cloudflare 和机房 ASN 有严密的信誉评分体系，推荐使用高质量独享海外住宅 IP（ISP 原生家宽）或者信誉良好的小众节点。固定在同一国家或地区，严禁短时间内在不同国家频繁切换跨洲漂移！",
+      desc: "绝不要使用公共免费节点或高并发共享数据中心节点（Data Center IP）。OpenAI 对 Cloudflare 和数据中心 ASN 有严密的信誉评分体系，推荐使用高质量独享海外住宅 IP（ISP 原生家宽）或者信誉良好的专属节点。固定在同一国家或地区，严禁短时间内在不同国家频繁切换跨洲漂移！",
     },
     {
       title: "规则二：指纹浏览器独立环境隔离",
@@ -724,7 +724,7 @@ Request: Please verify whether this deactivation was caused by an automated fals
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-emerald-600 font-bold">•</span>
-                  <span><strong>IP 或节点频繁漂移：</strong>机场节点不稳定或机房代理被连带拉黑（万人骑 IP 受牵连）。</span>
+                  <span><strong>IP 或节点频繁漂移：</strong>代理节点不稳定或共享数据中心 IP 被连带风控限制。</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-emerald-600 font-bold">•</span>
@@ -974,7 +974,7 @@ Request: Please verify whether this deactivation was caused by an automated fals
           {[
             {
               title: "固定纯净独享节点",
-              desc: "尽量使用稳定纯净的独享或住宅节点，避免在对话中频繁切换不同国家地区，严禁多人共用万人骑的公共机房 IP。",
+              desc: "尽量使用稳定纯净的独享或住宅节点，避免在对话中频繁切换不同国家地区，切勿多人共用高风险的公共共享 IP。",
             },
             {
               title: "敏感词与违规场景主动避让",

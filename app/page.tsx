@@ -29,14 +29,14 @@ import { useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefron
 
 const categoryCards = [
   {
-    title: "数字账号",
+    title: "数字 / 社媒账号",
     desc: "Apple ID / Steam / Gmail 等账号商品",
     href: "/products/digital-accounts",
     icon: KeyRound,
     active: true,
   },
   {
-    title: "AI会员充值",
+    title: "AI 会员充值",
     desc: "ChatGPT / Claude / Grok 等会员服务",
     href: "/products/ai-membership",
     icon: Bot,
@@ -48,7 +48,7 @@ const categoryCards = [
     icon: Gift,
   },
   {
-    title: "国际电话卡",
+    title: "国际 SIM 卡",
     desc: "海外实体卡、SIM 与通信服务",
     href: "/products/sim-cards",
     icon: CreditCard,
@@ -77,7 +77,7 @@ const highlights = [
 const heroSlides = [
   {
     title: "全球数字商品与通信服务商城",
-    desc: "提供数字账号、AI会员充值、礼品卡、国际电话卡等商品。下单前请核对商品说明，拿到账户和卡密后请第一时间检查。",
+    desc: "提供数字账号、AI 会员充值、礼品卡、国际 SIM 卡等商品。下单前请核对商品说明，拿到账户和卡密后请第一时间检查。",
     visual: "globe",
   },
   {
@@ -243,7 +243,13 @@ export default function HomePage() {
     .map((item) => {
       if (categoryRows && isCatalogCategoryHref(item.href)) {
         const primary = findVisibleStorefrontPrimaryCategory(item.href, categoryRows);
-        if (primary?.name) return { ...item, title: primary.name };
+        if (primary?.name) {
+          const normalizedTitle = primary.name
+            .replace(/国际\s*sim\s*卡|国际电话卡/gi, "国际 SIM 卡")
+            .replace(/数字\s*\/\s*社媒账号/g, "数字 / 社媒账号")
+            .replace(/礼品卡\s*\/\s*充值卡/g, "礼品卡 / 充值卡");
+          return { ...item, title: normalizedTitle };
+        }
       }
       return item;
     });

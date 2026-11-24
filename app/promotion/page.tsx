@@ -351,7 +351,10 @@ export default function PromotionPage() {
 
             <div className="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-[1fr_1fr_1.15fr]">
               <InfoTile label="充值提佣倍率" value="暂未开放" />
-              <InfoTile label="最低提现额" value={formatMoney(data?.minWithdrawAmount ?? 10)} />
+              <InfoTile
+                label="最低提现额"
+                value={loading && !data ? "—" : formatMoney(data?.minWithdrawAmount ?? 100)}
+              />
               <button
                 type="button"
                 onClick={copyPromotionLink}

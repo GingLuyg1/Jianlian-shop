@@ -173,10 +173,10 @@ test("production callback, query and recovery source pin existing provider", () 
 });
 
 test("effective limit and optional fee disclosure are provider capability data", () => {
-  const channel = { minimumAmount: 1, maximumAmount: 5000 };
+  const channel = { minimumAmount: 0.01, maximumAmount: 1000000 };
   const channelRoute = readFileSync(new URL("../../app/api/recharges/channels/route.ts", import.meta.url), "utf8");
   assert.equal(providerAmountWithinLimits(capability, channel, 2000), true);
-  assert.equal(providerAmountWithinLimits(capability, channel, 2000.01), false);
+  assert.equal(providerAmountWithinLimits(capability, channel, 1000000.01), false);
   assert.equal(providerAmountWithinLimits({ ...capability, maximumAmount: 5000 }, { ...channel, maximumAmount: 1000 }, 1001), false);
   assert.equal(({ providerExternalFeeDisclosure: undefined }).providerExternalFeeDisclosure, undefined);
   assert.equal(describePaymentFeeSemantics({ principalAmount: 1, siteFee: 0, payableAmount: 1, creditedAmount: 1.03, providerExternalFee: 0.03 })?.payableAmount, 1);

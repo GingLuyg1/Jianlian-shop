@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
+import { syncSharedSkuCodeInventory } from "@/lib/products/sku-summary";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { normalizeOrderExpirationRpcResult } from "@/lib/orders/order-expiration-result.mjs";
 
@@ -74,7 +75,20 @@ export async function expireUnpaidOrder(orderId: string, reason = "payment_timeo
       requestId,
     } satisfies ExpireOrderResult;
   }
-  return normalizeRpcResult(data, requestId);
+  const normalized = normalizeRpcResult(data, requestId);
+  if (normalized.ok && (normalized.releasedSku ?? 0) > 0) {
+    const { data: items } = await service
+      .from("order_items")
+      .select("sku_id")
+      .eq("order_id", orderId);
+    if (Array.isArray(items) && items.length > 0) {
+      await syncSharedSkuCodeInventory(
+        service,
+        items.map((item) => String((item as { sku_id?: unknown }).sku_id ?? "")).filter(Boolean)
+      );
+    }
+  }
+  return normalized;
 }
 
 export async function processExpiredOrders(limit = ORDER_EXPIRATION_BATCH_LIMIT, reason = "payment_timeout") {

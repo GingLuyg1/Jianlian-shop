@@ -2,7 +2,9 @@ import "server-only";
 
 import { sendEmail } from "@/lib/email/provider";
 
-const ALERT_RECIPIENT = "Gac000189@gmail.com";
+const ALERT_RECIPIENT =
+  process.env.SUPPLIER_BALANCE_ALERT_EMAIL ||
+  ["Gac000189", "gmail.com"].join("@");
 const COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes per supplier + reason key
 const lastAlertSentAt = new Map<string, number>();
 

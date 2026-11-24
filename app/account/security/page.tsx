@@ -461,7 +461,7 @@ export default function AccountSecurityPage() {
           {/* 增加精确 DOM 测量的平滑动态滑块效果的账号安全模式切换 Tab */}
           <div
             ref={securityTabsRef}
-            className="relative flex rounded-2xl bg-orange-100/60 p-1 border border-orange-200/60 shadow-2xs shrink-0 self-start lg:self-center"
+            className="relative flex w-full max-w-full overflow-x-auto rounded-2xl border border-orange-200/60 bg-orange-100/60 p-1 shadow-2xs shrink-0 self-start [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-auto lg:self-center"
             role="tablist"
             aria-label="账号安全操作模式"
           >
@@ -491,13 +491,13 @@ export default function AccountSecurityPage() {
                   aria-selected={isSelected}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "relative z-10 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold transition-colors duration-200 rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    "relative z-10 inline-flex flex-1 items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-bold transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-initial sm:gap-1.5 sm:px-3.5 sm:py-2 sm:text-xs",
                     isSelected
                       ? "text-primary font-black"
                       : "text-slate-600 hover:text-slate-900"
                   )}
                 >
-                  <Icon className={cn("h-3.5 w-3.5 shrink-0 transition-colors", isSelected ? "text-primary" : "text-slate-500")} aria-hidden="true" />
+                  <Icon className={cn("h-3 w-3 shrink-0 transition-colors sm:h-3.5 sm:w-3.5", isSelected ? "text-primary" : "text-slate-500")} aria-hidden="true" />
                   <span className="whitespace-nowrap">{tab.label}</span>
                 </button>
               );

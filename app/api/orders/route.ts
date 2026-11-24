@@ -4,6 +4,7 @@ import { authorizeBitrefillStorefrontOrder } from "@/lib/providers/bitrefill/pro
 import { freezeBitrefillOrderBinding } from "@/lib/providers/bitrefill/live-fulfillment";
 
 import { checkOrderProductAvailability } from "@/lib/catalog/order-product-visibility.mjs";
+import { syncSharedSkuCodeInventory } from "@/lib/products/sku-summary";
 import { getOrderErrorMessage, listUserOrders } from "@/lib/orders/order-queries";
 import { classifyBalancePaymentFailure } from "@/lib/orders/balance-payment-failure.mjs";
 import { payOrderWithBalance } from "@/lib/orders/balance-payment-service";
@@ -470,8 +471,13 @@ export async function POST(request: Request) {
         }
       }
       const capability = getPaymentProviderCapabilities(channel.provider);
+      const effectiveChannel = {
+        ...channel,
+        minimumAmount: 0.01,
+        maximumAmount: Math.max(channel.maximumAmount ?? 1000000, capability.maximumAmount ?? 1000000),
+      };
       if (paymentMethod !== "usdt_bep20" && (!providerSupportsChannel(capability, channel.code, "CNY")
-        || !providerAmountWithinLimits(capability, channel, Number(payableAmount)))) {
+        || !providerAmountWithinLimits(capability, effectiveChannel, Number(payableAmount)))) {
         return NextResponse.json({ error: "支付渠道不支持该金额", code: "PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED" }, { status: 400 });
       }
     }
@@ -614,6 +620,13 @@ export async function POST(request: Request) {
       productId,
       skuId: resolvedSkuId,
     });
+
+    if (resolvedSkuId) {
+      const serviceForSync = getSupabaseServiceRoleClient();
+      if (serviceForSync) {
+        await syncSharedSkuCodeInventory(serviceForSync, [resolvedSkuId]);
+      }
+    }
 
     // The controlled RPC already persists payment_method. A second user-scoped
     // UPDATE would require a broad orders UPDATE policy and can leave a hidden

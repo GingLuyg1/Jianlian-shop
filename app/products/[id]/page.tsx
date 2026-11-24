@@ -289,6 +289,11 @@ export default function ProductDetailPage() {
   }, [productIdentifier]);
 
   useEffect(() => {
+    if (typeof document === "undefined" || !product?.name) return;
+    document.title = `${product.name} - Jianlian Shop`;
+  }, [product?.name]);
+
+  useEffect(() => {
     if (!hasSupabaseConfig()) return;
     let active = true;
 
@@ -521,6 +526,11 @@ export default function ProductDetailPage() {
                       <Badge variant="outline" className="border-orange-200 bg-orange-50 text-primary">
                         {getDeliveryLabel(deliveryType)}
                       </Badge>
+                      {deliveryType === "shipping" ? (
+                        <Badge variant="outline" className="border-orange-200 bg-orange-50 font-semibold text-primary">
+                          下单24小时内发货
+                        </Badge>
+                      ) : null}
                       <Badge variant="outline" className="border-orange-200 bg-white text-primary">
                         {getStatusLabel(product, productSoldOut)}
                       </Badge>

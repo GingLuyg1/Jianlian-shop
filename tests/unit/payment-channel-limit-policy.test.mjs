@@ -9,13 +9,13 @@ import {
 
 const source = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
-test("Alipay and WeChat use the 2000 CNY online ceiling", () => {
-  assert.equal(ONLINE_CNY_MAXIMUM, 2000);
+test("Alipay and WeChat use the open 1000000 CNY online ceiling", () => {
+  assert.equal(ONLINE_CNY_MAXIMUM, 1000000);
   assert.equal(isOnlineCnyOverLimit("2000.00"), false);
-  assert.equal(isOnlineCnyOverLimit("2000.01"), true);
+  assert.equal(isOnlineCnyOverLimit("1000000.01"), true);
 
   const providers = source("lib/payments/providers.ts");
-  assert.equal((providers.match(/maximumAmount: 2000,/g) ?? []).length >= 2, true);
+  assert.equal((providers.match(/maximumAmount: 1000000,/g) ?? []).length >= 2, true);
 });
 
 test("USDT account recharge has no maximum ceiling", () => {

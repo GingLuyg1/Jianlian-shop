@@ -198,8 +198,15 @@ export async function createPaymentSession(input: CreatePaymentSessionInput): Pr
     || business.feeAmount !== 0 || business.payableAmount !== business.requestedAmount)) {
     throw new PaymentSessionError("SNPAY_FEE_CONFIGURATION_INVALID", "支付平台手续费由收银台收取，本站不得重复加费");
   }
+  const effectiveChannel = {
+    ...channel,
+    minimumAmount: channel.currency === "CNY" ? 0.01 : channel.minimumAmount,
+    maximumAmount: channel.currency === "CNY"
+      ? Math.max(channel.maximumAmount ?? 1000000, capability.maximumAmount ?? 1000000)
+      : channel.maximumAmount,
+  };
   if (!providerSupportsChannel(capability, channel.code, business.currency)
-    || !providerAmountWithinLimits(capability, channel, business.payableAmount)) {
+    || !providerAmountWithinLimits(capability, effectiveChannel, business.payableAmount)) {
     throw new PaymentSessionError("PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED", "支付渠道不支持该金额或币种");
   }
 

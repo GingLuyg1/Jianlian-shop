@@ -89,10 +89,10 @@ export const products: Product[] = [
   // 国际电话卡
   {
     id: "sim-001",
-    name: "GiffGaff 白卡",
+    name: "Giffgaff 白卡",
     category: "sim-cards",
     categoryLabel: "国际电话卡",
-    description: "英国 GiffGaff 白卡，适合英国号码注册与收件使用",
+    description: "英国 Giffgaff 白卡，适合英国号码注册与收件使用",
     price: 69.0,
     currency: "CNY",
     stockStatus: "out-of-stock",
@@ -102,7 +102,7 @@ export const products: Product[] = [
     deliveryLabel: "快递发货",
     productType: "physical",
     listingStatus: "active",
-    detail: "英国 GiffGaff 白卡，适合英国号码相关业务使用。当前库存为0，仅展示套餐信息。",
+    detail: "英国 Giffgaff 白卡，适合英国号码相关业务使用。当前库存为0，仅展示套餐信息。",
     purchaseNotes: "库存为0时暂不可购买。如需补货或批量购买，请联系客服确认。",
     faq: [
       { question: "当前可以购买吗？", answer: "当前库存为0，暂不可购买。" },
@@ -111,10 +111,10 @@ export const products: Product[] = [
   },
   {
     id: "sim-002",
-    name: "GiffGaff 白卡（余额5英镑）",
+    name: "Giffgaff 白卡（余额5英镑）",
     category: "sim-cards",
     categoryLabel: "国际电话卡",
-    description: "英国 GiffGaff 白卡，含5英镑余额",
+    description: "英国 Giffgaff 白卡，含5英镑余额",
     price: 89.0,
     currency: "CNY",
     stockStatus: "out-of-stock",
@@ -124,7 +124,7 @@ export const products: Product[] = [
     deliveryLabel: "快递发货",
     productType: "physical",
     listingStatus: "active",
-    detail: "英国 GiffGaff 白卡，含5英镑余额。当前库存为0，仅展示套餐信息。",
+    detail: "英国 Giffgaff 白卡，含5英镑余额。当前库存为0，仅展示套餐信息。",
     purchaseNotes: "库存为0时暂不可购买。如需补货或批量购买，请联系客服确认。",
     faq: [
       { question: "余额是多少？", answer: "该套餐包含5英镑余额。" },
@@ -132,10 +132,10 @@ export const products: Product[] = [
   },
   {
     id: "sim-003",
-    name: "GiffGaff 白卡（已激活余额15英镑）",
+    name: "Giffgaff 白卡（已激活余额15英镑）",
     category: "sim-cards",
     categoryLabel: "国际电话卡",
-    description: "英国 GiffGaff 已激活白卡，含15英镑余额",
+    description: "英国 Giffgaff 已激活白卡，含15英镑余额",
     price: 239.0,
     currency: "CNY",
     stockStatus: "out-of-stock",
@@ -145,7 +145,7 @@ export const products: Product[] = [
     deliveryLabel: "快递发货",
     productType: "physical",
     listingStatus: "active",
-    detail: "英国 GiffGaff 已激活白卡，含15英镑余额。当前库存为0，仅展示套餐信息。",
+    detail: "英国 Giffgaff 已激活白卡，含15英镑余额。当前库存为0，仅展示套餐信息。",
     purchaseNotes: "库存为0时暂不可购买。如需补货或批量购买，请联系客服确认。",
   },
   {
@@ -221,10 +221,10 @@ export const products: Product[] = [
   },
   {
     id: "gift-giffgaff-topup",
-    name: "GiffGaff 充值",
+    name: "Giffgaff 充值",
     category: "gift-cards",
-    categoryLabel: "GiffGaff",
-    description: "GiffGaff 充值，支持10英镑、15英镑、20英镑档位",
+    categoryLabel: "Giffgaff",
+    description: "Giffgaff 充值，支持10英镑、15英镑、20英镑档位",
     price: 107.8,
     currency: "CNY",
     stockStatus: "out-of-stock",
@@ -234,7 +234,7 @@ export const products: Product[] = [
     deliveryLabel: "16位卡密",
     productType: "digital",
     listingStatus: "active",
-    detail: "GiffGaff 充值，支持10英镑、15英镑、20英镑档位。发货方式为16位充值卡密，收到后可前往 Giffgaff 官网或 App 的 Top-up / Voucher 页面自助兑换。",
+    detail: "Giffgaff 充值，支持10英镑、15英镑、20英镑档位。发货方式为16位充值卡密，收到后可前往 Giffgaff 官网或 App 的 Top-up / Voucher 页面自助兑换。",
     purchaseNotes: "16位卡密属于一次性数字商品，非商品问题售出后不支持无理由退换。库存为0时暂不可购买，如需补货或批量购买，请联系客服确认。",
     faq: [
       {

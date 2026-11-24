@@ -43,7 +43,8 @@ export function rememberPublicProductPreview(row: PublicProductRow, now = Date.n
     delivery_type: row.delivery_type,
     status: row.status,
     sort_order: row.sort_order,
-    metadata: null,
+    sales_count: row.sales_count ?? null,
+    metadata: row.metadata ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

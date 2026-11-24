@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncSharedSkuCodeInventory } from "@/lib/products/sku-summary";
 
 import { getOrderErrorMessage, getUserOrderByNo } from "@/lib/orders/order-queries";
 import { canUserCancelOrder } from "@/lib/orders/order-status";
@@ -229,6 +230,16 @@ export async function PATCH(request: Request, context: RouteContext) {
       const code = typeof result.code === "string" ? result.code : "ORDER_CANCEL_FAILED";
       const status = code === "ORDER_NOT_FOUND" ? 404 : 400;
       return jsonError(typeof result.message === "string" ? result.message : "Order cancellation failed.", status, code);
+    }
+
+    const serviceForSync = getSupabaseServiceRoleClient();
+    if (serviceForSync && Array.isArray(order.order_items)) {
+      const skuIds = order.order_items
+        .map((item) => String(item.sku_id ?? "").trim())
+        .filter(Boolean);
+      if (skuIds.length > 0) {
+        await syncSharedSkuCodeInventory(serviceForSync, skuIds);
+      }
     }
 
     return NextResponse.json({ ok: true, result });

@@ -43,10 +43,10 @@ import {
 
 const menuItems = [
   { label: "首页", href: "/", icon: Home },
-  { label: "国际电话卡", href: "/products/sim-cards", icon: CreditCard },
+  { label: "国际 SIM 卡", href: "/products/sim-cards", icon: CreditCard },
   { label: "礼品卡 / 充值卡", href: "/products/gift-cards", icon: Gift },
-  { label: "数字账号", href: "/products/digital-accounts", icon: KeyRound },
-  { label: "AI会员充值", href: "/products/ai-membership", icon: Sparkles },
+  { label: "数字 / 社媒账号", href: "/products/digital-accounts", icon: KeyRound },
+  { label: "AI 会员充值", href: "/products/ai-membership", icon: Sparkles },
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
   { label: "推广中心", href: "/promotion", icon: Share2 },
   { label: "我的订单", href: "/account/orders", icon: ClipboardList },
@@ -91,7 +91,13 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
     .map((item) => {
       if (rows && isCatalogCategoryHref(item.href)) {
         const primary = findVisibleStorefrontPrimaryCategory(item.href, rows);
-        if (primary?.name) return { ...item, label: primary.name };
+        if (primary?.name) {
+          const normalizedLabel = primary.name
+            .replace(/国际\s*sim\s*卡|国际电话卡/gi, "国际 SIM 卡")
+            .replace(/数字\s*\/\s*社媒账号/g, "数字 / 社媒账号")
+            .replace(/礼品卡\s*\/\s*充值卡/g, "礼品卡 / 充值卡");
+          return { ...item, label: normalizedLabel };
+        }
       }
       return item;
     });

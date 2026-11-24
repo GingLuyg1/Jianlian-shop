@@ -286,7 +286,7 @@ export default function OneNzTutorial({
                     <span>下一篇教程</span>
                   </div>
                   <h3 className="text-base font-bold text-slate-900 sm:text-lg">
-                    新西兰 One 卡使用指南与常见问题
+                    新西兰 One NZ SIM 卡使用指南与常见问题
                   </h3>
                   <p className="text-xs text-slate-600">
                     了解漫游短信资费、发送 mynum 到 521 排错、每年 10 NZD 充值保号及常见故障排错。
@@ -302,7 +302,7 @@ export default function OneNzTutorial({
                   }}
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-bold text-white shadow-sm transition-transform duration-150 hover:bg-primary/90 active:scale-95"
                 >
-                  <span>查看卡使用指南与常见问题</span>
+                  <span>查看 SIM 卡使用指南与常见问题</span>
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </div>

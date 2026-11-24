@@ -188,6 +188,39 @@ export async function GET(
     }
 
     const product = normalizePublicProduct(productData as Record<string, unknown>);
+    const service = getSupabaseServiceRoleClient();
+    if (service) {
+      try {
+        const [{ data: orderRows }, { data: metaRow }] = await Promise.all([
+          service
+            .from("order_items")
+            .select("quantity,orders!inner(payment_status,refund_status)")
+            .eq("product_id", product.id)
+            .eq("orders.payment_status", "paid")
+            .eq("orders.refund_status", "none")
+            .limit(5000),
+          service
+            .from("products")
+            .select("metadata")
+            .eq("id", product.id)
+            .maybeSingle(),
+        ]);
+        const meta = metaRow?.metadata && typeof metaRow.metadata === "object" && !Array.isArray(metaRow.metadata)
+          ? (metaRow.metadata as Record<string, unknown>)
+          : null;
+        const boost = Math.max(0, Math.trunc(Number(meta?.sales_boost ?? meta?.salesCount ?? 0) || 0));
+        const paidQty = (orderRows ?? []).reduce((sum, r) => {
+          const q = Number((r as { quantity?: unknown }).quantity ?? 0);
+          return Number.isSafeInteger(q) && q > 0 ? sum + q : sum;
+        }, 0);
+        product.sales_count = boost + paidQty;
+        if (boost > 0) {
+          product.metadata = { ...(product.metadata ?? {}), sales_boost: boost };
+        }
+      } catch {
+        // Best-effort sales enrichment
+      }
+    }
     let skuError: string | null = null;
     let skus: ReturnType<typeof normalizePublicSku>[] = [];
 

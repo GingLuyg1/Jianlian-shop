@@ -67,45 +67,52 @@ export default function RakutenMobileTutorial() {
           日本乐天移动 Rakuten Mobile 安装配置教程
         </h1>
         <p className="mt-2 max-w-3xl text-xs leading-relaxed text-rose-100/90 sm:text-sm">
-          本文汇总日本乐天移动原生实体 SIM 卡从收到卡片、插卡防扣费、搜网激活到 APN 配置的全套图文与高清视频指引。
+          本文汇总日本乐天移动原生实体 SIM 卡从收到卡片、插卡防扣费、搜网激活到 iOS / Android APN 配置的全套图文实操指引。
         </p>
       </section>
 
-      {/* 原生内嵌：安装配置保姆级视频教程 */}
+      {/* 原生图文：iOS 与 Android 实操网络配置指南 */}
       <section className="overflow-hidden rounded-3xl border border-rose-200/90 bg-gradient-to-b from-slate-900 to-slate-950 text-white shadow-lg">
         <div className="border-b border-white/10 px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-600 text-white shadow-sm">
-                <Video className="h-4.5 w-4.5" />
+                <Smartphone className="h-4.5 w-4.5" />
               </div>
               <div>
                 <h2 className="text-sm font-bold text-white sm:text-base">
-                  乐天移动官方实操演示视频（建议全屏观看）
+                  乐天移动 iOS / Android 双端插卡与搜网实操要点
                 </h2>
                 <p className="text-[11px] text-slate-400">
-                  包含：插卡步骤、iOS / 安卓网络接入与常见配置细节演示
+                  包含：插卡准备、国内漫游选网、短信接收验证与信号排错步骤
                 </p>
               </div>
             </div>
             <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/20 px-3 py-1 text-xs font-medium text-rose-300">
-              <Play className="h-3 w-3 fill-rose-300" />
-              高清实拍演示
+              <CheckCircle2 className="h-3 w-3" />
+              图文标准规范
             </span>
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
-          <div className="relative mx-auto aspect-video max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-black shadow-inner">
-            <video
-              controls
-              playsInline
-              preload="metadata"
-              src="https://video.yqqy.de/rm.mp4"
-              className="h-full w-full object-contain"
-            >
-              您的浏览器暂不支持内置视频播放，请升级浏览器后观看。
-            </video>
+        <div className="grid gap-4 p-5 sm:grid-cols-3 sm:p-6">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="text-xs font-bold text-rose-300">Step A · iOS (iPhone) 设置</div>
+            <p className="mt-2 text-xs leading-5 text-slate-300">
+              插入 SIM 卡后若弹出「激活 iMessage 与 FaceTime」提示，请点击<strong>【取消】</strong>。随后进入「设置 → 蜂窝网络」，确认<strong>关闭数据漫游</strong>，等待状态栏自动接入中国移动或中国联通信号。
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="text-xs font-bold text-rose-300">Step B · Android (安卓) 设置</div>
+            <p className="mt-2 text-xs leading-5 text-slate-300">
+              建议将 SIM 卡装入<strong>卡槽 1</strong>。进入「设置 → 移动网络」，确认<strong>关闭数据漫游</strong>。如遇未自动出信号，可关闭「自动选择网络」，手动选择「中国移动」或「中国联通」。
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="text-xs font-bold text-rose-300">Step C · 接收日区平台验证码</div>
+            <p className="mt-2 text-xs leading-5 text-slate-300">
+              驻网成功后即可免费接收短信。在 Mercari 煤炉、Line、日区 Apple ID 或票务平台填写您的 <code className="rounded bg-white/10 px-1 font-mono text-rose-200">+81</code>（或 <code className="rounded bg-white/10 px-1 font-mono text-rose-200">070/080/090</code>）号码即可秒收验证码。
+            </p>
           </div>
         </div>
       </section>

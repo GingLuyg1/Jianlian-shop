@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { auditCatalogAction, requireCatalogAdmin } from "../../../../catalog/_shared";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
-import { syncSkuProductSummary } from "@/lib/products/sku-summary";
+import { syncSharedSkuCodeInventory, syncSkuProductSummary } from "@/lib/products/sku-summary";
 import { inspectCatalogSkuSchema } from "@/lib/products/catalog-readiness.mjs";
 import { formatSkuActivationReasons, isAutomaticSkuActivation, readSkuActivationReadiness } from "@/lib/products/sku-activation-readiness.mjs";
 
@@ -63,7 +63,10 @@ export async function PATCH(
   const { data, error } = await service.from("product_skus").update(payload).eq("id", params.skuId).eq("product_id", params.id).select(SKU_FIELDS).single();
   if (error || !data) return json({ error: error?.code === "23505" ? "SKU Code 已存在" : "SKU 保存失败", requestId }, error?.code === "23505" ? 409 : 500);
   await auditCatalogAction({ request, user: admin.user, action: "update_product_sku", module: "products", targetType: "product_sku", targetId: params.skuId, targetLabel: String(data.sku_title ?? ""), result: "success", beforeSummary: before, afterSummary: data });
-  try { await syncSkuProductSummary(service, params.id); }
+  try {
+    await syncSkuProductSummary(service, params.id);
+    await syncSharedSkuCodeInventory(service, [params.skuId]);
+  }
   catch { return json({ sku: data, error: "SKU 已保存，但商品汇总失败，请重试保存该 SKU", requestId }, 500); }
   return json({ sku: data, requestId });
 }

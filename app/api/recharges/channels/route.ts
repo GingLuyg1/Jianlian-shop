@@ -67,12 +67,17 @@ export async function GET() {
       return capability.supportsCreate && providerSupportsChannel(capability, channel.code, channel.currency);
     }).map((channel) => {
       const capability = getPaymentProviderCapabilities(channel.provider);
+      const normalizedMin = channel.code === "usdt_bep20"
+        ? Math.max(0.01, channel.minimumAmount || 1)
+        : Math.min(0.01, Math.max(channel.minimumAmount, capability.minimumAmount ?? 0));
+      const normalizedMax = channel.code === "usdt_bep20"
+        ? undefined
+        : Math.max(1000000, Math.min(channel.maximumAmount ?? capability.maximumAmount ?? Number.POSITIVE_INFINITY, capability.maximumAmount ?? Number.POSITIVE_INFINITY));
       return {
         ...channel,
-        minimumAmount: Math.max(channel.minimumAmount, capability.minimumAmount ?? 0),
-        maximumAmount: channel.code === "usdt_bep20"
-          ? undefined
-          : Math.min(channel.maximumAmount ?? Infinity, capability.maximumAmount ?? Infinity),
+        minimum_amount: normalizedMin,
+        minimumAmount: normalizedMin,
+        maximumAmount: Number.isFinite(normalizedMax) ? normalizedMax : undefined,
         providerExternalFeeDisclosure: capability.providerExternalFeeDisclosure ?? undefined,
       };
     });

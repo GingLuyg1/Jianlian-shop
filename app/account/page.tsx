@@ -210,7 +210,7 @@ function InfoCard({
       {loading ? (
         <div className="mt-1.5 h-5 w-24 animate-pulse rounded bg-slate-100" />
       ) : (
-        <div className="mt-1 truncate text-base font-semibold text-slate-950" title={value}>{value || "—"}</div>
+        <div className="mt-1 break-words text-xs font-semibold leading-snug text-slate-950 sm:truncate sm:text-base" title={value}>{value || "—"}</div>
       )}
     </div>
   );

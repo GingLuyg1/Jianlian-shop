@@ -145,7 +145,7 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
     },
     {
       tag: "超值首充赠金",
-      title: "GiffGaff 赠5英镑卡（全新未激活）",
+      title: "Giffgaff 赠5英镑卡（全新未激活）",
       price: "¥98",
       features: [
         "全新三合一实体卡（未激活 · 附首充赠送特权）",
@@ -158,7 +158,7 @@ export default function GiffgaffSimProductDetails({ product }: GiffgaffSimProduc
     },
     {
       tag: "🔥 强烈推荐 · 即插即用",
-      title: "GiffGaff 已激活余额15英镑卡",
+      title: "Giffgaff 已激活余额15英镑卡",
       price: "¥239",
       features: [
         "专业团队代为合规完成官方激活，省去繁琐外网步骤",

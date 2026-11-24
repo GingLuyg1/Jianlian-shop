@@ -36,7 +36,7 @@ export async function generateMetadata(props: ProductRouteContext): Promise<Meta
     });
   }
 
-  const title = `${product.name}${product.status === "sold_out" ? "（已售罄）" : ""}`;
+  const title = `${product.name}${product.status === "sold_out" ? "（已售罄）" : ""} - ${SITE_NAME}`;
   const description =
     product.short_description || product.description || `${product.name} - ${SITE_NAME} 数字商品服务`;
 

@@ -33,6 +33,16 @@ function getSettingRawValue(row: { setting_value?: unknown } | undefined) {
   return value;
 }
 
+function getPublicOrigin(request: NextRequest) {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.split(",")[0]?.trim();
+  if (host && !host.includes("localhost") && !host.startsWith("127.0.0.1")) {
+    const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
+    return `${proto}://${host}`;
+  }
+  return request.nextUrl.origin;
+}
+
 let maintenanceCache: { enabled: boolean; expiresAt: number } | null = null;
 const MAINTENANCE_CACHE_TTL_MS = 15_000;
 
@@ -93,18 +103,14 @@ export async function middleware(request: NextRequest) {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        const loginUrl = request.nextUrl.clone();
-        loginUrl.pathname = "/login";
-        loginUrl.search = "";
-        loginUrl.searchParams.set("redirect", `${pathname}${request.nextUrl.search}`);
+        const redirectTarget = `${pathname}${request.nextUrl.search}`;
+        const loginUrl = new URL(`/login?redirect=${encodeURIComponent(redirectTarget)}`, getPublicOrigin(request));
         return NextResponse.redirect(loginUrl);
       }
     }
 
     if (!isMaintenanceBypassPath(pathname) && (await isMaintenanceEnabled(supabase))) {
-      const maintenanceUrl = request.nextUrl.clone();
-      maintenanceUrl.pathname = "/maintenance";
-      maintenanceUrl.search = "";
+      const maintenanceUrl = new URL("/maintenance", getPublicOrigin(request));
       return NextResponse.redirect(maintenanceUrl);
     }
   }

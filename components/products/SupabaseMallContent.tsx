@@ -156,6 +156,7 @@ export default function SupabaseMallContent({
 
 function SupabaseMallContentInner({
   fallbackCategories,
+  fallbackTitle,
   primaryNames,
   primarySlugs,
   productCategory,
@@ -388,6 +389,13 @@ function SupabaseMallContentInner({
   useEffect(() => {
     setDraftSearch(filters.search);
   }, [filters.search]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const baseTitle = fallbackTitle || primaryNames[0] || "商品分类";
+    const subTitle = resolvedCategory?.name ? `${resolvedCategory.name} · ${baseTitle}` : baseTitle;
+    document.title = `${subTitle} | Jianlian Shop`;
+  }, [fallbackTitle, primaryNames, resolvedCategory?.name]);
 
   useEffect(() => {
     const rows = categorySnapshot.rows;
@@ -1264,14 +1272,16 @@ function ProductPanel({
                 </span>
               ) : null}
             </div>
-            <div data-testid="catalog-product-result-bar" className={cn("flex min-h-4 shrink-0 items-center gap-1.5 text-xs text-muted-foreground", !isMobile && "xl:mt-1.5 xl:gap-2")}>
+            <div data-testid="catalog-product-result-bar" className={cn("flex min-h-4 shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground", !isMobile && "xl:mt-1.5 xl:gap-2")}>
               <span data-testid="catalog-product-result-dot" className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
-              <span>{`当前 ${resultText} 个商品`}</span>
+              <span className="whitespace-nowrap">
+                {resultText === "/" ? "商品加载中..." : `当前 ${resultText} 个商品`}
+              </span>
             </div>
           </div>
           <div className={cn("flex w-full gap-2", !isMobile && "xl:w-[760px]")}>
             <div className="relative min-w-0 flex-1">
-              <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 text-[#7d6355]", isMobile ? "h-3.5 w-3.5" : "left-3.5 sm:left-4 h-4 w-4")} />
+              <Search className={cn("pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7d6355]", isMobile ? "h-3.5 w-3.5" : "left-3.5 sm:left-4 h-4 w-4")} />
               <Input
                 disabled={Boolean(routePendingTarget)}
                 value={draftSearch}
@@ -1282,7 +1292,7 @@ function ProductPanel({
                 placeholder="搜索商品、SKU、规格或分类"
                 className={cn(
                   "rounded-lg border-[#ead9cc] bg-[#fffaf6] text-xs text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25 sm:text-sm",
-                  isMobile ? "h-[34px] pl-8.5" : "h-10 pl-10 sm:pl-11"
+                  isMobile ? "h-[34px] pl-9" : "h-10 pl-10 sm:pl-11"
                 )}
               />
             </div>

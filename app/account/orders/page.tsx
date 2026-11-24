@@ -140,7 +140,7 @@ export default function MyOrdersPage() {
 
   return (
     <div data-testid="orders-glass-page" data-account-orders-ready={!loading} className={cn(styles.page, "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden")}>
-      <Card className={cn(glass.surface, "flex min-h-[480px] min-w-0 flex-1 flex-col overflow-hidden md:min-h-0")}>
+      <Card className={cn(glass.surface, "flex min-h-[340px] min-w-0 flex-1 flex-col overflow-hidden sm:min-h-[480px] md:min-h-0")}>
           <CardHeader className={cn(glass.hero, "shrink-0 px-5 py-5 md:px-6 md:py-6")}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">

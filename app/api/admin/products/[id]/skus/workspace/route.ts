@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { auditCatalogAction, requireCatalogAdmin } from "../../../../catalog/_shared";
 import { inspectCatalogSkuSchema } from "@/lib/products/catalog-readiness.mjs";
+import { syncSharedSkuCodeInventory } from "@/lib/products/sku-summary";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 const MAX_MUTATIONS = 100;
@@ -130,6 +131,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
   }
 
   const result = data as Record<string, unknown>;
+  const savedSkus = Array.isArray(result.skus) ? (result.skus as Array<{ id?: unknown }>) : [];
+  if (savedSkus.length > 0) {
+    await syncSharedSkuCodeInventory(
+      service,
+      savedSkus.map((item) => String(item?.id ?? "")).filter(Boolean)
+    );
+  }
   await auditCatalogAction({
     request,
     user: admin.user,

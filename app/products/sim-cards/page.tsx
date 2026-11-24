@@ -2,8 +2,8 @@ import SimCardsMallContent from "@/components/products/SimCardsMallContent";
 import { productCategoryMetadata } from "@/lib/product-category-metadata";
 
 export const metadata = productCategoryMetadata({
-  title: "国际电话卡",
-  description: "海外实体电话卡、通信套餐和国际通信相关服务。",
+  title: "国际 SIM 卡",
+  description: "海外实体 SIM 卡、通信套餐和国际通信相关服务。",
   path: "/products/sim-cards",
 });
 
