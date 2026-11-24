@@ -44,6 +44,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { useSlidingIndicator } from "@/components/ui/use-sliding-indicator";
 import { cn } from "@/lib/utils";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
@@ -73,6 +74,12 @@ export default function FAQPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [activeTabFilter, setActiveTabFilter] = useState<"all" | "unread" | "processing" | "completed">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const faqSliderKey = activeTabFilter === "unread" ? null : activeTabFilter;
+  const {
+    containerRef: faqTabsRef,
+    setItemRef: setFaqTabRef,
+    indicator: faqTabIndicator,
+  } = useSlidingIndicator<"all" | "processing" | "completed">(faqSliderKey, [tickets.length]);
 
   // 新建工单表单
   const [formData, setFormData] = useState({
@@ -567,39 +574,66 @@ export default function FAQPage() {
                 )}
               </div>
 
-              {/* 状态过滤 Tabs：滑动胶囊样式（全部 / 处理中 / 已完成） */}
-              <div className="relative mb-3 flex rounded-xl bg-slate-100/80 p-0.5 text-xs font-medium text-slate-600 shrink-0">
+              {/* 状态过滤 Tabs：精确 DOM 测量滑动胶囊（全部 / 处理中 / 已完成） */}
+              <div
+                ref={faqTabsRef}
+                role="tablist"
+                aria-label="工单状态筛选"
+                className="relative mb-3 flex rounded-xl bg-slate-100/90 p-1 text-xs font-medium text-slate-600 shrink-0 border border-slate-200/70"
+              >
+                {faqTabIndicator.visible && (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "pointer-events-none absolute top-1 bottom-1 rounded-lg bg-white shadow-xs ring-1 ring-orange-200/70",
+                      faqTabIndicator.animated && "transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                    )}
+                    style={{
+                      left: `${faqTabIndicator.left}px`,
+                      width: `${faqTabIndicator.width}px`,
+                    }}
+                  />
+                )}
                 <button
+                  ref={setFaqTabRef("all")}
                   type="button"
+                  role="tab"
+                  aria-selected={activeTabFilter === "all"}
                   onClick={() => setActiveTabFilter("all")}
                   className={cn(
-                    "flex-1 rounded-lg py-1 text-center font-bold transition-all text-xs",
+                    "relative z-10 flex-1 rounded-lg py-1.5 text-center font-bold transition-colors duration-200 text-xs cursor-pointer",
                     activeTabFilter === "all"
-                      ? "bg-white text-orange-600 shadow-xs"
+                      ? "text-orange-600 font-black"
                       : "hover:text-slate-900"
                   )}
                 >
                   全部 {tickets.length}
                 </button>
                 <button
+                  ref={setFaqTabRef("processing")}
                   type="button"
+                  role="tab"
+                  aria-selected={activeTabFilter === "processing"}
                   onClick={() => setActiveTabFilter("processing")}
                   className={cn(
-                    "flex-1 rounded-lg py-1 text-center font-bold transition-all text-xs",
+                    "relative z-10 flex-1 rounded-lg py-1.5 text-center font-bold transition-colors duration-200 text-xs cursor-pointer",
                     activeTabFilter === "processing"
-                      ? "bg-white text-orange-600 shadow-xs"
+                      ? "text-orange-600 font-black"
                       : "hover:text-slate-900"
                   )}
                 >
                   处理中 {stats.processing}
                 </button>
                 <button
+                  ref={setFaqTabRef("completed")}
                   type="button"
+                  role="tab"
+                  aria-selected={activeTabFilter === "completed"}
                   onClick={() => setActiveTabFilter("completed")}
                   className={cn(
-                    "flex-1 rounded-lg py-1 text-center font-bold transition-all text-xs",
+                    "relative z-10 flex-1 rounded-lg py-1.5 text-center font-bold transition-colors duration-200 text-xs cursor-pointer",
                     activeTabFilter === "completed"
-                      ? "bg-white text-orange-600 shadow-xs"
+                      ? "text-orange-600 font-black"
                       : "hover:text-slate-900"
                   )}
                 >

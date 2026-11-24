@@ -1228,6 +1228,15 @@ export default function AnimatedCharacters({
             />
           )}
 
+          {/* 角色本体层：底部精确裁切在展台水平线 0px，彻底杜绝角色倾斜或下压时底角穿出舞台底面穿帮 */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              clipPath: "inset(-320px -260px 0px -260px)",
+              zIndex: 1,
+            }}
+          >
           {/* 1. Purple Tall Character (Beautified Soft 3D Vinyl Texture) */}
           <div
             ref={purpleRef}
@@ -1773,6 +1782,7 @@ export default function AnimatedCharacters({
                 />
               </svg>
             </div>
+          </div>
           </div>
         </div>
 

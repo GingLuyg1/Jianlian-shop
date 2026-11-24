@@ -119,59 +119,161 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const authMainRef = useRef<HTMLElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
-  const [rippleOrigin, setRippleOrigin] = useState<{ x: number; y: number } | null>(null);
 
   const triggerSuccessWithButtonRipple = () => {
-    let originX = typeof window !== "undefined" ? window.innerWidth * 0.72 : 800;
-    let originY = typeof window !== "undefined" ? window.innerHeight * 0.58 : 500;
-    if (submitBtnRef.current) {
-      const rect = submitBtnRef.current.getBoundingClientRect();
-      originX = rect.left + rect.width / 2;
-      originY = rect.top + rect.height / 2;
-    }
-    setRippleOrigin({ x: originX, y: originY });
     setLoginSuccess(true);
 
-    // 将明显的多层同心圆光学水波纹挂载到 document.body 顶层，全程 pointer-events: none：
-    // 1. 路由立即跳转至真实首页后，水波纹在真实首页上方继续完整扩散 1.2s，视觉效果与之前一样明显饱满；
-    // 2. 没有任何遮挡蒙版，鼠标可随时穿透水波纹直接点击首页任意分类与商品。
-    if (typeof document !== "undefined") {
+    // 严格按照打磨实验室黄金参数挂载全屏水幕涟漪转场到 document.body（全程 pointer-events: none，底层瞬间切入 100% 真实可交互首页）：
+    // - 扩散总时长 (Duration): 2.8s
+    // - 水幕羽化虚化度 (Blur): 40px
+    // - 冲击波环数 (Wave Rings): 2 环（从登录按钮精确边框轮廓向外泛起涟漪）
+    if (typeof document !== "undefined" && typeof window !== "undefined") {
       try {
+        const DURATION_MS = 2800;
+        const BLUR_PX = 40;
+        const WAVE_RINGS = 2;
+
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        let btnRect = {
+          left: vw * 0.72 - 170,
+          top: vh * 0.58 - 22,
+          width: 340,
+          height: 44,
+        };
+        if (submitBtnRef.current) {
+          const r = submitBtnRef.current.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            btnRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+          }
+        }
+        const originX = btnRect.left + btnRect.width / 2;
+        const originY = btnRect.top + btnRect.height / 2;
+        const maxDist = Math.hypot(
+          Math.max(originX, vw - originX),
+          Math.max(originY, vh - originY)
+        );
+        const targetRadius = maxDist * 1.15;
+        const startRadius = Math.max(20, Math.min(btnRect.width, btnRect.height) * 0.52);
+
         const existing = document.getElementById("jianlian-login-ripple-portal");
         if (existing) existing.remove();
+
         const host = document.createElement("div");
         host.id = "jianlian-login-ripple-portal";
         host.setAttribute("aria-hidden", "true");
         host.style.cssText =
           "position:fixed;inset:0;z-index:9999;pointer-events:none;overflow:hidden;";
-        host.innerHTML = `
-          <style>
-            @keyframes jianlian-optical-shockwave-portal {
-              0% {
-                transform: translate(-50%, -50%) scale(0.05);
-                opacity: 0.96;
-              }
-              35% {
-                opacity: 0.88;
-              }
-              70% {
-                opacity: 0.48;
-              }
-              100% {
-                transform: translate(-50%, -50%) scale(28);
-                opacity: 0;
-              }
+
+        // 1. 顶层 1:1 登录页水幕快照：全程 pointer-events: none，以 40px 柔焦羽化水幕在 2.8s 内从登录按钮向外融化揭开真实首页
+        let snapshotLayer: HTMLElement | null = null;
+        if (authMainRef.current) {
+          const cloned = authMainRef.current.cloneNode(true) as HTMLElement;
+          cloned.style.cssText =
+            "position:fixed;inset:0;width:100vw;height:100vh;margin:0;pointer-events:none;z-index:1;overflow:hidden;will-change:mask-image,-webkit-mask-image,opacity,transform;";
+          cloned.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+          host.appendChild(cloned);
+          snapshotLayer = cloned;
+        }
+
+        // 2. 从登录按钮精确边框泛起的 2 环香槟白金光学冲击波
+        const ringBox = document.createElement("div");
+        ringBox.style.cssText =
+          "position:fixed;inset:0;pointer-events:none;z-index:2;overflow:hidden;";
+        host.appendChild(ringBox);
+
+        const finalDiameter = targetRadius * 2;
+        const ringBorder = "2.5px solid rgba(254, 243, 199, 0.92)";
+        const ringBoxShadow =
+          "0 0 50px 18px rgba(251, 191, 36, 0.45), inset 0 0 40px 12px rgba(255, 255, 255, 0.9)";
+
+        for (let i = 0; i < WAVE_RINGS; i++) {
+          const ring = document.createElement("div");
+          ring.style.cssText = [
+            "position:absolute",
+            `left:${originX}px`,
+            `top:${originY}px`,
+            `width:${btnRect.width}px`,
+            `height:${btnRect.height}px`,
+            "border-radius:12px",
+            `border:${ringBorder}`,
+            `box-shadow:${ringBoxShadow}`,
+            `filter:blur(${Math.max(1, BLUR_PX * 0.25)}px)`,
+            "transform:translate(-50%,-50%)",
+            "pointer-events:none",
+            "opacity:0",
+            "will-change:width,height,border-radius,opacity",
+          ].join(";");
+          ringBox.appendChild(ring);
+
+          const delayMs = i * 160;
+          const ringDurationMs = Math.round(DURATION_MS * 0.9);
+          ring.animate(
+            [
+              {
+                width: `${btnRect.width}px`,
+                height: `${btnRect.height}px`,
+                borderRadius: "12px",
+                opacity: 0.96,
+              },
+              {
+                width: `${finalDiameter * 0.45}px`,
+                height: `${finalDiameter * 0.45}px`,
+                borderRadius: "50%",
+                opacity: 0.78,
+                offset: 0.4,
+              },
+              {
+                width: `${finalDiameter * 1.08}px`,
+                height: `${finalDiameter * 1.08}px`,
+                borderRadius: "50%",
+                opacity: 0,
+              },
+            ],
+            {
+              duration: ringDurationMs,
+              delay: delayMs,
+              easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+              fill: "forwards",
             }
-          </style>
-          <div style="position:absolute;left:${originX}px;top:${originY}px;width:176px;height:176px;border-radius:9999px;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(253,224,71,0.38) 42%,rgba(251,146,60,0.18) 70%,transparent 100%);box-shadow:0 0 90px 28px rgba(255,255,255,0.92),0 0 160px 52px rgba(245,158,11,0.38);filter:blur(8px);animation:jianlian-optical-shockwave-portal 1.15s cubic-bezier(0.16,1,0.3,1) forwards;"></div>
-          <div style="position:absolute;left:${originX}px;top:${originY}px;width:176px;height:176px;border-radius:9999px;pointer-events:none;border:2.5px solid rgba(255,255,255,0.95);background:radial-gradient(circle,rgba(255,255,255,0.32) 0%,rgba(254,215,170,0.22) 55%,transparent 100%);box-shadow:inset 0 0 42px rgba(255,255,255,0.85),0 0 64px 18px rgba(251,191,36,0.34);filter:blur(2px);animation:jianlian-optical-shockwave-portal 1.15s cubic-bezier(0.16,1,0.3,1) 0.08s forwards;"></div>
-          <div style="position:absolute;left:${originX}px;top:${originY}px;width:176px;height:176px;border-radius:9999px;pointer-events:none;border:1.5px solid rgba(253,186,116,0.72);background:transparent;box-shadow:0 0 36px 8px rgba(234,88,12,0.18);filter:blur(3px);animation:jianlian-optical-shockwave-portal 1.15s cubic-bezier(0.16,1,0.3,1) 0.18s forwards;"></div>
-        `;
+          );
+        }
+
         document.body.appendChild(host);
+
+        // 3. 60fps 逐帧平滑驱动 40px 羽化径向水幕（精确模拟 cubic-bezier(0.16, 1, 0.3, 1) 液态减速曲线）
+        const startTime = performance.now();
+        const easeLiquid = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
+
+        const step = (now: number) => {
+          const elapsed = now - startTime;
+          const raw = Math.min(1, Math.max(0, elapsed / DURATION_MS));
+          const eased = easeLiquid(raw);
+
+          if (snapshotLayer) {
+            const currentR = startRadius + (targetRadius - startRadius) * eased;
+            const currentBlur = BLUR_PX * (1 + eased);
+            const grad = `radial-gradient(circle at ${originX}px ${originY}px, transparent ${currentR.toFixed(1)}px, black ${(currentR + currentBlur).toFixed(1)}px)`;
+            snapshotLayer.style.webkitMaskImage = grad;
+            snapshotLayer.style.maskImage = grad;
+            snapshotLayer.style.transform = `scale(${(1 + 0.03 * eased).toFixed(4)})`;
+            snapshotLayer.style.opacity = raw > 0.78 ? String(Math.max(0, 1 - (raw - 0.78) / 0.22)) : "1";
+          }
+
+          if (raw < 1) {
+            window.requestAnimationFrame(step);
+          } else {
+            host.remove();
+          }
+        };
+
+        window.requestAnimationFrame(step);
+        // 安全清理兜底，绝不残留任何 DOM
         window.setTimeout(() => {
-          host.remove();
-        }, 1400);
+          if (host.isConnected) host.remove();
+        }, DURATION_MS + 350);
       } catch {}
     }
   };
@@ -415,11 +517,15 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       }
       toast.success("邮箱已验证，注册完成。");
       triggerSuccessWithButtonRipple();
-      forgetPendingSignup();
       setRegistration(null);
       setInlinePendingSignup(null);
+      forgetPendingSignup();
       router.replace("/account");
-      router.refresh();
+      window.setTimeout(() => {
+        if (window.location.pathname === "/login" || window.location.pathname === "/register") {
+          window.location.replace("/account");
+        }
+      }, 450);
     } catch {
       await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
       setError("注册验证暂时不可用，请稍后重试。");
@@ -678,8 +784,14 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       }
 
       triggerSuccessWithButtonRipple();
-      router.replace(redirectTo || "/");
-      router.refresh();
+      const targetUrl = redirectTo || "/";
+      router.replace(targetUrl);
+      // 防止 Next.js 客户端导航偶发被阻塞，若 450ms 后仍滞留登录页则安全直跳真实目标页
+      window.setTimeout(() => {
+        if (window.location.pathname === "/login" || window.location.pathname === "/register") {
+          window.location.replace(targetUrl);
+        }
+      }, 450);
     } catch (authException) {
       console.warn("[Supabase Auth] Network or runtime exception");
       setError(getSafeNetworkAuthMessage(authException));
@@ -689,7 +801,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#fff6ee] text-foreground">
+    <main ref={authMainRef} className="relative min-h-screen overflow-hidden bg-[#fff6ee] text-foreground">
       {/* 优化后的高级暖色微光背景 */}
       <div className="pointer-events-none fixed -left-32 -top-32 h-[480px] w-[480px] rounded-full bg-gradient-to-br from-[#ffd9b3] via-[#ffc68a] to-[#ffb366] opacity-60 blur-3xl" />
       <div className="pointer-events-none fixed -right-24 top-1/4 h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-[#ffe6cc] via-[#ffd2a8] to-[#ffb885] opacity-55 blur-3xl" />
@@ -1114,60 +1226,6 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
           </section>
         </div>
       </div>
-      {/* 登录成功同心圆多层水波光环：仅保留纯 pointer-events-none 的饱满光波反馈，不挂载任何遮挡点击的首页蒙版 */}
-      {loginSuccess && (
-        <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" aria-hidden="true">
-          <style
-            dangerouslySetInnerHTML={{
-              __html: `
-                @keyframes jianlian-optical-shockwave {
-                  0% {
-                    transform: translate(-50%, -50%) scale(0.05);
-                    opacity: 0.95;
-                  }
-                  35% {
-                    opacity: 0.85;
-                  }
-                  70% {
-                    opacity: 0.45;
-                  }
-                  100% {
-                    transform: translate(-50%, -50%) scale(28);
-                    opacity: 0;
-                  }
-                }
-              `,
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
-              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
-              zIndex: 45,
-            }}
-            className="pointer-events-none h-44 w-44 rounded-full bg-radial from-white via-amber-200/40 to-transparent shadow-[0_0_90px_24px_rgba(255,255,255,0.9),0_0_160px_48px_rgba(245,158,11,0.35)] blur-md animate-[jianlian-optical-shockwave_1.15s_cubic-bezier(0.16,1,0.3,1)_forwards]"
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
-              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
-              zIndex: 46,
-            }}
-            className="pointer-events-none h-44 w-44 rounded-full border-2 border-white/90 bg-radial from-white/30 to-transparent shadow-[inset_0_0_40px_rgba(255,255,255,0.8),0_0_60px_16px_rgba(251,191,36,0.3)] blur-xs animate-[jianlian-optical-shockwave_1.15s_cubic-bezier(0.16,1,0.3,1)_0.08s_forwards]"
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: rippleOrigin ? `${rippleOrigin.x}px` : "72%",
-              top: rippleOrigin ? `${rippleOrigin.y}px` : "58%",
-              zIndex: 47,
-            }}
-            className="pointer-events-none h-44 w-44 rounded-full border border-orange-200/60 bg-transparent blur-sm animate-[jianlian-optical-shockwave_1.15s_cubic-bezier(0.16,1,0.3,1)_0.18s_forwards]"
-          />
-        </div>
-      )}
     </main>
   );
 }

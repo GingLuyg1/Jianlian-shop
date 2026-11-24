@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -45,6 +45,7 @@ import styles from "@/components/account/AccountCenter.module.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useSlidingIndicator } from "@/components/ui/use-sliding-indicator";
 import { cn } from "@/lib/utils";
 
 const tabs = [
@@ -108,15 +109,25 @@ function generateApiKey() {
 export default function AccountApiPage() {
   const email = useAccountEmail();
   const [activeTab, setActiveTab] = useState<ApiTab>("overview");
-  const [apiStatus, setApiStatus] = useState<MerchantApiStatus>("approved");
-  const [appId, setAppId] = useState<string>("MCH_10082691");
-  const [apiKey, setApiKey] = useState<string>("jl_live_8f7b2a9e4d1c305e7a9b1c2d3e4f5a6b");
+  const [apiStatus, setApiStatus] = useState<MerchantApiStatus>("unapplied");
+  const [wasRevoked, setWasRevoked] = useState<boolean>(false);
+  const [viewingDocsWhileUnapproved, setViewingDocsWhileUnapproved] = useState<boolean>(false);
+  const [appId, setAppId] = useState<string>("");
+  const [apiKey, setApiKey] = useState<string>("");
   const [showKey, setShowKey] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [copiedAppId, setCopiedAppId] = useState<boolean>(false);
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
   const [whitelistIps, setWhitelistIps] = useState<string[]>([]);
   const [merchantBalance, setMerchantBalance] = useState<number>(0);
+  const [callLogs, setCallLogs] = useState<ApiCallLogItem[]>([]);
+  const [apiOrders, setApiOrders] = useState<ApiOrderItem[]>([]);
+
+  const {
+    containerRef: apiTabsRef,
+    setItemRef: setApiTabRef,
+    indicator: apiTabIndicator,
+  } = useSlidingIndicator<ApiTab>(apiStatus === "approved" ? activeTab : null, [apiStatus]);
 
   // 申请表单状态
   const [merchantName, setMerchantName] = useState("");
@@ -139,8 +150,8 @@ export default function AccountApiPage() {
       ? `${window.location.origin}/api/v1`
       : "https://www.jianlian.shop/api/v1";
 
-  // 读取或初始化商户 API 状态（与后台「代理与分销 - API管理 / API申请记录」保持严格同步）
-  useEffect(() => {
+  // 读取或同步商户 API 状态（严格与后台「代理与分销 - API管理 / API申请记录」保持实时同步，收回权限后必须重新申请）
+  const syncMerchantApiState = useCallback(() => {
     if (typeof window === "undefined") return;
     const userEmail = email || "developer@example.com";
     const statusKey = `jianlian_mch_app_status_${userEmail}`;
@@ -153,83 +164,81 @@ export default function AccountApiPage() {
     const savedAppId = window.localStorage.getItem(appIdKey);
     const savedIps = window.localStorage.getItem(ipKey);
 
-    const ensureAdminMerchantSynced = (targetAppId: string, targetSecret: string, ips: string[]) => {
-      try {
-        const raw = window.localStorage.getItem("jianlian_admin_api_applications");
-        const list: ApiApplicationRecord[] = raw ? JSON.parse(raw) : [];
-        const existingIdx = list.findIndex((item) => item && item.email === userEmail);
-        if (existingIdx >= 0) {
-          if (list[existingIdx].status === "revoked" || list[existingIdx].status === "rejected") {
-            window.localStorage.setItem(statusKey, "unapplied");
-            setApiStatus("unapplied");
-            return false;
-          }
-          if (list[existingIdx].status !== "approved" || !list[existingIdx].appId) {
-            list[existingIdx] = {
-              ...list[existingIdx],
-              status: "approved",
-              appId: list[existingIdx].appId || targetAppId,
-              appSecret: list[existingIdx].appSecret || targetSecret,
-            };
-            window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(list));
-          }
-        } else {
-          list.unshift({
-            id: `APP_SYNC_${Math.abs(hashString(userEmail))}`,
-            email: userEmail,
-            merchantName: userEmail.split("@")[0] || "平台认证商户",
-            businessScenario: "开放平台标准 API 自动化订单与库存对接",
-            serverIps: ips,
-            contact: userEmail,
-            status: "approved",
-            appliedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-            appId: targetAppId,
-            appSecret: targetSecret,
-          });
-          window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(list));
-        }
-      } catch {}
-      return true;
-    };
+    let adminRecord: ApiApplicationRecord | undefined;
+    try {
+      const raw = window.localStorage.getItem("jianlian_admin_api_applications");
+      const list: ApiApplicationRecord[] = raw ? JSON.parse(raw) : [];
+      adminRecord = list.find((item) => item && item.email === userEmail);
+    } catch {}
 
-    if (savedStatus === "revoked" || savedStatus === "unapplied") {
+    // 1. 若后台已回收或被移除，强制回到未开通/重新申请状态
+    if (
+      savedStatus === "revoked" ||
+      savedStatus === "unapplied" ||
+      adminRecord?.status === "revoked" ||
+      adminRecord?.status === "rejected"
+    ) {
       setApiStatus("unapplied");
+      setWasRevoked(savedStatus === "revoked" || adminRecord?.status === "revoked");
+      setAppId("");
+      setApiKey("");
       setWhitelistIps([]);
       return;
     }
 
-    if (savedStatus === "pending") {
+    // 2. 审核中状态
+    if (savedStatus === "pending" || adminRecord?.status === "pending") {
       setApiStatus("pending");
+      setWasRevoked(false);
       return;
     }
 
-    const freshKey = savedKey || generateApiKey();
-    const generatedId = savedAppId || `MCH_${Math.abs(hashString(userEmail)).toString().slice(0, 8).padEnd(8, "0")}`;
-    let parsedIpsList: string[] = [];
-    if (savedIps) {
-      try {
-        const parsedIps = JSON.parse(savedIps);
-        parsedIpsList = Array.isArray(parsedIps) ? parsedIps.filter((ip) => ip && ip !== "124.220.100.12") : [];
-      } catch {
-        parsedIpsList = savedIps !== "124.220.100.12" ? [savedIps] : [];
+    // 3. 仅当已明确通过审批时展示已开通开发者面板
+    if (savedStatus === "approved" || adminRecord?.status === "approved") {
+      const resolvedAppId = adminRecord?.appId || savedAppId || `MCH_${Math.abs(hashString(userEmail)).toString().slice(0, 8).padEnd(8, "0")}`;
+      const resolvedKey = adminRecord?.appSecret || savedKey || generateApiKey();
+      let parsedIpsList: string[] = [];
+      if (savedIps) {
+        try {
+          const parsedIps = JSON.parse(savedIps);
+          parsedIpsList = Array.isArray(parsedIps) ? parsedIps.filter((ip) => ip && ip !== "124.220.100.12") : [];
+        } catch {
+          parsedIpsList = savedIps !== "124.220.100.12" ? [savedIps] : [];
+        }
+      } else if (adminRecord?.serverIps?.length) {
+        parsedIpsList = adminRecord.serverIps;
       }
+      setApiStatus("approved");
+      setWasRevoked(false);
+      setViewingDocsWhileUnapproved(false);
+      setAppId(resolvedAppId);
+      setApiKey(resolvedKey);
+      setWhitelistIps(parsedIpsList);
+      return;
     }
 
-    if (ensureAdminMerchantSynced(generatedId, freshKey, parsedIpsList)) {
-      setApiStatus("approved");
-      setApiKey(freshKey);
-      setAppId(generatedId);
-      setWhitelistIps(parsedIpsList);
-      window.localStorage.setItem(statusKey, "approved");
-      window.localStorage.setItem(keyKey, freshKey);
-      window.localStorage.setItem(appIdKey, generatedId);
-      if (!savedIps) {
-        window.localStorage.setItem(ipKey, JSON.stringify([]));
-      }
-    }
+    // 4. 默认未开通：要求提交接入申请
+    setApiStatus("unapplied");
+    setWasRevoked(false);
+    setAppId("");
+    setApiKey("");
+    setWhitelistIps([]);
   }, [email]);
 
-  // 读取真实用户账户余额
+  useEffect(() => {
+    syncMerchantApiState();
+    const onSync = () => syncMerchantApiState();
+    window.addEventListener("storage", onSync);
+    window.addEventListener("focus", onSync);
+    window.addEventListener("jianlian-admin-badges-updated", onSync);
+    return () => {
+      window.removeEventListener("storage", onSync);
+      window.removeEventListener("focus", onSync);
+      window.removeEventListener("jianlian-admin-badges-updated", onSync);
+    };
+  }, [syncMerchantApiState]);
+
+  // 读取真实用户账户余额与真实 API 订单/调用记录
   useEffect(() => {
     let active = true;
     fetch("/api/account/assets", { cache: "no-store" })
@@ -243,6 +252,69 @@ export default function AccountApiPage() {
         }
       })
       .catch(() => {});
+
+    // 读取真实开放 API 调用日志与订单（不含假数据）
+    if (typeof window !== "undefined") {
+      try {
+        const userEmail = email || "developer@example.com";
+        const rawLogs = window.localStorage.getItem(`jianlian_api_call_logs_${userEmail}`);
+        if (rawLogs) {
+          const parsed = JSON.parse(rawLogs);
+          if (Array.isArray(parsed)) setCallLogs(parsed);
+        } else {
+          setCallLogs([]);
+        }
+      } catch {
+        setCallLogs([]);
+      }
+    }
+
+    fetch("/api/orders?page=1&pageSize=50", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        if (!active || !payload) return;
+        const rows = Array.isArray(payload?.orders) ? payload.orders : [];
+        const realApiOnly: ApiOrderItem[] = rows
+          .filter((row: any) => {
+            const note = String(row.customer_note || "").toLowerCase();
+            return (
+              row.source === "api" ||
+              row.channel === "api" ||
+              row.order_source === "api" ||
+              note.includes("open_api") ||
+              note.includes("api:")
+            );
+          })
+          .map((row: any) => {
+            const firstItem = Array.isArray(row.order_items) ? row.order_items[0] : null;
+            const statusMap: Record<string, string> = {
+              delivered: "已发货",
+              completed: "已完成",
+              paid: "已支付",
+              processing: "处理中",
+              pending_payment: "待支付",
+              cancelled: "已取消",
+              expired: "已过期",
+            };
+            const dt = row.created_at ? new Date(row.created_at) : null;
+            const pad = (n: number) => String(n).padStart(2, "0");
+            const formatted =
+              dt && !Number.isNaN(dt.getTime())
+                ? `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`
+                : "—";
+            return {
+              id: String(row.id || row.order_no),
+              orderNo: String(row.order_no || row.id || "—"),
+              productName: firstItem?.product_name || row.product_name || "数字商品",
+              amount: Number(row.total_amount ?? 0),
+              status: statusMap[String(row.status || "")] || String(row.status || "处理中"),
+              createdAt: formatted,
+            };
+          });
+        setApiOrders(realApiOnly);
+      })
+      .catch(() => {});
+
     return () => {
       active = false;
     };
@@ -347,23 +419,52 @@ export default function AccountApiPage() {
     ? `${apiKey.slice(0, 10)}${"•".repeat(20)}${apiKey.slice(-4)}`
     : "正在生成开发者凭证...";
 
+  // 实时计算今日真实统计指标
+  const apiMetrics = useMemo(() => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const todayPrefix = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const todayShortPrefix = `${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+    const todayCalls = callLogs.filter(
+      (c) => c.time.startsWith(todayPrefix) || c.time.startsWith(todayShortPrefix)
+    );
+    const todayErrors = todayCalls.filter((c) => c.status >= 400).length;
+    const successRate =
+      todayCalls.length === 0
+        ? "100%"
+        : `${(((todayCalls.length - todayErrors) / todayCalls.length) * 100).toFixed(1)}%`;
+
+    const todayOrders = apiOrders.filter((o) => o.createdAt.startsWith(todayPrefix));
+    const todayAmount = todayOrders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+
+    return {
+      todayCallCount: todayCalls.length,
+      totalCallCount: callLogs.length,
+      todayErrorCount: todayErrors,
+      successRate,
+      todayOrderCount: todayOrders.length,
+      todayAmount,
+    };
+  }, [callLogs, apiOrders]);
+
   // 调用记录分页计算
-  const totalCallLogsPages = Math.max(1, Math.ceil(DEFAULT_CALL_LOGS.length / callLogsPageSize));
+  const totalCallLogsPages = Math.max(1, Math.ceil(callLogs.length / callLogsPageSize));
   const pagedCallLogs = useMemo(() => {
     const start = (callLogsPage - 1) * callLogsPageSize;
-    return DEFAULT_CALL_LOGS.slice(start, start + callLogsPageSize);
-  }, [callLogsPage, callLogsPageSize]);
+    return callLogs.slice(start, start + callLogsPageSize);
+  }, [callLogs, callLogsPage, callLogsPageSize]);
 
   // API 订单搜索与分页
   const filteredOrders = useMemo(() => {
     const q = ordersSearch.trim().toLowerCase();
-    if (!q) return DEFAULT_API_ORDERS;
-    return DEFAULT_API_ORDERS.filter(
+    if (!q) return apiOrders;
+    return apiOrders.filter(
       (o) =>
         o.orderNo.toLowerCase().includes(q) ||
         o.productName.toLowerCase().includes(q)
     );
-  }, [ordersSearch]);
+  }, [apiOrders, ordersSearch]);
 
   const totalOrdersPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPageSize));
   const pagedOrders = useMemo(() => {
@@ -396,18 +497,35 @@ export default function AccountApiPage() {
               type="button"
               variant="outline"
               className="border-orange-200 bg-white/80 hover:bg-orange-50 font-bold text-xs"
-              onClick={() => setActiveTab("docs")}
+              onClick={() => {
+                if (apiStatus === "approved") {
+                  setActiveTab("docs");
+                } else {
+                  setViewingDocsWhileUnapproved((prev) => !prev);
+                }
+              }}
             >
               <BookOpen className="mr-2 h-4 w-4 text-primary" aria-hidden="true" />
-              查看接口协议与文档
+              {apiStatus !== "approved" && viewingDocsWhileUnapproved
+                ? "返回 API 接入申请"
+                : "查看接口协议与文档"}
             </Button>
           </div>
         </header>
       </section>
 
-      {/* 未开通状态：展示申请表单 */}
-      {apiStatus === "unapplied" ? (
+      {/* 未开通状态：展示申请表单（若点击查看文档则预览文档） */}
+      {apiStatus === "unapplied" && !viewingDocsWhileUnapproved ? (
         <section className={`${glass.surface} ${styles.panel} p-6 sm:p-8 space-y-6`}>
+          {wasRevoked && (
+            <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 px-4 py-3 text-xs text-rose-800 shadow-2xs">
+              <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-bold text-rose-900">您的 API 接入权限已被管理员收回</p>
+                <p className="text-rose-700/90">原 AppID、AppSecret 与白名单 IP 均已停用失效，如需继续对接开放平台接口，请重新提交接入申请。</p>
+              </div>
+            </div>
+          )}
           <div className="max-w-2xl space-y-2">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-bold text-primary">
               <Sparkles className="h-3.5 w-3.5" />
@@ -488,7 +606,7 @@ export default function AccountApiPage() {
             </div>
           </form>
         </section>
-      ) : apiStatus === "pending" ? (
+      ) : apiStatus === "pending" && !viewingDocsWhileUnapproved ? (
         /* 申请审核中状态 */
         <section className={`${glass.surface} ${styles.panel} p-8 text-center space-y-4`}>
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 shadow-xs">
@@ -501,7 +619,7 @@ export default function AccountApiPage() {
             </p>
           </div>
         </section>
-      ) : (
+      ) : apiStatus === "approved" ? (
         /* 已开通状态：展示商户开发者控制台 */
         <>
           {/* 开发者凭证与快捷操作面板 */}
@@ -629,25 +747,25 @@ export default function AccountApiPage() {
             <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
               <p className="text-xs font-medium text-slate-600">今日调用</p>
               <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
-                0
+                {apiMetrics.todayCallCount}
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">累计 {DEFAULT_CALL_LOGS.length} 次</p>
+              <p className="mt-1 text-[11px] text-slate-400">累计 {apiMetrics.totalCallCount} 次</p>
             </div>
 
             {/* 3. 今日成功率 */}
             <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
               <p className="text-xs font-medium text-slate-600">今日成功率</p>
               <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
-                100%
+                {apiMetrics.successRate}
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">0 次错误</p>
+              <p className="mt-1 text-[11px] text-slate-400">{apiMetrics.todayErrorCount} 次错误</p>
             </div>
 
             {/* 4. 今日 API 订单 */}
             <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
               <p className="text-xs font-medium text-slate-600">今日 API 订单</p>
               <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
-                0
+                {apiMetrics.todayOrderCount}
               </div>
               <p className="mt-1 text-[11px] text-slate-400">仅统计 API 余额支付</p>
             </div>
@@ -656,39 +774,45 @@ export default function AccountApiPage() {
             <div className="rounded-2xl border border-orange-100 bg-white/95 p-4 shadow-2xs transition-all hover:shadow-xs">
               <p className="text-xs font-medium text-slate-600">今日成交</p>
               <div className="mt-2 text-2xl font-bold font-mono text-slate-900">
-                ¥0.00
+                ¥{apiMetrics.todayAmount.toFixed(2)}
               </div>
               <p className="mt-1 text-[11px] text-slate-400">按已创建订单全额</p>
             </div>
           </div>
         </>
-      )}
+      ) : null}
 
-      {/* 选项卡栏：带丝滑高光药丸滑动指示器（概览 / 调用记录 / API 订单 / 接口文档 / 安全设置） */}
-      <div className="relative flex rounded-2xl bg-orange-100/60 p-1 border border-orange-200/70 shadow-2xs w-fit max-w-full overflow-x-auto">
-        <div
-          className="absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-orange-200/80 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-          style={{
-            left:
-              activeTab === "overview"
-                ? "4px"
-                : activeTab === "calls"
-                ? "calc(20% + 2px)"
-                : activeTab === "orders"
-                ? "calc(40% + 1px)"
-                : activeTab === "docs"
-                ? "calc(60% + 0px)"
-                : "calc(80% - 1px)",
-            width: "calc(20% - 3px)",
-          }}
-        />
+      {/* 选项卡栏：仅已开通商户显示控制台选项卡（精确 DOM 测量高光药丸滑动指示器） */}
+      {apiStatus === "approved" && (
+      <div
+        ref={apiTabsRef}
+        role="tablist"
+        aria-label="开放平台工作台切换"
+        className="relative flex rounded-2xl bg-orange-100/60 p-1 border border-orange-200/70 shadow-2xs w-fit max-w-full overflow-x-auto"
+      >
+        {apiTabIndicator.visible && (
+          <div
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-orange-200/80",
+              apiTabIndicator.animated && "transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            )}
+            style={{
+              left: `${apiTabIndicator.left}px`,
+              width: `${apiTabIndicator.width}px`,
+            }}
+          />
+        )}
         {tabs.map((tab) => (
           <button
             key={tab.value}
+            ref={setApiTabRef(tab.value)}
             type="button"
+            role="tab"
+            aria-selected={activeTab === tab.value}
             onClick={() => setActiveTab(tab.value)}
             className={cn(
-              "relative z-10 flex min-w-[92px] items-center justify-center px-4 py-2 text-xs sm:text-sm font-bold transition-colors duration-200 cursor-pointer rounded-xl",
+              "relative z-10 flex min-w-[92px] items-center justify-center px-4 py-2 text-xs sm:text-sm font-bold transition-colors duration-200 cursor-pointer rounded-xl whitespace-nowrap",
               activeTab === tab.value
                 ? "text-primary font-black"
                 : "text-slate-600 hover:text-slate-900"
@@ -698,11 +822,12 @@ export default function AccountApiPage() {
           </button>
         ))}
       </div>
+      )}
 
       {/* 选项卡内容区 */}
       <div className="space-y-6">
         {/* 1. 概览：参考图 4 实现两栏（左：最近调用，右：最近 API 订单） */}
-        {activeTab === "overview" && (
+        {apiStatus === "approved" && activeTab === "overview" && (
           <div className="grid gap-6 lg:grid-cols-2">
             {/* 左栏：最近调用 */}
             <section className={`${glass.surface} ${styles.panel} p-5 flex flex-col justify-between space-y-4`}>
@@ -725,14 +850,14 @@ export default function AccountApiPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {DEFAULT_CALL_LOGS.length === 0 ? (
+                      {callLogs.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="py-10 text-center text-xs text-slate-400">
                             暂无接口调用记录
                           </td>
                         </tr>
                       ) : (
-                        DEFAULT_CALL_LOGS.slice(0, 6).map((item) => (
+                        callLogs.slice(0, 6).map((item) => (
                           <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
                             <td className="py-2.5 px-3 font-medium text-slate-800">{item.name}</td>
                             <td className="py-2.5 px-3">
@@ -784,14 +909,14 @@ export default function AccountApiPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {DEFAULT_API_ORDERS.length === 0 ? (
+                      {apiOrders.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="py-10 text-center text-xs text-slate-400">
-                            暂无API 订单记录
+                            暂无 API 订单记录
                           </td>
                         </tr>
                       ) : (
-                        DEFAULT_API_ORDERS.slice(0, 10).map((item) => (
+                        apiOrders.slice(0, 10).map((item) => (
                           <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
                             <td className="py-2.5 px-3">
                               <div className="font-medium text-slate-800 max-w-[200px] truncate">{item.productName}</div>
@@ -832,7 +957,7 @@ export default function AccountApiPage() {
         )}
 
         {/* 2. 调用记录 Tab（支持 10 行/页与自定义条数分页） */}
-        {activeTab === "calls" && (
+        {apiStatus === "approved" && activeTab === "calls" && (
           <section className={`${glass.surface} ${styles.panel} overflow-hidden`}>
             <div className="px-6 py-4 border-b border-orange-100/70 flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -902,7 +1027,7 @@ export default function AccountApiPage() {
 
             {/* 分页控制栏 */}
             <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
-              <div>共 {DEFAULT_CALL_LOGS.length} 条记录 · 第 {callLogsPage} / {totalCallLogsPages} 页</div>
+              <div>共 {callLogs.length} 条记录 · 第 {callLogsPage} / {totalCallLogsPages} 页</div>
               <div className="flex items-center gap-1.5">
                 <Button
                   type="button"
@@ -930,7 +1055,7 @@ export default function AccountApiPage() {
         )}
 
         {/* 3. API 订单 Tab（新增到调用记录右侧） */}
-        {activeTab === "orders" && (
+        {apiStatus === "approved" && activeTab === "orders" && (
           <section className={`${glass.surface} ${styles.panel} overflow-hidden space-y-4 p-5`}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/70 pb-4">
               <div>
@@ -1036,8 +1161,8 @@ export default function AccountApiPage() {
           </section>
         )}
 
-        {/* 4. 接口文档指南：标准开放平台卖家 API 文档 */}
-        {activeTab === "docs" && (
+        {/* 4. 接口文档指南：标准开放平台卖家 API 文档（未开通时点击右上角查看文档亦可预览） */}
+        {((apiStatus === "approved" && activeTab === "docs") || (apiStatus !== "approved" && viewingDocsWhileUnapproved)) && (
           <div className="space-y-6">
             {/* 全局接入协议与规范 */}
             <section className={`${glass.surface} ${styles.panel} p-6 space-y-4`}>
@@ -1176,7 +1301,7 @@ Accept: application/json
         )}
 
         {/* 5. 安全设置：删除小字，优化加白引导 */}
-        {activeTab === "security" && (
+        {apiStatus === "approved" && activeTab === "security" && (
           <div className="space-y-5">
             <section className={`${glass.surface} ${styles.panel} p-6 space-y-5`}>
               <div className="flex items-start justify-between gap-4">

@@ -37,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useSlidingIndicator } from "@/components/ui/use-sliding-indicator";
 import { cn } from "@/lib/utils";
 
 type AgentTab = "applications" | "management" | "whitelist" | "orders";
@@ -166,6 +167,11 @@ export default function AdminAgentsPage() {
   const [orders, setOrders] = useState<AgentOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [search, setSearch] = useState("");
+  const {
+    containerRef: agentTabsRef,
+    setItemRef: setAgentTabRef,
+    indicator: agentTabIndicator,
+  } = useSlidingIndicator<AgentTab>(activeTab, [applications.length]);
 
   // 分页与每页条数状态
   const [page, setPage] = useState(1);
@@ -445,7 +451,7 @@ export default function AdminAgentsPage() {
       "jianlian_admin_api_applications",
       JSON.stringify(updatedApps)
     );
-    window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "unapplied");
+    window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "revoked");
     window.localStorage.removeItem(`jianlian_mch_app_id_${app.email}`);
     window.localStorage.removeItem(`jianlian_developer_key_${app.email}`);
 
@@ -736,25 +742,28 @@ export default function AdminAgentsPage() {
           </div>
         </div>
 
-        {/* 顶部 Tab 切换、搜索框与操作栏（带丝滑滑动指示器） */}
+        {/* 顶部 Tab 切换、搜索框与操作栏（带精确 DOM 测量的丝滑滑动指示器） */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-          <div className="relative grid grid-cols-4 rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs">
-            <div
-              className="absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-              style={{
-                left:
-                  activeTab === "applications"
-                    ? "4px"
-                    : activeTab === "management"
-                    ? "calc(25% + 2px)"
-                    : activeTab === "whitelist"
-                    ? "calc(50% + 1px)"
-                    : "calc(75% + 0px)",
-                width: "calc(25% - 4px)",
-              }}
-            />
+          <div
+            ref={agentTabsRef}
+            className="relative flex rounded-2xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-2xs"
+          >
+            {agentTabIndicator.visible && (
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "pointer-events-none absolute top-1 bottom-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70",
+                  agentTabIndicator.animated && "transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                )}
+                style={{
+                  left: `${agentTabIndicator.left}px`,
+                  width: `${agentTabIndicator.width}px`,
+                }}
+              />
+            )}
 
             <button
+              ref={setAgentTabRef("applications")}
               type="button"
               onClick={() => switchTab("applications")}
               className={cn(
@@ -774,6 +783,7 @@ export default function AdminAgentsPage() {
             </button>
 
             <button
+              ref={setAgentTabRef("management")}
               type="button"
               onClick={() => switchTab("management")}
               className={cn(
@@ -788,6 +798,7 @@ export default function AdminAgentsPage() {
             </button>
 
             <button
+              ref={setAgentTabRef("whitelist")}
               type="button"
               onClick={() => switchTab("whitelist")}
               className={cn(
@@ -802,6 +813,7 @@ export default function AdminAgentsPage() {
             </button>
 
             <button
+              ref={setAgentTabRef("orders")}
               type="button"
               onClick={() => switchTab("orders")}
               className={cn(

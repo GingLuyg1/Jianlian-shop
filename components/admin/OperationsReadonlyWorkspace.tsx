@@ -2,43 +2,21 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { format } from 'date-fns';
 import AdminPageShell from '@/components/admin/AdminPageShell';
+import {
+  AdminDateRangeFilter,
+  getPresetDateRange,
+  type DashboardDateFilterValue,
+} from '@/components/admin/dashboard/AdminDateRangeFilter';
 import { AdminListPagination, AdminListSurface, AdminTableViewport } from '@/components/admin/v2/AdminList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { listPagination } from '@/lib/admin/list-pagination.mjs';
-import { businessTypeLabel, directionLabel, statusLabel, supplierStatusLabel, workerStatusLabel, booleanLabel, currencyLabel, beijingDateTime, ledgerBusinessOptions, workerHelpText, operationsDateFilterHelp } from '@/lib/admin/display-labels';
+import { businessTypeLabel, directionLabel, statusLabel, supplierStatusLabel, workerStatusLabel, booleanLabel, currencyLabel, ledgerBusinessOptions, workerHelpText, operationsDateFilterHelp } from '@/lib/admin/display-labels';
 
 type Kind = 'worker' | 'ledger' | 'supplier-queue';
 type Row = Record<string, unknown>;
-type DatePresetKey = 'today' | 'yesterday' | '7d' | '30d' | 'custom';
-
-function toIsoDate(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function toShortDate(iso: string) {
-  return iso && iso.length >= 10 ? iso.slice(5, 10) : iso;
-}
-
-function computePresetDates(preset: Exclude<DatePresetKey, 'custom'>) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const end = toIsoDate(today);
-  if (preset === 'today') return { start: end, end };
-  if (preset === 'yesterday') {
-    const y = new Date(today.getTime() - 86400000);
-    const yStr = toIsoDate(y);
-    return { start: yStr, end: yStr };
-  }
-  if (preset === '7d') {
-    const d7 = new Date(today.getTime() - 6 * 86400000);
-    return { start: toIsoDate(d7), end };
-  }
-  const d30 = new Date(today.getTime() - 29 * 86400000);
-  return { start: toIsoDate(d30), end };
-}
 const ledgerColumns = [
   ['transaction_no','流水号'],['user_email','用户邮箱'],['business_type','业务类型'],['business_id','关联单号'],
   ['direction','方向'],['amount','金额'],['currency','币种'],['status','状态'],['balance_before','变动前余额'],['balance_after','变动后余额'],['created_at','创建时间'],
@@ -62,10 +40,10 @@ function displayValue(kind: Kind, key: string, row: Row) {
   if (key === 'currency') return currencyLabel(v);
   if (key === 'status') {
     if (kind === 'supplier-queue') {
-      const s = String(v);
-      const isOk = s === 'completed';
-      const isFailed = s === 'permanent_failed' || s === 'retryable_failed';
-      const isProc = s === 'processing';
+      const s = String(v || '').toUpperCase();
+      const isOk = s === 'COMPLETED' || s === 'FULFILLED' || s === 'SUCCEEDED';
+      const isFailed = s === 'PERMANENT_FAILED' || s === 'RETRYABLE_FAILED' || s === 'FAILED' || s === 'FAILED_VALIDATION';
+      const isProc = s === 'PROCESSING' || s === 'PURCHASING' || s === 'RECONCILIATION';
       const cls = isOk
         ? 'inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200'
         : isFailed
@@ -99,7 +77,8 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const version = useRef(0);
-  const datePopoverRef = useRef<HTMLDetailsElement>(null);
+  const [dateRangeFilter, setDateRangeFilter] = useState<DashboardDateFilterValue>(() => getPresetDateRange('30d'));
+  const [isAllDates, setIsAllDates] = useState(true);
   useEffect(() => {
     const requestVersion = ++version.current;
     const controller = new AbortController();
@@ -124,16 +103,23 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
     ? '查看全部历史余额流水，不提供调账或删除。'
     : kind === 'worker'
     ? workerHelpText
-    : '查看供应商自动采购任务执行进度、平台回传单号与耗时流水，数据只读受控。';
+    : '查看上游供应商自动采购订单执行进度、平台回传单号与耗时流水，数据只读受控。';
   const stats = listPagination(total, page, 50);
 
-  const default30d = computePresetDates('30d');
-  const activePreset = (filters._preset as DatePresetKey | undefined) || '30d';
-  const displayStart = filters.start || default30d.start;
-  const displayEnd = filters.end || default30d.end;
-  const applyPreset = (preset: Exclude<DatePresetKey, 'custom'>) => {
-    const range = computePresetDates(preset);
-    setFilters(old => ({ ...old, _preset: preset, start: range.start, end: range.end }));
+  const handleSupplierDateChange = (next: DashboardDateFilterValue) => {
+    setDateRangeFilter(next);
+    setIsAllDates(false);
+    setFilters(old => ({
+      ...old,
+      start: format(next.from, 'yyyy-MM-dd'),
+      end: format(next.to, 'yyyy-MM-dd'),
+    }));
+    setPage(1);
+  };
+
+  const handleSelectAllDates = () => {
+    setIsAllDates(true);
+    setFilters(old => ({ ...old, start: '', end: '' }));
     setPage(1);
   };
 
@@ -153,38 +139,15 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
                 <option value="">全部状态</option>{['pending','processing','retryable_failed','permanent_failed','completed','uncertain','needs_input'].map(s => <option key={s} value={s}>{supplierStatusLabel(s)}</option>)}
               </select>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 ml-auto" role="group" aria-label="时间范围筛选">
-              <div className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
-                {([
-                  ['today', '今日'],
-                  ['yesterday', '昨日'],
-                  ['7d', '近 7 天'],
-                  ['30d', '近 30 天'],
-                ] as const).map(([key, label]) => {
-                  const isSelected = activePreset === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => applyPreset(key)}
-                      style={isSelected ? { backgroundColor: '#1d4ed8', color: '#ffffff' } : undefined}
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${isSelected ? 'shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              <details ref={datePopoverRef} className="relative">
-                <summary className="inline-flex h-8 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50">
-                  <span className="tabular-nums">{toShortDate(displayStart)} ~ {toShortDate(displayEnd)}</span>
-                </summary>
-                <div className="absolute right-0 top-9 z-30 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl">
-                  <Input aria-label="开始日期" type="date" className="h-8 w-36 text-xs" value={displayStart} onChange={e => { setFilters(old => ({ ...old, _preset: 'custom', start: e.target.value, end: old.end || displayEnd })); setPage(1); }} />
-                  <span className="text-xs text-slate-400">~</span>
-                  <Input aria-label="结束日期" type="date" className="h-8 w-36 text-xs" value={displayEnd} onChange={e => { setFilters(old => ({ ...old, _preset: 'custom', start: old.start || displayStart, end: e.target.value })); setPage(1); }} />
-                </div>
-              </details>
+            <div className="ml-auto">
+              <AdminDateRangeFilter
+                size="sm"
+                allowAll
+                isAllSelected={isAllDates}
+                onSelectAll={handleSelectAllDates}
+                value={dateRangeFilter}
+                onChange={handleSupplierDateChange}
+              />
             </div>
           </>
         ) : (
@@ -208,7 +171,7 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
       <AdminTableViewport>
         {loading ? <p role="status" className="p-6">正在读取…</p> : error ? <div role="alert" className="p-6 text-red-700">{error}<Button variant="outline" className="ml-3" onClick={() => setRevision(v => v + 1)}>重试读取</Button></div>
           : kind === 'worker' ? <dl className="grid gap-3 p-4 sm:grid-cols-2">{Object.entries(workerLabels).map(([key,label]) => <div key={key} className="min-w-0 rounded border p-3"><dt className="text-sm text-slate-500">{label}</dt><dd className="break-words">{displayValue(kind, key, worker ?? {})}</dd></div>)}</dl>
-          : !rows.length ? <p role="status" className="p-6">当前筛选暂无记录。</p>
+          : !rows.length ? <p role="status" className="p-6 text-slate-500 text-sm">{kind === 'supplier-queue' ? '当前筛选暂无上游供应商采购订单（本地库存自动发货订单请在「订单管理」查看）。' : '当前筛选暂无记录。'}</p>
           : <table className="w-full min-w-[1100px] text-sm"><thead className="bg-slate-50 text-left"><tr>{columns.map(([key,label]) => <th className="p-3" key={key}>{label}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={String(row.id)} className="border-b">{columns.map(([key]) => <td className="max-w-64 break-words p-3" key={key}>{key === 'order_no' && row.order_id ? <Link className="text-blue-700 underline" href={`/admin/orders?search=${encodeURIComponent(String(row.order_no || row.order_id))}`}>{value(row[key])}</Link> : displayValue(kind, key, row)}</td>)}</tr>)}</tbody></table>}
       </AdminTableViewport>
       {kind !== 'worker' && <AdminListPagination page={page} totalPages={stats.totalPages} loading={loading || Boolean(error)} summary={error ? '总数未知' : `共 ${total} 条（全部历史筛选结果）`} onPrevious={() => setPage(p => Math.max(1,p-1))} onNext={() => setPage(p => p+1)} />}

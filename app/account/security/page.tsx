@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSafeAuthErrorMessage, isEmailFormatValid } from "@/lib/auth/password-policy";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useSlidingIndicator } from "@/components/ui/use-sliding-indicator";
 import { cn } from "@/lib/utils";
 
 type SecurityTab = "change-email" | "email-password" | "old-password";
@@ -96,6 +97,11 @@ function formatDateTime(iso: string | null | undefined) {
 export default function AccountSecurityPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<SecurityTab>("change-email");
+  const {
+    containerRef: securityTabsRef,
+    setItemRef: setSecurityTabRef,
+    indicator: securityTabIndicator,
+  } = useSlidingIndicator<SecurityTab>(activeTab);
   const [userEmail, setUserEmail] = useState<string>("");
   const [lastSignInAt, setLastSignInAt] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
@@ -452,35 +458,40 @@ export default function AccountSecurityPage() {
             </div>
           </div>
 
-          {/* 增加平滑动态滑块效果的账号安全模式切换 Tab */}
+          {/* 增加精确 DOM 测量的平滑动态滑块效果的账号安全模式切换 Tab */}
           <div
+            ref={securityTabsRef}
             className="relative flex rounded-2xl bg-orange-100/60 p-1 border border-orange-200/60 shadow-2xs shrink-0 self-start lg:self-center"
             role="tablist"
             aria-label="账号安全操作模式"
           >
             {/* 平滑动态滑块背景 */}
-            <div
-              className={cn(
-                "absolute top-1 bottom-1 rounded-xl bg-white shadow-xs transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                activeTab === "change-email"
-                  ? "left-1 w-[calc(33.333%-2.67px)] translate-x-0"
-                  : activeTab === "email-password"
-                  ? "left-1 w-[calc(33.333%-2.67px)] translate-x-[calc(100%+4px)]"
-                  : "left-1 w-[calc(33.333%-2.67px)] translate-x-[calc(200%+8px)]"
-              )}
-            />
+            {securityTabIndicator.visible && (
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "pointer-events-none absolute top-1 bottom-1 rounded-xl bg-white shadow-xs ring-1 ring-orange-200/70",
+                  securityTabIndicator.animated && "transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                )}
+                style={{
+                  left: `${securityTabIndicator.left}px`,
+                  width: `${securityTabIndicator.width}px`,
+                }}
+              />
+            )}
             {SECURITY_TABS.map((tab) => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
+                  ref={setSecurityTabRef(tab.id)}
                   type="button"
                   role="tab"
                   aria-selected={isSelected}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "relative z-10 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold transition-colors duration-200 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    "relative z-10 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold transition-colors duration-200 rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                     isSelected
                       ? "text-primary font-black"
                       : "text-slate-600 hover:text-slate-900"

@@ -9,6 +9,7 @@ import type { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useSlidingIndicator } from "@/components/ui/use-sliding-indicator";
 import { cn } from "@/lib/utils";
 
 export type DashboardDatePreset = "today" | "yesterday" | "7d" | "30d" | "custom";
@@ -45,10 +46,16 @@ export function AdminDateRangeFilter({
   value,
   onChange,
   size = "default",
+  allowAll = false,
+  isAllSelected = false,
+  onSelectAll,
 }: {
   value: DashboardDateFilterValue;
   onChange: (next: DashboardDateFilterValue) => void;
   size?: "sm" | "default";
+  allowAll?: boolean;
+  isAllSelected?: boolean;
+  onSelectAll?: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [draftRange, setDraftRange] = React.useState<DateRange | undefined>({
@@ -60,33 +67,78 @@ export function AdminDateRangeFilter({
     setDraftRange({ from: value.from, to: value.to });
   }, [value.from, value.to]);
 
-  const customLabel =
-    value.preset === "custom"
-      ? `${format(value.from, "yyyy-MM-dd")} ~ ${format(value.to, "yyyy-MM-dd")}`
-      : `${format(value.from, "MM-dd")} ~ ${format(value.to, "MM-dd")}`;
+  const activePresetKey = isAllSelected
+    ? "all"
+    : value.preset === "custom"
+    ? null
+    : value.preset;
+
+  const { containerRef, setItemRef, indicator } = useSlidingIndicator<string>(
+    activePresetKey,
+    [allowAll, size]
+  );
+
+  const customLabel = isAllSelected
+    ? "选择日期范围"
+    : value.preset === "custom"
+    ? `${format(value.from, "yyyy-MM-dd")} ~ ${format(value.to, "yyyy-MM-dd")}`
+    : `${format(value.from, "MM-dd")} ~ ${format(value.to, "MM-dd")}`;
 
   const isDefaultSize = size === "default";
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="时间范围筛选">
-      <div className={cn(
-        "inline-flex items-center rounded-lg border border-slate-200 bg-white shadow-sm",
-        isDefaultSize ? "h-10 p-1" : "h-8 p-0.5"
-      )}>
+      <div
+        ref={containerRef}
+        className={cn(
+          "relative inline-flex items-center rounded-lg border border-slate-200 bg-white shadow-sm",
+          isDefaultSize ? "h-10 p-1" : "h-8 p-0.5"
+        )}
+      >
+        {indicator.visible && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute rounded-md bg-blue-700 shadow-sm",
+              isDefaultSize ? "top-1 bottom-1" : "top-0.5 bottom-0.5",
+              indicator.animated && "transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            )}
+            style={{
+              left: `${indicator.left}px`,
+              width: `${indicator.width}px`,
+            }}
+          />
+        )}
+        {allowAll && (
+          <button
+            ref={setItemRef("all")}
+            type="button"
+            onClick={() => onSelectAll?.()}
+            className={cn(
+              "relative z-10 rounded-md font-medium transition-colors cursor-pointer whitespace-nowrap",
+              isDefaultSize ? "h-8 px-2.5 text-xs" : "px-2.5 py-1 text-xs",
+              isAllSelected
+                ? "text-white"
+                : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            全部
+          </button>
+        )}
         {PRESETS.map((item) => {
-          const active = value.preset === item.key;
+          const active = !isAllSelected && value.preset === item.key;
           return (
             <button
               key={item.key}
+              ref={setItemRef(item.key)}
               type="button"
               onClick={() => onChange(getPresetDateRange(item.key))}
-              style={active ? { backgroundColor: "#1d4ed8", color: "#ffffff" } : undefined}
               className={cn(
-                "rounded-md font-medium transition-colors",
+                "relative z-10 rounded-md font-medium transition-colors cursor-pointer whitespace-nowrap",
                 isDefaultSize ? "h-8 px-2.5 text-xs" : "px-2.5 py-1 text-xs",
                 active
-                  ? "shadow-sm"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "text-white"
+                  : "text-slate-600 hover:text-slate-900"
               )}
             >
               {item.label}
@@ -104,7 +156,7 @@ export function AdminDateRangeFilter({
             className={cn(
               "gap-1.5 rounded-lg border-slate-200 bg-white px-3 font-medium text-slate-700 hover:bg-slate-50",
               isDefaultSize ? "h-10 text-sm" : "h-8 text-xs",
-              value.preset === "custom" && "border-blue-300 bg-blue-50/70 text-blue-700"
+              !isAllSelected && value.preset === "custom" && "border-blue-300 bg-blue-50/70 text-blue-700"
             )}
           >
             <CalendarIcon className="h-4 w-4 text-slate-500" />
