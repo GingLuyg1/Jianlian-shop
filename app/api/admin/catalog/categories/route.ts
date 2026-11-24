@@ -19,33 +19,41 @@ export async function GET() {
   if (!admin.ok) return admin.response;
 
   const service = getSupabaseServiceRoleClient() ?? admin.supabase;
-  const [catRes, prodRes] = await Promise.all([
-    service
-      .from("categories")
-      .select("*")
-      .order("level", { ascending: true })
-      .order("sort_order", { ascending: true })
-      .order("name", { ascending: true }),
-    service
+  const catPromise = service
+    .from("categories")
+    .select("*")
+    .order("level", { ascending: true })
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+
+  const prodRows: Array<{ category_id?: string | null; slug?: string | null; name?: string | null }> = [];
+  const PAGE_SIZE = 1000;
+  let offset = 0;
+  while (offset < 20000) {
+    const prodRes = await service
       .from("products")
       .select("category_id,slug,name")
-      .range(0, 4999),
-  ]);
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (prodRes.error || !Array.isArray(prodRes.data) || prodRes.data.length === 0) break;
+    prodRows.push(...(prodRes.data as Array<{ category_id?: string | null; slug?: string | null; name?: string | null }>));
+    if (prodRes.data.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
 
+  const catRes = await catPromise;
   if (catRes.error) {
     return jsonResponse({ error: "分类读取失败，请稍后重试" }, 500);
   }
 
   const productCounts: Record<string, number> = {};
-  if (!prodRes.error && Array.isArray(prodRes.data)) {
-    for (const row of prodRes.data as Array<{ category_id?: string | null; slug?: string | null; name?: string | null }>) {
-      const cid = row.category_id;
-      if (!cid) continue;
-      const slug = String(row.slug ?? "").trim().toLowerCase();
-      const name = String(row.name ?? "").trim().toLowerCase();
-      if (slug === "sms-code" || slug.startsWith("sms-code-") || name.includes("接码")) continue;
-      productCounts[cid] = (productCounts[cid] ?? 0) + 1;
-    }
+  for (const row of prodRows) {
+    const cid = row.category_id;
+    if (!cid) continue;
+    const slug = String(row.slug ?? "").trim().toLowerCase();
+    const name = String(row.name ?? "").trim().toLowerCase();
+    if (slug === "sms-code" || slug.startsWith("sms-code-") || name.includes("接码")) continue;
+    productCounts[cid] = (productCounts[cid] ?? 0) + 1;
   }
 
   return jsonResponse({
