@@ -262,8 +262,9 @@ export default function PublicTopInfoBar({
     <div
       data-storefront-topbar
       className={cn(
-        "sticky top-[53px] bg-[#fcf8f3]/90 backdrop-blur-sm",
-        pathname === "/" ? "z-10" : "z-30",
+        pathname === "/" && !isMobile
+          ? "relative z-0 bg-transparent"
+          : "sticky top-[53px] z-30 bg-[#fcf8f3]/90 backdrop-blur-sm",
         mobileNavigationUntilLg ? "lg:top-0" : "md:top-0",
         isMobile && "relative !top-0"
       )}

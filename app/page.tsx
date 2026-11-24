@@ -112,7 +112,7 @@ function HeroCarousel() {
     "h-[108px] xl:h-[118px] w-auto object-contain select-none pointer-events-none";
 
   return (
-    <div data-testid="hero-carousel-outer" className="relative overflow-visible">
+    <div data-testid="hero-carousel-outer" className="relative z-30 overflow-visible">
       {/* 1. 后景虚层（尾巴 + GPT 下半截长裙摆与龙尾）：z-[12] 位于 Hero 卡片背景之上、文字之下 */}
       <div
         aria-hidden="true"
@@ -197,11 +197,11 @@ function HeroCarousel() {
         className="hidden lg:block pointer-events-none select-none absolute top-0 left-[21.5%] -translate-x-1/2 -translate-y-1/2 z-20 h-2 w-28 bg-[#4a2e3e]/12 blur-[4px] rounded-full"
       />
 
-      {/* 4. 前景实层（上半身 + 龙尾上方拱起段 + 垂落双腿与鞋子，z-30） */}
+      {/* 4. 前景实层（上半身 + 龙尾上方拱起段 + 垂落双腿与鞋子，z-40 置于最顶层覆盖公告区） */}
       <div
         aria-hidden="true"
         data-testid="hero-mascots-front"
-        className={cn(mascotAnchorClassName, "z-30 drop-shadow-[2px_5px_7px_rgba(65,38,58,0.18)]")}
+        className={cn(mascotAnchorClassName, "z-40 drop-shadow-[2px_5px_7px_rgba(65,38,58,0.18)]")}
       >
         <img
           src="/mascots/gemini-front.png"

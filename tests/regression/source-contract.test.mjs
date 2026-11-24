@@ -33,7 +33,7 @@ test("public account surfaces share the responsive viewport panel height", () =>
   const promotionPage = file("app/promotion/page.tsx");
   const productPage = file("app/products/[id]/page.tsx");
 
-  assert.match(sharedLayout, /md:h-\[calc\(100dvh-87px\)\]/);
+  assert.match(sharedLayout, /md:h-\[calc\(100dvh-94px\)\]/);
   assert.doesNotMatch(sharedLayout, /h-\[(?:775|970|974)px\]/);
   for (const source of [accountShell, promotionPage, productPage]) {
     assert.match(source, /publicMainPanelHeightClassName/);

@@ -201,7 +201,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       />
 
       <main className={cn(
-        viewportLocked && !isMobile ? "flex h-[calc(100dvh-57px)] min-w-0 flex-col overflow-hidden md:h-dvh" : "flex min-h-screen min-w-0 flex-col",
+        viewportLocked && !isMobile ? "flex h-[calc(100dvh-57px)] min-w-0 flex-col overflow-hidden md:h-dvh" : "flex min-h-dvh min-w-0 flex-col",
         mobileNavigationUntilLg ? "lg:ml-[var(--storefront-main-offset)]" : "md:ml-[var(--storefront-main-offset)]",
         pathname === "/" && !isMobile && "lg:pt-[10px]",
         isMobile && "!ml-0 !h-auto !overflow-visible pb-20",
@@ -210,6 +210,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         <div
           className={cn(
             "w-full md:!pb-0",
+            pathname === "/" && !isMobile && "relative z-30",
             viewportLocked && !isMobile ? "min-h-0 flex-1" : "flex-1",
             contentClassName,
           )}
@@ -220,7 +221,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         <footer
           data-testid="public-site-footer"
           style={{ paddingInline: "var(--storefront-content-padding-x)" }}
-          className="mt-auto w-full shrink-0 bg-transparent py-1.5 text-[11px] leading-none text-[#8c7a6b] md:flex md:h-[18px] md:items-center md:py-0"
+          className="mt-auto w-full shrink-0 bg-transparent py-1.5 text-[11px] leading-none text-[#8c7a6b] md:flex md:h-[20px] md:items-center md:py-0"
         >
           <div className="mx-auto flex w-full max-w-[1640px] flex-wrap items-center justify-between gap-2 px-1">
             <span className="truncate">

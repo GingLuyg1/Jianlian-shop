@@ -1013,7 +1013,7 @@ function CheckoutPageContent() {
   };
 
   return (
-    <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-75px)] lg:overflow-hidden lg:pt-3 lg:pb-0 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
+    <PublicLayout mobileNavigationUntilLg contentClassName={cn("max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-82px)] lg:overflow-hidden lg:pt-3 lg:pb-0 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
       <div data-testid="checkout-layout" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isMobile && "!grid-cols-1 !h-auto")}>
         <ProductDetailCard
           product={displayProduct ?? product}
@@ -1561,7 +1561,7 @@ function ProductDetailSkeleton() {
 }
 
 function CheckoutLoadingShell() {
-  return <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-75px)] lg:overflow-hidden lg:pt-3 lg:pb-0 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
+  return <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-82px)] lg:overflow-hidden lg:pt-3 lg:pb-0 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
     <div data-testid="checkout-progressive-loading" className="grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
       <Card className="min-h-0 overflow-auto"><CardContent className="p-4 sm:p-6"><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
       <Card className="min-h-0"><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
