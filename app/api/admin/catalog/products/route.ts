@@ -108,6 +108,7 @@ export async function GET(request: Request) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
   const operationalScan = hasOperationalScanFilters(filters);
+  const liteMode = !operationalScan && url.searchParams.get("lite") === "1";
 
   const selectFields = (
     getSupabaseServiceRoleClient()
@@ -157,6 +158,19 @@ export async function GET(request: Request) {
   }
 
   const productRows = (data ?? []) as Array<Record<string, unknown>>;
+  if (liteMode) {
+    const response = jsonResponse({
+      success: true,
+      data: { products: productRows, count: count ?? 0, query_count: 1 },
+      products: productRows,
+      count: count ?? 0,
+      query_count: 1,
+      request_id: requestId,
+    });
+    response.headers.set("X-Request-ID", requestId);
+    return response;
+  }
+
   const multiSkuProductIds = productRows
     .filter((row) => row.has_skus === true)
     .map((row) => String(row.id));

@@ -2,7 +2,7 @@
 
 import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Edit, GripVertical, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -19,7 +19,7 @@ import {
   createProduct,
   deleteCategory,
   isCategoryEnabled,
-  listCategories,
+  listCategoriesWithCounts,
   listProducts,
   reorderCategories,
   reorderProducts,
@@ -276,9 +276,13 @@ export default function AdminCategoriesPage() {
 }
 
 function AdminCategoriesPageInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const initialQueryRef = useRef<{ root: string | null; category: string | null }>({
+    root: searchParams.get("root"),
+    category: searchParams.get("category"),
+  });
   const [categories, setCategories] = useState<AdminCategory[]>([]);
+  const [categoryProductCounts, setCategoryProductCounts] = useState<Record<string, number>>({});
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [productCount, setProductCount] = useState(0);
   const [selectedRootId, setSelectedRootId] = useState("");
@@ -300,6 +304,8 @@ function AdminCategoriesPageInner() {
   const [productInitialForm, setProductInitialForm] = useState<ProductForm | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [skuRefreshKey, setSkuRefreshKey] = useState(0);
+  const productsCacheRef = useRef<Map<string, { products: AdminProduct[]; count: number }>>(new Map());
+  const productReqSeqRef = useRef(0);
   const editingProduct = useMemo(
     () => products.find((p) => p.id === productForm?.id) ?? null,
     [products, productForm?.id]
@@ -321,84 +327,168 @@ function AdminCategoriesPageInner() {
   const selectedChild = selectedChildId ? categoryMap.get(selectedChildId) ?? null : null;
   const selectedProductCategoryId = selectedChildId || (childCategories.length === 0 ? selectedRootId : "");
 
-  const loadCategories = useCallback(async () => {
-    setLoadingCategories(true);
+  const loadCategories = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoadingCategories(true);
     setError("");
     try {
-      const rows = await listCategories();
+      const { categories: rows, productCounts } = await listCategoriesWithCounts();
       setCategories(rows);
+      setCategoryProductCounts(productCounts);
       const roots = rows.filter((row) => row.level === 1).sort(sortCategories);
-      const queryRoot = searchParams.get("root");
-      const queryCategory = searchParams.get("category");
-      setSelectedRootId((current) => {
-        if (queryRoot && roots.some((row) => row.id === queryRoot)) return queryRoot;
-        if (current && roots.some((row) => row.id === current)) return current;
-        return roots[0]?.id ?? "";
-      });
-      setSelectedChildId((current) => {
-        if (queryCategory && rows.some((row) => row.id === queryCategory && row.parent_id === (queryRoot || selectedRootId))) {
-          return queryCategory;
-        }
-        return current && rows.some((row) => row.id === current) ? current : "";
+      const queryRoot = initialQueryRef.current.root;
+      const queryCategory = initialQueryRef.current.category;
+      initialQueryRef.current = { root: null, category: null };
+
+      setSelectedRootId((currentRoot) => {
+        const nextRoot =
+          queryRoot && roots.some((row) => row.id === queryRoot)
+            ? queryRoot
+            : currentRoot && roots.some((row) => row.id === currentRoot)
+              ? currentRoot
+              : roots[0]?.id ?? "";
+
+        const nextChildren = nextRoot
+          ? rows.filter((row) => row.parent_id === nextRoot).sort(sortCategories)
+          : [];
+
+        setSelectedChildId((currentChild) => {
+          if (queryCategory && nextChildren.some((row) => row.id === queryCategory)) {
+            return queryCategory;
+          }
+          if (currentChild && nextChildren.some((row) => row.id === currentChild)) {
+            return currentChild;
+          }
+          return nextChildren[0]?.id ?? "";
+        });
+
+        return nextRoot;
       });
     } catch (loadError) {
       setError(getErrorText(loadError, "分类读取失败，请稍后重试"));
     } finally {
-      setLoadingCategories(false);
+      if (!opts?.silent) setLoadingCategories(false);
     }
-  }, [searchParams, selectedRootId]);
+  }, []);
 
-  const loadProducts = useCallback(async () => {
-    if (!selectedProductCategoryId) {
-      setProducts([]);
-      setProductCount(0);
-      return;
-    }
-    setLoadingProducts(true);
-    setError("");
-    try {
-      const result = await listProducts({
-        search: debouncedSearch,
-        categoryId: selectedProductCategoryId,
-        status: productStatus,
-        sortBy: "sort_order",
-        page: 1,
-        pageSize: 100,
-      });
-      setProducts(result.products);
-      setProductCount(result.count);
-    } catch (loadError) {
-      setError(getErrorText(loadError, "商品读取失败，请稍后重试"));
-    } finally {
-      setLoadingProducts(false);
-    }
-  }, [debouncedSearch, productStatus, selectedProductCategoryId]);
+  const loadProducts = useCallback(
+    async (opts?: { forceRefresh?: boolean }) => {
+      if (!selectedProductCategoryId) {
+        setProducts([]);
+        setProductCount(0);
+        return;
+      }
+      const cacheKey = `${selectedProductCategoryId}|${debouncedSearch.trim()}|${productStatus}`;
+      const cached = !opts?.forceRefresh ? productsCacheRef.current.get(cacheKey) : undefined;
+      if (cached) {
+        setProducts(cached.products);
+        setProductCount(cached.count);
+        setLoadingProducts(false);
+        return;
+      }
+
+      const seq = ++productReqSeqRef.current;
+      setLoadingProducts(true);
+      setError("");
+      try {
+        const result = await listProducts({
+          search: debouncedSearch,
+          categoryId: selectedProductCategoryId,
+          status: productStatus,
+          sortBy: "sort_order",
+          page: 1,
+          pageSize: 100,
+          lite: true,
+        });
+        if (seq !== productReqSeqRef.current) return;
+        productsCacheRef.current.set(cacheKey, { products: result.products, count: result.count });
+        setProducts(result.products);
+        setProductCount(result.count);
+        if (!debouncedSearch.trim() && productStatus === "all") {
+          setCategoryProductCounts((prev) =>
+            prev[selectedProductCategoryId] === result.count
+              ? prev
+              : { ...prev, [selectedProductCategoryId]: result.count }
+          );
+        }
+      } catch (loadError) {
+        if (seq !== productReqSeqRef.current) return;
+        setError(getErrorText(loadError, "商品读取失败，请稍后重试"));
+      } finally {
+        if (seq === productReqSeqRef.current) {
+          setLoadingProducts(false);
+        }
+      }
+    },
+    [debouncedSearch, productStatus, selectedProductCategoryId]
+  );
 
   useEffect(() => {
-    loadCategories();
+    void loadCategories();
   }, [loadCategories]);
 
   useEffect(() => {
-    loadProducts();
+    void loadProducts();
   }, [loadProducts]);
 
+  // Background prefetch sibling secondary categories in idle time so clicking feels instantaneous
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(productSearch), 300);
+    if (!childCategories.length) return;
+    let cancelled = false;
+    const toPrefetch = childCategories
+      .filter((cat) => cat.id !== selectedChildId && !productsCacheRef.current.has(`${cat.id}||all`))
+      .slice(0, 6);
+    if (!toPrefetch.length) return;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        for (const cat of toPrefetch) {
+          if (cancelled) return;
+          const key = `${cat.id}||all`;
+          if (productsCacheRef.current.has(key)) continue;
+          try {
+            const res = await listProducts({
+              categoryId: cat.id,
+              status: "all",
+              sortBy: "sort_order",
+              page: 1,
+              pageSize: 100,
+              lite: true,
+            });
+            if (!cancelled) {
+              productsCacheRef.current.set(key, { products: res.products, count: res.count });
+            }
+          } catch {
+            // ignore background prefetch errors
+          }
+        }
+      })();
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [childCategories, selectedChildId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(productSearch), 250);
     return () => window.clearTimeout(timer);
   }, [productSearch]);
 
   function updateUrl(rootId: string, childId = "") {
+    if (typeof window === "undefined") return;
     const params = new URLSearchParams();
     if (rootId) params.set("root", rootId);
     if (childId) params.set("category", childId);
-    router.replace(`/admin/categories${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false });
+    const nextUrl = `/admin/categories${params.toString() ? `?${params.toString()}` : ""}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
   }
 
   function selectRoot(categoryId: string) {
     setSelectedRootId(categoryId);
-    setSelectedChildId("");
+    const nextChildren = categories.filter((c) => c.parent_id === categoryId).sort(sortCategories);
+    const firstChildId = nextChildren[0]?.id ?? "";
+    setSelectedChildId(firstChildId);
     setSelectedSubcategoryFilter("");
-    updateUrl(categoryId);
+    updateUrl(categoryId, firstChildId);
   }
 
   function selectChild(categoryId: string) {
@@ -683,7 +773,8 @@ function AdminCategoriesPageInner() {
       setNotice(productForm.id ? "商品已保存" : "商品已新增");
       toast.success(productForm.id ? "商品已保存" : "商品已新增");
       closeProductEditorAfterSave();
-      await loadProducts();
+      productsCacheRef.current.clear();
+      await Promise.all([loadProducts({ forceRefresh: true }), loadCategories({ silent: true })]);
     } catch (saveError) {
       toast.error(getErrorText(saveError, "商品保存失败，请检查输入内容"));
     } finally {
@@ -699,7 +790,8 @@ function AdminCategoriesPageInner() {
     try {
       await setProductStatus(product.id, status);
       setNotice("商品状态已更新");
-      await loadProducts();
+      productsCacheRef.current.clear();
+      await loadProducts({ forceRefresh: true });
     } catch (statusError) {
       toast.error(getErrorText(statusError, "商品状态更新失败"));
     } finally {
@@ -750,6 +842,7 @@ function AdminCategoriesPageInner() {
     try {
       const saved = await reorderProducts(selectedProductCategoryId, optimistic);
       setProducts(saved);
+      productsCacheRef.current.set(`${selectedProductCategoryId}||all`, { products: saved, count: saved.length });
       toast.success("商品排序已保存");
     } catch (reorderError) {
       setProducts(previous);
@@ -830,7 +923,7 @@ function AdminCategoriesPageInner() {
           actionLabel="新增一级分类"
           onAction={openCreateRoot}
           error={Boolean(error && categories.length === 0)}
-          onRetry={loadCategories}
+          onRetry={() => void loadCategories()}
         >
           {rootCategories.map((category) => (
             <CategoryCard
@@ -861,14 +954,14 @@ function AdminCategoriesPageInner() {
           actionLabel={selectedRoot ? "新增二级分类" : undefined}
           onAction={selectedRoot ? openCreateChild : undefined}
           error={false}
-          onRetry={loadCategories}
+          onRetry={() => void loadCategories()}
         >
           {childCategories.map((category) => (
             <CategoryCard
               key={category.id}
               category={category}
               active={selectedChildId === category.id}
-              count={products.filter((product) => product.category_id === category.id).length}
+              count={categoryProductCounts[category.id] ?? 0}
               onClick={() => selectChild(category.id)}
               onEdit={() => openEditCategory(category)}
               onDelete={() => removeCategory(category)}
@@ -896,7 +989,7 @@ function AdminCategoriesPageInner() {
                 </div>
               </div>
               <div className="flex shrink-0 gap-2">
-                <Button variant="outline" size="sm" onClick={loadProducts} disabled={loadingProducts}>
+                <Button variant="outline" size="sm" onClick={() => { productsCacheRef.current.clear(); void loadProducts({ forceRefresh: true }); void loadCategories({ silent: true }); }} disabled={loadingProducts}>
                   <RefreshCw className={cn("mr-2 h-4 w-4", loadingProducts && "animate-spin")} />
                   刷新
                 </Button>

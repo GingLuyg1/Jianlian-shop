@@ -146,6 +146,7 @@ export type ProductFilters = {
   sortBy?: "sort_order" | "updated_at";
   page?: number;
   pageSize?: number;
+  lite?: boolean;
 };
 
 export type ProductListResult = {
@@ -468,6 +469,22 @@ export async function listCategories(client?: SupabaseClient) {
   );
 }
 
+export async function listCategoriesWithCounts(): Promise<{
+  categories: AdminCategory[];
+  productCounts: Record<string, number>;
+}> {
+  const result = await adminCatalogRequest<{
+    categories?: Array<Record<string, unknown>>;
+    productCounts?: Record<string, number>;
+  }>("/api/admin/catalog/categories");
+  return {
+    categories: filterOutRetiredAdminCategories(
+      (result.categories ?? []).map(normalizeCategory)
+    ),
+    productCounts: result.productCounts ?? {},
+  };
+}
+
 export async function createCategory(payload: CategoryPayload) {
   const result = await adminCatalogRequest<{ category: Record<string, unknown> }>("/api/admin/catalog/categories", {
     method: "POST",
@@ -524,6 +541,7 @@ export async function listProducts({
   sortBy = "sort_order",
   page = 1,
   pageSize = 10,
+  lite = false,
 }: ProductFilters): Promise<ProductListResult> {
   const params = new URLSearchParams();
   if (search.trim()) params.set("search", search.trim());
@@ -538,6 +556,7 @@ export async function listProducts({
   if (supplierStock !== "all") params.set("supplierStock", supplierStock);
   if (inventoryVerification !== "all") params.set("inventoryVerification", inventoryVerification);
   if (fulfillmentHealth !== "all") params.set("fulfillmentHealth", fulfillmentHealth);
+  if (lite) params.set("lite", "1");
   params.set("sortBy", sortBy);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));

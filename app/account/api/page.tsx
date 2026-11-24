@@ -516,7 +516,8 @@ export default function AccountApiPage() {
 
       {/* 未开通状态：展示申请表单（若点击查看文档则预览文档） */}
       {apiStatus === "unapplied" && !viewingDocsWhileUnapproved ? (
-        <section className={`${glass.surface} ${styles.panel} p-6 sm:p-8 space-y-6`}>
+        <section className={`${glass.surface} ${styles.panel} p-6 sm:p-8`}>
+          <div className="mx-auto w-full max-w-xl space-y-6 text-left">
           {wasRevoked && (
             <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 px-4 py-3 text-xs text-rose-800 shadow-2xs">
               <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
@@ -526,7 +527,7 @@ export default function AccountApiPage() {
               </div>
             </div>
           )}
-          <div className="max-w-2xl space-y-2">
+          <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-bold text-primary">
               <Sparkles className="h-3.5 w-3.5" />
               <span>开放平台接入申请</span>
@@ -539,7 +540,7 @@ export default function AccountApiPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmitApplication} className="max-w-xl space-y-4">
+          <form onSubmit={handleSubmitApplication} className="w-full space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="merchantName" className="text-xs font-semibold text-slate-700">
                 商户/企业/个人主体名称 <span className="text-red-500">*</span>
@@ -605,6 +606,7 @@ export default function AccountApiPage() {
               </Button>
             </div>
           </form>
+          </div>
         </section>
       ) : apiStatus === "pending" && !viewingDocsWhileUnapproved ? (
         /* 申请审核中状态 */

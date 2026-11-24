@@ -42,7 +42,28 @@ import {
 } from "@/components/ui/table";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { listProducts, type AdminProduct } from "@/lib/supabase/admin-catalog";
+import {
+  computeFinanceCostSummary,
+  type FinanceCostDataPayload,
+} from "@/lib/admin/finance-cost";
 import { cn } from "@/lib/utils";
+
+const BUSINESS_TIME_ZONE = "Asia/Shanghai";
+
+function formatBusinessDateKey(dateOrIso: Date | string) {
+  const dt = typeof dateOrIso === "string" ? new Date(dateOrIso) : dateOrIso;
+  if (Number.isNaN(dt.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(dt);
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  return year && month && day ? `${year}-${month}-${day}` : "";
+}
 
 type RawOrder = {
   id: string;
@@ -102,6 +123,7 @@ export default function AdminFinancePage() {
   const [recharges, setRecharges] = useState<RawRecharge[]>([]);
   const [orderItems, setOrderItems] = useState<RawOrderItem[]>([]);
   const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [costData, setCostData] = useState<FinanceCostDataPayload | null>(null);
   const [sessions, setSessions] = useState<Array<{ channel_code?: string; status?: string; payable_amount?: number; created_at?: string }>>([]);
   const [productSortBy, setProductSortBy] = useState<"sales" | "profit" | "margin" | "cost">("sales");
 
@@ -116,29 +138,36 @@ export default function AdminFinancePage() {
 
     try {
       const supabase = getSupabaseBrowserClient();
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 90);
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const sinceIso = ninetyDaysAgo.toISOString();
 
-      const [ordersRes, rechargesRes, productsRes, orderItemsRes, sessionsRes] = await Promise.allSettled([
+      const [ordersRes, rechargesRes, productsRes, orderItemsRes, sessionsRes, costDataRes] = await Promise.allSettled([
         supabase
           .from("orders")
           .select("id,order_no,customer_email,total_amount,payment_status,created_at")
-          .gte("created_at", thirtyDaysAgo.toISOString())
+          .gte("created_at", sinceIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("account_recharges")
           .select("id,recharge_no,user_email,amount,credited_amount,channel_code,status,created_at")
-          .gte("created_at", thirtyDaysAgo.toISOString())
+          .gte("created_at", sinceIso)
           .order("created_at", { ascending: false }),
-        listProducts({ page: 1, pageSize: 500, sortBy: "updated_at" }),
+        listProducts({ page: 1, pageSize: 500, sortBy: "updated_at", lite: true }),
         supabase
           .from("order_items")
           .select("order_id,product_id,product_name,quantity,line_total,created_at")
-          .gte("created_at", thirtyDaysAgo.toISOString()),
+          .gte("created_at", sinceIso),
         supabase
           .from("payment_sessions")
           .select("channel_code,status,payable_amount,created_at")
-          .gte("created_at", thirtyDaysAgo.toISOString()),
+          .gte("created_at", sinceIso),
+        fetch(`/api/admin/finance/cost-data?since=${encodeURIComponent(sinceIso)}`, { cache: "no-store" }).then(
+          async (res) => {
+            if (!res.ok) throw new Error("cost data unavailable");
+            return (await res.json()) as FinanceCostDataPayload;
+          }
+        ),
       ]);
 
       if (ordersRes.status === "fulfilled" && !ordersRes.value.error) {
@@ -156,6 +185,9 @@ export default function AdminFinancePage() {
       if (sessionsRes.status === "fulfilled" && !sessionsRes.value.error) {
         setSessions((sessionsRes.value.data ?? []) as any[]);
       }
+      if (costDataRes.status === "fulfilled") {
+        setCostData(costDataRes.value);
+      }
     } catch (err) {
       console.error("[AdminFinance] load error", err);
       setError("财务数据读取失败，请检查网络后重试。");
@@ -168,14 +200,14 @@ export default function AdminFinancePage() {
     void loadFinanceData();
   }, [loadFinanceData]);
 
-  const fromDateStr = dateFilter.from.toISOString().slice(0, 10);
-  const toDateStr = dateFilter.to.toISOString().slice(0, 10);
+  const fromDateStr = formatBusinessDateKey(dateFilter.from);
+  const toDateStr = formatBusinessDateKey(dateFilter.to);
 
   const inRange = useCallback(
     (iso?: string | null) => {
       if (!iso) return false;
-      const d = iso.slice(0, 10);
-      return d >= fromDateStr && d <= toDateStr;
+      const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : formatBusinessDateKey(iso);
+      return Boolean(d && d >= fromDateStr && d <= toDateStr);
     },
     [fromDateStr, toDateStr]
   );
@@ -202,65 +234,25 @@ export default function AdminFinancePage() {
       0
     );
 
-    const totalRevenue = rangeGmv + rangeRechargeAmount;
+    const rawItems =
+      costData && Array.isArray(costData.orderItems)
+        ? costData.orderItems.filter((i) => paidOrderIds.has(i.order_id))
+        : orderItems.filter((i) => paidOrderIds.has(i.order_id));
 
-    const rangeItems = orderItems.filter((i) => inRange(i.created_at) && paidOrderIds.has(i.order_id));
-    const productMap = new Map(products.map((p) => [p.id, p]));
+    const summary = computeFinanceCostSummary({
+      gmv: rangeGmv,
+      recharge: rangeRechargeAmount,
+      paidOrders: rangeOrders,
+      orderItems: rawItems,
+      products,
+      costData,
+    });
 
-    let totalCost = 0;
-    const costMap = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        price: number;
-        cost: number;
-        quantity: number;
-        sales: number;
-        totalCost: number;
-        profit: number;
-        margin: number;
-      }
-    >();
-
-    for (const item of rangeItems) {
-      const pid = item.product_id ?? "";
-      const p = productMap.get(pid);
-      const unitCost = Number(p?.original_price ?? 0);
-      const qty = safeNumber(item.quantity);
-      const lineTotal = safeNumber(item.line_total);
-      const lineCost = unitCost * qty;
-      totalCost += lineCost;
-
-      const cur = costMap.get(pid) ?? {
-        id: pid,
-        name: p?.name ?? item.product_name ?? "未知商品",
-        price: Number(p?.price ?? 0),
-        cost: unitCost,
-        quantity: 0,
-        sales: 0,
-        totalCost: 0,
-        profit: 0,
-        margin: 0,
-      };
-      cur.quantity += qty;
-      cur.sales += lineTotal;
-      cur.totalCost += lineCost;
-      cur.profit = cur.sales - cur.totalCost;
-      cur.margin = cur.sales > 0 ? (cur.profit / cur.sales) * 100 : 0;
-      costMap.set(pid, cur);
-    }
-
-    const grossProfit = rangeGmv - totalCost;
-    const grossMargin = rangeGmv > 0 ? (grossProfit / rangeGmv) * 100 : 0;
-    const gatewayFee = Number((rangeGmv * 0.03).toFixed(2));
-    const netProfit = grossProfit - gatewayFee;
-
-    const productList = Array.from(costMap.values()).sort((a, b) => {
+    const productList = [...summary.productCostRows].sort((a, b) => {
       if (productSortBy === "profit") return b.profit - a.profit;
-      if (productSortBy === "margin") return b.margin - a.margin;
+      if (productSortBy === "margin") return b.marginNumber - a.marginNumber;
       if (productSortBy === "cost") return b.totalCost - a.totalCost;
-      return b.sales - a.sales;
+      return b.salesAmount - a.salesAmount;
     });
 
     const rangeSessions = sessions.filter((s) => inRange(s.created_at) && s.status === "paid");
@@ -280,20 +272,21 @@ export default function AdminFinancePage() {
     });
 
     return {
-      rangeGmv,
-      rangeRechargeAmount,
-      totalRevenue,
+      rangeGmv: summary.gmv,
+      rangeRechargeAmount: summary.recharge,
+      totalRevenue: summary.revenue,
       paidOrderCount: rangeOrders.length,
       paidRechargeCount: rangeRecharges.length,
-      totalCost,
-      grossProfit,
-      grossMargin: `${grossMargin.toFixed(1)}%`,
-      gatewayFee,
-      netProfit,
+      totalCost: summary.totalCost,
+      grossProfit: summary.grossProfit,
+      grossMargin: summary.grossMargin,
+      gatewayFee: summary.gatewayFee,
+      netProfit: summary.netProfit,
+      unconfiguredCostItemCount: summary.unconfiguredCostItemCount,
       productList,
       channelStats,
     };
-  }, [inRange, orderItems, orders, productSortBy, products, recharges, sessions]);
+  }, [costData, inRange, orderItems, orders, productSortBy, products, recharges, sessions]);
 
   return (
     <AdminPageShell
@@ -354,28 +347,30 @@ export default function AdminFinancePage() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="text-xs text-slate-500">已售商品估算成本</div>
+              <div className="text-xs text-slate-500">已售商品采购成本</div>
               <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
                 {loading ? "…" : formatMoney(metrics.totalCost)}
               </div>
               <div className="mt-0.5 text-[10px] text-slate-400">
-                基于已配置规格原价/供货底价
+                {metrics.unconfiguredCostItemCount > 0
+                  ? `含 ${metrics.unconfiguredCostItemCount} 款未填成本商品`
+                  : "按上游实际采购价 / SKU 底价核算"}
               </div>
             </div>
 
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 shadow-sm">
               <div className="text-xs font-medium text-emerald-800">预估商品毛利</div>
-              <div className="mt-1 text-lg font-bold tabular-nums text-emerald-700">
+              <div className={cn("mt-1 text-lg font-bold tabular-nums", metrics.grossProfit < 0 ? "text-rose-600" : "text-emerald-700")}>
                 {loading ? "…" : formatMoney(metrics.grossProfit)}
               </div>
               <div className="mt-0.5 text-[10px] text-emerald-600/80">
-                订单 GMV - 商品总成本
+                订单 GMV - 商品采购成本
               </div>
             </div>
 
             <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 shadow-sm">
               <div className="text-xs font-medium text-blue-800">综合毛利率</div>
-              <div className="mt-1 text-lg font-bold tabular-nums text-blue-700">
+              <div className={cn("mt-1 text-lg font-bold tabular-nums", metrics.grossProfit < 0 ? "text-rose-600" : "text-blue-700")}>
                 {loading ? "…" : metrics.grossMargin}
               </div>
               <div className="mt-0.5 text-[10px] text-blue-600/80">
@@ -389,17 +384,17 @@ export default function AdminFinancePage() {
                 {loading ? "…" : formatMoney(metrics.gatewayFee)}
               </div>
               <div className="mt-0.5 text-[10px] text-amber-600/80">
-                第三方支付平台结算扣费
+                仅计在线通道（余额支付 ¥0）
               </div>
             </div>
 
             <div className="rounded-xl border border-emerald-300 bg-gradient-to-br from-emerald-100/60 to-white p-3 shadow-sm">
               <div className="text-xs font-semibold text-emerald-900">预估净利润</div>
-              <div className="mt-1 text-lg font-bold tabular-nums text-emerald-800">
+              <div className={cn("mt-1 text-lg font-bold tabular-nums", metrics.netProfit < 0 ? "text-rose-600" : "text-emerald-800")}>
                 {loading ? "…" : formatMoney(metrics.netProfit)}
               </div>
               <div className="mt-0.5 text-[10px] text-emerald-700/80">
-                扣除商品成本与通道手续费
+                扣除采购成本与通道手续费
               </div>
             </div>
           </div>
@@ -466,13 +461,13 @@ export default function AdminFinancePage() {
                         <TableHeader>
                           <TableRow className="text-xs">
                             <TableHead className="min-w-[180px]">商品名称</TableHead>
-                            <TableHead className="text-right">在售价</TableHead>
-                            <TableHead className="text-right">成本底价 (原价)</TableHead>
-                            <TableHead className="text-right">销量</TableHead>
-                            <TableHead className="text-right">销售额</TableHead>
-                            <TableHead className="text-right">总成本</TableHead>
-                            <TableHead className="text-right">预估毛利</TableHead>
-                            <TableHead className="text-right">毛利率</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">成交均价</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">单位成本</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">销量</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">销售额</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">总成本</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">预估毛利</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">毛利率</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -482,16 +477,27 @@ export default function AdminFinancePage() {
                                 {item.name}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(item.price)}</TableCell>
-                              <TableCell className="text-right tabular-nums text-slate-500">
-                                {item.cost > 0 ? formatMoney(item.cost) : <span className="text-slate-400">未填(¥0)</span>}
+                              <TableCell className="text-right tabular-nums text-slate-600">
+                                {item.cost !== null ? (
+                                  <span>
+                                    {formatMoney(item.cost)}
+                                    {item.costSource === "supplier_actual" ? (
+                                      <span className="ml-1 rounded bg-emerald-50 px-1 py-0.5 text-[10px] text-emerald-700">实采</span>
+                                    ) : null}
+                                  </span>
+                                ) : (
+                                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">未填成本</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-right tabular-nums font-medium text-slate-900">{item.quantity}</TableCell>
-                              <TableCell className="text-right tabular-nums text-blue-700 font-medium">{formatMoney(item.sales)}</TableCell>
+                              <TableCell className="text-right tabular-nums text-blue-700 font-medium">{formatMoney(item.salesAmount)}</TableCell>
                               <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(item.totalCost)}</TableCell>
-                              <TableCell className="text-right tabular-nums font-semibold text-emerald-700">{formatMoney(item.profit)}</TableCell>
+                              <TableCell className={cn("text-right tabular-nums font-semibold", item.profit < 0 ? "text-rose-600" : "text-emerald-700")}>
+                                {formatMoney(item.profit)}
+                              </TableCell>
                               <TableCell className="text-right tabular-nums">
-                                <span className={item.margin >= 30 ? "font-semibold text-emerald-700" : "text-slate-700"}>
-                                  {item.margin.toFixed(1)}%
+                                <span className={item.marginNumber < 0 ? "font-semibold text-rose-600" : item.marginNumber >= 30 ? "font-semibold text-emerald-700" : "text-slate-700"}>
+                                  {item.margin}
                                 </span>
                               </TableCell>
                             </TableRow>

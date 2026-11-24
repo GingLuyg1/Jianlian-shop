@@ -555,19 +555,21 @@ function SupabaseMallContentInner({
     };
   }, [resolvedCategoryId, resolvedCategoryLevel, resolvedCategoryParentId, resolvedCategoryName, filters.search, filters.page, filters.pageSize, productCategory, productQueryKey, retryNonce]);
 
-  function handleCategorySelect(category: DisplayCategory) {
+  function handleCategorySelect(category: DisplayCategory, initialSubcategory = "") {
     clearCatalogRoutePending();
     const shell = document.querySelector<HTMLElement>('[data-testid="storefront-category-layout"]');
     shell?.removeAttribute("data-route-exiting");
     if (selectedCategoryId === category.id && !filters.search) {
-      if (selectedSubcategory) {
+      if (initialSubcategory) {
+        setSelectedSubcategory((current) => (current === initialSubcategory ? "" : initialSubcategory));
+      } else if (selectedSubcategory) {
         setSelectedSubcategory("");
       }
       return;
     }
     productRequestIdRef.current += 1;
     setSelectedCategoryId(category.id);
-    setSelectedSubcategory("");
+    setSelectedSubcategory(initialSubcategory);
     setActiveCategory(category);
     setProductError("");
 
@@ -707,12 +709,27 @@ function SupabaseMallContentInner({
   }, [resolvedCategory?.metadata?.subcategories, products]);
 
   const filteredProducts = useMemo(() => {
-    if (!selectedSubcategory) return products;
-    return products.filter((prod) => {
-      const label = extractProductSubcategoryLabel(prod);
-      return label === selectedSubcategory;
+    if (selectedSubcategory) {
+      return products.filter((prod) => {
+        const label = extractProductSubcategoryLabel(prod);
+        return label === selectedSubcategory;
+      });
+    }
+    if (availableSubcategories.length <= 1) return products;
+    const subOrder = new Map<string, number>();
+    availableSubcategories.forEach((sub, idx) => {
+      subOrder.set(sub.name, idx);
     });
-  }, [products, selectedSubcategory]);
+    const fallbackRank = availableSubcategories.length;
+    return products
+      .map((prod, index) => ({
+        prod,
+        index,
+        rank: subOrder.get(extractProductSubcategoryLabel(prod)) ?? fallbackRank,
+      }))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map((entry) => entry.prod);
+  }, [products, selectedSubcategory, availableSubcategories]);
 
   return (
     <PublicLayout contentClassName={cn(mallContentClassName, isMobile && "!px-3 !py-2.5 !overflow-visible")}>
@@ -806,7 +823,7 @@ function CategoryPanel({
   selectedSubcategory?: string;
   activeCategorySubcategories?: Array<{ name: string; slug: string; sort_order: number }>;
   onPrefetchCategory: (category: DisplayCategory) => void;
-  onSelectCategory: (category: DisplayCategory) => void;
+  onSelectCategory: (category: DisplayCategory, initialSubcategory?: string) => void;
   onSelectSubcategory?: (subName: string) => void;
   onRetry: () => void;
 }) {
@@ -817,6 +834,26 @@ function CategoryPanel({
   const [clickedCategoryId, setClickedCategoryId] = useState("");
   const [clickPulseId, setClickPulseId] = useState("");
   const [navigatingProductCategoryId, setNavigatingProductCategoryId] = useState("");
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>(() =>
+    selectedCategoryId ? [selectedCategoryId] : []
+  );
+  const lastExpandedRouteRef = useRef(pageRoute);
+  const lastAutoExpandedSelectionRef = useRef(selectedCategoryId);
+
+  useEffect(() => {
+    if (lastExpandedRouteRef.current !== pageRoute) {
+      lastExpandedRouteRef.current = pageRoute;
+      lastAutoExpandedSelectionRef.current = selectedCategoryId;
+      setExpandedCategoryIds(selectedCategoryId ? [selectedCategoryId] : []);
+      return;
+    }
+    if (selectedCategoryId && selectedCategoryId !== lastAutoExpandedSelectionRef.current) {
+      lastAutoExpandedSelectionRef.current = selectedCategoryId;
+      setExpandedCategoryIds((prev) =>
+        prev.includes(selectedCategoryId) ? prev : [...prev, selectedCategoryId]
+      );
+    }
+  }, [pageRoute, selectedCategoryId]);
 
   useEffect(() => {
     const handleProductNavStart = (event: Event) => {
@@ -899,6 +936,7 @@ function CategoryPanel({
                 ? (activeCategorySubcategories.length > 0 ? activeCategorySubcategories : (category.metadata?.subcategories ?? []))
                 : (category.metadata?.subcategories ?? []);
               const hasSubcategories = subItems.length > 0;
+              const isExpanded = hasSubcategories && expandedCategoryIds.includes(category.id);
               return (
               <div key={category.id} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && "!w-full")}>
                 <div className={animatedInitialRows.current || isMobile ? undefined : "catalog-enter-item"} style={animatedInitialRows.current || isMobile ? undefined : { animationDelay: `${Math.min(index * 30, 200)}ms` }}>
@@ -906,7 +944,7 @@ function CategoryPanel({
                     category={category}
                     active={isSelected}
                     hasSubcategories={hasSubcategories}
-                    expanded={isSelected && hasSubcategories}
+                    expanded={isExpanded}
                     loading={
                       clickPulseId === category.id ||
                       navigatingProductCategoryId === category.id ||
@@ -918,6 +956,22 @@ function CategoryPanel({
                     mobileExpanded={false}
                     onIntent={() => onPrefetchCategory(category)}
                     onClick={() => {
+                      if (hasSubcategories && !isMobile) {
+                        if (isSelected) {
+                          setExpandedCategoryIds((prev) =>
+                            prev.includes(category.id)
+                              ? prev.filter((id) => id !== category.id)
+                              : [...prev, category.id]
+                          );
+                          if (selectedSubcategory) {
+                            onSelectCategory(category);
+                          }
+                          return;
+                        }
+                        setExpandedCategoryIds((prev) =>
+                          prev.includes(category.id) ? prev : [...prev, category.id]
+                        );
+                      }
                       setClickedCategoryId(category.id);
                       setClickPulseId(category.id);
                       window.setTimeout(() => {
@@ -927,18 +981,29 @@ function CategoryPanel({
                       onSelectCategory(category);
                     }}
                   />
-                  {isSelected && hasSubcategories && !isMobile ? (
+                  {isExpanded && !isMobile ? (
                     <div
                       data-testid="storefront-subcategory-tree"
                       className="relative ml-6 mt-1.5 mb-2 space-y-1 border-l-2 border-[#ead5c3] pl-3 py-0.5"
                     >
                       {subItems.map((sub) => {
-                        const subActive = selectedSubcategory === sub.name;
+                        const subActive = isSelected && selectedSubcategory === sub.name;
                         return (
                           <button
                             key={sub.slug || sub.name}
                             type="button"
-                            onClick={() => onSelectSubcategory?.(sub.name)}
+                            onClick={() => {
+                              if (isSelected) {
+                                onSelectSubcategory?.(sub.name);
+                              } else {
+                                setExpandedCategoryIds((prev) =>
+                                  prev.includes(category.id) ? prev : [...prev, category.id]
+                                );
+                                setClickedCategoryId(category.id);
+                                centerItem(category.id);
+                                onSelectCategory(category, sub.name);
+                              }
+                            }}
                             className={cn(
                               "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-all duration-150",
                               subActive

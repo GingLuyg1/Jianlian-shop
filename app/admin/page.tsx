@@ -79,6 +79,11 @@ import { requiresRechargeAdminAttention } from "@/lib/recharges/admin-attention"
 import { clearLegacyLocalTickets } from "@/lib/tickets/types";
 import { cn } from "@/lib/utils";
 import { listProducts } from "@/lib/supabase/admin-catalog";
+import {
+  computeFinanceCostSummary,
+  type FinanceCostDataPayload,
+  type FinanceCostSummary,
+} from "@/lib/admin/finance-cost";
 
 type MetricValue = number | string | null;
 
@@ -203,6 +208,7 @@ type DashboardData = {
     sessionsFailed: boolean;
     orderItems: RawOrderItemForDetail[] | null;
     products: AdminProduct[] | null;
+    financeCostData: FinanceCostDataPayload | null;
     fetchedSince: string;
   };
 };
@@ -417,6 +423,7 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
     visitsResult,
     readinessResult,
     lowStockResult,
+    financeCostResult,
   ] = await Promise.allSettled([
     supabase
       .from("orders")
@@ -428,7 +435,7 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
       .select("id,recharge_no,user_email,amount,requested_amount,credited_amount,channel_name,channel_code,status,review_mode,exception_type,error_summary,paid_at,created_at")
       .gte("created_at", queryStart.toISOString())
       .order("created_at", { ascending: false }),
-    listProducts({ page: 1, pageSize: 500, sortBy: "updated_at" }),
+    listProducts({ page: 1, pageSize: 500, sortBy: "updated_at", lite: true }),
     supabase.from("profiles").select("id,email,role,created_at", { count: "exact" }),
     supabase
       .from("payment_sessions")
@@ -458,6 +465,12 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
       return response.json();
     }),
     listProducts({ page: 1, pageSize: 1, stockLevel: "low", sortBy: "updated_at" }),
+    fetch(`/api/admin/finance/cost-data?since=${encodeURIComponent(queryStart.toISOString())}`, { cache: "no-store" }).then(
+      async (response) => {
+        if (!response.ok) throw new Error("finance cost unavailable");
+        return (await response.json()) as FinanceCostDataPayload;
+      }
+    ),
   ]);
 
   const orders = ordersResult.status === "fulfilled" && !ordersResult.value.error
@@ -497,6 +510,7 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
     visitsResult.status === "rejected" ||
     (visitsResult.status === "fulfilled" && Boolean(visitsResult.value.error) && !visitsMissing);
   const readiness = readinessResult.status === "fulfilled" ? readinessResult.value : null;
+  const financeCostData = financeCostResult.status === "fulfilled" ? financeCostResult.value : null;
 
   const todayOrders = orders ? orders.filter((order) => new Date(order.created_at) >= today) : null;
   const yesterdayOrders = orders ? orders.filter((order) => new Date(order.created_at) >= yesterday && new Date(order.created_at) < today) : null;
@@ -589,14 +603,31 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
   }
   const ranks = Array.from(rankMap.values());
 
+  const callbackReady = Boolean(
+    readiness?.codeChecks?.unifiedCallbackRoute ?? readiness?.checks?.callbackRoute?.ok
+  );
+  const rechargeRpcReady = Boolean(
+    readiness?.coreDatabase?.checks?.completeRechargeRpc ?? readiness?.checks?.rechargeRpc?.ok
+  );
+  const orderPaymentReady = Boolean(
+    (readiness?.codeChecks?.completePaymentService &&
+      readiness?.coreDatabase?.checks?.completeOrderRpc &&
+      readiness?.coreDatabase?.checks?.completePaymentSessionRpc) ??
+      readiness?.checks?.orderPaymentService?.ok
+  );
+  const reconciliationReady = Boolean(
+    readiness?.codeChecks?.reconciliationRecoveryUsesCompletePayment ??
+      readiness?.checks?.reconciliationUsesCompletePayment?.ok
+  );
+
   const systemStatuses: SystemStatus[] = [
     { label: "数据库连接", value: orders || products || users ? "正常" : "异常" },
     { label: "支付平台接入", value: readiness?.status === "ready" ? "正常" : readiness?.status === "partial" ? "部分配置" : "未接入", href: "/admin/payments" },
-    { label: "支付回调接口", value: readiness?.checks?.callbackRoute?.ok ? "正常" : "部分配置", href: "/admin/payments" },
-    { label: "充值入账事务", value: readiness?.checks?.rechargeRpc?.ok ? "正常" : "异常", href: "/admin/recharges" },
-    { label: "订单支付事务", value: readiness?.checks?.orderPaymentService?.ok ? "正常" : "部分配置", href: "/admin/orders" },
+    { label: "支付回调接口", value: callbackReady ? "正常" : "部分配置", href: "/admin/payments" },
+    { label: "充值入账事务", value: rechargeRpcReady ? "正常" : readiness ? "异常" : "部分配置", href: "/admin/recharges" },
+    { label: "订单支付事务", value: orderPaymentReady ? "正常" : "部分配置", href: "/admin/orders" },
     { label: "自动发货服务", value: deliveries === null ? "部分配置" : "正常", href: "/admin/inventory" },
-    { label: "支付对账服务", value: readiness?.checks?.reconciliationUsesCompletePayment?.ok ? "正常" : "部分配置", href: "/admin/payments" },
+    { label: "支付对账服务", value: reconciliationReady ? "正常" : "部分配置", href: "/admin/payments" },
     { label: "审计日志", value: "正常", href: "/admin/audit-logs" },
     { label: "最近部署版本", value: "正常" },
     { label: "系统刷新状态", value: "正常" },
@@ -646,7 +677,7 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
           : (point.paidCount / point.orderCount) * 100),
       },
       {
-        label: "今日访客数",
+        label: "今日访客数量（去重）",
         value: visitsMissing ? INITIALIZING : visitsFailed ? READ_FAILED : todayVisitorSet?.size ?? 0,
         description: `UV · ${BUSINESS_TIME_ZONE}`,
         tone: "slate",
@@ -760,6 +791,7 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
       sessionsFailed: paymentSessionsResult.status === "rejected" || (paymentSessionsResult.status === "fulfilled" && Boolean(paymentSessionsResult.value.error)),
       orderItems,
       products,
+      financeCostData,
       fetchedSince: queryStart.toISOString(),
     },
   };
@@ -902,7 +934,7 @@ export default function AdminDashboardPage() {
   const todayRechargeMetric = metricByLabel.get("今日充值金额");
   const todayOrderMetric = metricByLabel.get("今日订单数");
   const todaySuccessRateMetric = metricByLabel.get("今日支付成功率");
-  const todayUvMetric = metricByLabel.get("今日访客数");
+  const todayUvMetric = metricByLabel.get("今日访客数量（去重）");
   const todayPvMetric = metricByLabel.get("今日访问量");
   const todayNewUserMetric = metricByLabel.get("今日新增用户");
 
@@ -1055,97 +1087,45 @@ export default function AdminDashboardPage() {
     return allSortedProductRows.slice(start, start + productPageSize);
   }, [allSortedProductRows, productPage, productPageSize]);
 
-  const financeStats = useMemo(() => {
-    if (!data) return { revenue: 0, gmv: 0, recharge: 0, totalCost: 0, grossProfit: 0, grossMargin: "—", gatewayFee: 0, netProfit: 0, productCostRows: [] };
-    const gmv = rangeGmv;
-    const recharge = rangeRecharge;
-    const revenue = gmv + recharge;
-
-    const items = (data.rawSeries.orderItems ?? []).filter((item) => inDateFilterRange(item.created_at));
-    const productMap = new Map((data.rawSeries.products ?? []).map((p) => [p.id, p]));
-
-    let totalCost = 0;
-    const productCostMap = new Map<string, {
-      id: string;
-      name: string;
-      price: number;
-      cost: number;
-      quantity: number;
-      salesAmount: number;
-      totalCost: number;
-      profit: number;
-      margin: string;
-    }>();
-
-    for (const item of items) {
-      const pid = item.product_id ?? "";
-      const p = productMap.get(pid);
-      const unitCost = Number(p?.original_price ?? 0);
-      const qty = safeNumber(item.quantity);
-      const lineTotal = safeNumber(item.line_total);
-      const lineCost = unitCost * qty;
-      totalCost += lineCost;
-
-      const cur = productCostMap.get(pid) ?? {
-        id: pid,
-        name: p?.name ?? item.product_name ?? "未知商品",
-        price: Number(p?.price ?? 0),
-        cost: unitCost,
-        quantity: 0,
-        salesAmount: 0,
+  const financeStats = useMemo<FinanceCostSummary>(() => {
+    if (!data) {
+      return {
+        revenue: 0,
+        gmv: 0,
+        recharge: 0,
         totalCost: 0,
-        profit: 0,
-        margin: "—",
+        grossProfit: 0,
+        grossMargin: "—",
+        grossMarginNumber: 0,
+        gatewayEligibleAmount: 0,
+        balancePaidAmount: 0,
+        gatewayFee: 0,
+        netProfit: 0,
+        unconfiguredCostItemCount: 0,
+        apiOrdersGmv: 0,
+        apiOrdersCost: 0,
+        productCostRows: [],
       };
-      cur.quantity += qty;
-      cur.salesAmount += lineTotal;
-      cur.totalCost += lineCost;
-      cur.profit = cur.salesAmount - cur.totalCost;
-      cur.margin = cur.salesAmount > 0 ? `${((cur.profit / cur.salesAmount) * 100).toFixed(1)}%` : "—";
-      productCostMap.set(pid, cur);
     }
 
-    // 计入 API 开放分销订单利润核算
-    let apiOrdersGmv = 0;
-    let apiOrdersCost = 0;
-    const allFilteredOrders = (data.rawSeries.orders ?? []).filter((o) => inDateFilterRange(o.created_at));
-    for (const ord of allFilteredOrders) {
-      const isApi =
-        (ord as any).source === "api" ||
-        (ord as any).channel === "api" ||
-        (ord as any).order_source === "api" ||
-        Boolean((ord as any).app_id);
-      if (isApi) {
-        const amt = safeNumber(ord.total_amount);
-        const cost = safeNumber(
-          (ord as any).cost_amount ?? (ord as any).supplier_cost ?? amt * 0.72
-        );
-        apiOrdersGmv += amt;
-        apiOrdersCost += cost;
-      }
-    }
-    totalCost += apiOrdersCost;
+    const paidOrders = (data.rawSeries.orders ?? []).filter(
+      (o) => o.payment_status === "paid" && inDateFilterRange(o.created_at)
+    );
+    const paidOrderIdSet = new Set(paidOrders.map((o) => o.id));
+    const costData = data.rawSeries.financeCostData;
+    const rawItems =
+      costData && Array.isArray(costData.orderItems)
+        ? costData.orderItems.filter((item) => item.order_id && paidOrderIdSet.has(item.order_id))
+        : (data.rawSeries.orderItems ?? []).filter((item) => item.order_id && paidOrderIdSet.has(item.order_id));
 
-    const grossProfit = gmv - totalCost;
-    const grossMargin = gmv > 0 ? `${((grossProfit / gmv) * 100).toFixed(1)}%` : "—";
-    const gatewayFee = Number((gmv * 0.03).toFixed(2));
-    const netProfit = grossProfit - gatewayFee;
-
-    const productCostRows = Array.from(productCostMap.values()).sort((a, b) => b.salesAmount - a.salesAmount);
-
-    return {
-      revenue,
-      gmv,
-      recharge,
-      totalCost,
-      grossProfit,
-      grossMargin,
-      gatewayFee,
-      netProfit,
-      apiOrdersGmv,
-      apiOrdersCost,
-      productCostRows,
-    };
+    return computeFinanceCostSummary({
+      gmv: rangeGmv,
+      recharge: rangeRecharge,
+      paidOrders,
+      orderItems: rawItems,
+      products: data.rawSeries.products ?? [],
+      costData,
+    });
   }, [data, inDateFilterRange, rangeGmv, rangeRecharge]);
   const rechartPoints = useMemo(() => {
     if (!data) return [];
@@ -1418,7 +1398,7 @@ export default function AdminDashboardPage() {
                     trend={todaySuccessRateMetric?.trend ?? []}
                   />
                   <AdminMetricTrendCard
-                    label={`${periodLabel}访客数`}
+                    label={`${periodLabel}访客数量（去重）`}
                     value={formatNumber(activeUvValue)}
                     description="UV · Asia/Shanghai"
                     comparison={dateFilter.preset === "today" ? todayUvMetric?.change : `${periodLabel}独立访客`}
@@ -2441,29 +2421,7 @@ function FinanceOverviewCard({
   loading,
   periodLabel,
 }: {
-  stats: {
-    revenue: number;
-    gmv: number;
-    recharge: number;
-    totalCost: number;
-    grossProfit: number;
-    grossMargin: string;
-    gatewayFee: number;
-    netProfit: number;
-    apiOrdersGmv?: number;
-    apiOrdersCost?: number;
-    productCostRows: Array<{
-      id: string;
-      name: string;
-      price: number;
-      cost: number;
-      quantity: number;
-      salesAmount: number;
-      totalCost: number;
-      profit: number;
-      margin: string;
-    }>;
-  };
+  stats: FinanceCostSummary;
   loading: boolean;
   periodLabel: string;
 }) {
@@ -2478,7 +2436,7 @@ function FinanceOverviewCard({
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            营收核算、已售商品成本核算、毛利率及支付通道成本（仅管理员后台与商品编辑可见成本）
+            营收核算、上游真实采购成本与 SKU 供货底价核算、毛利率及第三方支付通道成本（仅管理员后台可见）
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -2515,18 +2473,20 @@ function FinanceOverviewCard({
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-              <div className="text-xs text-slate-500">已售商品估算成本</div>
+              <div className="text-xs text-slate-500">已售商品采购成本</div>
               <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
                 {formatMoney(stats.totalCost)}
               </div>
               <div className="mt-1 text-[10px] text-slate-400">
-                按 SKU 底价及 API 分销成本合并核算
+                {stats.unconfiguredCostItemCount > 0
+                  ? `含 ${stats.unconfiguredCostItemCount} 款未填成本商品`
+                  : "按上游实际采购价 / SKU 底价核算"}
               </div>
             </div>
 
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
               <div className="text-xs font-medium text-emerald-800">预估商品毛利</div>
-              <div className="mt-1 text-lg font-bold tabular-nums text-emerald-700">
+              <div className={cn("mt-1 text-lg font-bold tabular-nums", stats.grossProfit < 0 ? "text-rose-600" : "text-emerald-700")}>
                 {formatMoney(stats.grossProfit)}
               </div>
               <div className="mt-1 text-[10px] text-emerald-600/80">
@@ -2536,7 +2496,7 @@ function FinanceOverviewCard({
 
             <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3">
               <div className="text-xs font-medium text-blue-800">综合毛利率</div>
-              <div className="mt-1 text-lg font-bold tabular-nums text-blue-700">
+              <div className={cn("mt-1 text-lg font-bold tabular-nums", stats.grossMarginNumber < 0 ? "text-rose-600" : "text-blue-700")}>
                 {stats.grossMargin}
               </div>
               <div className="mt-1 text-[10px] text-blue-600/80">
@@ -2550,17 +2510,17 @@ function FinanceOverviewCard({
                 {formatMoney(stats.gatewayFee)}
               </div>
               <div className="mt-1 text-[10px] text-amber-600/80">
-                支付服务商结算扣费预估
+                仅计在线通道（余额支付 ¥0）
               </div>
             </div>
 
             <div className="rounded-xl border border-emerald-300 bg-gradient-to-br from-emerald-100/50 to-white p-3">
               <div className="text-xs font-semibold text-emerald-900">预估净利润</div>
-              <div className="mt-1 text-lg font-bold tabular-nums text-emerald-800">
+              <div className={cn("mt-1 text-lg font-bold tabular-nums", stats.netProfit < 0 ? "text-rose-600" : "text-emerald-800")}>
                 {formatMoney(stats.netProfit)}
               </div>
               <div className="mt-1 text-[10px] text-emerald-700/80">
-                扣除商品成本与通道手续费
+                扣除采购成本与通道手续费
               </div>
             </div>
           </div>
@@ -2581,36 +2541,49 @@ function FinanceOverviewCard({
                 <TableHeader>
                   <TableRow className="text-xs">
                     <TableHead className="min-w-[160px]">商品名称</TableHead>
-                    <TableHead className="text-right">售价</TableHead>
-                    <TableHead className="text-right">成本价 (原价)</TableHead>
-                    <TableHead className="text-right">销量</TableHead>
-                    <TableHead className="text-right">销售额</TableHead>
-                    <TableHead className="text-right">总成本</TableHead>
-                    <TableHead className="text-right">预估毛利</TableHead>
-                    <TableHead className="text-right">毛利率</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">成交均价</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">单位成本</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">销量</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">销售额</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">总成本</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">预估毛利</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">毛利率</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {stats.productCostRows.map((row) => (
                     <TableRow key={row.id} className="text-xs">
-                      <TableCell className="max-w-[200px] truncate font-medium text-slate-900" title={row.name}>
+                      <TableCell className="max-w-[220px] truncate font-medium text-slate-900" title={row.name}>
                         {row.name}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(row.price)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-slate-500">
-                        {row.cost > 0 ? formatMoney(row.cost) : <span className="text-slate-400">未填(¥0)</span>}
+                      <TableCell className="text-right tabular-nums text-slate-600">
+                        {row.cost !== null ? (
+                          <span>
+                            {formatMoney(row.cost)}
+                            {row.costSource === "supplier_actual" ? (
+                              <span className="ml-1 rounded bg-emerald-50 px-1 py-0.5 text-[10px] text-emerald-700">实采</span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">未填成本</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium text-slate-900">{row.quantity}</TableCell>
                       <TableCell className="text-right tabular-nums text-blue-700">{formatMoney(row.salesAmount)}</TableCell>
                       <TableCell className="text-right tabular-nums text-slate-700">{formatMoney(row.totalCost)}</TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold text-emerald-700">{formatMoney(row.profit)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-slate-700">{row.margin}</TableCell>
+                      <TableCell className={cn("text-right tabular-nums font-semibold", row.profit < 0 ? "text-rose-600" : "text-emerald-700")}>
+                        {formatMoney(row.profit)}
+                      </TableCell>
+                      <TableCell className={cn("text-right tabular-nums", row.marginNumber < 0 ? "text-rose-600 font-semibold" : "text-slate-700")}>
+                        {row.margin}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
               <div className="mt-2 text-[10px] text-slate-400 px-2">
-                🔒 安全提示：产品成本与原价数据仅在管理员后台（商品编辑页及财务看板）呈现，前台买家端不展示任何成本信息。若绑定了供应商规格，可自动采纳供应商供货底价。
+                🔒 说明：成本优先采纳上游供应商实际采购扣款价（标注「实采」）与 SKU 供货底价，不将前台划线原价误算为成本；未配置成本的人工商品暂按 ¥0 计入并标注「未填成本」。
               </div>
             </div>
           </details>

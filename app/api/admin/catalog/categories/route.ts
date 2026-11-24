@@ -10,6 +10,49 @@
 
 import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 import { revalidateCategoryCache } from "@/lib/cache/cache-tags";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const admin = await requireCatalogAdmin();
+  if (!admin.ok) return admin.response;
+
+  const service = getSupabaseServiceRoleClient() ?? admin.supabase;
+  const [catRes, prodRes] = await Promise.all([
+    service
+      .from("categories")
+      .select("*")
+      .order("level", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true }),
+    service
+      .from("products")
+      .select("category_id,slug,name")
+      .range(0, 4999),
+  ]);
+
+  if (catRes.error) {
+    return jsonResponse({ error: "分类读取失败，请稍后重试" }, 500);
+  }
+
+  const productCounts: Record<string, number> = {};
+  if (!prodRes.error && Array.isArray(prodRes.data)) {
+    for (const row of prodRes.data as Array<{ category_id?: string | null; slug?: string | null; name?: string | null }>) {
+      const cid = row.category_id;
+      if (!cid) continue;
+      const slug = String(row.slug ?? "").trim().toLowerCase();
+      const name = String(row.name ?? "").trim().toLowerCase();
+      if (slug === "sms-code" || slug.startsWith("sms-code-") || name.includes("接码")) continue;
+      productCounts[cid] = (productCounts[cid] ?? 0) + 1;
+    }
+  }
+
+  return jsonResponse({
+    categories: catRes.data ?? [],
+    productCounts,
+  });
+}
 
 export async function POST(request: Request) {
   const admin = await requireCatalogAdmin();

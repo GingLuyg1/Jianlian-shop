@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { Check, Copy, RefreshCw } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import {
   AdminDateRangeFilter,
@@ -22,35 +23,144 @@ const ledgerColumns = [
   ['direction','方向'],['amount','金额'],['currency','币种'],['status','状态'],['balance_before','变动前余额'],['balance_after','变动后余额'],['created_at','创建时间'],
 ];
 const queueColumns = [
-  ['order_no','订单'],['order_item_id','商品项'],['supplier','供应商'],['supplier_product_id','供应商商品ID'],['supplier_sku','供应商商品规格'],
-  ['request_id','采购任务号'],['provider_order_code','上游平台订单号'],['status','状态'],['retryable','是否可以再次尝试'],['attempt_count','已尝试次数'],
-  ['last_error_code','失败原因代码'],['last_attempt_at','最近处理时间'],['completed_at','完成时间'],['created_at','创建时间'],['updated_at','更新时间'],
+  ['order_no','订单号'],
+  ['supplier','供应商'],
+  ['supplier_product_id','供应商商品ID'],
+  ['supplier_sku','规格'],
+  ['status','状态'],
+  ['provider_order_code','上游平台订单号'],
+  ['request_id','采购任务号'],
+  ['order_item_id','商品项ID'],
+  ['retryable','可重试'],
+  ['attempt_count','尝试次数'],
+  ['last_error_code','失败原因'],
+  ['last_attempt_at','最近处理时间'],
+  ['completed_at','完成时间'],
+  ['created_at','创建时间'],
+  ['updated_at','更新时间'],
 ];
 const workerLabels: Record<string, string> = {
   timer_enabled:'定时任务是否启用',timer_active:'定时任务是否正在运行',snapshot_observed_at:'服务器任务状态更新时间',snapshot_fresh:'服务器任务状态是否有效',
   last_invocation:'最近一次任务运行编号',heartbeat_status:'最近运行状态',heartbeat_finished_at:'最近运行完成时间',heartbeat_stale:'运行状态是否过期',
   last_successful_run:'最近成功时间',last_error_observed_at:'本次错误时间',error_count:'本次错误数',provider_queries:'本次查询支付平台次数',completed:'本次完成数',observability_note:'使用说明',
 };
+const COPYABLE_QUEUE_KEYS = new Set(['order_item_id', 'request_id', 'provider_order_code', 'supplier_product_id']);
+const SUPPLIER_BADGE_CLASS: Record<string, string> = {
+  bitrefill: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  kuajingzy: 'bg-sky-50 text-sky-700 border-sky-200',
+};
+
 function value(v: unknown) { return v == null || v === '' ? '—' : typeof v === 'boolean' ? booleanLabel(v) : String(v); }
+
+function formatTimestamp(v: unknown) {
+  if (v == null || v === '') return '—';
+  const date = new Date(String(v));
+  if (Number.isNaN(date.getTime())) return String(v);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function CopyableCodeCell({ text, maxWidthClass = 'max-w-[168px]' }: { text: string; maxWidthClass?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      void navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      });
+    }
+  };
+  return (
+    <div className="group inline-flex items-center gap-1.5">
+      <span
+        title={text}
+        className={`inline-block ${maxWidthClass} truncate rounded bg-slate-100/80 px-1.5 py-0.5 font-mono text-[11px] text-slate-700`}
+      >
+        {text}
+      </span>
+      <button
+        type="button"
+        onClick={handleCopy}
+        title={copied ? '已复制' : `复制 ${text}`}
+        aria-label={`复制 ${text}`}
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 opacity-60 transition hover:bg-slate-200/70 hover:text-slate-700 group-hover:opacity-100"
+      >
+        {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+      </button>
+    </div>
+  );
+}
+
 function displayValue(kind: Kind, key: string, row: Row) {
   const v = row[key];
   if (key === 'observability_note') return workerHelpText;
   if (key === 'business_type') return businessTypeLabel(v);
   if (key === 'direction') return directionLabel(v);
   if (key === 'currency') return currencyLabel(v);
+  if (kind === 'supplier-queue') {
+    if (key === 'supplier') {
+      const s = String(v || '').trim();
+      if (!s) return '—';
+      const badgeCls = SUPPLIER_BADGE_CLASS[s.toLowerCase()] ?? 'bg-slate-100 text-slate-700 border-slate-200';
+      return (
+        <span className={`inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 font-mono text-[11px] font-semibold ${badgeCls}`}>
+          {s}
+        </span>
+      );
+    }
+    if (key === 'supplier_sku') {
+      const s = String(v ?? '').trim();
+      if (!s) return '—';
+      return (
+        <span className="inline-flex items-center whitespace-nowrap rounded bg-orange-50 px-2 py-0.5 font-mono text-xs font-semibold text-orange-700 ring-1 ring-inset ring-orange-200/80">
+          {s}
+        </span>
+      );
+    }
+    if (COPYABLE_QUEUE_KEYS.has(key)) {
+      const s = String(v ?? '').trim();
+      if (!s) return <span className="text-slate-400">—</span>;
+      return (
+        <CopyableCodeCell
+          text={s}
+          maxWidthClass={key === 'provider_order_code' ? 'max-w-[200px]' : key === 'request_id' ? 'max-w-[180px]' : 'max-w-[150px]'}
+        />
+      );
+    }
+    if (key === 'retryable') {
+      const isYes = Boolean(v);
+      return (
+        <span className={`inline-flex whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium ${isYes ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+          {booleanLabel(v)}
+        </span>
+      );
+    }
+    if (key === 'attempt_count') {
+      return <span className="font-mono text-xs font-medium tabular-nums text-slate-700">{value(v)}</span>;
+    }
+    if (key === 'last_error_code') {
+      const s = String(v ?? '').trim();
+      if (!s) return <span className="text-slate-400">—</span>;
+      return (
+        <span title={s} className="inline-block max-w-[180px] truncate rounded bg-rose-50 px-1.5 py-0.5 font-mono text-[11px] text-rose-700">
+          {s}
+        </span>
+      );
+    }
+  }
   if (key === 'status') {
     if (kind === 'supplier-queue') {
       const s = String(v || '').toUpperCase();
       const isOk = s === 'COMPLETED' || s === 'FULFILLED' || s === 'SUCCEEDED';
       const isFailed = s === 'PERMANENT_FAILED' || s === 'RETRYABLE_FAILED' || s === 'FAILED' || s === 'FAILED_VALIDATION';
-      const isProc = s === 'PROCESSING' || s === 'PURCHASING' || s === 'RECONCILIATION';
+      const isProc = s === 'PROCESSING' || s === 'PURCHASING' || s === 'RECONCILIATION' || s === 'SUBMITTING' || s === 'CLAIMED';
       const cls = isOk
-        ? 'inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200'
+        ? 'inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200'
         : isFailed
-        ? 'inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700 border border-rose-200'
+        ? 'inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 border border-rose-200'
         : isProc
-        ? 'inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700 border border-blue-200'
-        : 'inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700 border border-amber-200';
+        ? 'inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200'
+        : 'inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 border border-amber-200';
       return <span className={cls}>{supplierStatusLabel(v, row.retryable)}</span>;
     }
     return statusLabel(v);
@@ -58,11 +168,7 @@ function displayValue(kind: Kind, key: string, row: Row) {
   if (key === 'heartbeat_status') return workerStatusLabel(v);
   if (['timer_enabled','timer_active','snapshot_fresh','heartbeat_stale','retryable'].includes(key)) return booleanLabel(v);
   if (key.endsWith('_at') || key === 'last_successful_run') {
-    if (v == null || v === '') return '—';
-    const date = new Date(String(v));
-    if (Number.isNaN(date.getTime())) return String(v);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    return <span className="whitespace-nowrap font-mono text-xs tabular-nums text-slate-600">{formatTimestamp(v)}</span>;
   }
   return value(v);
 }
@@ -126,7 +232,10 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
   return <AdminPageShell variant="v2" title={title} description={description}
     actions={
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size={kind === 'supplier-queue' ? 'sm' : 'default'} className={kind === 'supplier-queue' ? 'h-8' : undefined} onClick={() => setRevision(v => v + 1)} disabled={loading}>刷新</Button>
+        <Button variant="outline" size={kind === 'supplier-queue' ? 'sm' : 'default'} className={kind === 'supplier-queue' ? 'h-8' : undefined} onClick={() => setRevision(v => v + 1)} disabled={loading}>
+          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          刷新
+        </Button>
       </div>
     }>
     <AdminListSurface>
@@ -134,7 +243,7 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
         {kind === 'supplier-queue' ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <Input aria-label="搜索" className="h-8 w-52 sm:w-60 text-xs" placeholder="订单号 / 采购任务号 / 上游平台订单号" value={filters.q ?? ''} onChange={e => change('q', e.target.value)} />
+              <Input aria-label="搜索" className="h-8 w-52 sm:w-64 text-xs" placeholder="订单号 / 采购任务号 / 上游平台订单号" value={filters.q ?? ''} onChange={e => change('q', e.target.value)} />
               <select aria-label="状态" className="h-8 w-36 rounded-md border bg-white px-2.5 text-xs" value={filters.status ?? ''} onChange={e => change('status', e.target.value)}>
                 <option value="">全部状态</option>{['pending','processing','retryable_failed','permanent_failed','completed','uncertain','needs_input'].map(s => <option key={s} value={s}>{supplierStatusLabel(s)}</option>)}
               </select>
@@ -169,10 +278,48 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
         <p className="w-full text-xs text-slate-500 sm:col-span-2 lg:col-span-4">{operationsDateFilterHelp}</p>
       </div>}
       <AdminTableViewport>
-        {loading ? <p role="status" className="p-6">正在读取…</p> : error ? <div role="alert" className="p-6 text-red-700">{error}<Button variant="outline" className="ml-3" onClick={() => setRevision(v => v + 1)}>重试读取</Button></div>
+        {loading ? <p role="status" className="p-6 text-sm text-slate-500">正在读取…</p> : error ? <div role="alert" className="p-6 text-red-700">{error}<Button variant="outline" className="ml-3" onClick={() => setRevision(v => v + 1)}>重试读取</Button></div>
           : kind === 'worker' ? <dl className="grid gap-3 p-4 sm:grid-cols-2">{Object.entries(workerLabels).map(([key,label]) => <div key={key} className="min-w-0 rounded border p-3"><dt className="text-sm text-slate-500">{label}</dt><dd className="break-words">{displayValue(kind, key, worker ?? {})}</dd></div>)}</dl>
           : !rows.length ? <p role="status" className="p-6 text-slate-500 text-sm">{kind === 'supplier-queue' ? '当前筛选暂无上游供应商采购订单（本地库存自动发货订单请在「订单管理」查看）。' : '当前筛选暂无记录。'}</p>
-          : <table className="w-full min-w-[1100px] text-sm"><thead className="bg-slate-50 text-left"><tr>{columns.map(([key,label]) => <th className="p-3" key={key}>{label}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={String(row.id)} className="border-b">{columns.map(([key]) => <td className="max-w-64 break-words p-3" key={key}>{key === 'order_no' && row.order_id ? <Link className="text-blue-700 underline" href={`/admin/orders?search=${encodeURIComponent(String(row.order_no || row.order_id))}`}>{value(row[key])}</Link> : displayValue(kind, key, row)}</td>)}</tr>)}</tbody></table>}
+          : (
+            <table className="w-max min-w-full border-collapse text-sm">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 text-left backdrop-blur-xs">
+                <tr>
+                  {columns.map(([key, label]) => (
+                    <th
+                      key={key}
+                      className="whitespace-nowrap px-3.5 py-2.5 text-xs font-semibold text-slate-600"
+                    >
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {rows.map(row => (
+                  <tr key={String(row.id)} className="transition-colors hover:bg-slate-50/80">
+                    {columns.map(([key]) => (
+                      <td
+                        key={key}
+                        className="whitespace-nowrap px-3.5 py-2.5 align-middle text-xs text-slate-700"
+                      >
+                        {key === 'order_no' && row.order_id ? (
+                          <Link
+                            className="font-mono font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                            href={`/admin/orders?search=${encodeURIComponent(String(row.order_no || row.order_id))}`}
+                          >
+                            {value(row[key])}
+                          </Link>
+                        ) : (
+                          displayValue(kind, key, row)
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
       </AdminTableViewport>
       {kind !== 'worker' && <AdminListPagination page={page} totalPages={stats.totalPages} loading={loading || Boolean(error)} summary={error ? '总数未知' : `共 ${total} 条（全部历史筛选结果）`} onPrevious={() => setPage(p => Math.max(1,p-1))} onNext={() => setPage(p => p+1)} />}
     </AdminListSurface>
