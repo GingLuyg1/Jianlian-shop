@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Clipboard, Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
+import { Clipboard, Eye, EyeOff, Headphones, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { pollForPaymentDelivery } from "@/lib/orders/delivery-polling.mjs";
 import { normalizeOrderStatus, normalizePaymentStatus } from "@/lib/orders/order-status";
+import { openPublicSupport } from "@/lib/support/open-public-support";
 import { cn } from "@/lib/utils";
 
 type SecureDelivery = {
@@ -23,6 +24,8 @@ type SecureDelivery = {
 
 type DeliveryResponse = {
   status?: string;
+  needs_support?: boolean;
+  message?: string;
   deliveries?: SecureDelivery[];
   error?: string;
 };
@@ -57,6 +60,7 @@ export function SecureOrderDelivery({
   const [loading, setLoading] = useState(false);
   const [requested, setRequested] = useState(false);
   const [error, setError] = useState(false);
+  const [manualSupportMessage, setManualSupportMessage] = useState("");
   const [pollOutcome, setPollOutcome] = useState<"idle" | "polling" | "timeout" | "error" | "delivered">("idle");
   const [visibleIds, setVisibleIds] = useState<Record<string, boolean>>({});
   const activeRequestRef = useRef<{ orderNo: string; controller: AbortController } | null>(null);
@@ -90,9 +94,19 @@ export function SecureOrderDelivery({
       if (!response.ok) throw new Error("DELIVERY_LOAD_FAILED");
       setDeliveryResult({ orderNo, rows: result?.deliveries ?? [] });
       setError(false);
-      return (result?.deliveries ?? []).some((delivery) => delivery.delivery_status === "delivered")
-        ? "delivered" as const
-        : "pending" as const;
+      const hasDelivered = (result?.deliveries ?? []).some((delivery) => delivery.delivery_status === "delivered");
+      if (hasDelivered) {
+        setManualSupportMessage("");
+        return "delivered" as const;
+      }
+      if (result?.status === "manual_review" || result?.needs_support) {
+        setManualSupportMessage(
+          result.message || "自动发货未能及时完成，请携带订单号联系在线客服或提交工单优先补发。"
+        );
+        return "delivered" as const;
+      }
+      setManualSupportMessage("");
+      return "pending" as const;
     } catch {
       if (activeRequestRef.current !== request || request.controller.signal.aborted) return "pending" as const;
       setError(true);
@@ -110,6 +124,7 @@ export function SecureOrderDelivery({
     setDeliveryResult({ orderNo, rows: [] });
     setLoading(false);
     setError(false);
+    setManualSupportMessage("");
     setRequested(false);
     setVisibleIds({});
     setPollOutcome("idle");
@@ -207,11 +222,25 @@ export function SecureOrderDelivery({
             );
           })}
         </div>
+      ) : manualSupportMessage ? (
+        <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-amber-900">
+          <div className="font-semibold">订单已确认支付，等待人工优先补发</div>
+          <p className="text-xs leading-5 text-amber-800 sm:text-sm">{manualSupportMessage}</p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button type="button" size="sm" onClick={openPublicSupport} className="rounded-xl text-xs">
+              <Headphones className="mr-1.5 h-3.5 w-3.5" />
+              联系在线客服
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-xl border-amber-300 bg-white text-xs text-amber-900 hover:bg-amber-50" asChild>
+              <Link href="/faq">提交工单</Link>
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-3 rounded-lg bg-slate-50 p-3 text-muted-foreground">
           <div>
             {pollOutcome === "timeout"
-              ? "支付成功，交付内容仍在准备中。"
+              ? "支付成功，交付内容仍在准备中。如等待较久可点击刷新或联系在线客服。"
               : deliveredHint
                 ? "正在同步交付内容……"
                 : ["manual", "manual_delivery"].includes(String(deliveryType ?? ""))
@@ -219,9 +248,15 @@ export function SecureOrderDelivery({
                   : "支付成功，正在准备交付内容……"}
           </div>
           {pollOutcome === "timeout" ? (
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href="/account/orders">查看我的订单</Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" asChild>
+                <Link href="/account/orders">查看我的订单</Link>
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={openPublicSupport}>
+                <Headphones className="mr-1.5 h-3.5 w-3.5" />
+                联系在线客服
+              </Button>
+            </div>
           ) : null}
         </div>
       )}

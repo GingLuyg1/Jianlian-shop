@@ -1,4 +1,5 @@
 ﻿import { NextResponse } from "next/server";
+import { deliverDigitalOrder } from "@/lib/delivery/delivery-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { createKuajingZyProductionRuntime } from "@/lib/providers/kuajingzy/purchase-server";
 import { reconcileBitrefillOrder } from "@/lib/providers/bitrefill/live-fulfillment";
@@ -112,32 +113,98 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     let rows = (data ?? []) as DeliveryRow[];
+    let needsManualSupport = false;
+    let manualSupportMessage = "";
     if (rows.length === 0) {
-      // Best-effort GET-only reconciliation for already-created supplier orders
-      // whose upstream fulfillment finished asynchronously after checkout.
+      // Best-effort reconciliation + idempotent compensation for paid orders
+      // whose delivery did not complete synchronously during payment callback.
       try {
         const service = getSupabaseServiceRoleClient();
         if (service) {
           const { data: paidOrder } = await service
             .from("orders")
-            .select("id")
+            .select("id,status,fulfillment_status,delivery_type,paid_at,created_at")
             .eq("order_no", orderNo)
             .eq("user_id", user.id)
             .eq("payment_status", "paid")
             .maybeSingle();
           if (paidOrder?.id) {
-            const kSummary = await createKuajingZyProductionRuntime({ service }).reconcileExistingOrder(
-              String(paidOrder.id)
-            );
+            const orderId = String(paidOrder.id);
+            const kSummary = await createKuajingZyProductionRuntime({ service }).reconcileExistingOrder(orderId);
             const bSummary = kSummary.fulfilled > 0
               ? { fulfilled: 0 }
-              : await reconcileBitrefillOrder(service, String(paidOrder.id));
-            if (kSummary.fulfilled > 0 || bSummary.fulfilled > 0) {
+              : await reconcileBitrefillOrder(service, orderId);
+
+            let compensated = false;
+            const autoDeliveryTypes = new Set(["automatic", "auto", "card", "account", "auto_delivery"]);
+            const paidAtMs = Date.parse(String(paidOrder.paid_at ?? paidOrder.created_at ?? ""));
+            const ageMs = Number.isFinite(paidAtMs) ? Date.now() - paidAtMs : 0;
+
+            if (
+              kSummary.fulfilled === 0 &&
+              bSummary.fulfilled === 0 &&
+              kSummary.handled === 0 &&
+              autoDeliveryTypes.has(String(paidOrder.delivery_type ?? "").toLowerCase()) &&
+              ageMs >= 10_000
+            ) {
+              // Check that no supplier request/attempt already exists before triggering
+              // one atomic, DB-locked idempotent compensation delivery.
+              const { count: existingReqCount } = await service
+                .from("supplier_fulfillment_requests")
+                .select("id", { count: "exact", head: true })
+                .eq("order_id", orderId);
+              if ((existingReqCount ?? 0) === 0) {
+                try {
+                  const compResult = await deliverDigitalOrder(service, orderId, "delivery_compensation");
+                  if ((compResult.delivered_count ?? 0) > 0) compensated = true;
+                } catch {
+                  // Compensation failure is surfaced below via manual_review check.
+                }
+              }
+            }
+
+            if (kSummary.fulfilled > 0 || bSummary.fulfilled > 0 || compensated) {
               const refreshed = await supabase.rpc("get_order_delivery_for_user", {
                 p_order_no: orderNo,
               });
               if (!refreshed.error && Array.isArray(refreshed.data)) {
                 rows = refreshed.data as DeliveryRow[];
+              }
+            }
+
+            if (rows.length === 0 && autoDeliveryTypes.has(String(paidOrder.delivery_type ?? "").toLowerCase())) {
+              const [{ data: failedLogs }, { data: errSessions }, { data: manualAttempts }] = await Promise.all([
+                service
+                  .from("delivery_logs")
+                  .select("message")
+                  .eq("order_id", orderId)
+                  .eq("event_type", "delivery_failed")
+                  .order("created_at", { ascending: false })
+                  .limit(1),
+                service
+                  .from("payment_sessions")
+                  .select("last_error")
+                  .eq("business_id", orderId)
+                  .not("last_error", "is", null)
+                  .order("updated_at", { ascending: false })
+                  .limit(1),
+                service
+                  .from("supplier_purchase_attempts")
+                  .select("status")
+                  .like("logical_request_key", `jianlian:${orderId}:%`)
+                  .in("status", ["MANUAL_REVIEW", "FAILED"])
+                  .limit(1),
+              ]);
+              const hasFailureEvidence =
+                (failedLogs?.length ?? 0) > 0 ||
+                Boolean(errSessions?.[0]?.last_error) ||
+                (manualAttempts?.length ?? 0) > 0 ||
+                kSummary.uncertain > 0 ||
+                ageMs >= 60_000;
+              if (hasFailureEvidence) {
+                needsManualSupport = true;
+                manualSupportMessage =
+                  "自动发货未能完成（上游已取消或转入人工核对），请携带订单号联系在线客服或提交工单，我们将为您优先人工补发或退款。";
               }
             }
           }
@@ -147,6 +214,14 @@ export async function GET(_request: Request, context: RouteContext) {
       }
     }
     if (rows.length === 0) {
+      if (needsManualSupport) {
+        return json({
+          status: "manual_review",
+          needs_support: true,
+          deliveries: [],
+          message: manualSupportMessage,
+        });
+      }
       return json({ status: "pending", deliveries: [], message: "正在处理" });
     }
 

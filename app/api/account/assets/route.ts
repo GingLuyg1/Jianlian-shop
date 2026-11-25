@@ -112,7 +112,7 @@ export async function GET(request: Request) {
       availableBalance: getAccountAssetsAvailableBalance(profileResult.profile),
       frozenBalance: null,
       totalRecharge,
-      totalSpend: balanceResult.ready ? transactionSpend : orderSpend,
+      totalSpend: orderResult.error ? transactionSpend : orderSpend,
       orderCount: orders.length,
       unfinishedOrderCount: orders.filter((order) =>
         unfinishedOrderStatuses.has(normalizeOrderStatus(order.status))
