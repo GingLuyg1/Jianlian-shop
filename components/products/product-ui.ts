@@ -5,7 +5,7 @@ export const mallContentClassName =
   "max-w-none px-4 md:px-6 py-3 lg:overflow-hidden";
 
 export const mallShellClassName =
-  "grid min-h-0 grid-cols-1 items-stretch gap-3 lg:h-[calc(100dvh-94px)] lg:gap-4 lg:overflow-hidden lg:grid-cols-[243px_minmax(0,1fr)]";
+  "grid min-h-0 grid-cols-1 items-stretch gap-3 lg:h-[calc(100dvh-84px)] lg:gap-4 lg:overflow-hidden lg:grid-cols-[243px_minmax(0,1fr)]";
 
 export const categoryListScrollClassName =
   "min-h-0 flex-1 flex gap-2 overflow-x-auto px-1 py-1 sidebar-scroll lg:scroll-fade-y lg:block lg:space-y-2.5 lg:overflow-x-hidden lg:overflow-y-auto";

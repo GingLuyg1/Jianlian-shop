@@ -281,9 +281,9 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         <PublicTopInfoBar announcementText={announcement || undefined} mobileNavigationUntilLg={mobileNavigationUntilLg} />
         <div
           className={cn(
-            "w-full md:!pb-0",
+            "w-full",
             pathname === "/" && !isMobile && "relative z-30",
-            viewportLocked && !isMobile ? "min-h-0 flex-1" : "flex-1",
+            viewportLocked && !isMobile ? "min-h-0 flex-1 md:!pb-[20px]" : "flex-1 md:!pb-0",
             contentClassName,
           )}
           style={{ paddingInline: "var(--storefront-content-padding-x)" }}

@@ -123,7 +123,8 @@ export default function PublicTopInfoBar({
       <div className={cn(
         "mx-auto grid max-w-[1540px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2 px-[var(--storefront-content-padding-x)]",
         isMobile && "!flex !py-1.5",
-        !isMobile && "sm:h-[62px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 sm:py-0 xl:grid-cols-[minmax(0,1fr)_142px_150px]"
+        !isMobile && pathname === "/" && "sm:h-[62px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 sm:py-0 xl:grid-cols-[minmax(0,1fr)_142px_150px]",
+        !isMobile && pathname !== "/" && "sm:h-[52px] sm:items-start sm:pt-[13px] sm:pb-[3px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 xl:grid-cols-[minmax(0,1fr)_142px_150px]"
       )}>
         {announcementText ? (
           <div className={cn("relative z-10 col-span-2 min-w-0 flex-1 overflow-hidden", !isMobile && "sm:col-span-1")}>
