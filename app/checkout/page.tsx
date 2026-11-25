@@ -893,19 +893,17 @@ function CheckoutPageContent() {
     ? "正在提交订单..."
     : pendingBalanceOrder
       ? "继续支付原订单"
-      : !hasSelectedPaymentMethod
-        ? !isPurchasable
-          ? "不可购买"
-          : "提交订单"
-        : balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT"
-          ? "余额不足"
-          : balanceSubmissionBlockReason === "BALANCE_LOADING"
-            ? "正在核对余额..."
-            : balanceSubmissionBlockReason
-              ? "余额未确认"
-            : !isPurchasable
-              ? "不可购买"
-              : "提交订单";
+      : !isPurchasable
+        ? "暂无库存"
+        : !hasSelectedPaymentMethod
+          ? "提交订单"
+          : balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT"
+            ? "余额不足"
+            : balanceSubmissionBlockReason === "BALANCE_LOADING"
+              ? "正在核对余额..."
+              : balanceSubmissionBlockReason
+                ? "余额未确认"
+                : "提交订单";
   const amountLabel = useMemo(() => {
     if (!product) return "";
     return `¥${effectiveOrderAmount.toFixed(2)}`;
@@ -955,19 +953,19 @@ function CheckoutPageContent() {
     if (productLoading) return;
     if (!productRow || submitLoading || submissionGuardRef.current.isActive()) return;
 
-    if (!hasSelectedPaymentMethod && !pendingBalanceOrder) {
-      toast.warning("请先选择支付方式");
-      setPaymentDropdownOpen(true);
-      return;
-    }
-
     if (hasSku && !selectedSku) {
       toast.warning("请选择 SKU");
       return;
     }
 
     if (!isPurchasable) {
-      toast.error(unavailableMessage || "该商品目前不可购买");
+      toast.error("该商品暂无库存");
+      return;
+    }
+
+    if (!hasSelectedPaymentMethod && !pendingBalanceOrder) {
+      toast.warning("请先选择支付方式");
+      setPaymentDropdownOpen(true);
       return;
     }
 
@@ -1174,8 +1172,8 @@ function CheckoutPageContent() {
   };
 
   return (
-    <PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={cn("max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-82px)] lg:overflow-hidden lg:pt-3 lg:pb-0 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
-      <div data-testid="checkout-layout" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isMobile && "!grid-cols-1 !h-auto")}>
+    <PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={cn("max-w-none py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
+      <div data-testid="checkout-layout" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:h-[calc(100dvh-94px)] lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isMobile && "!grid-cols-1 !h-auto")}>
         <ProductDetailCard
           product={displayProduct ?? product}
           loading={productLoading}
@@ -1187,7 +1185,7 @@ function CheckoutPageContent() {
           }
         />
 
-        <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden rounded-[26px] lg:h-full">
+        <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden !rounded-[26px] lg:h-full">
           <CardContent className="flex h-full min-h-0 flex-col bg-white p-4">
             <div className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-hidden">
               {hasSku && skuOptions.length > 1 ? (
@@ -1770,10 +1768,10 @@ function ProductDetailSkeleton() {
 }
 
 function CheckoutLoadingShell() {
-  return <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="max-w-none py-3 lg:mt-0 lg:h-[calc(100dvh-82px)] lg:overflow-hidden lg:pt-3 lg:pb-0 [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
-    <div data-testid="checkout-progressive-loading" className="grid min-h-0 grid-cols-1 gap-3.5 lg:h-full lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
+  return <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="max-w-none py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
+    <div data-testid="checkout-progressive-loading" className="grid min-h-0 grid-cols-1 gap-3.5 lg:h-[calc(100dvh-94px)] lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
       <Card className="min-h-0 overflow-auto"><CardContent className="p-4 sm:p-6"><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
-      <Card className="min-h-0"><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
+      <Card className="min-h-0 !rounded-[26px]"><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
     </div>
   </PublicLayout>;
 }

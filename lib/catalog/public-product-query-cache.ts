@@ -23,7 +23,7 @@ const categoryToRoute = new Map([
 
 export function publicProductQueryKey(query: CatalogProductQuery) {
   return JSON.stringify([
-    query.primaryCategoryId ?? "", query.secondaryCategoryId ?? "",
+    query.primaryCategoryId ?? "", query.secondaryCategoryId ?? "", query.subcategory?.trim() ?? "",
     query.keyword?.trim() ?? "", query.page ?? 1, query.pageSize ?? 20, query.excludeId ?? "",
   ]);
 }

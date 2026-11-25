@@ -94,15 +94,43 @@ type FilterState = {
 
 const CATALOG_PAGE_SIZE = 500;
 
-export function extractProductSubcategoryLabel(product: { description?: string | null; detail?: string | null }): string {
+export function extractProductSubcategoryLabel(product: {
+  description?: string | null;
+  detail?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): string {
+  const fromMeta =
+    product.metadata && typeof product.metadata.subcategory === "string"
+      ? product.metadata.subcategory.trim()
+      : "";
+  if (fromMeta) return fromMeta;
   const raw = String(product.description || product.detail || "").trim();
-  const match = raw.match(/^【([^】]{1,40})】/);
+  const match = raw.match(/^【([^】]{1,60})】/);
   return match?.[1]?.trim() ?? "";
+}
+
+function normalizeSubcategoryMatch(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/[｢「『]/g, "「")
+    .replace(/[｣」』]/g, "」")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function getDefaultSubcategoryForCategory(category: DisplayCategory | null | undefined): string {
+  if (!category) return "";
+  const slug = normalizeText(category.slug);
+  const name = normalizeText(category.name);
+  if (slug === "telegram" || name === "telegram") {
+    return category.metadata?.subcategories?.[0]?.name?.trim() ?? "";
+  }
+  return "";
 }
 
 export function stripProductSubcategoryPrefix(text: string | null | undefined): string {
   if (!text) return "";
-  return text.replace(/^【[^】]{1,40}】\s*/, "").trim();
+  return text.replace(/^【[^】]{1,60}】\s*/, "").trim();
 }
 
 function matchCategoryByRouteKey(category: DisplayCategory, rawRouteKey: string) {
@@ -413,18 +441,28 @@ function SupabaseMallContentInner({
         : selected
     );
     setSelectedCategoryId((prev) => {
-      if (prev !== selected.id) setSelectedSubcategory("");
+      if (prev !== selected.id) {
+        setSelectedSubcategory(getDefaultSubcategoryForCategory(selected));
+      }
       return selected.id;
     });
   }, [activeCategoryPool, attachFallbackVisual, categorySnapshot.rows, categorySnapshot.status, config, routeCategoryKey, secondaryCategories]);
 
-  const productQueryKey = JSON.stringify([productCategory, resolvedCategory?.id ?? "", filters.search, filters.page, filters.pageSize]);
+  const effectiveSubcategory = useMemo(() => {
+    if (selectedCategoryId && resolvedCategory?.id === selectedCategoryId) {
+      return selectedSubcategory;
+    }
+    return selectedSubcategory || getDefaultSubcategoryForCategory(resolvedCategory);
+  }, [resolvedCategory, selectedCategoryId, selectedSubcategory]);
+
+  const productQueryKey = JSON.stringify([productCategory, resolvedCategory?.id ?? "", effectiveSubcategory, filters.search, filters.page, filters.pageSize]);
 
   useEffect(() => {
     if (!resolvedCategory || loadedProductKey !== productQueryKey) return;
     const query = {
       primaryCategoryId: resolvedCategory.level === 1 ? resolvedCategory.id : resolvedCategory.parent_id ?? "",
       secondaryCategoryId: resolvedCategory.level === 2 ? resolvedCategory.id : "",
+      subcategory: effectiveSubcategory,
       keyword: filters.search, page: filters.page, pageSize: filters.pageSize,
     };
     const revalidateIfStale = () => {
@@ -436,7 +474,7 @@ function SupabaseMallContentInner({
       window.removeEventListener("focus", revalidateIfStale);
       document.removeEventListener("visibilitychange", revalidateIfStale);
     };
-  }, [filters.page, filters.pageSize, filters.search, loadedProductKey, productQueryKey, resolvedCategory]);
+  }, [effectiveSubcategory, filters.page, filters.pageSize, filters.search, loadedProductKey, productQueryKey, resolvedCategory]);
 
   const resolvedCategoryId = resolvedCategory?.id ?? "";
   const resolvedCategoryLevel = resolvedCategory?.level ?? 0;
@@ -468,6 +506,7 @@ function SupabaseMallContentInner({
         const query = {
           primaryCategoryId,
           secondaryCategoryId,
+          subcategory: effectiveSubcategory,
           keyword: filters.search,
           page: filters.page,
           pageSize: filters.pageSize,
@@ -532,23 +571,27 @@ function SupabaseMallContentInner({
     return () => {
       mounted = false;
     };
-  }, [resolvedCategoryId, resolvedCategoryLevel, resolvedCategoryParentId, resolvedCategoryName, filters.search, filters.page, filters.pageSize, productCategory, productQueryKey, retryNonce]);
+  }, [resolvedCategoryId, resolvedCategoryLevel, resolvedCategoryParentId, resolvedCategoryName, effectiveSubcategory, filters.search, filters.page, filters.pageSize, productCategory, productQueryKey, retryNonce]);
 
   function handleCategorySelect(category: DisplayCategory, initialSubcategory = "") {
     clearCatalogRoutePending();
     const shell = document.querySelector<HTMLElement>('[data-testid="storefront-category-layout"]');
     shell?.removeAttribute("data-route-exiting");
+    const defaultSubcategory = getDefaultSubcategoryForCategory(category);
+    const resolvedInitialSub = initialSubcategory || defaultSubcategory;
     if (selectedCategoryId === category.id && !filters.search) {
       if (initialSubcategory) {
-        setSelectedSubcategory((current) => (current === initialSubcategory ? "" : initialSubcategory));
-      } else if (selectedSubcategory) {
+        setSelectedSubcategory((current) =>
+          current === initialSubcategory ? (defaultSubcategory ? current : "") : initialSubcategory
+        );
+      } else if (selectedSubcategory && !defaultSubcategory) {
         setSelectedSubcategory("");
       }
       return;
     }
     productRequestIdRef.current += 1;
     setSelectedCategoryId(category.id);
-    setSelectedSubcategory(initialSubcategory);
+    setSelectedSubcategory(resolvedInitialSub);
     setActiveCategory(category);
     setProductError("");
 
@@ -557,11 +600,12 @@ function SupabaseMallContentInner({
     const query = {
       primaryCategoryId,
       secondaryCategoryId,
+      subcategory: resolvedInitialSub,
       keyword: "",
       page: 1,
       pageSize: CATALOG_PAGE_SIZE,
     };
-    const nextProductKey = JSON.stringify([productCategory, category.id, "", 1, CATALOG_PAGE_SIZE]);
+    const nextProductKey = JSON.stringify([productCategory, category.id, resolvedInitialSub, "", 1, CATALOG_PAGE_SIZE]);
     const cached = peekPublicProductPage(query);
     if (cached) {
       setProducts(
@@ -598,6 +642,7 @@ function SupabaseMallContentInner({
       void prefetchPublicProductPage({
         primaryCategoryId: primaryId,
         secondaryCategoryId: secondaryId,
+        subcategory: getDefaultSubcategoryForCategory(category),
         keyword: "",
         page: 1,
         pageSize: CATALOG_PAGE_SIZE,
@@ -651,6 +696,7 @@ function SupabaseMallContentInner({
         forgetPublicProductPage({
           primaryCategoryId: resolvedCategory.level === 1 ? resolvedCategory.id : resolvedCategory.parent_id ?? "",
           secondaryCategoryId: resolvedCategory.level === 2 ? resolvedCategory.id : "",
+          subcategory: effectiveSubcategory,
           keyword: filters.search,
           page: filters.page,
           pageSize: filters.pageSize,
@@ -673,14 +719,14 @@ function SupabaseMallContentInner({
     const list: Array<{ name: string; slug: string; sort_order: number }> = [];
     for (const item of configured) {
       const name = item.name.trim();
-      const lower = name.toLowerCase();
+      const lower = normalizeSubcategoryMatch(name);
       if (!name || seenLower.has(lower)) continue;
       seenLower.add(lower);
       list.push(item);
     }
     for (const prod of products) {
       const label = extractProductSubcategoryLabel(prod);
-      const lower = label.toLowerCase();
+      const lower = normalizeSubcategoryMatch(label);
       if (label && !seenLower.has(lower)) {
         seenLower.add(lower);
         list.push({ name: label, slug: label, sort_order: (list.length + 1) * 10 });
@@ -694,12 +740,12 @@ function SupabaseMallContentInner({
       const sd = getPublicStockDisplay(prod.stock, { metadata: prod.metadata });
       return !sd.available || (prod.stockStatus === "out-of-stock" && sd.code !== "preorder");
     };
-    if (selectedSubcategory) {
-      const targetLower = selectedSubcategory.trim().toLowerCase();
+    if (effectiveSubcategory) {
+      const targetNorm = normalizeSubcategoryMatch(effectiveSubcategory);
       return products
         .filter((prod) => {
           const label = extractProductSubcategoryLabel(prod);
-          return label.toLowerCase() === targetLower;
+          return !label || normalizeSubcategoryMatch(label) === targetNorm;
         })
         .map((prod, index) => ({ prod, index, out: isOutOfStock(prod) ? 1 : 0 }))
         .sort((a, b) => a.out - b.out || a.index - b.index)
@@ -707,7 +753,7 @@ function SupabaseMallContentInner({
     }
     const subOrder = new Map<string, number>();
     availableSubcategories.forEach((sub, idx) => {
-      subOrder.set(sub.name.trim().toLowerCase(), idx);
+      subOrder.set(normalizeSubcategoryMatch(sub.name), idx);
     });
     const fallbackRank = availableSubcategories.length;
     return products
@@ -715,11 +761,24 @@ function SupabaseMallContentInner({
         prod,
         index,
         out: isOutOfStock(prod) ? 1 : 0,
-        rank: subOrder.get(extractProductSubcategoryLabel(prod).toLowerCase()) ?? fallbackRank,
+        rank: subOrder.get(normalizeSubcategoryMatch(extractProductSubcategoryLabel(prod))) ?? fallbackRank,
       }))
       .sort((a, b) => a.out - b.out || a.rank - b.rank || a.index - b.index)
       .map((entry) => entry.prod);
-  }, [products, selectedSubcategory, availableSubcategories]);
+  }, [products, effectiveSubcategory, availableSubcategories]);
+
+  const handleSubcategoryToggle = useCallback(
+    (subName: string) => {
+      const fallbackSub = getDefaultSubcategoryForCategory(resolvedCategory);
+      setSelectedSubcategory((current) =>
+        normalizeSubcategoryMatch(current) === normalizeSubcategoryMatch(subName)
+          ? (fallbackSub ? current : "")
+          : subName
+      );
+      productListTopRef.current?.scrollIntoView({ block: "nearest" });
+    },
+    [resolvedCategory]
+  );
 
   return (
     <PublicLayout contentClassName={cn(mallContentClassName, isMobile && "!px-3 !py-2.5 !overflow-visible")}>
@@ -738,20 +797,28 @@ function SupabaseMallContentInner({
           pendingDestination={Boolean(routePending && pendingSecondaryCategories)}
           selectionReady={!routePending && (getPublicProductCount(productQueryKey) !== undefined || countReadyKey === productQueryKey || (!isLoadingProducts && loadedProductKey === productQueryKey)) && !productError}
           selectedCategoryId={routePending ? (pendingSelectedCategoryId || pendingSecondaryCategories?.[0]?.id || "") : (resolvedCategory?.id ?? "")}
-          selectedSubcategory={selectedSubcategory}
+          selectedSubcategory={effectiveSubcategory}
           activeCategorySubcategories={availableSubcategories}
           onSelectCategory={routePending ? handlePendingCategorySelect : handleCategorySelect}
-          onSelectSubcategory={(subName) => {
-            setSelectedSubcategory((current) => (current === subName ? "" : subName));
-            productListTopRef.current?.scrollIntoView({ block: "nearest" });
+          onSelectSubcategory={handleSubcategoryToggle}
+          onPrefetchCategory={(category) => {
+            void prefetchPublicProductPage({
+              primaryCategoryId: category.level === 1 ? category.id : category.parent_id ?? "",
+              secondaryCategoryId: category.level === 2 ? category.id : "",
+              subcategory: getDefaultSubcategoryForCategory(category),
+              keyword: "",
+              page: 1,
+              pageSize: CATALOG_PAGE_SIZE,
+            });
           }}
-          onPrefetchCategory={(category) => { void prefetchPublicProductPage({ primaryCategoryId: category.level === 1 ? category.id : category.parent_id ?? "", secondaryCategoryId: category.level === 2 ? category.id : "", keyword: "", page: 1, pageSize: CATALOG_PAGE_SIZE }); }}
           onRetry={retryLoad}
         />
         <ProductPanel
           pageRoute={`/products/${productCategory}`}
           activeCategory={resolvedCategory}
-          selectedSubcategory={selectedSubcategory}
+          selectedSubcategory={effectiveSubcategory}
+          availableSubcategories={availableSubcategories}
+          onSelectSubcategory={handleSubcategoryToggle}
           currencySymbol={settings.currency_symbol}
           draftSearch={draftSearch}
           appliedSearch={filters.search}
@@ -773,7 +840,7 @@ function SupabaseMallContentInner({
           routePendingTarget={routePending?.target ?? ""}
           productListTopRef={productListTopRef}
           showStock={settings.show_stock}
-          total={selectedSubcategory ? filteredProducts.length : total}
+          total={effectiveSubcategory ? total || filteredProducts.length : total}
           onDraftSearchChange={setDraftSearch}
           onResetFilters={resetFilters}
           onSearchSubmit={submitSearch}
@@ -953,7 +1020,7 @@ function CategoryPanel({
                               ? prev.filter((id) => id !== category.id)
                               : [...prev, category.id]
                           );
-                          if (selectedSubcategory) {
+                          if (selectedSubcategory && !getDefaultSubcategoryForCategory(category)) {
                             onSelectCategory(category);
                           }
                           return;
@@ -977,7 +1044,9 @@ function CategoryPanel({
                       className="relative ml-6 mt-1.5 mb-2 space-y-1 border-l-2 border-[#ead5c3] pl-3 py-0.5"
                     >
                       {subItems.map((sub) => {
-                        const subActive = isSelected && selectedSubcategory === sub.name;
+                        const subActive =
+                          isSelected &&
+                          normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name);
                         return (
                           <button
                             key={sub.slug || sub.name}
@@ -1173,6 +1242,8 @@ function ProductPanel({
   pageRoute,
   activeCategory,
   selectedSubcategory = "",
+  availableSubcategories = [],
+  onSelectSubcategory,
   currencySymbol,
   draftSearch,
   appliedSearch,
@@ -1198,6 +1269,8 @@ function ProductPanel({
   pageRoute: string;
   activeCategory: DisplayCategory | null;
   selectedSubcategory?: string;
+  availableSubcategories?: Array<{ name: string; slug: string; sort_order: number }>;
+  onSelectSubcategory?: (subName: string) => void;
   currencySymbol: string;
   draftSearch: string;
   appliedSearch: string;
@@ -1291,6 +1364,29 @@ function ProductPanel({
             </Button>
           </div>
         </div>
+
+        {isMobile && availableSubcategories.length > 0 && onSelectSubcategory ? (
+          <div className="mb-2 flex items-center gap-1.5 overflow-x-auto pb-1">
+            {availableSubcategories.map((sub) => {
+              const subActive = normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name);
+              return (
+                <button
+                  key={sub.slug || sub.name}
+                  type="button"
+                  onClick={() => onSelectSubcategory(sub.name)}
+                  className={cn(
+                    "shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    subActive
+                      ? "border-[#e6a679] bg-[#fef0e4] text-[#c85e22]"
+                      : "border-slate-200 bg-white text-slate-600"
+                  )}
+                >
+                  {sub.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         {routePendingTarget && routeStalled ? (
           <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-slate-700">

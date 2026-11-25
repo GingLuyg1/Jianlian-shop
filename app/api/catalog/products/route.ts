@@ -85,6 +85,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const primaryCategoryId = normalizeCategoryId(url.searchParams.get("primaryCategoryId"));
     const secondaryCategoryId = normalizeCategoryId(url.searchParams.get("secondaryCategoryId"));
+    const subcategoryFilter = normalizeSubcategory(url.searchParams.get("subcategory"));
     const keyword = normalizeSearch(url.searchParams.get("keyword"));
     const excludeId = normalizeToken(url.searchParams.get("excludeId"));
     const page = clampNumber(url.searchParams.get("page"), 1, 1, 100000);
@@ -140,17 +141,29 @@ export async function GET(request: Request) {
     });
 
     const productIds = products.map((product) => product.id);
-    const [skuRows, deliveryModeByProduct] = await Promise.all([
-      loadSkus(supabase, productIds),
-      loadPublicDeliveryModes(productIds),
-    ]);
+    let filteredProducts = products;
+    let publicMetaByProduct: Map<string, PublicProductMetadata>;
+    let skuRows: SkuRow[];
+
+    if (subcategoryFilter) {
+      publicMetaByProduct = await loadPublicProductMetadata(productIds);
+      filteredProducts = products.filter((product) =>
+        matchSubcategory(product, publicMetaByProduct.get(product.id) ?? null, subcategoryFilter)
+      );
+      skuRows = await loadSkus(supabase, filteredProducts.map((product) => product.id));
+    } else {
+      [skuRows, publicMetaByProduct] = await Promise.all([
+        loadSkus(supabase, productIds),
+        loadPublicProductMetadata(productIds),
+      ]);
+    }
     const skuMap = groupSkusByProduct(skuRows);
     const deliveryTypes = Array.from(
-      new Set(products.map((product) => product.delivery_type).filter((value): value is string => Boolean(value)))
+      new Set(filteredProducts.map((product) => product.delivery_type).filter((value): value is string => Boolean(value)))
     ).sort();
 
-    const visible = products
-      .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap, deliveryModeByProduct.get(product.id) ?? null))
+    const visible = filteredProducts
+      .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap, publicMetaByProduct.get(product.id) ?? null))
       .filter((product) => matchSearch(product, skuMap.get(product.id) ?? [], keyword))
       .sort((a, b) => compareProducts(a, b, categoryMap));
 
@@ -224,8 +237,13 @@ async function loadSkus(supabase: ReturnType<typeof getSupabaseServerClient>, pr
   }
 }
 
-async function loadPublicDeliveryModes(productIds: string[]) {
-  const output = new Map<string, string>();
+type PublicProductMetadata = {
+  deliveryMode: string | null;
+  subcategory: string | null;
+};
+
+async function loadPublicProductMetadata(productIds: string[]) {
+  const output = new Map<string, PublicProductMetadata>();
   if (productIds.length === 0) return output;
   const service = getSupabaseServiceRoleClient();
   if (!service) return output;
@@ -243,13 +261,22 @@ async function loadPublicDeliveryModes(productIds: string[]) {
           .in("id", chunk);
         for (const row of data ?? []) {
           const pid = typeof row.id === "string" ? row.id : "";
+          if (!pid) continue;
           const mode = extractDeliveryModeFromMetadata(row.metadata);
-          if (pid && mode) output.set(pid, mode);
+          const metaObj =
+            row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+              ? (row.metadata as Record<string, unknown>)
+              : null;
+          const rawSub = typeof metaObj?.subcategory === "string" ? metaObj.subcategory.trim() : "";
+          const subcategory = rawSub || null;
+          if (mode || subcategory) {
+            output.set(pid, { deliveryMode: mode ?? null, subcategory });
+          }
         }
       })
     );
   } catch {
-    // Best-effort delivery mode enrichment
+    // Best-effort public metadata enrichment
   }
   return output;
 }
@@ -320,13 +347,18 @@ function enrichProduct(
   product: ProductRow,
   skus: SkuRow[],
   categoryMap: Map<string, CategoryRow>,
-  deliveryMode: string | null = null
+  publicMeta: PublicProductMetadata | null = null
 ): ProductView {
   const activeSkus = skus.filter((sku) => sku.status === "active" || sku.status === "sold_out");
   const { productHasSkus: hasSkus, minPrice, maxPrice, effectiveStock } =
     derivePublicCatalogSkuSummary(product, activeSkus);
   const preferredImage = activeSkus.find((sku) => sku.image_url)?.image_url ?? product.image_url;
   const deliveryType = activeSkus.find((sku) => sku.delivery_type)?.delivery_type ?? product.delivery_type ?? "manual";
+  const deliveryMode = publicMeta?.deliveryMode ?? null;
+  const subcategory = publicMeta?.subcategory ?? null;
+  const metadata: Record<string, unknown> = {};
+  if (deliveryMode) metadata.delivery_mode = deliveryMode;
+  if (subcategory) metadata.subcategory = subcategory;
 
   return {
     ...product,
@@ -339,7 +371,7 @@ function enrichProduct(
     stock: effectiveStock,
     delivery_type: deliveryType,
     delivery_mode: deliveryMode,
-    metadata: deliveryMode ? { delivery_mode: deliveryMode } : null,
+    metadata: Object.keys(metadata).length > 0 ? metadata : null,
     status: product.status ?? "draft",
     sort_order: Number(product.sort_order ?? 0),
     category_path: getCategoryPath(categoryMap, product.category_id),
@@ -483,6 +515,35 @@ function normalizeCategoryId(value: string | null) {
   const text = (value ?? "").trim();
   if (!text) return "";
   return UUID_PATTERN.test(text) ? text : "";
+}
+
+function normalizeSubcategory(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[｢「『]/g, "「")
+    .replace(/[｣」』]/g, "」")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .slice(0, 80);
+}
+
+function extractShortDescriptionSubcategory(shortDescription: string | null | undefined) {
+  const raw = String(shortDescription ?? "").trim();
+  const match = raw.match(/^【([^】]{1,60})】/);
+  return match?.[1]?.trim() ?? "";
+}
+
+function matchSubcategory(
+  product: ProductRow,
+  publicMeta: PublicProductMetadata | null,
+  normalizedFilter: string
+) {
+  if (!normalizedFilter) return true;
+  const fromMeta = normalizeSubcategory(publicMeta?.subcategory);
+  if (fromMeta && fromMeta === normalizedFilter) return true;
+  const fromDesc = normalizeSubcategory(extractShortDescriptionSubcategory(product.short_description));
+  if (fromDesc && fromDesc === normalizedFilter) return true;
+  return false;
 }
 
 function normalizeSearch(value: string | null) {

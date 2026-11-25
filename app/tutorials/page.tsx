@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -41,21 +41,21 @@ const tutorialLoading = () => (
   </div>
 );
 
-const BinanceTutorial = dynamic(() => import("@/components/account/BinanceTutorial"), { loading: tutorialLoading });
-const GiffgaffTutorial = dynamic(() => import("@/components/account/GiffgaffTutorial"), { loading: tutorialLoading });
-const GiffgaffActivationTutorial = dynamic(() => import("@/components/account/GiffgaffActivationTutorial"), { loading: tutorialLoading });
-const HahaSimTutorial = dynamic(() => import("@/components/account/HahaSimTutorial"), { loading: tutorialLoading });
-const OneNzTutorial = dynamic(() => import("@/components/account/OneNzTutorial"), { loading: tutorialLoading });
-const ChatGptAccountGuideTutorial = dynamic(() => import("@/components/account/ChatGptAccountGuideTutorial"), { loading: tutorialLoading });
-const GeminiTutorial = dynamic(() => import("@/components/account/GeminiTutorial"), { loading: tutorialLoading });
-const GeminiStudentDiscountTutorial = dynamic(() => import("@/components/account/GeminiStudentDiscountTutorial"), { loading: tutorialLoading });
-const AppleIdTutorial = dynamic(() => import("@/components/account/AppleIdTutorial"), { loading: tutorialLoading });
-const GoogleRegionTutorial = dynamic(() => import("@/components/account/GoogleRegionTutorial"), { loading: tutorialLoading });
-const GoogleQrSmsTutorial = dynamic(() => import("@/components/account/GoogleQrSmsTutorial"), { loading: tutorialLoading });
-const GoogleAppealTutorial = dynamic(() => import("@/components/account/GoogleAppealTutorial"), { loading: tutorialLoading });
-const FacebookTutorial = dynamic(() => import("@/components/account/FacebookTutorial"), { loading: tutorialLoading });
-const TwitterTutorial = dynamic(() => import("@/components/account/TwitterTutorial"), { loading: tutorialLoading });
-const RakutenMobileTutorial = dynamic(() => import("@/components/account/RakutenMobileTutorial"), { loading: tutorialLoading });
+const BinanceTutorial = dynamic(() => import("@/components/account/BinanceTutorial"), { ssr: false, loading: tutorialLoading });
+const GiffgaffTutorial = dynamic(() => import("@/components/account/GiffgaffTutorial"), { ssr: false, loading: tutorialLoading });
+const GiffgaffActivationTutorial = dynamic(() => import("@/components/account/GiffgaffActivationTutorial"), { ssr: false, loading: tutorialLoading });
+const HahaSimTutorial = dynamic(() => import("@/components/account/HahaSimTutorial"), { ssr: false, loading: tutorialLoading });
+const OneNzTutorial = dynamic(() => import("@/components/account/OneNzTutorial"), { ssr: false, loading: tutorialLoading });
+const ChatGptAccountGuideTutorial = dynamic(() => import("@/components/account/ChatGptAccountGuideTutorial"), { ssr: false, loading: tutorialLoading });
+const GeminiTutorial = dynamic(() => import("@/components/account/GeminiTutorial"), { ssr: false, loading: tutorialLoading });
+const GeminiStudentDiscountTutorial = dynamic(() => import("@/components/account/GeminiStudentDiscountTutorial"), { ssr: false, loading: tutorialLoading });
+const AppleIdTutorial = dynamic(() => import("@/components/account/AppleIdTutorial"), { ssr: false, loading: tutorialLoading });
+const GoogleRegionTutorial = dynamic(() => import("@/components/account/GoogleRegionTutorial"), { ssr: false, loading: tutorialLoading });
+const GoogleQrSmsTutorial = dynamic(() => import("@/components/account/GoogleQrSmsTutorial"), { ssr: false, loading: tutorialLoading });
+const GoogleAppealTutorial = dynamic(() => import("@/components/account/GoogleAppealTutorial"), { ssr: false, loading: tutorialLoading });
+const FacebookTutorial = dynamic(() => import("@/components/account/FacebookTutorial"), { ssr: false, loading: tutorialLoading });
+const TwitterTutorial = dynamic(() => import("@/components/account/TwitterTutorial"), { ssr: false, loading: tutorialLoading });
+const RakutenMobileTutorial = dynamic(() => import("@/components/account/RakutenMobileTutorial"), { ssr: false, loading: tutorialLoading });
 
 const appleChapters = [
   ["apple-product", "商品说明"],
@@ -380,17 +380,24 @@ function ScrollProgressFab({
   );
 }
 
-function TutorialsPageContent() {
+function TutorialQuerySync({
+  onSync,
+}: {
+  onSync: (paramTopic: string | null, paramGuide: string | null) => void;
+}) {
   const searchParams = useSearchParams();
+  const paramTopic = searchParams?.get("topic") ?? null;
+  const paramGuide = searchParams?.get("guide") ?? null;
+  useEffect(() => {
+    onSync(paramTopic, paramGuide);
+  }, [onSync, paramTopic, paramGuide]);
+  return null;
+}
+
+function TutorialsPageContent() {
   const { isMobile, previewWidth, mobilePreview } = useMobileStorefront();
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>(() => {
-    const p = searchParams?.get("topic");
-    if (p && tutorialTopics.some((t) => t.id === p)) {
-      return p as (typeof tutorialTopics)[number]["id"];
-    }
-    return "required";
-  });
+  const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>("required");
   const [expandAllOpen, setExpandAllOpen] = useState(false);
   const [giffgaffTreeOpen, setGiffgaffTreeOpen] = useState(false);
   const [giffgaffGuide, setGiffgaffGuide] = useState<"activation" | "keeper">("activation");
@@ -407,9 +414,7 @@ function TutorialsPageContent() {
   const [headerOverlayOpen, setHeaderOverlayOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const paramTopic = searchParams?.get("topic");
-    const paramGuide = searchParams?.get("guide");
+  const handleSyncQuery = useCallback((paramTopic: string | null, paramGuide: string | null) => {
     if (paramGuide === "student-discount") {
       setSelected("google-region");
       setGoogleTreeOpen(true);
@@ -439,7 +444,7 @@ function TutorialsPageContent() {
     } else if (paramGuide === "appeal") {
       setGoogleGuide("appeal");
     }
-  }, [searchParams]);
+  }, []);
 
   const query = search.trim().toLocaleLowerCase();
   const matchingTopics = tutorialTopics.filter(topic => [topic.label, topic.title, topic.description, ...topic.keywords].some(text => text.toLocaleLowerCase().includes(query)));
@@ -458,7 +463,7 @@ function TutorialsPageContent() {
     twitterGuide,
     googleGuide,
   });
-  return <div className={tutorial.shell}><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={isMobile ? "max-w-none !pt-2 !px-3 pb-6" : "max-w-none px-4 py-3 md:px-6"}>
+  return <div className={tutorial.shell}><Suspense fallback={null}><TutorialQuerySync onSync={handleSyncQuery} /></Suspense><PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={isMobile ? "max-w-none !pt-2 !px-3 pb-6" : "max-w-none px-4 py-3 md:px-6"}>
     <div data-testid="tutorial-workspace" className={`${tutorial.workspace} ${isMobile ? "!block !h-auto !space-y-3 !overflow-visible" : ""}`}>
       <aside data-testid="tutorial-navigation" className={cn(glass.surface, styles.panel, tutorial.navigation, isMobile && "!max-h-none !overflow-visible !p-2 !sticky !top-[65px] !z-30 bg-white/95 backdrop-blur-md shadow-xs border border-orange-100/90 rounded-2xl")}>
         {isMobile ? (
@@ -747,9 +752,9 @@ function TutorialsPageContent() {
             glass.hero,
             tutorial.header,
             isMobile && "!px-4 !py-3.5",
-            !isMobile && headerCollapsed && !headerOverlayOpen && "!h-0 !overflow-hidden !border-0 !py-0 opacity-0 pointer-events-none",
-            !isMobile && headerCollapsed && headerOverlayOpen && "absolute inset-x-0 top-0 z-30 rounded-t-[26px] shadow-xl backdrop-blur-md",
-            "transition-all duration-200"
+            !isMobile && "max-h-[260px] overflow-hidden transition-[max-height,opacity,padding,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            !isMobile && headerCollapsed && !headerOverlayOpen && "!max-h-0 !border-0 !py-0 -translate-y-2 opacity-0 pointer-events-none",
+            !isMobile && headerCollapsed && headerOverlayOpen && "absolute inset-x-0 top-0 z-30 rounded-t-[26px] translate-y-0 opacity-100 shadow-xl backdrop-blur-md"
           )}
         >
           {!isMobile && headerCollapsed && headerOverlayOpen ? (
@@ -968,45 +973,6 @@ function TutorialsPageContent() {
   </PublicLayout></div>;
 }
 
-function TutorialsLoadingShell() {
-  return (
-    <div className={tutorial.shell}>
-      <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="max-w-none px-4 py-3 md:px-6">
-        <div data-testid="tutorial-loading-shell" className={tutorial.workspace}>
-          <aside className={cn(glass.surface, styles.panel, tutorial.navigation, "space-y-3 p-4")}>
-            <div className="h-5 w-28 animate-pulse rounded-md bg-orange-100/70" />
-            <div className="h-11 w-full animate-pulse rounded-xl bg-slate-100" />
-            <div className="space-y-2 pt-2">
-              {Array.from({ length: 8 }).map((_, idx) => (
-                <div key={idx} className="h-10 w-full animate-pulse rounded-xl bg-orange-50/70" />
-              ))}
-            </div>
-          </aside>
-          <section className={cn(glass.surface, styles.panel, tutorial.content, "flex flex-col")}>
-            <div className={cn(glass.hero, tutorial.header, "space-y-2.5 p-6")}>
-              <div className="h-7 w-48 animate-pulse rounded-lg bg-orange-100/70" />
-              <div className="h-4 w-36 animate-pulse rounded-md bg-orange-50" />
-              <div className="h-4 w-2/3 animate-pulse rounded-md bg-slate-100" />
-            </div>
-            <div className="flex-1 space-y-4 p-6">
-              <div className="h-36 w-full animate-pulse rounded-2xl bg-orange-50/50" />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="h-28 animate-pulse rounded-2xl bg-slate-100/80" />
-                <div className="h-28 animate-pulse rounded-2xl bg-slate-100/80" />
-              </div>
-              <div className="h-32 w-full animate-pulse rounded-2xl bg-slate-100/70" />
-            </div>
-          </section>
-        </div>
-      </PublicLayout>
-    </div>
-  );
-}
-
 export default function TutorialsPage() {
-  return (
-    <Suspense fallback={<TutorialsLoadingShell />}>
-      <TutorialsPageContent />
-    </Suspense>
-  );
+  return <TutorialsPageContent />;
 }

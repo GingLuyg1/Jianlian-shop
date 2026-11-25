@@ -91,6 +91,7 @@ export type PublicProductDetail = {
 export type CatalogProductQuery = {
   primaryCategoryId?: string;
   secondaryCategoryId?: string;
+  subcategory?: string;
   keyword?: string;
   page?: number;
   pageSize?: number;
@@ -134,7 +135,7 @@ export function publicProductMetadata(value: unknown): Record<string, unknown> |
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
   const result: Record<string, unknown> = {};
-  for (const field of ["category", "category_slug", "subcategory_slug", "category_path", "delivery_mode"]) {
+  for (const field of ["category", "category_slug", "subcategory", "subcategory_slug", "category_path", "delivery_mode"]) {
     const item = source[field];
     if (typeof item === "string" && item.length <= 512) result[field] = item;
   }
@@ -298,6 +299,7 @@ export async function searchPublicCatalogProducts(query: CatalogProductQuery) {
   const params = new URLSearchParams();
   if (query.primaryCategoryId) params.set("primaryCategoryId", query.primaryCategoryId);
   if (query.secondaryCategoryId) params.set("secondaryCategoryId", query.secondaryCategoryId);
+  if (query.subcategory?.trim()) params.set("subcategory", query.subcategory.trim());
   if (query.keyword?.trim()) params.set("keyword", query.keyword.trim());
   if (query.page) params.set("page", String(query.page));
   if (query.pageSize) params.set("pageSize", String(query.pageSize));
