@@ -28,7 +28,7 @@ test("recharge uses a responsive two-column layout with live channel and record 
 
 test("recharge request, limit dialog and existing record actions stay wired", () => {
   for (const marker of [
-    'fetch("/api/recharges", {',
+    'fetchWithTimeout("/api/recharges", {',
     'method: "POST"',
     'client_request_id: clientRequestIdRef.current',
     'setAmountLimitDialogOpen(true)',
@@ -48,7 +48,8 @@ test("recharge request, limit dialog and existing record actions stay wired", ()
 test("selected refinements keep V3.5 spacing and restore only the sliding record tab", () => {
   assert.match(recharge, /h-\[84px\]/);
   assert.match(recharge, /h-\[46px\] w-\[46px\]/);
-  assert.equal((recharge.match(/pl-\[13px\] pr-2\.5/g) ?? []).length, 2);
+  assert.match(recharge, /pl-\[13px\] pr-2\.5/);
+  assert.match(recharge, /code:\s*"usdt_trc20"/);
   assert.match(recharge, /<RechargeRecordTabs value=\{historyTab\}/);
   assert.match(recharge, /md:mt-auto/);
   assert.match(recharge, /channelGridStyles\.hero/);

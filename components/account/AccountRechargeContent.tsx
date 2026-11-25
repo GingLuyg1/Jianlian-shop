@@ -4,7 +4,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, Headphones, Info, Wallet, WalletCards, Check, Clock3, Coins, FileText, LockKeyhole } from "lucide-react";
+import { ArrowUpRight, Headphones, Info, Wallet, WalletCards, Check, Clock3, Coins, FileText } from "lucide-react";
 import { toast } from "sonner";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,8 @@ type RechargeRate = {
 const CHANNEL_PRESENTATION = [
   { code: "alipay", name: "支付宝", description: "手续费 3%", icon: "/assets/alipay-icon.jpg" },
   { code: "wechat", name: "微信支付", description: "手续费 3%", icon: "/assets/wechat-pay-icon.jpg" },
-  { code: "usdt_bep20", name: "USDT BEP20", description: "无手续费", icon: "/assets/usdt-bep20-icon.jpg" },
+  { code: "usdt_bep20", name: "USDT BEP20", description: "BSC · 无手续费", icon: "/assets/usdt-bep20-icon.jpg" },
+  { code: "usdt_trc20", name: "USDT TRC20", description: "TRON · 无手续费", icon: "/assets/usdt-trc20-icon.jpg" },
 ] as const;
 
 export default function AccountRechargeContent() {
@@ -100,7 +101,7 @@ export default function AccountRechargeContent() {
 
   const selectedChannel =
     visibleChannels.find((channel) => channel.code === selectedChannelCode) ?? visibleChannels[0] ?? null;
-  const isUsdtCnyRecharge = selectedChannel?.code === "usdt_bep20";
+  const isUsdtCnyRecharge = selectedChannel?.code === "usdt_bep20" || selectedChannel?.code === "usdt_trc20";
   const legacyChannelAmount = isUsdtCnyRecharge ? 0 : Number(amountText) || 0;
   const summary = useMemo(
     () => (selectedChannel && !isUsdtCnyRecharge ? calculateRechargeAmounts(selectedChannel, legacyChannelAmount) : null),
@@ -324,7 +325,7 @@ export default function AccountRechargeContent() {
                   <Notice icon={FileText} title="付款说明"><span className="block">收款页无法显示，请关闭代理后重试。</span><span className="block">二维码超限，请关闭支付页重新获取。</span></Notice>
                   <Notice icon={WalletCards} title="到账与异常"><span className="block">支付成功后，等待1分钟再刷新页面。</span><span className="block">未到账，请发付款截图及用户名给客服。</span></Notice>
                   <Notice icon={Coins} title="单笔限制"><span className="block">单笔超 ¥1000 建议分单或用 USDT。</span><span className="block">超额请联系客服，USDT无限制。</span></Notice>
-                  <Notice icon={Clock3} title="费用说明"><span className="block">支付宝 / 微信：手续费 3%</span><span className="block">USDT BEP20：无手续费</span></Notice>
+                  <Notice icon={Clock3} title="费用说明"><span className="block">支付宝 / 微信：手续费 3%</span><span className="block">USDT (BEP20 / TRC20)：无手续费</span></Notice>
                 </div>
               </CardContent>
             </Card>
@@ -355,8 +356,9 @@ export default function AccountRechargeContent() {
                   const channel = paymentChannels.find((candidate) => candidate.code === item.code);
                   const selected = Boolean(channel && selectedChannel?.code === channel.code);
                   const disabled = !channel || !channel.enabled || channel.status !== "active";
+                  const isUsdtPresentation = item.code === "usdt_bep20" || item.code === "usdt_trc20";
                   const knownExternalFee = channel?.currency === "CNY" && ["snpay", "liuhaoyi"].includes(channel.provider) && Boolean(channel.providerExternalFeeDisclosure);
-                  const actualFeeDescription = channel && ((item.code === "usdt_bep20" && channel.feeRate !== 0) || (item.code !== "usdt_bep20" && !knownExternalFee && channel.feeRate !== 0.03))
+                  const actualFeeDescription = channel && ((isUsdtPresentation && channel.feeRate !== 0) || (!isUsdtPresentation && !knownExternalFee && channel.feeRate !== 0.03))
                     ? `手续费 ${Number((channel.feeRate * 100).toFixed(2))}%` : item.description;
 
                   return (
@@ -388,14 +390,13 @@ export default function AccountRechargeContent() {
                           <span className="block whitespace-nowrap text-[14px] font-semibold leading-5 sm:text-[16px] sm:leading-[22px]">
                             {item.name}
                           </span>
-                          {item.code === "usdt_bep20" || disabled ? <span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px] text-muted-foreground">{item.code === "usdt_bep20" ? actualFeeDescription : ""}{disabled ? " · 未开放" : ""}</span> : null}
+                          {isUsdtPresentation || disabled ? <span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px] text-muted-foreground">{isUsdtPresentation ? actualFeeDescription : ""}{disabled ? " · 未开放" : ""}</span> : null}
                         </span>
                       </div>
                     </button>
                     </div>
                   );
                 })}
-                {!channelsLoading ? <button data-payment-channel="unavailable" type="button" disabled className={cn(channelGridStyles.channelCard, "relative flex h-[84px] min-w-0 cursor-not-allowed items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-100/70 pl-[13px] pr-2.5 text-left text-slate-400")}><span className="absolute right-2 top-2 h-3.5 w-3.5 rounded-full border border-slate-300" /><span data-channel-icon className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-slate-200/70"><LockKeyhole className="h-[23px] w-[23px]" /></span><span className="min-w-0"><span className="block whitespace-nowrap text-[14px] font-semibold leading-5 sm:text-[16px] sm:leading-[22px]">暂未开放</span><span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px]">敬请期待</span></span></button> : null}
               </div>
 
               <div className={cn("order-3 mt-8 flex flex-col border-t border-border/70 pt-6 md:mt-auto md:pt-8", isMobile && "!mt-5 !pt-4")}>
@@ -425,7 +426,7 @@ export default function AccountRechargeContent() {
                 ) : null}
                 {!isUsdtCnyRecharge && legacyChannelAmount > 1000 ? (
                   <p className="mt-2 text-xs text-amber-700">
-                    单笔充值超过 ¥1000 建议分笔充值或切换为 USDT BEP20 渠道（无上限、免手续费）。
+                    单笔充值超过 ¥1000 建议分笔充值或切换为 USDT 渠道（BEP20 / TRC20，无上限、免手续费）。
                   </p>
                 ) : null}
                 {channelOverLimit ? (

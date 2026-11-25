@@ -546,8 +546,12 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   const remainingSeconds = secondsLeft(recharge?.expiresAt) + nowTick * 0;
   const expiredByTime = Boolean(isCnyGatewayRecharge && recharge?.expiresAt && isRechargePastDue(recharge.expiresAt));
   const canTransfer = ["pending", "waiting_payment"].includes(rechargeStatus) && remainingSeconds > 0;
-  const canSubmitRechargeTxHash = recharge?.channelCode === "usdt_bep20" && canTransfer;
-  const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
+  const isTrc20Recharge = recharge?.channelCode === "usdt_trc20";
+  const isUsdtChainRecharge = recharge?.channelCode === "usdt_bep20" || isTrc20Recharge;
+  const canSubmitRechargeTxHash = isUsdtChainRecharge && canTransfer;
+  const txHashValid = isTrc20Recharge
+    ? /^[0-9a-fA-F]{64}$/.test(txHash.trim())
+    : /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
 
   useEffect(() => {
     if (!succeeded || balanceNotificationRechargeRef.current === rechargeNo) return;
@@ -566,20 +570,28 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
     setError("");
     setVerifyMessage("");
     try {
-      const response = await fetchWithTimeout(`/api/recharges/${encodeURIComponent(rechargeNo)}/bep20/verify`, {
+      const verifyEndpoint = isTrc20Recharge
+        ? `/api/recharges/${encodeURIComponent(rechargeNo)}/trc20/verify`
+        : `/api/recharges/${encodeURIComponent(rechargeNo)}/bep20/verify`;
+      const response = await fetchWithTimeout(verifyEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash: txHash.trim() }),
       });
       const payload = (await response.json().catch(() => null)) as
-        | { error?: string; actualReceivedUsdt?: string; creditedCnyAmount?: string }
+        | { error?: string; status?: string; actualReceivedUsdt?: string; creditedCnyAmount?: string }
         | null;
       if (response.status === 401) {
         router.push(`/login?redirect=${encodeURIComponent(`/payment?recharge=${rechargeNo}`)}`);
         return;
       }
       if (!response.ok) throw new Error(payload?.error ?? "链上交易核验失败");
-      setVerifyMessage("TxHash 已提交核验，请勿重复付款。页面会继续自动刷新充值状态。");
+      if (payload?.status === "succeeded") {
+        setVerifyMessage("链上核验通过，人民币余额已自动入账！");
+        notifyAccountBalanceUpdated();
+      } else {
+        setVerifyMessage("TxHash 已提交核验，请勿重复付款。页面会继续自动刷新充值状态。");
+      }
       await loadRecharge({ silent: true });
     } catch (verifyError) {
       toast.error(getOrderErrorMessage(verifyError, "链上交易核验失败"));
@@ -596,7 +608,11 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
           <div>
             <h1 className="text-2xl font-bold text-foreground">账户充值付款</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {isCnyGatewayRecharge ? "请使用支付渠道提供的付款入口完成支付。" : "请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。"}
+              {isCnyGatewayRecharge
+                ? "请使用支付渠道提供的付款入口完成支付。"
+                : isTrc20Recharge
+                  ? "请按充值单的精确金额完成 USDT-TRC20（TRON Network）转账，并在下方提交交易哈希（TxHash）自动核验入账。"
+                  : "请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。"}
             </p>
           </div>
           <Button variant="outline" asChild>
@@ -625,7 +641,11 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <ShieldCheck className="h-5 w-5 text-primary" />
-                  {isCnyGatewayRecharge ? `${recharge.channelName || (recharge.channelCode === "alipay" ? "支付宝" : "微信支付")}付款信息` : "USDT-BEP20 付款信息"}
+                  {isCnyGatewayRecharge
+                    ? `${recharge.channelName || (recharge.channelCode === "alipay" ? "支付宝" : "微信支付")}付款信息`
+                    : isTrc20Recharge
+                      ? "USDT-TRC20 付款信息"
+                      : "USDT-BEP20 付款信息"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -650,7 +670,9 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                   </div>
                 ) : canTransfer ? (
                   <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-                    普通充值由 Scanner 自动识别，无需填写 TxHash。请勿重复付款。
+                    {isTrc20Recharge
+                      ? "请通过 TRON Network (TRC20) 精确转入上方 USDT 金额，等待约 1 分钟确认后在下方提交 64 位 TxHash 即可自动秒级入账，请勿重复付款。"
+                      : "普通充值由 Scanner 自动识别，无需填写 TxHash。请勿重复付款。"}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -668,7 +690,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                       <Info label="精确应付 USDT" value={recharge.expectedUsdtAmount ?? "—"} strong copyable onCopy={() => void copyRechargeText(recharge.expectedUsdtAmount ?? "")} />
                       <Info label="收款地址" value={recharge.paymentAddress} copyable onCopy={() => void copyRechargeText(recharge.paymentAddress ?? "")} />
                       <Info label="Token 合约" value={recharge.paymentTokenContract ?? "—"} copyable={Boolean(recharge.paymentTokenContract)} onCopy={() => void copyRechargeText(recharge.paymentTokenContract ?? "")} />
-                      <Info label="网络" value="BNB Smart Chain (BEP20)" />
+                      <Info label="网络" value={isTrc20Recharge ? "TRON Network (TRC20)" : "BNB Smart Chain (BEP20)"} />
                       <Info label="支付截止时间" value={formatDate(recharge.expiresAt)} />
                       <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-muted-foreground">
                         <Clock3 className="h-4 w-4" />
@@ -681,20 +703,32 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                 {canSubmitRechargeTxHash ? (
                   <div className="space-y-3 border-t pt-4">
                     <div>
-                      <div className="text-sm font-medium">TxHash fallback（可选）</div>
-                      <p className="mt-1 text-xs text-muted-foreground">仅在自动识别延迟或客服要求时提交，正常充值无需填写。</p>
+                      <div className="text-sm font-medium">
+                        {isTrc20Recharge ? "提交 TRON 交易哈希（TxHash）核验入账" : "TxHash fallback（可选）"}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {isTrc20Recharge
+                          ? "完成 TRON TRC20 转账后，从钱包或交易所提币记录复制 64 位 TxHash（不含 0x）填入下方，验证达到 19 个确认后自动入账。"
+                          : "仅在自动识别延迟或客服要求时提交，正常充值无需填写。"}
+                      </p>
                     </div>
                     <input
                       value={txHash}
                       onChange={(event) => setTxHash(event.target.value)}
-                      placeholder="0x 开头的 32 字节交易哈希"
+                      placeholder={isTrc20Recharge ? "64 位十六进制 TRON 交易哈希（不含 0x）" : "0x 开头的 32 字节交易哈希"}
                       className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary"
                     />
-                    {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
+                    {txHash && !txHashValid ? (
+                      <div className="text-xs text-red-600">
+                        {isTrc20Recharge
+                          ? "请输入合法的 64 位十六进制 TRON TxHash（不含 0x 前缀）。"
+                          : "请输入合法的 0x 开头 64 位十六进制 TxHash。"}
+                      </div>
+                    ) : null}
                     {verifyMessage ? <div className="text-sm text-emerald-700">{verifyMessage}</div> : null}
                     <Button type="button" onClick={() => void verifyRechargeTxHash()} disabled={!txHashValid || verifying}>
                       {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      提交 TxHash 核验
+                      {isTrc20Recharge ? "核验 TRON 交易并入账" : "提交 TxHash 核验"}
                     </Button>
                   </div>
                 ) : null}
@@ -722,7 +756,11 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
               <CardHeader className="pb-3"><CardTitle className="text-base">链上充值须知</CardTitle></CardHeader>
               <CardContent>
                 <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
-                  <li>仅支持 USDT 通过 BNB Smart Chain（BEP20）转账。</li>
+                  <li>
+                    {isTrc20Recharge
+                      ? "仅支持 USDT 通过 TRON Network（TRC20）转账，请勿通过 BEP20 / ERC20 等其他网络跨链转账。"
+                      : "仅支持 USDT 通过 BNB Smart Chain（BEP20）转账。"}
+                  </li>
                   <li>请严格支付页面显示的精确 USDT 金额，不要自行四舍五入。</li>
                   <li>请在截止时间前付款；金额不一致、晚到账或其他异常交易将进入人工复核。</li>
                   <li>匹配成功后按申请的人民币金额入账。</li>

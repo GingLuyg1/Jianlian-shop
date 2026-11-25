@@ -186,13 +186,13 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const isUsdtCnyRecharge = channel.code === "usdt_bep20";
+    const isUsdtCnyRecharge = channel.code === "usdt_bep20" || channel.code === "usdt_trc20";
     if (!isUsdtCnyRecharge && currency === "CNY" && isOnlineCnyOverLimit(body.amount)) {
       return NextResponse.json({ error: ONLINE_PAYMENT_LIMIT_MESSAGE, code: "ONLINE_PAYMENT_LIMIT_EXCEEDED" }, { status: 400 });
     }
     if (isUsdtCnyRecharge && channel.reviewMode !== "manual") {
       return NextResponse.json(
-        { error: "USDT-BEP20 账号充值仅支持人工审核模式", code: "RECHARGE_REVIEW_MODE_INVALID" },
+        { error: "USDT 链上账号充值仅支持人工/链上核验模式", code: "RECHARGE_REVIEW_MODE_INVALID" },
         { status: 400 },
       );
     }
@@ -326,7 +326,7 @@ export async function POST(request: Request) {
       const paymentAddress = channel.manualPayment?.payment_address ?? "";
       if (!paymentAddress || !theoreticalUsdtAmount) {
         return NextResponse.json(
-          { error: "USDT-BEP20 收款配置不完整", code: "RECHARGE_CHANNEL_CONFIG_INVALID" },
+          { error: `${channel.name || "USDT"} 收款配置不完整`, code: "RECHARGE_CHANNEL_CONFIG_INVALID" },
           { status: 503 },
         );
       }
