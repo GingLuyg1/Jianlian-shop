@@ -292,7 +292,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
         <footer
           data-testid="public-site-footer"
-          className="mt-auto w-full shrink-0 bg-transparent px-[var(--storefront-content-padding-x)] py-1.5 text-[11px] leading-none text-[#8c7a6b] md:fixed md:bottom-0 md:left-0 md:right-0 md:z-20 md:mt-0 md:flex md:h-[20px] md:w-full md:items-center md:bg-[#fbf7f1]/95 md:px-[20px] md:py-0"
+          className="mt-auto w-full shrink-0 bg-transparent px-[var(--storefront-content-padding-x)] py-1.5 text-[11px] leading-none text-[#8c7a6b] md:fixed md:bottom-0 md:left-0 md:right-0 md:z-20 md:mt-0 md:flex md:h-[20px] md:w-full md:items-center md:bg-[#fbf7f1]/95 md:px-[20px] md:py-0 lg:px-[calc(var(--storefront-main-offset)+var(--storefront-content-padding-x))]"
         >
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
             <span className="truncate">

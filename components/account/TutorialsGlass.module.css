@@ -26,12 +26,12 @@
 .scroll:focus-visible { outline:2px solid #de9d62; outline-offset:-3px; }
 .topicEnter { min-height:100%; animation:topic-enter 240ms cubic-bezier(.22,1,.36,1); }
 @keyframes topic-enter { from { opacity:0; transform:translateY(5px); } }
-.tree { --expanded-height:var(--radix-collapsible-content-height); min-width:0; grid-column:1/-1; }
+.tree { --expanded-height:var(--radix-collapsible-content-height); min-width:0; grid-column:1/-1; overflow:hidden; }
 .treeItem { min-width:0; }
-.tree[data-state=open] { animation:expand 300ms cubic-bezier(.22,1,.36,1); }
-.tree[data-state=closed] { animation:collapse 220ms cubic-bezier(.22,1,.36,1); }
-@keyframes expand { from { height:0; overflow:hidden; opacity:.55; } to { height:var(--expanded-height); overflow:hidden; opacity:1; } }
-@keyframes collapse { from { height:var(--expanded-height); overflow:hidden; opacity:1; } to { height:0; overflow:hidden; opacity:0; } }
+.tree[data-state=open] { animation:expand 500ms cubic-bezier(.22,1,.36,1); }
+.tree[data-state=closed] { animation:collapse 420ms cubic-bezier(.22,1,.36,1); }
+@keyframes expand { from { height:0; opacity:0; transform:translateY(-6px); } to { height:var(--expanded-height); opacity:1; transform:translateY(0); } }
+@keyframes collapse { from { height:var(--expanded-height); opacity:1; transform:translateY(0); } to { height:0; opacity:0; transform:translateY(-6px); } }
 .appleContents { margin:8px 2px 4px 14px; padding-left:9px; border-left:1px solid #ead7c5; }
 .contentsLink { display:block; width:100%; padding:6px 8px; border-radius:8px; text-align:left; font-size:13px; line-height:1.5; color:#665749; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .subtopics { position:relative; isolation:isolate; }
@@ -60,7 +60,7 @@
 .subtopics[data-guide=unban] .subtopicIndicator {
   transform: translateY(144px);
 }
-.chevron { width:15px; height:15px; transition:transform 240ms cubic-bezier(.22,1,.36,1); }
+.chevron { width:15px; height:15px; transition:transform 500ms cubic-bezier(.22,1,.36,1); }
 [aria-expanded=true] > span > .chevron { transform:rotate(180deg); }
 .appleArticle { padding:12px 0 4px; }
 .appleArticle h2[id] { scroll-margin-top:16px; }

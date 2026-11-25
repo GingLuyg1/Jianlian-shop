@@ -1038,48 +1038,64 @@ function CategoryPanel({
                       onSelectCategory(category);
                     }}
                   />
-                  {isExpanded && !isMobile ? (
+                  {hasSubcategories && !isMobile ? (
                     <div
                       data-testid="storefront-subcategory-tree"
-                      className="relative ml-6 mt-1.5 mb-2 space-y-1 border-l-2 border-[#ead5c3] pl-3 py-0.5"
+                      aria-hidden={!isExpanded}
+                      className={cn(
+                        "grid transition-[grid-template-rows,opacity,margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                        isExpanded
+                          ? "mt-1.5 mb-2 grid-rows-[1fr] opacity-100"
+                          : "mt-0 mb-0 grid-rows-[0fr] opacity-0 pointer-events-none"
+                      )}
                     >
-                      {subItems.map((sub) => {
-                        const subActive =
-                          isSelected &&
-                          normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name);
-                        return (
-                          <button
-                            key={sub.slug || sub.name}
-                            type="button"
-                            onClick={() => {
-                              if (isSelected) {
-                                onSelectSubcategory?.(sub.name);
-                              } else {
-                                setExpandedCategoryIds((prev) =>
-                                  prev.includes(category.id) ? prev : [...prev, category.id]
-                                );
-                                setClickedCategoryId(category.id);
-                                centerItem(category.id);
-                                onSelectCategory(category, sub.name);
-                              }
-                            }}
-                            className={cn(
-                              "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-all duration-150",
-                              subActive
-                                ? "bg-gradient-to-r from-[#fde8d7] via-[#fef2e8] to-[#fce3cd] font-bold text-[#c85e22] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_-2px_rgba(161,92,42,0.14)] ring-1 ring-[#e6a679]/50"
-                                : "font-medium text-slate-600 hover:bg-[#fff7f0]/90 hover:text-[#b4531a]"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
-                                subActive ? "bg-[#d96927]" : "bg-slate-300 group-hover:bg-[#e59866]"
-                              )}
-                            />
-                            <span className="truncate leading-snug">{sub.name}</span>
-                          </button>
-                        );
-                      })}
+                      <div className="min-h-0 overflow-hidden">
+                        <div
+                          className={cn(
+                            "relative ml-6 space-y-1 border-l-2 border-[#ead5c3] pl-3 py-0.5 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                            isExpanded ? "translate-y-0" : "-translate-y-2"
+                          )}
+                        >
+                          {subItems.map((sub) => {
+                            const subActive =
+                              isSelected &&
+                              normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name);
+                            return (
+                              <button
+                                key={sub.slug || sub.name}
+                                type="button"
+                                tabIndex={isExpanded ? 0 : -1}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    onSelectSubcategory?.(sub.name);
+                                  } else {
+                                    setExpandedCategoryIds((prev) =>
+                                      prev.includes(category.id) ? prev : [...prev, category.id]
+                                    );
+                                    setClickedCategoryId(category.id);
+                                    centerItem(category.id);
+                                    onSelectCategory(category, sub.name);
+                                  }
+                                }}
+                                className={cn(
+                                  "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-all duration-150",
+                                  subActive
+                                    ? "bg-gradient-to-r from-[#fde8d7] via-[#fef2e8] to-[#fce3cd] font-bold text-[#c85e22] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_-2px_rgba(161,92,42,0.14)] ring-1 ring-[#e6a679]/50"
+                                    : "font-medium text-slate-600 hover:bg-[#fff7f0]/90 hover:text-[#b4531a]"
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
+                                    subActive ? "bg-[#d96927]" : "bg-slate-300 group-hover:bg-[#e59866]"
+                                  )}
+                                />
+                                <span className="truncate leading-snug">{sub.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -1219,7 +1235,7 @@ function CategoryButton({
         {hasSubcategories ? (
           <ChevronDown
             className={cn(
-              "hidden h-5 w-5 shrink-0 lg:block transition-transform duration-200",
+              "hidden h-5 w-5 shrink-0 lg:block transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
               active ? "text-primary" : "text-muted-foreground/60",
               !expanded && "-rotate-90",
               loading && "opacity-0"

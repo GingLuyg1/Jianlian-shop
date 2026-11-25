@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>资源中心「全部商品」排版演示 · Jianlian Shop</title>
+  <title>资源中心「全部商品」排版演示（带品牌图标）· Jianlian Shop</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { background: #fbf7f1; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1e293b; }
     .panel { background: rgba(255,255,255,0.94); border: 1px solid #f0e4d8; border-radius: 26px; box-shadow: 0 14px 40px -22px rgba(133,82,43,0.22); }
-    .card-row { transition: all 180ms cubic-bezier(.22,1,.36,1); }
+    .card-row { transition: all 220ms cubic-bezier(.22,1,.36,1); }
     .card-row:hover { transform: translateY(-1px); border-color: rgba(223,115,52,0.45); box-shadow: 0 10px 24px -14px rgba(169,103,52,0.28); }
+    .product-icon { transition: transform 280ms cubic-bezier(.22,1,.36,1); }
+    .card-row:hover .product-icon { transform: scale(1.04); }
   </style>
 </head>
 <body class="h-screen overflow-hidden p-5">
@@ -17,7 +19,7 @@
     <!-- 模拟左侧主导航栏 -->
     <aside class="panel flex h-full flex-col p-4">
       <div class="mb-5 flex items-center gap-2.5 px-2 pt-1">
-        <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#e67b39] to-[#c85e22] text-sm font-black text-white">JL</div>
+        <img src="/assets/jianlian-brand-logo-96.webp" alt="Jianlian" class="h-9 w-9 rounded-xl object-cover ring-1 ring-orange-100" />
         <div>
           <div class="text-base font-bold leading-tight text-slate-900">Jianlian</div>
           <div class="text-[11px] text-slate-400">数字商品服务</div>
@@ -25,21 +27,39 @@
       </div>
 
       <div class="space-y-1 text-sm">
-        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">首页</div>
+        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">
+          <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>首页</span>
+        </div>
         <div class="px-3 pt-3 pb-1 text-[11px] font-medium text-slate-400">资源中心</div>
         <div class="flex items-center justify-between rounded-xl bg-gradient-to-r from-[#fde8d7] to-[#fff5ec] px-3 py-2.5 font-bold text-[#c85e22] ring-1 ring-[#e6a679]/40">
-          <span>全部商品</span>
+          <span class="flex items-center gap-2.5">
+            <svg class="h-4 w-4 text-[#df7334]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg>
+            <span>全部商品</span>
+          </span>
           <span class="rounded-full bg-[#df7334] px-1.5 py-0.5 text-[10px] font-bold text-white">NEW</span>
         </div>
-        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">国际 SIM 卡</div>
-        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">礼品卡 / 充值卡</div>
-        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">数字 / 社媒账号</div>
-        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">AI 会员充值</div>
+        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">
+          <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+          <span>国际 SIM 卡</span>
+        </div>
+        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">
+          <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect width="20" height="5" x="2" y="7"/><line x1="12" x2="12" y1="22" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+          <span>礼品卡 / 充值卡</span>
+        </div>
+        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">
+          <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+          <span>数字 / 社媒账号</span>
+        </div>
+        <div class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-slate-500">
+          <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+          <span>AI 会员充值</span>
+        </div>
       </div>
 
       <div class="mt-auto rounded-2xl bg-orange-50/80 p-3 text-[11px] leading-5 text-slate-600">
-        <div class="font-bold text-[#c85e22]">交互演示说明</div>
-        资源中心新增「全部商品」总入口：支持一键跨类目搜索、按大类/库存状态快速筛选，热卖有货置顶、无库存自动沉底。
+        <div class="font-bold text-[#c85e22]">带图标流畅度说明</div>
+        所有品牌图标均走本地静态资源 + 浏览器强缓存 + <code class="rounded bg-white px-1 text-[10px]">loading="lazy"</code> 懒加载，首屏只解码可见区域图标，滚动丝滑不卡顿。
       </div>
     </aside>
 
@@ -51,18 +71,22 @@
           <div>
             <div class="flex items-center gap-2.5">
               <h1 class="text-xl font-black tracking-tight text-slate-900">全部商品</h1>
-              <span id="count-badge" class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200/70">共 12 个示例商品</span>
+              <span id="count-badge" class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200/70">共 18 个示例商品</span>
             </div>
-            <p class="mt-0.5 text-xs text-slate-500">跨分类一站式检索 · 有库存与预约发货优先展示，暂无库存自动沉底</p>
+            <p class="mt-0.5 text-xs text-slate-500">跨分类一站式检索 · 品牌主图清晰识别 · 有库存与预约发货置顶，暂无库存自动沉底</p>
           </div>
-          <div class="flex items-center gap-2">
-            <div class="relative w-72">
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="relative w-64 sm:w-72">
               <input id="search-input" oninput="render()" type="text" placeholder="搜索全站商品、国家、平台或规格..."
                 class="h-10 w-full rounded-xl border border-[#ead9cc] bg-[#fffaf6] px-3.5 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#df7334] focus:outline-none" />
             </div>
             <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-[#ead9cc] bg-white px-3 h-10 text-xs font-semibold text-slate-700 select-none hover:bg-orange-50/40">
               <input id="in-stock-only" type="checkbox" onchange="render()" class="accent-[#df7334] h-3.5 w-3.5" />
               <span>仅看有货</span>
+            </label>
+            <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/70 px-3 h-10 text-xs font-semibold text-[#c85e22] select-none hover:bg-orange-100/70">
+              <input id="show-icons" type="checkbox" checked onchange="render()" class="accent-[#df7334] h-3.5 w-3.5" />
+              <span>显示品牌图标</span>
             </label>
           </div>
         </div>
@@ -81,18 +105,24 @@
     let activeCat = "全部";
 
     const SAMPLE_PRODUCTS = [
-      { name: "Giffgaff 英国实体卡（白卡 / 赠5镑 / 已激活）", cat: "国际 SIM 卡", sub: "英国", desc: "0月租、免实名、国内免费收短信，支持三规格切换", stock: 57, sales: 142, price: "¥68.00 ~ ¥239.00", delivery: "物流发货" },
-      { name: "Haha SIM 香港宽频 0 月租实体电话卡", cat: "国际 SIM 卡", sub: "中国香港", desc: "永久0月租保号，支持中港澳高速流量与各类验证码", stock: 18, sales: 89, price: "¥136.00", delivery: "物流发货" },
-      { name: "ChatGPT Plus / Pro 独立成品号与代充", cat: "AI 会员充值", sub: "ChatGPT", desc: "稳定不掉订阅，含完整防封与 2FA 教程", stock: 35, sales: 218, price: "¥148.00", delivery: "自动发货" },
-      { name: "discord邮箱号-2022年", cat: "数字 / 社媒账号", sub: "Discord", desc: "自动发货 · 独享老号，权重高抗风控", stock: 247, sales: 64, price: "¥31.20", delivery: "自动发货" },
-      { name: "Discord 3个月账号-过手机验证-邮箱验证", cat: "数字 / 社媒账号", sub: "Discord", desc: "自动发货 · 手机邮箱双验证稳定号", stock: 42, sales: 51, price: "¥33.15", delivery: "自动发货" },
-      { name: "韩国 Apple ID | 带密保可改密 | 独享", cat: "数字 / 社媒账号", sub: "Apple ID", desc: "已过韩服 19+ 年龄认证，自动发卡密", stock: 68, sales: 80, price: "¥11.70 ~ ¥38.03", delivery: "自动发货" },
-      { name: "萨克斯坦 Steam 账号 | 注册30天+ | 邮箱可用", cat: "数字 / 社媒账号", sub: "Steam", desc: "自动发货 · 独享低价区成品号", stock: 6, sales: 45, price: "¥3.28", delivery: "自动发货" },
-      { name: "Apple App Store 礼品卡（美区 / 土区 / 日区）", cat: "礼品卡 / 充值卡", sub: "Apple 礼品卡", desc: "正规官方直出卡密，即买即兑", stock: 99, sales: 176, price: "¥14.90 ~ ¥198.00", delivery: "自动发货" },
-      { name: "Steam 钱包礼品卡（多面额自动直发）", cat: "礼品卡 / 充值卡", sub: "Steam 礼品卡", desc: "正规渠道直充，支持多地区钱包", stock: 99, sales: 112, price: "¥38.50", delivery: "自动发货" },
-      { name: "日本 Rakuten Mobile 原生实体卡（预约批次）", cat: "国际 SIM 卡", sub: "日本", desc: "原生日本号段，支持煤炉 / Line / 抽票验证", stock: 0, preorder: true, sales: 37, price: "¥378.00", delivery: "预约发货" },
-      { name: "美区 Apple ID | 带密保可改密 | 独享（补货中）", cat: "数字 / 社媒账号", sub: "Apple ID", desc: "上游补货中，自动沉底至列表最下方", stock: 0, sales: 221, price: "暂无库存", delivery: "自动发货" },
-      { name: "Discord 2017年老账号（补货中）", cat: "数字 / 社媒账号", sub: "Discord", desc: "稀缺 2017 年份老号，补货后自动置顶", stock: 0, sales: 19, price: "暂无库存", delivery: "自动发货" },
+      { name: "Giffgaff 英国实体卡（白卡 / 赠5镑 / 已激活）", cat: "国际 SIM 卡", sub: "英国", icon: "/assets/giffgaff-icon.svg", desc: "0月租、免实名、国内免费收短信，支持三规格切换", stock: 57, sales: 142, price: "¥68.00 ~ ¥239.00", delivery: "物流发货" },
+      { name: "One NZ 新西兰原生实体卡（0月租保号）", cat: "国际 SIM 卡", sub: "新西兰", icon: "/assets/one-nz-card.png", desc: "国内 5G 漫游免费收短信，长期稳定保号", stock: 26, sales: 94, price: "¥158.00", delivery: "物流发货" },
+      { name: "ChatGPT Plus / Pro 独立成品号与代充", cat: "AI 会员充值", sub: "ChatGPT", icon: "/assets/ai-chatgpt-icon.jpg", desc: "稳定不掉订阅，含完整防封与 2FA 教程", stock: 35, sales: 218, price: "¥148.00", delivery: "自动发货" },
+      { name: "Google Gemini AI Pro 会员成品号 / 代充", cat: "AI 会员充值", sub: "Gemini", icon: "/assets/ai-gemini-icon.jpg", desc: "含 2TB 云盘与 Gemini Advanced，稳定不掉", stock: 41, sales: 136, price: "¥89.00", delivery: "自动发货" },
+      { name: "Claude Pro 独立账号与充值服务", cat: "AI 会员充值", sub: "Claude", icon: "/assets/ai-claude-icon.jpg", desc: "支持 Claude 4 / 代码助手，独享不拼车", stock: 19, sales: 77, price: "¥168.00", delivery: "人工发货" },
+      { name: "【定制】 微软 Outlook 邮箱账号 | 独享直登", cat: "数字 / 社媒账号", sub: "Outlook", icon: "/assets/digital-outlook.svg", desc: "按需定制独享微软邮箱，人工一对一交付", stock: 99, sales: 68, price: "¥19.90", delivery: "人工发货" },
+      { name: "TG飞机成品号 ｢30天+｣ 稳定直登账号", cat: "数字 / 社媒账号", sub: "Telegram", icon: "/assets/digital-telegram.svg", desc: "支持协议 / Tdata / 成品直登，多国家可选", stock: 145, sales: 312, price: "¥18.50", delivery: "自动发货" },
+      { name: "discord邮箱号-2022年", cat: "数字 / 社媒账号", sub: "Discord", icon: "/assets/digital-discord.png", desc: "自动发货 · 独享老号，权重高抗风控", stock: 247, sales: 64, price: "¥31.20", delivery: "自动发货" },
+      { name: "韩国 Apple ID | 带密保可改密 | 独享", cat: "数字 / 社媒账号", sub: "Apple ID", icon: "/assets/digital-apple-id.svg", desc: "已过韩服 19+ 年龄认证，自动发卡密", stock: 68, sales: 80, price: "¥11.70 ~ ¥38.03", delivery: "自动发货" },
+      { name: "萨克斯坦 Steam 账号 | 注册30天+ | 邮箱可用", cat: "数字 / 社媒账号", sub: "Steam", icon: "/assets/digital-steam.png", desc: "自动发货 · 独享低价区成品号", stock: 6, sales: 45, price: "¥3.28", delivery: "自动发货" },
+      { name: "GitHub 实名老号 / 开发者稳定账号", cat: "数字 / 社媒账号", sub: "GitHub", icon: "/assets/digital-github.png", desc: "适合开发者部署与开源协作，含原邮", stock: 54, sales: 59, price: "¥24.90", delivery: "自动发货" },
+      { name: "LinkedIn 海外职场老号（带连接）", cat: "数字 / 社媒账号", sub: "LinkedIn", icon: "/assets/digital-linkedin.png", desc: "适合外贸开发与海外求职，高权重账号", stock: 22, sales: 41, price: "¥68.00", delivery: "自动发货" },
+      { name: "Threads 社媒成品号（含原邮直登）", cat: "数字 / 社媒账号", sub: "Threads", icon: "/assets/digital-threads.png", desc: "高活跃社媒账号，支持品牌矩阵运营", stock: 31, sales: 38, price: "¥19.80", delivery: "自动发货" },
+      { name: "Apple App Store 礼品卡（美区 / 土区 / 日区）", cat: "礼品卡 / 充值卡", sub: "Apple 礼品卡", icon: "/assets/apple-gift-card-icon.jpg", desc: "正规官方直出卡密，即买即兑", stock: 99, sales: 176, price: "¥14.90 ~ ¥198.00", delivery: "自动发货" },
+      { name: "Google Play 礼品卡（美区 / 日区直充）", cat: "礼品卡 / 充值卡", sub: "Google Play", icon: "/assets/giftcard-google-play.png", desc: "官方卡密自动发码，支持游戏与应用内购", stock: 88, sales: 129, price: "¥39.00 ~ ¥380.00", delivery: "自动发货" },
+      { name: "Netflix 奈飞礼品卡（多地区直兑）", cat: "礼品卡 / 充值卡", sub: "Netflix", icon: "/assets/giftcard-netflix.png", desc: "免绑外卡轻松续费 4K 会员，自动交付", stock: 64, sales: 93, price: "¥58.00", delivery: "自动发货" },
+      { name: "日本 Rakuten Mobile 原生实体卡（预约批次）", cat: "国际 SIM 卡", sub: "日本", icon: "/assets/sim-uk-icon.png", desc: "原生日本号段，支持煤炉 / Line / 抽票验证", stock: 0, preorder: true, sales: 37, price: "¥378.00", delivery: "预约发货" },
+      { name: "美区 Apple ID | 带密保可改密 | 独享（补货中）", cat: "数字 / 社媒账号", sub: "Apple ID", icon: "/assets/digital-apple-id.svg", desc: "上游补货中，自动沉底至列表最下方", stock: 0, sales: 221, price: "暂无库存", delivery: "自动发货" },
     ];
 
     function stockBadge(p) {
@@ -118,6 +148,7 @@
       renderPills();
       const kw = document.getElementById("search-input").value.trim().toLowerCase();
       const onlyInStock = document.getElementById("in-stock-only").checked;
+      const showIcons = document.getElementById("show-icons").checked;
       const list = SAMPLE_PRODUCTS
         .filter(p => activeCat === "全部" || p.cat === activeCat)
         .filter(p => !onlyInStock || stockBadge(p).out === 0)
@@ -126,16 +157,22 @@
 
       document.getElementById("count-badge").textContent = `当前展示 ${list.length} 个商品`;
       const grid = document.getElementById("product-grid");
-      grid.innerHTML = list.map(p => {
+      grid.innerHTML = list.map((p, idx) => {
         const sb = stockBadge(p);
+        const iconHtml = showIcons
+          ? `<img src="${p.icon}" alt="${p.sub}" width="44" height="44" loading="${idx < 10 ? "eager" : "lazy"}" decoding="async" class="product-icon h-11 w-11 shrink-0 rounded-xl border border-orange-100/80 bg-white object-cover shadow-xs" />`
+          : "";
         return `
-          <div class="card-row flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white px-4 py-3.5">
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <span class="shrink-0 rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-bold text-[#c85e22]">${p.sub}</span>
-                <span class="truncate text-sm font-bold text-slate-900">${p.name}</span>
+          <div class="card-row flex items-center justify-between gap-3.5 rounded-2xl border border-slate-100 bg-white px-4 py-3">
+            <div class="flex min-w-0 flex-1 items-center gap-3">
+              ${iconHtml}
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="shrink-0 rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-bold text-[#c85e22]">${p.sub}</span>
+                  <span class="truncate text-sm font-bold text-slate-900">${p.name}</span>
+                </div>
+                <p class="mt-1 truncate text-xs text-slate-500">${p.desc}</p>
               </div>
-              <p class="mt-1 truncate text-xs text-slate-500">${p.desc}</p>
             </div>
             <div class="flex shrink-0 items-center gap-2.5">
               <span class="rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sb.cls}">${sb.label}</span>
