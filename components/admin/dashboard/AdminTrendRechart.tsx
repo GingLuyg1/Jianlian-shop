@@ -57,15 +57,31 @@ const SERIES: ReadonlyArray<{
 
 export function AdminTrendRechart({ points, loading }: { points: DashboardTrendPoint[]; loading: boolean }) {
   const host = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<ReturnType<typeof init> | null>(null);
   const [selected, setSelected] = useState<TrendMetricKey[]>([
     "payAmount",
     "orderCount",
     "visitors",
     "views",
   ]);
+  const hasChart = !loading && points.length > 0;
+
   useEffect(() => {
-    if (loading || !host.current || points.length === 0) return;
+    if (!hasChart || !host.current) return;
     const chart = init(host.current, undefined, { renderer: "canvas" });
+    chartRef.current = chart;
+    const observer = new ResizeObserver(() => chart.resize());
+    observer.observe(host.current);
+    return () => {
+      observer.disconnect();
+      chart.dispose();
+      chartRef.current = null;
+    };
+  }, [hasChart]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !hasChart) return;
     chart.setOption({
       animation: false,
       aria: { enabled: true },
@@ -104,11 +120,8 @@ export function AdminTrendRechart({ points, loading }: { points: DashboardTrendP
         itemStyle: { color: item.color }, lineStyle: { width: 2 },
         data: points.map(point => point[item.key] ?? null),
       })),
-    });
-    const observer = new ResizeObserver(() => chart.resize());
-    observer.observe(host.current);
-    return () => { observer.disconnect(); chart.dispose(); };
-  }, [points, selected, loading]);
+    }, { notMerge: true });
+  }, [points, selected, hasChart]);
   if (loading) return <div className="h-[270px] animate-pulse rounded-lg bg-slate-100" />;
   if (!points.length) return <AdminEmptyState title="暂无趋势数据" description="有真实记录后显示趋势。" />;
   return <div className="flex h-full min-w-0 flex-col">

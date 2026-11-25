@@ -88,9 +88,10 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     key: "finance",
     label: "财务管理",
     icon: Landmark,
-    routePrefixes: ["/admin/finance", "/admin/payments", "/admin/recharges", "/admin/balance-ledger"],
+    routePrefixes: ["/admin/finance", "/admin/reports", "/admin/payments", "/admin/recharges", "/admin/balance-ledger"],
     children: [
       { label: "财务看板", href: "/admin/finance" },
+      { label: "经营报表", href: "/admin/reports" },
       { label: "支付管理", href: "/admin/payments" },
       { label: "充值管理", href: "/admin/recharges" },
       { label: "余额流水", href: "/admin/balance-ledger" },
@@ -132,6 +133,7 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     children: [
       { label: "生产看板", href: "/admin/system/production-readiness" },
       { label: "自动任务运行状态", href: "/admin/system/workers" },
+      { label: "数据一致性巡检", href: "/admin/system/data-consistency" },
       { label: "异常中心", href: "/admin/system-errors" },
       { label: "请求追踪", href: "/admin/system/request-traces" },
       { label: "事务补偿", href: "/admin/system/compensations" },

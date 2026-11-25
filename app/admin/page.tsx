@@ -1,6 +1,8 @@
 "use client";
+import "./dashboard-v21.css";
 import { statusLabel } from '@/lib/admin/display-labels';
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -41,12 +43,19 @@ import {
   getPresetDateRange,
   type DashboardDateFilterValue,
 } from "@/components/admin/dashboard/AdminDateRangeFilter";
-import { AdminTrendRechart } from "@/components/admin/dashboard/AdminTrendRechart";
-import {
-  AdminProductDetailDialog,
-  type ProductDetailModalData,
-  type RawOrderItemForDetail,
+import type {
+  ProductDetailModalData,
+  RawOrderItemForDetail,
 } from "@/components/admin/dashboard/AdminProductDetailDialog";
+
+const AdminTrendRechart = dynamic(
+  () => import("@/components/admin/dashboard/AdminTrendRechart").then((mod) => mod.AdminTrendRechart),
+  { ssr: false, loading: () => <div className="h-[270px] animate-pulse rounded-lg bg-slate-100" /> }
+);
+const AdminProductDetailDialog = dynamic(
+  () => import("@/components/admin/dashboard/AdminProductDetailDialog").then((mod) => mod.AdminProductDetailDialog),
+  { ssr: false }
+);
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

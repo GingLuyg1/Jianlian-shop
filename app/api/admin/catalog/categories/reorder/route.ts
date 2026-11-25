@@ -55,12 +55,22 @@ export async function POST(request: Request) {
   const previous = new Map(current.map((row: any) => [String(row.id), Number(row.sort_order ?? 0)]));
   const updatedIds: string[] = [];
   try {
-    for (const item of items) {
-      let update = service.from("categories").update({ sort_order: item.sortOrder }).eq("id", item.id);
-      update = parentId ? update.eq("parent_id", parentId).eq("level", 2) : update.is("parent_id", null).eq("level", 1);
-      const { data, error } = await update.select("id").maybeSingle();
-      if (error || !data) throw error ?? new Error("category moved outside reorder scope");
-      updatedIds.push(item.id);
+    const CONCURRENCY = 10;
+    for (let i = 0; i < items.length; i += CONCURRENCY) {
+      const batch = items.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(async (item) => {
+          let update = service.from("categories").update({ sort_order: item.sortOrder }).eq("id", item.id);
+          update = parentId ? update.eq("parent_id", parentId).eq("level", 2) : update.is("parent_id", null).eq("level", 1);
+          const { data, error } = await update.select("id").maybeSingle();
+          return { id: item.id, ok: !error && Boolean(data), error };
+        })
+      );
+      for (const r of results) {
+        if (r.ok) updatedIds.push(r.id);
+      }
+      const failed = results.find((r) => !r.ok);
+      if (failed) throw failed.error ?? new Error("category moved outside reorder scope");
     }
   } catch {
     await Promise.all(updatedIds.map((id) => service.from("categories").update({ sort_order: previous.get(id) ?? 0 }).eq("id", id)));

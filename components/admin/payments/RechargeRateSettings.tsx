@@ -34,6 +34,21 @@ export default function RechargeRateSettings() {
 
   async function save() {
     if (saving) return;
+    const numericRate = Number(marketRate);
+    if (!effectiveDate.trim() || !Number.isFinite(numericRate) || numericRate <= 0) {
+      toast.error("请填写有效的生效日期和市场参考汇率");
+      return;
+    }
+    const settlementPreview = (Math.floor(numericRate * 10) / 10).toFixed(1);
+    const anomalyWarning =
+      numericRate < 5.0 || numericRate > 10.0
+        ? "\n\n【高危异常提醒】当前输入汇率偏离常规 USDT/CNY 区间（5.0 ~ 10.0），请务必再次核对是否输错小数点！"
+        : "";
+    const confirmed = window.confirm(
+      `确认锁定 ${effectiveDate} 的每日 USDT/CNY 充值汇率？\n市场参考价：${marketRate}\n预计结算价：1 USDT = ¥${settlementPreview}\n注意：每天仅允许保存一次，锁定后当日不可再次修改。${anomalyWarning}`
+    );
+    if (!confirmed) return;
+
     setSaving(true); setMessage("");
     try {
       const response = await fetch("/api/admin/recharge-rates", {

@@ -167,6 +167,19 @@ export default function AdminSuppliersWorkspace() {
       const response = await fetch(`${activeSupplier.adminEndpoint}?resource=balance`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw getSupplierError(payload, "供应商连接检测失败");
+      if (payload.degraded) {
+        setBalance((payload.balance as SupplierBalance | null) ?? null);
+        setDetection({
+          status: "failed",
+          checkedAt: new Date().toISOString(),
+          error: {
+            message: String(payload.warning || "供应商接口暂不可达，已降级展示"),
+            code: typeof payload.code === "string" ? payload.code : null,
+            requestId: typeof payload.requestId === "string" ? payload.requestId : null,
+          },
+        });
+        return;
+      }
       setBalance(payload.balance as SupplierBalance);
       if (typeof payload.balance?.usdtCnyRate === "number") {
         setUsdtCnyRate(payload.balance.usdtCnyRate);

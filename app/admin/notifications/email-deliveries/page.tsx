@@ -47,7 +47,10 @@ type DeliveryRow = {
 export default async function EmailDeliveriesPage(props: { searchParams?: Promise<{ status?: string }> }) {
   const searchParams = await props.searchParams;
   const admin = await getServerSuperAdminContext();
-  if (!admin.ok) redirect("/login");
+  if (!admin.ok) {
+    if (admin.status === 401) redirect("/login?redirect=/admin/notifications/email-deliveries");
+    return <AdminEmailPageState title="无访问权限" message={admin.message || "仅超级管理员可查看邮件发送记录。"} />;
+  }
   const service = getSupabaseServiceRoleClient();
   if (!service) return <AdminEmailPageState title="服务未配置" message="缺少 SUPABASE_SERVICE_ROLE_KEY，无法读取邮件发送记录。" />;
 

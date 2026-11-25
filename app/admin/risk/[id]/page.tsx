@@ -41,22 +41,37 @@ export default function AdminRiskDetailPage() {
   const loadEvent = useCallback(async () => {
     setLoading(true); setError(""); setAuditError("");
     try {
-      const response = await fetch(`/api/admin/risk/${id}`, { cache: "no-store" });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "风险事件读取失败");
-      setEvent(payload.event ?? null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "风险事件读取失败"); setEvent(null);
-    }
+      const [eventRes, auditRes] = await Promise.allSettled([
+        fetch(`/api/admin/risk/${id}`, { cache: "no-store" }),
+        fetch(`/api/admin/audit-logs?targetId=${encodeURIComponent(id)}&pageSize=50`, { cache: "no-store" }),
+      ]);
 
-    try {
-      const response = await fetch(`/api/admin/audit-logs?targetId=${encodeURIComponent(id)}&pageSize=50`, { cache: "no-store" });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "审计日志读取失败");
-      setAudits(Array.isArray(payload.logs) ? payload.logs.filter((log: AuditLog) => log.target_id === id) : []);
+      if (eventRes.status === "fulfilled") {
+        const payload = await eventRes.value.json().catch(() => ({}));
+        if (!eventRes.value.ok) throw new Error(payload.error || "风险事件读取失败");
+        setEvent(payload.event ?? null);
+      } else {
+        throw eventRes.reason;
+      }
+
+      if (auditRes.status === "fulfilled") {
+        const payload = await auditRes.value.json().catch(() => ({}));
+        if (!auditRes.value.ok) {
+          setAuditError(payload.error || "审计日志读取失败");
+          setAudits([]);
+        } else {
+          setAudits(Array.isArray(payload.logs) ? payload.logs.filter((log: AuditLog) => log.target_id === id) : []);
+        }
+      } else {
+        setAuditError("审计日志读取失败");
+        setAudits([]);
+      }
     } catch (loadError) {
-      setAuditError(loadError instanceof Error ? loadError.message : "审计日志读取失败"); setAudits([]);
-    } finally { setLoading(false); }
+      setError(loadError instanceof Error ? loadError.message : "风险事件读取失败");
+      setEvent(null);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useEffect(() => { void loadEvent(); }, [loadEvent]);
@@ -67,7 +82,7 @@ export default function AdminRiskDetailPage() {
       <div className="min-h-0 flex-1 overflow-auto">
         {error ? <AdminErrorState title="风险事件加载失败" description={error} onRetry={() => void loadEvent()} /> : loading && !event ? <AdminTableSkeleton rows={8} /> : event ? (
           <div className="space-y-4 pb-4">
-            <AdminSection title={event.ruleCode} description={event.id} action={<AdminStatusBadge tone={riskTone(event.riskLevel)}>{event.riskLevel} · {event.riskScore}</AdminStatusBadge>}>
+            <AdminSection title={event.ruleCode} description={event.id} action={<AdminStatusBadge tone={riskTone(event.riskLevel)}>{statusLabel(event.riskLevel)} · {event.riskScore}</AdminStatusBadge>}>
               <AdminInfoGrid columns={3}><AdminInfoItem label="摘要" value={event.summary} className="sm:col-span-2" /><AdminInfoItem label="当前状态" value={<AdminStatusBadge tone={statusTone(event.status)}>{statusLabel(event.status)}</AdminStatusBadge>} /><AdminInfoItem label="业务类型" value={businessTypeLabel(event.businessType)} /><AdminInfoItem label="命中次数" value={String(event.occurrences)} className="tabular-nums" /><AdminInfoItem label="建议动作" value={event.recommendedAction} /></AdminInfoGrid>
             </AdminSection>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -95,4 +110,4 @@ function formatDate(value: string | null) { if (!value) return "—"; const date
 function riskTone(level: string): AdminStatusTone { return level === "critical" || level === "high" ? "danger" : level === "medium" ? "warning" : "success"; }
 function statusTone(status: string): AdminStatusTone { return status === "resolved" || status === "closed" ? "success" : status === "open" || status === "pending" ? "warning" : "neutral"; }
 function businessIcon(type: string) { if (type === "order") return <ShoppingBag className="h-4 w-4" />; if (type === "payment") return <CreditCard className="h-4 w-4" />; if (type === "recharge") return <WalletCards className="h-4 w-4" />; return <ShieldAlert className="h-4 w-4" />; }
-function riskTimeline(event: RiskDetail) { return [{ id: "created", title: "风险事件创建", time: formatDate(event.createdAt) }, { id: "first", title: "首次发现", time: formatDate(event.firstSeenAt) }, { id: "last", title: "最后发现", time: formatDate(event.lastSeenAt) }, ...event.reviews.map((review) => ({ id: review.id, title: `${review.decision} · ${review.status}`, time: formatDate(review.reviewedAt), actor: review.reviewedBy ? `管理员 ${shortId(review.reviewedBy)}` : undefined, message: review.reason })), ...(event.resolvedAt ? [{ id: "resolved", title: "事件结束", time: formatDate(event.resolvedAt) }] : []), { id: "updated", title: "最近更新", time: formatDate(event.updatedAt) }]; }
+function riskTimeline(event: RiskDetail) { return [{ id: "created", title: "风险事件创建", time: formatDate(event.createdAt) }, { id: "first", title: "首次发现", time: formatDate(event.firstSeenAt) }, { id: "last", title: "最后发现", time: formatDate(event.lastSeenAt) }, ...event.reviews.map((review) => ({ id: review.id, title: `${detailLabel(review.decision)} · ${statusLabel(review.status)}`, time: formatDate(review.reviewedAt), actor: review.reviewedBy ? `管理员 ${shortId(review.reviewedBy)}` : undefined, message: review.reason })), ...(event.resolvedAt ? [{ id: "resolved", title: "事件结束", time: formatDate(event.resolvedAt) }] : []), { id: "updated", title: "最近更新", time: formatDate(event.updatedAt) }]; }

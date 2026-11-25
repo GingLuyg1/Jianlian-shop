@@ -69,8 +69,11 @@ export default function AdminDigitalInventoryPickerModal({
 
   useEffect(() => {
     if (!open) return;
-    void loadSummary("");
-  }, [open, loadSummary]);
+    const timer = window.setTimeout(() => {
+      void loadSummary(search);
+    }, search ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [open, search, loadSummary]);
 
   if (!open) return null;
 
@@ -107,7 +110,7 @@ export default function AdminDigitalInventoryPickerModal({
             <div>
               <h3 className="text-sm font-semibold text-slate-900">绑定后台数字库存</h3>
               <p className="text-[11px] text-slate-500">
-                仅适用于「自动发货-数字库存」规格，选择后将同步对应数字库存池的可用数量
+                仅适用于「自动发货-数字库存」规格，为防止发错货，仅允许绑定当前商品所属的数字库存池；点击绑定后需保存商品/规格生效
               </p>
             </div>
           </div>
@@ -170,12 +173,14 @@ export default function AdminDigitalInventoryPickerModal({
               </div>
               {filtered.map((row) => {
                 const isBound = currentInventoryProductId === row.product_id;
+                const isDifferentProduct = Boolean(currentProductId && row.product_id !== currentProductId);
                 return (
                   <div
                     key={row.product_id}
                     className={cn(
                       "grid grid-cols-[minmax(0,1fr)_56px_56px_56px_56px_76px] items-center px-3 py-2.5 text-xs transition-colors hover:bg-slate-50/80",
-                      isBound && "bg-emerald-50/50"
+                      isBound && "bg-emerald-50/50",
+                      isDifferentProduct && "opacity-60"
                     )}
                   >
                     <div className="min-w-0 pr-2">
@@ -186,6 +191,10 @@ export default function AdminDigitalInventoryPickerModal({
                         {currentProductId && row.product_id === currentProductId ? (
                           <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
                             当前商品
+                          </span>
+                        ) : isDifferentProduct ? (
+                          <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
+                            其他商品池
                           </span>
                         ) : null}
                       </div>
@@ -208,6 +217,8 @@ export default function AdminDigitalInventoryPickerModal({
                       <Button
                         type="button"
                         size="sm"
+                        disabled={isDifferentProduct}
+                        title={isDifferentProduct ? "禁止跨商品绑定其他商品的数字库存池" : undefined}
                         variant={isBound ? "outline" : "default"}
                         className={cn(
                           "h-7 px-2.5 text-[11px]",
@@ -220,6 +231,8 @@ export default function AdminDigitalInventoryPickerModal({
                             <Check className="mr-1 h-3 w-3" />
                             已选
                           </>
+                        ) : isDifferentProduct ? (
+                          "不可绑"
                         ) : (
                           "绑定"
                         )}

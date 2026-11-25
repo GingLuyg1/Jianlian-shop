@@ -41,7 +41,7 @@ export default function AdminTopBar() {
   }, [pathname, routeGroup]);
 
   return (
-    <div data-admin-shell-topbar className="sticky top-0 z-30 flex h-[var(--admin-header-height)] min-w-0 shrink-0 items-center border-b border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] px-3 sm:px-4 lg:[padding-inline:var(--admin-content-padding-x)]">
+    <div data-admin-shell-topbar className="sticky top-0 z-40 flex h-[var(--admin-header-height)] min-w-0 shrink-0 items-center border-b border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] px-3 sm:px-4 lg:[padding-inline:var(--admin-content-padding-x)]">
       <div className="flex min-w-0 w-full items-center justify-between gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
@@ -59,7 +59,7 @@ export default function AdminTopBar() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold leading-5 text-[var(--admin-v2-text-primary)]">
-                      Jianlian Admin
+                      Jianlian 运营后台
                     </div>
                     <div className="text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">管理后台</div>
                   </div>
@@ -106,11 +106,11 @@ export default function AdminTopBar() {
                                 <li key={child.href}>
                                   <Link
                                     prefetch={false} href={child.href}
-                                    aria-current={isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view")) ? "page" : undefined}
+                                    aria-current={isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view"), searchParams.get("tab")) ? "page" : undefined}
                                     onClick={() => setMobileNavigationOpen(false)}
                                     className={cn(
                                       "block min-h-10 rounded-[var(--admin-v2-control-radius)] px-2.5 py-2 text-[13px] leading-6 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] focus-visible:ring-inset",
-                                      isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view"))
+                                      isAdminNavigationLinkActive(pathname, child.href, searchParams.get("view"), searchParams.get("tab"))
                                         ? "bg-[var(--admin-v2-selected)] font-medium text-[var(--admin-v2-primary)]"
                                         : "text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)] hover:text-[var(--admin-v2-text-primary)]"
                                     )}

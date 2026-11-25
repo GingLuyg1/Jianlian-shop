@@ -8,7 +8,14 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export default async function EmailTemplatesPage() {
   const admin = await getServerSuperAdminContext();
-  if (!admin.ok) redirect("/login");
+  if (!admin.ok) {
+    if (admin.status === 401) redirect("/login?redirect=/admin/notifications/email-templates");
+    return (
+      <AdminPageShell title="邮件模板" description="创建、维护和发布邮件模板版本。">
+        <AdminErrorState title="无访问权限" description={admin.message || "仅超级管理员可管理邮件模板。"} />
+      </AdminPageShell>
+    );
+  }
 
   const service = getSupabaseServiceRoleClient();
   if (!service) {

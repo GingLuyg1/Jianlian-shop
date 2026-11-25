@@ -14,6 +14,9 @@ export const dynamic = "force-dynamic";
 
 type ProbeResult = { ok: boolean; error?: string };
 
+const READINESS_CACHE_TTL_MS = 60_000;
+let readinessCache: { expiresAt: number; payload: Record<string, unknown> } | null = null;
+
 const tableFields: Record<string, string> = {
   payment_sessions:
     "id,session_no,business_type,business_id,business_no,user_id,channel_code,provider,currency,network,requested_amount,fee_amount,payable_amount,status,payment_type,provider_order_no,provider_transaction_id,expires_at,paid_at,closed_at,created_at,updated_at",
@@ -32,24 +35,30 @@ const tableFields: Record<string, string> = {
   profiles: "id,email,role,balance,created_at",
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   const admin = await requireApiAdmin();
   if (!admin.ok) return admin.response;
+
+  const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
+  if (!forceRefresh && readinessCache && readinessCache.expiresAt > Date.now()) {
+    return NextResponse.json(readinessCache.payload);
+  }
 
   const service = getSupabaseServiceRoleClient();
   const client = service ?? admin.supabase;
   const tableChecks: Record<string, ProbeResult> = {};
 
-  await Promise.all(
-    Object.entries(tableFields).map(async ([table, fields]) => {
-      tableChecks[table] = await probeTable(client, table, fields);
-    })
-  );
-
-  const coreDatabase = await probeCoreDatabase(service);
-  const channelChecks = await probeChannels(client);
+  const [, coreDatabase, channelChecks, bep20Config] = await Promise.all([
+    Promise.all(
+      Object.entries(tableFields).map(async ([table, fields]) => {
+        tableChecks[table] = await probeTable(client, table, fields);
+      })
+    ),
+    probeCoreDatabase(service),
+    probeChannels(client),
+    getBep20RuntimeConfigStatus(),
+  ]);
   const providerReadiness = getPaymentProviderReadiness();
-  const bep20Config = await getBep20RuntimeConfigStatus();
   const serviceRoleConfigured = Boolean(service);
   const providerConfigured = channelChecks.channels.some(
     (channel: { enabled?: boolean; configured?: boolean }) =>
@@ -98,7 +107,7 @@ export async function GET() {
   ].filter(Boolean);
   const status = blockingReasons.length > 0 ? "blocked" : partialReasons.length > 0 ? "partial" : "ready";
 
-  return NextResponse.json({
+  const responsePayload = {
     status,
     codeChecks,
     tableChecks,
@@ -118,7 +127,14 @@ export async function GET() {
         : status === "ready"
           ? "代码、数据库和 Provider 配置均已就绪，仍需完成真实渠道沙箱验收。"
           : "请先处理阻塞项，再开始接入真实 Provider。",
-  });
+  };
+
+  readinessCache = {
+    expiresAt: Date.now() + READINESS_CACHE_TTL_MS,
+    payload: responsePayload,
+  };
+
+  return NextResponse.json(responsePayload);
 }
 
 async function probeTable(client: any, table: string, fields: string): Promise<ProbeResult> {

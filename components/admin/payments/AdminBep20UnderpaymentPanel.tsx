@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { formatDateTime } from "@/lib/i18n/datetime";
+import { statusLabel } from "@/lib/admin/display-labels";
 import { canSubmitAdminUnderpaymentSettlement } from "@/lib/payments/bep20-underpayment-admin-runtime.mjs";
+import { useAsyncActionLock } from "@/hooks/use-async-action-lock";
 
 type UnderpaymentPreview = {
   sessionId: string;
@@ -104,7 +106,7 @@ export default function AdminBep20UnderpaymentPanel() {
   const [requestId, setRequestId] = useState("");
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
-  const [settling, setSettling] = useState(false);
+  const { busy: settling, runLocked: runSettleLocked } = useAsyncActionLock();
   const [error, setError] = useState("");
 
   const loadRecords = useCallback(async () => {
@@ -166,7 +168,7 @@ export default function AdminBep20UnderpaymentPanel() {
 
   const canSettle = useMemo(() => Boolean(selected) && canSubmitAdminUnderpaymentSettlement({
     previewed: prechecked,
-    eligible: Boolean(selected?.manualEligible),
+    eligible: Boolean(selected?.eligible && selected?.manualEligible),
     reason: reason.length <= 500 ? reason : "",
     confirmationText,
     orderNo: selected?.orderNo,
@@ -183,44 +185,43 @@ export default function AdminBep20UnderpaymentPanel() {
     );
     if (!confirmed) return;
 
-    setSettling(true);
-    try {
-      const response = await fetch("/api/admin/payments/bep20/underpayments/settle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "settle",
-          dry_run: false,
-          sessionId: selected.sessionId,
-          reason: reason.trim(),
-          requestId,
-          requiredConfirmations: selected.requiredConfirmations,
-          confirmationText: confirmationText.trim(),
-          confirmIrreversible: true,
-        }),
-      });
-      const payload = await response.json().catch(() => null) as SettlementResponse | null;
-      if (!response.ok || !payload?.success) {
-        throw new Error(payload?.message ?? "欠额支付结算失败");
+    await runSettleLocked(async () => {
+      try {
+        const response = await fetch("/api/admin/payments/bep20/underpayments/settle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "settle",
+            dry_run: false,
+            sessionId: selected.sessionId,
+            reason: reason.trim(),
+            requestId,
+            requiredConfirmations: selected.requiredConfirmations,
+            confirmationText: confirmationText.trim(),
+            confirmIrreversible: true,
+          }),
+        });
+        const payload = await response.json().catch(() => null) as SettlementResponse | null;
+        if (!response.ok || !payload?.success) {
+          throw new Error(payload?.message ?? "欠额支付结算失败");
+        }
+        toast.success(
+          payload.result === "already_settled"
+            ? "该欠额记录已完成结算，本次未重复入账"
+            : "欠额款已转入用户余额，原订单已取消",
+        );
+        setPrechecked(false);
+        await loadRecords();
+        const previewResponse = await fetch(
+          `/api/admin/payments/bep20/underpayments?session_id=${encodeURIComponent(selected.sessionId)}`,
+          { cache: "no-store" },
+        );
+        const previewPayload = await previewResponse.json().catch(() => null) as PreviewResponse | null;
+        if (previewResponse.ok && previewPayload?.preview) setSelected(previewPayload.preview);
+      } catch (settlementError) {
+        toast.error(settlementError instanceof Error ? settlementError.message : "欠额支付结算失败");
       }
-      toast.success(
-        payload.result === "already_settled"
-          ? "该欠额记录已完成结算，本次未重复入账"
-          : "欠额款已转入用户余额，原订单已取消",
-      );
-      setPrechecked(false);
-      await loadRecords();
-      const previewResponse = await fetch(
-        `/api/admin/payments/bep20/underpayments?session_id=${encodeURIComponent(selected.sessionId)}`,
-        { cache: "no-store" },
-      );
-      const previewPayload = await previewResponse.json().catch(() => null) as PreviewResponse | null;
-      if (previewResponse.ok && previewPayload?.preview) setSelected(previewPayload.preview);
-    } catch (settlementError) {
-      toast.error(settlementError instanceof Error ? settlementError.message : "欠额支付结算失败");
-    } finally {
-      setSettling(false);
-    }
+    });
   };
 
   return (
@@ -254,7 +255,7 @@ export default function AdminBep20UnderpaymentPanel() {
               {loading ? (
                 <tr><td colSpan={18} className="h-40 px-4 text-center text-slate-500">正在加载欠额记录…</td></tr>
               ) : records.length === 0 ? (
-                <tr><td colSpan={18} className="h-[360px] px-4"><AdminEmptyState title="暂无可显示的欠额记录" description="当前没有 underpaid 链上会话。" /></td></tr>
+                <tr><td colSpan={18} className="h-[360px] px-4"><AdminEmptyState title="暂无可显示的欠额记录" description="当前没有欠额支付（underpaid）链上会话。" /></td></tr>
               ) : records.map((record) => (
                 <tr key={record.sessionId} className="border-b hover:bg-slate-50">
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">{record.orderNo || "—"}</td>
@@ -265,9 +266,9 @@ export default function AdminBep20UnderpaymentPanel() {
                   <td className="px-3 py-3 text-amber-700">{record.shortfallUsdt}</td>
                   <td className="px-3 py-3">{record.exchangeRate}</td>
                   <td className="px-3 py-3 font-medium text-emerald-700">¥{record.creditedCny}</td>
-                  <td className="px-3 py-3">{record.orderStatus}</td>
-                  <td className="px-3 py-3">{record.paymentSessionStatus}</td>
-                  <td className="px-3 py-3">{record.chainSessionStatus}</td>
+                  <td className="px-3 py-3">{statusLabel(record.orderStatus)}</td>
+                  <td className="px-3 py-3">{statusLabel(record.paymentSessionStatus)}</td>
+                  <td className="px-3 py-3">{statusLabel(record.chainSessionStatus)}</td>
                   <td className="px-3 py-3">{record.confirmationCount ?? "—"} / {record.requiredConfirmations}</td>
                   <td className="whitespace-nowrap px-3 py-3">{formatDate(record.confirmedAt)}</td>
                   <td className="whitespace-nowrap px-3 py-3">{formatDate(record.expiresAt)}</td>
@@ -326,13 +327,13 @@ export default function AdminBep20UnderpaymentPanel() {
                 ["区块时间", formatDate(selected.blockTimestamp)],
                 ["证据写入时间", formatDate(selected.evidenceCreatedAt)],
                 ["确认时间", formatDate(selected.confirmedAt)],
-                ["Claim / Transaction", `${selected.claimCount} / ${selected.transactionCount}`],
+                ["认领次数 / 流水数", `${selected.claimCount} / ${selected.transactionCount}`],
               ]} />
               <DetailSection title="状态与库存" rows={[
-                ["订单状态", selected.orderStatus],
-                ["订单支付状态", selected.orderPaymentStatus],
-                ["支付会话状态", selected.paymentSessionStatus],
-                ["链会话状态", selected.chainSessionStatus],
+                ["订单状态", statusLabel(selected.orderStatus)],
+                ["订单支付状态", statusLabel(selected.orderPaymentStatus)],
+                ["支付会话状态", statusLabel(selected.paymentSessionStatus)],
+                ["链会话状态", statusLabel(selected.chainSessionStatus)],
                 ["截止时间", formatDate(selected.expiresAt)],
                 ["预留数字库存", String(selected.inventoryState.reservedCount)],
                 ["库存已释放", selected.inventoryState.released ? "是" : "否"],

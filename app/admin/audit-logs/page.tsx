@@ -2,7 +2,7 @@
 import { detailLabel } from '@/lib/admin/display-labels';
 
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Copy, Eye, RotateCcw, Search } from "lucide-react";
 
@@ -222,15 +222,20 @@ export default function AdminAuditLogsPage() {
     setPage(1);
   };
 
+  const copyTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+  }, []);
+
   const copyRequestId = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied("请求编号已复制");
-      window.setTimeout(() => setCopied(""), 1600);
     } catch {
       setCopied("复制失败，请手动复制");
-      window.setTimeout(() => setCopied(""), 1600);
     }
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopied(""), 1600);
   };
 
   return (

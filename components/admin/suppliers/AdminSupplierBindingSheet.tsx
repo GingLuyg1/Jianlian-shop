@@ -414,8 +414,8 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
                                 <div className="border-b bg-slate-50/80 px-3 py-2 text-xs font-semibold text-slate-800">
                                   供应商规格项列表（{detail.skuVariants.length} 项）
                                 </div>
-                                <div className="max-h-48 overflow-y-auto">
-                                  <table className="w-full text-left text-xs">
+                                <div className="max-h-48 overflow-auto">
+                                  <table className="w-full min-w-[420px] text-left text-xs">
                                     <thead className="bg-slate-50 text-slate-500 sticky top-0 border-b">
                                       <tr>
                                         <th className="px-3 py-1.5">规格名称</th>

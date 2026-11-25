@@ -242,10 +242,10 @@ function ReconciliationDrawer({ selected, detail, detailLoading, detailError, on
             <div className="space-y-4">
               {item.risk_level === "high" ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />高风险异常</div><p className="mt-1 text-xs">系统不会自动回滚余额、订单或已交付库存，请人工核查。</p></div> : null}
               <DetailGroup title="本地支付信息" rows={[["业务类型", item.business_type === "recharge" ? "账户充值" : "商品订单"], ["支付会话", item.payment_session_id ?? "—"], ["业务单号", item.business_id ?? "—"], ["本地状态", statusLabel(item.local_status)], ["本地金额", formatMoney(item.local_amount, item.currency)]]} />
-              <DetailGroup title="渠道查询摘要" rows={[["渠道", item.channel_code ?? "—"], ["Provider", item.provider ?? "—"], ["渠道状态", statusLabel(item.provider_status)], ["渠道交易号", item.provider_trade_no ? "已脱敏保存" : "—"]]} />
+              <DetailGroup title="渠道查询摘要" rows={[["渠道", item.channel_code ?? "—"], ["支付平台", item.provider ?? "—"], ["渠道状态", statusLabel(item.provider_status)], ["渠道交易号", item.provider_trade_no ? "已脱敏保存" : "—"]]} />
               <DetailGroup title="状态对比" rows={[["结果", getReconciliationResultLabel(item.result)], ["差异类型", getDifferenceTypeLabel(item.difference_type)], ["风险等级", getRiskLevelLabel(item.risk_level)]]} />
               <DetailGroup title="金额对比" rows={[["本地金额", formatMoney(item.local_amount, item.currency)], ["渠道金额", item.provider_amount === null ? "—" : formatMoney(item.provider_amount, item.currency)], ["币种", item.currency]]} />
-              <DetailGroup title="恢复动作" rows={[["动作", item.recovery_action ?? "—"], ["状态", item.recovery_status ?? "—"], ["说明", item.recovery_error ?? "—"]]} />
+              <DetailGroup title="恢复动作" rows={[["动作", item.recovery_action ?? "—"], ["状态", item.recovery_status ? statusLabel(item.recovery_status) : "—"], ["说明", item.recovery_error ?? "—"]]} />
               <DetailGroup title="错误信息" rows={[["错误代码", item.error_code ?? "—"], ["错误摘要", item.error_message ?? "—"]]} />
               <DetailGroup title="处理时间线" rows={[["检查时间", formatDate(item.checked_at)], ["解决时间", formatDate(item.resolved_at)], ["解决说明", item.resolution ?? "—"]]} />
             </div>

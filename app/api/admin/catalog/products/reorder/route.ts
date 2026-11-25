@@ -52,16 +52,26 @@ export async function POST(request: Request) {
   const previous = new Map(current.map((row) => [String(row.id), Number(row.sort_order ?? 0)]));
   const updatedIds: string[] = [];
   try {
-    for (const item of items) {
-      const { data, error } = await service
-        .from("products")
-        .update({ sort_order: item.sortOrder })
-        .eq("id", item.id)
-        .eq("category_id", categoryId)
-        .select("id")
-        .maybeSingle();
-      if (error || !data) throw error ?? new Error("product no longer belongs to category");
-      updatedIds.push(item.id);
+    const CONCURRENCY = 10;
+    for (let i = 0; i < items.length; i += CONCURRENCY) {
+      const batch = items.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(async (item) => {
+          const { data, error } = await service
+            .from("products")
+            .update({ sort_order: item.sortOrder })
+            .eq("id", item.id)
+            .eq("category_id", categoryId)
+            .select("id")
+            .maybeSingle();
+          return { id: item.id, ok: !error && Boolean(data), error };
+        })
+      );
+      for (const r of results) {
+        if (r.ok) updatedIds.push(r.id);
+      }
+      const failed = results.find((r) => !r.ok);
+      if (failed) throw failed.error ?? new Error("product no longer belongs to category");
     }
   } catch {
     await Promise.all(updatedIds.map((id) => service.from("products").update({ sort_order: previous.get(id) ?? 0 }).eq("id", id).eq("category_id", categoryId)));

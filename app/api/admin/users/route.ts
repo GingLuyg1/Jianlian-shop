@@ -9,8 +9,12 @@ import {
   parseAdminUserManagementCompatibility,
 } from "@/lib/admin/user-management-compatibility.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { sanitizePostgrestFilterTerm } from "@/lib/security/postgrest-sanitize";
 
 export const dynamic = "force-dynamic";
+
+const USER_COMPAT_CACHE_TTL_MS = 300_000;
+let userCompatCache: { expiresAt: number; value: ReturnType<typeof parseAdminUserManagementCompatibility> } | null = null;
 
 const PAGE_SIZE_DEFAULT = 20;
 const ACCOUNT_STATUSES = new Set(["active", "restricted", "suspended", "disabled"]);
@@ -65,22 +69,24 @@ export async function GET(request: Request) {
   const sort = SORTS.has(requestedSort) ? requestedSort : "newest";
 
   try {
-    const profileResult = await loadProfiles(supabase, {
-      page,
-      pageSize,
-      search,
-      accountStatus,
-      riskStatus,
-      role,
-      registeredFrom,
-      registeredTo,
-      sort,
-    });
+    const [profileResult, compatibility] = await Promise.all([
+      loadProfiles(supabase, {
+        page,
+        pageSize,
+        search,
+        accountStatus,
+        riskStatus,
+        role,
+        registeredFrom,
+        registeredTo,
+        sort,
+      }),
+      loadUserManagementCompatibility(admin.supabase),
+    ]);
     if (!profileResult.ok) {
       return json({ users: [], count: 0, page, pageSize, schemaReady: false, error: profileResult.error }, { status: 503 });
     }
 
-    const compatibility = await loadUserManagementCompatibility(admin.supabase);
     const pageUsers = profileResult.rows.map(normalizeProfile);
 
     return json({
@@ -137,10 +143,11 @@ async function loadProfiles(supabase: any, input: ProfileQuery) {
 
 async function runProfileQuery(supabase: any, select: string, input: ProfileQuery, includeNames: boolean) {
   let query = supabase.from("profiles").select(select, { count: "exact" });
-  if (input.search) {
-    const filters = [`email.ilike.%${input.search}%`];
+  const safeSearch = sanitizePostgrestFilterTerm(input.search);
+  if (safeSearch) {
+    const filters = [`email.ilike.%${safeSearch}%`];
     if (isUuid(input.search)) filters.unshift(`id.eq.${input.search}`);
-    if (includeNames) filters.push(`display_name.ilike.%${input.search}%`, `full_name.ilike.%${input.search}%`, `nickname.ilike.%${input.search}%`, `name.ilike.%${input.search}%`);
+    if (includeNames) filters.push(`display_name.ilike.%${safeSearch}%`, `full_name.ilike.%${safeSearch}%`, `nickname.ilike.%${safeSearch}%`, `name.ilike.%${safeSearch}%`);
     query = query.or(filters.join(","));
   }
   if (input.accountStatus !== "all") query = query.eq("account_status", input.accountStatus);
@@ -159,8 +166,15 @@ async function runProfileQuery(supabase: any, select: string, input: ProfileQuer
 }
 
 async function loadUserManagementCompatibility(supabase: any) {
+  if (userCompatCache && userCompatCache.expiresAt > Date.now()) {
+    return userCompatCache.value;
+  }
   const { data, error } = await supabase.rpc("get_admin_user_management_compatibility");
-  return parseAdminUserManagementCompatibility(data, error);
+  const parsed = parseAdminUserManagementCompatibility(data, error);
+  if (!error) {
+    userCompatCache = { expiresAt: Date.now() + USER_COMPAT_CACHE_TTL_MS, value: parsed };
+  }
+  return parsed;
 }
 
 function normalizeProfile(row: ProfileRow): NormalizedUser {

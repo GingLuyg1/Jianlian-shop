@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireApiAdmin } from "@/lib/admin/api-auth";
+import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { getAuditErrorMessage, writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import {
   CODE_FIELD_CONSISTENCY_NOTES,
@@ -48,7 +48,7 @@ function normalizeError(error: unknown, fallback = "数据库结构检查失败�
 }
 
 export async function GET(request: Request) {
-  const admin = await requireApiAdmin();
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
 
   const serviceClient = getSupabaseServiceRoleClient();

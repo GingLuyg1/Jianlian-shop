@@ -6,6 +6,7 @@ import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { boundedListInteger } from "@/lib/admin/list-pagination.mjs";
 import { maskEmail, normalizeRefundError } from "@/lib/refunds/refund-utils";
+import { escapeIlikePattern } from "@/lib/security/postgrest-sanitize";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +53,7 @@ function refundReadError(error: unknown) {
 }
 
 async function findRefundIdsForSearch(supabase: SupabaseClient, q: string) {
-  const pattern = `%${q}%`;
+  const pattern = `%${escapeIlikePattern(q)}%`;
   const [refundMatches, orderMatches, profileMatches] = await Promise.all([
     supabase.from("refund_requests").select("id").ilike("refund_no", pattern).limit(SEARCH_MATCH_LIMIT + 1),
     supabase.from("orders").select("id").ilike("order_no", pattern).limit(SEARCH_MATCH_LIMIT + 1),

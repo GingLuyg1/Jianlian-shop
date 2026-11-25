@@ -109,7 +109,7 @@ export default function AdminMediaPage() {
   const loadAssets = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ pageSize: "80", ownerType, status });
+    const params = new URLSearchParams({ pageSize: "24", ownerType, status });
     try {
       const response = await fetch(`/api/admin/media?${params.toString()}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
@@ -268,13 +268,13 @@ export default function AdminMediaPage() {
                 {filteredAssets.map((asset) => (
                   <tr key={asset.id} className={adminListRowClass}>
                     <td className="px-4 py-3 text-center">
-                      {asset.public_url ? <img src={asset.public_url} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" /> : <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100"><ImageIcon className="h-5 w-5 text-slate-400" /></div>}
+                      {asset.public_url ? <img src={asset.public_url} alt="" loading="lazy" decoding="async" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" /> : <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100"><ImageIcon className="h-5 w-5 text-slate-400" /></div>}
                     </td>
                     <td className="max-w-[220px] px-4 py-3">
                       <div className="truncate font-medium text-slate-900">{asset.original_name || "—"}</div>
                       <div className="truncate text-xs text-slate-500">{asset.public_url || "私有资源"}</div>
                     </td>
-                    <td className="px-4 py-3">{asset.owner_type}</td>
+                    <td className="px-4 py-3">{OWNER_OPTIONS.find(([key]) => key === asset.owner_type)?.[1] ?? asset.owner_type}</td>
                     <td className="max-w-[260px] px-4 py-3">
                       <div className="font-medium text-slate-700">{asset.bucket}</div>
                       <div className="truncate text-xs text-slate-500">{asset.storage_path}</div>

@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "crypto";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { escapeIlikePattern } from "@/lib/security/postgrest-sanitize";
 
 type MediaPurpose = "product" | "sku" | "category" | "logo" | "favicon" | "announcement" | "avatar" | "misc";
 type MediaOwnerType = "product" | "sku" | "category" | "site_setting" | "profile" | "announcement" | "unassigned";
@@ -241,7 +242,7 @@ export async function listMediaAssets(client: SupabaseClient, params: URLSearchP
   const start = params.get("start");
   const end = params.get("end");
   if (ownerType && ownerType !== "all") query = query.eq("owner_type", ownerType);
-  if (mimeType && mimeType !== "all") query = query.ilike("mime_type", `${mimeType}%`);
+  if (mimeType && mimeType !== "all") query = query.ilike("mime_type", `${escapeIlikePattern(mimeType)}%`);
   if (status && status !== "all") query = query.eq("status", status);
   if (uploadedBy) query = query.eq("uploaded_by", uploadedBy);
   if (start) query = query.gte("created_at", start);
@@ -260,7 +261,7 @@ export async function scanMediaReferences(client: SupabaseClient, asset: MediaAs
     ["product_skus.image_url", client.from("product_skus").select("id", { count: "exact", head: true }).eq("image_url", url)],
     ["categories.icon", client.from("categories").select("id", { count: "exact", head: true }).eq("icon", url)],
     ["profiles.avatar_url", client.from("profiles").select("id", { count: "exact", head: true }).eq("avatar_url", url)],
-    ["site_settings.setting_value", client.from("site_settings").select("id", { count: "exact", head: true }).ilike("setting_value", `%${url}%`)],
+    ["site_settings.setting_value", client.from("site_settings").select("id", { count: "exact", head: true }).ilike("setting_value", `%${escapeIlikePattern(url)}%`)],
   ];
   for (const [type, promise] of checks) {
     try {

@@ -26,7 +26,7 @@ export default function BitrefillFulfillmentWorkspace() {
   return <section className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-xl font-semibold">Bitrefill 采购与履约</h1>
       <button type="button" onClick={refresh} disabled={loading} className="min-h-[44px] rounded-lg border px-4 disabled:opacity-50">刷新记录</button></div>
-    <nav className="flex flex-wrap gap-4 text-orange-700"><a href="/admin/suppliers/bitrefill/catalog">商品目录与人工映射</a><a href="/admin/suppliers/bitrefill/aftercare">异常待处理</a></nav>
+    <nav className="flex flex-wrap gap-4 text-orange-700"><a href="/admin/suppliers">供应商中心</a><a href="/admin/supplier-fulfillment">采购队列</a></nav>
     <p className="rounded-xl border bg-orange-50 p-3 text-sm">真实自动采购关闭。商品映射、商业授权、真实成本和 Child 身份仍待验证。这里不展示卡密，也不提供重发 POST 按钮。</p>
     {loading ? <p role="status">正在读取采购记录…</p> : error ? <div role="alert"><p>{error}</p><button type="button" className="min-h-[44px] underline" onClick={refresh}>重试只读查询</button></div> : data && data.page === page ? <>
       <BitrefillFulfillmentRows rows={data.rows} />

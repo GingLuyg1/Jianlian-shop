@@ -7,10 +7,14 @@ import { listDataConsistencyState, runDataConsistencyScan } from "@/lib/consiste
 export const dynamic = "force-dynamic";
 
 function safeError(error: unknown, fallback = "数据巡检操作失败") {
-  if (typeof error === "string" && error.trim()) return error;
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) return message;
+  const raw =
+    typeof error === "string"
+      ? error.trim()
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "").trim()
+        : "";
+  if (raw && /[\u4e00-\u9fa5]/.test(raw) && !/select\s+|relation\s+|postgres|schema/i.test(raw)) {
+    return raw;
   }
   return fallback;
 }

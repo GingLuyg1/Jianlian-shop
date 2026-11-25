@@ -5,6 +5,7 @@ import { requireApiAdmin } from "@/lib/admin/api-auth";
 import { getSafeErrorResponse } from "@/lib/monitoring/error-codes";
 import { recordApiError } from "@/lib/monitoring/logger";
 import { getRequestIdFromRequest, withRequestIdHeader } from "@/lib/monitoring/request-id";
+import { escapeIlikePattern } from "@/lib/security/postgrest-sanitize";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
     if (level && validLevels.has(level)) query = query.eq("level", level);
     if (status && validStatuses.has(status)) query = query.eq("status", status);
     if (category) query = query.eq("category", category.slice(0, 40));
-    if (traceId) query = query.ilike("request_id", `%${traceId.slice(0, 120)}%`);
+    if (traceId) query = query.ilike("request_id", `%${escapeIlikePattern(traceId.slice(0, 120))}%`);
     if (orderId) query = query.eq("order_id", orderId);
     if (paymentId) query = query.eq("payment_id", paymentId);
     if (startAt) query = query.gte("last_seen_at", startAt);

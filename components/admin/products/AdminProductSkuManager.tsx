@@ -248,7 +248,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     }
     const updated = candidateRows.map((row, idx) =>
       idx === targetIdx
-        ? { ...row, draft: { ...row.draft, sku_code: cleanSlug, touched: true } }
+        ? { ...row, draft: { ...row.draft, sku_code: cleanSlug, touched: forceOverwrite ? true : row.draft.touched } }
         : row
     );
     return { rows: updated, autoSynced: true };
@@ -268,6 +268,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   const [activationConfirmation, setActivationConfirmation] = useState<Array<{ code: string; stock: number; source: string; supplierBound: boolean; localAvailable: number; inventoryState: string | null }> | null>(null);
   const activationConfirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
   const productId = product?.id;
+  const productMetadataRef = useRef(product?.metadata ?? null);
+  productMetadataRef.current = product?.metadata ?? null;
   const previousProductId = useRef(productId);
 
   const load = useCallback(async () => {
@@ -283,21 +285,16 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
         }
         const persisted = skus.map((sku) => {
           const previous = current.find((row) => row.sku?.id === sku.id);
-          if (!previous || !previous.draft.touched) return { key: sku.id, sku, draft: toDraft(sku, product?.metadata ?? null) };
+          if (!previous || !previous.draft.touched) return { key: sku.id, sku, draft: toDraft(sku, productMetadataRef.current) };
           return { ...previous, sku, draft: { ...previous.draft, ...(previous.draft.stock === String(previous.sku?.stock) ? { stock: String(sku.stock) } : {}) } };
         });
         const merged = [...persisted, ...current.filter((row) => !row.sku && row.key !== "legacy" && !isSkuDraftEmpty(row.draft)), emptyRow()];
         const synced = syncSingleSkuCode(merged, productSlugRef.current, false);
-        if (synced.autoSynced) {
-          queueMicrotask(() => {
-            onSummaryRef.current(deriveSkuProductSummary(synced.rows.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft)));
-          });
-        }
         return synced.rows;
       });
     } catch (error) { setDiagnostics(null); setLoadError(error instanceof Error ? error.message : "商品规格读取失败"); }
     finally { setLoading(false); }
-  }, [productId, product?.metadata, syncSingleSkuCode]);
+  }, [productId, syncSingleSkuCode]);
   useEffect(() => {
     if (!normalizedProductSlug || loading) return;
     if (prevSlugForSyncRef.current === normalizedProductSlug) return;

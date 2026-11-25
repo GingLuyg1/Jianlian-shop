@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { ChevronDown, ListFilter, MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -39,10 +40,17 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminSyncedHorizontalScroller from "@/components/admin/AdminSyncedHorizontalScroller";
 import glass from "@/components/admin/v2/AdminPremiumGlass.module.css";
-import AdminSupplierBindingSheet from "@/components/admin/suppliers/AdminSupplierBindingSheet";
-import AdminProductImagePicker from "@/components/admin/products/AdminProductImagePicker";
 import AdminProductSkuManager, { type ProductSkuManagerHandle } from "@/components/admin/products/AdminProductSkuManager";
 import { getSupplierUiDefinition } from "@/components/admin/suppliers/supplier-ui-registry";
+
+const AdminSupplierBindingSheet = dynamic(
+  () => import("@/components/admin/suppliers/AdminSupplierBindingSheet"),
+  { ssr: false }
+);
+const AdminProductImagePicker = dynamic(
+  () => import("@/components/admin/products/AdminProductImagePicker"),
+  { ssr: false }
+);
 import {
   createCategory,
   createProduct,
@@ -537,7 +545,14 @@ export default function AdminProductsPage() {
       if (productReadRequestRef.current !== requestSequence) return;
       const latestForm = toProductForm(latestProduct, categoryMap, categories);
       setProductInitialForm(latestForm);
-      setProductForm(latestForm);
+      setProductForm((current) => {
+        if (!current || current.id !== latestProduct.id) return current;
+        // Preserve edits if the user has already started modifying fields while detail was loading
+        if (isProductDirty(current, form)) {
+          return { ...current, metadata_base: latestForm.metadata_base };
+        }
+        return latestForm;
+      });
       mergeSavedProductIntoList(latestProduct);
     } catch (readError) {
       if (productReadRequestRef.current !== requestSequence) return;
@@ -1202,10 +1217,10 @@ export default function AdminProductsPage() {
                     }}
                   >
                     <option value="any">全部商品规格状态</option>
-                    <option value="has_active_sku">存在 Active 商品规格</option>
-                    <option value="all_draft">商品规格全为 草稿</option>
+                    <option value="has_active_sku">存在在售商品规格</option>
+                    <option value="all_draft">商品规格全为草稿</option>
                     <option value="has_sold_out_sku">存在售罄商品规格</option>
-                    <option value="no_active_sku">无 Active 商品规格</option>
+                    <option value="no_active_sku">无在售商品规格</option>
                   </NativeSelect>
                   <NativeSelect
                     value={supplierBindingFilter}
@@ -1387,9 +1402,18 @@ export default function AdminProductsPage() {
         }}
         onSaved={(saved) => {
           if (!bindingProduct) return;
-          setProducts((current) => current.map((product) => product.id === bindingProduct.id
+          const boundId = bindingProduct.id;
+          setProducts((current) => current.map((product) => product.id === boundId
             ? { ...product, metadata: saved.metadata ?? product.metadata, delivery_type: saved.delivery_type ?? "automatic", stock: saved.stock ?? product.stock }
             : product));
+          if (saved.metadata && typeof saved.metadata === "object" && !Array.isArray(saved.metadata)) {
+            setProductForm((current) =>
+              current && current.id === boundId ? { ...current, metadata_base: saved.metadata ?? current.metadata_base } : current
+            );
+            setProductInitialForm((current) =>
+              current && current.id === boundId ? { ...current, metadata_base: saved.metadata ?? current.metadata_base } : current
+            );
+          }
           if (saved.sku) setSkuRefreshKey((current) => current + 1);
           setBindingProduct(null);
           setBindingSku(null);
@@ -1568,6 +1592,44 @@ function ProductOperationsSummary({ product }: { product: AdminProduct }) {
   );
 }
 
+function ProductThumbPreview({ src }: { src: string }) {
+  const [hovered, setHovered] = useState(false);
+  const safeSrc = src || PRODUCT_FALLBACK_IMAGE;
+  return (
+    <div
+      className="relative h-10 w-10 shrink-0 overflow-visible"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="h-10 w-10 overflow-hidden rounded-lg border border-[#dce3ee] bg-white">
+        <img
+          src={safeSrc}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+          onError={(event) => {
+            event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
+          }}
+        />
+      </div>
+      {hovered ? (
+        <div className="pointer-events-none absolute left-12 top-0 z-30 h-40 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          <img
+            src={safeSrc}
+            alt=""
+            decoding="async"
+            className="h-full w-full rounded-lg object-cover"
+            onError={(event) => {
+              event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ProductTable({
   categoryMap,
   categories,
@@ -1647,29 +1709,7 @@ function ProductTable({
               <TableRow key={product.id} data-attention={hasCategoryIssue || undefined}>
                 <TableCell className="min-w-0 px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="group relative h-10 w-10 shrink-0 overflow-visible">
-                      <div className="h-10 w-10 overflow-hidden rounded-lg border border-[#dce3ee] bg-white">
-                      <img
-                        src={product.image_url || PRODUCT_FALLBACK_IMAGE}
-                        alt=""
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                        onError={(event) => {
-                          event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
-                        }}
-                      />
-                      </div>
-                      <div className="pointer-events-none absolute left-12 top-0 z-20 hidden h-40 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg group-hover:block">
-                      <img
-                        src={product.image_url || PRODUCT_FALLBACK_IMAGE}
-                        alt=""
-                        className="h-full w-full rounded-lg object-cover"
-                        onError={(event) => {
-                          event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
-                        }}
-                      />
-                      </div>
-                    </div>
+                    <ProductThumbPreview src={product.image_url || PRODUCT_FALLBACK_IMAGE} />
                     <div className="min-w-0 leading-tight">
                       <div
                         className="truncate text-sm font-semibold text-slate-900"
@@ -1701,7 +1741,7 @@ function ProductTable({
                 </TableCell>
                 <TableCell className={cn("px-2 py-2 text-center tabular-nums", effectiveStock === 0 ? "text-red-600" : effectiveStock <= 5 ? "text-orange-600" : "text-green-600")}>
                   <div className="font-semibold">{effectiveStock}</div>
-                  <div className="mt-0.5 text-[10px] text-slate-500" title={product.has_skus ? "仅汇总 Active 商品规格库存" : undefined}>{product.has_skus ? "规格库存" : "商品库存"}</div>
+                  <div className="mt-0.5 text-[10px] text-slate-500" title={product.has_skus ? "仅汇总在售商品规格库存" : undefined}>{product.has_skus ? "规格库存" : "商品库存"}</div>
                   {product.metadata?.supplier_stock_sync_status === "synced" ? <div className="mt-0.5 text-[10px] font-normal text-blue-600" title={typeof product.metadata.supplier_stock_synced_at === "string" ? `最后同步：${formatAdminDate(product.metadata.supplier_stock_synced_at)}` : "供应商同步"}>供应商同步</div> : null}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>
@@ -2162,13 +2202,16 @@ function ModalFrame({
       tabIndex={-1}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className={cn(
-          "relative w-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl",
+          "relative flex max-h-[calc(100dvh-48px)] w-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl",
           size
         )}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-orange-100 bg-gradient-to-br from-orange-50 to-white px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-orange-100 bg-gradient-to-br from-orange-50 to-white px-5 py-4">
           <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
           <button
             type="button"

@@ -91,7 +91,9 @@ export default function AdminGlobalSearch() {
         setPayload(null);
         setError(searchError instanceof Error ? searchError.message : "搜索失败");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }, 260);
 
@@ -160,7 +162,7 @@ export default function AdminGlobalSearch() {
       {loading ? <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[var(--admin-v2-text-muted)]" /> : null}
 
       {open && keyword.trim() ? (
-        <div id="admin-global-search-results" role="listbox" aria-label="全局搜索结果" className="absolute left-0 right-0 top-11 z-50 max-h-[560px] overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-lg">
+        <div id="admin-global-search-results" role="listbox" aria-label="全局搜索结果" className="absolute left-0 right-0 top-11 z-50 max-h-[min(560px,calc(100dvh-88px))] overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)] shadow-lg">
           {error ? (
             <div className="px-4 py-5 text-sm text-[var(--admin-v2-danger-foreground)]">{error}</div>
           ) : loading && !payload ? (
@@ -171,7 +173,7 @@ export default function AdminGlobalSearch() {
               <div className="mt-1">请检查编号、邮箱或商品名称是否正确。</div>
             </div>
           ) : payload ? (
-            <div className="max-h-[560px] overflow-y-auto py-2">
+            <div className="max-h-[min(560px,calc(100dvh-88px))] overflow-y-auto py-2">
               {payload.groups.map((group) => {
                 if (!group.results.length && !group.error) return null;
                 return (

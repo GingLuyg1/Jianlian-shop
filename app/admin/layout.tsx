@@ -1,4 +1,3 @@
-import "./dashboard-v21.css";
 import { ReactNode } from "react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";

@@ -3,6 +3,7 @@
 import { getAuditErrorMessage, sanitizeAuditValue } from "@/lib/admin/audit-log-service";
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { sanitizeMessage } from "@/lib/monitoring/logger";
+import { escapeIlikePattern } from "@/lib/security/postgrest-sanitize";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -74,12 +75,12 @@ export async function GET(request: Request) {
   const startAt = searchParams.get("startAt")?.trim();
   const endAt = searchParams.get("endAt")?.trim();
 
-  if (adminEmail) query = query.ilike("admin_email", `%${adminEmail}%`);
+  if (adminEmail) query = query.ilike("admin_email", `%${escapeIlikePattern(adminEmail)}%`);
   if (auditModule && VALID_MODULES.has(auditModule)) query = query.eq("module", auditModule);
-  if (action) query = query.ilike("action", `%${action}%`);
+  if (action) query = query.ilike("action", `%${escapeIlikePattern(action)}%`);
   if (result && VALID_RESULTS.has(result)) query = query.eq("result", result);
-  if (targetId) query = query.ilike("target_id", `%${targetId}%`);
-  if (requestId) query = query.ilike("request_id", `%${requestId}%`);
+  if (targetId) query = query.ilike("target_id", `%${escapeIlikePattern(targetId)}%`);
+  if (requestId) query = query.ilike("request_id", `%${escapeIlikePattern(requestId)}%`);
   if (startAt) query = query.gte("created_at", startAt);
   if (endAt) query = query.lte("created_at", endAt);
 

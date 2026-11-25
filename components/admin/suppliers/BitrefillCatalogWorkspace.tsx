@@ -35,7 +35,7 @@ export default function BitrefillCatalogWorkspace({ localMode = false }: { local
   return <section className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
     <h1 className="text-xl font-semibold">Bitrefill 商品目录与人工映射</h1>
     <p className="rounded-xl border bg-orange-50 p-3 text-sm">Personal API 仅查询商品，不代表商业转售许可。人工映射不启用采购；没有真实报价时成本和利润始终未验证。</p>
-    <nav className="flex flex-wrap gap-4 text-sm text-orange-700">{!localMode ? <a href="/admin/suppliers/bitrefill">采购记录</a> : null}<a href="/admin/suppliers/bitrefill/aftercare">异常待处理</a></nav>
+    <nav className="flex flex-wrap gap-4 text-sm text-orange-700">{!localMode ? <a href="/admin/suppliers">供应商中心</a> : null}</nav>
     <form className="flex flex-wrap items-end gap-3 rounded-xl border p-3" onSubmit={(e) => {
       e.preventDefault(); setSelection(null); if (country !== query.country) setCategoryOptions([]); setQuery({ country, q, category, stock, page: 1 });
     }}>

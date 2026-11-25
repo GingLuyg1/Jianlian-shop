@@ -8,6 +8,9 @@ import { getSafeDajuError } from "@/lib/providers/daju/errors";
 
 export const dynamic = "force-dynamic";
 
+const DAJU_BALANCE_CACHE_TTL_MS = 30_000;
+let dajuBalanceCache: { expiresAt: number; balance: unknown } | null = null;
+
 function json(body: unknown, status = 200) {
   const response = NextResponse.json(body, { status });
   response.headers.set("Cache-Control", "no-store");
@@ -20,12 +23,18 @@ export async function GET(request: Request) {
   const admin = await getServerAdminContext();
   if (!admin.ok) return json({ error: admin.message, code: "DAJU_ADMIN_REQUIRED", requestId }, admin.status);
 
+  const url = new URL(request.url);
+  const resource = url.searchParams.get("resource") ?? "balance";
+  const forceRefresh = url.searchParams.get("refresh") === "1";
+
   try {
     const client = createDajuClient();
-    const url = new URL(request.url);
-    const resource = url.searchParams.get("resource") ?? "balance";
     if (resource === "balance") {
+      if (!forceRefresh && dajuBalanceCache && dajuBalanceCache.expiresAt > Date.now()) {
+        return json({ supplier: "大橘AI", balance: dajuBalanceCache.balance, cached: true, requestId });
+      }
       const balance = await client.getBalance();
+      dajuBalanceCache = { expiresAt: Date.now() + DAJU_BALANCE_CACHE_TTL_MS, balance };
       const numericBalance = Number(balance?.balance);
       if (Number.isFinite(numericBalance) && numericBalance < 10) {
         void notifySupplierInsufficientBalance({
@@ -52,6 +61,19 @@ export async function GET(request: Request) {
   } catch (error) {
     const safe = getSafeDajuError(error);
     console.error("[DajuAdmin] supplier read failed", { requestId, code: safe.code, kind: safe.kind });
+    if (resource === "balance") {
+      return json(
+        {
+          supplier: "大橘AI",
+          balance: dajuBalanceCache?.balance ?? null,
+          degraded: true,
+          warning: "大橘AI 上游接口暂不可达，已展示最近缓存或降级状态",
+          code: safe.code,
+          requestId,
+        },
+        200
+      );
+    }
     return json({ error: "大橘AI供应商信息读取失败", code: safe.code, requestId }, safe.status);
   }
 }

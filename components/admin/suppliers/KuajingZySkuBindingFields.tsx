@@ -123,6 +123,12 @@ export default function KuajingZySkuBindingFields({
       toast.error("请填写有效的正数最高成本上限（CNY）");
       return;
     }
+    if (autoPurchaseEnabled) {
+      const confirmed = window.confirm(
+        `确认开启「${product.name}」的跨境资源网自动采购开关？\n上游商品 ID：${supplierProductId.trim()}\n最高成本上限：¥${maxUnitCost.trim()} CNY\n开启后用户付款将直接自动向下游扣款下单。`
+      );
+      if (!confirmed) return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/suppliers/kuajingzy/bindings/${product.id}`, {

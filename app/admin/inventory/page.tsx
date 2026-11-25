@@ -321,6 +321,11 @@ export default function AdminInventoryPage() {
       setImportValidation("请先完成导入预览");
       return;
     }
+    const targetName = products.find((p) => p.id === importProductId)?.name ?? importProductId;
+    const confirmed = window.confirm(
+      `确认向商品「${targetName}」正式导入数字库存？\n预计导入：${preview.estimatedImportRows} 条\n跳过重复：${preview.fileDuplicateRows + preview.databaseDuplicateRows} 条\n无效行：${preview.invalidRows} 条`
+    );
+    if (!confirmed) return;
     setSubmitting(true);
     setImportValidation(null);
     try {
@@ -358,13 +363,14 @@ export default function AdminInventoryPage() {
       await readJson(response, "库存状态更新失败");
       toast.success("库存状态已更新");
       await loadData();
-      if (selectedProduct) await openProductItems(selectedProduct);
+      if (selectedBatch) await openBatchItems(selectedBatch);
+      else if (selectedProduct) await openProductItems(selectedProduct);
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "库存状态更新失败");
     } finally {
       setSubmitting(false);
     }
-  }, [loadData, openProductItems, selectedProduct]);
+  }, [loadData, openBatchItems, openProductItems, selectedBatch, selectedProduct]);
 
   const importableProducts = useMemo(() => products.filter((product) => product.status !== "inactive"), [products]);
 

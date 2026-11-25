@@ -170,8 +170,10 @@ export default function AdminRefundsPage() {
     setProviderRefundId(row.providerRefundId ?? "");
   }
 
+  const submitLockRef = useRef(false);
+
   async function submitAction() {
-    if (!selected) return;
+    if (!selected || submitLockRef.current || submitting) return;
     if (!note.trim()) {
       toast.error("请填写审核备注");
       return;
@@ -192,6 +194,7 @@ export default function AdminRefundsPage() {
     const dangerous = ["approve_balance", "reject", "cancel", "complete_external", "fail"].includes(action);
     if (dangerous && !window.confirm("确认执行该退款操作？操作会写入审计日志。")) return;
 
+    submitLockRef.current = true;
     setSubmitting(true);
     try {
       const response = await fetch(`/api/admin/refunds/${selected.id}`, {
@@ -214,6 +217,7 @@ export default function AdminRefundsPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "退款操作失败");
     } finally {
+      submitLockRef.current = false;
       setSubmitting(false);
     }
   }
@@ -297,14 +301,14 @@ export default function AdminRefundsPage() {
       </div>
 
       {selected ? (
-        <div className="fixed inset-0 z-50 bg-slate-950/35" onClick={() => setSelected(null)}>
+        <div className="fixed inset-0 z-50 bg-slate-950/35" onClick={() => !submitting && setSelected(null)}>
           <aside className="ml-auto flex h-full w-full max-w-[780px] flex-col bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex shrink-0 items-start justify-between gap-4 border-b px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">退款详情</h2>
                 <p className="mt-1 text-sm text-slate-500">{selected.refundNo} / {selected.orderNo}</p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setSelected(null)}><X className="h-5 w-5" /></Button>
+              <Button variant="ghost" size="icon" disabled={submitting} onClick={() => setSelected(null)}><X className="h-5 w-5" /></Button>
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">

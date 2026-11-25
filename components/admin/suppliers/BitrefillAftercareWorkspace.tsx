@@ -19,7 +19,7 @@ export default function BitrefillAftercareWorkspace({ localMode = false }: { loc
   return <section className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
     <h1 className="text-xl font-semibold">Bitrefill 异常待处理</h1>
     <p className="rounded-xl border bg-orange-50 p-3 text-sm">采购失败、供应商退款、部分失败统一由管理员人工处理。供应商退款不等于客户退款；本页不会自动退余额、退支付款或重发货。客户问题请联系人工客服。</p>
-    <nav className="flex flex-wrap gap-4 text-orange-700"><a href={localMode ? "/" : "/admin/suppliers/bitrefill/catalog"}>商品目录</a>{!localMode ? <><a href="/admin/orders">订单人工处理</a><a href="/admin/refunds">原有退款审核</a></> : null}
+    <nav className="flex flex-wrap gap-4 text-orange-700"><a href={localMode ? "/" : "/admin/suppliers"}>供应商中心</a>{!localMode ? <><a href="/admin/orders">订单人工处理</a><a href="/admin/refunds">原有退款审核</a></> : null}
       <button type="button" disabled={loading} onClick={() => setReload((n) => n + 1)}>刷新异常</button></nav>
     {loading ? <p role="status">正在读取异常记录…</p> : error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => setReload((n) => n + 1)}>重试异常队列</button></div> : <>
       {!cases.length ? <p>本页暂无异常记录；可继续浏览后续订单页。不会构造异常订单。</p> : cases.map((c) => <article key={c.id} className="min-w-0 break-all rounded-xl border bg-white p-4 text-sm">
@@ -40,7 +40,7 @@ export default function BitrefillAftercareWorkspace({ localMode = false }: { loc
           } catch (e) { setMessage(e instanceof Error ? e.message : "记录失败"); } finally { setBusy(false); }
         }}><select name="status" aria-label="人工处理状态" className="min-h-[44px] rounded border"><option value="assigned">人工处理中</option><option value="resolved_manually">人工记录完成（不等于退款或发货）</option></select>
           <input name="note" aria-label="人工处理说明" required minLength={3} maxLength={160} placeholder="不填写客户资料、卡密或密码" className="min-h-[44px] min-w-0 rounded border px-2" />
-          <button disabled={busy} className="min-h-[44px] rounded border px-3">保存人工记录（不动账）</button></form>}
+          <button type="submit" disabled={busy} className="min-h-[44px] rounded border px-3">保存人工记录（不动账）</button></form>}
       </article>)}
       <nav aria-label="异常订单分页" className="flex items-center gap-3"><button type="button" disabled={page === 1} className="min-h-[44px] rounded border px-3 disabled:opacity-50" onClick={() => setPage((n) => n - 1)}>上一页</button><span>订单扫描第 {page} 页</span><button type="button" disabled={!hasMore} className="min-h-[44px] rounded border px-3 disabled:opacity-50" onClick={() => setPage((n) => n + 1)}>下一页</button></nav>
     </>}

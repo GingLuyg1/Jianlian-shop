@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, Suspense } from "react";
 import AdminGuard from "@/components/auth/AdminGuard";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopBar from "./AdminTopBar";
@@ -17,11 +17,19 @@ function AdminShell({ children }: AdminLayoutProps) {
   return (
     <div data-admin-shell className={cn(v2Styles.scope, glass.shell, "fixed inset-0 flex h-[100dvh] max-h-[100dvh] min-h-0 w-full overflow-hidden bg-[var(--admin-v2-background)] text-[var(--admin-v2-text-primary)] [--admin-content-padding-x:16px] [--admin-header-height:62px] [--admin-main-offset:204px] [--admin-sidebar-width:204px]")}>
       <div className="hidden h-full w-[var(--admin-main-offset)] shrink-0 lg:flex">
-        <AdminSidebar />
+        <Suspense fallback={<div className="h-full w-full border-r border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]" />}>
+          <AdminSidebar />
+        </Suspense>
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AdminTopBar />
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+        <Suspense fallback={<div className="h-[var(--admin-header-height)] shrink-0 border-b border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface)]" />}>
+          <AdminTopBar />
+        </Suspense>
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-xs text-slate-400">正在加载页面...</div>}>
+            {children}
+          </Suspense>
+        </main>
       </div>
     </div>
   );
