@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -87,12 +88,47 @@ const heroSlides = [
   },
 ];
 
-const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+function MascotImage({
+  src,
+  alt,
+  width,
+  height,
+  className,
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  className: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      loading="lazy"
+      decoding="async"
+      fetchPriority="low"
+      draggable={false}
+      onLoad={() => setLoaded(true)}
+      className={cn(
+        className,
+        "select-none pointer-events-none transition-opacity duration-300",
+        loaded ? "opacity-100" : "opacity-0"
+      )}
+    />
+  );
+}
 
 function HeroCarousel() {
   const { isMobile } = useMobileStorefront();
   const [activeIndex, setActiveIndex] = useState(0);
   const [isMoving, setIsMoving] = useState(false);
+  const heroOuterRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number | null>(null);
   const nextIndex = (activeIndex + 1) % heroSlides.length;
   const orderedSlides = [heroSlides[activeIndex], heroSlides[nextIndex]];
   const visibleIndex = isMoving ? nextIndex : activeIndex;
@@ -113,28 +149,102 @@ function HeroCarousel() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (isMobile) return;
+      const el = heroOuterRef.current;
+      if (!el) return;
+      const clientX = event.clientX;
+      const clientY = event.clientY;
+      if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = null;
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        const mx = Math.max(-1, Math.min(1, ((clientX - rect.left) / rect.width) * 2 - 1));
+        const my = Math.max(-1, Math.min(1, ((clientY - rect.top) / rect.height) * 2 - 1));
+        el.style.setProperty("--mx", mx.toFixed(4));
+        el.style.setProperty("--my", my.toFixed(4));
+      });
+    },
+    [isMobile]
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    if (rafRef.current !== null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    const el = heroOuterRef.current;
+    if (!el) return;
+    el.style.setProperty("--mx", "0");
+    el.style.setProperty("--my", "0");
+  }, []);
+
   const mascotAnchorClassName =
-    "hidden lg:flex items-end -space-x-2 pointer-events-none select-none absolute top-0 -translate-y-[58%] left-[21.5%] -translate-x-1/2";
-  const mascotImgClassName =
-    "h-[108px] xl:h-[118px] w-auto object-contain select-none pointer-events-none";
+    "hidden lg:flex items-start pointer-events-none select-none absolute top-0 left-[25%] xl:left-[26%] -translate-x-1/2";
+  const mascotGirlImgClassName = "h-[108px] xl:h-[118px] w-auto object-contain";
+  const mascotFishImgClassName = "h-[60px] xl:h-[66px] w-auto object-contain";
+
+  const parallaxRootStyle: CSSProperties = {
+    ["--mx" as string]: "0",
+    ["--my" as string]: "0",
+    perspective: "900px",
+  };
+  const backParallaxStyle: CSSProperties = {
+    transform: "translate3d(calc(var(--mx) * -3px), calc(var(--my) * -1.5px), -14px)",
+    transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+    willChange: "transform",
+  };
+  const frontParallaxStyle: CSSProperties = {
+    transform:
+      "translate3d(calc(var(--mx) * 3px), calc(var(--my) * 1.5px), 12px) rotateY(calc(var(--mx) * 4deg)) rotateX(calc(var(--my) * -2.5deg))",
+    transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+    willChange: "transform",
+  };
 
   return (
-    <div data-testid="hero-carousel-outer" className="relative z-30 overflow-visible">
-      {/* 1. 后景虚层（仅桌面端展示，移动端取消吉祥物展示且不触发图片下载） */}
+    <div
+      ref={heroOuterRef}
+      data-testid="hero-carousel-outer"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={parallaxRootStyle}
+      className="relative z-30 overflow-visible"
+    >
+      {/* 1. 后景虚层（仅桌面端展示，模拟透过半透明玻璃看到的裙摆与尾巴景深） */}
       {!isMobile ? (
         <div
           aria-hidden="true"
           data-testid="hero-mascots-back"
           className={cn(mascotAnchorClassName, "z-[12] opacity-35 blur-[2px] saturate-90")}
         >
-          <picture>
-            <source media="(min-width: 1024px)" srcSet="/mascots/gemini-back.webp" type="image/webp" />
-            <img src={TRANSPARENT_PIXEL} alt="" width={193} height={260} draggable={false} decoding="async" className={mascotImgClassName} />
-          </picture>
-          <picture>
-            <source media="(min-width: 1024px)" srcSet="/mascots/chatgpt-back.webp" type="image/webp" />
-            <img src={TRANSPARENT_PIXEL} alt="" width={186} height={260} draggable={false} decoding="async" className={mascotImgClassName} />
-          </picture>
+          <div style={backParallaxStyle} className="flex items-start">
+            <div className="flex items-end -space-x-2 -translate-y-[58%]">
+              <MascotImage
+                src="/mascots/gemini-back.png"
+                alt=""
+                width={284}
+                height={380}
+                className={mascotGirlImgClassName}
+              />
+              <MascotImage
+                src="/mascots/chatgpt-back.png"
+                alt=""
+                width={278}
+                height={380}
+                className={mascotGirlImgClassName}
+              />
+            </div>
+            {/* 占位与前景大肥鱼宽度对齐，保证前后两层坐标严格同心 */}
+            <div className="ml-1 w-[86px] xl:w-[95px] shrink-0" aria-hidden="true" />
+          </div>
         </div>
       ) : null}
 
@@ -196,26 +306,48 @@ function HeroCarousel() {
         </div>
       </section>
 
-      {/* 3. 上边框物理接触暗影（z-20）与前景实层（仅桌面端渲染，手机端取消展示） */}
+      {/* 3. 上边框物理接触暗影（z-20）与前景 3D 盲盒手办天团层（z-30，仅桌面端渲染） */}
       {!isMobile ? (
         <>
           <div
             aria-hidden="true"
-            className="hidden lg:block pointer-events-none select-none absolute top-0 left-[21.5%] -translate-x-1/2 -translate-y-1/2 z-20 h-2 w-28 bg-[#4a2e3e]/12 blur-[4px] rounded-full"
+            className="hidden lg:block pointer-events-none select-none absolute top-0 left-[25%] xl:left-[26%] -translate-x-1/2 -translate-y-1/2 z-20 h-2 w-52 bg-[#4a2e3e]/14 blur-[4px] rounded-full"
           />
           <div
             aria-hidden="true"
             data-testid="hero-mascots-front"
-            className={cn(mascotAnchorClassName, "z-40 drop-shadow-[2px_5px_7px_rgba(65,38,58,0.18)]")}
+            className={cn(mascotAnchorClassName, "z-30")}
           >
-            <picture>
-              <source media="(min-width: 1024px)" srcSet="/mascots/gemini-front.webp" type="image/webp" />
-              <img src={TRANSPARENT_PIXEL} alt="Gemini 吉祥物" width={193} height={260} draggable={false} decoding="async" className={mascotImgClassName} />
-            </picture>
-            <picture>
-              <source media="(min-width: 1024px)" srcSet="/mascots/chatgpt-front.webp" type="image/webp" />
-              <img src={TRANSPARENT_PIXEL} alt="ChatGPT 吉祥物" width={186} height={260} draggable={false} decoding="async" className={mascotImgClassName} />
-            </picture>
+            <div
+              style={frontParallaxStyle}
+              className="flex items-start drop-shadow-[2px_6px_9px_rgba(65,38,58,0.20)]"
+            >
+              <div className="flex items-end -space-x-2 -translate-y-[58%]">
+                <MascotImage
+                  src="/mascots/gemini-front.png"
+                  alt="Gemini 娘 3D 手办"
+                  width={284}
+                  height={380}
+                  className={mascotGirlImgClassName}
+                />
+                <MascotImage
+                  src="/mascots/chatgpt-front.png"
+                  alt="GPT 娘 3D 手办"
+                  width={278}
+                  height={380}
+                  className={mascotGirlImgClassName}
+                />
+              </div>
+              <div className="ml-1 -translate-y-[88%]">
+                <MascotImage
+                  src="/mascots/deepseek-sleep.png"
+                  alt="钢盆睡觉大肥鱼 3D 手办"
+                  width={375}
+                  height={260}
+                  className={mascotFishImgClassName}
+                />
+              </div>
+            </div>
           </div>
         </>
       ) : null}
