@@ -4,6 +4,7 @@ export type CatalogSkuDiagnosticRow = {
   sku_id: string;
   sku_code: string | null;
   website_stock: number;
+  supplier_applicable: boolean;
   supplier_expected: boolean;
   supplier_bound: boolean;
   supplier_product_id: unknown;

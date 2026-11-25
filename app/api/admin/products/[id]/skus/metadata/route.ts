@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { auditCatalogAction, requireCatalogAdmin } from "../../../../catalog/_shared";
 import { withDeliveryModeMetadata, type ExtendedDeliveryMode } from "@/lib/products/delivery-and-stock";
+import { syncProductDeliveryModeFromSkus } from "@/lib/products/sku-summary";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -120,7 +121,12 @@ export async function PATCH(
     ])
   );
 
-  const updatedSkus: Array<{ id: string; metadata: Record<string, unknown> }> = [];
+  const updatedSkus: Array<{
+    id: string;
+    metadata: Record<string, unknown>;
+    updated_at: string | null;
+    local_available_count?: number;
+  }> = [];
 
   await Promise.all(
     updates.map(async (patch) => {
@@ -162,17 +168,51 @@ export async function PATCH(
         .update({ metadata: nextMeta })
         .eq("id", patch.sku_id)
         .eq("product_id", params.id)
-        .select("id,metadata")
+        .select("id,metadata,updated_at")
         .single();
 
       if (!updErr && savedRow) {
+        let localAvailableCount: number | undefined = undefined;
+        const effectiveMode =
+          typeof nextMeta.delivery_mode === "string" ? nextMeta.delivery_mode : patch.delivery_mode ?? "";
+        const boundInventoryProductId =
+          typeof nextMeta.digital_inventory_product_id === "string"
+            ? nextMeta.digital_inventory_product_id
+            : patch.digital_inventory_product_id ?? "";
+
+        if (effectiveMode === "automatic_digital_inventory" && boundInventoryProductId === params.id) {
+          // Bind product-level unallocated available digital_inventory rows to this SKU
+          // so both activation readiness checks and deliver_digital_order match sku_id cleanly.
+          await service
+            .from("digital_inventory")
+            .update({ sku_id: patch.sku_id })
+            .eq("product_id", params.id)
+            .is("sku_id", null)
+            .eq("status", "available");
+
+          const { count: availCount } = await service
+            .from("digital_inventory")
+            .select("id", { count: "exact", head: true })
+            .eq("product_id", params.id)
+            .eq("sku_id", patch.sku_id)
+            .eq("status", "available");
+
+          if (typeof availCount === "number" && Number.isFinite(availCount)) {
+            localAvailableCount = availCount;
+          }
+        }
+
         updatedSkus.push({
           id: String(savedRow.id),
           metadata: (savedRow.metadata as Record<string, unknown>) ?? nextMeta,
+          updated_at: savedRow.updated_at ? String(savedRow.updated_at) : null,
+          ...(localAvailableCount !== undefined ? { local_available_count: localAvailableCount } : {}),
         });
       }
     })
   );
+
+  await syncProductDeliveryModeFromSkus(service, params.id).catch(() => null);
 
   await auditCatalogAction({
     request,

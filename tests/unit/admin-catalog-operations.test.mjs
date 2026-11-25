@@ -231,3 +231,29 @@ test("API uses bounded batch SKU reads and the UI keeps filters in URL state", (
   assert.match(page, /router\.replace/);
   assert.match(page, /resetProductFilters/);
 });
+
+test("non-supplier SKUs (shipping, manual, automatic_digital_inventory) are not flagged as supplier_unbound", () => {
+  const shippingProduct = product({ id: "p-sim", name: "Rakuten Mobile", slug: "sim-rakuten", delivery_type: "manual" });
+  const shippingSku = sku(1, { id: "sku-sim", product_id: "p-sim", status: "active", stock: 16, delivery_type: "shipping", metadata: {} });
+  const shippingSummary = buildAdminProductOperationalSummary(shippingProduct, [shippingSku]);
+  assert.equal(shippingSummary.effective_stock, 16);
+  assert.equal(shippingSummary.supplier_unbound, 0);
+  assert.equal(shippingSummary.supplier_bound, false);
+  assert.equal(shippingSummary.supplier_stock_unknown, 0);
+  assert.equal(shippingSummary.fulfillment_ready, 1);
+
+  const digitalProduct = product({ id: "p-dig", name: "Gemini Verify", slug: "gemini-verify", delivery_type: "automatic", metadata: { delivery_mode: "automatic_digital_inventory" } });
+  const digitalSku = sku(2, { id: "sku-dig", product_id: "p-dig", status: "active", stock: 3, delivery_type: "automatic", metadata: { delivery_mode: "automatic_digital_inventory", fulfillment_source: "local_inventory" } });
+  const digitalSummary = buildAdminProductOperationalSummary(digitalProduct, [digitalSku], { availableBySku: { "sku-dig": 3 }, error: false });
+  assert.equal(digitalSummary.supplier_unbound, 0);
+  assert.equal(digitalSummary.supplier_stock_unknown, 0);
+  assert.equal(digitalSummary.local_inventory_available, 1);
+  assert.equal(digitalSummary.fulfillment_ready, 1);
+
+  const [decoratedShipping] = decorateAdminCatalogProducts([shippingProduct], [shippingSku], filters({ deliveryType: "shipping" }));
+  assert.equal(decoratedShipping?.id, "p-sim");
+  assert.equal(decoratedShipping?.effective_delivery_mode, "shipping");
+  const [decoratedDigital] = decorateAdminCatalogProducts([digitalProduct], [digitalSku], filters({ deliveryType: "automatic_digital_inventory" }), { availableBySku: { "sku-dig": 3 }, error: false });
+  assert.equal(decoratedDigital?.id, "p-dig");
+  assert.equal(decoratedDigital?.effective_delivery_mode, "automatic_digital_inventory");
+});

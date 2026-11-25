@@ -127,7 +127,7 @@ export async function GET(request: Request) {
     query = query.in("category_id", categoryIds);
   }
   if (status && status !== "all") query = query.eq("status", status);
-  if (deliveryType && deliveryType !== "all") query = query.eq("delivery_type", deliveryType);
+  if (deliveryType && deliveryType !== "all" && !operationalScan) query = query.eq("delivery_type", deliveryType);
   if (filters.productType === "multi_sku") query = query.eq("has_skus", true);
   if (filters.productType === "single_product") query = query.eq("has_skus", false);
 

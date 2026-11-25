@@ -69,6 +69,7 @@ import { getSupplierStockEvidence } from "@/lib/products/sku-activation-readines
 import {
   parseAdminCatalogOperationFilters,
   serializeAdminCatalogFilterState,
+  type AdminCatalogDeliveryFilter,
   type AdminCatalogInventoryVerification,
   type AdminCatalogFulfillmentHealth,
   type AdminCatalogProductType,
@@ -100,6 +101,7 @@ const productStatusClass: Record<ProductStatus, string> = {
 };
 
 import {
+  EXTENDED_DELIVERY_LABELS,
   EXTENDED_DELIVERY_OPTIONS,
   getExtendedDeliveryLabel,
   resolveExtendedDeliveryMode,
@@ -303,7 +305,7 @@ export default function AdminProductsPage() {
   const [primaryFilter, setPrimaryFilter] = useState(searchParams.get("primaryCategory") || "all");
   const [secondaryFilter, setSecondaryFilter] = useState(searchParams.get("secondaryCategory") || "all");
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatus | "all">(initialFilters.productStatus);
-  const [deliveryFilter, setDeliveryFilter] = useState<DeliveryType | "all">(initialFilters.deliveryType);
+  const [deliveryFilter, setDeliveryFilter] = useState<AdminCatalogDeliveryFilter>(initialFilters.deliveryType);
   const [productTypeFilter, setProductTypeFilter] = useState<AdminCatalogProductType>(initialFilters.productType);
   const [skuStatusFilter, setSkuStatusFilter] = useState<AdminCatalogSkuStatus>(initialFilters.skuStatus);
   const [stockFilter, setStockFilter] = useState<AdminCatalogStockLevel>(initialFilters.stockLevel);
@@ -387,7 +389,7 @@ export default function AdminProductsPage() {
     secondaryFilter !== "all" ? "二级分类" : "",
     productTypeFilter === "multi_sku" ? "多商品规格" : productTypeFilter === "single_product" ? "普通商品" : "",
     productStatusFilter !== "all" ? productStatusLabel[productStatusFilter] : "",
-    deliveryFilter !== "all" ? deliveryLabel[deliveryFilter] : "",
+    deliveryFilter !== "all" ? (EXTENDED_DELIVERY_LABELS[deliveryFilter as ExtendedDeliveryMode] ?? deliveryFilter) : "",
     skuStatusFilter !== "any" ? ({ has_active_sku: "存在 Active 商品规格", all_draft: "商品规格全为 草稿", has_sold_out_sku: "存在售罄商品规格", no_active_sku: "无 Active 商品规格" } as const)[skuStatusFilter] : "",
     stockFilter === "zero_stock" ? "零库存" : stockFilter === "low_stock" ? "低库存" : stockFilter === "in_stock" ? "有库存" : "",
     supplierBindingFilter === "supplier_bound" ? "供应商已绑定" : supplierBindingFilter === "supplier_unbound" ? "存在未绑定" : "",
@@ -594,8 +596,17 @@ export default function AdminProductsPage() {
     setProducts((current) => {
       const index = current.findIndex((product) => product.id === savedProduct.id);
       if (index === -1) return current;
+      const existing = current[index];
       const next = [...current];
-      next[index] = savedProduct;
+      next[index] = {
+        ...savedProduct,
+        effective_delivery_mode: savedProduct.effective_delivery_mode ?? existing.effective_delivery_mode ?? null,
+        operational_summary: savedProduct.operational_summary ?? (
+          existing.operational_summary
+            ? { ...existing.operational_summary, effective_stock: savedProduct.stock }
+            : null
+        ),
+      };
       return next;
     });
   }
@@ -1149,14 +1160,14 @@ export default function AdminProductsPage() {
                 <NativeSelect
                   value={deliveryFilter}
                   onChange={(value) => {
-                    setDeliveryFilter(value as DeliveryType | "all");
+                    setDeliveryFilter(value as AdminCatalogDeliveryFilter);
                     setProductPage(1);
                   }}
                 >
                   <option value="all">全部交付方式</option>
-                  {Object.entries(deliveryLabel).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
+                  {EXTENDED_DELIVERY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
                     </option>
                   ))}
                 </NativeSelect>
@@ -1435,7 +1446,34 @@ function formatAdminDate(value: string | null | undefined) {
 
 function SupplierBindingBadge({ product }: { product: AdminProduct }) {
   const summary = product.operational_summary;
+  const effectiveMode = resolveExtendedDeliveryMode(
+    product.effective_delivery_mode ?? product.delivery_type,
+    product.metadata
+  );
   if (product.has_skus && summary) {
+    if (summary.supplier_unbound === 0 && !summary.supplier_bound) {
+      if (effectiveMode === "automatic_digital_inventory") {
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              "whitespace-nowrap px-1.5 text-[10px]",
+              summary.local_inventory_available > 0
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-amber-200 bg-amber-50 text-amber-700"
+            )}
+            title="当前为自动发货-数字库存模式，直接由后台数字库存发货"
+          >
+            {summary.local_inventory_available > 0 ? "数字库存 · 已绑" : "数字库存 · 待绑"}
+          </Badge>
+        );
+      }
+      return (
+        <Badge variant="outline" className="whitespace-nowrap border-slate-200 bg-slate-50 px-1.5 text-[10px] text-slate-400">
+          无需绑定
+        </Badge>
+      );
+    }
     const stockIssue = summary.supplier_stock_error > 0
       ? `${summary.supplier_stock_error} 同步错误`
       : summary.supplier_stock_stale > 0
@@ -1448,7 +1486,7 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
         <Badge
           variant="outline"
           className={cn("whitespace-nowrap px-1.5 text-[10px]", summary.supplier_unbound > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-blue-200 bg-blue-50 text-blue-700")}
-          title={summary.supplier_unbound > 0 ? "未绑定供应商不等于无法履约；商品规格仍可能使用本地数字库存。" : "所有商品规格均具备完整供应商绑定"}
+          title={summary.supplier_unbound > 0 ? "存在尚未绑定供应商的「自动发货-供应商」规格。" : "所有供应商规格均具备完整绑定"}
         >
           {summary.supplier_unbound > 0 ? `${summary.supplier_unbound} 规格未绑定` : "规格全部已绑定"}
         </Badge>
@@ -1464,7 +1502,15 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
   const supplierProductId = typeof metadata.supplier_product_id === "string" || typeof metadata.supplier_product_id === "number"
     ? String(metadata.supplier_product_id)
     : "";
-  if (!supplier) return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500">未绑定</Badge>;
+  if (!supplier) {
+    if (effectiveMode === "automatic_digital_inventory") {
+      return <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">数字库存</Badge>;
+    }
+    if (effectiveMode !== "automatic") {
+      return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-400">无需绑定</Badge>;
+    }
+    return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500">未绑定</Badge>;
+  }
   const definition = getSupplierUiDefinition(supplier);
   const evidence = getSupplierStockEvidence(metadata);
   const stockLabel = evidence.ready
@@ -1594,7 +1640,7 @@ function ProductTable({
               const category = product.category_id ? categoryMap.get(product.category_id) : null;
               const hasCategoryIssue = Boolean(!category || hasChildren(categories, product.category_id ?? ""));
               const effectiveStock = product.has_skus
-                ? product.operational_summary?.effective_stock ?? 0
+                ? product.operational_summary?.effective_stock ?? product.stock
                 : product.stock;
 
               return (
@@ -1659,7 +1705,7 @@ function ProductTable({
                   {product.metadata?.supplier_stock_sync_status === "synced" ? <div className="mt-0.5 text-[10px] font-normal text-blue-600" title={typeof product.metadata.supplier_stock_synced_at === "string" ? `最后同步：${formatAdminDate(product.metadata.supplier_stock_synced_at)}` : "供应商同步"}>供应商同步</div> : null}
                 </TableCell>
                 <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>
-                  {getExtendedDeliveryLabel(product.delivery_type, product.metadata)}
+                  {getExtendedDeliveryLabel(product.effective_delivery_mode ?? product.delivery_type, product.metadata)}
                 </TableCell>
                 <TableCell className="px-3 py-2 text-center">
                   <SupplierBindingBadge product={product} />

@@ -18,11 +18,13 @@ export type DigitalInventorySummaryRow = {
 
 export default function AdminDigitalInventoryPickerModal({
   open,
+  currentProductId,
   currentInventoryProductId,
   onClose,
   onSelect,
 }: {
   open: boolean;
+  currentProductId?: string | null;
   currentInventoryProductId?: string | null;
   onClose: () => void;
   onSelect: (row: DigitalInventorySummaryRow) => void;
@@ -72,7 +74,7 @@ export default function AdminDigitalInventoryPickerModal({
 
   if (!open) return null;
 
-  const filtered = search.trim()
+  const filtered = (search.trim()
     ? rows.filter((row) => {
         const q = search.trim().toLowerCase();
         return (
@@ -80,7 +82,13 @@ export default function AdminDigitalInventoryPickerModal({
           row.product_slug.toLowerCase().includes(q)
         );
       })
-    : rows;
+    : rows
+  ).slice().sort((a, b) => {
+    const aCurrent = currentProductId && a.product_id === currentProductId ? 1 : 0;
+    const bCurrent = currentProductId && b.product_id === currentProductId ? 1 : 0;
+    if (aCurrent !== bCurrent) return bCurrent - aCurrent;
+    return b.available_count - a.available_count;
+  });
 
   return (
     <div
@@ -171,8 +179,15 @@ export default function AdminDigitalInventoryPickerModal({
                     )}
                   >
                     <div className="min-w-0 pr-2">
-                      <div className="truncate font-medium text-slate-900" title={row.product_name}>
-                        {row.product_name}
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate font-medium text-slate-900" title={row.product_name}>
+                          {row.product_name}
+                        </span>
+                        {currentProductId && row.product_id === currentProductId ? (
+                          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            当前商品
+                          </span>
+                        ) : null}
                       </div>
                       <div className="truncate font-mono text-[10px] text-slate-400" title={row.product_slug}>
                         {row.product_slug}

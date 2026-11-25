@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { auditCatalogAction, requireCatalogAdmin } from "../../../../catalog/_shared";
 import { inspectCatalogSkuSchema } from "@/lib/products/catalog-readiness.mjs";
-import { syncSharedSkuCodeInventory } from "@/lib/products/sku-summary";
+import { syncProductDeliveryModeFromSkus, syncSharedSkuCodeInventory } from "@/lib/products/sku-summary";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 const MAX_MUTATIONS = 100;
@@ -137,6 +137,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       service,
       savedSkus.map((item) => String(item?.id ?? "")).filter(Boolean)
     );
+    await syncProductDeliveryModeFromSkus(service, params.id).catch(() => null);
   }
   await auditCatalogAction({
     request,

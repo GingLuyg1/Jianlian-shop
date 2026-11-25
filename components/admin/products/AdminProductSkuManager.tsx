@@ -35,6 +35,7 @@ type Draft = {
   delivery_mode?: ExtendedDeliveryMode;
   digital_inventory_product_id?: string;
   digital_inventory_product_name?: string;
+  pending_bound_inventory_count?: number;
   touched?: boolean;
 };
 type EditorRow = { key: string; sku?: AdminProductSku; draft: Draft };
@@ -187,7 +188,16 @@ function SkuOperationalDiagnostics({ diagnostic }: { diagnostic?: SkuOperational
           <div className="space-y-1">
             <div className="flex justify-between"><span>交付来源：</span><span className="font-medium text-slate-800">{fulfillmentSourceLabel[diagnostic.fulfillment_source]}</span></div>
             <div className="flex justify-between"><span>本地库存：</span><span className="font-medium text-slate-800">{diagnostic.local_inventory.state === "error" ? "读取失败" : diagnostic.local_inventory.available_count}</span></div>
-            <div className="flex justify-between"><span>供应商绑定：</span><span className="font-medium text-slate-800">{diagnostic.supplier.bound ? "已绑定" : "未绑定"}</span></div>
+            <div className="flex justify-between">
+              <span>供应商绑定：</span>
+              <span className="font-medium text-slate-800">
+                {diagnostic.effective_delivery_type !== "automatic" || diagnostic.fulfillment_source === "local_inventory"
+                  ? "不适用"
+                  : diagnostic.supplier.bound
+                    ? "已绑定"
+                    : "未绑定"}
+              </span>
+            </div>
             <div className="flex justify-between"><span>库存状态：</span><span className="font-medium text-slate-800">{supplierStockLabel[diagnostic.supplier_stock.state]}</span></div>
             <div className="flex justify-between"><span>上架条件：</span><span className={cn("font-medium", diagnostic.activation.ready ? "text-emerald-600" : "text-red-600")}>{diagnostic.activation.ready ? "符合要求" : "不符合"}</span></div>
           </div>
@@ -326,17 +336,34 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     return rowsRef.current.flatMap((row) => {
       if (!row.sku && isSkuDraftEmpty(row.draft)) return [];
       if (row.draft.status !== "active" || row.sku?.status === "active") return [];
-      const effectiveDeliveryType = row.draft.delivery_type || product?.delivery_type || defaults.delivery_type;
+      const effectiveDeliveryType = toBaseDeliveryType(row.draft.delivery_mode ?? row.draft.delivery_type) || product?.delivery_type || defaults.delivery_type;
       if (effectiveDeliveryType !== "automatic") return [];
       const diagnostic = row.sku ? diagnosticsBySku.get(row.sku.id) : null;
+      const isDigitalMode = row.draft.delivery_mode === "automatic_digital_inventory";
+      const pendingLocalCount =
+        isDigitalMode && row.draft.digital_inventory_product_id && row.draft.digital_inventory_product_id === product?.id
+          ? Number(row.draft.pending_bound_inventory_count ?? 0)
+          : 0;
+      const mergedMetadata = {
+        ...(row.sku?.metadata ?? {}),
+        ...(isDigitalMode
+          ? {
+              delivery_mode: "automatic_digital_inventory",
+              fulfillment_source: "local_inventory",
+              ...(row.draft.digital_inventory_product_id
+                ? { digital_inventory_product_id: row.draft.digital_inventory_product_id }
+                : {}),
+            }
+          : {}),
+      };
       const readiness = evaluateSkuActivationReadiness({
         product: product ?? { delivery_type: defaults.delivery_type },
         sku: {
           ...(row.sku ?? {}),
           ...payload(row.draft),
-          metadata: row.sku?.metadata ?? {},
+          metadata: mergedMetadata,
         },
-        localAvailableCount: diagnostic?.local_available_count ?? 0,
+        localAvailableCount: Math.max(diagnostic?.local_available_count ?? 0, pendingLocalCount),
         localInventoryError: diagnostic?.activation_readiness?.reasons.includes("READINESS_CHECK_FAILED") ?? false,
       });
       return [{ row, readiness }];
@@ -384,7 +411,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     flight.current = true; setBusy(true);
     try {
       const snapshotRows = rowsRef.current;
-      const operations: ProductSkuWorkspaceOperation[] = buildSkuWorkspaceOperations({
+      let operations: ProductSkuWorkspaceOperation[] = buildSkuWorkspaceOperations({
         rows: snapshotRows,
         buildPayload: payload,
         isEmptyDraft: isSkuDraftEmpty,
@@ -393,13 +420,61 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
         onSummary(deriveSkuProductSummary(snapshotRows.flatMap((row) => row.sku ? [row.sku] : [])));
         return;
       }
+
+      // Pre-bind digital inventory for existing SKUs BEFORE workspace RPC activation check
+      // so sku_id-scoped digital_inventory rows are linked and expected_updated_at stays fresh.
+      const preBindUpdates = snapshotRows
+        .filter((row) =>
+          row.draft.touched
+          && Boolean(row.sku?.id)
+          && row.draft.delivery_mode === "automatic_digital_inventory"
+          && row.draft.digital_inventory_product_id?.trim() === savedProduct.id
+        )
+        .map((row) => {
+          const rawCost = row.draft.cost_price.trim();
+          const parsedCost = rawCost === "" ? null : Number(rawCost);
+          return {
+            sku_id: row.sku!.id,
+            cost_price: parsedCost !== null && Number.isFinite(parsedCost) ? parsedCost : null,
+            delivery_mode: "automatic_digital_inventory" as ExtendedDeliveryMode,
+            digital_inventory_product_id: row.draft.digital_inventory_product_id!.trim(),
+            digital_inventory_product_name: row.draft.digital_inventory_product_name?.trim() || null,
+          };
+        });
+
+      const preBoundSkuIds = new Set<string>();
+      if (preBindUpdates.length > 0) {
+        const preRes = await fetch(`/api/admin/products/${encodeURIComponent(savedProduct.id)}/skus/metadata`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({ updates: preBindUpdates }),
+        });
+        if (preRes.ok) {
+          const preBody = (await preRes.json().catch(() => null)) as {
+            skus?: Array<{ id: string; metadata: Record<string, unknown>; updated_at?: string | null }>;
+          } | null;
+          const updatedAtById = new Map(
+            (preBody?.skus ?? [])
+              .filter((entry) => typeof entry.updated_at === "string" && entry.updated_at)
+              .map((entry) => [entry.id, entry.updated_at as string])
+          );
+          (preBody?.skus ?? []).forEach((entry) => preBoundSkuIds.add(entry.id));
+          operations = operations.map((op) =>
+            op.type === "update" && updatedAtById.has(op.sku_id)
+              ? { ...op, expected_updated_at: updatedAtById.get(op.sku_id)! }
+              : op
+          );
+        }
+      }
+
       const result = await saveProductSkuWorkspace(savedProduct.id, operations);
       const createdIdByClient = new Map((result.created_mappings ?? []).map((item) => [item.client_id, item.sku_id]));
       const metadataUpdates = snapshotRows
         .filter((row) => row.draft.touched && (row.sku || !isSkuDraftEmpty(row.draft)))
         .map((row) => {
           const skuId = row.sku?.id ?? createdIdByClient.get(row.key) ?? "";
-          if (!skuId) return null;
+          if (!skuId || preBoundSkuIds.has(skuId)) return null;
           const rawCost = row.draft.cost_price.trim();
           const parsedCost = rawCost === "" ? null : Number(rawCost);
           return {
@@ -421,9 +496,16 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
           body: JSON.stringify({ updates: metadataUpdates }),
         });
         if (metaRes.ok) {
-          const metaBody = (await metaRes.json().catch(() => null)) as { skus?: Array<{ id: string; metadata: Record<string, unknown> }> } | null;
-          const metaById = new Map((metaBody?.skus ?? []).map((entry) => [entry.id, entry.metadata]));
-          mergedSkus = result.skus.map((sku) => (metaById.has(sku.id) ? { ...sku, metadata: metaById.get(sku.id)! } : sku));
+          const metaBody = (await metaRes.json().catch(() => null)) as {
+            skus?: Array<{ id: string; metadata: Record<string, unknown>; updated_at?: string | null }>;
+          } | null;
+          const metaById = new Map((metaBody?.skus ?? []).map((entry) => [entry.id, entry]));
+          mergedSkus = result.skus.map((sku) => {
+            const entry = metaById.get(sku.id);
+            return entry
+              ? { ...sku, metadata: entry.metadata, updated_at: entry.updated_at ?? sku.updated_at }
+              : sku;
+          });
         }
       }
 
@@ -431,8 +513,10 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       rowsRef.current = next; setRows(next);
       setActivationBlocked([]);
       setSelectedSkuIds((current) => new Set(Array.from(current).filter((id) => mergedSkus.some((sku) => sku.id === id))));
-      const derived = deriveSkuProductSummary(next.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft));
-      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: getDerivedDeliveryType(derived) });
+      const activeDrafts = next.filter((item) => !isSkuDraftEmpty(item.draft)).map((item) => item.draft);
+      const derived = deriveSkuProductSummary(activeDrafts);
+      const primaryMode = activeDrafts.find((d) => d.status === "active")?.delivery_mode ?? activeDrafts[0]?.delivery_mode;
+      onSummary({ price: result.product_summary.price, stock: result.product_summary.stock, delivery_type: getDerivedDeliveryType(derived), delivery_mode: primaryMode });
       toast.success(`商品规格已保存：新增 ${result.created_count}，更新 ${result.updated_count}`);
     } catch (error) {
       if (error instanceof ProductSkuWorkspaceError || error instanceof SkuWorkspaceInputError) {
@@ -526,7 +610,8 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     onSummary({ ...derived, delivery_mode: firstMode });
   }
 
-  function handleBindDigitalInventory(rowKey: string, invRow: DigitalInventorySummaryRow) {
+  async function handleBindDigitalInventory(rowKey: string, invRow: DigitalInventorySummaryRow) {
+    const targetRow = rowsRef.current.find((item) => item.key === rowKey);
     const next = rowsRef.current.map((item) =>
       item.key === rowKey
         ? {
@@ -538,6 +623,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
               delivery_type: "automatic" as DeliveryType,
               digital_inventory_product_id: invRow.product_id,
               digital_inventory_product_name: invRow.product_name,
+              pending_bound_inventory_count: invRow.product_id === product?.id ? invRow.available_count : 0,
               touched: true,
             },
           }
@@ -549,7 +635,62 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
     const derived = deriveSkuProductSummary(activeDrafts);
     onSummary({ ...derived, delivery_mode: "automatic_digital_inventory" });
     setInventoryPickerRowKey(null);
-    toast.success(`已绑定数字库存「${invRow.product_name}」，可用库存 ${invRow.available_count}（点击保存商品后生效）`);
+
+    if (product?.id && targetRow?.sku?.id) {
+      try {
+        const res = await fetch(`/api/admin/products/${encodeURIComponent(product.id)}/skus/metadata`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            updates: [
+              {
+                sku_id: targetRow.sku.id,
+                delivery_mode: "automatic_digital_inventory",
+                digital_inventory_product_id: invRow.product_id,
+                digital_inventory_product_name: invRow.product_name,
+              },
+            ],
+          }),
+        });
+        if (res.ok) {
+          const body = (await res.json().catch(() => null)) as {
+            skus?: Array<{ id: string; metadata: Record<string, unknown>; updated_at?: string | null; local_available_count?: number }>;
+          } | null;
+          const updated = body?.skus?.[0];
+          const syncedCount = typeof updated?.local_available_count === "number" ? updated.local_available_count : invRow.available_count;
+          setRows((current) =>
+            current.map((item) =>
+              item.key === rowKey
+                ? {
+                    ...item,
+                    sku: item.sku
+                      ? {
+                          ...item.sku,
+                          metadata: updated?.metadata ?? item.sku.metadata,
+                          updated_at: updated?.updated_at ?? item.sku.updated_at,
+                        }
+                      : item.sku,
+                    draft: {
+                      ...item.draft,
+                      stock: String(syncedCount),
+                      pending_bound_inventory_count: syncedCount,
+                      touched: true,
+                    },
+                  }
+                : item
+            )
+          );
+          setActivationBlocked([]);
+          void load();
+          toast.success(`已绑定数字库存「${invRow.product_name}」，可用 ${syncedCount}（点击保存商品提交修改）`);
+          return;
+        }
+      } catch {
+        // Fallback to saving on submit if immediate bind fails.
+      }
+    }
+    toast.success(`已选择数字库存「${invRow.product_name}」，可用库存 ${invRow.available_count}（点击保存商品后生效）`);
   }
 
   async function removeRow() {
@@ -618,9 +759,21 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
   }
 
   const readinessSummary = useMemo(() => summarizeSkuReadiness(
-    rows.filter((row) => row.sku).map((row) => ({ ...row.sku!, ...payload(row.draft) })),
+    rows.filter((row) => row.sku).map((row) => ({
+      ...row.sku!,
+      ...payload(row.draft),
+      metadata: {
+        ...(row.sku?.metadata ?? {}),
+        ...(row.draft.delivery_mode === "automatic_digital_inventory"
+          ? { delivery_mode: "automatic_digital_inventory", fulfillment_source: "local_inventory" }
+          : row.draft.delivery_mode === "preorder_address" || row.draft.delivery_mode === "preorder_email"
+            ? { delivery_mode: row.draft.delivery_mode }
+            : {}),
+      },
+    })),
     diagnostics?.supplier_rows ?? [],
-  ), [diagnostics, rows]);
+    product,
+  ), [diagnostics, product, rows]);
   const operationalBySku = useMemo(() => new Map((diagnostics?.operational_rows ?? []).map((row) => [row.sku_id, row])), [diagnostics]);
   const operationalSummary = diagnostics?.operational_summary;
   const visibleSkuIds = rows.flatMap((row) => row.sku ? [row.sku.id] : []);
@@ -650,7 +803,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
       >
         <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 font-medium select-none">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-800">规格与交付状态</span>
+            <span className="font-semibold text-slate-800">交付与库存诊断</span>
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-[10px] font-semibold",
@@ -700,7 +853,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
             <div className="text-amber-800">• {diagnostics.supplier_problem_count} 个规格的供应商库存同步异常或已过期，系统暂保留上次有效库存。</div>
           ) : null}
           {readinessSummary.no_verified_source > 0 ? (
-            <div className="text-amber-800">• {readinessSummary.no_verified_source} 个自动发货规格当前无可用履约来源（请绑定供应商或绑定后台数字库存）。</div>
+            <div className="text-amber-800">• {readinessSummary.no_verified_source} 个自动发货规格当前无可验证履约来源（请绑定供应商或绑定后台数字库存）。</div>
           ) : null}
         </div>
       </details>
@@ -957,10 +1110,11 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
 
     <AdminDigitalInventoryPickerModal
       open={Boolean(inventoryPickerRowKey)}
+      currentProductId={product?.id}
       currentInventoryProductId={activePickerRow?.draft.digital_inventory_product_id}
       onClose={() => setInventoryPickerRowKey(null)}
       onSelect={(invRow) => {
-        if (inventoryPickerRowKey) handleBindDigitalInventory(inventoryPickerRowKey, invRow);
+        if (inventoryPickerRowKey) void handleBindDigitalInventory(inventoryPickerRowKey, invRow);
       }}
     />
 

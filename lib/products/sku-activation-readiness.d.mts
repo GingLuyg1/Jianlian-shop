@@ -30,13 +30,15 @@ export type SkuActivationReadiness = {
 
 export const SKU_ACTIVATION_REASON_LABELS: Readonly<Record<SkuActivationReason, string>>;
 export function getEffectiveSkuDeliveryType(product: Record<string, unknown> | null, sku: Record<string, unknown>): string;
+export function getEffectiveSkuDeliveryMode(product: Record<string, unknown> | null, sku: Record<string, unknown> | null): string;
+export function isSupplierDeliverySku(product: Record<string, unknown> | null, sku: Record<string, unknown> | null): boolean;
 export function isAutomaticSkuActivation(previousStatus: unknown, nextStatus: unknown, product: Record<string, unknown> | null, sku: Record<string, unknown>): boolean;
 export function validSupplierStockTimestamp(value: unknown): boolean;
 export function getSupplierStockEvidence(metadata: unknown): SkuActivationReadiness["supplier"];
 export function evaluateSkuActivationReadiness(input: { product: Record<string, unknown> | null; sku: Record<string, unknown>; localAvailableCount?: number; localInventoryError?: boolean; purchaseContext?: Record<string, any> }): SkuActivationReadiness;
 export function readSkuActivationReadiness(service: any, product: Record<string, unknown> | null, sku: Record<string, unknown>): Promise<SkuActivationReadiness>;
 export function formatSkuActivationReasons(reasons: unknown): string;
-export function summarizeSkuReadiness(skus: Array<Record<string, unknown>>, diagnosticRows?: Array<Record<string, any>>): {
+export function summarizeSkuReadiness(skus: Array<Record<string, unknown>>, diagnosticRows?: Array<Record<string, any>>, product?: Record<string, unknown> | null): {
   total: number;
   active: number;
   draft: number;

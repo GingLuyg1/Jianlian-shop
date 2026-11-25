@@ -1718,14 +1718,18 @@ function ProductDialog({
                 original_price: form.original_price,
                 stock: form.stock,
                 delivery_type: form.delivery_type,
+                delivery_mode: form.delivery_mode,
                 status: form.status,
               }}
               onSummary={(summary) => {
                 setIsSkuDirty(true);
+                const nextMode = summary.delivery_mode ?? form.delivery_mode;
                 onUpdate({
                   ...form,
                   price: String(summary.price ?? form.price),
                   stock: String(summary.stock),
+                  delivery_type: summary.delivery_type ?? toBaseDeliveryType(nextMode),
+                  delivery_mode: nextMode,
                 });
               }}
               onSupplierBinding={(_prod, sku) => {

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CatalogSkuDiagnostics } from "@/lib/products/catalog-readiness.mjs";
 import type {
+  AdminCatalogDeliveryFilter,
   AdminCatalogInventoryVerification,
   AdminCatalogFulfillmentHealth,
   AdminCatalogProductType,
@@ -52,6 +53,7 @@ export type AdminProduct = {
   original_price: number | null;
   stock: number;
   delivery_type: DeliveryType;
+  effective_delivery_mode?: string | null;
   status: ProductStatus;
   sort_order: number;
   has_skus?: boolean;
@@ -135,7 +137,7 @@ export type ProductFilters = {
   categoryId?: string;
   categoryIds?: string[];
   status?: ProductStatus | "all";
-  deliveryType?: DeliveryType | "all";
+  deliveryType?: AdminCatalogDeliveryFilter;
   productType?: AdminCatalogProductType;
   skuStatus?: AdminCatalogSkuStatus;
   stockLevel?: AdminCatalogStockLevel | "low";
@@ -304,6 +306,7 @@ function normalizeProduct(row: Record<string, unknown>): AdminProduct {
         : normalizeNumber(row.original_price),
     stock: normalizeNumber(row.stock),
     delivery_type: (row.delivery_type as DeliveryType) ?? "manual",
+    effective_delivery_mode: typeof row.effective_delivery_mode === "string" ? row.effective_delivery_mode : null,
     status: (row.status as ProductStatus) ?? "draft",
     sort_order: normalizeNumber(row.sort_order),
     has_skus: Boolean(row.has_skus),

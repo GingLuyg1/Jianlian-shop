@@ -5,11 +5,19 @@ export type AdminCatalogSupplierBinding = "all" | "supplier_bound" | "supplier_u
 export type AdminCatalogSupplierStock = "all" | "unknown" | "fresh" | "stale" | "error";
 export type AdminCatalogInventoryVerification = "all" | "requires_verification" | "no_verification_flag";
 export type AdminCatalogFulfillmentHealth = "all" | "ready" | "blocked" | "attention" | "no_source";
+export type AdminCatalogDeliveryFilter =
+  | "all"
+  | "manual"
+  | "automatic"
+  | "automatic_digital_inventory"
+  | "shipping"
+  | "preorder_address"
+  | "preorder_email";
 export type AdminCatalogOperationFilters = {
   search: string;
   productType: AdminCatalogProductType;
   productStatus: "all" | "draft" | "active" | "inactive" | "sold_out";
-  deliveryType: "all" | "manual" | "automatic" | "shipping";
+  deliveryType: AdminCatalogDeliveryFilter;
   skuStatus: AdminCatalogSkuStatus;
   stockLevel: AdminCatalogStockLevel;
   supplierBinding: AdminCatalogSupplierBinding;
@@ -47,7 +55,8 @@ export function parseAdminCatalogOperationFilters(params: Pick<URLSearchParams, 
 export function serializeAdminCatalogFilterState(state: Record<string, unknown>): URLSearchParams;
 export function getSupplierOperationalStockState(metadata: unknown): "unknown" | "fresh" | "stale" | "error";
 export function buildAdminProductOperationalSummary(product: Record<string, unknown>, skuRows?: Array<Record<string, unknown>>, inventoryContext?: { availableBySku?: Record<string, number>; error?: boolean }): AdminProductOperationalSummary;
+export function resolveProductEffectiveDeliveryMode(product: Record<string, unknown>, skuRows?: Array<Record<string, unknown>>): string;
 export function hasOperationalScanFilters(filters: AdminCatalogOperationFilters): boolean;
-export function matchesAdminCatalogOperations(product: Record<string, unknown>, summary: AdminProductOperationalSummary, filters: AdminCatalogOperationFilters): boolean;
+export function matchesAdminCatalogOperations(product: Record<string, unknown>, summary: AdminProductOperationalSummary, filters: AdminCatalogOperationFilters, skuRows?: Array<Record<string, unknown>>): boolean;
 export function decorateAdminCatalogProducts(products: Array<Record<string, unknown>>, skuRows: Array<Record<string, unknown>>, filters: AdminCatalogOperationFilters, inventoryContext?: { availableBySku?: Record<string, number>; error?: boolean }): Array<Record<string, unknown> & { operational_summary: AdminProductOperationalSummary }>;
 export function filterAndPaginateAdminCatalogProducts(products: Array<Record<string, unknown>>, skuRows: Array<Record<string, unknown>>, filters: AdminCatalogOperationFilters, inventoryContext?: { availableBySku?: Record<string, number>; error?: boolean }): { products: Array<Record<string, unknown> & { operational_summary: AdminProductOperationalSummary }>; count: number };

@@ -1,6 +1,40 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deriveSkuProductSummary } from "./sku-editor.mjs";
+import { getEffectiveSkuDeliveryMode } from "./sku-activation-readiness.mjs";
+import { toBaseDeliveryType, withDeliveryModeMetadata, type ExtendedDeliveryMode } from "./delivery-and-stock";
+
+export async function syncProductDeliveryModeFromSkus(service: SupabaseClient, productId: string) {
+  const [{ data: productRow, error: prodErr }, { data: skuRows, error: skuErr }] = await Promise.all([
+    service.from("products").select("id,delivery_type,metadata").eq("id", productId).maybeSingle(),
+    service
+      .from("product_skus")
+      .select("id,status,delivery_type,metadata,sort_order,created_at")
+      .eq("product_id", productId)
+      .order("sort_order")
+      .order("created_at")
+      .limit(200),
+  ]);
+  if (prodErr || skuErr || !productRow || !skuRows || skuRows.length === 0) return;
+
+  const primarySku = skuRows.find((row) => row.status === "active") ?? skuRows[0];
+  const effectiveMode = getEffectiveSkuDeliveryMode(productRow as Record<string, unknown>, primarySku as Record<string, unknown>) as ExtendedDeliveryMode;
+  const nextBaseDelivery = toBaseDeliveryType(effectiveMode);
+  const currentMeta =
+    productRow.metadata && typeof productRow.metadata === "object" && !Array.isArray(productRow.metadata)
+      ? (productRow.metadata as Record<string, unknown>)
+      : {};
+  const nextMeta = withDeliveryModeMetadata(currentMeta, effectiveMode);
+
+  const deliveryChanged = productRow.delivery_type !== nextBaseDelivery;
+  const modeChanged = (currentMeta.delivery_mode ?? null) !== (nextMeta.delivery_mode ?? null);
+  if (!deliveryChanged && !modeChanged) return;
+
+  await service
+    .from("products")
+    .update({ delivery_type: nextBaseDelivery, metadata: nextMeta })
+    .eq("id", productId);
+}
 
 export async function syncSkuProductSummary(service: SupabaseClient, productId: string) {
   // Page explicitly: PostgREST's row cap must not silently truncate the summary.
@@ -14,6 +48,7 @@ export async function syncSkuProductSummary(service: SupabaseClient, productId: 
   const summary = deriveSkuProductSummary(rows);
   const { error } = await service.from("products").update({ stock: summary.stock, has_skus: summary.has_skus, ...(summary.price === null ? {} : { price: summary.price }) }).eq("id", productId);
   if (error) throw new Error("商品价格库存汇总失败，请重试保存");
+  await syncProductDeliveryModeFromSkus(service, productId).catch(() => null);
   return summary;
 }
 
