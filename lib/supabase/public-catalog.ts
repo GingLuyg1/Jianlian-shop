@@ -92,6 +92,8 @@ export type CatalogProductQuery = {
   primaryCategoryId?: string;
   secondaryCategoryId?: string;
   subcategory?: string;
+  sort?: "recommended" | "sales" | "stock";
+  inStockOnly?: boolean;
   keyword?: string;
   page?: number;
   pageSize?: number;
@@ -300,6 +302,8 @@ export async function searchPublicCatalogProducts(query: CatalogProductQuery) {
   if (query.primaryCategoryId) params.set("primaryCategoryId", query.primaryCategoryId);
   if (query.secondaryCategoryId) params.set("secondaryCategoryId", query.secondaryCategoryId);
   if (query.subcategory?.trim()) params.set("subcategory", query.subcategory.trim());
+  if (query.sort && query.sort !== "recommended") params.set("sort", query.sort);
+  if (query.inStockOnly) params.set("inStockOnly", "true");
   if (query.keyword?.trim()) params.set("keyword", query.keyword.trim());
   if (query.page) params.set("page", String(query.page));
   if (query.pageSize) params.set("pageSize", String(query.pageSize));

@@ -25,7 +25,7 @@ const types: Record<string, string> = {
 };
 const statuses: Record<string, string> = { completed: "已完成", pending: "处理中", processing: "处理中", failed: "失败", cancelled: "已取消", rejected: "已拒绝", success: "已成功" };
 function money(value: number, currency: string) {
-  return currency === "USDT" ? `${Number(value).toFixed(6)} USDT` : `¥${Number(value).toFixed(2)}`;
+  return currency === "USDT" ? `${Number(value).toFixed(4)} USDT` : `¥${Number(value).toFixed(2)}`;
 }
 
 async function copyProductName(fullName: string) {

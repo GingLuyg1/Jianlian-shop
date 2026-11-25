@@ -989,7 +989,7 @@ function readBep20Config(): Bep20Config {
   const pricingMode = String(process.env.USDT_PRICING_MODE ?? "manual_fixed_rate").trim() as PricingMode;
   const fixedRate = String(process.env.CNY_USDT_FIXED_RATE ?? "").trim() || null;
   const rateTtlSeconds = Math.max(60, Number(process.env.CNY_USDT_RATE_TTL_SECONDS ?? 300));
-  const amountScale = Math.min(18, Math.max(2, Number(process.env.USDT_AMOUNT_SCALE ?? 6)));
+  const amountScale = Math.min(18, Math.max(2, Number(process.env.USDT_AMOUNT_SCALE ?? 4)));
 
   if (!rpcUrl) throw new Bep20PaymentError("BSC_RPC_NOT_CONFIGURED", "BSC RPC 尚未配置。", 503);
   if (chainId !== 56) throw new Bep20PaymentError("BSC_CHAIN_ID_INVALID", "BSC Chain ID 配置不正确。", 503);

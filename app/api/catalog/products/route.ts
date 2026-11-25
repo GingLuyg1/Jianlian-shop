@@ -86,6 +86,8 @@ export async function GET(request: Request) {
     const primaryCategoryId = normalizeCategoryId(url.searchParams.get("primaryCategoryId"));
     const secondaryCategoryId = normalizeCategoryId(url.searchParams.get("secondaryCategoryId"));
     const subcategoryFilter = normalizeSubcategory(url.searchParams.get("subcategory"));
+    const sortMode = normalizeSortMode(url.searchParams.get("sort"));
+    const inStockOnly = ["1", "true"].includes(String(url.searchParams.get("inStockOnly") ?? "").trim().toLowerCase());
     const keyword = normalizeSearch(url.searchParams.get("keyword"));
     const excludeId = normalizeToken(url.searchParams.get("excludeId"));
     const page = clampNumber(url.searchParams.get("page"), 1, 1, 100000);
@@ -162,21 +164,36 @@ export async function GET(request: Request) {
       new Set(filteredProducts.map((product) => product.delivery_type).filter((value): value is string => Boolean(value)))
     ).sort();
 
-    const visible = filteredProducts
+    let visible = filteredProducts
       .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap, publicMetaByProduct.get(product.id) ?? null))
       .filter((product) => matchSearch(product, skuMap.get(product.id) ?? [], keyword))
-      .sort((a, b) => compareProducts(a, b, categoryMap));
+      .filter((product) => !inStockOnly || !isProductOutOfStock(product));
+
+    let salesCountByProduct: Map<string, number> | null = null;
+    if (sortMode === "sales") {
+      salesCountByProduct = await loadVerifiedSalesCounts(visible.map((product) => product.id));
+      visible = visible.map((product) => ({
+        ...product,
+        sales_count: salesCountByProduct?.get(product.id) ?? 0,
+      }));
+    }
+
+    visible.sort((a, b) => compareProducts(a, b, categoryMap, sortMode));
 
     const total = visible.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const safePage = Math.min(page, totalPages);
     const from = (safePage - 1) * pageSize;
     const paged = visible.slice(from, from + pageSize);
-    const salesCountByProduct = await loadVerifiedSalesCounts(paged.map((product) => product.id));
-    const pagedWithSales = paged.map((product) => ({
-      ...product,
-      sales_count: salesCountByProduct.get(product.id) ?? 0,
-    }));
+    const pagedWithSales = salesCountByProduct
+      ? paged
+      : await (async () => {
+          const counts = await loadVerifiedSalesCounts(paged.map((product) => product.id));
+          return paged.map((product) => ({
+            ...product,
+            sales_count: counts.get(product.id) ?? 0,
+          }));
+        })();
 
     return productSuccess(pagedWithSales, total, safePage, pageSize, requestId, totalPages, deliveryTypes);
   } catch (error) {
@@ -290,39 +307,48 @@ async function loadVerifiedSalesCounts(productIds: string[]) {
   if (!service) return output;
 
   try {
-    const [{ data, error }, { data: metaRows }] = await Promise.all([
-      service
-        .from("order_items")
-        .select("product_id,quantity,orders!inner(payment_status,refund_status)")
-        .in("product_id", productIds)
-        .eq("orders.payment_status", "paid")
-        .eq("orders.refund_status", "none")
-        .limit(10000),
-      service
-        .from("products")
-        .select("id,metadata")
-        .in("id", productIds),
-    ]);
-
-    for (const mRow of metaRows ?? []) {
-      const pid = typeof mRow.id === "string" ? mRow.id : "";
-      const meta = mRow.metadata && typeof mRow.metadata === "object" && !Array.isArray(mRow.metadata)
-        ? (mRow.metadata as Record<string, unknown>)
-        : null;
-      const boost = Number(meta?.sales_boost ?? meta?.salesCount ?? 0);
-      if (pid && Number.isSafeInteger(boost) && boost > 0) {
-        output.set(pid, (output.get(pid) ?? 0) + boost);
-      }
+    const chunks: string[][] = [];
+    for (let i = 0; i < productIds.length; i += IN_QUERY_CHUNK_SIZE) {
+      chunks.push(productIds.slice(i, i + IN_QUERY_CHUNK_SIZE));
     }
 
-    if (error) return output;
+    await Promise.all(
+      chunks.map(async (chunk) => {
+        const [{ data, error }, { data: metaRows }] = await Promise.all([
+          service
+            .from("order_items")
+            .select("product_id,quantity,orders!inner(payment_status,refund_status)")
+            .in("product_id", chunk)
+            .eq("orders.payment_status", "paid")
+            .eq("orders.refund_status", "none")
+            .limit(10000),
+          service
+            .from("products")
+            .select("id,metadata")
+            .in("id", chunk),
+        ]);
 
-    for (const row of data ?? []) {
-      const productId = typeof row.product_id === "string" ? row.product_id : "";
-      const quantity = Number(row.quantity ?? 0);
-      if (!productId || !Number.isSafeInteger(quantity) || quantity <= 0) continue;
-      output.set(productId, (output.get(productId) ?? 0) + quantity);
-    }
+        for (const mRow of metaRows ?? []) {
+          const pid = typeof mRow.id === "string" ? mRow.id : "";
+          const meta = mRow.metadata && typeof mRow.metadata === "object" && !Array.isArray(mRow.metadata)
+            ? (mRow.metadata as Record<string, unknown>)
+            : null;
+          const boost = Number(meta?.sales_boost ?? meta?.salesCount ?? 0);
+          if (pid && Number.isSafeInteger(boost) && boost > 0) {
+            output.set(pid, (output.get(pid) ?? 0) + boost);
+          }
+        }
+
+        if (error) return;
+
+        for (const row of data ?? []) {
+          const productId = typeof row.product_id === "string" ? row.product_id : "";
+          const quantity = Number(row.quantity ?? 0);
+          if (!productId || !Number.isSafeInteger(quantity) || quantity <= 0) continue;
+          output.set(productId, (output.get(productId) ?? 0) + quantity);
+        }
+      })
+    );
   } catch {
     return output;
   }
@@ -439,15 +465,40 @@ function matchSearch(product: ProductView, skus: SkuRow[], keyword: string) {
   return haystack.includes(keyword.toLowerCase());
 }
 
-function compareProducts(a: ProductView, b: ProductView, categories: Map<string, CategoryRow>) {
-  const aOutOfStock =
-    !isPreorderDeliveryMode(a.delivery_mode ?? a.delivery_type, a.metadata) &&
-    (a.status === "sold_out" || a.effective_stock <= 0);
-  const bOutOfStock =
-    !isPreorderDeliveryMode(b.delivery_mode ?? b.delivery_type, b.metadata) &&
-    (b.status === "sold_out" || b.effective_stock <= 0);
+type CatalogSortMode = "recommended" | "sales" | "stock";
+
+function normalizeSortMode(value: string | null): CatalogSortMode {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "sales" || raw === "stock") return raw;
+  return "recommended";
+}
+
+function isProductOutOfStock(product: ProductView) {
+  return (
+    !isPreorderDeliveryMode(product.delivery_mode ?? product.delivery_type, product.metadata) &&
+    (product.status === "sold_out" || product.effective_stock <= 0)
+  );
+}
+
+function compareProducts(
+  a: ProductView,
+  b: ProductView,
+  categories: Map<string, CategoryRow>,
+  sortMode: CatalogSortMode = "recommended"
+) {
+  const aOutOfStock = isProductOutOfStock(a);
+  const bOutOfStock = isProductOutOfStock(b);
   const stockWeight = Number(aOutOfStock) - Number(bOutOfStock);
   if (stockWeight !== 0) return stockWeight;
+  if (sortMode === "sales") {
+    const salesDiff = (b.sales_count ?? 0) - (a.sales_count ?? 0);
+    if (salesDiff !== 0) return salesDiff;
+  } else if (sortMode === "stock") {
+    const aStock = Math.max(0, Number(a.effective_stock ?? 0));
+    const bStock = Math.max(0, Number(b.effective_stock ?? 0));
+    const stockDiff = bStock - aStock;
+    if (stockDiff !== 0) return stockDiff;
+  }
   const aCategory = a.category_id ? categories.get(a.category_id) : undefined;
   const bCategory = b.category_id ? categories.get(b.category_id) : undefined;
   const aRoot = aCategory?.parent_id ? categories.get(aCategory.parent_id) : aCategory;

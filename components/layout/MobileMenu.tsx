@@ -13,6 +13,7 @@ import {
   CreditCard,
   Gift,
   KeyRound,
+  LayoutGrid,
   Sparkles,
   Wallet,
   Share2,
@@ -43,6 +44,7 @@ import {
 
 const menuItems = [
   { label: "首页", href: "/", icon: Home },
+  { label: "全部商品", href: "/products/all", icon: LayoutGrid },
   { label: "国际 SIM 卡", href: "/products/sim-cards", icon: CreditCard },
   { label: "礼品卡 / 充值卡", href: "/products/gift-cards", icon: Gift },
   { label: "数字 / 社媒账号", href: "/products/digital-accounts", icon: KeyRound },
@@ -102,9 +104,9 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
     });
   const navigationGroups = [
     { title: "", items: visibleMenuItems.filter((item) => item.href === "/") },
-    { title: "资源中心", items: visibleMenuItems.filter((item) => isCatalogCategoryHref(item.href)) },
+    { title: "资源中心", items: visibleMenuItems.filter((item) => item.href === "/products/all" || isCatalogCategoryHref(item.href)) },
     { title: "帮助中心", items: helpItems },
-    { title: "我的", items: visibleMenuItems.filter((item) => item.href !== "/" && !isCatalogCategoryHref(item.href)) },
+    { title: "我的", items: visibleMenuItems.filter((item) => item.href !== "/" && item.href !== "/products/all" && !isCatalogCategoryHref(item.href)) },
   ];
 
   const secondaryByPrimaryHref = useMemo(() => {

@@ -24,6 +24,7 @@ const categoryToRoute = new Map([
 export function publicProductQueryKey(query: CatalogProductQuery) {
   return JSON.stringify([
     query.primaryCategoryId ?? "", query.secondaryCategoryId ?? "", query.subcategory?.trim() ?? "",
+    query.sort ?? "recommended", Boolean(query.inStockOnly),
     query.keyword?.trim() ?? "", query.page ?? 1, query.pageSize ?? 20, query.excludeId ?? "",
   ]);
 }

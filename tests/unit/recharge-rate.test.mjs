@@ -21,9 +21,9 @@ test("rate parsing rejects non-canonical and non-positive input", () => {
   }
 });
 
-test("expected USDT is rounded upward to six decimals", () => {
-  assert.equal(calculateExpectedUsdtAmount("100", "6.7"), "14.925374");
-  assert.equal(calculateExpectedUsdtAmount("67.00", "6.7"), "10.000000");
+test("expected USDT is rounded upward to four decimals", () => {
+  assert.equal(calculateExpectedUsdtAmount("100", "6.7"), "14.9254");
+  assert.equal(calculateExpectedUsdtAmount("67.00", "6.7"), "10.0000");
 });
 
 test("credited CNY uses actual USDT and floors to cents", () => {

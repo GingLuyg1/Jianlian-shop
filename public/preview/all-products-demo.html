@@ -84,10 +84,14 @@
               <input id="in-stock-only" type="checkbox" onchange="render()" class="accent-[#df7334] h-3.5 w-3.5" />
               <span>仅看有货</span>
             </label>
-            <label class="flex cursor-pointer items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/70 px-3 h-10 text-xs font-semibold text-[#c85e22] select-none hover:bg-orange-100/70">
-              <input id="show-icons" type="checkbox" checked onchange="render()" class="accent-[#df7334] h-3.5 w-3.5" />
-              <span>显示品牌图标</span>
-            </label>
+            <div class="flex h-10 items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/70 px-3 text-xs font-semibold text-[#c85e22]">
+              <span class="text-[#9a552b]">排序：</span>
+              <select id="sort-mode" onchange="render()" class="cursor-pointer bg-transparent font-bold text-[#c85e22] focus:outline-none">
+                <option value="recommended">推荐排序</option>
+                <option value="sales">按销量排序</option>
+                <option value="stock">按库存排序</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -148,20 +152,24 @@
       renderPills();
       const kw = document.getElementById("search-input").value.trim().toLowerCase();
       const onlyInStock = document.getElementById("in-stock-only").checked;
-      const showIcons = document.getElementById("show-icons").checked;
+      const sortMode = document.getElementById("sort-mode").value;
       const list = SAMPLE_PRODUCTS
         .filter(p => activeCat === "全部" || p.cat === activeCat)
         .filter(p => !onlyInStock || stockBadge(p).out === 0)
         .filter(p => !kw || `${p.name} ${p.cat} ${p.sub} ${p.desc}`.toLowerCase().includes(kw))
-        .sort((a, b) => stockBadge(a).out - stockBadge(b).out);
+        .sort((a, b) => {
+          const outDiff = stockBadge(a).out - stockBadge(b).out;
+          if (outDiff !== 0) return outDiff;
+          if (sortMode === "sales") return b.sales - a.sales;
+          if (sortMode === "stock") return (b.stock || 0) - (a.stock || 0);
+          return 0;
+        });
 
       document.getElementById("count-badge").textContent = `当前展示 ${list.length} 个商品`;
       const grid = document.getElementById("product-grid");
       grid.innerHTML = list.map((p, idx) => {
         const sb = stockBadge(p);
-        const iconHtml = showIcons
-          ? `<img src="${p.icon}" alt="${p.sub}" width="44" height="44" loading="${idx < 10 ? "eager" : "lazy"}" decoding="async" class="product-icon h-11 w-11 shrink-0 rounded-xl border border-orange-100/80 bg-white object-cover shadow-xs" />`
-          : "";
+        const iconHtml = `<img src="${p.icon}" alt="${p.sub}" width="44" height="44" loading="${idx < 10 ? "eager" : "lazy"}" decoding="async" class="product-icon h-11 w-11 shrink-0 rounded-xl border border-orange-100/80 bg-white object-cover shadow-xs" />`;
         return `
           <div class="card-row flex items-center justify-between gap-3.5 rounded-2xl border border-slate-100 bg-white px-4 py-3">
             <div class="flex min-w-0 flex-1 items-center gap-3">

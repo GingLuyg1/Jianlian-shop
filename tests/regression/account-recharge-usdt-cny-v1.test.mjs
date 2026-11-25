@@ -13,7 +13,7 @@ const reviewService = readFileSync(new URL("../../lib/recharges/review-service.t
 const checkout = readFileSync(new URL("../../app/checkout/page.tsx", import.meta.url), "utf8");
 
 test("underpayment and overpayment credit the actual received USDT", () => {
-  assert.equal(calculateExpectedUsdtAmount("100", "6.7"), "14.925374");
+  assert.equal(calculateExpectedUsdtAmount("100", "6.7"), "14.9254");
   assert.equal(calculateCreditedCnyAmount("14", "6.7"), "93.80");
   assert.equal(calculateCreditedCnyAmount("16", "6.7"), "107.20");
 });
