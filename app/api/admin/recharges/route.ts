@@ -10,16 +10,23 @@ import {
   sortPaymentRecords,
 } from "@/lib/payments/admin-payment-queries";
 import { requiresRechargeAdminAttention } from "@/lib/recharges/admin-attention";
+import { getShanghaiDayBoundsIso, POSTGREST_PAGE_SIZE, selectAllPaginated } from "@/lib/supabase/paginated-select";
 
 export const dynamic = "force-dynamic";
+
+function parsePositiveInt(raw: string | null, fallback: number, min: number, max: number) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
 
 export async function GET(request: Request) {
   const admin = await getServerAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
 
   const { searchParams } = new URL(request.url);
-  const page = Math.max(1, Number(searchParams.get("page") || 1));
-  const pageSize = Math.min(100, Math.max(10, Number(searchParams.get("pageSize") || 20)));
+  const page = parsePositiveInt(searchParams.get("page"), 1, 1, 10000);
+  const pageSize = parsePositiveInt(searchParams.get("pageSize"), 20, 10, 100);
   const filters = {
     search: searchParams.get("search") ?? "",
     businessType: "recharge",
@@ -31,11 +38,28 @@ export async function GET(request: Request) {
     rechargeOnly: true,
   };
   const reviewOnly = searchParams.get("view") === "review";
+  const startBounds = filters.startDate ? getShanghaiDayBoundsIso(filters.startDate) : null;
+  const endBounds = filters.endDate ? getShanghaiDayBoundsIso(filters.endDate) : null;
+  const ascending = filters.sort === "created_asc";
 
   try {
-    const { data, error } = await admin.supabase.from("account_recharges").select(adminRechargeSelect).limit(1000);
-    if (error) throw error;
-    const sourceRows = (data ?? []) as Record<string, unknown>[];
+    const result = await selectAllPaginated<Record<string, unknown>>(
+      (from, to) => {
+        let q = admin.supabase
+          .from("account_recharges")
+          .select(adminRechargeSelect)
+          .order("created_at", { ascending });
+        if (startBounds) q = q.gte("created_at", startBounds.startIso);
+        if (endBounds) q = q.lte("created_at", endBounds.endIso);
+        return q.range(from, to) as unknown as PromiseLike<{
+          data: Record<string, unknown>[] | null;
+          error: { code?: string; message?: string } | null;
+        }>;
+      },
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+    );
+    if (result.error) throw result.error;
+    const sourceRows = result.rows;
     const rows = (reviewOnly
       ? sourceRows.filter(requiresRechargeAdminAttention)
       : sourceRows

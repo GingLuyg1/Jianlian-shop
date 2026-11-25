@@ -1,15 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { init, use, type EChartsType } from "echarts/core";
+import { LineChart } from "echarts/charts";
+import { AriaComponent, GridComponent, TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
 
 import {
   Dialog,
@@ -24,6 +19,8 @@ import {
   type DashboardDateFilterValue,
 } from "@/components/admin/dashboard/AdminDateRangeFilter";
 import { cn } from "@/lib/utils";
+
+use([LineChart, GridComponent, TooltipComponent, AriaComponent, CanvasRenderer]);
 
 export type ProductDetailModalData = {
   id: string;
@@ -65,16 +62,12 @@ const DETAIL_SERIES: ReadonlyArray<{
 ];
 
 function toBizDateKey(date: Date) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(date);
-  const y = parts.find((p) => p.type === "year")?.value ?? "";
-  const m = parts.find((p) => p.type === "month")?.value ?? "";
-  const d = parts.find((p) => p.type === "day")?.value ?? "";
-  return `${y}-${m}-${d}`;
+  }).format(date);
 }
 
 function toBizHour(date: Date) {
@@ -105,6 +98,8 @@ export function AdminProductDetailDialog({
     () => initialDateFilter ?? getPresetDateRange("7d")
   );
   const [selectedMetrics, setSelectedMetrics] = useState<DetailMetricKey[]>(["amount", "orders"]);
+  const chartHostRef = useRef<HTMLDivElement>(null);
+  const chartInstanceRef = useRef<EChartsType | null>(null);
 
   const fromKey = toBizDateKey(dateFilter.from);
   const toKey = toBizDateKey(dateFilter.to);
@@ -174,9 +169,9 @@ export function AdminProductDetailDialog({
     }
 
     const days = new Map<string, { date: string; label: string; amount: number; orders: number; clicks: number; conversionRate: number }>();
-    const start = new Date(dateFilter.from);
-    const end = new Date(dateFilter.to);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const start = new Date(`${fromKey}T12:00:00+08:00`);
+    const end = new Date(`${toKey}T12:00:00+08:00`);
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
       const k = toBizDateKey(d);
       days.set(k, { date: k, label: k.slice(5), amount: 0, orders: 0, clicks: 0, conversionRate: 0 });
     }
@@ -204,7 +199,7 @@ export function AdminProductDetailDialog({
       totalClicks: sumClicks,
       conversionRate: conv,
     };
-  }, [dateFilter.from, dateFilter.to, fromKey, orderItems, product, sameDay, toKey, visits]);
+  }, [fromKey, orderItems, product, sameDay, toKey, visits]);
 
   const toggleMetric = (key: DetailMetricKey) => {
     setSelectedMetrics((current) => {
@@ -216,14 +211,94 @@ export function AdminProductDetailDialog({
     });
   };
 
-  const activeSeries = DETAIL_SERIES.filter((item) => selectedMetrics.includes(item.key));
-  const hasMoney = activeSeries.some((item) => item.yAxisId === "money");
-  const hasCount = activeSeries.some((item) => item.yAxisId === "count");
-  const hasPercent = activeSeries.some((item) => item.yAxisId === "percent");
+  const activeSeries = useMemo(
+    () => DETAIL_SERIES.filter((item) => selectedMetrics.includes(item.key)),
+    [selectedMetrics]
+  );
+
+  useEffect(() => {
+    if (!open) {
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.dispose();
+        chartInstanceRef.current = null;
+      }
+      return;
+    }
+    let observer: ResizeObserver | null = null;
+    const rafId = window.requestAnimationFrame(() => {
+      const el = chartHostRef.current;
+      if (!el) return;
+      const chart = chartInstanceRef.current ?? init(el, undefined, { renderer: "canvas" });
+      chartInstanceRef.current = chart;
+      chart.setOption(
+        {
+          animation: false,
+          aria: { enabled: true },
+          tooltip: { trigger: "axis", renderMode: "richText" },
+          grid: { left: 48, right: 44, top: 32, bottom: 24, containLabel: true },
+          xAxis: {
+            type: "category",
+            data: chartData.map((p) => p.label),
+            boundaryGap: false,
+            axisLine: { lineStyle: { color: "#e2e8f0" } },
+            axisLabel: { color: "#64748b", fontSize: 11 },
+          },
+          yAxis: [
+            {
+              type: "value",
+              name: "金额 (元)",
+              position: "left",
+              nameTextStyle: { color: "#64748b", fontSize: 11, padding: [0, 0, 4, 0] },
+              axisLabel: { color: "#64748b", fontSize: 11 },
+              splitLine: { lineStyle: { type: "dashed", color: "#f1f5f9" } },
+            },
+            {
+              type: "value",
+              name: "数量 / %",
+              position: "right",
+              minInterval: 1,
+              nameTextStyle: { color: "#64748b", fontSize: 11, padding: [0, 0, 4, 0] },
+              axisLabel: { color: "#64748b", fontSize: 11 },
+              splitLine: { show: false },
+            },
+          ],
+          series: activeSeries.map((item) => ({
+            name: item.label,
+            type: "line",
+            smooth: true,
+            showSymbol: chartData.length <= 1,
+            symbolSize: 6,
+            yAxisIndex: item.unit === "money" ? 0 : 1,
+            itemStyle: { color: item.color },
+            lineStyle: { width: 2 },
+            areaStyle: { color: item.color, opacity: 0.1 },
+            data: chartData.map((point) => point[item.key]),
+          })),
+        },
+        true
+      );
+      chart.resize();
+      observer = new ResizeObserver(() => chart.resize());
+      observer.observe(el);
+    });
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      observer?.disconnect();
+    };
+  }, [open, chartData, activeSeries]);
+
+  useEffect(() => {
+    return () => {
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.dispose();
+        chartInstanceRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="truncate pr-6">{product?.name ?? "商品详情"}</DialogTitle>
           <DialogDescription>
@@ -284,44 +359,14 @@ export function AdminProductDetailDialog({
             })}
           </div>
 
-          <div className="h-[260px] w-full rounded-lg border border-slate-200 bg-white p-2 pt-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} minTickGap={20} />
-                {hasMoney ? (
-                  <YAxis yAxisId="money" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => `¥${v}`} />
-                ) : null}
-                {hasCount ? (
-                  <YAxis yAxisId="count" orientation={hasMoney ? "right" : "left"} tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
-                ) : null}
-                {hasPercent ? (
-                  <YAxis yAxisId="percent" orientation={hasMoney || hasCount ? "right" : "left"} hide={hasMoney && hasCount} tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}%`} />
-                ) : null}
-                <Tooltip
-                  formatter={(value: number, name: string) => {
-                    const s = DETAIL_SERIES.find((item) => item.key === name);
-                    if (!s) return [String(value), name];
-                    if (s.unit === "money") return [`¥${Number(value).toFixed(2)}`, s.label];
-                    if (s.unit === "percent") return [`${Number(value).toFixed(1)}%`, s.label];
-                    return [String(Math.trunc(Number(value))), s.label];
-                  }}
-                />
-                {activeSeries.map((item) => (
-                  <Area
-                    key={item.key}
-                    type="monotone"
-                    dataKey={item.key}
-                    name={item.key}
-                    yAxisId={item.yAxisId}
-                    stroke={item.color}
-                    strokeWidth={2}
-                    fillOpacity={0.12}
-                    fill={item.color}
-                  />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-[260px] w-full rounded-lg border border-slate-200 bg-white p-2">
+            <div
+              ref={chartHostRef}
+              data-testid="product-detail-echarts"
+              role="img"
+              aria-label="单品销售趋势曲线图"
+              className="h-full w-full"
+            />
           </div>
         </div>
       </DialogContent>

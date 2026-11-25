@@ -99,9 +99,18 @@ function groupBy<T>(rows: T[], key: (row: T) => string) {
 
 async function safeSelect(client: any, table: string) {
   try {
-    const { data, error } = await client.from(table).select("*").limit(5000);
-    if (error) return { rows: [] as AnyRow[], error: getSafeErrorMessage(error, `${table} 读取失败`) };
-    return { rows: (data ?? []) as AnyRow[], error: null };
+    const pageSize = 1000;
+    const maxRows = 20000;
+    const rows: AnyRow[] = [];
+    for (let offset = 0; offset < maxRows; offset += pageSize) {
+      const end = Math.min(offset + pageSize - 1, maxRows - 1);
+      const { data, error } = await client.from(table).select("*").range(offset, end);
+      if (error) return { rows: [] as AnyRow[], error: getSafeErrorMessage(error, `${table} 读取失败`) };
+      const batch = Array.isArray(data) ? (data as AnyRow[]) : [];
+      rows.push(...batch);
+      if (batch.length < end - offset + 1) break;
+    }
+    return { rows, error: null };
   } catch (error) {
     return { rows: [] as AnyRow[], error: getSafeErrorMessage(error, `${table} 读取失败`) };
   }
@@ -145,7 +154,7 @@ export async function runDataConsistencyScan(options: {
     safeSelect(serviceClient, "payment_sessions"),
     safeSelect(serviceClient, "account_recharges"),
     safeSelect(serviceClient, "balance_transactions"),
-    safeSelect(serviceClient, "refunds"),
+    safeSelect(serviceClient, "refund_requests"),
     safeSelect(serviceClient, "digital_inventory"),
     safeSelect(serviceClient, "order_deliveries"),
   ]);
@@ -278,8 +287,13 @@ export async function listDataConsistencyState(filters: { severity?: string; rul
   const { data, error, count } = await query.range(from, to);
   if (error) throw error;
 
-  const { data: statsData } = await serviceClient.from("data_consistency_issues").select("severity,status");
-  const statsRows = (statsData ?? []) as AnyRow[];
+  const [totalRes, p0Res, p1Res, resolvedRes, openRes] = await Promise.all([
+    serviceClient.from("data_consistency_issues").select("id", { count: "exact", head: true }),
+    serviceClient.from("data_consistency_issues").select("id", { count: "exact", head: true }).eq("severity", "P0"),
+    serviceClient.from("data_consistency_issues").select("id", { count: "exact", head: true }).eq("severity", "P1"),
+    serviceClient.from("data_consistency_issues").select("id", { count: "exact", head: true }).eq("status", "resolved"),
+    serviceClient.from("data_consistency_issues").select("id", { count: "exact", head: true }).in("status", ["open", "investigating"]),
+  ]);
   return {
     latestRun: latestRun ?? null,
     issues: data ?? [],
@@ -288,11 +302,11 @@ export async function listDataConsistencyState(filters: { severity?: string; rul
     pageSize,
     rules: CONSISTENCY_RULES,
     stats: {
-      total: statsRows.length,
-      p0: statsRows.filter((row) => row.severity === "P0").length,
-      p1: statsRows.filter((row) => row.severity === "P1").length,
-      resolved: statsRows.filter((row) => row.status === "resolved").length,
-      open: statsRows.filter((row) => row.status === "open" || row.status === "investigating").length,
+      total: totalRes.count ?? 0,
+      p0: p0Res.count ?? 0,
+      p1: p1Res.count ?? 0,
+      resolved: resolvedRes.count ?? 0,
+      open: openRes.count ?? 0,
     },
   };
 }

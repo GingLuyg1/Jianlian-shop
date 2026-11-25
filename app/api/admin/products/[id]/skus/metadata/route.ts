@@ -23,6 +23,7 @@ type MetadataPatchInput = {
   delivery_mode?: ExtendedDeliveryMode | null;
   digital_inventory_product_id?: string | null;
   digital_inventory_product_name?: string | null;
+  expected_updated_at?: string | null;
 };
 
 function json(body: unknown, status = 200) {
@@ -87,12 +88,22 @@ export async function PATCH(
           ? item.digital_inventory_product_id.trim()
           : null
         : undefined;
+    if (invProdId && invProdId !== params.id) {
+      return json(
+        { error: "数字库存仅允许绑定当前商品，禁止跨商品绑定库存池", code: "CROSS_PRODUCT_INVENTORY_FORBIDDEN", requestId },
+        400
+      );
+    }
     const invProdName =
       "digital_inventory_product_name" in item
         ? typeof item.digital_inventory_product_name === "string" && item.digital_inventory_product_name.trim()
           ? item.digital_inventory_product_name.trim().slice(0, 200)
           : null
         : undefined;
+    const expectedUpdatedAt =
+      "expected_updated_at" in item && typeof item.expected_updated_at === "string" && item.expected_updated_at.trim()
+        ? item.expected_updated_at.trim()
+        : null;
 
     updates.push({
       sku_id: skuId,
@@ -100,26 +111,51 @@ export async function PATCH(
       ...(deliveryMode !== undefined ? { delivery_mode: deliveryMode } : {}),
       ...(invProdId !== undefined ? { digital_inventory_product_id: invProdId } : {}),
       ...(invProdName !== undefined ? { digital_inventory_product_name: invProdName } : {}),
+      ...(expectedUpdatedAt ? { expected_updated_at: expectedUpdatedAt } : {}),
     });
   }
 
   const skuIds = Array.from(new Set(updates.map((u) => u.sku_id)));
-  const { data: existingRows, error: readError } = await service
-    .from("product_skus")
-    .select("id,product_id,metadata")
-    .eq("product_id", params.id)
-    .in("id", skuIds);
+  const [{ data: existingRows, error: readError }, { count: totalProductSkuCount }] = await Promise.all([
+    service
+      .from("product_skus")
+      .select("id,product_id,metadata,updated_at")
+      .eq("product_id", params.id)
+      .in("id", skuIds),
+    service
+      .from("product_skus")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", params.id),
+  ]);
 
   if (readError) {
     return json({ error: "读取现有 SKU 元数据失败", requestId }, 500);
   }
 
+  const isSingleSkuProduct = (totalProductSkuCount ?? 0) <= 1;
   const existingMap = new Map(
-    ((existingRows ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }>).map((row) => [
+    ((existingRows ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null; updated_at?: string | null }>).map((row) => [
       row.id,
-      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {},
+      {
+        metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {},
+        updated_at: row.updated_at ? String(row.updated_at) : null,
+      },
     ])
   );
+
+  // Validate optimistic lock up front before mutating any row
+  for (const patch of updates) {
+    const existing = existingMap.get(patch.sku_id);
+    if (!existing) {
+      return json({ error: "目标商品规格不存在或已被删除", code: "SKU_NOT_FOUND", requestId }, 404);
+    }
+    if (patch.expected_updated_at && existing.updated_at && patch.expected_updated_at !== existing.updated_at) {
+      return json(
+        { error: "商品规格已被其他操作修改，请刷新后重试", code: "SKU_WORKSPACE_STALE", requestId },
+        409
+      );
+    }
+  }
 
   const updatedSkus: Array<{
     id: string;
@@ -127,12 +163,16 @@ export async function PATCH(
     updated_at: string | null;
     local_available_count?: number;
   }> = [];
+  const failedUpdates: Array<{ sku_id: string; reason: string; code: string }> = [];
 
   await Promise.all(
     updates.map(async (patch) => {
-      const currentMeta = existingMap.get(patch.sku_id);
-      if (!currentMeta) return;
-      let nextMeta: Record<string, unknown> = { ...currentMeta };
+      const existing = existingMap.get(patch.sku_id);
+      if (!existing) {
+        failedUpdates.push({ sku_id: patch.sku_id, reason: "规格不存在", code: "SKU_NOT_FOUND" });
+        return;
+      }
+      let nextMeta: Record<string, unknown> = { ...existing.metadata };
 
       if ("delivery_mode" in patch) {
         nextMeta = withDeliveryModeMetadata(nextMeta, patch.delivery_mode ?? "");
@@ -163,56 +203,86 @@ export async function PATCH(
         }
       }
 
-      const { data: savedRow, error: updErr } = await service
+      let updateQuery = service
         .from("product_skus")
         .update({ metadata: nextMeta })
         .eq("id", patch.sku_id)
-        .eq("product_id", params.id)
+        .eq("product_id", params.id);
+      if (patch.expected_updated_at) {
+        updateQuery = updateQuery.eq("updated_at", patch.expected_updated_at);
+      }
+
+      const { data: savedRow, error: updErr } = await updateQuery
         .select("id,metadata,updated_at")
-        .single();
+        .maybeSingle();
 
-      if (!updErr && savedRow) {
-        let localAvailableCount: number | undefined = undefined;
-        const effectiveMode =
-          typeof nextMeta.delivery_mode === "string" ? nextMeta.delivery_mode : patch.delivery_mode ?? "";
-        const boundInventoryProductId =
-          typeof nextMeta.digital_inventory_product_id === "string"
-            ? nextMeta.digital_inventory_product_id
-            : patch.digital_inventory_product_id ?? "";
+      if (updErr) {
+        failedUpdates.push({ sku_id: patch.sku_id, reason: "规格元数据更新失败", code: "SKU_METADATA_UPDATE_FAILED" });
+        return;
+      }
+      if (!savedRow) {
+        failedUpdates.push({ sku_id: patch.sku_id, reason: "规格已被其他操作修改", code: "SKU_WORKSPACE_STALE" });
+        return;
+      }
 
-        if (effectiveMode === "automatic_digital_inventory" && boundInventoryProductId === params.id) {
-          // Bind product-level unallocated available digital_inventory rows to this SKU
-          // so both activation readiness checks and deliver_digital_order match sku_id cleanly.
+      let localAvailableCount: number | undefined = undefined;
+      const effectiveMode =
+        typeof nextMeta.delivery_mode === "string" ? nextMeta.delivery_mode : patch.delivery_mode ?? "";
+      const boundInventoryProductId =
+        typeof nextMeta.digital_inventory_product_id === "string"
+          ? nextMeta.digital_inventory_product_id
+          : patch.digital_inventory_product_id ?? "";
+
+      if (effectiveMode === "automatic_digital_inventory" && boundInventoryProductId === params.id) {
+        // Only auto-bind unallocated product-level inventory for single-SKU products;
+        // multi-SKU products must never hijack the shared sku_id IS NULL pool into one SKU.
+        if (isSingleSkuProduct) {
           await service
             .from("digital_inventory")
             .update({ sku_id: patch.sku_id })
             .eq("product_id", params.id)
             .is("sku_id", null)
             .eq("status", "available");
-
-          const { count: availCount } = await service
-            .from("digital_inventory")
-            .select("id", { count: "exact", head: true })
-            .eq("product_id", params.id)
-            .eq("sku_id", patch.sku_id)
-            .eq("status", "available");
-
-          if (typeof availCount === "number" && Number.isFinite(availCount)) {
-            localAvailableCount = availCount;
-          }
         }
 
-        updatedSkus.push({
-          id: String(savedRow.id),
-          metadata: (savedRow.metadata as Record<string, unknown>) ?? nextMeta,
-          updated_at: savedRow.updated_at ? String(savedRow.updated_at) : null,
-          ...(localAvailableCount !== undefined ? { local_available_count: localAvailableCount } : {}),
-        });
+        const { count: availCount } = await service
+          .from("digital_inventory")
+          .select("id", { count: "exact", head: true })
+          .eq("product_id", params.id)
+          .eq("sku_id", patch.sku_id)
+          .eq("status", "available");
+
+        if (typeof availCount === "number" && Number.isFinite(availCount)) {
+          localAvailableCount = availCount;
+        }
       }
+
+      updatedSkus.push({
+        id: String(savedRow.id),
+        metadata: (savedRow.metadata as Record<string, unknown>) ?? nextMeta,
+        updated_at: savedRow.updated_at ? String(savedRow.updated_at) : null,
+        ...(localAvailableCount !== undefined ? { local_available_count: localAvailableCount } : {}),
+      });
     })
   );
 
   await syncProductDeliveryModeFromSkus(service, params.id).catch(() => null);
+
+  if (failedUpdates.length > 0) {
+    const hasStale = failedUpdates.some((item) => item.code === "SKU_WORKSPACE_STALE");
+    return json(
+      {
+        ok: false,
+        error: hasStale ? "商品规格已被其他操作修改，请刷新后重新确认" : "部分 SKU 成本或交付配置保存失败",
+        code: hasStale ? "SKU_WORKSPACE_STALE" : "SKU_METADATA_PARTIAL_FAILURE",
+        updated_count: updatedSkus.length,
+        failed: failedUpdates,
+        skus: updatedSkus,
+        requestId,
+      },
+      hasStale ? 409 : 500
+    );
+  }
 
   await auditCatalogAction({
     request,

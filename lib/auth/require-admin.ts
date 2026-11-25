@@ -1,5 +1,6 @@
 ﻿import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type AdminProfile = {
   role?: string | null;
@@ -17,11 +18,18 @@ function isAdminProfile(profile: AdminProfile | null | undefined) {
 }
 
 function isMissingAdminUsersSchema(error: { code?: string; message?: string } | null) {
-  return Boolean(error && /42P01|PGRST205|admin_users|schema cache/i.test(`${error.code ?? ""} ${error.message ?? ""}`));
+  if (!error) return false;
+  const code = String(error.code ?? "").trim().toUpperCase();
+  if (code === "42P01" || code === "PGRST205") return true;
+  const message = String(error.message ?? "");
+  return /(?:relation|table) .*admin_users.* does not exist|Could not find the table .*admin_users.* in the schema cache/i.test(message);
 }
 
 async function loadAdminAuthorization(supabase: SupabaseClient, userId: string) {
-  const { data, error } = await supabase
+  // Always read admin_users via service role when available so disabled rows
+  // can never be hidden by user-scoped RLS policies.
+  const reader = getSupabaseServiceRoleClient() ?? supabase;
+  const { data, error } = await reader
     .from("admin_users")
     .select("user_id,admin_level,status,permissions")
     .eq("user_id", userId)
@@ -51,28 +59,34 @@ export async function getServerAdminContext(): Promise<
     return { ok: false, status: 401, message: "请先登录" };
   }
 
-  const authorizationResult = await loadAdminAuthorization(supabase, user.id);
+  const [authorizationResult, profileResult] = await Promise.all([
+    loadAdminAuthorization(supabase, user.id),
+    supabase.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+  ]);
+
   if (authorizationResult.error && !authorizationResult.schemaMissing) {
     return { ok: false, status: 500, message: "无法验证后台权限" };
   }
-  if (authorizationResult.authorization
-      && (authorizationResult.authorization.status !== "active"
-        || !["admin", "super_admin"].includes(authorizationResult.authorization.admin_level))) {
+  if (
+    authorizationResult.authorization &&
+    (authorizationResult.authorization.status !== "active" ||
+      !["admin", "super_admin"].includes(authorizationResult.authorization.admin_level))
+  ) {
     return { ok: false, status: 403, message: "无后台访问权限" };
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError) {
+  if (profileResult.error) {
     return { ok: false, status: 500, message: "无法验证后台权限" };
   }
 
-  if (!authorizationResult.authorization && !isAdminProfile(profile as AdminProfile | null)) {
-    return { ok: false, status: 403, message: "无后台访问权限" };
+  const profile = profileResult.data as AdminProfile | null;
+
+  // Strictly only allow legacy profiles.role fallback when the admin_users table
+  // itself does not exist (42P01 / PGRST205). Never fall back when admin_users exists.
+  if (!authorizationResult.authorization) {
+    if (!authorizationResult.schemaMissing || !isAdminProfile(profile)) {
+      return { ok: false, status: 403, message: "无后台访问权限" };
+    }
   }
 
   return { ok: true, supabase, user, profile: profile as AdminProfile, adminAuthorization: authorizationResult.authorization };

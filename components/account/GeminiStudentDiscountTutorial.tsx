@@ -383,8 +383,51 @@ export default function GeminiStudentDiscountTutorial({
           />
 
           <div className="flex items-start gap-3 pt-1">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-xs font-extrabold text-emerald-700 border border-emerald-200">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-xs font-extrabold text-rose-700 border border-rose-200">
               03
+            </span>
+            <div className="min-w-0 flex-1 space-y-2.5">
+              <p className="text-sm leading-relaxed text-slate-800">
+                若提交绑卡时出现{" "}
+                <code className="rounded bg-rose-50 px-1.5 py-0.5 text-xs font-semibold text-rose-700 border border-rose-200/80">
+                  We couldn&apos;t complete this action. Contact us. Learn more [OR_CCREU_06]
+                </code>{" "}
+                此类报错提示，可依次按以下步骤排查解决：
+              </p>
+              <div className="rounded-xl border border-rose-200/80 bg-rose-50/50 p-3.5 text-xs sm:text-sm leading-relaxed text-slate-700 space-y-1.5">
+                <p>
+                  <strong>1.</strong> 自查账号有没有进入家庭组，如果有请先退出家庭组；
+                </p>
+                <p>
+                  <strong>2.</strong> 访问{" "}
+                  <a
+                    href="https://pay.google.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-primary underline underline-offset-4 hover:text-primary/80"
+                  >
+                    https://pay.google.com/
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>{" "}
+                  尝试在支付资料中添加绑卡；
+                </p>
+                <p>
+                  <strong>3.</strong> 更换网络节点后重试。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <TutorialImage
+            src="/assets/tutorials/gemini-student/step-9-or-ccreu-06.webp"
+            caption="图 9：绑卡报错 [OR_CCREU_06] 提示界面参考"
+            width={497}
+            height={805}
+          />
+
+          <div className="flex items-start gap-3 pt-1">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-xs font-extrabold text-emerald-700 border border-emerald-200">
+              04
             </span>
             <p className="text-sm leading-relaxed text-slate-800">
               点击保存并确认付款，只要卡内余额充足即可成功开通 <strong>Google AI Pro</strong> 会员。

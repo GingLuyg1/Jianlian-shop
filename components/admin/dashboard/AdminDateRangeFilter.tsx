@@ -20,19 +20,41 @@ export type DashboardDateFilterValue = {
   to: Date;
 };
 
+const SHANGHAI_TZ = "Asia/Shanghai";
+
+function formatShanghaiYmd(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: SHANGHAI_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function shanghaiDayDate(ymd: string): Date {
+  return new Date(`${ymd}T00:00:00+08:00`);
+}
+
+function shiftShanghaiYmd(ymd: string, deltaDays: number): string {
+  const base = new Date(`${ymd}T12:00:00+08:00`);
+  base.setUTCDate(base.getUTCDate() + deltaDays);
+  return formatShanghaiYmd(base);
+}
+
 export function getPresetDateRange(preset: Exclude<DashboardDatePreset, "custom">): DashboardDateFilterValue {
-  const today = startOfDay(new Date());
+  const todayKey = formatShanghaiYmd(new Date());
+  const today = shanghaiDayDate(todayKey);
   if (preset === "today") {
     return { preset, from: today, to: today };
   }
   if (preset === "yesterday") {
-    const yesterday = subDays(today, 1);
+    const yesterday = shanghaiDayDate(shiftShanghaiYmd(todayKey, -1));
     return { preset, from: yesterday, to: yesterday };
   }
   if (preset === "7d") {
-    return { preset, from: subDays(today, 6), to: today };
+    return { preset, from: shanghaiDayDate(shiftShanghaiYmd(todayKey, -6)), to: today };
   }
-  return { preset: "30d", from: subDays(today, 29), to: today };
+  return { preset: "30d", from: shanghaiDayDate(shiftShanghaiYmd(todayKey, -29)), to: today };
 }
 
 const PRESETS: Array<{ key: Exclude<DashboardDatePreset, "custom">; label: string }> = [
@@ -78,11 +100,13 @@ export function AdminDateRangeFilter({
     [allowAll, size]
   );
 
+  const fromKey = formatShanghaiYmd(value.from);
+  const toKey = formatShanghaiYmd(value.to);
   const customLabel = isAllSelected
     ? "选择日期范围"
     : value.preset === "custom"
-    ? `${format(value.from, "yyyy-MM-dd")} ~ ${format(value.to, "yyyy-MM-dd")}`
-    : `${format(value.from, "MM-dd")} ~ ${format(value.to, "MM-dd")}`;
+    ? `${fromKey} ~ ${toKey}`
+    : `${fromKey.slice(5)} ~ ${toKey.slice(5)}`;
 
   const isDefaultSize = size === "default";
 
@@ -160,7 +184,7 @@ export function AdminDateRangeFilter({
             )}
           >
             <CalendarIcon className="h-4 w-4 text-slate-500" />
-            <span className="tabular-nums">{customLabel}</span>
+            <span className="tabular-nums" suppressHydrationWarning>{customLabel}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="end">

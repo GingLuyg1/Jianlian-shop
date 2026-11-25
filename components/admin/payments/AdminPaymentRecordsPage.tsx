@@ -344,7 +344,7 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
         {error ? <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadPayments} /></div> : loading ? <AdminTableSkeleton rows={8} /> : <AdminTableViewport><PaymentTable isRechargePage={isRechargePage} payments={payments} copyText={copyText} loadDetail={loadDetail} hasFilters={hasFilters} /></AdminTableViewport>}
         <AdminListPagination summary={`共 ${count} 条记录，每页 ${PAGE_SIZE} 条`} page={page} totalPages={totalPages} loading={loading} onPrevious={() => setPage((value) => Math.max(1, value - 1))} onNext={() => setPage((value) => Math.min(totalPages, value + 1))} /></>}
       </AdminListSurface>
-      {selected ? <><PaymentDrawer isRechargePage={isRechargePage} selected={selected} detail={detail} callbacks={callbacks} callbackError={callbackError} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} detailLoading={detailLoading} detailError={detailError} onClose={() => setSelected(null)} onRetry={() => loadDetail(selected)} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} copyText={copyText} />{!isRechargePage && selected.source === "account_recharges" ? <RechargeReviewPanel rechargeId={selected.id} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} /> : null}</> : null}
+      {selected ? <PaymentDrawer isRechargePage={isRechargePage} selected={selected} detail={detail} callbacks={callbacks} callbackError={callbackError} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} detailLoading={detailLoading} detailError={detailError} onClose={() => setSelected(null)} onRetry={() => loadDetail(selected)} onChanged={async () => { await loadPayments(); await loadDetail(selected); }} copyText={copyText} /> : null}
     </AdminPageShell>
   );
 }
@@ -404,7 +404,7 @@ function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackEr
           {detailError ? <AdminErrorState description={detailError} onRetry={onRetry} /> : null}
           {!detailLoading && !detailError && detail ? (
             <div className="space-y-4">
-              {isRechargePage && selected.source === "account_recharges" ? <RechargeReviewPanel rechargeId={selected.id} onChanged={onChanged} embedded /> : null}
+              {selected.source === "account_recharges" ? <RechargeReviewPanel key={selected.id} rechargeId={selected.id} onChanged={onChanged} embedded /> : null}
               {underpaymentCredited ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">欠额款已转入用户余额，原订单已取消</div> : null}
               <div className="grid gap-px overflow-hidden rounded-[var(--admin-v2-surface-radius)] border border-[var(--admin-v2-border)] bg-white sm:grid-cols-3">
                 <DrawerSummaryItem label="当前状态" value={underpaymentCredited ? "欠额已转余额" : getUnifiedPaymentStatusLabel(detail.status)} />
@@ -413,11 +413,11 @@ function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackEr
               </div>
               <div className="space-y-4">
                 <DetailGroup title="关键字段" rows={[["支付单号", detail.payment_no], ["业务类型", getBusinessTypeLabel(detail.business_type)], ["创建时间", formatDate(detail.created_at)], ["支付时间", formatDate(detail.paid_at)]]} />
-                <DetailGroup title="支付平台 金额口径" rows={[["冻结 支付平台", detail.provider ?? "历史记录未提供，请核对支付会话"], ["本站手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency)], ["外部收银台实付/上游结算成本", "未持久化；不可将 支付平台记录金额 当作收银台总额或上游净额"]]} />
+                <DetailGroup title="支付通道金额口径" rows={[["冻结支付服务商", detail.provider ?? "历史记录未提供，请核对支付会话"], ["本站手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency)], ["外部收银台实付/上游结算成本", "未持久化；不可将支付服务商记录金额当作收银台总额或上游净额"]]} />
                 <ExternalCashierFeeSummary principal={detail.business_amount} provider={detail.provider ?? undefined} currency={detail.business_currency ?? undefined} />
                 {detail.business_type === "order" ? <DetailGroup title="订单支付会话与履约" rows={[["支付会话", detail.payment_session_no ?? "未提供"], ["会话状态", statusLabel(detail.payment_session_status)], ["对账状态", statusLabel(detail.reconciliation_status)], ["履约状态", statusLabel(detail.fulfillment_status)], ["支付/履约错误", detail.payment_session_error ?? "—"], ["历史身份绑定", detail.session_evidence_status ?? "未提供"], ["实际收银台手续费/总额", ["snpay", "liuhaoyi"].includes(detail.provider ?? "") ? "未提供；预计约 3%，以收银台实际金额为准" : "未提供"]]} /> : null}
                 <DetailGroup title="关联业务" rows={[["业务单号", detail.business_no ?? "—"], ["用户邮箱", detail.user_email ?? "—"], ["用户备注", detail.user_note ?? "—"], ["管理员备注", detail.admin_note ?? "—"]]} />
-                {isRechargePage ? <DetailGroup title="金额与汇率" rows={[["申请充值", formatRechargeRequested(detail)], ["应付", formatRechargeExpected(detail)], ["实际到账", formatRechargeActual(detail)], ["入账", formatRechargeCredited(detail)]]} /> : <DetailGroup title="金额与费率" rows={[["订单本金", formatPaymentMoney(detail.business_amount, detail.business_currency)], ["本站手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency ?? detail.business_currency)], ["本站 应付金额", formatPaymentMoney(detail.payable_amount, detail.payable_currency)], ["支付平台 记录到账金额", formatPaymentMoney(detail.received_amount, detail.received_currency)], ["本站到账减本站手续费（非支付平台 结算净额）", formatPaymentMoney(detail.platform_net_amount, detail.received_currency)]]} />}
+                {isRechargePage ? <DetailGroup title="金额与汇率" rows={[["申请充值", formatRechargeRequested(detail)], ["应付", formatRechargeExpected(detail)], ["实际到账", formatRechargeActual(detail)], ["入账", formatRechargeCredited(detail)]]} /> : <DetailGroup title="金额与费率" rows={[["订单本金", formatPaymentMoney(detail.business_amount, detail.business_currency)], ["本站手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency ?? detail.business_currency)], ["本站应付金额", formatPaymentMoney(detail.payable_amount, detail.payable_currency)], ["支付服务商记录到账金额", formatPaymentMoney(detail.received_amount, detail.received_currency)], ["本站到账减本站手续费（非上游结算净额）", formatPaymentMoney(detail.platform_net_amount, detail.received_currency)]]} />}
                 <DetailGroup title="渠道信息" rows={[["网络", detail.channel === "alipay" || detail.channel === "wechat" ? "—" : detail.network ?? "—"], ["渠道交易号", detail.provider_trade_no ?? "—", detail.provider_trade_no ? () => copyText(detail.provider_trade_no) : undefined], ["交易参考号", detail.transaction_reference ?? "—"], ["钱包地址", maskWallet(null)]]} />
               </div>
               {chainPayment || chainPaymentError ? <Bep20ChainPaymentPanel detail={detail} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} copyText={copyText} onChanged={onChanged} /> : null}
@@ -427,7 +427,7 @@ function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackEr
                 <DetailGroup title="异常摘要" rows={[["异常类型", detail.exception_type ? getExceptionTypeLabel(detail.exception_type) : "—"], ["错误摘要", detail.error_summary ?? "—"]]} />
               </div>
               <CallbackRecords callbacks={callbacks} callbackError={callbackError} />
-              {!underpaymentCredited && detail.exception_type ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />重新查询渠道状态</div><p className="mt-1 text-xs">真实支付 支付平台 尚未配置，当前操作不可用。</p></div> : null}
+              {!underpaymentCredited && detail.exception_type ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />重新查询渠道状态</div><p className="mt-1 text-xs">真实支付服务商尚未配置，当前操作不可用。</p></div> : null}
             </div>
           ) : null}
     </AdminDetailDrawer>

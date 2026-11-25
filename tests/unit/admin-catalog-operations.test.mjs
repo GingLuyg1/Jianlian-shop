@@ -223,9 +223,9 @@ test("API uses bounded batch SKU reads and the UI keeps filters in URL state", (
   const page = file("app/admin/products/page.tsx");
   assert.match(route, /SKU_PRODUCT_BATCH_SIZE/);
   assert.match(route, /\.from\("product_skus"\)/);
-  assert.match(route, /Promise\.all\(batches\.map/);
+  assert.match(route, /Promise\.all\(\s*batches\.map/);
   assert.match(route, /readSkuLocalInventoryDiagnostics/);
-  assert.match(route, /queryCount = 1 \+ skuResult\.queryCount \+ inventoryResult\.queryCount/);
+  assert.match(route, /queryCount = productQueryCount \+ skuResult\.queryCount \+ inventoryResult\.queryCount/);
   assert.doesNotMatch(route, /supplier.*fetch|sync_daju_supplier_stock/i);
   assert.match(page, /serializeAdminCatalogFilterState/);
   assert.match(page, /router\.replace/);

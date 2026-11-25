@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { syncProductDeliveryModeFromSkus } from "@/lib/products/sku-summary";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -116,20 +117,27 @@ export async function POST(request: Request, context: Context) {
       return json({ error: "SKU 绑定保存失败", code: "KUAJINGZY_SKU_SAVE_FAILED", requestId }, 500);
     }
     savedSku = skuUpdate.data as Record<string, unknown>;
-  }
+    await syncProductDeliveryModeFromSkus(service, productId).catch(() => null);
+    const refreshedProd = await service
+      .from("products")
+      .select("id,name,stock,metadata,delivery_type")
+      .eq("id", productId)
+      .maybeSingle();
+    savedProduct = (refreshedProd.data as Record<string, unknown>) ?? (product as Record<string, unknown>);
+  } else {
+    const nextProductMeta = { ...currentMetadata, ...bindingPatch };
+    const prodUpdate = await service
+      .from("products")
+      .update({ metadata: nextProductMeta, delivery_type: "automatic" })
+      .eq("id", productId)
+      .select("id,name,stock,metadata,delivery_type")
+      .single();
 
-  const nextProductMeta = { ...currentMetadata, ...bindingPatch };
-  const prodUpdate = await service
-    .from("products")
-    .update({ metadata: nextProductMeta, delivery_type: "automatic" })
-    .eq("id", productId)
-    .select("id,name,stock,metadata,delivery_type")
-    .single();
-
-  if (prodUpdate.error || !prodUpdate.data) {
-    return json({ error: "商品绑定保存失败", code: "KUAJINGZY_PRODUCT_SAVE_FAILED", requestId }, 500);
+    if (prodUpdate.error || !prodUpdate.data) {
+      return json({ error: "商品绑定保存失败", code: "KUAJINGZY_PRODUCT_SAVE_FAILED", requestId }, 500);
+    }
+    savedProduct = prodUpdate.data as Record<string, unknown>;
   }
-  savedProduct = prodUpdate.data as Record<string, unknown>;
 
   await writeAdminAuditLog({
     request,
@@ -188,35 +196,63 @@ export async function DELETE(request: Request, context: Context) {
   ];
 
   let savedSku: Record<string, unknown> | null = null;
+  let savedProduct: Record<string, unknown> | null = null;
   if (websiteSkuId) {
-    const { data: sku } = await service
+    const { data: sku, error: skuErr } = await service
       .from("product_skus")
       .select("id,metadata")
       .eq("id", websiteSkuId)
       .eq("product_id", productId)
       .maybeSingle();
-    if (sku) {
-      const nextSkuMeta = { ...(sku.metadata && typeof sku.metadata === "object" ? (sku.metadata as Record<string, unknown>) : {}) };
-      for (const k of KUAJINGZY_KEYS) delete nextSkuMeta[k];
-      const skuUpdate = await service
-        .from("product_skus")
-        .update({ metadata: nextSkuMeta, delivery_type: "manual" })
-        .eq("id", websiteSkuId)
-        .eq("product_id", productId)
-        .select("id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,updated_at")
-        .single();
-      savedSku = (skuUpdate.data as Record<string, unknown>) ?? null;
+    if (skuErr || !sku) {
+      return json({ error: "网站 SKU 不存在或不属于当前商品", code: "WEBSITE_SKU_NOT_FOUND", requestId }, 404);
     }
+    const nextSkuMeta = { ...(sku.metadata && typeof sku.metadata === "object" ? (sku.metadata as Record<string, unknown>) : {}) };
+    for (const k of KUAJINGZY_KEYS) delete nextSkuMeta[k];
+    const skuUpdate = await service
+      .from("product_skus")
+      .update({ metadata: nextSkuMeta, delivery_type: "manual" })
+      .eq("id", websiteSkuId)
+      .eq("product_id", productId)
+      .select("id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order,metadata,updated_at")
+      .single();
+    if (skuUpdate.error || !skuUpdate.data) {
+      return json({ error: "解除 SKU 绑定失败", code: "KUAJINGZY_SKU_UNBIND_FAILED", requestId }, 500);
+    }
+    savedSku = skuUpdate.data as Record<string, unknown>;
+    await syncProductDeliveryModeFromSkus(service, productId).catch(() => null);
+    const refreshedProd = await service
+      .from("products")
+      .select("id,name,stock,metadata,delivery_type")
+      .eq("id", productId)
+      .maybeSingle();
+    savedProduct = (refreshedProd.data as Record<string, unknown>) ?? null;
+  } else {
+    const nextProdMeta = { ...(product.metadata && typeof product.metadata === "object" ? (product.metadata as Record<string, unknown>) : {}) };
+    for (const k of KUAJINGZY_KEYS) delete nextProdMeta[k];
+    const prodUpdate = await service
+      .from("products")
+      .update({ metadata: nextProdMeta, delivery_type: "manual" })
+      .eq("id", productId)
+      .select("id,name,stock,metadata,delivery_type")
+      .single();
+    if (prodUpdate.error || !prodUpdate.data) {
+      return json({ error: "解除商品绑定失败", code: "KUAJINGZY_PRODUCT_UNBIND_FAILED", requestId }, 500);
+    }
+    savedProduct = prodUpdate.data as Record<string, unknown>;
   }
 
-  const nextProdMeta = { ...(product.metadata && typeof product.metadata === "object" ? (product.metadata as Record<string, unknown>) : {}) };
-  for (const k of KUAJINGZY_KEYS) delete nextProdMeta[k];
-  const prodUpdate = await service
-    .from("products")
-    .update({ metadata: nextProdMeta, delivery_type: "manual" })
-    .eq("id", productId)
-    .select("id,name,stock,metadata,delivery_type")
-    .single();
+  await writeAdminAuditLog({
+    request,
+    admin: { id: admin.user.id, email: admin.user.email },
+    action: "unbind_kuajingzy_supplier_product",
+    module: "products",
+    targetType: websiteSkuId ? "product_sku" : "product",
+    targetId: websiteSkuId ?? productId,
+    targetLabel: String(product.name ?? ""),
+    result: "success",
+    afterSummary: { website_sku_id: websiteSkuId, supplier: "kuajingzy", unbound: true },
+  });
 
-  return json({ product: prodUpdate.data ?? null, sku: savedSku, requestId });
+  return json({ product: savedProduct, sku: savedSku, requestId });
 }

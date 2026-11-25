@@ -15,6 +15,7 @@ import { markMediaReferenceByUrl } from "@/lib/media/media-service";
 import { revalidateProductCache } from "@/lib/cache/cache-tags";
 import { checkRateLimit, checkRequestSize, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { POSTGREST_PAGE_SIZE, selectAllPaginated } from "@/lib/supabase/paginated-select";
 import {
   decorateAdminCatalogProducts,
   filterAndPaginateAdminCatalogProducts,
@@ -60,20 +61,37 @@ async function readOperationalSkuRows(service: SupabaseClient, productIds: strin
       ? SKU_OPERATION_FIELDS
       : SKU_OPERATION_FIELDS.replace(",metadata", "")
   ) as typeof SKU_OPERATION_FIELDS;
-  const results = await Promise.all(batches.map((ids) => service
-    .from("product_skus")
-    .select(skuFields, { count: "exact" })
-    .in("product_id", ids)
-    .range(0, SKU_BATCH_ROW_LIMIT - 1)));
+
+  const batchResults = await Promise.all(
+    batches.map((ids) =>
+      selectAllPaginated<Record<string, unknown>>(
+        (rangeFrom, rangeTo) =>
+          service
+            .from("product_skus")
+            .select(skuFields, { count: "exact" })
+            .in("product_id", ids)
+            .order("id", { ascending: true })
+            .range(rangeFrom, rangeTo) as unknown as PromiseLike<{
+            data: Array<Record<string, unknown>> | null;
+            error: { code?: string; message?: string } | null;
+            count?: number | null;
+          }>,
+        { pageSize: POSTGREST_PAGE_SIZE, maxRows: SKU_BATCH_ROW_LIMIT }
+      )
+    )
+  );
+
   const rows: Array<Record<string, unknown>> = [];
-  for (const result of results) {
-    if (result.error) return { rows: [], queryCount: batches.length, error: result.error };
-    if (result.count === null || result.count !== (result.data ?? []).length || (result.data ?? []).length >= SKU_BATCH_ROW_LIMIT) {
-      return { rows: [], queryCount: batches.length, overflow: true };
+  let totalQueries = 0;
+  for (const result of batchResults) {
+    totalQueries += result.queryCount;
+    if (result.error) return { rows: [], queryCount: totalQueries, error: result.error };
+    if (result.truncated || (result.totalCount !== null && result.totalCount > SKU_BATCH_ROW_LIMIT)) {
+      return { rows: [], queryCount: totalQueries, overflow: true };
     }
-    rows.push(...((result.data ?? []) as Array<Record<string, unknown>>));
+    rows.push(...result.rows);
   }
-  return { rows, queryCount: batches.length };
+  return { rows, queryCount: totalQueries };
 }
 
 export async function GET(request: Request) {
@@ -115,56 +133,82 @@ export async function GET(request: Request) {
       ? PRODUCT_FIELDS
       : PRODUCT_FIELDS.replace(",metadata,", ",")
   ) as typeof PRODUCT_FIELDS;
-  let query = service.from("products").select(selectFields, { count: "exact" });
+  const buildProductsQuery = () => {
+    let q = service.from("products").select(selectFields, { count: "exact" });
+    if (search) {
+      const escaped = search.replace(/[%,()\\]/g, "").trim();
+      if (escaped) q = q.or(`name.ilike.%${escaped}%,slug.ilike.%${escaped}%`);
+    }
+    if (categoryId && categoryId !== "all") {
+      q = q.eq("category_id", categoryId);
+    } else if (categoryIds.length > 0) {
+      q = q.in("category_id", categoryIds);
+    }
+    if (status && status !== "all") q = q.eq("status", status);
+    if (deliveryType && deliveryType !== "all" && !operationalScan) q = q.eq("delivery_type", deliveryType);
+    if (filters.productType === "multi_sku") q = q.eq("has_skus", true);
+    if (filters.productType === "single_product") q = q.eq("has_skus", false);
 
-  if (search) {
-    const escaped = search.replace(/[%,]/g, "");
-    query = query.or(`name.ilike.%${escaped}%,slug.ilike.%${escaped}%`);
-  }
-  if (categoryId && categoryId !== "all") {
-    query = query.eq("category_id", categoryId);
-  } else if (categoryIds.length > 0) {
-    query = query.in("category_id", categoryIds);
-  }
-  if (status && status !== "all") query = query.eq("status", status);
-  if (deliveryType && deliveryType !== "all" && !operationalScan) query = query.eq("delivery_type", deliveryType);
-  if (filters.productType === "multi_sku") query = query.eq("has_skus", true);
-  if (filters.productType === "single_product") query = query.eq("has_skus", false);
+    const ordered =
+      sortBy === "updated_at"
+        ? q.order("updated_at", { ascending: false }).order("sort_order", { ascending: true })
+        : q.order("sort_order", { ascending: true }).order("updated_at", { ascending: false });
+    return ordered.order("id", { ascending: true });
+  };
 
-  const sortedQuery =
-    sortBy === "updated_at"
-      ? query.order("updated_at", { ascending: false }).order("sort_order", { ascending: true })
-      : query.order("sort_order", { ascending: true }).order("updated_at", { ascending: false });
+  let productRows: Array<Record<string, unknown>> = [];
+  let count: number | null = null;
+  let productQueryCount = 1;
 
-  const { data, error, count } = await sortedQuery
-    .order("id", { ascending: true })
-    .range(operationalScan ? 0 : from, operationalScan ? PRODUCT_SCAN_LIMIT - 1 : to);
-  if (error) {
-    console.error("[AdminProductList] read failed", { requestId, code: error.code, message: error.message });
-    return productFailureResponse("PRODUCT_LIST_READ_FAILED", "商品列表读取失败，请稍后重试", requestId, 500);
-  }
-
-  if (operationalScan && (count ?? 0) > PRODUCT_SCAN_LIMIT) {
-    return productFailureResponse(
-      "PRODUCT_FILTER_SCOPE_TOO_LARGE",
-      "当前筛选范围过大，请先增加搜索、分类或商品状态条件",
-      requestId,
-      400
+  if (operationalScan) {
+    const scanResult = await selectAllPaginated<Record<string, unknown>>(
+      (rangeFrom, rangeTo) =>
+        buildProductsQuery().range(rangeFrom, rangeTo) as unknown as PromiseLike<{
+          data: Array<Record<string, unknown>> | null;
+          error: { code?: string; message?: string } | null;
+          count?: number | null;
+        }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: PRODUCT_SCAN_LIMIT }
     );
+    productQueryCount = scanResult.queryCount;
+    if (scanResult.error) {
+      console.error("[AdminProductList] read failed", {
+        requestId,
+        code: scanResult.error.code,
+        message: scanResult.error.message,
+      });
+      return productFailureResponse("PRODUCT_LIST_READ_FAILED", "商品列表读取失败，请稍后重试", requestId, 500);
+    }
+    count = scanResult.totalCount;
+    if ((count ?? 0) > PRODUCT_SCAN_LIMIT) {
+      return productFailureResponse(
+        "PRODUCT_FILTER_SCOPE_TOO_LARGE",
+        "当前筛选范围过大，请先增加搜索、分类或商品状态条件",
+        requestId,
+        400
+      );
+    }
+    if (scanResult.truncated || count === null || count !== scanResult.rows.length) {
+      return productFailureResponse("PRODUCT_FILTER_SCAN_INCOMPLETE", "筛选数据未完整返回，请缩小范围后重试", requestId, 503);
+    }
+    productRows = scanResult.rows;
+  } else {
+    const { data, error, count: singleCount } = await buildProductsQuery().range(from, to);
+    if (error) {
+      console.error("[AdminProductList] read failed", { requestId, code: error.code, message: error.message });
+      return productFailureResponse("PRODUCT_LIST_READ_FAILED", "商品列表读取失败，请稍后重试", requestId, 500);
+    }
+    productRows = (data ?? []) as Array<Record<string, unknown>>;
+    count = singleCount ?? 0;
   }
 
-  if (operationalScan && (count === null || count !== (data ?? []).length)) {
-    return productFailureResponse("PRODUCT_FILTER_SCAN_INCOMPLETE", "筛选数据未完整返回，请缩小范围后重试", requestId, 503);
-  }
-
-  const productRows = (data ?? []) as Array<Record<string, unknown>>;
   if (liteMode) {
     const response = jsonResponse({
       success: true,
-      data: { products: productRows, count: count ?? 0, query_count: 1 },
+      data: { products: productRows, count: count ?? 0, query_count: productQueryCount },
       products: productRows,
       count: count ?? 0,
-      query_count: 1,
+      query_count: productQueryCount,
       request_id: requestId,
     });
     response.headers.set("X-Request-ID", requestId);
@@ -204,7 +248,7 @@ export async function GET(request: Request) {
     : { products: decorateAdminCatalogProducts(productRows, skuResult.rows, filters, inventoryContext), count: count ?? 0 };
   const products = filtered.products;
   const filteredCount = filtered.count;
-  const queryCount = 1 + skuResult.queryCount + inventoryResult.queryCount;
+  const queryCount = productQueryCount + skuResult.queryCount + inventoryResult.queryCount;
 
   const response = jsonResponse({
     success: true,

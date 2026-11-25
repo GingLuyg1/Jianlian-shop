@@ -63,7 +63,8 @@ export const PAYMENT_METHOD_OPTIONS: PaymentMethodOption[] = [
 ];
 
 export function normalizePaymentMethod(value: unknown): PaymentMethodCode | null {
-  const method = String(value ?? "").trim();
+  const raw = String(value ?? "").trim();
+  const method = raw === "wechat" ? "wechat_pay" : raw;
   return PAYMENT_METHODS.includes(method as PaymentMethodCode) ? (method as PaymentMethodCode) : null;
 }
 

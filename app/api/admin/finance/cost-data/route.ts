@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireApiAdmin } from "@/lib/admin/api-auth";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { chunkArray, POSTGREST_PAGE_SIZE, selectAllPaginated } from "@/lib/supabase/paginated-select";
 
 export const dynamic = "force-dynamic";
 
@@ -52,52 +53,86 @@ export async function GET(request: Request) {
       ? new Date(sinceParam).toISOString()
       : fallbackSince;
 
+  const warnings: string[] = [];
+
   const [ordersRes, orderItemsRes, sfrRes] = await Promise.all([
-    service
-      .from("orders")
-      .select("id,payment_method,payment_status,total_amount,created_at")
-      .gte("created_at", sinceIso)
-      .range(0, 4999),
-    service
-      .from("order_items")
-      .select("id,order_id,product_id,sku_id,product_name,sku_title,quantity,unit_price,line_total,created_at")
-      .gte("created_at", sinceIso)
-      .range(0, 4999),
-    service
-      .from("supplier_fulfillment_requests")
-      .select("id,order_id,order_item_id,supplier,status,supplier_unit_price,supplier_total_price,created_at")
-      .gte("created_at", sinceIso)
-      .range(0, 4999),
+    selectAllPaginated<{ id: string; payment_method?: string | null; payment_status?: string | null; total_amount?: number | string | null; created_at?: string | null }>(
+      (from, to) =>
+        service
+          .from("orders")
+          .select("id,payment_method,payment_status,total_amount,created_at")
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 20000 }
+    ),
+    selectAllPaginated<{
+      id: string;
+      order_id: string;
+      product_id: string | null;
+      sku_id: string | null;
+      product_name: string | null;
+      sku_title: string | null;
+      quantity: number | string | null;
+      unit_price: number | string | null;
+      line_total: number | string | null;
+      created_at: string;
+    }>(
+      (from, to) =>
+        service
+          .from("order_items")
+          .select("id,order_id,product_id,sku_id,product_name,sku_title,quantity,unit_price,line_total,created_at")
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 20000 }
+    ),
+    selectAllPaginated<{
+      order_item_id?: string | null;
+      supplier?: string | null;
+      status?: string | null;
+      supplier_unit_price?: number | string | null;
+      supplier_total_price?: number | string | null;
+    }>(
+      (from, to) =>
+        service
+          .from("supplier_fulfillment_requests")
+          .select("id,order_id,order_item_id,supplier,status,supplier_unit_price,supplier_total_price,created_at")
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 20000 }
+    ),
   ]);
 
-  const orderItems = (!orderItemsRes.error ? orderItemsRes.data ?? [] : []) as Array<{
-    id: string;
-    order_id: string;
-    product_id: string | null;
-    sku_id: string | null;
-    product_name: string | null;
-    sku_title: string | null;
-    quantity: number | string | null;
-    unit_price: number | string | null;
-    line_total: number | string | null;
-    created_at: string;
-  }>;
+  if (ordersRes.error) warnings.push("订单支付方式读取部分失败");
+  if (orderItemsRes.error) warnings.push("订单明细读取失败");
+  if (sfrRes.error) warnings.push("供应商履约成本读取失败");
+
+  const orderItems = orderItemsRes.error ? [] : orderItemsRes.rows;
 
   const skuIds = Array.from(new Set(orderItems.map((i) => i.sku_id).filter((v): v is string => Boolean(v))));
   const productIds = Array.from(new Set(orderItems.map((i) => i.product_id).filter((v): v is string => Boolean(v))));
 
-  const [skusRes, productsRes] = await Promise.all([
-    skuIds.length > 0
-      ? service.from("product_skus").select("id,product_id,price,metadata").in("id", skuIds)
-      : Promise.resolve({ data: [], error: null }),
-    productIds.length > 0
-      ? service.from("products").select("id,metadata").in("id", productIds)
-      : Promise.resolve({ data: [], error: null }),
+  const skuChunks = chunkArray(skuIds, 200);
+  const productChunks = chunkArray(productIds, 200);
+
+  const [skuChunkResults, productChunkResults] = await Promise.all([
+    Promise.all(
+      skuChunks.map((ids) =>
+        service.from("product_skus").select("id,product_id,price,metadata").in("id", ids)
+      )
+    ),
+    Promise.all(
+      productChunks.map((ids) =>
+        service.from("products").select("id,metadata").in("id", ids)
+      )
+    ),
   ]);
 
   const orderPaymentMethodById: Record<string, string> = {};
-  if (!ordersRes.error && Array.isArray(ordersRes.data)) {
-    for (const row of ordersRes.data as Array<{ id: string; payment_method?: string | null }>) {
+  if (!ordersRes.error) {
+    for (const row of ordersRes.rows) {
       orderPaymentMethodById[row.id] = String(row.payment_method ?? "").trim().toLowerCase();
     }
   }
@@ -106,14 +141,8 @@ export async function GET(request: Request) {
     string,
     { unitCostCny: number; totalCostCny: number; supplier: string; status: string }
   > = {};
-  if (!sfrRes.error && Array.isArray(sfrRes.data)) {
-    for (const row of sfrRes.data as Array<{
-      order_item_id?: string | null;
-      supplier?: string | null;
-      status?: string | null;
-      supplier_unit_price?: number | string | null;
-      supplier_total_price?: number | string | null;
-    }>) {
+  if (!sfrRes.error) {
+    for (const row of sfrRes.rows) {
       if (!row.order_item_id) continue;
       const unitPrice = toFiniteNumber(row.supplier_unit_price);
       const totalPrice = toFiniteNumber(row.supplier_total_price);
@@ -134,16 +163,24 @@ export async function GET(request: Request) {
   }
 
   const skuCostBySkuId: Record<string, { costCny: number; source: string }> = {};
-  if (!skusRes.error && Array.isArray(skusRes.data)) {
-    for (const row of skusRes.data as Array<{ id: string; metadata?: unknown }>) {
+  for (const res of skuChunkResults) {
+    if (res.error) {
+      warnings.push("部分 SKU 成本配置读取失败");
+      continue;
+    }
+    for (const row of (res.data ?? []) as Array<{ id: string; metadata?: unknown }>) {
       const parsed = extractExplicitCostCny(row.metadata);
       if (parsed) skuCostBySkuId[row.id] = parsed;
     }
   }
 
   const productCostByProductId: Record<string, { costCny: number; source: string }> = {};
-  if (!productsRes.error && Array.isArray(productsRes.data)) {
-    for (const row of productsRes.data as Array<{ id: string; metadata?: unknown }>) {
+  for (const res of productChunkResults) {
+    if (res.error) {
+      warnings.push("部分商品成本配置读取失败");
+      continue;
+    }
+    for (const row of (res.data ?? []) as Array<{ id: string; metadata?: unknown }>) {
       const parsed = extractExplicitCostCny(row.metadata);
       if (parsed) productCostByProductId[row.id] = parsed;
     }
@@ -155,5 +192,6 @@ export async function GET(request: Request) {
     productCostByProductId,
     orderPaymentMethodById,
     orderItems,
+    warnings,
   });
 }

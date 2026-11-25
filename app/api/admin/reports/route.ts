@@ -2,6 +2,7 @@
 
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { loadBusinessReport, normalizeReportError, normalizeReportRange } from "@/lib/reports/business-reports";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,8 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const range = normalizeReportRange(url.searchParams.get("start"), url.searchParams.get("end"));
-    const report = await loadBusinessReport(admin.supabase, range);
+    const reader = getSupabaseServiceRoleClient() ?? admin.supabase;
+    const report = await loadBusinessReport(reader, range);
     return NextResponse.json(report);
   } catch (error) {
     return NextResponse.json({ error: normalizeReportError(error, "经营报表加载失败") }, { status: 400 });

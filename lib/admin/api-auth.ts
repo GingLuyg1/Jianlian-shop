@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type AdminProfile = {
   role?: string | null;
@@ -26,11 +27,18 @@ export function isAdminProfile(profile: AdminProfile | null | undefined) {
 }
 
 function isMissingAdminUsersSchema(error: { code?: string; message?: string } | null) {
-  return Boolean(error && /42P01|PGRST205|admin_users|schema cache/i.test(`${error.code ?? ""} ${error.message ?? ""}`));
+  if (!error) return false;
+  const code = String(error.code ?? "").trim().toUpperCase();
+  if (code === "42P01" || code === "PGRST205") return true;
+  const message = String(error.message ?? "");
+  return /(?:relation|table) .*admin_users.* does not exist|Could not find the table .*admin_users.* in the schema cache/i.test(message);
 }
 
 async function loadAdminAuthorization(supabase: ReturnType<typeof getSupabaseServerClient>, userId: string) {
-  const { data, error } = await supabase
+  // Always read admin_users via service role when available so disabled rows
+  // are explicitly returned and never bypassed via RLS.
+  const reader = getSupabaseServiceRoleClient() ?? supabase;
+  const { data, error } = await reader
     .from("admin_users")
     .select("user_id,admin_level,status,permissions")
     .eq("user_id", userId)
@@ -65,7 +73,15 @@ export async function requireApiAdmin() {
   const userContext = await requireApiUser();
   if (!userContext.ok) return userContext;
 
-  const authorizationResult = await loadAdminAuthorization(userContext.supabase, userContext.user.id);
+  const [authorizationResult, profileResult] = await Promise.all([
+    loadAdminAuthorization(userContext.supabase, userContext.user.id),
+    userContext.supabase
+      .from("profiles")
+      .select("role,email")
+      .eq("id", userContext.user.id)
+      .maybeSingle(),
+  ]);
+
   if (authorizationResult.error && !authorizationResult.schemaMissing) {
     return { ok: false as const, response: permissionError("无法验证后台权限，请重新登录", 500) };
   }
@@ -77,20 +93,18 @@ export async function requireApiAdmin() {
     }
   }
 
-  const { data, error } = await userContext.supabase
-    .from("profiles")
-    .select("role,email")
-    .eq("id", userContext.user.id)
-    .maybeSingle();
-
-  if (error) {
+  if (profileResult.error) {
     return { ok: false as const, response: permissionError("无法验证后台权限，请重新登录", 500) };
   }
 
-  // Short-term compatibility for installations that have not yet backfilled
-  // admin_users. This fallback grants ordinary admin access only.
-  if (!authorization && !isAdminProfile(data)) {
-    return { ok: false as const, response: permissionError("无后台访问权限", 403) };
+  const data = profileResult.data;
+
+  // Strictly only allow legacy profiles.role fallback when admin_users table
+  // is genuinely absent (42P01 / PGRST205).
+  if (!authorization) {
+    if (!authorizationResult.schemaMissing || !isAdminProfile(data)) {
+      return { ok: false as const, response: permissionError("无后台访问权限", 403) };
+    }
   }
 
   return {

@@ -271,8 +271,8 @@ test("recharge review uses exact CAS, durable intent and safe post-credit reconc
   assert.match(adminPage, /禁止重复操作/);
   assert.match(adminPage, /全部充值/);
   assert.match(adminPage, /人工审核/);
-  assert.match(adminPage, /isRechargePage && selected\.source === "account_recharges" \? <RechargeReviewPanel[\s\S]*?embedded/);
-  assert.match(adminPage, /!isRechargePage && selected\.source === "account_recharges" \? <RechargeReviewPanel/);
+  assert.match(adminPage, /selected\.source === "account_recharges" \? <RechargeReviewPanel[\s\S]*?embedded/);
+  assert.doesNotMatch(adminPage, /!isRechargePage && selected\.source === "account_recharges" \? <RechargeReviewPanel/);
   assert.match(adminPage, /embedded \? "rounded-xl border bg-white p-4"/);
   assert.doesNotMatch(adminPage, /function RechargeReviewOverlay/);
   assert.match(adminRechargeListRoute, /searchParams\.get\("view"\) === "review"/);

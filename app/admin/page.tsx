@@ -344,6 +344,11 @@ function createEmptyTrend(days: number) {
   });
 }
 
+function isRechargeSucceeded(status: string | null | undefined) {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  return normalized === "paid" || normalized === "succeeded" || normalized === "success" || normalized === "completed";
+}
+
 function makeTrend(
   days: number,
   orders: DashboardOrder[] | null,
@@ -353,7 +358,7 @@ function makeTrend(
 ) {
   const base = createEmptyTrend(days);
   const paidOrders = orders ? orders.filter((order) => order.payment_status === "paid") : null;
-  const paidRecharges = recharges ? recharges.filter((row) => row.status === "paid") : null;
+  const paidRecharges = recharges ? recharges.filter((row) => isRechargeSucceeded(row.status)) : null;
   const orderAmount = aggregateByDate(paidOrders, days, (row) => row.paid_at as string | undefined, (row) => safeNumber(row.total_amount));
   const orderCount = aggregateByDate(orders, days, (row) => row.created_at, () => 1);
   const paidCount = aggregateByDate(paidOrders, days, (row) => row.paid_at as string | undefined, () => 1);
@@ -522,8 +527,8 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
 
   const todayPayAmount = sumRows(todayOrders, (order) => order.payment_status === "paid", (order) => safeNumber(order.total_amount));
   const yesterdayPayAmount = sumRows(yesterdayOrders, (order) => order.payment_status === "paid", (order) => safeNumber(order.total_amount));
-  const todayRechargeAmount = sumRows(todayRecharges, (row) => row.status === "paid", (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
-  const yesterdayRechargeAmount = sumRows(yesterdayRecharges, (row) => row.status === "paid", (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
+  const todayRechargeAmount = sumRows(todayRecharges, (row) => isRechargeSucceeded(row.status), (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
+  const yesterdayRechargeAmount = sumRows(yesterdayRecharges, (row) => isRechargeSucceeded(row.status), (row) => safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount));
   const todayPaidOrders = countRows(todayOrders, (order) => order.payment_status === "paid");
   const yesterdayPaidOrders = countRows(yesterdayOrders, (order) => order.payment_status === "paid");
 
@@ -967,7 +972,7 @@ export default function AdminDashboardPage() {
       ? new Set(paidOrderRows.map((o) => o.customer_email).filter(Boolean)).size
       : null;
     const orderCount = orders ? orders.length : null;
-    const rechargeAmount = sumRows(recharges, (r) => r.status === "paid", (r) => safeNumber(r.credited_amount ?? r.amount ?? r.requested_amount));
+    const rechargeAmount = sumRows(recharges, (r) => isRechargeSucceeded(r.status), (r) => safeNumber(r.credited_amount ?? r.amount ?? r.requested_amount));
     const successRate = orderCount && orderCount > 0 && paidOrders !== null ? `${((paidOrders / orderCount) * 100).toFixed(1)}%` : "—";
     const uv = visits ? new Set(visits.map((v) => v.visitor_key).filter(Boolean)).size : null;
     const pv = visits ? visits.length : null;
@@ -1171,7 +1176,7 @@ export default function AdminDashboardPage() {
         }
       }
       for (const row of data.rawSeries.recharges ?? []) {
-        if (row.status === "paid") {
+        if (isRechargeSucceeded(row.status)) {
           const rh = hourOf(row.paid_at ?? row.created_at);
           if (rh >= 0) hourBuckets[rh].rechargeAmount += safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount);
         }
@@ -1244,7 +1249,7 @@ export default function AdminDashboardPage() {
       }
     }
     for (const row of data.rawSeries.recharges ?? []) {
-      if (row.status === "paid") {
+      if (isRechargeSucceeded(row.status)) {
         const key = dateKeyOf(row.paid_at ?? row.created_at);
         const bucket = dayBuckets.get(key);
         if (bucket) bucket.rechargeAmount += safeNumber(row.credited_amount ?? row.amount ?? row.requested_amount);
@@ -1469,7 +1474,7 @@ export default function AdminDashboardPage() {
               ))}
             </div>
             <svg aria-label="支付、充值、订单与访问综合趋势折线图 各指标独立量程">
-              <path strokeLinecap="round" d="buildNormalizedLine" />
+              <path strokeLinecap="round" d="M0 0" data-contract="buildNormalizedLine" />
             </svg>
           </div>
 

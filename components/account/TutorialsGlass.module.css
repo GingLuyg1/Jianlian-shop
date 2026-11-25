@@ -44,7 +44,6 @@
 .subtopics[data-guide=security] .subtopicIndicator,
 .subtopics[data-guide=binding] .subtopicIndicator,
 .subtopics[data-guide=region] .subtopicIndicator,
-.subtopics[data-guide=student-discount] .subtopicIndicator,
 .subtopics[data-guide=x-2fa] .subtopicIndicator {
   transform: translateY(36px);
 }
@@ -54,7 +53,8 @@
 .subtopics[data-guide=x-renew-token] .subtopicIndicator {
   transform: translateY(72px);
 }
-.subtopics[data-guide=anti-ban] .subtopicIndicator {
+.subtopics[data-guide=anti-ban] .subtopicIndicator,
+.subtopics[data-guide=student-discount] .subtopicIndicator {
   transform: translateY(108px);
 }
 .subtopics[data-guide=unban] .subtopicIndicator {

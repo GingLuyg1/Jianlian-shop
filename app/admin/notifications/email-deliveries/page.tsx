@@ -1,6 +1,5 @@
-import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
-import { businessTypeLabel } from '@/lib/admin/display-labels';
-﻿import Link from "next/link";
+import { statusLabel as adminUnknownStatusLabel, businessTypeLabel } from "@/lib/admin/display-labels";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertCircle, CheckCircle2, MailCheck } from "lucide-react";
 
@@ -66,7 +65,7 @@ export default async function EmailDeliveriesPage(props: { searchParams?: Promis
     <AdminPageShell
       variant="v2"
       title="邮件发送记录"
-      description="查询邮件任务、发送状态、失败原因和 支付平台 状态；页面不展示完整邮箱或邮件正文。"
+      description="查询邮件任务、发送状态、失败原因和邮件服务商状态；页面不展示完整邮箱或邮件正文。"
       actions={<Button asChild variant="outline"><Link href="/admin/notifications/email-templates">邮件模板</Link></Button>}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
@@ -75,12 +74,12 @@ export default async function EmailDeliveriesPage(props: { searchParams?: Promis
             {provider.configured ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">邮件 支付平台</span>
+                <span className="text-sm font-semibold text-[var(--admin-v2-text-primary)]">邮件服务商</span>
                 <AdminStatusBadge tone="neutral">{provider.provider}</AdminStatusBadge>
                 <AdminStatusBadge tone={provider.configured ? "success" : "warning"}>{provider.configured ? "已配置" : "未配置"}</AdminStatusBadge>
               </div>
               <p className="text-xs text-[var(--admin-v2-text-secondary)]">
-                {provider.configured ? provider.message : `缺少配置：${provider.missing.join("、") || "支付平台 配置"}`}
+                {provider.configured ? provider.message : `缺少配置：${provider.missing.join("、") || "邮件服务商配置"}`}
               </p>
             </div>
           </div>
@@ -124,7 +123,7 @@ export default async function EmailDeliveriesPage(props: { searchParams?: Promis
                   <th className="px-4 py-3">收件人</th>
                   <th className="px-4 py-3 text-center">状态</th>
                   <th className="px-4 py-3 text-center">尝试</th>
-                  <th className="px-4 py-3 text-center">支付平台</th>
+                  <th className="px-4 py-3 text-center">邮件服务商</th>
                   <th className="px-4 py-3">错误摘要</th>
                   <th className="px-4 py-3 text-center">操作</th>
                 </tr>
@@ -155,7 +154,7 @@ export default async function EmailDeliveriesPage(props: { searchParams?: Promis
 
 function AdminEmailPageState({ title, message }: { title: string; message: string }) {
   return (
-    <AdminPageShell title="邮件发送记录" description="查询邮件任务、发送状态和 支付平台 状态。">
+    <AdminPageShell title="邮件发送记录" description="查询邮件任务、发送状态和邮件服务商状态。">
       <AdminErrorState title={title} description={message} />
     </AdminPageShell>
   );

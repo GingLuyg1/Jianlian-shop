@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -38,14 +38,58 @@ export default function OrderFulfillmentPanel({
   const [contentByItem, setContentByItem] = useState<Record<string, string>>({});
   const [noteByItem, setNoteByItem] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [retryingAuto, setRetryingAuto] = useState(false);
+  const submitLockRef = useRef(false);
+  const retryLockRef = useRef(false);
 
   const summaries = useMemo(
     () => summarizeFulfillmentItems(order.order_items ?? [], order.order_deliveries ?? []),
     [order.order_deliveries, order.order_items]
   );
   const aggregateStatus = computeOrderFulfillmentStatus(summaries);
+  const hasPendingAutoDelivery = useMemo(
+    () =>
+      order.payment_status === "paid" &&
+      !["cancelled", "expired", "refunded", "failed"].includes(order.status) &&
+      summaries.some(
+        (item) =>
+          item.deliveryType === "auto_delivery" &&
+          item.deliveryStatus !== "delivered" &&
+          item.deliveryStatus !== "not_required"
+      ),
+    [order.payment_status, order.status, summaries]
+  );
+
+  async function retryAutoDelivery() {
+    if (retryingAuto || retryLockRef.current) return;
+    if (!window.confirm("确认重新触发该订单的自动发货流程（将先检查本地卡密库存，再按商品绑定走供应商自动采购）？")) return;
+
+    retryLockRef.current = true;
+    setRetryingAuto(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry_auto_delivery" }),
+      });
+      const result = (await response.json().catch(() => null)) as { error?: string; deliveredCount?: number } | null;
+      if (!response.ok) throw new Error(result?.error ?? "重试自动发货失败");
+      toast.success(
+        result?.deliveredCount && result.deliveredCount > 0
+          ? `自动发货已完成（共交付 ${result.deliveredCount} 项）`
+          : "已触发自动发货检查"
+      );
+      await onReload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "重试自动发货失败");
+    } finally {
+      retryLockRef.current = false;
+      setRetryingAuto(false);
+    }
+  }
 
   async function submitManualDelivery(itemId: string) {
+    if (saving || submitLockRef.current) return;
     const content = (contentByItem[itemId] ?? "").trim();
     const note = (noteByItem[itemId] ?? "").trim();
     if (!content) {
@@ -54,6 +98,7 @@ export default function OrderFulfillmentPanel({
     }
     if (!window.confirm("确认提交该订单项的人工交付内容？提交后当前版本不支持重复提交。")) return;
 
+    submitLockRef.current = true;
     setSaving(true);
     setActiveItemId(itemId);
     try {
@@ -71,6 +116,7 @@ export default function OrderFulfillmentPanel({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "人工交付失败");
     } finally {
+      submitLockRef.current = false;
       setSaving(false);
       setActiveItemId("");
     }
@@ -80,9 +126,22 @@ export default function OrderFulfillmentPanel({
     <section className="rounded-xl border">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div className="font-semibold">订单项交付状态</div>
-        <Badge variant="outline" className={statusClass(aggregateStatus)}>
-          {getOrderFulfillmentStatusLabel(aggregateStatus)}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          {hasPendingAutoDelivery ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={retryingAuto || saving}
+              onClick={() => void retryAutoDelivery()}
+            >
+              {retryingAuto ? "自动发货重试中..." : "重试自动发货"}
+            </Button>
+          ) : null}
+          <Badge variant="outline" className={statusClass(aggregateStatus)}>
+            {getOrderFulfillmentStatusLabel(aggregateStatus)}
+          </Badge>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] text-sm">

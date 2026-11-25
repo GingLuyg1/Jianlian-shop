@@ -38,3 +38,19 @@ test('zero cost scope is backed by the existing internal settlement implementati
  assert.doesNotMatch(service,/createPaymentSession|createPayment\(|queryPayment\(/);
  assert.doesNotMatch(sql,/http_post|net\.http|payment_sessions/i);
 });
+test('alipay/wechat/wechat_pay orders query payment_sessions.payable_amount instead of nonexistent amount column',async()=>{
+ for(const [paymentMethod,expectedProvider] of [['alipay','alipay'],['wechat','wechat'],['wechat_pay','wechat']]) {
+  let selectedCols='';
+  const service={from(table){
+   const b={select(cols){if(table==='payment_sessions')selectedCols=cols;return b;},eq(){return b;},in(){return b;},limit(){return b;},single(){return b;},
+    then(resolve){return Promise.resolve({data:table==='orders'?{id,user_id:user,payment_status:'paid',payment_method:paymentMethod,currency:'CNY',total_amount:'5.08'}:[{id:'00000000-0000-4000-8000-000000000009',provider_transaction_id:'TX_001',status:'paid',payable_amount:5.08}],error:null}).then(resolve);}};
+   return b;
+  }};
+  const r=await get(service,id);
+  assert.equal(r.settlementKind,'payment_session');
+  assert.equal(r.provider,expectedProvider);
+  assert.equal(r.transactionNo,'TX_001');
+  assert.match(selectedCols,/\bpayable_amount\b/);
+  assert.doesNotMatch(selectedCols,/(^|,)amount(,|$)/);
+ }
+});

@@ -434,11 +434,19 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
       const response = await fetch(`/api/admin/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update_status", status: nextStatus, adminNote: note.trim() }),
+        body: JSON.stringify({ action: "update_status", status: nextStatus, admin_note: note.trim(), adminNote: note.trim() }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || "订单状态更新失败");
-      onUpdated(payload.order);
+      const mergedOrder = payload?.order
+        ? {
+            ...order,
+            ...payload.order,
+            order_items: payload.order.order_items ?? order.order_items,
+            items: payload.order.items ?? (order as unknown as { items?: unknown }).items,
+          }
+        : order;
+      onUpdated(mergedOrder);
       toast.success("订单状态已更新");
       void loadRelations();
     } catch (err) {

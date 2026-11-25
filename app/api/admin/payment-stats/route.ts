@@ -3,6 +3,7 @@
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { adminOrderPaymentSelect, adminRechargeSelect, isPaymentSchemaMissing, normalizeOrderPaymentRow, normalizeRechargeRow } from "@/lib/payments/admin-payment-queries";
 import type { AdminPaymentRecord } from "@/lib/payments/admin-payment-types";
+import { getShanghaiTodayStartIso, POSTGREST_PAGE_SIZE, selectAllPaginated } from "@/lib/supabase/paginated-select";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,36 @@ export async function GET() {
   const admin = await getServerAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
 
+  const todayStartIso = getShanghaiTodayStartIso();
+
   try {
     const [orderResult, rechargeResult, orderExceptionResult, rechargeExceptionResult] = await Promise.all([
-      admin.supabase.from("order_payments").select(adminOrderPaymentSelect).limit(1000),
-      admin.supabase.from("account_recharges").select(adminRechargeSelect).limit(1000),
+      selectAllPaginated<Record<string, unknown>>(
+        (from, to) =>
+          admin.supabase
+            .from("order_payments")
+            .select(adminOrderPaymentSelect)
+            .gte("created_at", todayStartIso)
+            .order("created_at", { ascending: false })
+            .range(from, to) as unknown as PromiseLike<{
+            data: Record<string, unknown>[] | null;
+            error: { code?: string; message?: string } | null;
+          }>,
+        { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+      ),
+      selectAllPaginated<Record<string, unknown>>(
+        (from, to) =>
+          admin.supabase
+            .from("account_recharges")
+            .select(adminRechargeSelect)
+            .gte("created_at", todayStartIso)
+            .order("created_at", { ascending: false })
+            .range(from, to) as unknown as PromiseLike<{
+            data: Record<string, unknown>[] | null;
+            error: { code?: string; message?: string } | null;
+          }>,
+        { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+      ),
       admin.supabase.from("order_payments").select("id", { count: "exact", head: true }).not("exception_type", "is", null),
       admin.supabase.from("account_recharges").select("id", { count: "exact", head: true }).not("exception_type", "is", null),
     ]);
@@ -22,13 +49,10 @@ export async function GET() {
     if (orderExceptionResult.error) throw orderExceptionResult.error;
     if (rechargeExceptionResult.error && !isPaymentSchemaMissing(rechargeExceptionResult.error)) throw rechargeExceptionResult.error;
 
-    const rows: AdminPaymentRecord[] = [
-      ...((orderResult.data ?? []) as Record<string, unknown>[]).map(normalizeOrderPaymentRow),
-      ...((rechargeResult.data ?? []) as Record<string, unknown>[]).map(normalizeRechargeRow),
+    const todayRows: AdminPaymentRecord[] = [
+      ...orderResult.rows.map(normalizeOrderPaymentRow),
+      ...rechargeResult.rows.map(normalizeRechargeRow),
     ];
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const todayRows = rows.filter((row) => new Date(row.created_at).getTime() >= start);
     const paidToday = todayRows.filter((row) => row.status === "paid");
     const orderPaidToday = paidToday.filter((row) => row.business_type === "order");
     const rechargePaidToday = paidToday.filter((row) => row.business_type === "recharge");

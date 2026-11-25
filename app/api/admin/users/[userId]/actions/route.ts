@@ -44,7 +44,11 @@ export async function POST(request: Request, context: RouteContext) {
   if (!isUuid(userId)) return json({ error: "用户编号格式无效。" }, { status: 400 });
   const action = String(body.action ?? "").trim();
   const reason = String(body.reason ?? "").trim();
-  const requestId = String(body.requestId ?? randomUUID()).trim();
+  const clientRequestId = typeof body.requestId === "string" ? body.requestId.trim() : "";
+  if (action === "adjust_balance" && !clientRequestId) {
+    return json({ error: "余额调账必须提供有效的幂等请求编号（requestId）。" }, { status: 400 });
+  }
+  const requestId = clientRequestId || randomUUID();
 
   if (!reason) return json({ error: "请填写操作原因。" }, { status: 400 });
   if (!requestId || requestId.length > 160) return json({ error: "缺少有效的请求编号。" }, { status: 400 });

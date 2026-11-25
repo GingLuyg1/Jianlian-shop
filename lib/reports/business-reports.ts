@@ -67,14 +67,27 @@ function addAmount(map: Record<string, number>, key: string, amount: number) {
   map[key] = (map[key] ?? 0) + amount;
 }
 
-async function safeSelect<T = Row[]>(label: string, promise: PromiseLike<{ data: any; error: any }>, errors: ReportErrorMap): Promise<T> {
+async function safeSelectAll(
+  label: string,
+  buildPageQuery: (from: number, to: number) => PromiseLike<{ data: any; error: any }>,
+  errors: ReportErrorMap,
+  maxRows = 10000
+): Promise<Row[]> {
   try {
-    const { data, error } = await promise;
-    if (error) throw error;
-    return (data ?? []) as T;
+    const pageSize = 1000;
+    const rows: Row[] = [];
+    for (let offset = 0; offset < maxRows; offset += pageSize) {
+      const end = Math.min(offset + pageSize - 1, maxRows - 1);
+      const { data, error } = await buildPageQuery(offset, end);
+      if (error) throw error;
+      const batch = Array.isArray(data) ? (data as Row[]) : [];
+      rows.push(...batch);
+      if (batch.length < end - offset + 1) break;
+    }
+    return rows;
   } catch (error) {
     errors[label] = normalizeReportError(error, `${label}读取失败`);
-    return [] as T;
+    return [];
   }
 }
 
@@ -91,19 +104,132 @@ export function normalizeReportRange(start?: string | null, end?: string | null)
 export async function loadBusinessReport(supabase: SupabaseClient, range: ReportRange) {
   const errors: ReportErrorMap = {};
   const [orders, payments, recharges, refunds, profiles, products, skus, inventory, deliveries, balanceTransactions] = await Promise.all([
-    safeSelect<Row[]>("订单", supabase.from("orders").select("id,order_no,user_id,status,payment_status,payment_method,total_amount,subtotal,currency,created_at,paid_at,delivery_type,customer_email,order_items(id,product_id,sku_id,sku_title,product_name,quantity,unit_price,line_total,delivery_status,delivery_type,created_at)").gte("created_at", range.start).lte("created_at", range.end).limit(5000), errors),
-    safeSelect<Row[]>("支付", supabase.from("order_payments").select("id,order_id,user_id,payment_no,channel,network,payment_method,status,amount,business_amount,payable_amount,received_amount,fee_amount,currency,created_at,paid_at,orders(order_no,customer_email)").gte("created_at", range.start).lte("created_at", range.end).limit(5000), errors),
-    safeSelect<Row[]>("充值", supabase.from("account_recharges").select("id,recharge_no,user_id,user_email,channel,channel_code,network,status,amount,requested_amount,credited_amount,fee_amount,currency,created_at,paid_at").gte("created_at", range.start).lte("created_at", range.end).limit(5000), errors),
-    safeSelect<Row[]>("退款", supabase.from("refund_requests").select("id,refund_no,order_id,user_id,status,refund_method,approved_amount,requested_amount,currency,created_at,completed_at,orders(order_no)").gte("created_at", range.start).lte("created_at", range.end).limit(5000), errors),
-    safeSelect<Row[]>("用户", supabase.from("profiles").select("id,email,role,balance,account_status,risk_status,created_at,last_login_at").limit(10000), errors),
-    safeSelect<Row[]>("商品", supabase.from("products").select("id,name,slug,status,price,stock,delivery_type,created_at,updated_at").limit(10000), errors),
-    safeSelect<Row[]>("SKU", supabase.from("product_skus").select("id,product_id,title,sku_code,price,stock,status,created_at,updated_at").limit(10000), errors),
-    safeSelect<Row[]>("数字库存", supabase.from("digital_inventory").select("id,product_id,sku_id,batch_no,status,created_at,updated_at,delivered_at,reserved_at").limit(10000), errors),
-    safeSelect<Row[]>("交付", supabase.from("order_deliveries").select("id,order_id,order_item_id,user_id,product_id,sku_id,delivery_type,delivery_status,created_at,delivered_at,updated_at").gte("created_at", range.start).lte("created_at", range.end).limit(5000), errors),
-    safeSelect<Row[]>("余额流水", supabase.from("balance_transactions").select("id,user_id,business_type,direction,amount,status,balance_before,balance_after,currency,created_at").gte("created_at", range.start).lte("created_at", range.end).limit(5000), errors),
+    safeSelectAll(
+      "订单",
+      (from, to) =>
+        supabase
+          .from("orders")
+          .select("id,order_no,user_id,status,payment_status,payment_method,total_amount,subtotal,currency,created_at,paid_at,delivery_type,customer_email,order_items(id,product_id,sku_id,sku_title,product_name,quantity,unit_price,line_total,delivery_status,delivery_type,created_at)")
+          .gte("created_at", range.start)
+          .lte("created_at", range.end)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      errors,
+      10000
+    ),
+    safeSelectAll(
+      "支付",
+      (from, to) =>
+        supabase
+          .from("order_payments")
+          .select("id,order_id,user_id,payment_no,channel,network,payment_method,status,amount,business_amount,payable_amount,received_amount,fee_amount,currency,created_at,paid_at,orders(order_no,customer_email)")
+          .gte("created_at", range.start)
+          .lte("created_at", range.end)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      errors,
+      10000
+    ),
+    safeSelectAll(
+      "充值",
+      (from, to) =>
+        supabase
+          .from("account_recharges")
+          .select("id,recharge_no,user_id,user_email,channel,channel_code,network,status,amount,requested_amount,credited_amount,fee_amount,currency,created_at,paid_at")
+          .gte("created_at", range.start)
+          .lte("created_at", range.end)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      errors,
+      10000
+    ),
+    safeSelectAll(
+      "退款",
+      (from, to) =>
+        supabase
+          .from("refund_requests")
+          .select("id,refund_no,order_id,user_id,status,refund_method,approved_amount,requested_amount,currency,created_at,completed_at,orders(order_no)")
+          .gte("created_at", range.start)
+          .lte("created_at", range.end)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      errors,
+      10000
+    ),
+    safeSelectAll(
+      "用户",
+      (from, to) =>
+        supabase
+          .from("profiles")
+          .select("id,email,role,balance,account_status,risk_status,created_at,last_login_at")
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      errors,
+      20000
+    ),
+    safeSelectAll(
+      "商品",
+      (from, to) =>
+        supabase
+          .from("products")
+          .select("id,name,slug,status,price,stock,delivery_type,created_at,updated_at")
+          .order("id", { ascending: true })
+          .range(from, to),
+      errors,
+      20000
+    ),
+    safeSelectAll(
+      "SKU",
+      (from, to) =>
+        supabase
+          .from("product_skus")
+          .select("id,product_id,sku_title,sku_code,price,stock,status,created_at,updated_at")
+          .order("id", { ascending: true })
+          .range(from, to),
+      errors,
+      20000
+    ),
+    safeSelectAll(
+      "数字库存",
+      (from, to) =>
+        supabase
+          .from("digital_inventory")
+          .select("id,product_id,sku_id,batch_no,status,created_at,updated_at,delivered_at,reserved_at")
+          .order("id", { ascending: true })
+          .range(from, to),
+      errors,
+      20000
+    ),
+    safeSelectAll(
+      "交付",
+      (from, to) =>
+        supabase
+          .from("order_deliveries")
+          .select("id,order_id,order_item_id,user_id,product_id,sku_id,delivery_type,delivery_status,created_at,delivered_at,updated_at")
+          .gte("created_at", range.start)
+          .lte("created_at", range.end)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      errors,
+      10000
+    ),
+    safeSelectAll(
+      "余额流水",
+      (from, to) =>
+        supabase
+          .from("balance_transactions")
+          .select("id,user_id,business_type,direction,amount,status,balance_before,balance_after,currency,created_at")
+          .gte("created_at", range.start)
+          .lte("created_at", range.end)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      errors,
+      10000
+    ),
   ]);
 
   const paidOrders = orders.filter((order) => order.payment_status === "paid" || PAID_ORDER_STATUSES.has(String(order.status ?? "")));
+  const paidOrderIds = new Set(paidOrders.map((order) => String(order.id)));
   const cancelledOrders = orders.filter((order) => order.status === "cancelled");
   const closedOrders = orders.filter((order) => CLOSED_ORDER_STATUSES.has(String(order.status ?? "")));
   const successfulPayments = payments.filter((payment) => SUCCESS_PAYMENT_STATUSES.has(String(payment.status ?? "")));
@@ -119,7 +245,7 @@ export async function loadBusinessReport(supabase: SupabaseClient, range: Report
     const key = formatDateKey(order.created_at);
     orderTrend[key] ??= { date: key, orders: 0, paidOrders: 0, amount: 0 };
     orderTrend[key].orders += 1;
-    if (paidOrders.includes(order)) {
+    if (paidOrderIds.has(String(order.id))) {
       orderTrend[key].paidOrders += 1;
       orderTrend[key].amount += numberValue(order.total_amount);
     }
@@ -235,7 +361,7 @@ export async function loadBusinessReport(supabase: SupabaseClient, range: Report
       recentProducts: products.filter((product) => inRange(product.created_at, range)).slice(0, 20),
       skuSalesRanking: Array.from(skuStats.values()).sort((a, b) => b.quantity - a.quantity).slice(0, 10),
       skuRevenueRanking: Array.from(skuStats.values()).sort((a, b) => b.amount - a.amount).slice(0, 10),
-      skuStockRanking: skus.map((sku) => ({ skuId: String(sku.id), name: textValue(sku.title ?? sku.sku_code), stock: numberValue(sku.stock), status: textValue(sku.status) })).sort((a, b) => a.stock - b.stock).slice(0, 20),
+      skuStockRanking: skus.map((sku) => ({ skuId: String(sku.id), name: textValue(sku.sku_title ?? sku.title ?? sku.sku_code), stock: numberValue(sku.stock), status: textValue(sku.status) })).sort((a, b) => a.stock - b.stock).slice(0, 20),
     },
     users: {
       totalUsers: profiles.length,
@@ -280,7 +406,7 @@ export async function loadBusinessReport(supabase: SupabaseClient, range: Report
 
 function csvSafe(value: unknown) {
   const text = value == null ? "" : String(value);
-  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  const safe = /^[\s\t\r\n]*[=+\-@]/.test(text) ? `'${text}` : text;
   return `"${safe.replace(/"/g, '""')}"`;
 }
 

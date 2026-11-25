@@ -33,41 +33,48 @@ const EXPORT_TYPES = [
 
 type Report = Record<string, any>;
 
+const SHANGHAI_TZ = "Asia/Shanghai";
+
 function toDateInput(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: SHANGHAI_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function shiftShanghaiYmd(ymd: string, deltaDays: number) {
+  const d = new Date(`${ymd}T12:00:00+08:00`);
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return toDateInput(d);
 }
 
 function presetRange(key: string) {
-  const now = new Date();
-  const start = new Date(now);
-  const end = new Date(now);
+  const todayKey = toDateInput(new Date());
   if (key === "today") {
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-  } else if (key === "yesterday") {
-    start.setDate(start.getDate() - 1);
-    end.setDate(end.getDate() - 1);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-  } else if (key === "30d") {
-    start.setDate(start.getDate() - 29);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-  } else if (key === "thisMonth") {
-    start.setDate(1);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-  } else if (key === "lastMonth") {
-    start.setMonth(start.getMonth() - 1, 1);
-    start.setHours(0, 0, 0, 0);
-    end.setDate(0);
-    end.setHours(23, 59, 59, 999);
-  } else {
-    start.setDate(start.getDate() - 6);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
+    return { start: todayKey, end: todayKey };
   }
-  return { start: toDateInput(start), end: toDateInput(end) };
+  if (key === "yesterday") {
+    const yesterdayKey = shiftShanghaiYmd(todayKey, -1);
+    return { start: yesterdayKey, end: yesterdayKey };
+  }
+  if (key === "30d") {
+    return { start: shiftShanghaiYmd(todayKey, -29), end: todayKey };
+  }
+  if (key === "thisMonth") {
+    return { start: `${todayKey.slice(0, 7)}-01`, end: todayKey };
+  }
+  if (key === "lastMonth") {
+    const [yearStr, monthStr] = todayKey.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const firstOfThisMonth = new Date(Date.UTC(year, month - 1, 1, 4, 0, 0));
+    const lastOfPrevMonth = new Date(firstOfThisMonth.getTime() - 24 * 3600 * 1000);
+    const endKey = toDateInput(lastOfPrevMonth);
+    return { start: `${endKey.slice(0, 7)}-01`, end: endKey };
+  }
+  return { start: shiftShanghaiYmd(todayKey, -6), end: todayKey };
 }
 
 function money(value: unknown) {

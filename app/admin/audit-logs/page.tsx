@@ -347,7 +347,7 @@ export default function AdminAuditLogsPage() {
             </colgroup>
             <thead className={adminListTableHeadClass}>
               <tr className="border-b border-[var(--admin-v2-border)]">
-                {["时间", "管理员", "模块", "操作", "目标", "结果", "IP", "请求编号", "操作"].map(
+                {["时间", "管理员", "模块", "操作动作", "目标", "结果", "IP", "请求编号", "操作"].map(
                   (heading) => (
                     <th key={heading} className="h-10 px-3 text-left font-medium whitespace-nowrap">
                       {heading}

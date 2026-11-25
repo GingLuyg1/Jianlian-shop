@@ -212,7 +212,8 @@ export default function AdminSupplierBindingSheet({ open, product, sku = null, o
     if (!window.confirm(`确认解除 ${label} 的供应商绑定？解绑后将恢复为手动交付，不再自动调用供应商下单与扣费。`)) return;
     setSaving(true);
     try {
-      const url = `/api/admin/suppliers/daju/bindings/${product.id}${sku ? `?website_sku_id=${sku.id}` : ""}`;
+      const targetSupplier = currentSupplier === "kuajingzy" ? "kuajingzy" : "daju";
+      const url = `/api/admin/suppliers/${targetSupplier}/bindings/${product.id}${sku ? `?website_sku_id=${sku.id}` : ""}`;
       const response = await fetch(url, { method: "DELETE" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "解除绑定失败");

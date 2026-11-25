@@ -439,6 +439,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
             delivery_mode: "automatic_digital_inventory" as ExtendedDeliveryMode,
             digital_inventory_product_id: row.draft.digital_inventory_product_id!.trim(),
             digital_inventory_product_name: row.draft.digital_inventory_product_name?.trim() || null,
+            expected_updated_at: row.sku!.updated_at ?? null,
           };
         });
 
@@ -450,26 +451,32 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
           cache: "no-store",
           body: JSON.stringify({ updates: preBindUpdates }),
         });
-        if (preRes.ok) {
-          const preBody = (await preRes.json().catch(() => null)) as {
-            skus?: Array<{ id: string; metadata: Record<string, unknown>; updated_at?: string | null }>;
-          } | null;
-          const updatedAtById = new Map(
-            (preBody?.skus ?? [])
-              .filter((entry) => typeof entry.updated_at === "string" && entry.updated_at)
-              .map((entry) => [entry.id, entry.updated_at as string])
-          );
-          (preBody?.skus ?? []).forEach((entry) => preBoundSkuIds.add(entry.id));
-          operations = operations.map((op) =>
-            op.type === "update" && updatedAtById.has(op.sku_id)
-              ? { ...op, expected_updated_at: updatedAtById.get(op.sku_id)! }
-              : op
-          );
+        const preBody = (await preRes.json().catch(() => null)) as {
+          error?: string;
+          code?: string;
+          skus?: Array<{ id: string; metadata: Record<string, unknown>; updated_at?: string | null }>;
+        } | null;
+        if (!preRes.ok) {
+          const msg = preBody?.error || "SKU 成本与数字库存配置保存失败";
+          toast.error(msg);
+          throw new Error(msg);
         }
+        const updatedAtById = new Map(
+          (preBody?.skus ?? [])
+            .filter((entry) => typeof entry.updated_at === "string" && entry.updated_at)
+            .map((entry) => [entry.id, entry.updated_at as string])
+        );
+        (preBody?.skus ?? []).forEach((entry) => preBoundSkuIds.add(entry.id));
+        operations = operations.map((op) =>
+          op.type === "update" && updatedAtById.has(op.sku_id)
+            ? { ...op, expected_updated_at: updatedAtById.get(op.sku_id)! }
+            : op
+        );
       }
 
       const result = await saveProductSkuWorkspace(savedProduct.id, operations);
       const createdIdByClient = new Map((result.created_mappings ?? []).map((item) => [item.client_id, item.sku_id]));
+      const latestUpdatedAtById = new Map(result.skus.map((sku) => [sku.id, sku.updated_at ?? null]));
       const metadataUpdates = snapshotRows
         .filter((row) => row.draft.touched && (row.sku || !isSkuDraftEmpty(row.draft)))
         .map((row) => {
@@ -483,6 +490,7 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
             delivery_mode: row.draft.delivery_mode ?? "manual",
             digital_inventory_product_id: row.draft.digital_inventory_product_id?.trim() || null,
             digital_inventory_product_name: row.draft.digital_inventory_product_name?.trim() || null,
+            expected_updated_at: latestUpdatedAtById.get(skuId) ?? row.sku?.updated_at ?? null,
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -495,18 +503,23 @@ const AdminProductSkuManager = forwardRef<ProductSkuManagerHandle, Props>(functi
           cache: "no-store",
           body: JSON.stringify({ updates: metadataUpdates }),
         });
-        if (metaRes.ok) {
-          const metaBody = (await metaRes.json().catch(() => null)) as {
-            skus?: Array<{ id: string; metadata: Record<string, unknown>; updated_at?: string | null }>;
-          } | null;
-          const metaById = new Map((metaBody?.skus ?? []).map((entry) => [entry.id, entry]));
-          mergedSkus = result.skus.map((sku) => {
-            const entry = metaById.get(sku.id);
-            return entry
-              ? { ...sku, metadata: entry.metadata, updated_at: entry.updated_at ?? sku.updated_at }
-              : sku;
-          });
+        const metaBody = (await metaRes.json().catch(() => null)) as {
+          error?: string;
+          code?: string;
+          skus?: Array<{ id: string; metadata: Record<string, unknown>; updated_at?: string | null }>;
+        } | null;
+        if (!metaRes.ok) {
+          const msg = metaBody?.error || "SKU 成本/交付配置保存失败，请刷新确认后重试";
+          toast.error(msg);
+          throw new Error(msg);
         }
+        const metaById = new Map((metaBody?.skus ?? []).map((entry) => [entry.id, entry]));
+        mergedSkus = result.skus.map((sku) => {
+          const entry = metaById.get(sku.id);
+          return entry
+            ? { ...sku, metadata: entry.metadata, updated_at: entry.updated_at ?? sku.updated_at }
+            : sku;
+        });
       }
 
       const next = ensureTrailingEmptySkuRow(mergedSkus.map((sku) => ({ key: sku.id, sku, draft: toDraft(sku, savedProduct.metadata ?? null) })), emptyRow);

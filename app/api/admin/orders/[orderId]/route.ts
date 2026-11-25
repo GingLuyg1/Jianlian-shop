@@ -38,7 +38,38 @@ function getOrderLabel(data: unknown) {
 const PAYMENT_FLOW_ONLY_ORDER_STATUSES = new Set(["paid", "payment_completed", "completed_payment"]);
 
 
+function validateOrderStatusTransition(
+  fromStatusRaw: string | null | undefined,
+  paymentStatusRaw: string | null | undefined,
+  toStatusRaw: string
+): string | null {
+  const fromStatus = String(fromStatusRaw ?? "").trim().toLowerCase();
+  const paymentStatus = String(paymentStatusRaw ?? "unpaid").trim().toLowerCase();
+  const toStatus = toStatusRaw.trim().toLowerCase();
+  if (!fromStatus || fromStatus === toStatus) return null;
+  if (toStatus === "pending_payment") {
+    return "不可将订单逆转为待支付状态";
+  }
+  if (["completed", "delivered", "refunded"].includes(fromStatus) && ["cancelled", "expired", "failed"].includes(toStatus)) {
+    return "已交付、已完成或已退款的订单不可逆转为取消/过期/失败，请使用退款流程";
+  }
+  if (fromStatus === "refunded") {
+    return "已退款订单为终态，不可继续流转";
+  }
+  if (["cancelled", "expired"].includes(fromStatus) && ["processing", "delivered", "completed", "refunded"].includes(toStatus)) {
+    return "已取消或已过期订单不可流转为履约或完成状态";
+  }
+  if (["processing", "delivered", "completed"].includes(toStatus) && paymentStatus !== "paid") {
+    return "未支付订单不可跳过支付直接进入处理中、已交付或已完成状态";
+  }
+  if (toStatus === "refunded" && paymentStatus !== "paid") {
+    return "未支付订单不可标记为已退款";
+  }
+  return null;
+}
+
 export async function PATCH(request: Request, context: RouteContext) {
+  const { orderId } = await context.params;
   let auditAdmin: AuditAdmin | undefined;
 
   try {
@@ -49,7 +80,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: (await context.params).orderId,
+        targetId: orderId,
         result: "denied",
         errorMessage: admin.message,
       });
@@ -62,9 +93,11 @@ export async function PATCH(request: Request, context: RouteContext) {
           status?: OrderStatus;
           payment_status?: PaymentStatus;
           admin_note?: string;
+          adminNote?: string;
         }
       | null;
 
+    const adminNote = (body?.admin_note ?? body?.adminNote ?? null) || null;
     const requestedStatus = String(body?.status ?? "").trim();
     const requestedPaymentStatus = String(body?.payment_status ?? "").trim();
     if (PAYMENT_FLOW_ONLY_ORDER_STATUSES.has(requestedStatus) || requestedPaymentStatus === "paid") {
@@ -74,7 +107,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: (await context.params).orderId,
+        targetId: orderId,
         result: "failed",
         errorCode: "ORDER_PAYMENT_STATUS_REQUIRES_PAYMENT_FLOW",
         errorMessage: "订单支付成功状态必须通过支付完成流程写入",
@@ -96,7 +129,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: (await context.params).orderId,
+        targetId: orderId,
         result: "failed",
         errorCode: "invalid_order_status",
         errorMessage: "无效订单状态",
@@ -113,7 +146,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: (await context.params).orderId,
+        targetId: orderId,
         result: "failed",
         errorCode: "invalid_payment_status",
         errorMessage: "无效支付状态",
@@ -122,11 +155,42 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "无效支付状态" }, { status: 400 });
     }
 
+    const { data: currentOrder } = await admin.supabase
+      .from("orders")
+      .select("id,status,payment_status")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (currentOrder) {
+      const transitionError = validateOrderStatusTransition(
+        currentOrder.status,
+        currentOrder.payment_status,
+        toStatus
+      );
+      if (transitionError) {
+        await writeAdminAuditLog({
+          request,
+          admin: auditAdmin,
+          action: "update_order_status",
+          module: "orders",
+          targetType: "order",
+          targetId: orderId,
+          result: "failed",
+          errorCode: "ORDER_STATUS_TRANSITION_FORBIDDEN",
+          errorMessage: transitionError,
+          metadata: { fromStatus: currentOrder.status, toStatus, paymentStatus: currentOrder.payment_status },
+        });
+        return NextResponse.json(
+          { error: transitionError, code: "ORDER_STATUS_TRANSITION_FORBIDDEN" },
+          { status: 409 }
+        );
+      }
+    }
+
     const { data, error } = await admin.supabase.rpc("admin_update_order_status", {
-      p_order_id: (await context.params).orderId,
+      p_order_id: orderId,
       p_to_status: toStatus,
       p_payment_status: paymentStatus ?? null,
-      p_admin_note: body?.admin_note ?? null,
+      p_admin_note: adminNote,
     });
 
     if (error) {
@@ -137,7 +201,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "update_order_status",
         module: "orders",
         targetType: "order",
-        targetId: (await context.params).orderId,
+        targetId: orderId,
         result: "failed",
         errorCode: typeof error.code === "string" ? error.code : null,
         errorMessage: message,
@@ -154,7 +218,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (promotionSettings.enabled) {
       const { error: commissionError } = await admin.supabase.rpc("sync_referral_commission_for_order", {
-        p_order_id: (await context.params).orderId,
+        p_order_id: orderId,
         p_commission_rate: promotionSettings.commissionRate,
       });
 
@@ -163,23 +227,26 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
-    await writeAdminAuditLog({
+    const audit = await writeAdminAuditLog({
       request,
       admin: auditAdmin,
       action: "update_order_status",
       module: "orders",
       targetType: "order",
-      targetId: (await context.params).orderId,
+      targetId: orderId,
       targetLabel: getOrderLabel(data),
       result: "success",
       afterSummary: {
         status: toStatus,
         payment_status: paymentStatus ?? null,
-        has_admin_note: Boolean(body?.admin_note),
+        has_admin_note: Boolean(adminNote),
       },
     });
 
-    return NextResponse.json({ order: data });
+    return NextResponse.json({
+      order: data,
+      warning_code: audit.ok ? null : "GENERAL_AUDIT_WRITE_FAILED",
+    });
   } catch (error) {
     console.error("[Admin Orders] update failed", error);
     const message = getOrderErrorMessage(error, "订单状态更新失败");
@@ -189,7 +256,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: "update_order_status",
       module: "orders",
       targetType: "order",
-      targetId: (await context.params).orderId,
+      targetId: orderId,
       result: "failed",
       errorMessage: message,
     });

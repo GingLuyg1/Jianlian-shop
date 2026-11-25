@@ -228,7 +228,10 @@ export default function AdminFinancePage() {
     const paidOrderIds = new Set(rangeOrders.map((o) => o.id));
     const rangeGmv = rangeOrders.reduce((sum, o) => sum + safeNumber(o.total_amount), 0);
 
-    const rangeRecharges = recharges.filter((r) => inRange(r.created_at) && r.status === "paid");
+    const rangeRecharges = recharges.filter((r) => {
+      const s = String(r.status ?? "").trim().toLowerCase();
+      return inRange(r.created_at) && (s === "paid" || s === "succeeded" || s === "success" || s === "completed");
+    });
     const rangeRechargeAmount = rangeRecharges.reduce(
       (sum, r) => sum + safeNumber(r.credited_amount ?? r.amount),
       0
