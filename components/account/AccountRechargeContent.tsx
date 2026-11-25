@@ -323,7 +323,7 @@ export default function AccountRechargeContent() {
                 <div className="mt-3 grid grid-cols-2 gap-2.5 text-xs leading-5 text-slate-500 sm:mt-4 sm:gap-3 xl:grid-cols-4">
                   <Notice icon={FileText} title="付款说明"><span className="block">收款页无法显示，请关闭代理后重试。</span><span className="block">二维码超限，请关闭支付页重新获取。</span></Notice>
                   <Notice icon={WalletCards} title="到账与异常"><span className="block">支付成功后，等待1分钟再刷新页面。</span><span className="block">未到账，请发付款截图及用户名给客服。</span></Notice>
-                  <Notice icon={Coins} title="单笔限制"><span className="block">单笔超 ¥4000 建议分单或用 USDT。</span><span className="block">超额请联系客服，USDT无限制。</span></Notice>
+                  <Notice icon={Coins} title="单笔限制"><span className="block">单笔超 ¥1000 建议分单或用 USDT。</span><span className="block">超额请联系客服，USDT无限制。</span></Notice>
                   <Notice icon={Clock3} title="费用说明"><span className="block">支付宝 / 微信：手续费 3%</span><span className="block">USDT BEP20：无手续费</span></Notice>
                 </div>
               </CardContent>
@@ -423,9 +423,9 @@ export default function AccountRechargeContent() {
                     {isUsdtCnyRecharge ? `当前渠道最低充值金额需折合不少于 ${selectedChannel?.minimumAmount ?? 1} USDT。` : <>当前方式最低充值金额为 {selectedChannel ? formatPaymentAmount(selectedChannel.minimumAmount, selectedChannel.currency) : "—"}。</>}
                   </p>
                 ) : null}
-                {!isUsdtCnyRecharge && legacyChannelAmount > 4000 ? (
+                {!isUsdtCnyRecharge && legacyChannelAmount > 1000 ? (
                   <p className="mt-2 text-xs text-amber-700">
-                    单笔充值超过 ¥4000 建议分笔充值或切换为 USDT BEP20 渠道（无上限、免手续费）。
+                    单笔充值超过 ¥1000 建议分笔充值或切换为 USDT BEP20 渠道（无上限、免手续费）。
                   </p>
                 ) : null}
                 {channelOverLimit ? (
@@ -496,7 +496,7 @@ export default function AccountRechargeContent() {
             <DialogTitle>单笔支付金额超限</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-6 text-muted-foreground">
-            支付宝/微信单笔支付金额大于2000元，请联系人工客服处理。
+            支付宝/微信单笔支付金额大于1000元，请联系人工客服处理。
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>

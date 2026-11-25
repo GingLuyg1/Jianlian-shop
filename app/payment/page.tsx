@@ -5,7 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { copyWithFeedback } from "@/lib/ui/copy-feedback";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Clock3, Copy, ExternalLink, Headphones, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Clock3, Copy, ExternalLink, Headphones, Loader2, PackageCheck, RefreshCw, ShieldCheck, ShoppingBag, Sparkles } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
@@ -1292,22 +1292,45 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
     await copyWithFeedback(value);
   }
 
+  const isPaidSuccessView = Boolean(order && normalizedPaymentStatus === "paid");
+  const isDeliveredOrder = Boolean(
+    order && (
+      orderStatus === "delivered" ||
+      order.fulfillment_status === "delivered" ||
+      order.order_deliveries?.[0]?.delivery_status === "delivered"
+    )
+  );
+  const isManualDeliveryOrder = Boolean(
+    order && ["manual", "manual_delivery"].includes(String(order.delivery_type ?? firstItem?.delivery_type ?? ""))
+  );
+  const paymentMethodLabel = useMemo(() => {
+    const method = String(order?.payment_method ?? "").trim().toLowerCase();
+    if (method === "balance") return "站内余额支付";
+    if (method === "alipay") return "支付宝";
+    if (method === "wechat" || method === "wechat_pay") return "微信支付";
+    if (method === "usdt_bep20") return "USDT (BEP20)";
+    if (method === "usdt_trc20") return "USDT (TRC20)";
+    return method || "在线支付";
+  }, [order?.payment_method]);
+
   return (
     <PublicLayout mobileNavigationUntilLg>
       <div className="mx-auto max-w-5xl space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">收银台</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              选择已开放的支付方式，创建真实支付会话后完成付款。
-            </p>
+        {!isPaidSuccessView ? (
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">收银台</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                选择已开放的支付方式，创建真实支付会话后完成付款。
+              </p>
+            </div>
+            {order ? (
+              <Button variant="outline" asChild>
+                <Link href={`/account/orders/${encodeURIComponent(order.order_no)}`}>返回订单</Link>
+              </Button>
+            ) : null}
           </div>
-          {order ? (
-            <Button variant="outline" asChild>
-              <Link href={`/account/orders/${encodeURIComponent(order.order_no)}`}>返回订单</Link>
-            </Button>
-          ) : null}
-        </div>
+        ) : null}
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1329,6 +1352,156 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
               </Button>
             </CardContent>
           </Card>
+        ) : isPaidSuccessView ? (
+          <div data-testid="payment-success-delivery-view" className="space-y-4">
+            {/* 通用支付成功顶部英雄横幅 */}
+            <section className="relative overflow-hidden rounded-[26px] border border-emerald-200/80 bg-gradient-to-br from-emerald-50/90 via-white to-[#fff7ee] p-5 shadow-[0_14px_38px_-24px_rgba(16,120,80,0.28)] sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3.5 sm:items-center">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/25">
+                    {isDeliveredOrder ? (
+                      <PackageCheck className="h-6 w-6" />
+                    ) : (
+                      <CheckCircle2 className="h-6 w-6" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+                        {isDeliveredOrder
+                          ? "支付成功 · 已完成交付"
+                          : isManualDeliveryOrder
+                            ? "支付成功 · 等待人工处理"
+                            : "支付成功 · 正在为您交付"}
+                      </h1>
+                      <span className="inline-flex items-center rounded-full bg-emerald-100/90 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                        {paymentMethodLabel}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">
+                      {isDeliveredOrder
+                        ? "交付内容已在下方就绪，请点击显示或一键复制并妥善保存。"
+                        : isManualDeliveryOrder
+                          ? "您的订单已确认收款，将由客服按顺序为您人工交付，请留意站内订单状态与预留邮箱。"
+                          : "系统已确认收款，正在自动提取并校验商品交付内容，通常几秒内完成。"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl border-orange-200 bg-white/90 text-xs font-semibold hover:bg-orange-50" asChild>
+                    <Link href={`/account/orders/${encodeURIComponent(order.order_no)}`}>订单详情</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl border-orange-200 bg-white/90 text-xs font-semibold hover:bg-orange-50" asChild>
+                    <Link href="/products/all">
+                      <ShoppingBag className="mr-1.5 h-3.5 w-3.5 text-primary" />
+                      继续逛逛
+                    </Link>
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={openPublicSupport}
+                    className="h-9 rounded-xl bg-gradient-to-r from-[#e67b39] to-[#d96727] text-xs font-semibold text-white shadow-sm hover:opacity-95"
+                  >
+                    <Headphones className="mr-1.5 h-3.5 w-3.5" />
+                    在线客服
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            {/* 通用双栏主区：左侧核心交付区 + 右侧订单凭证摘要 */}
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_370px]">
+              <div className="min-w-0 space-y-4">
+                {isBep20Order && bep20Session?.overpaymentCredit ? (
+                  <div className="rounded-[22px] border border-emerald-200 bg-emerald-50/90 p-4 text-sm leading-6 text-emerald-900 shadow-xs">
+                    <div className="flex items-center gap-2 font-bold">
+                      <Sparkles className="h-4 w-4 text-emerald-600" />
+                      超额付款已自动折算入账
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-emerald-800 sm:text-sm">
+                      链上超额到账 <strong>{bep20Session.overpaymentCredit.overpaidUsdt} USDT</strong>，已按锁定汇率折算为{" "}
+                      <strong>¥{bep20Session.overpaymentCredit.creditedCny}</strong> 站内余额。
+                    </p>
+                    <div className="mt-1 text-[11px] text-emerald-700">
+                      入账时间：{formatDate(bep20Session.overpaymentCredit.processedAt)}
+                    </div>
+                  </div>
+                ) : null}
+
+                <SecureOrderDelivery
+                  className="!rounded-[26px] border-[#f0e4d8] p-5 shadow-[0_12px_34px_-22px_rgba(133,82,43,0.2)] sm:p-6"
+                  orderNo={order.order_no}
+                  paymentStatus={order.payment_status}
+                  orderStatus={order.status}
+                  fulfillmentStatus={order.fulfillment_status}
+                  deliveryStatus={order.order_deliveries?.[0]?.delivery_status}
+                  deliveryType={order.delivery_type ?? firstItem?.delivery_type}
+                  pollUntilDelivered
+                  onDelivered={() => loadOrder({ silent: true })}
+                />
+
+                <div className="rounded-[22px] border border-orange-100/90 bg-[#fffaf5] px-4 py-3.5 text-xs leading-6 text-slate-600">
+                  <div className="flex items-center gap-1.5 font-bold text-[#9a552b]">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    交付与售后核验提醒
+                  </div>
+                  <ul className="mt-1.5 list-disc space-y-1 pl-4">
+                    <li>数字卡密与账号属于一次性商品，收到后请第一时间登录或兑换核验。</li>
+                    <li>所有历史已购交付内容均可在左侧「我的订单」随时回查，无需担心关闭页面丢失。</li>
+                    <li>如交付内容超过 1 分钟未刷新，请点击上方「刷新交付信息」，或携带订单编号联系在线客服。</li>
+                  </ul>
+                </div>
+              </div>
+
+              <Card className="h-fit !rounded-[26px] border-[#f0e4d8] bg-white/95 shadow-[0_12px_34px_-22px_rgba(133,82,43,0.2)]">
+                <CardHeader className="border-b border-orange-100/70 pb-3.5">
+                  <CardTitle className="flex items-center justify-between text-base font-bold text-slate-900">
+                    <span>订单凭证摘要</span>
+                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[11px] font-bold text-emerald-700">
+                      已确认收款
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-4 text-sm">
+                  <div className="rounded-xl border border-orange-100/80 bg-[#fffaf5] p-3">
+                    <div className="font-bold leading-snug text-slate-900">{firstItem?.product_name ?? "订单商品"}</div>
+                    {firstItem?.sku_title ? (
+                      <div className="mt-1 text-xs text-slate-500">规格：{firstItem.sku_title}</div>
+                    ) : null}
+                  </div>
+                  <Info label="订单编号" value={order.order_no} copyable onCopy={() => copyText(order.order_no)} />
+                  <Info label="购买数量" value={`${firstItem?.quantity ?? 1} 件`} />
+                  <Info label="实付金额" value={formatMoney(order.total_amount, order.currency)} strong />
+                  <Info label="支付方式" value={paymentMethodLabel} />
+                  <Info label="下单时间" value={formatDate(order.created_at)} />
+                  {isBep20Order && bep20Session?.submittedTxHash ? (
+                    <div className="pt-1">
+                      <Button asChild type="button" size="sm" variant="outline" className="w-full rounded-xl text-xs">
+                        <a href={`https://bscscan.com/tx/${bep20Session.submittedTxHash}`} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                          查看链上交易凭证
+                        </a>
+                      </Button>
+                    </div>
+                  ) : null}
+                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <span className="text-muted-foreground">订单状态</span>
+                    <Badge variant="outline" className={cn("text-xs", ORDER_STATUS_STYLES[orderStatus])}>
+                      {getOrderStatusLabel(order.status)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">支付状态</span>
+                    <Badge variant="outline" className={cn("text-xs", PAYMENT_STATUS_STYLES[normalizedPaymentStatus])}>
+                      {getPaymentStatusLabel(order.payment_status)}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
             <Card>

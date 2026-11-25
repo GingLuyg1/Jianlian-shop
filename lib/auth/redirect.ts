@@ -8,7 +8,7 @@ export function getSafeInternalRedirect(
 
   const trimmed = value.trim();
   if (!trimmed) return fallback;
-  if (trimmed.startsWith("//") || trimmed.includes("\\")) return fallback;
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.includes("\\")) return fallback;
   if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed)) return fallback;
 
   let parsed: URL;

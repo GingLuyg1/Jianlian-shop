@@ -1357,9 +1357,9 @@ function CheckoutPageContent() {
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
                   </p>
                 ) : null}
-                {orderAmount > 4000 && (paymentMethod === "alipay" || paymentMethod === "wechat_pay") ? (
+                {orderAmount > 1000 && (paymentMethod === "alipay" || paymentMethod === "wechat_pay") ? (
                   <div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50/90 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800">
-                    单笔订单超过 ¥4000 建议分单购买，或切换为 <strong>余额支付 / USDT-BEP20</strong> 以免第三方收银台风控拦截。
+                    单笔订单超过 ¥1000 建议分单购买，或切换为 <strong>余额支付 / USDT-BEP20</strong> 以免第三方收银台风控拦截。
                   </div>
                 ) : null}
                 {selectedPaymentChannel?.providerExternalFeeDisclosure ? (
@@ -1480,7 +1480,7 @@ function CheckoutPageContent() {
             <DialogTitle>支付宝/微信支付金额超限</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-6 text-muted-foreground">
-            支付宝/微信单笔支付金额大于2000元，请联系人工客服处理。
+            支付宝/微信单笔支付金额大于1000元，请联系人工客服处理。
           </p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setAmountLimitDialogOpen(false)}>取消</Button>
