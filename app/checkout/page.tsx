@@ -373,6 +373,7 @@ function CheckoutPageContent() {
   const [customerNote, setCustomerNote] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(DEFAULT_PAYMENT_METHOD);
+  const [hasSelectedPaymentMethod, setHasSelectedPaymentMethod] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>(() => peekPublicRechargeChannels() ?? []);
   const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(true);
@@ -456,7 +457,9 @@ function CheckoutPageContent() {
     lastBalanceFetchAtRef.current = now;
     const requestVersion = balanceRequestVersionRef.current + 1;
     balanceRequestVersionRef.current = requestVersion;
-    setBalanceStatus("loading");
+    if (availableBalanceRef.current === null) {
+      setBalanceStatus("loading");
+    }
     setBalanceError("");
     setBalanceRequiresLogin(false);
 
@@ -578,7 +581,10 @@ function CheckoutPageContent() {
     if (authUserEmail) {
       setEmail((current) => (current.trim() ? current : authUserEmail));
     }
-    setAvailableBalance((prev) => (prev === null ? publicAuthBalanceRef.current : prev));
+    if (Number.isFinite(publicAuthBalanceRef.current)) {
+      setAvailableBalance((prev) => (prev === null ? publicAuthBalanceRef.current : prev));
+      setBalanceStatus("ready");
+    }
     void loadAccountBalance(true);
     const refreshBalanceOnFocus = () => void loadAccountBalance(false);
     const refreshBalanceForce = () => void loadAccountBalance(true);
@@ -875,25 +881,31 @@ function CheckoutPageContent() {
       setCouponLoading(false);
     }
   };
-  const balanceSubmissionBlockReason = getBalanceSubmissionBlockReason({
-    paymentMethod,
-    balanceStatus,
-    balanceSummary,
-  });
+  const balanceSubmissionBlockReason = hasSelectedPaymentMethod
+    ? getBalanceSubmissionBlockReason({
+        paymentMethod,
+        balanceStatus,
+        balanceSummary,
+      })
+    : null;
   const orderConfigurationLocked = productLoading || submitLoading || Boolean(pendingBalanceOrder);
   const submitButtonLabel = submitLoading
     ? "正在提交订单..."
     : pendingBalanceOrder
       ? "继续支付原订单"
-      : balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT"
-        ? "余额不足"
-        : balanceSubmissionBlockReason === "BALANCE_LOADING"
-          ? "正在核对余额..."
-          : balanceSubmissionBlockReason
-            ? "余额未确认"
-          : !isPurchasable
-            ? "不可购买"
-            : "提交订单";
+      : !hasSelectedPaymentMethod
+        ? !isPurchasable
+          ? "不可购买"
+          : "提交订单"
+        : balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT"
+          ? "余额不足"
+          : balanceSubmissionBlockReason === "BALANCE_LOADING"
+            ? "正在核对余额..."
+            : balanceSubmissionBlockReason
+              ? "余额未确认"
+            : !isPurchasable
+              ? "不可购买"
+              : "提交订单";
   const amountLabel = useMemo(() => {
     if (!product) return "";
     return `¥${effectiveOrderAmount.toFixed(2)}`;
@@ -927,7 +939,11 @@ function CheckoutPageContent() {
   }
 
   const handleSelectPaymentMethod = (nextMethod: PaymentMethodCode) => {
+    setHasSelectedPaymentMethod(true);
     setPaymentMethod(nextMethod);
+    if (nextMethod === "balance") {
+      void loadAccountBalance(false);
+    }
     if (pendingBalanceOrder && nextMethod !== "balance") {
       window.sessionStorage.removeItem(checkoutSessionKey);
       setPendingBalanceOrder(null);
@@ -938,6 +954,12 @@ function CheckoutPageContent() {
   const handleSubmit = async () => {
     if (productLoading) return;
     if (!productRow || submitLoading || submissionGuardRef.current.isActive()) return;
+
+    if (!hasSelectedPaymentMethod && !pendingBalanceOrder) {
+      toast.warning("请先选择支付方式");
+      setPaymentDropdownOpen(true);
+      return;
+    }
 
     if (hasSku && !selectedSku) {
       toast.warning("请选择 SKU");
@@ -1165,7 +1187,7 @@ function CheckoutPageContent() {
           }
         />
 
-        <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden lg:h-full">
+        <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden rounded-[26px] lg:h-full">
           <CardContent className="flex h-full min-h-0 flex-col bg-white p-4">
             <div className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-hidden">
               {hasSku && skuOptions.length > 1 ? (

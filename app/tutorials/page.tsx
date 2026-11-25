@@ -403,6 +403,8 @@ function TutorialsPageContent() {
   const [googleTreeOpen, setGoogleTreeOpen] = useState(false);
   const [googleGuide, setGoogleGuide] = useState<"qr-sms" | "region" | "appeal" | "student-discount">("qr-sms");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [headerOverlayOpen, setHeaderOverlayOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -727,8 +729,40 @@ function TutorialsPageContent() {
           </nav>
         </div>
       </aside>
-      <section data-testid="tutorial-content" className={`${glass.surface} ${styles.panel} ${tutorial.content} ${isMobile ? "!overflow-visible" : ""}`}>
-        <header className={`${glass.hero} ${tutorial.header} ${isMobile ? "!px-4 !py-3.5" : ""}`}>
+      <section data-testid="tutorial-content" className={`relative ${glass.surface} ${styles.panel} ${tutorial.content} ${isMobile ? "!overflow-visible" : ""}`}>
+        {!isMobile && headerCollapsed && !headerOverlayOpen ? (
+          <button
+            type="button"
+            onClick={() => setHeaderOverlayOpen(true)}
+            aria-label="展开教程标题栏"
+            title="展开教程标题与购买入口"
+            className="absolute right-4 top-2.5 z-30 inline-flex items-center gap-1 rounded-full border border-orange-200/90 bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-primary shadow-md shadow-orange-900/10 backdrop-blur transition hover:bg-orange-50"
+          >
+            <span>展开顶栏</span>
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+        <header
+          className={cn(
+            glass.hero,
+            tutorial.header,
+            isMobile && "!px-4 !py-3.5",
+            !isMobile && headerCollapsed && !headerOverlayOpen && "!h-0 !overflow-hidden !border-0 !py-0 opacity-0 pointer-events-none",
+            !isMobile && headerCollapsed && headerOverlayOpen && "absolute inset-x-0 top-0 z-30 rounded-t-[26px] shadow-xl backdrop-blur-md",
+            "transition-all duration-200"
+          )}
+        >
+          {!isMobile && headerCollapsed && headerOverlayOpen ? (
+            <button
+              type="button"
+              onClick={() => setHeaderOverlayOpen(false)}
+              aria-label="收起教程标题栏"
+              className="absolute right-4 top-2.5 z-40 inline-flex items-center gap-1 rounded-full border border-orange-200 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-xs hover:text-primary"
+            >
+              <span>收起</span>
+              <ChevronDown className="h-3.5 w-3.5 rotate-180" />
+            </button>
+          ) : null}
           <div
             key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}`}
             className={`${tutorial.topicEnter} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}
@@ -765,7 +799,25 @@ function TutorialsPageContent() {
             })()}
           </div>
         </header>
-        <div ref={scrollRef} data-testid="tutorial-scroll" className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`} tabIndex={0} role="region" aria-label={`${topic.label}正文`}>
+        <div
+          ref={scrollRef}
+          data-testid="tutorial-scroll"
+          onScroll={(e) => {
+            if (isMobile) return;
+            const top = e.currentTarget.scrollTop;
+            if (top > 48 && !headerCollapsed) {
+              setHeaderCollapsed(true);
+              setHeaderOverlayOpen(false);
+            } else if (top < 16 && headerCollapsed) {
+              setHeaderCollapsed(false);
+              setHeaderOverlayOpen(false);
+            }
+          }}
+          className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`}
+          tabIndex={0}
+          role="region"
+          aria-label={`${topic.label}正文`}
+        >
           <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
           {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "gemini" ? <GeminiTutorial onGoToGoogleRegion={() => { setSelected("google-region"); setSearch(""); setGoogleTreeOpen(true); setGoogleGuide("region"); setGiffgaffTreeOpen(false); setOneNzTreeOpen(false); setChatgptTreeOpen(false); setTwitterTreeOpen(false); resetScroll(); }} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : googleGuide === "appeal" ? <GoogleAppealTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} onSwitchToRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : googleGuide === "student-discount" ? <GeminiStudentDiscountTutorial onGoToGoogleRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : <GoogleRegionTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-6">
             {/* 1. 平台服务说明与三大核心准则 */}

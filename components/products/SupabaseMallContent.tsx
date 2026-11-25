@@ -92,7 +92,7 @@ type FilterState = {
   pageSize: number;
 };
 
-const CATALOG_PAGE_SIZE = 200;
+const CATALOG_PAGE_SIZE = 500;
 
 export function extractProductSubcategoryLabel(product: { description?: string | null; detail?: string | null }): string {
   const raw = String(product.description || product.detail || "").trim();
