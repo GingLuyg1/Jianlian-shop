@@ -292,7 +292,7 @@ export default function AdminBep20UnderpaymentPanel() {
 
       {selected ? (
         <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={() => !settling && setSelected(null)}>
-          <aside className="absolute inset-y-0 right-0 flex h-dvh w-full max-w-[820px] flex-col overflow-hidden bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <aside className="absolute inset-y-0 right-0 flex h-[100dvh] w-full max-w-[820px] flex-col overflow-hidden bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex shrink-0 items-start justify-between border-b px-5 py-4">
               <div>
                 <div className="text-lg font-semibold">欠额支付处理</div>

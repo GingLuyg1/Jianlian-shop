@@ -202,7 +202,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       data-mobile-active={isMobile ? "true" : undefined}
       style={{ maxWidth: previewWidth ? `${previewWidth}px` : undefined }}
       className={cn(
-        viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen overflow-x-clip" : "min-h-screen overflow-x-hidden",
+        viewportLocked && !isMobile ? "h-[100dvh] overflow-hidden" : isMobile ? "min-h-screen overflow-x-clip" : "min-h-screen overflow-x-hidden",
         "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:252px] lg:[--storefront-sidebar-width:232px]",
         !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:252px] md:[--storefront-sidebar-width:232px]",
         isMobile && "[--storefront-content-padding-x:12px] lg:[--storefront-main-offset:0px]",
@@ -267,7 +267,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       />
 
       <main className={cn(
-        viewportLocked && !isMobile ? "flex h-[calc(100dvh-57px)] min-w-0 flex-col overflow-hidden md:h-dvh" : "flex min-h-dvh min-w-0 flex-col",
+        viewportLocked && !isMobile ? "flex h-[calc(100dvh-57px)] min-w-0 flex-col overflow-hidden md:h-[100dvh]" : "flex min-h-[100dvh] min-w-0 flex-col",
         mobileNavigationUntilLg ? "lg:ml-[var(--storefront-main-offset)]" : "md:ml-[var(--storefront-main-offset)]",
         pathname === "/" && !isMobile && "lg:pt-[10px]",
         isMobile && "!ml-0 !h-auto !overflow-visible pb-20",
@@ -286,10 +286,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
         <footer
           data-testid="public-site-footer"
-          style={{
-            paddingLeft: "var(--storefront-content-padding-x)",
-            paddingRight: "calc(var(--storefront-main-offset) + var(--storefront-content-padding-x))",
-          }}
+          style={{ paddingInline: "var(--storefront-content-padding-x)" }}
           className="mt-auto w-full shrink-0 bg-transparent py-1.5 text-[11px] leading-none text-[#8c7a6b] md:flex md:h-[20px] md:items-center md:py-0"
         >
           <div className="flex w-full flex-wrap items-center justify-between gap-2 px-1">
