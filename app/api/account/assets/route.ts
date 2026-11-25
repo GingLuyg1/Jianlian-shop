@@ -16,7 +16,7 @@ const paidRechargeStatuses = new Set(["paid", "succeeded"]);
 const spendOrderStatuses = new Set(["paid", "processing", "delivered", "completed"]);
 const unfinishedOrderStatuses = new Set(["pending_payment", "paid", "processing", "delivered"]);
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   if (!hasSupabaseServerConfig()) {
     return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 503 });
   }
