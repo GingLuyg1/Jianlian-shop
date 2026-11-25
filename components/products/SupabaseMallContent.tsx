@@ -928,8 +928,8 @@ function CategoryPanel({
               const hasSubcategories = subItems.length > 0;
               const isExpanded = hasSubcategories && expandedCategoryIds.includes(category.id);
               return (
-              <div key={category.id} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && "!w-full")}>
-                <div className={animatedInitialRows.current || isMobile ? undefined : "catalog-enter-item"} style={animatedInitialRows.current || isMobile ? undefined : { animationDelay: `${Math.min(index * 30, 200)}ms` }}>
+              <div key={`${pageRoute}-${category.id}`} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && "!w-full")}>
+                <div className={isMobile ? undefined : "catalog-enter-item"} style={isMobile ? undefined : { animationDelay: `${Math.min(index * 35, 210)}ms` }}>
                   <CategoryButton
                     category={category}
                     active={isSelected}
