@@ -9,7 +9,7 @@ test("SKU table owns price, inventory, delivery and variant status editing", () 
   assert.match(page, /title="价格、库存与交付规格"/);
   assert.doesNotMatch(page, /title="商品规格 \/ 规格与供应商绑定"|title="价格与库存"/);
   assert.doesNotMatch(page, /label="商品排序"|title="交付与状态"/);
-  assert.match(editor, /\["名称", "编码", "价格", "库存", "交付方式", "状态", "绑定供货商"\]/);
+  assert.match(editor, /\["名称", "编码", "价格", "库存", "交付方式", "状态", "成本 \/ 绑定供货商"\]/);
   assert.match(editor, /<table/);
   assert.match(editor, /h-8/);
   assert.match(editor, /<details/);

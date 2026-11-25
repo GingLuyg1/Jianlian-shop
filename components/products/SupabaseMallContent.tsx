@@ -699,18 +699,20 @@ function SupabaseMallContentInner({
 
   const availableSubcategories = useMemo(() => {
     const configured = resolvedCategory?.metadata?.subcategories ?? [];
-    const seen = new Set<string>();
+    const seenLower = new Set<string>();
     const list: Array<{ name: string; slug: string; sort_order: number }> = [];
     for (const item of configured) {
       const name = item.name.trim();
-      if (!name || seen.has(name)) continue;
-      seen.add(name);
+      const lower = name.toLowerCase();
+      if (!name || seenLower.has(lower)) continue;
+      seenLower.add(lower);
       list.push(item);
     }
     for (const prod of products) {
       const label = extractProductSubcategoryLabel(prod);
-      if (label && !seen.has(label)) {
-        seen.add(label);
+      const lower = label.toLowerCase();
+      if (label && !seenLower.has(lower)) {
+        seenLower.add(lower);
         list.push({ name: label, slug: label, sort_order: (list.length + 1) * 10 });
       }
     }
@@ -719,22 +721,23 @@ function SupabaseMallContentInner({
 
   const filteredProducts = useMemo(() => {
     if (selectedSubcategory) {
+      const targetLower = selectedSubcategory.trim().toLowerCase();
       return products.filter((prod) => {
         const label = extractProductSubcategoryLabel(prod);
-        return label === selectedSubcategory;
+        return label.toLowerCase() === targetLower;
       });
     }
     if (availableSubcategories.length <= 1) return products;
     const subOrder = new Map<string, number>();
     availableSubcategories.forEach((sub, idx) => {
-      subOrder.set(sub.name, idx);
+      subOrder.set(sub.name.trim().toLowerCase(), idx);
     });
     const fallbackRank = availableSubcategories.length;
     return products
       .map((prod, index) => ({
         prod,
         index,
-        rank: subOrder.get(extractProductSubcategoryLabel(prod)) ?? fallbackRank,
+        rank: subOrder.get(extractProductSubcategoryLabel(prod).toLowerCase()) ?? fallbackRank,
       }))
       .sort((a, b) => a.rank - b.rank || a.index - b.index)
       .map((entry) => entry.prod);

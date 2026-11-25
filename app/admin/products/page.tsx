@@ -1851,11 +1851,11 @@ function ProductFormDialog({
             </FormSection>
 
             <FormSection title="商品分类 *" className="md:col-span-2">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-3">
                 <Field label="一级分类" required error={errors.primaryCategoryId}>
                   <NativeSelect
                     value={form.primaryCategoryId}
-                    onChange={(value) => onUpdate({ ...form, primaryCategoryId: value, category_id: "" })}
+                    onChange={(value) => onUpdate({ ...form, primaryCategoryId: value, category_id: "", subcategory: "" })}
                   >
                     <option value="">请选择一级分类</option>
                     {rootCategories.map((category) => (
@@ -1875,7 +1875,7 @@ function ProductFormDialog({
                       {!form.primaryCategoryId
                         ? "请先选择一级分类"
                         : secondaryCategories.length === 0
-                          ? "该一级分类暂无可用二级分类，请先在分类管理中添加。"
+                          ? "该一级分类暂无可用二级分类"
                           : "请选择二级分类"}
                     </option>
                     {secondaryCategories.map((category) => (
@@ -1885,32 +1885,33 @@ function ProductFormDialog({
                     ))}
                   </NativeSelect>
                 </Field>
-                <Field label="所属子分类（选填，用于二级分类下拉子目录分组）" className="md:col-span-2">
+                <Field label="所属子分类（选填）">
                   {(() => {
                     const selectedSec = secondaryCategories.find((c) => c.id === form.category_id);
-                    const subOptions = extractSubcategoriesFromCategory(selectedSec);
+                    const baseOptions = extractSubcategoriesFromCategory(selectedSec);
+                    const subOptions =
+                      form.subcategory && !baseOptions.includes(form.subcategory)
+                        ? [form.subcategory, ...baseOptions]
+                        : baseOptions;
                     return (
-                      <div className="flex gap-2">
-                        {subOptions.length > 0 ? (
-                          <NativeSelect
-                            className="w-1/2"
-                            value={subOptions.includes(form.subcategory) ? form.subcategory : ""}
-                            onChange={(value) => onUpdate({ ...form, subcategory: value })}
-                          >
-                            <option value="">不指定 / 手动输入子分类</option>
-                            {subOptions.map((subName) => (
-                              <option key={subName} value={subName}>
-                                {subName}
-                              </option>
-                            ))}
-                          </NativeSelect>
-                        ) : null}
-                        <Input
-                          value={form.subcategory}
-                          placeholder="输入或选择子分类名称（如：Facebook脸书 老号）"
-                          onChange={(event) => onUpdate({ ...form, subcategory: event.target.value })}
-                        />
-                      </div>
+                      <NativeSelect
+                        value={form.subcategory}
+                        disabled={!form.category_id || subOptions.length === 0}
+                        onChange={(value) => onUpdate({ ...form, subcategory: value })}
+                      >
+                        <option value="">
+                          {!form.category_id
+                            ? "请先选择二级分类"
+                            : subOptions.length === 0
+                              ? "当前二级分类暂无子分类"
+                              : "不指定子分类"}
+                        </option>
+                        {subOptions.map((subName) => (
+                          <option key={subName} value={subName}>
+                            {subName}
+                          </option>
+                        ))}
+                      </NativeSelect>
                     );
                   })()}
                 </Field>

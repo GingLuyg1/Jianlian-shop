@@ -814,13 +814,13 @@ function AdminCategoriesPageInner() {
 
   const selectedChildSubcategories = useMemo(() => {
     const configured = extractSubcategoriesFromCategory(selectedChild);
-    const seen = new Set(configured);
+    const seenLower = new Set(configured.map((name) => name.toLowerCase()));
     const result = [...configured];
     for (const prod of products) {
       const parsed = extractSubcategoryFromShortDescription(prod.short_description);
       const sub = parsed.subcategory || (typeof prod.metadata?.subcategory === "string" ? prod.metadata.subcategory.trim() : "");
-      if (sub && !seen.has(sub)) {
-        seen.add(sub);
+      if (sub && !seenLower.has(sub.toLowerCase())) {
+        seenLower.add(sub.toLowerCase());
         result.push(sub);
       }
     }
@@ -829,10 +829,11 @@ function AdminCategoriesPageInner() {
 
   const displayedProducts = useMemo(() => {
     if (!selectedSubcategoryFilter) return products;
+    const targetLower = selectedSubcategoryFilter.trim().toLowerCase();
     return products.filter((prod) => {
       const parsed = extractSubcategoryFromShortDescription(prod.short_description);
       const sub = parsed.subcategory || (typeof prod.metadata?.subcategory === "string" ? prod.metadata.subcategory.trim() : "");
-      return sub === selectedSubcategoryFilter;
+      return sub.toLowerCase() === targetLower;
     });
   }, [products, selectedSubcategoryFilter]);
 
@@ -1051,10 +1052,11 @@ function AdminCategoriesPageInner() {
                   全部 ({products.length})
                 </button>
                 {selectedChildSubcategories.map((subName) => {
+                  const subLower = subName.trim().toLowerCase();
                   const subCount = products.filter((p) => {
                     const parsed = extractSubcategoryFromShortDescription(p.short_description);
                     const s = parsed.subcategory || (typeof p.metadata?.subcategory === "string" ? p.metadata.subcategory.trim() : "");
-                    return s === subName;
+                    return s.toLowerCase() === subLower;
                   }).length;
                   const active = selectedSubcategoryFilter === subName;
                   return (
@@ -1556,66 +1558,70 @@ function ProductDialog({
               onChange={(event) => onUpdate({ ...form, slug: event.target.value.trim().toLowerCase() })}
             />
           </Field>
-          <Field label="一级分类" error={errors.primaryCategoryId} required>
-            <select
-              value={form.primaryCategoryId}
-              onChange={(event) => onUpdate({ ...form, primaryCategoryId: event.target.value, category_id: "" })}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="">请选择一级分类</option>
-              {rootCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
+          <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
+            <Field label="一级分类" error={errors.primaryCategoryId} required>
+              <select
+                value={form.primaryCategoryId}
+                onChange={(event) => onUpdate({ ...form, primaryCategoryId: event.target.value, category_id: "", subcategory: "" })}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">请选择一级分类</option>
+                {rootCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="二级分类" error={errors.category_id} required={secondaries.length > 0}>
+              <select
+                value={form.category_id}
+                disabled={!form.primaryCategoryId || secondaries.length === 0}
+                onChange={(event) => onUpdate({ ...form, category_id: event.target.value, subcategory: "" })}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:bg-slate-50"
+              >
+                <option value="">
+                  {!form.primaryCategoryId ? "请先选择一级分类" : secondaries.length === 0 ? "无二级分类，直接绑定一级分类" : "请选择二级分类"}
                 </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="二级分类" error={errors.category_id} required={secondaries.length > 0}>
-            <select
-              value={form.category_id}
-              disabled={!form.primaryCategoryId || secondaries.length === 0}
-              onChange={(event) => onUpdate({ ...form, category_id: event.target.value, subcategory: "" })}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:bg-slate-50"
-            >
-              <option value="">
-                {!form.primaryCategoryId ? "请先选择一级分类" : secondaries.length === 0 ? "无二级分类，直接绑定一级分类" : "请选择二级分类"}
-              </option>
-              {secondaries.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="所属子分类（选填，用于二级分类下拉子目录分组）" className="sm:col-span-2">
-            {(() => {
-              const selectedSec = secondaries.find((c) => c.id === form.category_id);
-              const subOptions = extractSubcategoriesFromCategory(selectedSec);
-              return (
-                <div className="flex gap-2">
-                  {subOptions.length > 0 ? (
-                    <select
-                      value={subOptions.includes(form.subcategory) ? form.subcategory : ""}
-                      onChange={(event) => onUpdate({ ...form, subcategory: event.target.value })}
-                      className="h-10 w-1/2 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="">不指定 / 手动输入子分类</option>
-                      {subOptions.map((subName) => (
-                        <option key={subName} value={subName}>
-                          {subName}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
-                  <Input
+                {secondaries.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="所属子分类（选填）">
+              {(() => {
+                const selectedSec = secondaries.find((c) => c.id === form.category_id);
+                const baseOptions = extractSubcategoriesFromCategory(selectedSec);
+                const subOptions =
+                  form.subcategory && !baseOptions.includes(form.subcategory)
+                    ? [form.subcategory, ...baseOptions]
+                    : baseOptions;
+                return (
+                  <select
                     value={form.subcategory}
-                    placeholder="输入或选择子分类名称（如：Facebook脸书 老号）"
+                    disabled={!form.category_id || subOptions.length === 0}
                     onChange={(event) => onUpdate({ ...form, subcategory: event.target.value })}
-                  />
-                </div>
-              );
-            })()}
-          </Field>
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:bg-slate-50"
+                  >
+                    <option value="">
+                      {!form.category_id
+                        ? "请先选择二级分类"
+                        : subOptions.length === 0
+                          ? "当前二级分类暂无子分类"
+                          : "不指定子分类"}
+                    </option>
+                    {subOptions.map((subName) => (
+                      <option key={subName} value={subName}>
+                        {subName}
+                      </option>
+                    ))}
+                  </select>
+                );
+              })()}
+            </Field>
+          </div>
           <Field label="简短说明" className="sm:col-span-2">
             <Input
               value={form.short_description}

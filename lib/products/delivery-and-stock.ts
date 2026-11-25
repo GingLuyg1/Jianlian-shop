@@ -14,7 +14,7 @@ export const EXTENDED_DELIVERY_OPTIONS: ReadonlyArray<{
   baseDeliveryType: BaseDeliveryType;
 }> = [
   { value: "manual", label: "人工发货", baseDeliveryType: "manual" },
-  { value: "automatic", label: "自动发货", baseDeliveryType: "automatic" },
+  { value: "automatic", label: "自动发货-供应商", baseDeliveryType: "automatic" },
   { value: "automatic_digital_inventory", label: "自动发货-数字库存", baseDeliveryType: "automatic" },
   { value: "shipping", label: "物流发货", baseDeliveryType: "shipping" },
   { value: "preorder_address", label: "预约发货-地址表单", baseDeliveryType: "shipping" },
@@ -23,7 +23,7 @@ export const EXTENDED_DELIVERY_OPTIONS: ReadonlyArray<{
 
 export const EXTENDED_DELIVERY_LABELS: Record<ExtendedDeliveryMode, string> = {
   manual: "人工发货",
-  automatic: "自动发货",
+  automatic: "自动发货-供应商",
   automatic_digital_inventory: "自动发货-数字库存",
   shipping: "物流发货",
   preorder_address: "预约发货-地址表单",
