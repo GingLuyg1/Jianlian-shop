@@ -36,8 +36,9 @@ export const fallbackCategoriesByPath: Record<string, StorefrontFallbackCategory
     { slug: "youtube", name: "YouTube", image: "/assets/digital-youtube.svg" },
     { slug: "twitch", name: "Twitch", image: "/assets/digital-twitch.svg" },
     { slug: "github", name: "GitHub", image: "/assets/digital-github.png", aliases: ["git-hub"] },
-    { slug: "linkedin", name: "LinkedIn", icon: "key", aliases: ["linked-in"] },
+    { slug: "linkedin", name: "LinkedIn", image: "/assets/digital-linkedin.png", aliases: ["linked-in"] },
     { slug: "threads", name: "Threads", image: "/assets/digital-threads.png", aliases: ["thread"] },
+    { slug: "discord", name: "Discord", image: "/assets/digital-discord.png", aliases: ["dc"] },
   ],
   "/products/ai-membership": [
     { slug: "chatgpt", name: "ChatGPT", image: "/assets/ai-chatgpt-icon.jpg", aliases: ["chat gpt", "chat-gpt"] },
