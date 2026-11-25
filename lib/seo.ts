@@ -254,9 +254,17 @@ export function productJsonLd(product: SeoProduct, categoryPath = "") {
           ? "https://schema.org/OutOfStock"
           : "https://schema.org/InStock";
   const path = `/products/${product.slug || product.id}`;
-  const nextYear = new Date();
+  const now = new Date();
+  const nextYear = new Date(now);
   nextYear.setFullYear(nextYear.getFullYear() + 1);
   const priceValidUntil = nextYear.toISOString().slice(0, 10);
+  const parsedUpdatedAt = product.updated_at ? new Date(product.updated_at) : null;
+  const validFrom =
+    parsedUpdatedAt && !Number.isNaN(parsedUpdatedAt.getTime())
+      ? parsedUpdatedAt.toISOString()
+      : now.toISOString();
+  const isPhysicalShipping = product.delivery_type === "shipping";
+  const servedRegions = ["HK", "US", "SG", "JP", "GB"];
 
   return {
     "@context": "https://schema.org",
@@ -277,9 +285,42 @@ export function productJsonLd(product: SeoProduct, categoryPath = "") {
       url: absoluteUrl(path),
       priceCurrency: "CNY",
       price: Number(product.price ?? 0).toFixed(2),
+      validFrom,
       priceValidUntil,
       availability,
       itemCondition: "https://schema.org/NewCondition",
+      shippingDetails: {
+        "@type": "OfferShippingDetails",
+        shippingRate: {
+          "@type": "MonetaryAmount",
+          value: "0.00",
+          currency: "CNY",
+        },
+        shippingDestination: {
+          "@type": "DefinedRegion",
+          addressCountry: servedRegions,
+        },
+        deliveryTime: {
+          "@type": "ShippingDeliveryTime",
+          handlingTime: {
+            "@type": "QuantitativeValue",
+            minValue: 0,
+            maxValue: isPhysicalShipping ? 1 : 0,
+            unitCode: "DAY",
+          },
+          transitTime: {
+            "@type": "QuantitativeValue",
+            minValue: isPhysicalShipping ? 1 : 0,
+            maxValue: isPhysicalShipping ? 5 : 0,
+            unitCode: "DAY",
+          },
+        },
+      },
+      hasMerchantReturnPolicy: {
+        "@type": "MerchantReturnPolicy",
+        applicableCountry: servedRegions,
+        returnPolicyCategory: "https://schema.org/MerchantReturnNotPermitted",
+      },
       seller: {
         "@type": "Organization",
         name: SITE_NAME,
