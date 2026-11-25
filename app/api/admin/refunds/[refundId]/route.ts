@@ -23,13 +23,14 @@ async function requireSuperAdmin(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const admin = await requireSuperAdmin(request);
   if (!admin.ok) return admin.response;
+  const { refundId } = await context.params;
   const supabase = getSupabaseServiceRoleClient() ?? admin.supabase;
 
   try {
     const { data, error } = await supabase
       .from("refund_requests")
       .select("*,orders(*,order_items(*)),profiles(email,display_name),refund_status_logs(*)")
-      .eq("id", (await context.params).refundId)
+      .eq("id", refundId)
       .maybeSingle();
     if (error) return json({ error: normalizeRefundError(error.message) }, { status: 503 });
     if (!data) return json({ error: "退款申请不存在。" }, { status: 404 });
@@ -43,6 +44,7 @@ export async function GET(request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   const admin = await requireSuperAdmin(request);
   if (!admin.ok) return admin.response;
+  const { refundId } = await context.params;
   const supabase = admin.supabase;
 
   const body = (await request.json().catch(() => null)) as
@@ -57,7 +59,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const before = await supabase
       .from("refund_requests")
       .select("id,refund_no,status,requested_amount,approved_amount,refund_method,order_id,user_id,orders(payment_method)")
-      .eq("id", (await context.params).refundId)
+      .eq("id", refundId)
       .maybeSingle();
     if (before.error) return json({ error: normalizeRefundError(before.error.message) }, { status: 503 });
     if (!before.data) return json({ error: "退款申请不存在。" }, { status: 404 });
@@ -73,7 +75,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: "refund_approve_balance",
         module: "orders",
         targetType: "refund",
-        targetId: (await context.params).refundId,
+        targetId: refundId,
         targetLabel: String(beforeRow.refund_no ?? ""),
         result: "denied",
         errorMessage: "外部支付订单不能通过余额退款自动完成",
@@ -89,7 +91,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const { data, error } = await supabase.rpc("super_admin_process_refund_request", {
-      p_refund_id: (await context.params).refundId,
+      p_refund_id: refundId,
       p_action: action,
       p_approved_amount: body?.approvedAmount ?? null,
       p_review_note: reviewNote,
@@ -106,7 +108,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         action: `refund_${action}`,
         module: "orders",
         targetType: "refund",
-        targetId: (await context.params).refundId,
+        targetId: refundId,
         result: "failed",
         errorCode: typeof error.code === "string" ? error.code : null,
         errorMessage: message,
@@ -115,21 +117,27 @@ export async function PATCH(request: Request, context: RouteContext) {
       return json({ error: message }, { status: 400 });
     }
 
-    await writeAdminAuditLog({
+    const audit = await writeAdminAuditLog({
       request,
       admin: { id: admin.user.id, email: admin.user.email },
       action: `refund_${action}`,
       module: "orders",
       targetType: "refund",
-      targetId: (await context.params).refundId,
+      targetId: refundId,
       targetLabel: beforeRow.refund_no ? String(beforeRow.refund_no) : null,
       result: "success",
       beforeSummary: beforeRow,
       afterSummary: data ?? null,
       metadata: { action, actionLabel: REFUND_ACTION_LABELS[action], hasProviderRefundId: Boolean(body?.providerRefundId) },
     });
+    if (!audit.ok) {
+      console.error("[Admin Refunds] audit log write failed after refund action", { refundId, action });
+    }
 
-    return json({ result: data });
+    return json({
+      result: data,
+      ...(audit.ok ? {} : { auditWarning: "操作已生效，但审计日志写入失败，请通知管理员核查。" }),
+    });
   } catch (error) {
     console.error("[Admin Refunds] process failed", error);
     await writeAdminAuditLog({
@@ -138,7 +146,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: `refund_${action ?? "unknown"}`,
       module: "orders",
       targetType: "refund",
-      targetId: (await context.params).refundId,
+      targetId: refundId,
       result: "failed",
       errorMessage: error,
     });

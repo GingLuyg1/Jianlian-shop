@@ -406,7 +406,11 @@ async function countQuery(
   return { count: count ?? 0, failed: false, missing: false };
 }
 
-async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
+let cachedDashboardReadiness: any = null;
+let cachedDashboardReadinessAt = 0;
+const READINESS_CLIENT_CACHE_MS = 120_000;
+
+async function loadDashboardData(sinceDate?: Date, options?: { skipReadiness?: boolean }): Promise<DashboardData> {
   const supabase = getSupabaseBrowserClient();
   const today = startOfToday();
   const yesterday = addDays(today, -1);
@@ -414,6 +418,10 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
   const thirtyDaysAgo = addDays(today, -29);
   const queryStart = sinceDate && sinceDate < thirtyDaysAgo ? sinceDate : thirtyDaysAgo;
   const weekAgo = addDays(today, -6);
+
+  const shouldFetchReadiness =
+    !options?.skipReadiness &&
+    (!cachedDashboardReadiness || Date.now() - cachedDashboardReadinessAt > READINESS_CLIENT_CACHE_MS);
 
   const [
     ordersResult,
@@ -429,6 +437,9 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
     readinessResult,
     lowStockResult,
     financeCostResult,
+    orderItemsResult,
+    recentOrdersResult,
+    recentRechargesResult,
   ] = await Promise.allSettled([
     supabase
       .from("orders")
@@ -465,10 +476,15 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
       .gte("visit_date", queryStart.toISOString())
       .lt("visit_date", tomorrow.toISOString())
       .not("page_path", "like", "/admin%"),
-    fetch("/api/admin/payments/readiness", { cache: "no-store" }).then(async (response) => {
-      if (!response.ok) throw new Error("readiness unavailable");
-      return response.json();
-    }),
+    shouldFetchReadiness
+      ? fetch("/api/admin/payments/readiness", { cache: "no-store" }).then(async (response) => {
+          if (!response.ok) throw new Error("readiness unavailable");
+          const data = await response.json();
+          cachedDashboardReadiness = data;
+          cachedDashboardReadinessAt = Date.now();
+          return data;
+        })
+      : Promise.resolve(cachedDashboardReadiness),
     listProducts({ page: 1, pageSize: 1, stockLevel: "low", sortBy: "updated_at" }),
     fetch(`/api/admin/finance/cost-data?since=${encodeURIComponent(queryStart.toISOString())}`, { cache: "no-store" }).then(
       async (response) => {
@@ -476,6 +492,21 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
         return (await response.json()) as FinanceCostDataPayload;
       }
     ),
+    supabase
+      .from("order_items")
+      .select("order_id,product_id,product_name,quantity,line_total,created_at")
+      .gte("created_at", queryStart.toISOString()),
+    fetch("/api/admin/orders?page=1&pageSize=7&sortBy=created_at&sortDirection=desc", { cache: "no-store" }).then(
+      async (response) => {
+        if (!response.ok) throw new Error("RECENT_ORDERS_UNAVAILABLE");
+        return (await response.json()) as { orders?: Array<DashboardOrder & { items?: Array<{ product_name?: string }> }> };
+      }
+    ),
+    supabase
+      .from("account_recharges")
+      .select("id,recharge_no,user_email,amount,channel_name,channel_code,status,created_at")
+      .order("created_at", { ascending: false })
+      .limit(7),
   ]);
 
   const orders = ordersResult.status === "fulfilled" && !ordersResult.value.error
@@ -566,10 +597,10 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
   });
 
   const paidOrderIds = new Set((orders ?? []).filter((order) => order.payment_status === "paid").map((order) => order.id));
-  const orderItemRowsResult = await supabase
-    .from("order_items")
-    .select("order_id,product_id,product_name,quantity,line_total,created_at")
-    .gte("created_at", queryStart.toISOString());
+  const orderItemRowsResult =
+    orderItemsResult.status === "fulfilled"
+      ? orderItemsResult.value
+      : { data: null, error: new Error("order_items failed") };
   const orderProductNameMap = new Map<string, string>();
   if (!orderItemRowsResult.error) {
     ((orderItemRowsResult.data ?? []) as any[]).forEach((item) => {
@@ -588,10 +619,11 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
         .filter((item) => item.order_id && paidOrderIds.has(item.order_id));
   const rankMap = new Map<string, ProductRank>();
   if (orderItems && products) {
+    const productById = new Map(products.map((row) => [row.id, row]));
     orderItems.forEach((item) => {
       const id = item.product_id ?? item.product_name ?? "";
       if (!id) return;
-      const product = products.find((row) => row.id === item.product_id);
+      const product = item.product_id ? productById.get(item.product_id) : undefined;
       const previous = rankMap.get(id) ?? {
         id,
         name: product?.name ?? item.product_name ?? "未知商品",
@@ -607,6 +639,23 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
     });
   }
   const ranks = Array.from(rankMap.values());
+
+  const resolvedRecentOrders: DashboardOrder[] =
+    recentOrdersResult.status === "fulfilled" && Array.isArray(recentOrdersResult.value?.orders)
+      ? recentOrdersResult.value.orders.slice(0, 7).map((order: any) => {
+          const items = order.order_items || order.items;
+          const resolvedName =
+            Array.isArray(items) && items.length > 0
+              ? items.map((i: any) => i.product_name).filter(Boolean).join("、")
+              : order.product_name || "数字商品";
+          return { ...order, product_name: resolvedName };
+        })
+      : decoratedOrders.slice(0, 7);
+
+  const resolvedRecentRecharges: DashboardRecharge[] =
+    recentRechargesResult.status === "fulfilled" && !recentRechargesResult.value.error
+      ? ((recentRechargesResult.value.data ?? []) as DashboardRecharge[])
+      : recharges?.slice(0, 7) ?? [];
 
   const callbackReady = Boolean(
     readiness?.codeChecks?.unifiedCallbackRoute ?? readiness?.checks?.callbackRoute?.ok
@@ -770,8 +819,8 @@ async function loadDashboardData(sinceDate?: Date): Promise<DashboardData> {
     soldOut: products ? products.filter((product) => product.status === "sold_out" || product.stock === 0).slice(0, 8) : [],
     recentProducts: products ? [...products].sort((a, b) => new Date(b.created_at ?? b.updated_at ?? 0).getTime() - new Date(a.created_at ?? a.updated_at ?? 0).getTime()).slice(0, 8) : [],
     staleProducts: products ? [...products].sort((a, b) => new Date(a.updated_at ?? a.created_at ?? 0).getTime() - new Date(b.updated_at ?? b.created_at ?? 0).getTime()).slice(0, 8) : [],
-    recentOrders: decoratedOrders.slice(0, 8),
-    recentRecharges: recharges?.slice(0, 8) ?? [],
+    recentOrders: resolvedRecentOrders,
+    recentRecharges: resolvedRecentRecharges,
     userOverview: [
       { label: "总用户", value: users ? users.length : FAILED },
       { label: "今日新增", value: todayUsers ? todayUsers.length : FAILED },
@@ -855,6 +904,7 @@ export default function AdminDashboardPage() {
   }, [dateFilter, productSortBy, productSortOrder, productPageSize]);
 
   const refreshInFlight = useMemo(() => ({ current: false }), []);
+  const lastRefreshTimeRef = useMemo(() => ({ current: 0 }), []);
   const loadDashboard = useCallback(async (sinceDate?: Date, quiet = false) => {
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
@@ -869,26 +919,9 @@ export default function AdminDashboardPage() {
     }
 
     try {
-      const nextData = await loadDashboardData(sinceDate);
-      // Match the canonical admin order list, independent of the trend date range.
-      const response = await fetch("/api/admin/orders?page=1&pageSize=7&sortBy=created_at&sortDirection=desc", { cache: "no-store" });
-      if (!response.ok) throw new Error("RECENT_ORDERS_UNAVAILABLE");
-      const recent = await response.json() as { orders?: Array<DashboardOrder & { items?: Array<{ product_name?: string }> }> };
-      if (!Array.isArray(recent.orders)) throw new Error("RECENT_ORDERS_INVALID");
-      const rechargeResult = await getSupabaseBrowserClient().from("account_recharges")
-        .select("id,recharge_no,user_email,amount,channel_name,channel_code,status,created_at")
-        .order("created_at", { ascending: false }).limit(7);
-      if (rechargeResult.error) throw new Error("RECENT_RECHARGES_UNAVAILABLE");
-      setData({ ...nextData,
-        recentOrders: recent.orders.slice(0, 7).map((order: any) => {
-          const items = order.order_items || order.items;
-          const resolvedName = Array.isArray(items) && items.length > 0
-            ? items.map((i: any) => i.product_name).filter(Boolean).join("、")
-            : (order.product_name || "数字商品");
-          return { ...order, product_name: resolvedName };
-        }),
-        recentRecharges: (rechargeResult.data ?? []) as DashboardRecharge[],
-      });
+      const nextData = await loadDashboardData(sinceDate, { skipReadiness: quiet });
+      setData(nextData);
+      lastRefreshTimeRef.current = Date.now();
       setLastRefreshedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
     } catch (dashboardError) {
       console.error("[AdminDashboard] load failed", dashboardError);
@@ -897,18 +930,22 @@ export default function AdminDashboardPage() {
       refreshInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [lastRefreshTimeRef, refreshInFlight]);
 
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
 
   useEffect(() => {
-    const refresh = () => { if (document.visibilityState === "visible") void loadDashboard(dateFilter.from, true); };
-    const timer = window.setInterval(refresh, 30000);
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastRefreshTimeRef.current < 20_000) return;
+      void loadDashboard(dateFilter.from, true);
+    };
+    const timer = window.setInterval(refresh, 90_000);
     document.addEventListener("visibilitychange", refresh);
     return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
-  }, [dateFilter.from, loadDashboard]);
+  }, [dateFilter.from, lastRefreshTimeRef, loadDashboard]);
 
   const handleDateFilterChange = useCallback(
     (next: DashboardDateFilterValue) => {

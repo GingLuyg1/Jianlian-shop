@@ -2,6 +2,7 @@
 
 import React, { FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   AlertTriangle,
@@ -57,12 +58,17 @@ import {
 
 type AdminTicketTab = "all" | "processing" | "completed" | "flagged";
 
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 export default function AdminTicketsPage() {
+  const searchParams = useSearchParams();
+  const initialUrlTicketId = searchParams.get("ticket") || searchParams.get("ticketId") || null;
+  const initialUrlQuery = searchParams.get("q") || "";
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(initialUrlTicketId);
   const [activeTab, setActiveTab] = useState<AdminTicketTab>("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialUrlQuery);
 
   // 回复表单状态
   const [replyText, setReplyText] = useState("");
@@ -123,6 +129,17 @@ export default function AdminTicketsPage() {
     void loadTicketsFromServer();
   }, [loadTicketsFromServer]);
 
+  useEffect(() => {
+    const paramTicket = searchParams.get("ticket") || searchParams.get("ticketId");
+    const paramQuery = searchParams.get("q");
+    if (paramQuery !== null) {
+      setSearchQuery(paramQuery);
+    }
+    if (paramTicket && tickets.some((item) => item.id === paramTicket)) {
+      setSelectedTicketId(paramTicket);
+    }
+  }, [searchParams, tickets]);
+
   // 通知侧边栏和控制台刷新未处理徽章
   const syncAdminTicketsState = (newTickets: TicketItem[]) => {
     setTickets(newTickets);
@@ -157,7 +174,7 @@ export default function AdminTicketsPage() {
     };
   }, [tickets]);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     updateTabGeometry();
     const bar = tabBarRef.current;
     if (!bar || typeof ResizeObserver === "undefined") return;
@@ -741,7 +758,6 @@ export default function AdminTicketsPage() {
                   {/* 官方答复输入底栏（支持 Ctrl+V 粘贴图片与上传图片/文件） */}
                   <form
                     onSubmit={handleAdminReply}
-                    onPaste={handlePasteImages}
                     className="p-3.5 border-t border-slate-100 bg-slate-50/40 shrink-0 space-y-2.5"
                   >
                     <Textarea

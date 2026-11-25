@@ -45,8 +45,8 @@ test('refund UI wires server total, resets filters and rejects stale request res
   assert.match(ui, /本页待审核/);
   assert.match(ui, /记录总数未知/);
   assert.equal((ui.match(/version !== requestVersion.current/g) ?? []).length, 2);
-  assert.match(ui, /version === requestVersion.current\) setLoading\(false\)/);
-  assert.match(ui, /return \(\) => \{ requestVersion.current \+= 1; \}/);
+  assert.match(ui, /version === requestVersion\.current(?:\s*&&\s*!controller\.signal\.aborted)?\)\s*setLoading\(false\)/);
+  assert.match(ui, /return \(\) => \{ requestVersion\.current \+= 1;/);
 });
 
 test('refund read route still authorizes before queries and never mutates refund records', () => {

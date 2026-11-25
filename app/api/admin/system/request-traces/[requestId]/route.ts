@@ -23,8 +23,17 @@ export async function GET(request: Request, props: { params: Promise<{ requestId
   const client = getSupabaseServiceRoleClient() ?? admin.supabase;
 
   try {
+    const isSuperAdmin = admin.adminAuthorization?.admin_level === "super_admin";
     const payload = await loadRequestTrace(client, safeRequestId);
-    const response = NextResponse.json(payload);
+    const filteredPayload = isSuperAdmin
+      ? payload
+      : {
+          ...payload,
+          events: payload.events.filter(
+            (event) => !/审计|audit|email|邮件/i.test(String(event.source ?? ""))
+          ),
+        };
+    const response = NextResponse.json(filteredPayload);
     return withRequestIdHeader(response, safeRequestId);
   } catch (error) {
     await recordApiError({

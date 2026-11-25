@@ -65,14 +65,18 @@ test('workspaces render explicit raw option values and Chinese display helpers, 
   assert.equal(labels.currencyLabel('USDT'), 'USDT');
 });
 function renderWorkspace(kind, row, worker = {}) {
-  const states = [{},1,0,[row],worker,1,false,''];
+  const states = [{},'',1,0,[row],worker,1,false,'',{from:new Date(),to:new Date(),preset:'30d'},true];
   let cursor=0;
   const wrap = ({children}) => createElement('div',null,children);
   const component=loadTs('components/admin/OperationsReadonlyWorkspace.tsx', {
     react: {useEffect(){},useRef: v=>({current:v}),useState:()=>[states[cursor++],()=>{}]},
     'react/jsx-runtime': jsx,
     'next/link': ({children,href})=>createElement('a',{href},children),
+    'next/navigation': {useSearchParams:()=>new URLSearchParams()},
+    'date-fns': {format:()=>'2026-01-01'},
+    'lucide-react': {Check:()=>null,Copy:()=>null,RefreshCw:()=>null},
     '@/components/admin/AdminPageShell': ({children,title,description})=>createElement('section',null,createElement('h1',null,title),createElement('p',null,description),children),
+    '@/components/admin/dashboard/AdminDateRangeFilter': {AdminDateRangeFilter:wrap,getPresetDateRange:()=>({from:new Date(),to:new Date(),preset:'30d'})},
     '@/components/admin/v2/AdminList': {AdminListSurface:wrap,AdminTableViewport:wrap,AdminListPagination:wrap},
     '@/components/ui/button': {Button:wrap}, '@/components/ui/input':{Input:props=>createElement('input',props)},
     '@/lib/admin/list-pagination.mjs': {listPagination}, '@/lib/admin/display-labels':labels,

@@ -115,23 +115,13 @@ function computeOrderFinancials(ord: AgentOrder) {
       ? Number(ord.orderAmount)
       : paidAmount;
 
-  let costAmount: number;
-  if (typeof ord.costAmount === "number" && ord.costAmount >= 0) {
-    costAmount = ord.costAmount;
-  } else {
-    // 根据商品名称特征估算标准渠道供货成本率（82% ~ 88%）
-    const name = (ord.productName || "").toLowerCase();
-    const costRatio =
-      name.includes("chatgpt") || name.includes("claude") || name.includes("grok")
-        ? 0.84
-        : name.includes("sim") || name.includes("giffgaff") || name.includes("卡")
-        ? 0.82
-        : 0.85;
-    costAmount = Number((paidAmount * costRatio).toFixed(2));
-  }
+  const costAmount =
+    typeof ord.costAmount === "number" && Number.isFinite(ord.costAmount) && ord.costAmount >= 0
+      ? ord.costAmount
+      : 0;
 
   const profitAmount =
-    typeof ord.profitAmount === "number"
+    typeof ord.profitAmount === "number" && Number.isFinite(ord.profitAmount)
       ? ord.profitAmount
       : Number((paidAmount - costAmount).toFixed(2));
 
@@ -189,175 +179,21 @@ export default function AdminAgentsPage() {
     setPage(1);
   }, [activeTab, search, pageSize]);
 
-  // 加载真实数据并清理历史演示假数据
+  // 从服务端数据库加载真实代理申请、IP 白名单与分销订单（彻底脱离 localStorage）
   const loadRealAgentData = useCallback(async () => {
-    if (typeof window === "undefined") return;
-    let cleanApps: ApiApplication[] = [];
-    let cleanWls: WhitelistEntry[] = [];
-    let localOrders: AgentOrder[] = [];
-
-    try {
-      const rawApps = window.localStorage.getItem("jianlian_admin_api_applications");
-      if (rawApps) {
-        const parsed = JSON.parse(rawApps);
-        if (Array.isArray(parsed)) {
-          cleanApps = parsed.filter(
-            (item: ApiApplication) => item && !LEGACY_FAKE_APP_IDS.has(item.id)
-          );
-          if (cleanApps.length !== parsed.length) {
-            window.localStorage.setItem(
-              "jianlian_admin_api_applications",
-              JSON.stringify(cleanApps)
-            );
-          }
-        }
-      }
-      // 自动扫描前台已开通的商户（jianlian_mch_app_status_<email> === "approved"）并同步到后台列表中，确保前后台信息完全同步
-      let syncedNew = false;
-      for (let i = 0; i < window.localStorage.length; i++) {
-        const key = window.localStorage.key(i);
-        if (!key || !key.startsWith("jianlian_mch_app_status_")) continue;
-        const emailKey = key.replace("jianlian_mch_app_status_", "").trim();
-        if (!emailKey) continue;
-        const statusVal = window.localStorage.getItem(key);
-        if (statusVal === "approved" && !cleanApps.some((a) => a.email === emailKey)) {
-          const savedAppId = window.localStorage.getItem(`jianlian_mch_app_id_${emailKey}`) || `MCH_${Math.floor(10000000 + Math.random() * 90000000)}`;
-          const savedSecret = window.localStorage.getItem(`jianlian_developer_key_${emailKey}`) || "";
-          let savedIps: string[] = [];
-          try {
-            const rawIps = window.localStorage.getItem(`jianlian_mch_whitelist_${emailKey}`);
-            if (rawIps) {
-              const parsedIps = JSON.parse(rawIps);
-              if (Array.isArray(parsedIps)) savedIps = parsedIps.filter(Boolean);
-            }
-          } catch {}
-          cleanApps.unshift({
-            id: `APP_SYNC_${Date.now()}_${i}`,
-            email: emailKey,
-            merchantName: emailKey.split("@")[0] || "平台认证商户",
-            businessScenario: "开放平台标准 API 自动化订单与库存对接",
-            serverIps: savedIps,
-            contact: emailKey,
-            status: "approved",
-            appliedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-            appId: savedAppId,
-            appSecret: savedSecret,
-          });
-          syncedNew = true;
-        }
-      }
-      if (syncedNew) {
-        window.localStorage.setItem(
-          "jianlian_admin_api_applications",
-          JSON.stringify(cleanApps)
-        );
-      }
-    } catch {}
-
-    try {
-      const rawWl = window.localStorage.getItem("jianlian_admin_ip_whitelist");
-      if (rawWl) {
-        const parsed = JSON.parse(rawWl);
-        if (Array.isArray(parsed)) {
-          cleanWls = parsed.filter(
-            (item: WhitelistEntry) => item && !LEGACY_FAKE_WL_IDS.has(item.id)
-          );
-          if (cleanWls.length !== parsed.length) {
-            window.localStorage.setItem(
-              "jianlian_admin_ip_whitelist",
-              JSON.stringify(cleanWls)
-            );
-          }
-        }
-      }
-    } catch {}
-
-    try {
-      const rawOrders = window.localStorage.getItem("jianlian_admin_agent_orders");
-      if (rawOrders) {
-        const parsed = JSON.parse(rawOrders);
-        if (Array.isArray(parsed)) {
-          localOrders = parsed.filter(
-            (item: AgentOrder) => item && !LEGACY_FAKE_ORDER_IDS.has(item.id)
-          );
-          if (localOrders.length !== parsed.length) {
-            window.localStorage.setItem(
-              "jianlian_admin_agent_orders",
-              JSON.stringify(localOrders)
-            );
-          }
-        }
-      }
-    } catch {}
-
-    setApplications(cleanApps);
-    setWhitelists(cleanWls);
-    notifySidebarBadgesUpdated();
-
-    // 从后台真实订单 API 拉取真实开放 API 订单并整合利润数据
     setLoadingOrders(true);
     try {
-      const res = await fetch("/api/admin/orders?page=1&pageSize=50", {
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const payload = await res.json().catch(() => null);
-        const apiRows = Array.isArray(payload?.orders) ? payload.orders : [];
-        const apiOnlyRows = apiRows.filter((row: any) => {
-          const isApi =
-            row.source === "api" ||
-            row.channel === "api" ||
-            row.order_source === "api" ||
-            (row.app_id && row.app_id !== "DIRECT_ORDER");
-          return Boolean(isApi);
-        });
-        const mappedRealOrders: AgentOrder[] = apiOnlyRows.map((row: any) => {
-          const itemSummary =
-            Array.isArray(row.order_items) && row.order_items.length > 0
-              ? row.order_items
-                  .map((it: any) => `${it.product_name || "商品"} x${it.quantity || 1}`)
-                  .join("、")
-              : row.product_name || "平台数字商品订单";
-          const totalAmount = Number(row.total_amount ?? row.amount ?? 0);
-          const rawCost =
-            row.cost_amount !== undefined && row.cost_amount !== null
-              ? Number(row.cost_amount)
-              : row.supplier_cost !== undefined && row.supplier_cost !== null
-              ? Number(row.supplier_cost)
-              : undefined;
-          const statusStr = String(row.status || "").toLowerCase();
-          const isDelivered =
-            statusStr === "delivered" ||
-            statusStr === "completed" ||
-            statusStr === "fulfilled";
-
-          return {
-            id: String(row.id || row.order_no),
-            orderNo: String(row.order_no || row.id || "—"),
-            merchantEmail: String(row.customer_email || row.user_email || "真实客户订单"),
-            appId: row.app_id ? String(row.app_id) : "DIRECT_ORDER",
-            productName: itemSummary,
-            amount: totalAmount,
-            orderAmount: Number(row.original_amount ?? totalAmount),
-            costAmount: rawCost,
-            deliveryStatus: isDelivered ? "auto_delivered" : "processing",
-            createdAt: row.created_at
-              ? new Date(row.created_at).toLocaleString("zh-CN", { hour12: false })
-              : "—",
-          };
-        });
-
-        const existingIds = new Set(mappedRealOrders.map((o) => o.orderNo));
-        const merged = [
-          ...mappedRealOrders,
-          ...localOrders.filter((o) => !existingIds.has(o.orderNo)),
-        ];
-        setOrders(merged);
-      } else {
-        setOrders(localOrders);
+      const res = await fetch("/api/admin/agents", { cache: "no-store" });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.error || "代理数据加载失败");
       }
-    } catch {
-      setOrders(localOrders);
+      setApplications(Array.isArray(payload?.applications) ? payload.applications : []);
+      setWhitelists(Array.isArray(payload?.whitelists) ? payload.whitelists : []);
+      setOrders(Array.isArray(payload?.orders) ? payload.orders : []);
+      notifySidebarBadgesUpdated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "代理数据加载失败");
     } finally {
       setLoadingOrders(false);
     }
@@ -371,154 +207,111 @@ export default function AdminAgentsPage() {
     router.replace(`/admin/agents?tab=${tab}`);
   };
 
-  // 审核通过
-  const handleApprove = (app: ApiApplication) => {
-    const freshAppId = `MCH_${Math.floor(10000000 + Math.random() * 90000000)}`;
-    const chars = "abcdef0123456789";
-    let randomSecret = "";
-    for (let i = 0; i < 32; i++) {
-      randomSecret += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    const freshSecret = `jl_live_${randomSecret}`;
-
-    const updatedApps = applications.map((item) =>
-      item.id === app.id
-        ? {
-            ...item,
-            status: "approved" as const,
-            appId: freshAppId,
-            appSecret: freshSecret,
-          }
-        : item
-    );
-    setApplications(updatedApps);
-    window.localStorage.setItem(
-      "jianlian_admin_api_applications",
-      JSON.stringify(updatedApps)
-    );
-    notifySidebarBadgesUpdated();
-
-    // 同步给该用户的前台凭证状态
-    window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "approved");
-    window.localStorage.setItem(`jianlian_mch_app_id_${app.email}`, freshAppId);
-    window.localStorage.setItem(`jianlian_developer_key_${app.email}`, freshSecret);
-
-    // 自动将拟加白 IP 录入白名单池
-    if (app.serverIps && app.serverIps.length > 0) {
-      const newEntries: WhitelistEntry[] = app.serverIps.map((ip, idx) => ({
-        id: `WL_${Date.now()}_${idx}`,
-        email: app.email,
-        merchantName: app.merchantName,
-        appId: freshAppId,
-        ip: ip.trim(),
-        remark: "API审核通过自动加白",
-        addedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-        status: "active",
-      }));
-      const nextWl = [...newEntries, ...whitelists];
-      setWhitelists(nextWl);
-      window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(nextWl));
-      window.localStorage.setItem(
-        `jianlian_mch_whitelist_${app.email}`,
-        JSON.stringify(app.serverIps)
+  // 审核通过（服务端 crypto.randomBytes 生成 AppID/AppSecret 并落库）
+  const handleApprove = async (app: ApiApplication) => {
+    try {
+      const res = await fetch("/api/admin/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve", id: app.id }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error || "审批通过失败");
+      toast.success(
+        `商户 ${app.merchantName} API 申请已批准！AppID: ${payload.appId}（密钥仅本次展示，请妥善保存）`
       );
+      await loadRealAgentData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "审批通过失败");
     }
-
-    toast.success(`商户 ${app.merchantName} API 申请已批准！已分配 AppID: ${freshAppId}`);
   };
 
-  // 忽略 API 申请（从待办申请中移除，前台恢复为未申请状态）
-  const handleReject = (app: ApiApplication) => {
-    const updatedApps = applications.filter((item) => item.id !== app.id);
-    setApplications(updatedApps);
-    window.localStorage.setItem(
-      "jianlian_admin_api_applications",
-      JSON.stringify(updatedApps)
-    );
-    window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "unapplied");
-    notifySidebarBadgesUpdated();
-    toast.info(`已忽略商户 ${app.merchantName} 的 API 申请`);
+  // 拒绝 API 申请
+  const handleReject = async (app: ApiApplication) => {
+    try {
+      const res = await fetch("/api/admin/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reject", id: app.id }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error || "拒绝申请失败");
+      toast.info(`已拒绝商户 ${app.merchantName} 的 API 申请`);
+      await loadRealAgentData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "拒绝申请失败");
+    }
   };
 
-  // 移除已开通商户的 API 接入权限（移除后需要重新申请）
-  const handleRevoke = (app: ApiApplication) => {
+  // 移除已开通商户的 API 接入权限
+  const handleRevoke = async (app: ApiApplication) => {
     if (!window.confirm(`确定要移除商户【${app.merchantName}】的 API 权限吗？移除后该商户的 API 凭证将失效，需要重新提交申请才能再次开通。`)) {
       return;
     }
-    const updatedApps = applications.filter((item) => item.id !== app.id);
-    setApplications(updatedApps);
-    window.localStorage.setItem(
-      "jianlian_admin_api_applications",
-      JSON.stringify(updatedApps)
-    );
-    window.localStorage.setItem(`jianlian_mch_app_status_${app.email}`, "revoked");
-    window.localStorage.removeItem(`jianlian_mch_app_id_${app.email}`);
-    window.localStorage.removeItem(`jianlian_developer_key_${app.email}`);
-
-    // 联动清除该商户的白名单 IP
-    const nextWl = whitelists.filter((w) => w.email !== app.email);
-    setWhitelists(nextWl);
-    window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(nextWl));
-    window.localStorage.removeItem(`jianlian_mch_whitelist_${app.email}`);
-
-    notifySidebarBadgesUpdated();
-    toast.success(`已移除商户 ${app.merchantName} 的 API 权限，该商户需重新申请方可开通`);
+    try {
+      const res = await fetch("/api/admin/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "revoke", id: app.id }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error || "吊销权限失败");
+      toast.success(`已移除商户 ${app.merchantName} 的 API 权限，该商户需重新申请方可开通`);
+      await loadRealAgentData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "吊销权限失败");
+    }
   };
 
   // 删除白名单 IP
-  const handleDeleteWhitelist = (entry: WhitelistEntry) => {
-    const nextWl = whitelists.filter((w) => w.id !== entry.id);
-    setWhitelists(nextWl);
-    window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(nextWl));
-
-    const remainingForEmail = nextWl
-      .filter((w) => w.email === entry.email)
-      .map((w) => w.ip);
-    window.localStorage.setItem(
-      `jianlian_mch_whitelist_${entry.email}`,
-      JSON.stringify(remainingForEmail)
-    );
-    toast.success(`已从白名单中移除 IP: ${entry.ip}`);
+  const handleDeleteWhitelist = async (entry: WhitelistEntry) => {
+    try {
+      const res = await fetch("/api/admin/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_whitelist", id: entry.id }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error || "移除 IP 白名单失败");
+      toast.success(`已从白名单中移除 IP: ${entry.ip}`);
+      await loadRealAgentData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "移除 IP 白名单失败");
+    }
   };
 
   // 手动新增白名单
-  const handleAddWhitelistSubmit = (e: React.FormEvent) => {
+  const handleAddWhitelistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addIp.trim()) {
       toast.error("请输入有效的服务器 IP 地址");
       return;
     }
     const cleanIp = addIp.trim();
-    const newEntry: WhitelistEntry = {
-      id: `WL_${Date.now()}`,
-      email: addEmail.trim() || "admin_manual@jianlian.shop",
-      merchantName: addMchName.trim() || "平台受控代理商户",
-      appId: `MCH_${Math.floor(10000000 + Math.random() * 90000000)}`,
-      ip: cleanIp,
-      remark: addRemark.trim() || "管理员手动加白",
-      addedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-      status: "active",
-    };
-    const nextWl = [newEntry, ...whitelists];
-    setWhitelists(nextWl);
-    window.localStorage.setItem("jianlian_admin_ip_whitelist", JSON.stringify(nextWl));
-
-    if (addEmail.trim()) {
-      const remainingForEmail = nextWl
-        .filter((w) => w.email === addEmail.trim())
-        .map((w) => w.ip);
-      window.localStorage.setItem(
-        `jianlian_mch_whitelist_${addEmail.trim()}`,
-        JSON.stringify(remainingForEmail)
-      );
+    try {
+      const res = await fetch("/api/admin/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_whitelist",
+          ip: cleanIp,
+          email: addEmail.trim(),
+          merchantName: addMchName.trim(),
+          remark: addRemark.trim(),
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error || "新增 IP 白名单失败");
+      setAddWhitelistOpen(false);
+      setAddIp("");
+      setAddRemark("");
+      setAddEmail("");
+      setAddMchName("");
+      toast.success(`成功为商户加白公网 IP: ${cleanIp}`);
+      await loadRealAgentData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "新增 IP 白名单失败");
     }
-
-    setAddWhitelistOpen(false);
-    setAddIp("");
-    setAddRemark("");
-    setAddEmail("");
-    setAddMchName("");
-    toast.success(`成功为商户加白公网 IP: ${cleanIp}`);
   };
 
   // 搜索过滤与分页计算

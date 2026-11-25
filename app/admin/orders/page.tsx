@@ -4,7 +4,7 @@ import { statusLabel } from '@/lib/admin/display-labels';
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, Eye, Loader2, RefreshCcw, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -137,6 +137,15 @@ export default function AdminOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const ordersAbortRef = useRef<AbortController | null>(null);
+  const ordersReqSeqRef = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const hasFilters = Boolean(
     search.trim() ||
     status !== ALL_VALUE ||
@@ -146,6 +155,10 @@ export default function AdminOrdersPage() {
   );
 
   const loadOrders = useCallback(async () => {
+    ordersAbortRef.current?.abort();
+    const controller = new AbortController();
+    ordersAbortRef.current = controller;
+    const seq = ++ordersReqSeqRef.current;
     setLoading(true);
     setError("");
     try {
@@ -154,7 +167,7 @@ export default function AdminOrdersPage() {
         pageSize: String(pageSize),
         sort,
       });
-      if (search.trim()) params.set("search", search.trim());
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
       if (status !== ALL_VALUE) params.set("status", status);
       if (paymentStatus !== ALL_VALUE) params.set("paymentStatus", paymentStatus);
       if (deliveryType !== ALL_VALUE) params.set("deliveryType", deliveryType);
@@ -170,17 +183,19 @@ export default function AdminOrdersPage() {
       params.set("sortBy", sortField);
       params.set("sortDirection", sortDirection);
 
-      const response = await fetch(`/api/admin/orders?${params.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/admin/orders?${params.toString()}`, { cache: "no-store", signal: controller.signal });
       const payload = await response.json().catch(() => null);
+      if (seq !== ordersReqSeqRef.current || controller.signal.aborted) return;
       if (!response.ok) throw new Error(payload?.error || "订单列表读取失败");
       setOrders(payload.orders ?? []);
       setCount(Number(payload.count ?? 0));
     } catch (err) {
+      if (controller.signal.aborted || seq !== ordersReqSeqRef.current) return;
       setError(getOrderErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (seq === ordersReqSeqRef.current && !controller.signal.aborted) setLoading(false);
     }
-  }, [attention, deliveryType, page, pageSize, paymentStatus, search, sort, status]);
+  }, [attention, debouncedSearch, deliveryType, page, pageSize, paymentStatus, sort, status]);
 
   useEffect(() => {
     void loadOrders();
@@ -501,12 +516,12 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
   }
   const availableActions = useMemo(() => {
     const transitions: Record<OrderStatus, OrderStatus[]> = {
-      pending_payment: ["paid", "cancelled", "failed"],
+      pending_payment: ["cancelled", "failed"],
       paid: ["processing", "cancelled"],
       processing: ["delivered", "completed", "cancelled", "failed"],
       delivered: ["completed"],
       completed: [],
-      cancelled: ["processing"],
+      cancelled: [],
       expired: [],
       refunded: [],
       failed: ["processing"],

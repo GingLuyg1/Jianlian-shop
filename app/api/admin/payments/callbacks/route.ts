@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { DASHBOARD_PAYMENT_CALLBACK_EXCEPTION_RESULTS } from "@/lib/admin/dashboard-payment-schema.mjs";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { isPaymentSchemaMissing, sanitizePaymentError } from "@/lib/payments/admin-payment-queries";
+import { sanitizePostgrestFilterTerm } from "@/lib/security/postgrest-sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const page = boundedInteger(searchParams.get("page"), 1, 1, 100000);
   const pageSize = boundedInteger(searchParams.get("pageSize"), 20, 10, 100);
-  const search = (searchParams.get("search") ?? "").trim().replace(/[%,]/g, "").slice(0, 120);
+  const search = sanitizePostgrestFilterTerm(searchParams.get("search") ?? "", 120);
   const rawAttention = searchParams.get("attention") ?? "";
   if (rawAttention && rawAttention !== "failed") {
     return NextResponse.json({ error: "未知的回调筛选条件" }, { status: 400 });

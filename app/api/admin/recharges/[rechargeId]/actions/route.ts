@@ -77,29 +77,28 @@ export async function POST(request: Request, props: { params: Promise<{ recharge
       reason,
       requestId,
     });
-    try {
-      await writeAdminAuditLog({
-        request,
-        admin: {
-          id: admin.user.id,
-          email: admin.user.email ?? null,
-        },
-        action: `recharge_${action}`,
-        module: "recharges",
-        targetType: "account_recharge",
-        targetId: params.rechargeId,
-        targetLabel: result.recharge.recharge_no,
-        requestId: result.requestId,
-        result: "success",
-        metadata: {
-          idempotent: result.idempotent,
-          outcome: result.outcome,
-          requiresManualReconciliation:
-            result.requiresManualReconciliation,
-        },
-        afterSummary: { status: result.recharge.status },
-      });
-    } catch {
+    const audit = await writeAdminAuditLog({
+      request,
+      admin: {
+        id: admin.user.id,
+        email: admin.user.email ?? null,
+      },
+      action: `recharge_${action}`,
+      module: "recharges",
+      targetType: "account_recharge",
+      targetId: params.rechargeId,
+      targetLabel: result.recharge.recharge_no,
+      requestId: result.requestId,
+      result: "success",
+      metadata: {
+        idempotent: result.idempotent,
+        outcome: result.outcome,
+        requiresManualReconciliation:
+          result.requiresManualReconciliation,
+      },
+      afterSummary: { status: result.recharge.status },
+    });
+    if (!audit.ok) {
       const classified = classifyRechargeReviewError(
         new RechargeReviewAuditError(true, result.recharge.status),
         result.requestId,

@@ -17,7 +17,7 @@ import {
 import { toggleNavigationGroup } from "./admin-navigation-state.mjs";
 import { clearLegacyLocalTickets } from "@/lib/tickets/types";
 
-const DEMO_APP_IDS = new Set(["APP_1732204801", "APP_1732203920", "APP_1732198000"]);
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 let lastAdminSliderGeometry: { top: number; left: number; width: number; height: number } | null = null;
 
@@ -46,25 +46,20 @@ export default function AdminSidebar() {
     clearLegacyLocalTickets();
     let apiPending = 0;
     let ticketPending = 0;
-    try {
-      const rawApps = window.localStorage.getItem("jianlian_admin_api_applications");
-      if (rawApps) {
-        const parsed = JSON.parse(rawApps);
-        if (Array.isArray(parsed)) {
-          apiPending = parsed.filter(
-            (item: any) => item && !DEMO_APP_IDS.has(item.id) && item.status === "pending"
-          ).length;
-        }
-      }
-    } catch {}
 
-    try {
-      const res = await fetch("/api/admin/tickets?summary=1", { cache: "no-store" });
-      if (res.ok) {
-        const payload = (await res.json()) as { counts?: { processing?: number } };
-        ticketPending = Number(payload?.counts?.processing ?? 0);
-      }
-    } catch {}
+    const [agentsRes, ticketsRes] = await Promise.allSettled([
+      fetch("/api/admin/agents?summary=1", { cache: "no-store" }),
+      fetch("/api/admin/tickets?summary=1", { cache: "no-store" }),
+    ]);
+
+    if (agentsRes.status === "fulfilled" && agentsRes.value.ok) {
+      const payload = (await agentsRes.value.json().catch(() => null)) as { pendingApplications?: number } | null;
+      apiPending = Number(payload?.pendingApplications ?? 0);
+    }
+    if (ticketsRes.status === "fulfilled" && ticketsRes.value.ok) {
+      const payload = (await ticketsRes.value.json().catch(() => null)) as { counts?: { processing?: number } } | null;
+      ticketPending = Number(payload?.counts?.processing ?? 0);
+    }
 
     setPendingBadges({
       apiApplications: apiPending,
@@ -77,13 +72,11 @@ export default function AdminSidebar() {
     const onRefresh = () => {
       void syncPendingBadges();
     };
-    window.addEventListener("storage", onRefresh);
     window.addEventListener("jianlian-admin-badges-updated", onRefresh);
     return () => {
-      window.removeEventListener("storage", onRefresh);
       window.removeEventListener("jianlian-admin-badges-updated", onRefresh);
     };
-  }, [syncPendingBadges, pathname, agentTab]);
+  }, [syncPendingBadges]);
 
   useEffect(() => {
     if (routeGroup) {
@@ -91,7 +84,7 @@ export default function AdminSidebar() {
     }
   }, [pathname, routeGroup]);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const nav = navRef.current;
     const indicator = indicatorRef.current;
     if (!nav || !indicator) return;
@@ -262,7 +255,7 @@ export default function AdminSidebar() {
         })}
       </nav>
       <div className="shrink-0 border-t border-[var(--admin-v2-border)] px-3 py-3 text-xs leading-[18px] text-[var(--admin-v2-text-muted)]">
-        <span className="font-medium text-[var(--admin-v2-text-secondary)]">Admin V2</span>
+        <span className="font-medium text-[var(--admin-v2-text-secondary)]">Jianlian</span>
         <span className="ml-2">运营工作台</span>
       </div>
     </aside>

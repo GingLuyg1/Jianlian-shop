@@ -10,14 +10,34 @@ export const dynamic = "force-dynamic";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 40;
+const MAX_BUCKETS = 2000;
 const buckets = new Map<string, { count: number; resetAt: number }>();
+let lastSweepAt = 0;
 
 function getIp(request: Request) {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
 }
 
+function sweepBuckets(now: number) {
+  if (buckets.size < MAX_BUCKETS && now - lastSweepAt < RATE_LIMIT_WINDOW_MS) return;
+  lastSweepAt = now;
+  for (const [key, entry] of Array.from(buckets.entries())) {
+    if (entry.resetAt <= now) buckets.delete(key);
+  }
+  if (buckets.size > MAX_BUCKETS) {
+    const excess = buckets.size - MAX_BUCKETS;
+    let removed = 0;
+    for (const key of Array.from(buckets.keys())) {
+      buckets.delete(key);
+      removed += 1;
+      if (removed >= excess) break;
+    }
+  }
+}
+
 function hitRateLimit(key: string) {
   const now = Date.now();
+  sweepBuckets(now);
   const current = buckets.get(key);
   if (!current || current.resetAt <= now) {
     buckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
@@ -69,7 +89,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await runAdminGlobalSearch(serviceClient, keyword);
+    const isSuperAdmin = admin.adminAuthorization?.admin_level === "super_admin";
+    const result = await runAdminGlobalSearch(serviceClient, keyword, { isSuperAdmin });
     await writeAdminAuditLog({
       request,
       admin: { id: admin.user.id, email: admin.user.email },

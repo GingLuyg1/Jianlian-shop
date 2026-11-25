@@ -7,10 +7,10 @@ import { loadTs } from '../helpers/payment-session-guard-harness.mjs';
 function deferred() { let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve}; }
 test('actual refund loader ignores a slow old response after a fast filter switch',async()=>{
   const source=readFileSync(new URL('../../app/admin/refunds/page.tsx',import.meta.url),'utf8');
-  const block=source.match(/const loadRefunds = useCallback\([\s\S]*?\}, \[query, status, page\]\);/)[0];
-  const ref={current:0},state={},pending=[];
-  const build=new Function('useCallback','requestVersion','setLoading','setError','setRefunds','setTotal','query','status','page','pageSize','fetch','listPagination',block+'return loadRefunds;');
-  const loader=(q,page)=>build(fn=>fn,ref,v=>state.loading=v,v=>state.error=v,v=>state.rows=v,v=>state.total=v,q,'all',page,50,async url=>{const d=deferred();pending.push({url,...d});return d.promise;},listPagination);
+  const block=source.match(/const loadRefunds = useCallback\([\s\S]*?\}, \[debouncedQuery, status, page\]\);/)[0];
+  const ref={current:0},abortRef={current:null},state={},pending=[];
+  const build=new Function('useCallback','requestVersion','abortRef','setLoading','setError','setRefunds','setTotal','debouncedQuery','status','page','pageSize','fetch','listPagination',block+'return loadRefunds;');
+  const loader=(q,page)=>build(fn=>fn,ref,abortRef,v=>state.loading=v,v=>state.error=v,v=>state.rows=v,v=>state.total=v,q,'all',page,50,async url=>{const d=deferred();pending.push({url,...d});return d.promise;},listPagination);
   const old=loader('old',1)();const latest=loader('new',2)();
   assert.match(pending[1].url,/page=2/);
   pending[1].resolve(Response.json({refunds:[{id:'new'}],total:101}));await latest;
@@ -21,7 +21,11 @@ test('actual refund loader ignores a slow old response after a fast filter switc
   assert.equal(state.error,'SAFE ERROR');assert.equal(state.total,0);assert.equal(state.loading,false);
 });
 test('actual global inventory search returns import_status and no card content',async()=>{
-  const search=loadTs('lib/admin/global-search.ts',{'@/lib/admin/display-labels':loadTs('lib/admin/display-labels.ts',{}),'@/lib/business/business-ids':{normalizeBusinessKeyword:v=>v,isUuid:()=>false,isLikelyBusinessNo:()=>false}});
+  const search=loadTs('lib/admin/global-search.ts',{
+    '@/lib/admin/display-labels':loadTs('lib/admin/display-labels.ts',{}),
+    '@/lib/business/business-ids':{normalizeBusinessKeyword:v=>v,isUuid:()=>false,isLikelyBusinessNo:()=>false},
+    '@/lib/security/postgrest-sanitize':loadTs('lib/security/postgrest-sanitize.ts',{}),
+  });
   const c={from(table){const q={select(columns){if(table==='digital_inventory_batches')assert.equal(columns,'id,batch_no,batch_name,import_status,total_count,available_count,created_at');return q;},or(){return q;},order(){return q;},limit(){return q;},in(){return q;},
     then(ok,bad){return Promise.resolve({data:table==='digital_inventory_batches'?[{id:'x',batch_no:'B_TEST',import_status:'completed',available_count:0,total_count:2}]:[],error:null}).then(ok,bad);}};return q;}};
   const result=await search.runAdminGlobalSearch(c,'B_TEST');const inventory=result.groups.find(g=>g.group==='inventory');

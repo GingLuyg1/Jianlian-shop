@@ -4,7 +4,7 @@ import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labe
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, RefreshCw, Search } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -78,21 +78,39 @@ export default function AdminUsersPage() {
     return params.toString();
   }, [debouncedSearch, page, registeredFrom, registeredTo, risk, role, sort, status]);
 
+  const lastReplacedQueryRef = useRef<string | null>(null);
+  const usersAbortRef = useRef<AbortController | null>(null);
+  const usersReqSeqRef = useRef(0);
+
   const loadUsers = useCallback(async () => {
+    usersAbortRef.current?.abort();
+    const controller = new AbortController();
+    usersAbortRef.current = controller;
+    const seq = ++usersReqSeqRef.current;
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/admin/users?${queryString}`, { cache: "no-store" });
+      const response = await fetch(`/api/admin/users?${queryString}`, { cache: "no-store", signal: controller.signal });
       const payload = (await response.json().catch(() => ({}))) as UserListResponse;
+      if (seq !== usersReqSeqRef.current || controller.signal.aborted) return;
       if (!response.ok) throw new Error(payload.error || "用户列表加载失败。");
       setUsers(payload.users ?? []); setCount(payload.count ?? 0);
       setSchemaReady(payload.schemaReady !== false); setPartialErrors(payload.errors ?? {});
     } catch (loadError) {
+      if (controller.signal.aborted || seq !== usersReqSeqRef.current) return;
       setUsers([]); setCount(0); setError(loadError instanceof Error ? loadError.message : "用户列表加载失败。");
-    } finally { setLoading(false); }
+    } finally {
+      if (seq === usersReqSeqRef.current && !controller.signal.aborted) setLoading(false);
+    }
   }, [queryString]);
 
-  useEffect(() => { router.replace(`${pathname}?${queryString}`, { scroll: false }); void loadUsers(); }, [loadUsers, pathname, queryString, router]);
   useEffect(() => {
+    lastReplacedQueryRef.current = queryString;
+    router.replace(`${pathname}?${queryString}`, { scroll: false });
+    void loadUsers();
+  }, [loadUsers, pathname, queryString, router]);
+  useEffect(() => {
+    const currentUrlQuery = initial.toString();
+    if (lastReplacedQueryRef.current === currentUrlQuery) return;
     setSearch(initial.get("search") ?? "");
     setStatus(normalizeFilter(initial.get("status"), ACCOUNT_LABELS));
     setRole(normalizeFilter(initial.get("role"), ROLE_LABELS));

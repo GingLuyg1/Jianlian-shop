@@ -1,7 +1,7 @@
-import { businessTypeLabel, directionLabel } from '@/lib/admin/display-labels';
-﻿import "server-only";
+import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { businessTypeLabel, directionLabel } from "@/lib/admin/display-labels";
 
 import { loadOrderEvidence } from "@/lib/legal/legal-service";
 
@@ -128,8 +128,10 @@ function addEvent(events: BusinessTimelineEvent[], event: Omit<BusinessTimelineE
 
 export async function loadAdminOrderRelations(
   supabase: SupabaseClient,
-  orderId: string
+  orderId: string,
+  options: { isSuperAdmin?: boolean } = {}
 ): Promise<OrderRelationsPayload | null> {
+  const isSuperAdmin = options.isSuperAdmin !== false;
   const orderResult = await safeQuery<Record<string, unknown>>(() =>
     supabase
       .from("orders")
@@ -160,13 +162,114 @@ export async function loadAdminOrderRelations(
   if (text(order.completed_at)) addEvent(events, { source: "订单", title: "订单完成", summary: orderNo, status: text(order.status), occurredAt: text(order.completed_at)!, href: `/admin/orders?search=${encodeURIComponent(orderNo)}` });
   if (text(order.cancelled_at)) addEvent(events, { source: "订单", title: "订单取消", summary: orderNo, status: text(order.status), occurredAt: text(order.cancelled_at)!, href: `/admin/orders?search=${encodeURIComponent(orderNo)}` });
 
-  const itemsResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("order_items")
-      .select("id,order_id,product_id,sku_id,sku_code,product_name,sku_title,quantity,unit_price,line_total,delivery_type,delivery_status,created_at,delivery_started_at,delivery_completed_at")
-      .eq("order_id", orderId)
-      .order("created_at", { ascending: true })
-  );
+  const [
+    itemsResult,
+    sessionsResult,
+    paymentsResult,
+    chainSessionsResult,
+    refundsResult,
+    balanceResult,
+    deliveriesResult,
+    inventoryResult,
+    notificationResult,
+    evidenceResult,
+    auditResult,
+  ] = await Promise.all([
+    safeQuery<Record<string, unknown>>(() =>
+      supabase
+        .from("order_items")
+        .select("id,order_id,product_id,sku_id,sku_code,product_name,sku_title,quantity,unit_price,line_total,delivery_type,delivery_status,created_at,delivery_started_at,delivery_completed_at")
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: true })
+    ),
+    safeQuery<Record<string, unknown>>(() =>
+      supabase
+        .from("payment_sessions")
+        .select("id,session_no,business_type,business_id,business_no,provider,provider_order_no,provider_transaction_id,status,payable_amount,currency,created_at,paid_at,closed_at,last_error,updated_at")
+        .eq("business_type", "order")
+        .eq("business_id", orderId)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    ),
+    safeQuery<Record<string, unknown>>(() =>
+      supabase
+        .from("order_payments")
+        .select("id,payment_no,payment_session_id,order_id,user_id,payment_method,channel,status,amount,currency,payable_amount,payable_currency,received_amount,received_currency,provider_trade_no,created_at,paid_at,submitted_at,reviewed_at")
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    ),
+    safeQuery<Record<string, unknown>>(() =>
+      supabase
+        .from("chain_payment_sessions")
+        .select("id,order_id,payment_session_id,payment_id,payment_method,network,chain_id,asset,token_contract,order_currency,order_amount,payment_currency,exchange_rate,exchange_rate_source,expected_amount,confirmed_amount,receive_address,status,submitted_tx_hash,confirmed_at,expires_at,manual_review_reason,failure_reason,created_at,updated_at")
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    ),
+    safeQuery<Record<string, unknown>>(() =>
+      supabase
+        .from("refund_requests")
+        .select("id,refund_no,order_id,payment_id,user_id,requested_amount,approved_amount,currency,status,reason_code,created_at,reviewed_at,completed_at,failed_at")
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    ),
+    isSuperAdmin
+      ? safeQuery<Record<string, unknown>>(() =>
+          supabase
+            .from("balance_transactions")
+            .select("id,transaction_no,user_id,business_type,business_id,direction,amount,currency,status,created_at")
+            .or(`business_id.eq.${orderId},business_id.eq.${orderNo}`)
+            .order("created_at", { ascending: false })
+            .limit(20)
+        )
+      : Promise.resolve({ rows: [] as Record<string, unknown>[], error: undefined as string | undefined }),
+    safeQuery<Record<string, unknown>>(() =>
+      supabase
+        .from("order_deliveries")
+        .select("id,order_id,order_item_id,user_id,product_id,inventory_id,delivery_type,delivery_status,delivery_no,delivered_at,created_at,updated_at")
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    ),
+    safeQuery<Record<string, unknown>>(() =>
+      supabase
+        .from("digital_inventory")
+        .select("id,batch_no,batch_id,product_id,sku_id,status,reserved_order_id,delivered_order_id,reserved_at,delivered_at,created_at")
+        .or(`reserved_order_id.eq.${orderId},delivered_order_id.eq.${orderId}`)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    ),
+    safeQuery<Record<string, unknown>>(() =>
+      supabase
+        .from("user_notifications")
+        .select("id,user_id,title,type,status,business_type,business_id,created_at,read_at")
+        .eq("business_type", "order")
+        .eq("business_id", orderId)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    ),
+    loadOrderEvidence(supabase, orderId).catch(() => ({
+      agreements: [],
+      agreementError: "订单证据读取失败",
+      documents: [],
+      documentError: null,
+      events: [],
+      evidenceError: "订单证据读取失败",
+    })),
+    isSuperAdmin
+      ? safeQuery<Record<string, unknown>>(() =>
+          supabase
+            .from("admin_audit_logs")
+            .select("id,request_id,admin_email,module,action,target_type,target_id,result,created_at")
+            .or(`target_id.eq.${orderId},target_id.eq.${orderNo}`)
+            .order("created_at", { ascending: false })
+            .limit(20)
+        )
+      : Promise.resolve({ rows: [] as Record<string, unknown>[], error: undefined as string | undefined }),
+  ]);
+
   const orderItems = itemsResult.rows;
   groups.push(group("items", orderItems.map((item) => relationItem({
     id: String(item.id),
@@ -183,15 +286,6 @@ export async function loadAdminOrderRelations(
     if (text(item.delivery_completed_at)) addEvent(events, { source: "订单项", title: "交付完成", summary: text(item.product_name) ?? "订单商品", status: text(item.delivery_status), occurredAt: text(item.delivery_completed_at)!, href: null });
   }
 
-  const sessionsResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("payment_sessions")
-      .select("id,session_no,business_type,business_id,business_no,provider,provider_order_no,provider_transaction_id,status,payable_amount,currency,created_at,paid_at,closed_at,last_error,updated_at")
-      .eq("business_type", "order")
-      .eq("business_id", orderId)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
   groups.push(group("payment_sessions", sessionsResult.rows.map((session) => relationItem({
     id: String(session.id),
     label: "支付会话",
@@ -208,14 +302,6 @@ export async function loadAdminOrderRelations(
     if (text(session.status) === "failed") addEvent(events, { source: "支付会话", title: "支付失败", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.closed_at) ?? text(session.updated_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}` });
   }
 
-  const paymentsResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("order_payments")
-      .select("id,payment_no,payment_session_id,order_id,user_id,payment_method,channel,status,amount,currency,payable_amount,payable_currency,received_amount,received_currency,provider_trade_no,created_at,paid_at,submitted_at,reviewed_at")
-      .eq("order_id", orderId)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
   groups.push(group("payments", paymentsResult.rows.map((payment) => relationItem({
     id: String(payment.id),
     label: "支付记录",
@@ -234,14 +320,6 @@ export async function loadAdminOrderRelations(
     addEvent(events, { source: "支付记录", title: text(payment.paid_at) ? "支付确认" : "支付记录创建", summary: text(payment.payment_no) ?? "支付记录", status: text(payment.status), occurredAt: text(payment.paid_at) ?? text(payment.created_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(text(payment.payment_no) ?? orderNo)}` });
   }
 
-  const chainSessionsResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("chain_payment_sessions")
-      .select("id,order_id,payment_session_id,payment_id,payment_method,network,chain_id,asset,token_contract,order_currency,order_amount,payment_currency,exchange_rate,exchange_rate_source,expected_amount,confirmed_amount,receive_address,status,submitted_tx_hash,confirmed_at,expires_at,manual_review_reason,failure_reason,created_at,updated_at")
-      .eq("order_id", orderId)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
   groups.push(group("chain_payment_sessions", chainSessionsResult.rows.map((session) => relationItem({
     id: String(session.id),
     label: `${text(session.asset) ?? "USDT"}-${text(session.network) ?? "链上支付"}`,
@@ -267,14 +345,6 @@ export async function loadAdminOrderRelations(
     });
   }
 
-  const refundsResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("refund_requests")
-      .select("id,refund_no,order_id,payment_id,user_id,requested_amount,approved_amount,currency,status,reason_code,created_at,reviewed_at,completed_at,failed_at")
-      .eq("order_id", orderId)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
   groups.push(group("refunds", refundsResult.rows.map((refund) => relationItem({
     id: String(refund.id),
     label: "退款申请",
@@ -291,36 +361,22 @@ export async function loadAdminOrderRelations(
     if (text(refund.completed_at)) addEvent(events, { source: "退款", title: "退款完成", summary: text(refund.refund_no) ?? "退款完成", status: text(refund.status), occurredAt: text(refund.completed_at)!, href: `/admin/refunds?search=${encodeURIComponent(text(refund.refund_no) ?? orderNo)}` });
   }
 
-  const balanceResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("balance_transactions")
-      .select("id,transaction_no,user_id,business_type,business_id,direction,amount,currency,status,created_at")
-      .or(`business_id.eq.${orderId},business_id.eq.${orderNo}`)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
-  groups.push(group("balance", balanceResult.rows.map((tx) => relationItem({
-    id: String(tx.id),
-    label: "余额流水",
-    businessNo: text(tx.transaction_no),
-    summary: `${businessTypeLabel(tx.business_type)} / ${directionLabel(tx.direction)}`,
-    status: text(tx.status),
-    amount: money(tx.amount, tx.currency),
-    createdAt: text(tx.created_at),
-    href: `/admin/users?transaction=${encodeURIComponent(text(tx.transaction_no) ?? String(tx.id))}`,
-  })), balanceResult.error));
-  for (const tx of balanceResult.rows) {
-    addEvent(events, { source: "余额流水", title: "余额流水产生", summary: text(tx.transaction_no) ?? text(tx.business_type) ?? "余额流水", status: text(tx.status), occurredAt: text(tx.created_at) ?? "", href: `/admin/users?transaction=${encodeURIComponent(text(tx.transaction_no) ?? String(tx.id))}` });
+  if (isSuperAdmin) {
+    groups.push(group("balance", balanceResult.rows.map((tx) => relationItem({
+      id: String(tx.id),
+      label: "余额流水",
+      businessNo: text(tx.transaction_no),
+      summary: `${businessTypeLabel(tx.business_type)} / ${directionLabel(tx.direction)}`,
+      status: text(tx.status),
+      amount: money(tx.amount, tx.currency),
+      createdAt: text(tx.created_at),
+      href: `/admin/balance-ledger?q=${encodeURIComponent(text(tx.transaction_no) ?? String(tx.id))}`,
+    })), balanceResult.error));
+    for (const tx of balanceResult.rows) {
+      addEvent(events, { source: "余额流水", title: "余额流水产生", summary: text(tx.transaction_no) ?? text(tx.business_type) ?? "余额流水", status: text(tx.status), occurredAt: text(tx.created_at) ?? "", href: `/admin/balance-ledger?q=${encodeURIComponent(text(tx.transaction_no) ?? String(tx.id))}` });
+    }
   }
 
-  const deliveriesResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("order_deliveries")
-      .select("id,order_id,order_item_id,user_id,product_id,inventory_id,delivery_type,delivery_status,delivery_no,delivered_at,created_at,updated_at")
-      .eq("order_id", orderId)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
   groups.push(group("deliveries", deliveriesResult.rows.map((delivery) => relationItem({
     id: String(delivery.id),
     label: "交付记录",
@@ -335,14 +391,6 @@ export async function loadAdminOrderRelations(
     addEvent(events, { source: "交付", title: text(delivery.delivered_at) ? "交付完成" : "交付记录创建", summary: text(delivery.delivery_no) ?? text(delivery.delivery_type) ?? "交付记录", status: text(delivery.delivery_status), occurredAt: text(delivery.delivered_at) ?? text(delivery.created_at) ?? "", href: `/admin/orders?search=${encodeURIComponent(orderNo)}` });
   }
 
-  const inventoryResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("digital_inventory")
-      .select("id,batch_no,batch_id,product_id,sku_id,status,reserved_order_id,delivered_order_id,reserved_at,delivered_at,created_at")
-      .or(`reserved_order_id.eq.${orderId},delivered_order_id.eq.${orderId}`)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
   groups.push(group("inventory", inventoryResult.rows.map((inventory) => relationItem({
     id: String(inventory.id),
     label: "数字库存",
@@ -358,15 +406,6 @@ export async function loadAdminOrderRelations(
     if (text(inventory.delivered_at)) addEvent(events, { source: "数字库存", title: "库存交付", summary: text(inventory.batch_no) ?? "数字库存", status: text(inventory.status), occurredAt: text(inventory.delivered_at)!, href: text(inventory.batch_no) ? `/admin/inventory?batch=${encodeURIComponent(text(inventory.batch_no)!)}` : "/admin/inventory" });
   }
 
-  const notificationResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("user_notifications")
-      .select("id,user_id,title,type,status,business_type,business_id,created_at,read_at")
-      .eq("business_type", "order")
-      .eq("business_id", orderId)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
   groups.push(group("notifications", notificationResult.rows.map((notice) => relationItem({
     id: String(notice.id),
     label: "站内通知",
@@ -381,14 +420,6 @@ export async function loadAdminOrderRelations(
     addEvent(events, { source: "通知", title: "站内通知", summary: text(notice.title) ?? "站内通知", status: text(notice.status), occurredAt: text(notice.created_at) ?? "", href: null });
   }
 
-  const evidenceResult = await loadOrderEvidence(supabase, orderId).catch(() => ({
-    agreements: [],
-    agreementError: "订单证据读取失败",
-    documents: [],
-    documentError: null,
-    events: [],
-    evidenceError: "订单证据读取失败",
-  }));
   const agreementRows = asArray<Record<string, unknown>>(evidenceResult.agreements);
   groups.push(group("agreements", agreementRows.length ? agreementRows.map((agreement) => relationItem({
     id: String(agreement.id),
@@ -441,26 +472,21 @@ export async function loadAdminOrderRelations(
       href: null,
     });
   }
-  const auditResult = await safeQuery<Record<string, unknown>>(() =>
-    supabase
-      .from("admin_audit_logs")
-      .select("id,request_id,admin_email,module,action,target_type,target_id,result,created_at")
-      .or(`target_id.eq.${orderId},target_id.eq.${orderNo}`)
-      .order("created_at", { ascending: false })
-      .limit(20)
-  );
-  groups.push(group("audit", auditResult.rows.map((log) => relationItem({
-    id: String(log.id),
-    label: "审计记录",
-    businessNo: text(log.request_id),
-    summary: `${text(log.module) ?? "system"} / ${text(log.action) ?? "操作"}`,
-    status: text(log.result),
-    amount: null,
-    createdAt: text(log.created_at),
-    href: text(log.request_id) ? `/admin/audit-logs?requestId=${encodeURIComponent(text(log.request_id)!)}` : "/admin/audit-logs",
-  })), auditResult.error));
-  for (const log of auditResult.rows) {
-    addEvent(events, { source: "管理员操作", title: text(log.action) ?? "管理员操作", summary: text(log.admin_email) ? `操作人 ${text(log.admin_email)}` : "管理员操作", status: text(log.result), occurredAt: text(log.created_at) ?? "", href: text(log.request_id) ? `/admin/audit-logs?requestId=${encodeURIComponent(text(log.request_id)!)}` : "/admin/audit-logs" });
+
+  if (isSuperAdmin) {
+    groups.push(group("audit", auditResult.rows.map((log) => relationItem({
+      id: String(log.id),
+      label: "审计记录",
+      businessNo: text(log.request_id),
+      summary: `${text(log.module) ?? "system"} / ${text(log.action) ?? "操作"}`,
+      status: text(log.result),
+      amount: null,
+      createdAt: text(log.created_at),
+      href: text(log.request_id) ? `/admin/audit-logs?requestId=${encodeURIComponent(text(log.request_id)!)}` : "/admin/audit-logs",
+    })), auditResult.error));
+    for (const log of auditResult.rows) {
+      addEvent(events, { source: "管理员操作", title: text(log.action) ?? "管理员操作", summary: text(log.admin_email) ? `操作人 ${text(log.admin_email)}` : "管理员操作", status: text(log.result), occurredAt: text(log.created_at) ?? "", href: text(log.request_id) ? `/admin/audit-logs?requestId=${encodeURIComponent(text(log.request_id)!)}` : "/admin/audit-logs" });
+    }
   }
 
   const timeline = events

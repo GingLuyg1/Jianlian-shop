@@ -18,6 +18,7 @@ import {
 } from "@/lib/tickets/types";
 
 const TICKETS_SETTING_KEY = "support_tickets_store_v1";
+const TICKETS_COUNTS_SETTING_KEY = "support_tickets_counts_v1";
 const MAX_STORED_TICKETS = 500;
 const MAX_IMAGES_PER_ENTRY = 6;
 const MAX_ATTACHMENTS_PER_ENTRY = 6;
@@ -184,7 +185,71 @@ async function writeAllServerTickets(tickets: TicketItem[], updatedBy?: string |
     throw new Error(`WRITE_TICKETS_FAILED: ${error.message}`);
   }
 
+  // Persist a tiny summary row so sidebar/dashboard badge polls never deserialize
+  // megabytes of base64 ticket attachments.
+  const counts = computeTicketCounts(clean);
+  await service
+    .from("site_settings")
+    .upsert(
+      {
+        setting_key: TICKETS_COUNTS_SETTING_KEY,
+        setting_value: { ...counts, updatedAt: new Date().toISOString() },
+        setting_type: "json",
+        setting_group: "order",
+        is_public: false,
+        description: "Lightweight ticket counts summary for admin sidebar",
+        ...(updatedBy ? { updated_by: updatedBy } : {}),
+      },
+      { onConflict: "setting_key" }
+    )
+    .then(() => undefined, () => undefined);
+
   return clean;
+}
+
+export async function getAdminTicketCountsFast(): Promise<TicketCounts> {
+  const service = getServiceClientOrThrow();
+  const { data, error } = await service
+    .from("site_settings")
+    .select("setting_value")
+    .eq("setting_key", TICKETS_COUNTS_SETTING_KEY)
+    .maybeSingle();
+
+  if (!error && data?.setting_value && typeof data.setting_value === "object") {
+    const raw = data.setting_value as Record<string, unknown>;
+    const processing = Number(raw.processing);
+    const completed = Number(raw.completed);
+    const total = Number(raw.total);
+    const flagged = Number(raw.flagged ?? 0);
+    const unread = Number(raw.unread ?? 0);
+    if (Number.isFinite(processing) && Number.isFinite(completed) && Number.isFinite(total)) {
+      return {
+        processing,
+        completed,
+        total,
+        flagged: Number.isFinite(flagged) ? flagged : 0,
+        unread: Number.isFinite(unread) ? unread : 0,
+      };
+    }
+  }
+
+  const all = await readAllServerTickets();
+  const counts = computeTicketCounts(all);
+  await service
+    .from("site_settings")
+    .upsert(
+      {
+        setting_key: TICKETS_COUNTS_SETTING_KEY,
+        setting_value: { ...counts, updatedAt: new Date().toISOString() },
+        setting_type: "json",
+        setting_group: "order",
+        is_public: false,
+        description: "Lightweight ticket counts summary for admin sidebar",
+      },
+      { onConflict: "setting_key" }
+    )
+    .then(() => undefined, () => undefined);
+  return counts;
 }
 
 function isTicketOwnedByUser(ticket: TicketItem, user: { id: string; email?: string | null }): boolean {

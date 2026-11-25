@@ -3,6 +3,7 @@ import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labe
 
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { RefreshCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -77,15 +78,19 @@ function isBalanceRefund(row: RefundRow | null) {
 }
 
 export default function AdminRefundsPage() {
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("search") ?? searchParams.get("q") ?? "";
   const [refunds, setRefunds] = useState<RefundRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [query, setQuery] = useState(initialQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
+  const [status, setStatus] = useState(searchParams.get("status") ?? "all");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 50;
   const requestVersion = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const [selected, setSelected] = useState<RefundRow | null>(null);
   const [action, setAction] = useState("approve_balance");
   const [approvedAmount, setApprovedAmount] = useState("");
@@ -94,29 +99,47 @@ export default function AdminRefundsPage() {
   const [providerRefundId, setProviderRefundId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    const paramQ = searchParams.get("search") ?? searchParams.get("q");
+    if (paramQ !== null && paramQ !== query) {
+      setQuery(paramQ);
+      setDebouncedQuery(paramQ);
+      setPage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
   const loadRefunds = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     const version = ++requestVersion.current;
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ status, page: String(page), pageSize: String(pageSize) });
-    if (query.trim()) params.set("q", query.trim());
+    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
     try {
-      const response = await fetch(`/api/admin/refunds?${params.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/admin/refunds?${params.toString()}`, { cache: "no-store", signal: controller.signal });
       const payload = await response.json().catch(() => ({}));
-      if (version !== requestVersion.current) return;
+      if (version !== requestVersion.current || controller.signal.aborted) return;
       if (!response.ok) throw new Error(payload.error || "退款列表读取失败");
       setRefunds(Array.isArray(payload.refunds) ? payload.refunds : []);
       setTotal(listPagination(payload.total, page, pageSize).count);
     } catch (err) {
-      if (version !== requestVersion.current) return;
+      if (controller.signal.aborted || version !== requestVersion.current) return;
       const message = err instanceof Error ? err.message : "退款列表读取失败";
       setError(message);
       setRefunds([]);
       setTotal(0);
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      if (version === requestVersion.current && !controller.signal.aborted) setLoading(false);
     }
-  }, [query, status, page]);
+  }, [debouncedQuery, status, page]);
 
   useEffect(() => {
     loadRefunds();

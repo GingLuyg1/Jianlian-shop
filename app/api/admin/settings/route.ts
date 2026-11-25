@@ -72,7 +72,7 @@ export async function PATCH(request: Request) {
 
   const result = await readAdminSettings(admin.supabase);
   revalidateSiteSettingsCache();
-  await writeAdminAuditLog({
+  const audit = await writeAdminAuditLog({
     request,
     admin: { id: admin.user.id, email: admin.user.email },
     action: "update_settings",
@@ -83,9 +83,13 @@ export async function PATCH(request: Request) {
       changed_keys: Object.keys(body.settings),
     },
   });
+  if (!audit.ok) {
+    console.error("[Admin Settings] audit log write failed");
+  }
 
   return NextResponse.json({
     ...result,
     message: "系统设置已保存",
+    ...(audit.ok ? {} : { auditWarning: "设置已保存，但审计日志写入失败。" }),
   });
 }

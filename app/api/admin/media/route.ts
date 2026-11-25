@@ -81,7 +81,10 @@ export async function POST(request: Request) {
 
     return json({ assets }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : mediaInitError(error);
+    const rawMessage = error instanceof Error ? error.message : mediaInitError(error);
+    const hasChinese = /[\u4e00-\u9fa5]/.test(rawMessage);
+    const message = hasChinese ? rawMessage : "媒体上传失败，请检查文件格式与大小后重试。";
+    console.error("[Admin Media] upload failed", error);
     await writeAdminAuditLog({
       request,
       admin: { id: admin.user.id, email: admin.user.email },

@@ -364,6 +364,10 @@ export async function DELETE(request: Request, props: RouteContext) {
       productId,
       error: safeSupabaseError(error),
     });
+    const fkConflict = error.code === "23503" || /foreign key/i.test(error.message ?? "");
+    const safeError = fkConflict
+      ? "该商品仍有关联订单或业务记录，无法直接删除，请改为下架处理。"
+      : "商品删除失败，请稍后重试。";
     await auditCatalogAction({
       request,
       user: admin.user,
@@ -374,9 +378,9 @@ export async function DELETE(request: Request, props: RouteContext) {
       targetLabel: String((before as { name?: unknown }).name ?? ""),
       result: "failed",
       beforeSummary: before,
-      errorMessage: error.message || "商品删除失败",
+      errorMessage: safeError,
     });
-    return jsonResponse({ error: `商品删除失败：${error.message || "请稍后重试"}` }, 400);
+    return jsonResponse({ error: safeError }, fkConflict ? 409 : 400);
   }
 
   await auditCatalogAction({

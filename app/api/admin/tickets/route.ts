@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 
+import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { enforceAdminWriteGuard } from "@/lib/security/rate-limit";
 import {
   adminReplyServerTicket,
   adminUpdateServerTicket,
+  getAdminTicketCountsFast,
   listAdminServerTickets,
 } from "@/lib/tickets/server";
 
 export const dynamic = "force-dynamic";
+
+function toSafeTicketError(err: unknown, fallback: string) {
+  const raw = err instanceof Error ? err.message : "";
+  if (!raw || /^(?:READ_|WRITE_|TICKET_SERVICE_)/i.test(raw) || /postgres|supabase|PGRST|syntax|relation/i.test(raw)) {
+    return fallback;
+  }
+  return raw;
+}
 
 export async function GET(request: Request) {
   const admin = await getServerAdminContext();
@@ -16,15 +27,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await listAdminServerTickets();
     const url = new URL(request.url);
     if (url.searchParams.get("summary") === "1") {
-      return NextResponse.json({ counts: result.counts });
+      const counts = await getAdminTicketCountsFast();
+      return NextResponse.json({ counts }, { headers: { "Cache-Control": "no-store" } });
     }
-    return NextResponse.json(result);
+    const result = await listAdminServerTickets();
+    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "读取工单列表失败";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: toSafeTicketError(err, "读取工单列表失败") }, { status: 500 });
   }
 }
 
@@ -33,6 +44,9 @@ export async function POST(request: Request) {
   if (!admin.ok) {
     return NextResponse.json({ error: admin.message }, { status: admin.status });
   }
+
+  const guardError = enforceAdminWriteGuard(request, admin.user.id, "ticket_reply", 16 * 1024 * 1024);
+  if (guardError) return guardError;
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || typeof body !== "object") {
@@ -46,12 +60,33 @@ export async function POST(request: Request) {
       images: body.images,
       attachments: body.attachments,
     });
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email ?? null },
+      action: "reply_support_ticket",
+      module: "users",
+      targetType: "support_ticket",
+      targetId: String(body.ticketId ?? ""),
+      result: "success",
+      afterSummary: { status: result.ticket.status },
+    });
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "发送回复失败";
-    const status = message.startsWith("READ_") || message.startsWith("WRITE_") || message.startsWith("TICKET_SERVICE_")
+    const raw = err instanceof Error ? err.message : "";
+    const status = raw.startsWith("READ_") || raw.startsWith("WRITE_") || raw.startsWith("TICKET_SERVICE_")
       ? 500
       : 400;
+    const message = toSafeTicketError(err, "发送回复失败");
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email ?? null },
+      action: "reply_support_ticket",
+      module: "users",
+      targetType: "support_ticket",
+      targetId: String(body.ticketId ?? ""),
+      result: "failed",
+      errorMessage: message,
+    });
     return NextResponse.json({ error: message }, { status });
   }
 }
@@ -61,6 +96,9 @@ export async function PATCH(request: Request) {
   if (!admin.ok) {
     return NextResponse.json({ error: admin.message }, { status: admin.status });
   }
+
+  const guardError = enforceAdminWriteGuard(request, admin.user.id, "ticket_update", 32 * 1024);
+  if (guardError) return guardError;
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || typeof body !== "object") {
@@ -73,12 +111,36 @@ export async function PATCH(request: Request) {
       isFlagged: body.isFlagged,
       status: body.status,
     });
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email ?? null },
+      action: "update_support_ticket",
+      module: "users",
+      targetType: "support_ticket",
+      targetId: String(body.ticketId ?? ""),
+      result: "success",
+      afterSummary: {
+        status: result.ticket.status,
+        isFlagged: result.ticket.isFlagged,
+      },
+    });
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "更新工单状态失败";
-    const status = message.startsWith("READ_") || message.startsWith("WRITE_") || message.startsWith("TICKET_SERVICE_")
+    const raw = err instanceof Error ? err.message : "";
+    const status = raw.startsWith("READ_") || raw.startsWith("WRITE_") || raw.startsWith("TICKET_SERVICE_")
       ? 500
       : 400;
+    const message = toSafeTicketError(err, "更新工单状态失败");
+    await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email ?? null },
+      action: "update_support_ticket",
+      module: "users",
+      targetType: "support_ticket",
+      targetId: String(body.ticketId ?? ""),
+      result: "failed",
+      errorMessage: message,
+    });
     return NextResponse.json({ error: message }, { status });
   }
 }

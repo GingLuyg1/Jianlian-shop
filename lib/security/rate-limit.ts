@@ -59,6 +59,7 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
 };
 
 const buckets = new Map<string, RateLimitEntry>();
+const MAX_RATE_LIMIT_BUCKETS = 5000;
 let lastSweepAt = 0;
 
 export function getRateLimitPolicy(name: RateLimitPolicyName) {
@@ -147,16 +148,93 @@ export function checkRequestSize(request: Request, maxBytes: number) {
   return null;
 }
 
+/**
+ * Streaming JSON body reader that counts actual bytes read so Transfer-Encoding: chunked
+ * requests without Content-Length cannot bypass size limits.
+ */
+export async function readBoundedJsonBody<T = Record<string, unknown>>(
+  request: Request,
+  maxBytes = 64 * 1024
+): Promise<{ ok: true; data: T } | { ok: false; response: NextResponse }> {
+  const headerSizeError = checkRequestSize(request, maxBytes);
+  if (headerSizeError) return { ok: false, response: headerSizeError };
+
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "请求体不能为空。", code: "INVALID_JSON" }, { status: 400 }),
+    };
+  }
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        void reader.cancel().catch(() => {});
+        return {
+          ok: false,
+          response: NextResponse.json(
+            { error: "请求内容过大，请减少单次提交的数据量。", code: "REQUEST_TOO_LARGE" },
+            { status: 413 }
+          ),
+        };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  try {
+    const text = Buffer.concat(chunks).toString("utf8");
+    const parsed = JSON.parse(text) as T;
+    return { ok: true, data: parsed };
+  } catch {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "请求 JSON 格式无效。", code: "INVALID_JSON" }, { status: 400 }),
+    };
+  }
+}
+
+export function enforceAdminWriteGuard(
+  request: Request,
+  adminId: string,
+  scope: string,
+  maxBytes = 128 * 1024,
+  policy: RateLimitPolicyName = "admin_write"
+): NextResponse | null {
+  const sizeError = checkRequestSize(request, maxBytes);
+  if (sizeError) return sizeError;
+  const rate = checkRateLimit(policy, getAdminRateLimitKey(adminId, scope));
+  if (!rate.allowed) return rate.response!;
+  return null;
+}
+
 export function clampPageSize(value: number, max: number, fallback: number) {
   if (!Number.isFinite(value) || value <= 0) return fallback;
   return Math.min(Math.trunc(value), max);
 }
 
 function sweepExpiredBuckets(now: number) {
-  if (now - lastSweepAt < 60_000) return;
+  if (buckets.size < MAX_RATE_LIMIT_BUCKETS && now - lastSweepAt < 60_000) return;
   lastSweepAt = now;
   for (const [key, entry] of Array.from(buckets.entries())) {
     if (entry.resetAt <= now) buckets.delete(key);
+  }
+  if (buckets.size > MAX_RATE_LIMIT_BUCKETS) {
+    const excess = buckets.size - MAX_RATE_LIMIT_BUCKETS;
+    let removed = 0;
+    for (const key of Array.from(buckets.keys())) {
+      buckets.delete(key);
+      removed += 1;
+      if (removed >= excess) break;
+    }
   }
 }
 

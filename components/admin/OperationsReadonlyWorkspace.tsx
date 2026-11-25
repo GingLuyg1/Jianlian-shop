@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { Check, Copy, RefreshCw } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
@@ -62,13 +63,19 @@ function formatTimestamp(v: unknown) {
 
 function CopyableCodeCell({ text, maxWidthClass = 'max-w-[168px]' }: { text: string; maxWidthClass?: string }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+  }, []);
   const handleCopy = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(text).then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      });
-    }
+    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {
+      // Ignore clipboard write rejection in non-secure / restricted contexts.
+    });
   };
   return (
     <div className="group inline-flex items-center gap-1.5">
@@ -174,7 +181,14 @@ function displayValue(kind: Kind, key: string, row: Row) {
 }
 
 export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const searchParams = useSearchParams();
+  const urlQ = searchParams.get('q') ?? '';
+  const urlStatus = searchParams.get('status') ?? '';
+  const [filters, setFilters] = useState<Record<string, string>>(() => ({
+    ...(urlQ ? { q: urlQ } : {}),
+    ...(urlStatus ? { status: urlStatus } : {}),
+  }));
+  const [debouncedQ, setDebouncedQ] = useState(urlQ);
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [rows, setRows] = useState<Row[]>([]);
@@ -185,11 +199,39 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
   const version = useRef(0);
   const [dateRangeFilter, setDateRangeFilter] = useState<DashboardDateFilterValue>(() => getPresetDateRange('30d'));
   const [isAllDates, setIsAllDates] = useState(true);
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    const status = searchParams.get('status');
+    setFilters((old) => {
+      const next = { ...old };
+      let changed = false;
+      if (q !== null && (old.q ?? '') !== q) {
+        next.q = q;
+        changed = true;
+      }
+      if (status !== null && (old.status ?? '') !== status) {
+        next.status = status;
+        changed = true;
+      }
+      return changed ? next : old;
+    });
+  }, [searchParams]);
+
+  useEffect(() => {
+    const nextQ = filters.q ?? '';
+    const timer = window.setTimeout(() => setDebouncedQ(nextQ), 300);
+    return () => window.clearTimeout(timer);
+  }, [filters.q]);
+
+  const filterKey = JSON.stringify({ ...filters, q: debouncedQ });
+
   useEffect(() => {
     const requestVersion = ++version.current;
     const controller = new AbortController();
     setLoading(true); setError(''); setRows([]); setWorker(null); setTotal(0);
-    const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([k, v]) => !k.startsWith('_') && v !== ''));
+    const effectiveFilters = { ...filters, q: debouncedQ };
+    const cleanFilters = Object.fromEntries(Object.entries(effectiveFilters).filter(([k, v]) => !k.startsWith('_') && v !== ''));
     const params = new URLSearchParams({ ...cleanFilters, page: String(page) });
     fetch(`/api/admin/operations/${kind}?${params}`, { cache: 'no-store', signal: controller.signal })
       .then(async response => {
@@ -201,7 +243,8 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
       }).catch(e => { if (version.current === requestVersion && !controller.signal.aborted) setError(e instanceof Error ? e.message : '读取失败'); })
       .finally(() => { if (version.current === requestVersion) setLoading(false); });
     return () => { version.current++; controller.abort(); };
-  }, [kind, filters, page, revision]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, filterKey, page, revision]);
   const change = (key: string, next: string) => { setFilters(old => ({ ...old, [key]: next })); setPage(1); };
   const columns = kind === 'ledger' ? ledgerColumns : queueColumns;
   const title = kind === 'worker' ? '自动任务运行状态' : kind === 'ledger' ? '全历史余额流水' : '供应商采购订单';

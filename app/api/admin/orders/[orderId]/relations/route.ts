@@ -24,7 +24,8 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   try {
-    const payload = await loadAdminOrderRelations(serviceClient, orderId);
+    const isSuperAdmin = admin.adminAuthorization?.admin_level === "super_admin";
+    const payload = await loadAdminOrderRelations(serviceClient, orderId, { isSuperAdmin });
     if (!payload) {
       return NextResponse.json({ error: "订单不存在或已被删除。" }, { status: 404 });
     }

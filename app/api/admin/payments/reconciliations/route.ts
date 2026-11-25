@@ -8,6 +8,7 @@ import {
   isReconciliationSchemaMissing,
   normalizeReconciliationRows,
 } from "@/lib/payments/reconciliation-service";
+import { boundedListInteger, sanitizePostgrestFilterTerm } from "@/lib/security/postgrest-sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,9 @@ export async function GET(request: Request) {
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
 
   const { searchParams } = new URL(request.url);
-  const page = Math.max(1, Number(searchParams.get("page") || 1));
-  const pageSize = Math.min(100, Math.max(10, Number(searchParams.get("pageSize") || 20)));
-  const search = (searchParams.get("search") ?? "").trim();
+  const page = boundedListInteger(searchParams.get("page"), 1, 1, 100000);
+  const pageSize = boundedListInteger(searchParams.get("pageSize"), 20, 10, 100);
+  const search = sanitizePostgrestFilterTerm(searchParams.get("search") ?? "", 120);
   const result = searchParams.get("result") ?? "all";
   const differenceType = searchParams.get("differenceType") ?? "all";
   const from = (page - 1) * pageSize;

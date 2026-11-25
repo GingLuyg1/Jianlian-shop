@@ -718,7 +718,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    await writeAdminAuditLog({
+    const audit = await writeAdminAuditLog({
       request,
       admin: {
         id: admin.user.id,
@@ -736,12 +736,16 @@ export async function PATCH(request: Request) {
         channels: [safeChannelSummary(row)],
       },
     });
+    if (!audit.ok) {
+      console.error("[Admin Payment Channels] audit log write failed", { channels: requestedChannelIds });
+    }
 
     return NextResponse.json({
       channels: normalizeConfigs(
         [updated as Record<string, unknown>],
       ),
       message: "支付设置已保存",
+      ...(audit.ok ? {} : { auditWarning: "支付设置已保存，但审计日志写入失败。" }),
     });
   } catch (error) {
     const validationError =

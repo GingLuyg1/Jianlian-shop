@@ -33,12 +33,44 @@ function getSettingRawValue(row: { setting_value?: unknown } | undefined) {
   return value;
 }
 
+const TRUSTED_PUBLIC_HOSTS = new Set(
+  [
+    "www.jianlian.shop",
+    "jianlian.shop",
+    "localhost",
+    "127.0.0.1",
+    ...(process.env.NEXT_PUBLIC_SITE_URL
+      ? [(() => { try { return new URL(process.env.NEXT_PUBLIC_SITE_URL).host; } catch { return ""; } })()]
+      : []),
+    ...(process.env.SITE_URL
+      ? [(() => { try { return new URL(process.env.SITE_URL).host; } catch { return ""; } })()]
+      : []),
+  ].filter(Boolean)
+);
+
+function isTrustedHost(host: string) {
+  const normalized = host.trim().toLowerCase();
+  if (!normalized || /[\s/@\\]/.test(normalized)) return false;
+  const hostnameOnly = normalized.split(":")[0];
+  return TRUSTED_PUBLIC_HOSTS.has(normalized) || TRUSTED_PUBLIC_HOSTS.has(hostnameOnly);
+}
+
 function getPublicOrigin(request: NextRequest) {
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const host = forwardedHost || request.headers.get("host")?.split(",")[0]?.trim();
-  if (host && !host.includes("localhost") && !host.startsWith("127.0.0.1")) {
-    const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
-    return `${proto}://${host}`;
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
+  const rawForwarded = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || "";
+  const rawHost = request.headers.get("host")?.split(",")[0]?.trim() || "";
+  const candidate = isTrustedHost(rawForwarded) ? rawForwarded : isTrustedHost(rawHost) ? rawHost : "";
+  if (candidate && !candidate.startsWith("localhost") && !candidate.startsWith("127.0.0.1")) {
+    const protoRaw = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+    const proto = protoRaw === "http" || protoRaw === "https" ? protoRaw : "https";
+    return `${proto}://${candidate}`;
+  }
+  if (configuredSiteUrl) {
+    try {
+      return new URL(configuredSiteUrl).origin;
+    } catch {
+      // fall through
+    }
   }
   return request.nextUrl.origin;
 }
@@ -73,7 +105,10 @@ async function isMaintenanceEnabled(supabase: ReturnType<typeof createServerClie
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  if (isStaticAssetPath(pathname) || pathname.startsWith("/api/")) return NextResponse.next();
+  if (isStaticAssetPath(pathname)) return NextResponse.next();
+
+  const isAdminApi = pathname === "/api/admin" || pathname.startsWith("/api/admin/");
+  if (pathname.startsWith("/api/") && !isAdminApi) return NextResponse.next();
 
   let response = NextResponse.next({ request: { headers: request.headers } });
 
@@ -93,6 +128,16 @@ export async function middleware(request: NextRequest) {
         },
       },
     });
+
+    if (isAdminApi) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: "请先登录" }, { status: 401 });
+      }
+      return response;
+    }
 
     // Only the orders page shell is public so it can render its sign-in cover.
     // All order data APIs and every other protected account/admin route retain authentication.

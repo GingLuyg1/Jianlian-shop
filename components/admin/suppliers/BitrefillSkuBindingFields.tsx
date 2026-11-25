@@ -56,7 +56,7 @@ export default function BitrefillSkuBindingFields({ product, sku, onSaved }: {
       <label>商品名称或 ID<input aria-label="Bitrefill 搜索" value={q} maxLength={100} onChange={(e) => setQ(e.target.value)} className="block min-h-[44px] max-w-full rounded border px-2" /></label>
       <label>国家<input aria-label="Bitrefill 国家" value={country} maxLength={2} pattern="[A-Z]{2}" required onChange={(e) => setCountry(e.target.value.toUpperCase())} className="block min-h-[44px] w-20 rounded border px-2" /></label>
       <label><input type="checkbox" checked={international} onChange={(e) => setInternational(e.target.checked)} /> 包含 XI 国际商品（不等于适用 US）</label>
-      <button disabled={loading} className="min-h-[44px] rounded border px-3">搜索 Bitrefill</button>
+      <button type="submit" disabled={loading} className="min-h-[44px] rounded border px-3">搜索 Bitrefill</button>
       <button type="button" disabled={!q.trim() || loading} className="min-h-[44px] rounded border px-3" onClick={() => void selectProduct(q.trim())}>按精确 Product ID 读取</button>
     </form>
     {loading ? <p role="status">正在查询官方商品目录…</p> : null}{error ? <p role="alert" className="break-all text-red-700">{error}</p> : null}
@@ -74,7 +74,7 @@ export default function BitrefillSkuBindingFields({ product, sku, onSaved }: {
           review_status: reviewed ? "manual_reviewed_unverified" : "draft", review_note: note,
           identity_confirmed: confirmed, denomination_confirmed: confirmed, brand_country_confirmed: confirmed,
           verified: false, automatic_purchase_enabled: false }) });
-        const body = await r.json(); if (!r.ok) throw Error(body.code ?? body.error ?? "绑定候选保存失败");
+        const body = await r.json(); if (!r.ok) throw Error(body.error ?? "绑定候选保存失败，请检查填写内容后重试");
         onSaved(body);
       } catch (e) { setError(e instanceof Error ? e.message : "保存失败"); } finally { setSaving(false); }
     }}>
@@ -91,7 +91,7 @@ export default function BitrefillSkuBindingFields({ product, sku, onSaved }: {
       <label className="block"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> 已逐项核对商品身份、国家、币种、面值及 Apple/Amazon 使用地区</label>
       <label className="block"><input type="checkbox" checked={reviewed} disabled={detail.product.category !== "gift_card"} onChange={(e) => setReviewed(e.target.checked)} /> 记录人工核对（仍未验证，不启用采购）</label>
       <p className="text-sm">保存版本 {(Number(sku.metadata?.supplier_binding_version) || 0) + 1}；原采购来源和已创建订单快照均不改变。</p>
-      <button disabled={saving || !sku.updated_at} className="min-h-[44px] rounded bg-orange-600 px-4 text-white">保存 Bitrefill SKU 候选</button>
+      <button type="submit" disabled={saving || !sku.updated_at} className="min-h-[44px] rounded bg-orange-600 px-4 text-white">保存 Bitrefill SKU 候选</button>
     </form> : null}
   </section>;
 }

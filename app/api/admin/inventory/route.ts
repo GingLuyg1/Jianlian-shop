@@ -137,14 +137,16 @@ export async function GET(request: Request) {
     const search = getSearchParam(request, "search");
     const rawStatus = getSearchParam(request, "status") || "all";
     const status = INVENTORY_STATUSES.has(rawStatus) ? rawStatus : "all";
-    const page = Number(getSearchParam(request, "page") || 1);
-    const pageSize = Number(getSearchParam(request, "pageSize") || 20);
+    const rawPage = Number(getSearchParam(request, "page") || 1);
+    const rawPageSize = Number(getSearchParam(request, "pageSize") || 20);
+    const page = Number.isFinite(rawPage) ? Math.min(10000, Math.max(1, Math.trunc(rawPage))) : 1;
+    const pageSize = Number.isFinite(rawPageSize) ? Math.min(100, Math.max(1, Math.trunc(rawPageSize))) : 20;
 
     const { data, error } = await admin.supabase.rpc("admin_list_digital_inventory_summary", {
       p_search: search || null,
       p_status: status,
-      p_page: Number.isFinite(page) ? page : 1,
-      p_page_size: Number.isFinite(pageSize) ? pageSize : 20,
+      p_page: page,
+      p_page_size: pageSize,
     });
 
     if (error) throw error;
@@ -152,6 +154,8 @@ export async function GET(request: Request) {
   } catch (error) {
     const message = "库存数据加载失败";
     await writeAdminAuditLog({
+      request,
+      admin: { id: admin.user.id, email: admin.user.email ?? null },
       action: "view_inventory",
       module: "inventory",
       targetType: "digital_inventory",
@@ -166,6 +170,7 @@ export async function POST(request: Request) {
   const admin = await getServerAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({
+      request,
       action: "import_inventory",
       module: "inventory",
       targetType: "digital_inventory",
@@ -175,7 +180,8 @@ export async function POST(request: Request) {
     return jsonError(admin.message, admin.status);
   }
 
-  const sizeError = checkRequestSize(request, 2 * 1024 * 1024);
+  const auditActor = { id: admin.user.id, email: admin.user.email ?? null };
+  const sizeError = checkRequestSize(request, 5 * 1024 * 1024);
   if (sizeError) return sizeError;
   const rateLimit = checkRateLimit("inventory_import", getAdminRateLimitKey(admin.user.id, "inventory_import"));
   if (!rateLimit.allowed) return rateLimit.response!;
@@ -233,6 +239,8 @@ export async function POST(request: Request) {
       });
 
       await writeAdminAuditLog({
+        request,
+        admin: auditActor,
         action: "import_inventory_batch",
         module: "inventory",
         targetType: "digital_inventory_batch",
@@ -287,6 +295,8 @@ export async function POST(request: Request) {
     });
 
     await writeAdminAuditLog({
+      request,
+      admin: auditActor,
       action: "import_inventory",
       module: "inventory",
       targetType: "digital_inventory",
@@ -298,6 +308,8 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = getInventoryImportErrorMessage(error, "库存导入失败");
     await writeAdminAuditLog({
+      request,
+      admin: auditActor,
       action: "import_inventory",
       module: "inventory",
       targetType: "digital_inventory",
@@ -312,6 +324,7 @@ export async function PATCH(request: Request) {
   const admin = await getServerAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({
+      request,
       action: "update_inventory",
       module: "inventory",
       targetType: "digital_inventory",
@@ -320,6 +333,8 @@ export async function PATCH(request: Request) {
     });
     return jsonError(admin.message, admin.status);
   }
+
+  const auditActor = { id: admin.user.id, email: admin.user.email ?? null };
 
   try {
     const body = await request.json();
@@ -335,6 +350,8 @@ export async function PATCH(request: Request) {
       });
       if (error) throw error;
       await writeAdminAuditLog({
+        request,
+        admin: auditActor,
         action: "disable_inventory_batch",
         module: "inventory",
         targetType: "digital_inventory_batch",
@@ -355,6 +372,8 @@ export async function PATCH(request: Request) {
       });
       if (error) throw error;
       await writeAdminAuditLog({
+        request,
+        admin: auditActor,
         action: "restore_inventory_item",
         module: "inventory",
         targetType: "digital_inventory",
@@ -372,6 +391,8 @@ export async function PATCH(request: Request) {
 
     if (error) throw error;
     await writeAdminAuditLog({
+      request,
+      admin: auditActor,
       action: "disable_inventory_item",
       module: "inventory",
       targetType: "digital_inventory",
@@ -383,6 +404,8 @@ export async function PATCH(request: Request) {
   } catch (error) {
     const failure = getInventoryStatusError(error);
     await writeAdminAuditLog({
+      request,
+      admin: auditActor,
       action: "update_inventory",
       module: "inventory",
       targetType: "digital_inventory",

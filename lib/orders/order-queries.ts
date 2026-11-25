@@ -394,11 +394,13 @@ export async function listAdminOrders(
     query = query.ilike("attention_deliveries.failure_reason", "%库存%");
   }
 
-  const search = options.search?.trim();
+  const rawSearch = options.search?.trim() ?? "";
+  const search = rawSearch.slice(0, 120).replace(/[\\%_*(),]/g, " ").replace(/\s+/g, " ").trim();
   if (search) query = query.or(`order_no.ilike.%${search}%,customer_email.ilike.%${search}%`);
 
-  const sortBy = options.sortBy ?? "created_at";
-  const sortDirection = options.sortDirection ?? "desc";
+  const ALLOWED_SORT_COLUMNS = new Set(["created_at", "updated_at", "total_amount", "paid_at", "status"]);
+  const sortBy = options.sortBy && ALLOWED_SORT_COLUMNS.has(options.sortBy) ? options.sortBy : "created_at";
+  const sortDirection = options.sortDirection === "asc" ? "asc" : "desc";
   const { data, error, count } = await query
     .order(sortBy, { ascending: sortDirection === "asc" })
     .range(from, to);

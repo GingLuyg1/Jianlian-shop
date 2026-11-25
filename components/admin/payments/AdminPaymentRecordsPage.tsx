@@ -251,15 +251,25 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     exceptionType: isRechargePage ? "all" : exceptionType,
   }), [businessType, channel, debouncedSearch, endDate, exceptionType, isRechargePage, page, sort, startDate, status, view]);
 
+  const listAbortRef = useRef<AbortController | null>(null);
+  const listReqSeqRef = useRef(0);
+  const detailAbortRef = useRef<AbortController | null>(null);
+  const detailReqSeqRef = useRef(0);
+
   const loadPayments = useCallback(async () => {
+    listAbortRef.current?.abort();
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    const seq = ++listReqSeqRef.current;
     setLoading(true);
     setError("");
     try {
       if (!isRechargePage && ["callbacks", "reconciliations", "underpayments"].includes(view)) { setLoading(false); return; }
       const params = buildParams();
       const endpoint = isRechargePage ? "/api/admin/recharges" : "/api/admin/payments";
-      const response = await fetch(`${endpoint}?${params.toString()}`, { cache: "no-store" });
+      const response = await fetch(`${endpoint}?${params.toString()}`, { cache: "no-store", signal: controller.signal });
       const payload = (await response.json().catch(() => null)) as ListPayload | null;
+      if (seq !== listReqSeqRef.current || controller.signal.aborted) return;
       if (!response.ok) throw new Error(payload?.error ?? "支付数据加载失败");
       setPayments(payload?.payments ?? []);
       setCount(Number(payload?.count ?? 0));
@@ -267,17 +277,22 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
       urlParams.delete("pageSize");
       window.history.replaceState(null, "", `${window.location.pathname}?${urlParams.toString()}`);
     } catch (loadError) {
+      if (controller.signal.aborted || seq !== listReqSeqRef.current) return;
       setError(loadError instanceof Error ? loadError.message : "支付数据加载失败");
       setPayments([]);
       setCount(0);
     } finally {
-      setLoading(false);
+      if (seq === listReqSeqRef.current && !controller.signal.aborted) setLoading(false);
     }
   }, [buildParams, isRechargePage, view]);
 
   useEffect(() => { loadPayments(); }, [loadPayments]);
 
   const loadDetail = useCallback(async (payment: AdminPaymentRecord) => {
+    detailAbortRef.current?.abort();
+    const controller = new AbortController();
+    detailAbortRef.current = controller;
+    const seq = ++detailReqSeqRef.current;
     setSelected(payment);
     setDetail(null);
     setCallbacks([]);
@@ -288,8 +303,9 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
     setDetailError("");
     setDetailLoading(true);
     try {
-      const response = await fetch(`/api/admin/payments/${payment.id}?source=${payment.source}`, { cache: "no-store" });
+      const response = await fetch(`/api/admin/payments/${payment.id}?source=${payment.source}`, { cache: "no-store", signal: controller.signal });
       const payload = (await response.json().catch(() => null)) as DetailPayload | null;
+      if (seq !== detailReqSeqRef.current || controller.signal.aborted) return;
       if (!response.ok) throw new Error(payload?.error ?? "支付详情加载失败");
       setDetail(payload?.payment ?? payment);
       setCallbacks(payload?.callbacks ?? []);
@@ -298,9 +314,10 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
       setChainPaymentError(payload?.chainPaymentError ?? "");
       setOverpaymentWallet(payload?.overpaymentWallet ?? { authorized: false, available: true, error: null, disposition: null });
     } catch (detailLoadError) {
+      if (controller.signal.aborted || seq !== detailReqSeqRef.current) return;
       setDetailError(detailLoadError instanceof Error ? detailLoadError.message : "支付详情加载失败");
     } finally {
-      setDetailLoading(false);
+      if (seq === detailReqSeqRef.current && !controller.signal.aborted) setDetailLoading(false);
     }
   }, []);
 

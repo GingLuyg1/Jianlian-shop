@@ -2,7 +2,8 @@
 import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
 
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, Ban, Eye, FileText, Loader2, PackageCheck, RefreshCw, RotateCcw, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -141,17 +142,21 @@ async function readJson<T>(response: Response, fallback: string): Promise<T> {
 }
 
 export default function AdminInventoryPage() {
+  const searchParams = useSearchParams();
+  const initialBatch = searchParams.get("batch") ?? "";
+  const initialSearch = initialBatch || searchParams.get("search") || searchParams.get("q") || "";
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [summaryRows, setSummaryRows] = useState<InventorySummary[]>([]);
   const [batchRows, setBatchRows] = useState<InventoryBatch[]>([]);
   const [itemRows, setItemRows] = useState<InventoryItem[]>([]);
-  const [view, setView] = useState<"summary" | "batches">("summary");
+  const [view, setView] = useState<"summary" | "batches">(initialBatch ? "batches" : "summary");
   const [loading, setLoading] = useState(true);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [importValidation, setImportValidation] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [batchPage, setBatchPage] = useState(1);
@@ -159,6 +164,8 @@ export default function AdminInventoryPage() {
   const [selectedBatch, setSelectedBatch] = useState<InventoryBatch | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [itemStatus, setItemStatus] = useState("all");
+  const listAbortRef = useRef<AbortController | null>(null);
+  const listReqSeqRef = useRef(0);
 
   const [importProductId, setImportProductId] = useState("");
   const [contentType, setContentType] = useState("card_key");
@@ -172,37 +179,66 @@ export default function AdminInventoryPage() {
   const batchTotal = batchRows[0]?.total_rows ?? 0;
   const itemTotal = itemRows[0]?.total_rows ?? 0;
 
+  useEffect(() => {
+    const paramBatch = searchParams.get("batch");
+    const paramSearch = searchParams.get("search") ?? searchParams.get("q");
+    if (paramBatch) {
+      setView("batches");
+      setSearch(paramBatch);
+      setDebouncedSearch(paramBatch);
+      setBatchPage(1);
+    } else if (paramSearch !== null) {
+      setSearch(paramSearch);
+      setDebouncedSearch(paramSearch);
+      setPage(1);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const loadProducts = useCallback(async () => {
     const response = await fetch("/api/admin/inventory?mode=products", { cache: "no-store" });
     const payload = await readJson<{ data: InventoryProduct[] }>(response, "商品列表加载失败");
     setProducts(payload.data ?? []);
   }, []);
 
-  const loadSummary = useCallback(async () => {
-    const params = new URLSearchParams({ search, status, page: String(page), pageSize: String(pageSize) });
-    const response = await fetch(`/api/admin/inventory?${params.toString()}`, { cache: "no-store" });
+  useEffect(() => {
+    void loadProducts().catch(() => undefined);
+  }, [loadProducts]);
+
+  const loadSummary = useCallback(async (signal?: AbortSignal) => {
+    const params = new URLSearchParams({ search: debouncedSearch, status, page: String(page), pageSize: String(pageSize) });
+    const response = await fetch(`/api/admin/inventory?${params.toString()}`, { cache: "no-store", signal });
     const payload = await readJson<{ data: InventorySummary[] }>(response, "库存汇总加载失败");
     setSummaryRows(payload.data ?? []);
-  }, [page, search, status]);
+  }, [page, debouncedSearch, status]);
 
-  const loadBatches = useCallback(async () => {
-    const params = new URLSearchParams({ mode: "batches", search, status, page: String(batchPage), pageSize: String(pageSize) });
-    const response = await fetch(`/api/admin/inventory?${params.toString()}`, { cache: "no-store" });
+  const loadBatches = useCallback(async (signal?: AbortSignal) => {
+    const params = new URLSearchParams({ mode: "batches", search: debouncedSearch, status, page: String(batchPage), pageSize: String(pageSize) });
+    const response = await fetch(`/api/admin/inventory?${params.toString()}`, { cache: "no-store", signal });
     const payload = await readJson<{ data: InventoryBatch[] }>(response, "库存批次加载失败");
     setBatchRows(payload.data ?? []);
-  }, [batchPage, search, status]);
+  }, [batchPage, debouncedSearch, status]);
 
   const loadData = useCallback(async () => {
+    listAbortRef.current?.abort();
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    const seq = ++listReqSeqRef.current;
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadProducts(), view === "summary" ? loadSummary() : loadBatches()]);
+      await (view === "summary" ? loadSummary(controller.signal) : loadBatches(controller.signal));
     } catch (caught) {
+      if (controller.signal.aborted || seq !== listReqSeqRef.current) return;
       setError(caught instanceof Error ? caught.message : "库存数据加载失败");
     } finally {
-      setLoading(false);
+      if (seq === listReqSeqRef.current && !controller.signal.aborted) setLoading(false);
     }
-  }, [loadBatches, loadProducts, loadSummary, view]);
+  }, [loadBatches, loadSummary, view]);
 
   useEffect(() => {
     void loadData();
