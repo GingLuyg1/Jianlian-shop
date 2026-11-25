@@ -136,7 +136,7 @@ export async function validateCouponForOrderAmount(
   }
 
   if (!data) {
-    return { ok: false, code: "COUPON_NOT_FOUND", error: "优惠券不存在或已失效", status: 404 };
+    return { ok: false, code: "COUPON_NOT_FOUND", error: "该优惠券已被使用", status: 404 };
   }
 
   const row = data as Record<string, unknown>;
@@ -148,10 +148,10 @@ export async function validateCouponForOrderAmount(
   const nowMs = Date.now();
 
   if (status === "disabled") {
-    return { ok: false, code: "COUPON_DISABLED", error: "该优惠券已停用", status: 400 };
+    return { ok: false, code: "COUPON_DISABLED", error: "该优惠券已被使用", status: 400 };
   }
   if (status === "exhausted" || usedCount >= maxUses) {
-    return { ok: false, code: "COUPON_EXHAUSTED", error: "该优惠券已被使用完", status: 400 };
+    return { ok: false, code: "COUPON_EXHAUSTED", error: "该优惠券已被使用", status: 400 };
   }
   if (typeof row.starts_at === "string" && row.starts_at && Date.parse(row.starts_at) > nowMs) {
     return { ok: false, code: "COUPON_NOT_STARTED", error: "该优惠券尚未到生效时间", status: 400 };

@@ -293,7 +293,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         <footer
           data-testid="public-site-footer"
           style={{ paddingInline: "var(--storefront-content-padding-x)" }}
-          className="mt-auto w-full shrink-0 bg-transparent py-1.5 text-[11px] leading-none text-[#8c7a6b] md:flex md:h-[20px] md:items-center md:py-0"
+          className="mt-auto w-full shrink-0 bg-transparent py-1.5 text-[11px] leading-none text-[#8c7a6b] md:fixed md:bottom-0 md:left-[var(--storefront-main-offset)] md:right-0 md:z-20 md:mt-0 md:flex md:h-[20px] md:w-auto md:items-center md:bg-[#fbf7f1]/95 md:py-0"
         >
           <div className="flex w-full flex-wrap items-center justify-between gap-2 px-1">
             <span className="truncate">

@@ -1162,11 +1162,20 @@ export default function AdminDashboardPage() {
       cur.amount += safeNumber(item.line_total);
       salesByProduct.set(key, cur);
     }
+    const clicksByToken = new Map<string, number>();
+    for (const v of visits) {
+      const p = v.page_path ?? "";
+      if (!p) continue;
+      const m1 = p.match(/\/products\/([^/?#]+)/);
+      if (m1?.[1]) clicksByToken.set(m1[1], (clicksByToken.get(m1[1]) ?? 0) + 1);
+      const m2 = p.match(/[?&](?:p|product)=([^&#]+)/);
+      if (m2?.[1]) clicksByToken.set(m2[1], (clicksByToken.get(m2[1]) ?? 0) + 1);
+    }
     const rows = data.rawSeries.products.map((product) => {
       const stats = salesByProduct.get(product.id) ?? { orders: 0, amount: 0 };
-      const clicks = visits.filter(
-        (v) => (product.slug && v.page_path?.includes(product.slug)) || v.page_path?.includes(product.id)
-      ).length;
+      const clicks =
+        (product.slug ? (clicksByToken.get(product.slug) ?? 0) : 0) +
+        (product.id !== product.slug ? (clicksByToken.get(product.id) ?? 0) : 0);
       const numericConversionRate = clicks > 0 ? (stats.orders / clicks) * 100 : 0;
       const conversionRate = clicks > 0 ? `${numericConversionRate.toFixed(1)}%` : "—";
       return {
@@ -1904,7 +1913,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 flex flex-col justify-between overflow-auto px-4 pb-4 pt-0">
-                {loading && !data && !fastSummary ? (
+                {!data ? (
                   <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-9 animate-pulse rounded bg-slate-100" />)}</div>
                 ) : allSortedProductRows.length === 0 ? (
                   <AdminEmptyState title="暂无商品数据" description="当前时段暂无在售或成交商品记录。" />

@@ -17,11 +17,14 @@ export const fallbackCategoriesByPath: Record<string, StorefrontFallbackCategory
   ],
   "/products/gift-cards": [
     { slug: "apple-gift-card", name: "Apple 礼品卡", image: "/assets/apple-gift-card-icon.jpg", aliases: ["apple", "app-store", "itunes"] },
+    { slug: "steam", name: "Steam 礼品卡", image: "/assets/digital-steam.png", aliases: ["steam-gift-card", "steam 礼品卡"] },
+    { slug: "google-play", name: "Google Play 礼品卡", image: "/assets/giftcard-google-play.png", aliases: ["google-play-gift-card", "google play", "google"] },
+    { slug: "netflix", name: "Netflix 礼品卡", image: "/assets/giftcard-netflix.png", aliases: ["netflix-gift-card", "netflix 礼品卡"] },
     { slug: "giffgaff", name: "Giffgaff", image: "/assets/giffgaff-icon.svg", aliases: ["giff-gaff"] },
   ],
   "/products/digital-accounts": [
     { slug: "apple-id", name: "Apple ID", image: "/assets/apple-id-icon.jpg" },
-    { slug: "steam", name: "Steam", image: "/assets/digital-steam.jpg" },
+    { slug: "steam", name: "Steam", image: "/assets/digital-steam.png" },
     { slug: "gmail", name: "Gmail 邮箱", image: "/assets/digital-gmail.svg" },
     { slug: "outlook", name: "Outlook 邮箱", image: "/assets/digital-outlook.svg" },
     { slug: "telegram", name: "Telegram", image: "/assets/digital-telegram.svg" },
@@ -32,9 +35,9 @@ export const fallbackCategoriesByPath: Record<string, StorefrontFallbackCategory
     { slug: "facebook", name: "Facebook", image: "/assets/digital-facebook.svg" },
     { slug: "youtube", name: "YouTube", image: "/assets/digital-youtube.svg" },
     { slug: "twitch", name: "Twitch", image: "/assets/digital-twitch.svg" },
-    { slug: "github", name: "GitHub", icon: "key", aliases: ["git-hub"] },
+    { slug: "github", name: "GitHub", image: "/assets/digital-github.png", aliases: ["git-hub"] },
     { slug: "linkedin", name: "LinkedIn", icon: "key", aliases: ["linked-in"] },
-    { slug: "threads", name: "Threads", icon: "message", aliases: ["thread"] },
+    { slug: "threads", name: "Threads", image: "/assets/digital-threads.png", aliases: ["thread"] },
   ],
   "/products/ai-membership": [
     { slug: "chatgpt", name: "ChatGPT", image: "/assets/ai-chatgpt-icon.jpg", aliases: ["chat gpt", "chat-gpt"] },

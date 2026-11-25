@@ -690,14 +690,21 @@ function SupabaseMallContentInner({
   }, [resolvedCategory?.metadata?.subcategories, products]);
 
   const filteredProducts = useMemo(() => {
+    const isOutOfStock = (prod: Product) => {
+      const sd = getPublicStockDisplay(prod.stock, { metadata: prod.metadata });
+      return !sd.available || (prod.stockStatus === "out-of-stock" && sd.code !== "preorder");
+    };
     if (selectedSubcategory) {
       const targetLower = selectedSubcategory.trim().toLowerCase();
-      return products.filter((prod) => {
-        const label = extractProductSubcategoryLabel(prod);
-        return label.toLowerCase() === targetLower;
-      });
+      return products
+        .filter((prod) => {
+          const label = extractProductSubcategoryLabel(prod);
+          return label.toLowerCase() === targetLower;
+        })
+        .map((prod, index) => ({ prod, index, out: isOutOfStock(prod) ? 1 : 0 }))
+        .sort((a, b) => a.out - b.out || a.index - b.index)
+        .map((entry) => entry.prod);
     }
-    if (availableSubcategories.length <= 1) return products;
     const subOrder = new Map<string, number>();
     availableSubcategories.forEach((sub, idx) => {
       subOrder.set(sub.name.trim().toLowerCase(), idx);
@@ -707,9 +714,10 @@ function SupabaseMallContentInner({
       .map((prod, index) => ({
         prod,
         index,
+        out: isOutOfStock(prod) ? 1 : 0,
         rank: subOrder.get(extractProductSubcategoryLabel(prod).toLowerCase()) ?? fallbackRank,
       }))
-      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .sort((a, b) => a.out - b.out || a.rank - b.rank || a.index - b.index)
       .map((entry) => entry.prod);
   }, [products, selectedSubcategory, availableSubcategories]);
 
