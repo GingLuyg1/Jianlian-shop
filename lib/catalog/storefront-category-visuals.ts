@@ -9,6 +9,7 @@ export type StorefrontFallbackCategory = {
 
 export const fallbackCategoriesByPath: Record<string, StorefrontFallbackCategory[]> = {
   "/products/sim-cards": [
+    { slug: "sim-topup-pin", name: "SIM 充值卡", icon: "creditCard", aliases: ["sim-topup", "sim充值卡", "充值卡"] },
     { slug: "uk", name: "英国", icon: "phone", aliases: ["giffgaff"] },
     { slug: "us", name: "美国", icon: "phone", aliases: ["ultra-mobile"] },
     { slug: "nz", name: "新西兰", icon: "phone", aliases: ["one-nz", "onenz", "vodafone", "new-zealand"] },
@@ -17,7 +18,10 @@ export const fallbackCategoriesByPath: Record<string, StorefrontFallbackCategory
   ],
   "/products/gift-cards": [
     { slug: "apple-gift-card", name: "Apple 礼品卡", image: "/assets/apple-gift-card-icon.jpg", aliases: ["apple", "app-store", "itunes"] },
-    { slug: "giffgaff", name: "Giffgaff", image: "/assets/giffgaff-icon.svg", aliases: ["giff-gaff"] },
+    { slug: "google-play-gift-card", name: "Google Play 礼品卡", icon: "gift", aliases: ["google-play", "google"] },
+    { slug: "steam-gift-card", name: "Steam 礼品卡", image: "/assets/digital-steam.svg", aliases: ["steam"] },
+    { slug: "console-gift-card", name: "游戏主机礼品卡", icon: "gift", aliases: ["playstation", "xbox", "nintendo", "roblox"] },
+    { slug: "netflix-gift-card", name: "Netflix 礼品卡", icon: "gift", aliases: ["netflix"] },
   ],
   "/products/digital-accounts": [
     { slug: "apple-id", name: "Apple ID", image: "/assets/apple-id-icon.jpg" },
