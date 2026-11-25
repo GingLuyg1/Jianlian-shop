@@ -220,10 +220,13 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
         <footer
           data-testid="public-site-footer"
-          style={{ paddingInline: "var(--storefront-content-padding-x)" }}
+          style={{
+            paddingLeft: "var(--storefront-content-padding-x)",
+            paddingRight: "calc(var(--storefront-main-offset) + var(--storefront-content-padding-x))",
+          }}
           className="mt-auto w-full shrink-0 bg-transparent py-1.5 text-[11px] leading-none text-[#8c7a6b] md:flex md:h-[20px] md:items-center md:py-0"
         >
-          <div className="mx-auto flex w-full max-w-[1640px] flex-wrap items-center justify-between gap-2 px-1">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2 px-1">
             <span className="truncate">
               © {new Date().getFullYear()} {settings.site_name || "Jianlian"} · 7×24h 自动发货与售后质保
             </span>

@@ -41,7 +41,9 @@ export const productImageFallbackSrc = "/assets/jianlian-brand-logo.png";
 
 export function resolveProductImageSrc(url?: string | null): string {
   if (!url) return productImageFallbackSrc;
-  if (url === "/assets/giftcard-apple.svg") return "/assets/apple-gift-card-icon.svg";
+  if (url === "/assets/giftcard-apple.svg" || url === "/assets/apple-gift-card-icon.svg") {
+    return "/assets/apple-gift-card-icon.jpg";
+  }
   if (url.includes("/storage/v1/object/public/product-images/")) {
     const filename = url.split("/").pop();
     if (filename) return `/assets/products/${filename}`;
