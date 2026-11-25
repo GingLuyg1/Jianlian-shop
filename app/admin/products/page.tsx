@@ -1542,7 +1542,7 @@ function SupplierBindingBadge({ product }: { product: AdminProduct }) {
     : evidence.sync_status && evidence.sync_status !== "synced"
       ? "供应商库存：需复核"
       : "供应商库存：未同步";
-  return <div className="flex flex-col items-center gap-0.5"><Badge variant="outline" className={definition ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}>{definition?.name ?? supplier}</Badge>{supplierProductId ? <span className="font-mono text-[10px] text-slate-500">#{supplierProductId}</span> : null}{stockLabel ? <span className="text-[10px] font-medium text-amber-700">{stockLabel}</span> : null}</div>;
+  return <div className="flex max-w-full flex-col items-center gap-0.5 overflow-hidden"><Badge variant="outline" className={cn("max-w-full truncate whitespace-nowrap", definition ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700")}>{definition?.name ?? supplier}</Badge>{supplierProductId ? <span className="max-w-full truncate font-mono text-[10px] text-slate-500" title={`#${supplierProductId}`}>#{supplierProductId}</span> : null}{stockLabel ? <span className="max-w-full truncate text-[10px] font-medium text-amber-700">{stockLabel}</span> : null}</div>;
 }
 
 type OperationTag = { text: string; tone: "info" | "success" | "warning" | "orange" };
@@ -1658,31 +1658,31 @@ function ProductTable({
   return (
     <div className="flex min-h-[240px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#dce3ee] md:min-h-0">
     <AdminSyncedHorizontalScroller>
-      <table className={cn(glass.table, "w-full min-w-[1072px] table-fixed caption-bottom text-sm")}>
+      <table className={cn(glass.table, "w-full min-w-[1240px] table-fixed caption-bottom text-sm")}>
         <colgroup>
-          <col className="w-[252px]" />
-          <col className="w-[82px]" />
-          <col className="w-[90px]" />
-          <col className="w-[70px]" />
-          <col className="w-[76px]" />
-          <col className="w-[68px]" />
-          <col className="w-[96px]" />
-          <col className="w-[74px]" />
+          <col className="w-[248px]" />
           <col className="w-[104px]" />
-          <col className="w-[160px]" />
+          <col className="w-[104px]" />
+          <col className="w-[74px]" />
+          <col className="w-[84px]" />
+          <col className="w-[118px]" />
+          <col className="w-[132px]" />
+          <col className="w-[82px]" />
+          <col className="w-[132px]" />
+          <col className="w-[162px]" />
         </colgroup>
         <TableHeader className="sticky top-0 z-20">
           <TableRow>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>网址标识 (Slug)</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>交付方式</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>供应商</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
-            <TableHead className={cn("h-10 px-3 text-center text-xs", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
-            <TableHead className={cn("sticky right-0 z-30 h-10 px-3 text-center text-xs shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>商品</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>网址标识 (Slug)</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>分类路径</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>售价</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>库存</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>交付方式</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>供应商</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>状态</TableHead>
+            <TableHead className={cn("h-10 px-3 text-center text-xs whitespace-nowrap", HORIZONTAL_TEXT_CLASS)}>更新时间</TableHead>
+            <TableHead className={cn("sticky right-0 z-30 h-10 border-l border-slate-200/80 bg-[#f3f6fc] px-3 text-center text-xs whitespace-nowrap shadow-[-8px_0_12px_-10px_rgba(15,23,42,0.22)]", HORIZONTAL_TEXT_CLASS)}>操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -1744,10 +1744,10 @@ function ProductTable({
                   <div className="mt-0.5 text-[10px] text-slate-500" title={product.has_skus ? "仅汇总在售商品规格库存" : undefined}>{product.has_skus ? "规格库存" : "商品库存"}</div>
                   {product.metadata?.supplier_stock_sync_status === "synced" ? <div className="mt-0.5 text-[10px] font-normal text-blue-600" title={typeof product.metadata.supplier_stock_synced_at === "string" ? `最后同步：${formatAdminDate(product.metadata.supplier_stock_synced_at)}` : "供应商同步"}>供应商同步</div> : null}
                 </TableCell>
-                <TableCell className={cn("px-3 py-2 text-center text-slate-600", HORIZONTAL_TEXT_CLASS)}>
+                <TableCell className={cn("overflow-hidden truncate px-2.5 py-2 text-center text-xs text-slate-600", HORIZONTAL_TEXT_CLASS)} title={getExtendedDeliveryLabel(product.effective_delivery_mode ?? product.delivery_type, product.metadata)}>
                   {getExtendedDeliveryLabel(product.effective_delivery_mode ?? product.delivery_type, product.metadata)}
                 </TableCell>
-                <TableCell className="px-3 py-2 text-center">
+                <TableCell className="overflow-hidden px-2.5 py-2 text-center">
                   <SupplierBindingBadge product={product} />
                 </TableCell>
                 <TableCell className="px-2 py-2 text-center">
@@ -1764,12 +1764,12 @@ function ProductTable({
                     </Badge>
                   </div>
                 </TableCell>
-                <TableCell className="px-1 py-2 text-center">
+                <TableCell className="px-2 py-2 text-center">
                   <time className="block whitespace-nowrap text-xs tabular-nums text-slate-500">
                     {formatAdminDate(product.updated_at)}
                   </time>
                 </TableCell>
-                <TableCell className="sticky right-0 z-10 px-2 py-2 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
+                <TableCell className="sticky right-0 z-10 border-l border-slate-200/80 bg-white px-2 py-2 shadow-[-8px_0_12px_-10px_rgba(15,23,42,0.18)]">
                   <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                     <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onEdit(product)}>
                       编辑

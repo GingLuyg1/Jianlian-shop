@@ -1237,9 +1237,9 @@ function ProductPanel({
     <Card data-testid="storefront-product-list" data-catalog-route={pageRoute} data-catalog-page-ready={resultReady && !error ? "true" : "false"} aria-busy={isLoading} className={cn("min-h-0 overflow-hidden lg:h-full", isMobile && "min-h-[calc(100dvh-72px)] !rounded-2xl")}>
       <CardContent className={cn(productPanelContentClassName, isMobile && "!p-2.5")}>
         <div ref={productListTopRef} className={cn("mb-2 flex flex-col justify-between gap-2 sm:mb-3 sm:gap-3", !isMobile && "xl:flex-row xl:items-start")}>
-          <div className={cn("flex min-w-0 items-center justify-between gap-2", !isMobile && "xl:block")}>
+          <div className={cn("flex min-w-0 items-center justify-between gap-2", !isMobile && "xl:block xl:shrink-0")}>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className={cn("min-h-6 truncate text-base font-bold sm:min-h-7 sm:text-xl", resultReady && "catalog-title-enter")}>{activeCategory?.name || ""}</h1>
+              <h1 className={cn("min-h-6 whitespace-nowrap text-base font-bold sm:min-h-7 sm:text-xl", resultReady && "catalog-title-enter")}>{activeCategory?.name || ""}</h1>
               {selectedSubcategory ? (
                 <span className="inline-flex items-center rounded-full border border-[#e6a679]/60 bg-[#fef0e4] px-2.5 py-0.5 text-xs font-bold text-[#c85e22]">
                   {selectedSubcategory}
@@ -1253,7 +1253,7 @@ function ProductPanel({
               </span>
             </div>
           </div>
-          <div className={cn("flex w-full gap-2", !isMobile && "xl:w-[760px]")}>
+          <div className={cn("flex w-full gap-2", !isMobile && "xl:min-w-[300px] xl:max-w-[680px] xl:flex-1")}>
             <div className="relative min-w-0 flex-1">
               <Search className={cn("pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7d6355]", isMobile ? "h-3.5 w-3.5" : "left-3.5 sm:left-4 h-4 w-4")} />
               <Input

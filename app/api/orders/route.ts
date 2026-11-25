@@ -25,6 +25,7 @@ import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 import { evaluateOrderRisk, riskResponseMessage, shouldBlockRisk } from "@/lib/risk/risk-service";
+import { normalizeCouponCode, isValidCouponCodeFormat } from "@/lib/coupons/coupon-service";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ const ORDER_CREATE_ALLOWED_KEYS = new Set([
   "customer_note",
   "payment_method",
   "paymentMethod",
+  "coupon_code",
+  "couponCode",
   "agreement_version_ids",
   "agreements",
 ]);
@@ -316,6 +319,8 @@ export async function POST(request: Request) {
           customer_note?: string;
           payment_method?: string;
           paymentMethod?: string;
+          coupon_code?: string;
+          couponCode?: string;
           agreement_version_ids?: AgreementInput[];
           agreements?: AgreementInput[];
         }
@@ -513,6 +518,41 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedCouponCode = normalizeCouponCode(body.coupon_code ?? body.couponCode);
+    if (normalizedCouponCode) {
+      if (!isValidCouponCodeFormat(normalizedCouponCode)) {
+        return NextResponse.json({ error: "优惠券码格式无效", code: "COUPON_INVALID_FORMAT" }, { status: 400 });
+      }
+      const precheckService = getSupabaseServiceRoleClient();
+      if (!precheckService) {
+        return NextResponse.json({ error: "优惠券服务暂不可用", code: "COUPON_SERVICE_UNAVAILABLE" }, { status: 503 });
+      }
+      const { data: couponRow, error: couponErr } = await precheckService
+        .from("coupons")
+        .select("id,status,used_count,max_uses,starts_at,expires_at")
+        .eq("code", normalizedCouponCode)
+        .maybeSingle();
+      if (couponErr) {
+        return NextResponse.json({ error: "优惠券服务暂不可用，请稍后重试", code: "COUPON_CHECK_FAILED" }, { status: 503 });
+      }
+      if (!couponRow) {
+        return NextResponse.json({ error: "优惠券不存在或无效", code: "COUPON_NOT_FOUND" }, { status: 400 });
+      }
+      if (couponRow.status === "disabled") {
+        return NextResponse.json({ error: "该优惠券已停用", code: "COUPON_DISABLED" }, { status: 400 });
+      }
+      if (couponRow.status === "exhausted" || Number(couponRow.used_count ?? 0) >= Number(couponRow.max_uses ?? 1)) {
+        return NextResponse.json({ error: "该优惠券已被使用完", code: "COUPON_EXHAUSTED" }, { status: 400 });
+      }
+      const nowMs = Date.now();
+      if (couponRow.starts_at && Date.parse(String(couponRow.starts_at)) > nowMs) {
+        return NextResponse.json({ error: "该优惠券尚未到生效时间", code: "COUPON_NOT_STARTED" }, { status: 400 });
+      }
+      if (couponRow.expires_at && Date.parse(String(couponRow.expires_at)) < nowMs) {
+        return NextResponse.json({ error: "该优惠券已过期", code: "COUPON_EXPIRED" }, { status: 400 });
+      }
+    }
+
     const orderPayload: Record<string, unknown> = {
       p_product_id: productId,
       p_quantity: quantity,
@@ -625,6 +665,34 @@ export async function POST(request: Request) {
       const serviceForSync = getSupabaseServiceRoleClient();
       if (serviceForSync) {
         await syncSharedSkuCodeInventory(serviceForSync, [resolvedSkuId]);
+      }
+    }
+
+    if (normalizedCouponCode) {
+      const couponService = getSupabaseServiceRoleClient();
+      if (!couponService) {
+        return NextResponse.json({ error: "优惠券核销服务暂不可用", code: "COUPON_SERVICE_UNAVAILABLE" }, { status: 503 });
+      }
+      const { data: couponApplyRaw, error: couponApplyErr } = await couponService.rpc("apply_coupon_to_order", {
+        p_order_id: orderId,
+        p_user_id: user.id,
+        p_coupon_code: normalizedCouponCode,
+      });
+      const couponApply = (couponApplyRaw ?? null) as { ok?: boolean; code?: string; error?: string; final_amount?: number } | null;
+      if (couponApplyErr || !couponApply?.ok) {
+        // Best-effort cancel the newly created unpaid order so stock is released and user is never overcharged.
+        try {
+          await supabase.rpc("cancel_my_unpaid_order", { p_order_id: orderId });
+        } catch {
+          // Ignore cancel fallback errors.
+        }
+        return NextResponse.json(
+          {
+            error: couponApply?.error || "优惠券核销失败，请更换或取消优惠券后重试",
+            code: couponApply?.code || "COUPON_APPLY_FAILED",
+          },
+          { status: 409 }
+        );
       }
     }
 

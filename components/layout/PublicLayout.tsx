@@ -100,19 +100,19 @@ function MobileSupportFab({
       data-testid="floating-support-btn"
       style={
         mobilePreview && previewWidth
-          ? { right: `calc(50% - ${previewWidth / 2}px + 16px)`, bottom: "24px" }
-          : { right: "16px", bottom: "24px" }
+          ? { right: `calc(50% - ${previewWidth / 2}px + 10px)`, bottom: "14px" }
+          : { right: "10px", bottom: "14px" }
       }
       className={cn(
-        "fixed z-40 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-orange-500/30 transition-all duration-200 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-        isScrolling ? "translate-x-6 opacity-55" : "translate-x-0 opacity-100",
+        "fixed z-40 flex h-9 w-9 items-center justify-center rounded-full bg-primary/90 text-primary-foreground shadow-md shadow-orange-500/25 backdrop-blur-xs transition-all duration-200 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        isScrolling ? "translate-x-5 opacity-45" : "translate-x-0 opacity-90 hover:opacity-100",
         mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
         isMobile && "!flex",
       )}
       aria-label="在线客服"
       title="在线客服"
     >
-      <Headphones className="h-5 w-5" />
+      <Headphones className="h-4 w-4" />
     </button>
   );
 }
@@ -153,7 +153,13 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
     }
   }, [pathname]);
   useEffect(() => {
-    if (pathname.startsWith("/account") || pathname.startsWith("/checkout") || pathname.startsWith("/payment")) {
+    if (
+      pathname.startsWith("/account") ||
+      pathname.startsWith("/checkout") ||
+      pathname.startsWith("/payment") ||
+      pathname.startsWith("/products/account-recharge") ||
+      pathname.startsWith("/promotion")
+    ) {
       ensureAccountRecordPreload();
     }
   }, [pathname]);
@@ -270,7 +276,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         viewportLocked && !isMobile ? "flex h-[calc(100dvh-57px)] min-w-0 flex-col overflow-hidden md:h-[100dvh]" : "flex min-h-[100dvh] min-w-0 flex-col",
         mobileNavigationUntilLg ? "lg:ml-[var(--storefront-main-offset)]" : "md:ml-[var(--storefront-main-offset)]",
         pathname === "/" && !isMobile && "lg:pt-[10px]",
-        isMobile && "!ml-0 !h-auto !overflow-visible pb-20",
+        isMobile && "!ml-0 !h-auto !overflow-visible pb-24",
       )}>
         <PublicTopInfoBar announcementText={announcement || undefined} mobileNavigationUntilLg={mobileNavigationUntilLg} />
         <div

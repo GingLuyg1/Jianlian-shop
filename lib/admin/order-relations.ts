@@ -243,10 +243,10 @@ export async function loadAdminOrderRelations(
     ),
     safeQuery<Record<string, unknown>>(() =>
       supabase
-        .from("user_notifications")
-        .select("id,user_id,title,type,status,business_type,business_id,created_at,read_at")
-        .eq("business_type", "order")
-        .eq("business_id", orderId)
+        .from("site_notifications")
+        .select("id,user_id,title,type,content,link_url,related_type,related_id,created_at,read_at")
+        .eq("related_type", "order")
+        .eq("related_id", orderId)
         .order("created_at", { ascending: false })
         .limit(20)
     ),

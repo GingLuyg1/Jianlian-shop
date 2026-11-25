@@ -463,31 +463,34 @@ function TutorialsPageContent() {
           <div className="space-y-2">
             {/* 一级教程分类胶囊栏 (横向滚动 + 右侧展开全部按钮，悬浮置顶冻结) */}
             <div className="flex items-center gap-1.5">
-              <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5 touch-pan-x pr-2">
-                {tutorialTopics.map(({ id, label, icon: Icon }) => {
-                  const current = topic.id === id && matchingTopics.length > 0;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => {
-                        setSelected(id);
-                        setSearch("");
-                        if (id === "giffgaff") setGiffgaffTreeOpen(true);
-                        if (id === "one-nz") setOneNzTreeOpen(true);
-                        resetScroll();
-                      }}
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
-                        current
-                          ? "bg-slate-900 text-white shadow-xs"
-                          : "bg-orange-50/70 text-slate-700 hover:bg-orange-100/80"
-                      }`}
-                    >
-                      <Icon className={`h-3.5 w-3.5 shrink-0 ${current ? "text-orange-400" : "text-slate-500"}`} />
-                      <span>{label}</span>
-                    </button>
-                  );
-                })}
+              <div className="relative min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5 touch-pan-x pr-8">
+                  {tutorialTopics.map(({ id, label, icon: Icon }) => {
+                    const current = topic.id === id && matchingTopics.length > 0;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          setSelected(id);
+                          setSearch("");
+                          if (id === "giffgaff") setGiffgaffTreeOpen(true);
+                          if (id === "one-nz") setOneNzTreeOpen(true);
+                          resetScroll();
+                        }}
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                          current
+                            ? "bg-slate-900 text-white shadow-xs"
+                            : "bg-orange-50/70 text-slate-700 hover:bg-orange-100/80"
+                        }`}
+                      >
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${current ? "text-orange-400" : "text-slate-500"}`} />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/95 via-white/75 to-transparent" />
               </div>
 
               {/* 右侧展开全部/收起按钮 */}

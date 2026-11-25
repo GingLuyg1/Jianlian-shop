@@ -1,6 +1,7 @@
 /** Presentation only: never use these labels as API/filter/database values. */
 const businessLabels: Record<string, string> = {
   account_recharge: '账户充值', recharge: '账户充值', order_payment: '订单支付', order: '商品订单',
+  delivery: '订单发货',
   admin_adjustment: '管理员调整余额', refund: '退款', promotion: '活动赠送', system: '系统调整',
 };
 const statusLabels: Record<string, string> = {
@@ -31,6 +32,7 @@ const statusLabels: Record<string, string> = {
   partially_fulfilled: '部分交付', deleted: '已删除', unused: '未使用', revoked: '已吊销',
   healthy: '健康', degraded: '降级', unhealthy: '异常', unknown: '未知',
   paused: '已暂停', completed_with_warnings: '已完成（含警告）',
+  checkout: '结算页确认', missing: '历史缺失', read: '已读', unread: '未读',
 };
 const supplierLabels: Record<string, string> = {
   pending: '等待采购', processing: '正在采购', retryable_failed: '采购失败，可再次尝试',
@@ -88,6 +90,40 @@ const detailLabels: Record<string, string> = {
   update_risk_case: '处理风险事件', resolve_risk_case: '完结风险事件',
   execute_compensation: '执行事务补偿', retry_compensation: '重试事务补偿',
   export_business_report: '导出经营报表',
+  view_order_relations: '查看订单关联业务',
+  view_payment_detail: '查看支付详情',
+  view_recharge_detail: '查看充值详情',
+  view_sensitive_user_detail: '查看用户敏感资料',
+  view_inventory: '查看数字库存',
+  update_product_status: '修改商品上架状态',
+  update_product_display_state: '修改商品展示状态',
+  update_sku_display_state: '修改规格展示状态',
+  update_product_sku_metadata: '修改规格元数据与成本',
+  save_product_sku_workspace: '保存商品规格配置',
+  bulk_activate_product_skus: '批量启用商品规格',
+  bind_daju_supplier_product: '绑定大橘供应商商品',
+  import_inventory_batch: '批量导入数字库存',
+  disable_inventory_batch: '批量停用库存批次',
+  update_inventory: '更新数字库存',
+  global_search: '后台全局搜索',
+  global_search_rate_limited: '全局搜索触发限流',
+  database_schema_check: '检查数据库结构',
+  update_system_error_status: '更新系统异常状态',
+  export_own_personal_data: '导出个人数据',
+  revoke_agent_application: '撤销代理申请',
+  admin_authorization_create: '新增管理员授权',
+  admin_authorization_update: '修改管理员授权',
+  announcement_create: '创建系统公告',
+  announcement_update: '更新系统公告',
+  announcement_enable: '启用系统公告',
+  announcement_disable: '停用系统公告',
+  check_audit_integrity: '校验审计日志完整性',
+  legal_create_draft: '创建法律协议草稿',
+  legal_update_draft: '修改法律协议草稿',
+  legal_publish: '发布法律协议',
+  create_coupons: '批量创建优惠券',
+  update_coupon: '更新优惠券状态',
+  delete_coupon: '删除优惠券',
 };
 function label(value: unknown, map: Record<string, string>, suffix = '未识别状态'): string {
   if (value == null || value === '') return '—';
@@ -117,6 +153,6 @@ export function beijingDateTime(value: unknown): string {
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? String(value) : `${new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)}（北京时间）`;
 }
-export const ledgerBusinessOptions = Object.entries(businessLabels).filter(([value]) => !['recharge', 'order'].includes(value)).map(([value, label]) => ({value, label}));
+export const ledgerBusinessOptions = Object.entries(businessLabels).filter(([value]) => !['recharge', 'order', 'delivery'].includes(value)).map(([value, label]) => ({value, label}));
 export const workerHelpText = '这里只显示系统采集到的运行状态。如果定时任务状态显示“暂未获取”，不代表任务已经停止。此页面不能启动、停止或修改服务器任务。';
 export const operationsDateFilterHelp = '筛选范围为北京时间当天08:00至次日08:00（结束日期含次日08:00前的记录）。记录时间显示为北京时间。搜索匹配过多时，请缩小范围。';

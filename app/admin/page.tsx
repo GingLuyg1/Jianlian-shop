@@ -1,6 +1,7 @@
 "use client";
 import "./dashboard-v21.css";
 import { statusLabel } from '@/lib/admin/display-labels';
+import { fetchAdminTicketSummary, invalidateAdminTicketSummaryCache } from "@/lib/admin/ticket-summary-client";
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -860,6 +861,40 @@ async function loadDashboardData(sinceDate?: Date, options?: { skipReadiness?: b
   };
 }
 
+type DashboardFastSummary = {
+  cachedAt: string;
+  today: {
+    payAmount: number;
+    yesterdayPayAmount: number;
+    rechargeAmount: number;
+    yesterdayRechargeAmount: number;
+    orderCount: number;
+    yesterdayOrderCount: number;
+    paidOrderCount: number;
+    yesterdayPaidOrderCount: number;
+    buyersCount: number;
+    uv: number;
+    yesterdayUv: number;
+    pv: number;
+    yesterdayPv: number;
+    newUsers: number;
+    yesterdayNewUsers: number;
+  };
+  todos: {
+    pendingOrders: number;
+    manualDelivery: number;
+    autoDeliveryFailed: number;
+    inventoryShortage: number;
+    paymentExceptionSessions: number;
+    callbackFailed: number;
+    reconciliationFailed: number;
+    pendingRecharges: number;
+    lowStockProducts: number;
+    pendingTickets: number;
+    resolvedTickets: number;
+  };
+};
+
 export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -877,29 +912,23 @@ export default function AdminDashboardPage() {
     completed: 0,
     total: 0,
   });
+  const [fastSummary, setFastSummary] = useState<DashboardFastSummary | null>(null);
 
   useEffect(() => {
     clearLegacyLocalTickets();
     let cancelled = false;
-    const syncTickets = async () => {
+    const syncTickets = async (force = false) => {
       try {
-        const res = await fetch("/api/admin/tickets?summary=1", { cache: "no-store" });
-        if (!res.ok) return;
-        const payload = (await res.json()) as {
-          counts?: { processing?: number; completed?: number; total?: number };
-        };
-        if (!cancelled && payload?.counts) {
-          setTicketCounts({
-            processing: Number(payload.counts.processing ?? 0),
-            completed: Number(payload.counts.completed ?? 0),
-            total: Number(payload.counts.total ?? 0),
-          });
+        const counts = await fetchAdminTicketSummary({ force });
+        if (!cancelled && counts) {
+          setTicketCounts(counts);
         }
       } catch {}
     };
-    void syncTickets();
+    void syncTickets(false);
     const onRefresh = () => {
-      void syncTickets();
+      invalidateAdminTicketSummaryCache();
+      void syncTickets(true);
     };
     window.addEventListener("jianlian-admin-badges-updated", onRefresh);
     return () => {
@@ -914,6 +943,25 @@ export default function AdminDashboardPage() {
 
   const refreshInFlight = useMemo(() => ({ current: false }), []);
   const lastRefreshTimeRef = useMemo(() => ({ current: 0 }), []);
+  const loadFastSummary = useCallback(async (forceRefresh = false) => {
+    try {
+      const res = await fetch(`/api/admin/dashboard/summary${forceRefresh ? "?refresh=1" : ""}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const summary = (await res.json().catch(() => null)) as DashboardFastSummary | null;
+      if (!summary?.today || !summary?.todos) return;
+      setFastSummary(summary);
+      setTicketCounts({
+        processing: summary.todos.pendingTickets,
+        completed: summary.todos.resolvedTickets,
+        total: summary.todos.pendingTickets + summary.todos.resolvedTickets,
+      });
+    } catch {
+      // Fallback gracefully to full dashboard load.
+    }
+  }, []);
+
   const loadDashboard = useCallback(async (sinceDate?: Date, quiet = false) => {
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
@@ -927,6 +975,9 @@ export default function AdminDashboardPage() {
       return;
     }
 
+    // Fire fast server-side aggregated summary in parallel (30s cache) so top KPIs & todos render in 1-2s.
+    void loadFastSummary(!quiet && Boolean(lastRefreshTimeRef.current));
+
     try {
       const nextData = await loadDashboardData(sinceDate, { skipReadiness: quiet });
       setData(nextData);
@@ -939,7 +990,7 @@ export default function AdminDashboardPage() {
       refreshInFlight.current = false;
       setLoading(false);
     }
-  }, [lastRefreshTimeRef, refreshInFlight]);
+  }, [lastRefreshTimeRef, loadFastSummary, refreshInFlight]);
 
   useEffect(() => {
     void loadDashboard();
@@ -1005,7 +1056,23 @@ export default function AdminDashboardPage() {
   );
 
   const periodStats = useMemo(() => {
-    if (!data) return null;
+    if (!data) {
+      if (!fastSummary || dateFilter.preset !== "today") return null;
+      const t = fastSummary.today;
+      const successRate = t.orderCount > 0 ? `${((t.paidOrderCount / t.orderCount) * 100).toFixed(1)}%` : "—";
+      const visitorConversionRate = t.uv > 0 ? `${((t.buyersCount / t.uv) * 100).toFixed(1)}%` : "—";
+      return {
+        payAmount: t.payAmount,
+        rechargeAmount: t.rechargeAmount,
+        orderCount: t.orderCount,
+        payingUsers: t.buyersCount,
+        visitorConversionRate,
+        successRate,
+        uv: t.uv,
+        pv: t.pv,
+        newUsers: t.newUsers,
+      };
+    }
     const orders = data.rawSeries.orders?.filter((row) => inDateFilterRange(row.created_at)) ?? null;
     const recharges = data.rawSeries.recharges?.filter((row) => inDateFilterRange(row.created_at)) ?? null;
     const visits = data.rawSeries.visits?.filter((row) => inDateFilterRange(row.visit_date)) ?? null;
@@ -1038,7 +1105,7 @@ export default function AdminDashboardPage() {
       pv,
       newUsers,
     };
-  }, [data, inDateFilterRange]);
+  }, [data, dateFilter.preset, fastSummary, inDateFilterRange]);
 
   const activePayValue = periodStats?.payAmount ?? null;
   const activeOrderValue = periodStats?.orderCount ?? null;
@@ -1370,7 +1437,7 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {loading && !data ? (
+            {loading && !data && !fastSummary ? (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
                 {Array.from({ length: 10 }).map((_, index) => (
                   <div key={index} className="h-[116px] animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
@@ -1554,28 +1621,28 @@ export default function AdminDashboardPage() {
                     {
                       label: "待处理订单",
                       desc: "已支付等待交付",
-                      value: data?.todos.find((t) => t.label === "待处理订单")?.value ?? 0,
+                      value: data?.todos.find((t) => t.label === "待处理订单")?.value ?? fastSummary?.todos.pendingOrders ?? 0,
                       href: "/admin/orders?attention=pending_orders",
                       tone: "orange" as const,
                     },
                     {
                       label: "待人工交付",
                       desc: "需管理员人工充值/发货",
-                      value: data?.todos.find((t) => t.label === "待人工交付")?.value ?? 0,
+                      value: data?.todos.find((t) => t.label === "待人工交付")?.value ?? fastSummary?.todos.manualDelivery ?? 0,
                       href: "/admin/orders?attention=manual_delivery",
                       tone: "orange" as const,
                     },
                     {
                       label: "自动发货失败",
                       desc: "卡密提取/API交付失败",
-                      value: data?.todos.find((t) => t.label === "自动发货失败")?.value ?? 0,
+                      value: data?.todos.find((t) => t.label === "自动发货失败")?.value ?? fastSummary?.todos.autoDeliveryFailed ?? 0,
                       href: "/admin/orders?attention=auto_delivery_failed",
                       tone: "red" as const,
                     },
                     {
                       label: "交付库存不足",
                       desc: "订单缺货阻断履约",
-                      value: data?.todos.find((t) => t.label === "库存不足订单")?.value ?? 0,
+                      value: data?.todos.find((t) => t.label === "库存不足订单")?.value ?? fastSummary?.todos.inventoryShortage ?? 0,
                       href: "/admin/orders?attention=inventory_shortage",
                       tone: "red" as const,
                     },
@@ -1631,28 +1698,28 @@ export default function AdminDashboardPage() {
                     {
                       label: "支付异常会话",
                       desc: "超时或未完成支付会话",
-                      value: data?.statusMetrics.find((m) => m.label === "支付异常")?.value ?? 0,
+                      value: data?.statusMetrics.find((m) => m.label === "支付异常")?.value ?? fastSummary?.todos.paymentExceptionSessions ?? 0,
                       href: "/admin/payments?view=exceptions",
                       tone: "red" as const,
                     },
                     {
                       label: "支付回调失败",
                       desc: "第三方异步通知异常",
-                      value: data?.todos.find((t) => t.label === "支付回调失败")?.value ?? 0,
+                      value: data?.todos.find((t) => t.label === "支付回调失败")?.value ?? fastSummary?.todos.callbackFailed ?? 0,
                       href: "/admin/payments?view=callbacks&attention=failed",
                       tone: "red" as const,
                     },
                     {
                       label: "支付对账异常",
                       desc: "金额不一致或掉单排查",
-                      value: data?.todos.find((t) => t.label === "对账异常")?.value ?? 0,
+                      value: data?.todos.find((t) => t.label === "对账异常")?.value ?? fastSummary?.todos.reconciliationFailed ?? 0,
                       href: "/admin/payments?view=reconciliations&attention=failed",
                       tone: "orange" as const,
                     },
                     {
                       label: "待处理充值",
                       desc: "需管理员人工确认充值",
-                      value: data?.todos.find((t) => t.label === "待处理充值")?.value ?? 0,
+                      value: data?.todos.find((t) => t.label === "待处理充值")?.value ?? fastSummary?.todos.pendingRecharges ?? 0,
                       href: "/admin/recharges?view=review",
                       tone: "orange" as const,
                     },
@@ -1837,7 +1904,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 flex flex-col justify-between overflow-auto px-4 pb-4 pt-0">
-                {loading && !data ? (
+                {loading && !data && !fastSummary ? (
                   <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-9 animate-pulse rounded bg-slate-100" />)}</div>
                 ) : allSortedProductRows.length === 0 ? (
                   <AdminEmptyState title="暂无商品数据" description="当前时段暂无在售或成交商品记录。" />
@@ -1847,10 +1914,10 @@ export default function AdminDashboardPage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="text-xs">
-                            <TableHead className="min-w-[180px] text-left">商品标题</TableHead>
-                            <TableHead className="text-right">售价</TableHead>
+                            <TableHead className="min-w-[180px] whitespace-nowrap text-left">商品标题</TableHead>
+                            <TableHead className="whitespace-nowrap text-right">售价</TableHead>
                             <TableHead
-                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              className="cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900"
                               onClick={() => {
                                 if (productSortBy === "orders") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1866,7 +1933,7 @@ export default function AdminDashboardPage() {
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              className="cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900"
                               onClick={() => {
                                 if (productSortBy === "amount") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1882,7 +1949,7 @@ export default function AdminDashboardPage() {
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              className="cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900"
                               onClick={() => {
                                 if (productSortBy === "stock") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1898,7 +1965,7 @@ export default function AdminDashboardPage() {
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer text-right select-none transition-colors hover:text-slate-900"
+                              className="cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900"
                               onClick={() => {
                                 if (productSortBy === "conversionRate") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1913,7 +1980,7 @@ export default function AdminDashboardPage() {
                                 {productSortBy === "conversionRate" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
                               </span>
                             </TableHead>
-                            <TableHead className="text-center">操作</TableHead>
+                            <TableHead className="whitespace-nowrap text-center">操作</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>

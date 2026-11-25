@@ -16,6 +16,7 @@ import {
 } from "./admin-navigation";
 import { toggleNavigationGroup } from "./admin-navigation-state.mjs";
 import { clearLegacyLocalTickets } from "@/lib/tickets/types";
+import { fetchAdminTicketSummary, invalidateAdminTicketSummaryCache } from "@/lib/admin/ticket-summary-client";
 
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
@@ -41,24 +42,23 @@ export default function AdminSidebar() {
   const navRef = useRef<HTMLElement>(null);
   const indicatorRef = useRef<HTMLSpanElement>(null);
 
-  const syncPendingBadges = useCallback(async () => {
+  const syncPendingBadges = useCallback(async (force = false) => {
     if (typeof window === "undefined") return;
     clearLegacyLocalTickets();
     let apiPending = 0;
     let ticketPending = 0;
 
-    const [agentsRes, ticketsRes] = await Promise.allSettled([
+    const [agentsRes, ticketsCounts] = await Promise.allSettled([
       fetch("/api/admin/agents?summary=1", { cache: "no-store" }),
-      fetch("/api/admin/tickets?summary=1", { cache: "no-store" }),
+      fetchAdminTicketSummary({ force }),
     ]);
 
     if (agentsRes.status === "fulfilled" && agentsRes.value.ok) {
       const payload = (await agentsRes.value.json().catch(() => null)) as { pendingApplications?: number } | null;
       apiPending = Number(payload?.pendingApplications ?? 0);
     }
-    if (ticketsRes.status === "fulfilled" && ticketsRes.value.ok) {
-      const payload = (await ticketsRes.value.json().catch(() => null)) as { counts?: { processing?: number } } | null;
-      ticketPending = Number(payload?.counts?.processing ?? 0);
+    if (ticketsCounts.status === "fulfilled" && ticketsCounts.value) {
+      ticketPending = Number(ticketsCounts.value.processing ?? 0);
     }
 
     setPendingBadges({
@@ -68,9 +68,10 @@ export default function AdminSidebar() {
   }, []);
 
   useEffect(() => {
-    void syncPendingBadges();
+    void syncPendingBadges(false);
     const onRefresh = () => {
-      void syncPendingBadges();
+      invalidateAdminTicketSummaryCache();
+      void syncPendingBadges(true);
     };
     window.addEventListener("jianlian-admin-badges-updated", onRefresh);
     return () => {

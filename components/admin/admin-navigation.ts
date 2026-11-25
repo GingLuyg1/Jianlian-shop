@@ -76,9 +76,10 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     key: "trade",
     label: "订单与交易",
     icon: ClipboardList,
-    routePrefixes: ["/admin/orders", "/admin/refunds", "/admin/risk"],
+    routePrefixes: ["/admin/orders", "/admin/refunds", "/admin/risk", "/admin/coupons"],
     children: [
       { label: "订单管理", href: "/admin/orders" },
+      { label: "优惠券管理", href: "/admin/coupons" },
       { label: "售后退款", href: "/admin/refunds" },
       { label: "风险审核", href: "/admin/risk" },
     ],

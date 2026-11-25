@@ -377,6 +377,14 @@ function CheckoutPageContent() {
   const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(true);
   const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    name: string;
+    appliedDiscount: number;
+    finalAmount: number;
+  } | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState("");
   const [termsOpen, setTermsOpen] = useState(false);
   const [legalDocuments, setLegalDocuments] = useState<LegalDocument[]>([]);
   const [legalLoading, setLegalLoading] = useState(true);
@@ -391,6 +399,12 @@ function CheckoutPageContent() {
   const [error, setError] = useState("");
   const [balanceStatus, setBalanceStatus] = useState<BalanceLoadStatus>("loading");
   const [availableBalance, setAvailableBalance] = useState<number | null>(null);
+  const availableBalanceRef = useRef<number | null>(null);
+  availableBalanceRef.current = availableBalance;
+  const publicAuthBalanceRef = useRef<number>(publicAuthBalance);
+  publicAuthBalanceRef.current = publicAuthBalance;
+  const authUserId = authUser?.id ?? null;
+  const authUserEmail = authUser?.email ?? null;
   const [balanceError, setBalanceError] = useState("");
   const [balanceRequiresLogin, setBalanceRequiresLogin] = useState(false);
   const [pendingBalanceOrder, setPendingBalanceOrder] = useState<PendingBalanceOrder | null>(null);
@@ -428,7 +442,7 @@ function CheckoutPageContent() {
   }, []);
 
   const loadAccountBalance = useCallback(async (force = false) => {
-    if (publicAuthReady && !authUser) {
+    if (publicAuthReady && !authUserId) {
       setAvailableBalance(null);
       setBalanceStatus("error");
       setBalanceRequiresLogin(true);
@@ -436,7 +450,7 @@ function CheckoutPageContent() {
       return;
     }
     const now = Date.now();
-    if (!force && now - lastBalanceFetchAtRef.current < 15_000 && availableBalance !== null) {
+    if (!force && now - lastBalanceFetchAtRef.current < 15_000 && availableBalanceRef.current !== null) {
       return;
     }
     lastBalanceFetchAtRef.current = now;
@@ -481,7 +495,7 @@ function CheckoutPageContent() {
       setBalanceRequiresLogin(false);
       setBalanceError("账户余额读取失败，请重新加载");
     }
-  }, [authUser, availableBalance, publicAuthReady]);
+  }, [authUserId, publicAuthReady]);
 
   useEffect(() => {
     if (!paymentDropdownOpen) return;
@@ -554,17 +568,17 @@ function CheckoutPageContent() {
 
   useEffect(() => {
     if (!publicAuthReady) return;
-    if (!authUser) {
+    if (!authUserId) {
       setAvailableBalance(null);
       setBalanceStatus("error");
       setBalanceRequiresLogin(true);
       setBalanceError("请先登录后查看账户余额");
       return;
     }
-    if (authUser.email) {
-      setEmail((current) => (current.trim() ? current : authUser.email!));
+    if (authUserEmail) {
+      setEmail((current) => (current.trim() ? current : authUserEmail));
     }
-    setAvailableBalance((prev) => (prev === null ? publicAuthBalance : prev));
+    setAvailableBalance((prev) => (prev === null ? publicAuthBalanceRef.current : prev));
     void loadAccountBalance(true);
     const refreshBalanceOnFocus = () => void loadAccountBalance(false);
     const refreshBalanceForce = () => void loadAccountBalance(true);
@@ -575,7 +589,7 @@ function CheckoutPageContent() {
       window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalanceForce);
       balanceRequestVersionRef.current += 1;
     };
-  }, [authUser, loadAccountBalance, publicAuthBalance, publicAuthReady]);
+  }, [authUserEmail, authUserId, loadAccountBalance, publicAuthReady]);
 
   useEffect(() => {
     let active = true;
@@ -808,16 +822,59 @@ function CheckoutPageContent() {
         : "";
   const unitPrice = product ? (hasSku ? selectedSku?.rmb ?? product.price : product.price) : 0;
   const orderAmount = unitPrice * quantity;
+  const effectiveOrderAmount = appliedCoupon ? appliedCoupon.finalAmount : orderAmount;
   const paymentMaximum = selectedPaymentChannel?.maximumAmount;
   const paymentOverLimit = selectedPaymentChannel?.currency === "CNY"
     && typeof paymentMaximum === "number"
     && Number.isFinite(paymentMaximum)
-    && orderAmount > paymentMaximum;
+    && effectiveOrderAmount > paymentMaximum;
   const priceLabel = product ? getPriceLabel(product, selectedSku) : "";
   const balanceSummary = useMemo(
-    () => evaluateCheckoutBalance(orderAmount, availableBalance),
-    [availableBalance, orderAmount]
+    () => evaluateCheckoutBalance(effectiveOrderAmount, availableBalance),
+    [availableBalance, effectiveOrderAmount]
   );
+
+  useEffect(() => {
+    setAppliedCoupon(null);
+    setCouponError("");
+  }, [productId, selectedSku?.id, quantity]);
+
+  const handleApplyCoupon = async () => {
+    const trimmed = couponCode.trim().toUpperCase();
+    if (!trimmed) {
+      setCouponError("请输入优惠券码");
+      return;
+    }
+    if (orderAmount <= 0) return;
+    setCouponLoading(true);
+    setCouponError("");
+    try {
+      const response = await fetchWithTimeout("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: trimmed, orderAmount }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        valid?: boolean;
+        error?: string;
+        coupon?: { code: string; name: string; appliedDiscount: number; finalAmount: number };
+      } | null;
+      if (!response.ok || !payload?.valid || !payload.coupon) {
+        setAppliedCoupon(null);
+        setCouponError(payload?.error || "优惠券不可用");
+        return;
+      }
+      setCouponCode(payload.coupon.code);
+      setAppliedCoupon(payload.coupon);
+      setCouponError("");
+      toast.success(`已使用优惠券，立减 ¥${payload.coupon.appliedDiscount.toFixed(2)}`);
+    } catch {
+      setAppliedCoupon(null);
+      setCouponError("优惠券校验失败，请稍后重试");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
   const balanceSubmissionBlockReason = getBalanceSubmissionBlockReason({
     paymentMethod,
     balanceStatus,
@@ -830,15 +887,17 @@ function CheckoutPageContent() {
       ? "继续支付原订单"
       : balanceSubmissionBlockReason === "BALANCE_INSUFFICIENT"
         ? "余额不足"
-        : balanceSubmissionBlockReason
-          ? "余额未确认"
+        : balanceSubmissionBlockReason === "BALANCE_LOADING"
+          ? "正在核对余额..."
+          : balanceSubmissionBlockReason
+            ? "余额未确认"
           : !isPurchasable
             ? "不可购买"
             : "提交订单";
   const amountLabel = useMemo(() => {
     if (!product) return "";
-    return `¥${orderAmount.toFixed(2)}`;
-  }, [orderAmount, product]);
+    return `¥${effectiveOrderAmount.toFixed(2)}`;
+  }, [effectiveOrderAmount, product]);
   const rechargeReturnTo = useMemo(() => {
     const params = new URLSearchParams();
     params.set("product", productId);
@@ -940,7 +999,8 @@ function CheckoutPageContent() {
     setSubmitLoading(true);
 
     try {
-      const configFingerprint = `${productRow.id}:${selectedDatabaseSkuId ?? ""}:${quantity}:${paymentMethod}`;
+      const activeCouponCode = appliedCoupon?.code ?? (couponCode.trim() ? couponCode.trim().toUpperCase() : "");
+      const configFingerprint = `${productRow.id}:${selectedDatabaseSkuId ?? ""}:${quantity}:${paymentMethod}:${activeCouponCode}`;
       if (!pendingBalanceOrder && lastConfigFingerprintRef.current && lastConfigFingerprintRef.current !== configFingerprint) {
         clientRequestIdRef.current = createCheckoutClientRequestId();
       }
@@ -968,6 +1028,7 @@ function CheckoutPageContent() {
           quantity,
           sku_id: selectedDatabaseSkuId,
           payment_method: paymentMethod,
+          ...(activeCouponCode ? { coupon_code: activeCouponCode } : {}),
           client_request_id: clientRequestIdRef.current,
           customer_email: email,
           customer_name: customerName,
@@ -1146,7 +1207,56 @@ function CheckoutPageContent() {
 
                 <div className="shrink-0">
                   <label htmlFor="checkout-coupon" className="mb-1 block text-xs font-medium">优惠券</label>
-                  <Input id="checkout-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} maxLength={40} autoComplete="off" placeholder="请输入优惠券" className="h-9 bg-slate-50 text-base md:text-sm" />
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      id="checkout-coupon"
+                      value={couponCode}
+                      onChange={(event) => {
+                        setCouponCode(event.target.value);
+                        if (appliedCoupon) setAppliedCoupon(null);
+                        if (couponError) setCouponError("");
+                      }}
+                      maxLength={40}
+                      autoComplete="off"
+                      placeholder="请输入优惠券码"
+                      disabled={orderConfigurationLocked || couponLoading}
+                      className="h-9 flex-1 bg-slate-50 text-base md:text-sm"
+                    />
+                    {appliedCoupon ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 shrink-0 px-2.5 text-xs"
+                        disabled={orderConfigurationLocked}
+                        onClick={() => {
+                          setAppliedCoupon(null);
+                          setCouponCode("");
+                          setCouponError("");
+                        }}
+                      >
+                        取消
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 shrink-0 px-3 text-xs"
+                        disabled={orderConfigurationLocked || couponLoading || !couponCode.trim()}
+                        onClick={() => void handleApplyCoupon()}
+                      >
+                        {couponLoading ? "核验中" : "使用"}
+                      </Button>
+                    )}
+                  </div>
+                  {appliedCoupon ? (
+                    <p className="mt-1 text-[11px] font-medium text-emerald-700">
+                      已使用 {appliedCoupon.name}，立减 ¥{appliedCoupon.appliedDiscount.toFixed(2)}（原价 ¥{orderAmount.toFixed(2)} → 实付 ¥{appliedCoupon.finalAmount.toFixed(2)}）
+                    </p>
+                  ) : couponError ? (
+                    <p className="mt-1 text-[11px] text-red-600">{couponError}</p>
+                  ) : null}
                 </div>
 
                 <div className="shrink-0">

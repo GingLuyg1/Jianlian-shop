@@ -335,8 +335,8 @@ export default function PromotionPage() {
             </div>
 
             <div className={cn(glass.inset, "mt-4 flex h-12 items-center gap-3 rounded-xl p-2")}>
-              <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "暂无短链接"}>
-                {loading && !promotionLink ? "正在加载短链接..." : promotionLink || "暂无短链接"}
+              <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "推广返佣活动筹备中，敬请期待"}>
+                {loading && !promotionLink ? "正在读取推广状态..." : promotionLink || "推广返佣活动筹备中，敬请期待"}
               </div>
               <button
                 type="button"

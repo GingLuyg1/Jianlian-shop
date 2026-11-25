@@ -13,7 +13,7 @@ export type PrivacyRequestType = "data_export" | "account_deletion";
 type Row = Record<string, any>;
 
 export const PRIVACY_DATA_CLASSIFICATION = [
-  { group: "可导出数据", items: ["profiles 基本资料", "orders 订单摘要", "order_items 商品快照", "account_recharges 充值记录", "balance_transactions 余额流水", "refund_requests 退款记录", "order_deliveries 交付记录摘要", "user_notifications 通知记录"] },
+  { group: "可导出数据", items: ["profiles 基本资料", "orders 订单摘要", "order_items 商品快照", "account_recharges 充值记录", "balance_transactions 余额流水", "refund_requests 退款记录", "order_deliveries 交付记录摘要", "site_notifications 通知记录"] },
   { group: "内部安全数据", items: ["admin_audit_logs 管理员操作记录", "user_risk_records 风控记录", "支付回调原文", "内部处理备注", "访问风控细节"] },
   { group: "注销后保留数据", items: ["历史订单", "支付和充值记录", "余额流水", "退款记录", "交付审计", "管理员审计记录"] },
   { group: "可匿名化字段", items: ["email", "display_name", "phone", "avatar_url", "recipient_name", "shipping_address"] },
@@ -50,7 +50,7 @@ export async function getCurrentUserPrivacySummary(supabase: SupabaseClient, use
     safeCount(supabase.from("balance_transactions").select("id", { count: "exact", head: true }).eq("user_id", user.id)),
     safeCount(supabase.from("refund_requests").select("id", { count: "exact", head: true }).eq("user_id", user.id)),
     safeCount(supabase.from("order_deliveries").select("id", { count: "exact", head: true }).eq("user_id", user.id)),
-    safeCount(supabase.from("user_notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id)),
+    safeCount(supabase.from("site_notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id)),
     safeRows(supabase.from("privacy_requests").select("id,request_no,request_type,status,block_reasons,created_at,updated_at,cooldown_until,completed_at,cancelled_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10)),
   ]);
 
@@ -91,7 +91,7 @@ export async function buildPersonalDataExport(userId: string) {
     safeRows(service.from("balance_transactions").select("transaction_no,business_type,direction,amount,balance_before,balance_after,currency,status,remark,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5000)),
     safeRows(service.from("refund_requests").select("refund_no,reason_code,reason_detail,requested_amount,approved_amount,currency,status,user_visible_note,created_at,completed_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
     safeRows(service.from("order_deliveries").select("delivery_type,delivery_status,delivered_at,viewed_at,created_at,updated_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
-    safeRows(service.from("user_notifications").select("title,message,status,created_at,read_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
+    safeRows(service.from("site_notifications").select("title,content,type,created_at,read_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(2000)),
   ]);
 
   const orderIds = orders.rows.map((row) => String(row.id ?? "")).filter(Boolean);

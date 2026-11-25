@@ -120,15 +120,15 @@ export default async function EmailDeliveriesPage(props: { searchParams?: Promis
             <table className="min-w-full text-left text-sm">
               <thead className={adminListTableHeadClass}>
                 <tr>
-                  <th className="px-4 py-3 text-center">时间</th>
-                  <th className="px-4 py-3">模板</th>
-                  <th className="px-4 py-3">业务</th>
-                  <th className="px-4 py-3">收件人</th>
-                  <th className="px-4 py-3 text-center">状态</th>
-                  <th className="px-4 py-3 text-center">尝试</th>
-                  <th className="px-4 py-3 text-center">邮件服务商</th>
-                  <th className="px-4 py-3">错误摘要</th>
-                  <th className="px-4 py-3 text-center">操作</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">时间</th>
+                  <th className="whitespace-nowrap px-4 py-3">模板</th>
+                  <th className="whitespace-nowrap px-4 py-3">业务</th>
+                  <th className="whitespace-nowrap px-4 py-3">收件人</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">状态</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">尝试</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">邮件服务商</th>
+                  <th className="whitespace-nowrap px-4 py-3">错误摘要</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-v2-border)]">

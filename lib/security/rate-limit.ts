@@ -16,6 +16,7 @@ export type RateLimitPolicyName =
   | "inventory_import"
   | "media_upload"
   | "internal_task"
+  | "coupon_validate"
   | "snpay_reconciliation_execute"
   | "snpay_reconciliation_readiness";
 
@@ -52,6 +53,7 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
   inventory_import: { windowMs: 300_000, max: 6, message: "库存导入过于频繁，请稍后再试。" },
   media_upload: { windowMs: 300_000, max: 10, message: "媒体上传过于频繁，请稍后再试。" },
   internal_task: { windowMs: 300_000, max: 3, message: "内部任务触发过于频繁，请稍后再试。" },
+  coupon_validate: { windowMs: 300_000, max: 12, message: "优惠券验证尝试过于频繁，请 5 分钟后再试。" },
   // Separate authenticated, non-mutating admission from the four-candidate
   // worker budget. Do not weaken other internal jobs' 3-per-5-minute policy.
   snpay_reconciliation_execute: { windowMs: 60_000, max: 4, message: "支付核验触发过于频繁，请稍后再试。" },

@@ -150,7 +150,31 @@ export async function GET(request: Request) {
     });
 
     if (error) throw error;
-    return NextResponse.json({ data: data ?? [] });
+    const rows = Array.isArray(data) ? (data as Array<Record<string, unknown>>) : [];
+    const productIds = Array.from(new Set(rows.map((row) => String(row.product_id ?? "")).filter(Boolean)));
+    if (productIds.length > 0) {
+      const serviceClient = getSupabaseServiceRoleClient() ?? admin.supabase;
+      const { data: skuRows } = await serviceClient
+        .from("product_skus")
+        .select("product_id,sku_title,sku_code")
+        .in("product_id", productIds);
+      const skuMap = new Map<string, string[]>();
+      for (const sku of (skuRows ?? []) as Array<{ product_id?: string | null; sku_title?: string | null; sku_code?: string | null }>) {
+        const pid = String(sku.product_id ?? "");
+        const label = String(sku.sku_title || sku.sku_code || "").trim();
+        if (!pid || !label) continue;
+        const list = skuMap.get(pid) ?? [];
+        if (!list.includes(label)) list.push(label);
+        skuMap.set(pid, list);
+      }
+      return NextResponse.json({
+        data: rows.map((row) => ({
+          ...row,
+          sku_labels: skuMap.get(String(row.product_id ?? "")) ?? [],
+        })),
+      });
+    }
+    return NextResponse.json({ data: rows });
   } catch (error) {
     const message = "库存数据加载失败";
     await writeAdminAuditLog({

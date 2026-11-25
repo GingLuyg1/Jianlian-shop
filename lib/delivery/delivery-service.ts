@@ -143,7 +143,21 @@ export async function deliverDigitalOrder(
         const result = await fulfillSupplierOrderWithSupabase(supabase, orderId, triggerSource, localBitrefill);
         notifyStage(onStage, "DAJU_FALLBACK_COMPLETED");
         return result;
-      } catch {
+      } catch (error) {
+        try {
+          const safeDetail = rawMessage(error).replace(/[^\w\s:.,\-/()[\]中文\u4e00-\u9fff]/g, "").slice(0, 240);
+          await supabase.rpc("write_delivery_log", {
+            p_order_id: orderId,
+            p_order_item_id: null,
+            p_inventory_id: null,
+            p_trigger_source: triggerSource,
+            p_event_type: "delivery_failed",
+            p_message: getDeliveryErrorMessage(error, "供应商自动发货失败"),
+            p_detail: safeDetail ? { stage: "DAJU_FALLBACK_FAILED", reason: safeDetail } : { stage: "DAJU_FALLBACK_FAILED" },
+          });
+        } catch {
+          // Delivery logging is best-effort; the original delivery error is reported below.
+        }
         const safeError = stageError("DAJU_FALLBACK_FAILED");
         notifyStage(onStage, "DAJU_FALLBACK_FAILED", safeError);
         throw safeError;

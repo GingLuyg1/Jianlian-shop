@@ -91,7 +91,7 @@ test('actual ledger rendering translates data but retains all raw dropdown query
 });
 test('actual supplier and worker rendering handle retry flags and unavailable timer without raw jargon', () => {
   const supplier=renderWorkspace('supplier-queue',{id:'synthetic',status:'FAILED',retryable:true});
-  assert.match(supplier,/供应商自动采购任务/);assert.match(supplier,/采购失败，可再次尝试/);
+  assert.match(supplier,/供应商采购订单/);assert.match(supplier,/采购失败，可再次尝试/);
   assert.doesNotMatch(supplier,/>FAILED<|>yes<|Provider|SKU/);
   const worker=renderWorkspace('worker',{}, {timer_enabled:'unknown',timer_active:false,heartbeat_status:'finished',heartbeat_stale:false});
   assert.match(worker,/自动任务运行状态/);assert.match(worker,/暂未获取/);assert.match(worker,/已正常完成/);

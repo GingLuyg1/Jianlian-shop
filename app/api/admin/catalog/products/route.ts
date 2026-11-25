@@ -231,23 +231,46 @@ export async function GET(request: Request) {
       skuResult.overflow ? 400 : 500
     );
   }
-  const inventoryResult = await readSkuLocalInventoryDiagnostics(service, skuResult.rows);
-  if (inventoryResult.error) {
-    console.warn("[AdminProductList] local inventory diagnostics unavailable; response will fail closed", {
-      requestId,
-      overflow: inventoryResult.overflow,
-    });
-  }
-  const inventoryContext = {
-    availableBySku: inventoryResult.availableBySku,
-    error: inventoryResult.error,
-  };
+  const needsFullInventoryScan = operationalScan && filters.fulfillmentHealth !== "all";
+  let products: Array<Record<string, unknown>> = [];
+  let filteredCount = 0;
+  let inventoryResult: Awaited<ReturnType<typeof readSkuLocalInventoryDiagnostics>>;
 
-  const filtered = operationalScan
-    ? filterAndPaginateAdminCatalogProducts(productRows, skuResult.rows, filters, inventoryContext)
-    : { products: decorateAdminCatalogProducts(productRows, skuResult.rows, filters, inventoryContext), count: count ?? 0 };
-  const products = filtered.products;
-  const filteredCount = filtered.count;
+  if (operationalScan && !needsFullInventoryScan) {
+    const preFiltered = filterAndPaginateAdminCatalogProducts(productRows, skuResult.rows, filters, {});
+    filteredCount = preFiltered.count;
+    const pageProductIds = new Set(preFiltered.products.map((item) => String(item.id)));
+    const pageSkuRows = skuResult.rows.filter((row) => pageProductIds.has(String(row.product_id ?? "")));
+    inventoryResult = await readSkuLocalInventoryDiagnostics(service, pageSkuRows);
+    if (inventoryResult.error) {
+      console.warn("[AdminProductList] local inventory diagnostics unavailable; response will fail closed", {
+        requestId,
+        overflow: inventoryResult.overflow,
+      });
+    }
+    const pageInventoryContext = {
+      availableBySku: inventoryResult.availableBySku,
+      error: inventoryResult.error,
+    };
+    products = decorateAdminCatalogProducts(preFiltered.products, pageSkuRows, filters, pageInventoryContext);
+  } else {
+    inventoryResult = await readSkuLocalInventoryDiagnostics(service, skuResult.rows);
+    if (inventoryResult.error) {
+      console.warn("[AdminProductList] local inventory diagnostics unavailable; response will fail closed", {
+        requestId,
+        overflow: inventoryResult.overflow,
+      });
+    }
+    const inventoryContext = {
+      availableBySku: inventoryResult.availableBySku,
+      error: inventoryResult.error,
+    };
+    const filtered = operationalScan
+      ? filterAndPaginateAdminCatalogProducts(productRows, skuResult.rows, filters, inventoryContext)
+      : { products: decorateAdminCatalogProducts(productRows, skuResult.rows, filters, inventoryContext), count: count ?? 0 };
+    products = filtered.products;
+    filteredCount = filtered.count;
+  }
   const queryCount = productQueryCount + skuResult.queryCount + inventoryResult.queryCount;
 
   const response = jsonResponse({

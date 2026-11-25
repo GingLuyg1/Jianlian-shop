@@ -33,6 +33,7 @@ type InventorySummary = {
   product_id: string;
   product_name: string;
   product_slug: string;
+  sku_labels?: string[];
   total_count: number;
   available_count: number;
   reserved_count: number;
@@ -385,7 +386,7 @@ export default function AdminInventoryPage() {
         </Button>
       )}
     >
-      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid min-h-0 flex-1 gap-3 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <CardHeader className="shrink-0 border-b px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -425,16 +426,16 @@ export default function AdminInventoryPage() {
           ) : view === "summary" ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-auto">
-                <Table className="min-w-[980px]">
+                <Table className="min-w-[720px]">
                   <TableHeader className="sticky top-0 z-10 bg-slate-50">
                     <TableRow>
-                      <TableHead>商品</TableHead>
-                      <TableHead className="text-center">总数</TableHead>
-                      <TableHead className="text-center">可用</TableHead>
-                      <TableHead className="text-center">预留</TableHead>
-                      <TableHead className="text-center">已交付</TableHead>
-                      <TableHead className="text-center">禁用</TableHead>
-                      <TableHead className="text-center">操作</TableHead>
+                      <TableHead className="whitespace-nowrap">商品</TableHead>
+                      <TableHead className="whitespace-nowrap text-center">总数</TableHead>
+                      <TableHead className="whitespace-nowrap text-center">可用</TableHead>
+                      <TableHead className="whitespace-nowrap text-center">预留</TableHead>
+                      <TableHead className="whitespace-nowrap text-center">已交付</TableHead>
+                      <TableHead className="whitespace-nowrap text-center">禁用</TableHead>
+                      <TableHead className="whitespace-nowrap text-center">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -444,7 +445,17 @@ export default function AdminInventoryPage() {
                       <TableRow key={row.product_id}>
                         <TableCell>
                           <div className="font-medium text-slate-900">{row.product_name}</div>
-                          <div className="mt-1 text-xs text-slate-500">{row.product_slug}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                            <span>{row.product_slug}</span>
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500" title={`商品 ID: ${row.product_id}`}>
+                              ID:{row.product_id.slice(0, 8)}
+                            </span>
+                            {row.sku_labels && row.sku_labels.length > 0 ? (
+                              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700" title={row.sku_labels.join(" / ")}>
+                                规格：{row.sku_labels.slice(0, 2).join("、")}{row.sku_labels.length > 2 ? ` 等 ${row.sku_labels.length} 项` : ""}
+                              </span>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center tabular-nums">{row.total_count}</TableCell>
                         <TableCell className="text-center tabular-nums text-emerald-600">{row.available_count}</TableCell>

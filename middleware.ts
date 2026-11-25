@@ -1,6 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+function isBlockedProbePath(pathname: string) {
+  const lower = pathname.toLowerCase();
+  return (
+    lower.endsWith(".map") ||
+    lower.includes("/.env") ||
+    lower.includes("/.git") ||
+    lower.includes("/.svn") ||
+    lower.includes("/.ds_store") ||
+    lower.startsWith("/wp-admin") ||
+    lower.startsWith("/wp-login") ||
+    lower.startsWith("/phpmyadmin") ||
+    lower.startsWith("/actuator") ||
+    lower === "/xmlrpc.php"
+  );
+}
+
 function isStaticAssetPath(pathname: string) {
   return (
     pathname.startsWith("/_next/") ||
@@ -10,7 +26,7 @@ function isStaticAssetPath(pathname: string) {
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
-    /\.(?:js|css|svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|otf|map)$/i.test(pathname)
+    /\.(?:js|css|svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|otf)$/i.test(pathname)
   );
 }
 
@@ -105,6 +121,9 @@ async function isMaintenanceEnabled(supabase: ReturnType<typeof createServerClie
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  if (isBlockedProbePath(pathname)) {
+    return new NextResponse(null, { status: 404 });
+  }
   if (isStaticAssetPath(pathname)) return NextResponse.next();
 
   const isAdminApi = pathname === "/api/admin" || pathname.startsWith("/api/admin/");

@@ -87,9 +87,9 @@
 }
 .shell.shell.shell [data-admin-shell-topbar] input { border-radius: 12px; background: #f3f6fc; border-color: #dce3ee; }
 
-.filterBar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.filterBar > div { flex: 1 1 190px; max-width: 220px; position: relative; }
-.filterBar > select { flex: 1 1 124px; max-width: 152px; position: relative; }
+.filterBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filterBar > div { flex: 1 1 200px; max-width: 240px; position: relative; }
+.filterBar > select { flex: 0 1 auto; min-width: 138px; max-width: 185px; white-space: nowrap; position: relative; }
 .filters :is(input, select) { height: 36px; font-size: 12px; position: relative; }
 .filters select {
   appearance: none;

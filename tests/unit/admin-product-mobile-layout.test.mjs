@@ -7,7 +7,7 @@ test("mobile product filters scroll without collapsing the real product table", 
   const source = await read("app/admin/products/page.tsx");
   assert.match(source, /CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto[^"\n]*md:overflow-hidden/);
   assert.match(source, /<div className="flex min-h-\[240px\] min-w-0 flex-1 flex-col[^"\n]*md:min-h-0">\s*<AdminSyncedHorizontalScroller>/);
-  assert.match(source, /min-w-\[1072px\]/);
+  assert.match(source, /min-w-\[(?:1072|1240)px\]/);
 });
 
 test("mobile layout keeps native wide-table scrolling and bidirectional bottom-rail sync", async () => {
