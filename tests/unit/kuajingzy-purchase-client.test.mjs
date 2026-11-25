@@ -94,3 +94,19 @@ test('status and refund normalization follows safe documented DTO',async()=>{
     const dto=await c.getOrder('synthetic_order_1',expected);assert.equal(classifyKuajingZyOrder(dto),wanted);
   }
 });
+
+test('single-SKU KuajingZY responses returning empty string skuId normalize to null and deliver cleanly',async()=>{
+  const singleBinding={...syntheticCandidate().binding,sku:null};
+  const singleFrozen=freezeKuajingZyMallRequest({key:'jianlian:single_order:single_item',itemId:ITEM,quantity:1,expectedAmount:'0.090'});
+  const c=make(async(_url,init)=>{
+    const raw=syntheticOrder({skuId:''});
+    return Response.json(init.method==='POST'?{data:{order:raw}}:{data:raw});
+  });
+  const created=await c.purchase(singleFrozen,KUAJINGZY_DURABLE_SUBMIT,singleBinding);
+  assert.equal(created.skuId,null);
+  const queried=await c.getOrder(created.orderCode,{itemId:ITEM,skuId:null,quantity:1,expectedAmount:'0.090'});
+  assert.equal(queried.skuId,null);
+  let delivered='';
+  await commitKuajingZyPrivateDelivery(queried,content=>{delivered=content;});
+  assert.equal(delivered,SYNTHETIC_SECRET);
+});
