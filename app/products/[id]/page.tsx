@@ -601,7 +601,7 @@ export default function ProductDetailPage() {
                         <InfoItem
                           icon={PackageCheck}
                           title="交付方式"
-                          desc={getDeliveryLabel(deliveryType)}
+                          desc={getDeliveryLabel(deliveryType, product?.metadata)}
                         />
                         <InfoItem
                           icon={Headphones}

@@ -14,7 +14,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
-import { getExtendedDeliveryLabel, getPublicStockDisplay, isPreorderDeliveryMode } from "@/lib/products/delivery-and-stock";
+import { getPublicDeliveryLabel, getPublicStockDisplay, isPreorderDeliveryMode } from "@/lib/products/delivery-and-stock";
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
 import { resolveProductImageSrc } from "@/components/products/product-ui";
 import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
@@ -342,7 +342,7 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
         : row.delivery_type === "manual"
           ? "hybrid"
           : "digital",
-    deliveryLabel: getExtendedDeliveryLabel(row.delivery_type, row.metadata),
+    deliveryLabel: getPublicDeliveryLabel(row.delivery_type, row.metadata),
     productType: row.delivery_type === "shipping" ? "physical" : "digital",
     listingStatus: "active",
     detail: row.description ?? row.short_description ?? "",
@@ -769,7 +769,7 @@ function CheckoutPageContent() {
     )
   );
   const isShippingProduct = isExplicitShippingDelivery || (!isExplicitNonShippingDelivery && isSimProduct);
-  const effectiveDeliveryLabel = getExtendedDeliveryLabel(
+  const effectiveDeliveryLabel = getPublicDeliveryLabel(
     rawEffectiveDeliveryType,
     productRow?.metadata ?? product?.metadata
   );
@@ -1105,16 +1105,12 @@ function CheckoutPageContent() {
         />
 
         <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden lg:h-full">
-          <CardContent className="flex h-full min-h-0 flex-col p-0">
-            <div className="min-h-0 flex-1 bg-white p-4 lg:overflow-y-auto sidebar-scroll">
-              <div className="flex flex-col gap-3">
-              {hasSku ? (
+          <CardContent className="flex h-full min-h-0 flex-col bg-white p-4">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-hidden">
+              {hasSku && skuOptions.length > 1 ? (
                 <div
                   data-testid="checkout-sku-scroll"
-                  className={cn(
-                    "min-h-[58px] overflow-y-auto pr-1 sidebar-scroll",
-                    isShippingProduct ? "max-h-[126px] shrink-0" : "max-h-[220px] shrink-0"
-                  )}
+                  className="min-h-0 flex-initial overflow-y-auto pr-1 sidebar-scroll"
                 >
                   <SkuSelector
                     options={skuOptions}
@@ -1125,6 +1121,7 @@ function CheckoutPageContent() {
                 </div>
               ) : null}
 
+              <div className={cn("flex shrink-0 flex-col gap-3", !(hasSku && skuOptions.length > 1) && "min-h-0 lg:overflow-y-auto sidebar-scroll")}>
                 <div className="shrink-0">
                   <label className="mb-1 block text-xs font-medium">
                     <span className="text-red-500">*</span>联系邮箱
@@ -1164,50 +1161,53 @@ function CheckoutPageContent() {
                   />
                 </div>
 
-              {isShippingProduct ? (
-                <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium">
-                      <span className="text-red-500">*</span>收件人姓名
-                    </label>
-                    <Input
-                      value={customerName}
-                      onChange={(event) => setCustomerName(event.target.value)}
-                      placeholder="收件人姓名"
-                      className="h-9 w-full bg-slate-50 px-2.5 text-base md:text-sm"
-                    />
+                {isShippingProduct ? (
+                  <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">
+                        <span className="text-red-500">*</span>收件人姓名
+                      </label>
+                      <Input
+                        value={customerName}
+                        onChange={(event) => setCustomerName(event.target.value)}
+                        placeholder="收件人姓名"
+                        className="h-9 w-full bg-slate-50 px-2.5 text-base md:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">
+                        <span className="text-red-500">*</span>联系电话
+                      </label>
+                      <Input
+                        value={customerPhone}
+                        onChange={(event) => setCustomerPhone(event.target.value)}
+                        placeholder="联系电话"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        className="h-9 w-full bg-slate-50 px-2.5 text-base md:text-sm"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-xs font-medium">
+                        <span className="text-red-500">*</span>详细地址
+                      </label>
+                      <Input
+                        value={shippingAddress}
+                        onChange={(event) => {
+                          const nextAddress = event.target.value;
+                          setShippingAddress(nextAddress);
+                          setShippingRegion(nextAddress);
+                        }}
+                        placeholder="请输入省市区街道门牌等详细收货地址"
+                        className="h-9 w-full bg-slate-50 text-base md:text-sm"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium">
-                      <span className="text-red-500">*</span>联系电话
-                    </label>
-                    <Input
-                      value={customerPhone}
-                      onChange={(event) => setCustomerPhone(event.target.value)}
-                      placeholder="联系电话"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      className="h-9 w-full bg-slate-50 px-2.5 text-base md:text-sm"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs font-medium">
-                      <span className="text-red-500">*</span>详细地址
-                    </label>
-                    <Input
-                      value={shippingAddress}
-                      onChange={(event) => {
-                        const nextAddress = event.target.value;
-                        setShippingAddress(nextAddress);
-                        setShippingRegion(nextAddress);
-                      }}
-                      placeholder="请输入省市区街道门牌等详细收货地址"
-                      className="h-9 w-full bg-slate-50 text-base md:text-sm"
-                    />
-                  </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
+            </div>
 
+            <div className="mt-auto flex shrink-0 flex-col gap-2.5 pt-3">
               <div className="shrink-0 border-t border-border pt-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">
                   支付方式
@@ -1319,7 +1319,6 @@ function CheckoutPageContent() {
                   </button>
                 </div>
               </div>
-            </div>
             </div>
           </CardContent>
         </Card>

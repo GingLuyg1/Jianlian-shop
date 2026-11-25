@@ -139,7 +139,7 @@ function HeroCarousel() {
       ) : null}
 
       {/* 2. 内层轮播轨道容器（圆角和轮播溢出裁剪只放在内层） */}
-      <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm h-[200px] xl:h-[220px] 2xl:h-[270px]">
+      <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm h-[188px] xl:h-[200px] 2xl:h-[224px]">
         <div
           className={cn(
             "flex h-full w-[200%]",
@@ -376,8 +376,8 @@ export default function HomePage() {
   }, [mobileCategoryTree]);
 
   return (
-    <PublicLayout contentClassName={cn("mx-auto max-w-[1540px] px-4 py-3 md:px-5 md:py-4 pb-12", isMobile && "!px-3 !py-2.5 !pb-16")}>
-      <div className={cn("flex flex-col gap-3.5 md:gap-4", isMobile && "!gap-3")}>
+    <PublicLayout mobileNavigationUntilLg contentClassName={cn("mx-auto max-w-[1540px] px-4 py-3 md:px-5 md:pt-3 md:pb-0 pb-12", isMobile && "!px-3 !py-2.5 !pb-16")}>
+      <div className={cn("flex flex-col gap-3 md:gap-3.5", isMobile && "!gap-3")}>
         <div className={cn(
           "[&_h1]:text-xl [&_h1]:sm:text-2xl [&_h1]:lg:text-3xl [&_h1]:2xl:text-4xl [&_p]:mt-2 [&_p]:text-xs [&_p]:leading-5 [&_p]:sm:mt-2.5 [&_p]:sm:text-sm [&_p]:sm:leading-6 [&_p]:2xl:text-base [&_section>div:first-child>div]:px-5 [&_section>div:first-child>div]:py-4 [&_section>div:first-child>div]:pb-8 [&_section>div:first-child>div]:lg:px-7 [&_section>div:first-child>div]:lg:py-6 [&_section>div:last-child]:bottom-3 [&_section>div:last-child]:left-5 [&_section>div:last-child]:lg:bottom-4 [&_section>div:last-child]:lg:left-7",
           isMobile && "[&_h1]:!text-xl [&_h1]:!leading-7 [&_p]:!mt-2 [&_p]:!text-xs [&_p]:!leading-5 [&_section]:!min-h-0 [&_section>div:first-child]:!min-h-[168px] [&_section>div:first-child>div]:!px-4 [&_section>div:first-child>div]:!py-3.5 [&_section>div:first-child>div]:!pb-9 [&_section>div:last-child]:!bottom-2.5 [&_section>div:last-child]:!left-4 [&_.hero-visual-desktop]:!hidden"
@@ -430,8 +430,8 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          <div className={cn("rounded-2xl border border-border bg-white p-4 shadow-sm md:p-5", isMobile && "!p-3.5")}>
-            <div className="mb-3 flex items-end justify-between gap-3 md:mb-4">
+          <div className={cn("rounded-2xl border border-border bg-white p-4 shadow-sm md:p-4", isMobile && "!p-3.5")}>
+            <div className="mb-3 flex items-end justify-between gap-3 md:mb-3">
               <div>
                 <h2 className="text-base font-bold text-slate-950 md:text-xl">
                   {isMobile ? "核心服务专区" : "商品分类"}
@@ -452,15 +452,15 @@ export default function HomePage() {
                     key={category.title}
                     href={category.href}
                     className={cn(
-                      "group flex min-h-[72px] items-center gap-2.5 rounded-xl border p-3 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm md:min-h-[92px] md:gap-4 md:p-4",
+                      "group flex min-h-[72px] items-center gap-2.5 rounded-xl border p-3 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm md:min-h-[82px] md:gap-3.5 md:p-3.5",
                       isMobile && "!min-h-[64px] !gap-2 !p-2.5",
                       category.active
                         ? "border-primary/25 bg-primary/[0.04]"
                         : "border-border bg-white"
                     )}
                   >
-                    <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary md:h-12 md:w-12", isMobile && "!h-9 !w-9")}>
-                      <Icon className={cn("h-5 w-5 md:h-6 md:w-6", isMobile && "!h-4 !w-4")} />
+                    <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary md:h-11 md:w-11", isMobile && "!h-9 !w-9")}>
+                      <Icon className={cn("h-5 w-5 md:h-5 md:w-5", isMobile && "!h-4 !w-4")} />
                     </span>
                     <span className="min-w-0">
                       <span className={cn("flex items-center gap-1.5 text-sm font-semibold text-slate-950 md:gap-2 md:text-base", isMobile && "!text-[13px]")}>
@@ -477,17 +477,17 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className={cn("rounded-2xl border border-border bg-white p-4 shadow-sm md:p-5", isMobile && "!p-3.5")}>
-            <div className="mb-3 flex items-center justify-between md:mb-4">
+          <div className={cn("rounded-2xl border border-border bg-white p-4 shadow-sm md:p-4", isMobile && "!p-3.5")}>
+            <div className="mb-3 flex items-center justify-between md:mb-3">
               <h2 className="text-base font-bold text-slate-950 md:text-xl">热门入口</h2>
               <Sparkles className="h-5 w-5 text-primary" />
             </div>
-            <div className={cn("grid grid-cols-2 gap-2.5 xl:grid-cols-1 xl:gap-0 xl:space-y-3", isMobile && "!grid-cols-2 !gap-2")}>
+            <div className={cn("grid grid-cols-2 gap-2.5 xl:grid-cols-1 xl:gap-0 xl:space-y-2.5", isMobile && "!grid-cols-2 !gap-2")}>
               {visibleHotLinks.map((item) => (
                 <Link
                   key={item.title}
                   href={item.href}
-                  className={cn("flex items-center justify-between gap-2 rounded-xl border border-border bg-slate-50/70 px-3 py-2.5 font-semibold text-slate-950 transition-colors hover:border-primary/30 hover:bg-white md:px-4 md:py-3", isMobile && "!px-2.5 !py-2")}
+                  className={cn("flex items-center justify-between gap-2 rounded-xl border border-border bg-slate-50/70 px-3 py-2 font-semibold text-slate-950 transition-colors hover:border-primary/30 hover:bg-white md:px-3.5 md:py-2.5", isMobile && "!px-2.5 !py-2")}
                 >
                   <span className="min-w-0 text-sm md:text-base">
                     <span className={cn("block truncate", isMobile && "text-[13px]")}>{item.title}</span>

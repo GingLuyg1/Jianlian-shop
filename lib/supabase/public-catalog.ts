@@ -1,5 +1,5 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getExtendedDeliveryLabel, getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
+import { getPublicDeliveryLabel, getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
 import {
   buildEffectiveCategoryVisibility,
   filterEffectivelyVisibleCategories,
@@ -542,7 +542,7 @@ export function mapPublicProductToProduct(
           ? "自动发货"
           : "联系客服确认",
     deliveryMethod,
-    deliveryLabel: getExtendedDeliveryLabel(row.delivery_type, row.metadata),
+    deliveryLabel: getPublicDeliveryLabel(row.delivery_type, row.metadata),
     productType,
     listingStatus: row.status === FRONTEND_ACTIVE_PRODUCT_STATUS ? "active" : "inactive",
     detail: row.description ?? row.short_description ?? "",
@@ -553,12 +553,10 @@ export function normalizeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
-export function getDeliveryLabel(deliveryType: string) {
-  if (deliveryType === "automatic") return "自动发货";
-  if (deliveryType === "shipping") return "物流发货";
+export function getDeliveryLabel(deliveryType: string, metadata?: unknown) {
   if (deliveryType === "card") return "卡密交付";
   if (deliveryType === "account") return "账号交付";
-  return "人工处理";
+  return getPublicDeliveryLabel(deliveryType, metadata);
 }
 
 export function getProductDetailPath(product: { id: string; slug?: string | null }) {

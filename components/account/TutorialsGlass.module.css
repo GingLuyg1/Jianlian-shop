@@ -44,6 +44,7 @@
 .subtopics[data-guide=security] .subtopicIndicator,
 .subtopics[data-guide=binding] .subtopicIndicator,
 .subtopics[data-guide=region] .subtopicIndicator,
+.subtopics[data-guide=student-discount] .subtopicIndicator,
 .subtopics[data-guide=x-2fa] .subtopicIndicator {
   transform: translateY(36px);
 }

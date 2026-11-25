@@ -94,6 +94,12 @@ export function getExtendedDeliveryLabel(deliveryType?: string | null, metadata?
   return EXTENDED_DELIVERY_LABELS[mode] ?? "人工发货";
 }
 
+export function getPublicDeliveryLabel(deliveryType?: string | null, metadata?: unknown): string {
+  const full = getExtendedDeliveryLabel(deliveryType, metadata);
+  const dashIndex = full.indexOf("-");
+  return dashIndex >= 0 ? full.slice(0, dashIndex) : full;
+}
+
 export type PublicStockStatusCode = "preorder" | "abundant" | "tight" | "out";
 
 export interface PublicStockDisplay {
