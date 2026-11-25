@@ -189,9 +189,16 @@ export async function GET(
 
     const product = normalizePublicProduct(productData as Record<string, unknown>);
     const service = getSupabaseServiceRoleClient();
-    if (service) {
-      try {
-        const [{ data: orderRows }, { data: metaRow }] = await Promise.all([
+    const skuReadPromise = supabase
+      .from("product_skus")
+      .select(SKU_SELECT)
+      .eq("product_id", product.id)
+      .in("status", VISIBLE_PRODUCT_STATUSES)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    const enrichmentPromise = service
+      ? Promise.all([
           service
             .from("order_items")
             .select("quantity,orders!inner(payment_status,refund_status)")
@@ -204,7 +211,14 @@ export async function GET(
             .select("metadata")
             .eq("id", product.id)
             .maybeSingle(),
-        ]);
+        ]).catch(() => null)
+      : Promise.resolve(null);
+
+    const [skuResult, enrichment] = await Promise.all([skuReadPromise, enrichmentPromise]);
+
+    if (enrichment) {
+      try {
+        const [{ data: orderRows }, { data: metaRow }] = enrichment;
         const meta = metaRow?.metadata && typeof metaRow.metadata === "object" && !Array.isArray(metaRow.metadata)
           ? (metaRow.metadata as Record<string, unknown>)
           : null;
@@ -229,13 +243,7 @@ export async function GET(
     let skuError: string | null = null;
     let skus: ReturnType<typeof normalizePublicSku>[] = [];
 
-    const { data: skuData, error: rawSkuError } = await supabase
-      .from("product_skus")
-      .select(SKU_SELECT)
-      .eq("product_id", product.id)
-      .in("status", VISIBLE_PRODUCT_STATUSES)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true });
+    const { data: skuData, error: rawSkuError } = skuResult;
 
     if (rawSkuError && !isOptionalSkuSchemaError(rawSkuError)) {
       skuError = "SKU query failed";

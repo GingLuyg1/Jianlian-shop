@@ -1,6 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, type RefObject } from "react";
+import { useRef, type RefObject } from "react";
+import { useIsomorphicLayoutEffect } from "@/hooks/use-isomorphic-layout-effect";
 import styles from "./SecondarySlidingIndicator.module.css";
 
 /** Geometry-only feedback. Never changes selection, fetching or wheel transforms. */
@@ -12,7 +13,7 @@ export default function SecondarySlidingIndicator({ containerRef, activeId, read
 }) {
   const indicatorRef = useRef<HTMLSpanElement>(null);
   const committedId = useRef("");
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const container = containerRef.current;
     const indicator = indicatorRef.current;
     if (!container || !indicator) return;

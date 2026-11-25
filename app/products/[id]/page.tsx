@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -15,18 +16,22 @@ import {
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
-import AirMobileProductDetails from "@/components/products/details/AirMobileProductDetails";
-import EncMobileProductDetails from "@/components/products/details/EncMobileProductDetails";
-import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
-import HahaSimProductDetails from "@/components/products/details/HahaSimProductDetails";
-import Lucky2ProductDetails from "@/components/products/details/Lucky2ProductDetails";
-import MovistarSimProductDetails from "@/components/products/details/MovistarSimProductDetails";
-import OneNzProductDetails from "@/components/products/details/OneNzProductDetails";
-import OrangeSimProductDetails from "@/components/products/details/OrangeSimProductDetails";
-import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
-import TMobileProductDetails from "@/components/products/details/TMobileProductDetails";
-import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
-import VodafoneSimProductDetails from "@/components/products/details/VodafoneSimProductDetails";
+import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
+import { createSafeUuid } from "@/lib/browser/safe-storage";
+
+const AirMobileProductDetails = dynamic(() => import("@/components/products/details/AirMobileProductDetails"));
+const EncMobileProductDetails = dynamic(() => import("@/components/products/details/EncMobileProductDetails"));
+const GiffgaffSimProductDetails = dynamic(() => import("@/components/products/details/GiffgaffSimProductDetails"));
+const HahaSimProductDetails = dynamic(() => import("@/components/products/details/HahaSimProductDetails"));
+const Lucky2ProductDetails = dynamic(() => import("@/components/products/details/Lucky2ProductDetails"));
+const MovistarSimProductDetails = dynamic(() => import("@/components/products/details/MovistarSimProductDetails"));
+const OneNzProductDetails = dynamic(() => import("@/components/products/details/OneNzProductDetails"));
+const OrangeSimProductDetails = dynamic(() => import("@/components/products/details/OrangeSimProductDetails"));
+const RakutenMobileProductDetails = dynamic(() => import("@/components/products/details/RakutenMobileProductDetails"));
+const TMobileProductDetails = dynamic(() => import("@/components/products/details/TMobileProductDetails"));
+const UltraMobileProductDetails = dynamic(() => import("@/components/products/details/UltraMobileProductDetails"));
+const VodafoneSimProductDetails = dynamic(() => import("@/components/products/details/VodafoneSimProductDetails"));
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
@@ -292,7 +297,7 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     if (typeof document === "undefined" || !product?.name) return;
-    document.title = `${product.name} - Jianlian Shop`;
+    document.title = `${product.name} | Jianlian Shop`;
   }, [product?.name]);
 
   useEffect(() => {
@@ -327,14 +332,9 @@ export default function ProductDetailPage() {
       setLegalError("");
 
       try {
-        const response = await fetch("/api/legal/current", { cache: "no-store" });
-        const payload = (await response.json().catch(() => null)) as
-          | { documents?: LegalDocument[]; error?: string }
-          | null;
-
-        if (!response.ok) throw new Error(payload?.error || "协议读取失败，请稍后重试");
+        const docs = await fetchCurrentLegalDocuments();
         if (!active) return;
-        setLegalDocuments(Array.isArray(payload?.documents) ? payload!.documents! : []);
+        setLegalDocuments(docs);
       } catch (error) {
         if (!active) return;
         setLegalError(getErrorText(error, "协议读取失败，请稍后重试"));
@@ -378,8 +378,10 @@ export default function ProductDetailPage() {
     return "";
   }
 
+  const submitLockRef = useRef(false);
+
   async function handleSubmit() {
-    if (submitting) return;
+    if (submitting || submitLockRef.current) return;
     if (isLiuhaoyiPaymentMethod(paymentMethod) && isLiuhaoyiAmountOverLimit(unitPrice * quantity)) {
       setLiuhaoyiLimitDialogOpen(true);
       return;
@@ -391,17 +393,15 @@ export default function ProductDetailPage() {
     }
     if (!product) return;
 
+    submitLockRef.current = true;
     setSubmitError("");
     setSubmitting(true);
     try {
       if (!clientRequestIdRef.current) {
-        clientRequestIdRef.current =
-          typeof window !== "undefined" && window.crypto?.randomUUID
-            ? window.crypto.randomUUID()
-            : `detail-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        clientRequestIdRef.current = createSafeUuid();
       }
 
-      const response = await fetch("/api/orders", {
+      const response = await fetchWithTimeout("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -434,6 +434,7 @@ export default function ProductDetailPage() {
     } catch (error) {
       setSubmitError(getErrorText(error, "订单创建失败，请稍后重试"));
     } finally {
+      submitLockRef.current = false;
       setSubmitting(false);
     }
   }
@@ -469,7 +470,7 @@ export default function ProductDetailPage() {
             data-testid="product-detail-grid"
             className={`grid gap-5 overflow-visible md:min-h-0 md:overflow-hidden lg:grid-cols-[minmax(0,1fr)_386px] lg:items-stretch ${publicMainPanelHeightClassName}`}
           >
-            <main
+            <div
               data-testid="product-detail-left"
               className="min-h-0 min-w-0 space-y-5 overflow-visible px-1 sidebar-scroll md:h-full md:overflow-x-hidden md:overflow-y-auto md:[scrollbar-gutter:stable_both-edges]"
             >
@@ -488,6 +489,7 @@ export default function ProductDetailPage() {
                     <img
                       src={selectedSku?.image_url || product.image_url || PRODUCT_IMAGE_FALLBACK}
                       alt={product.name}
+                      fetchPriority="high"
                       className="h-full w-full object-cover"
                       onError={(event) => setProductImageFallback(event.currentTarget)}
                     />
@@ -622,7 +624,7 @@ export default function ProductDetailPage() {
                   </Card>
                 </>
               )}
-            </main>
+            </div>
 
             <aside className="flex min-h-0 min-w-0 overflow-visible md:h-full md:overflow-hidden">
               <Card
@@ -741,7 +743,7 @@ export default function ProductDetailPage() {
                     <select
                       value={paymentMethod}
                       onChange={(event) => setPaymentMethod(event.target.value as PaymentMethodCode)}
-                      className="h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-sm outline-none focus:border-primary"
+                      className="h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-base md:text-sm outline-none focus:border-primary"
                       disabled={submitting}
                     >
                       {PAYMENT_METHOD_OPTIONS.map((option) => (

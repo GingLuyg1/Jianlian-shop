@@ -116,7 +116,7 @@ function formatCategoryNavLabel(rawName: string) {
 
     if (isCatalogCategoryHref(item.href) && !confirmed) {
       return (
-        <li key={item.href} className="mx-auto flex h-[42px] w-full items-center gap-2.5 rounded-md px-3 text-sm text-muted-foreground" aria-hidden={status !== "error"}>
+        <li key={item.href} className="mx-auto flex h-[46px] w-[calc(100%-6px)] items-center gap-2.5 rounded-xl px-3 text-sm text-muted-foreground" aria-hidden={status !== "error"}>
           {status === "error" && item.href === "/products/sim-cards" ? (
             <button type="button" onClick={() => void refreshPublicCategories().catch(() => undefined)} className="text-left underline">分类读取失败，重试</button>
           ) : <span className="h-3 w-3/4 rounded bg-slate-100" />}
@@ -177,7 +177,7 @@ function formatCategoryNavLabel(rawName: string) {
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white lg:h-10 lg:w-10">
             <img
-              src="/assets/jianlian-brand-logo.png"
+              src="/assets/jianlian-brand-logo-96.webp"
               alt="Jianlian"
               width={48}
               height={48}

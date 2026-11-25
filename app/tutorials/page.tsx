@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import * as Collapsible from "@radix-ui/react-collapsible";
@@ -28,20 +29,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { openPublicSupport } from "@/lib/support/open-public-support";
-import BinanceTutorial from "@/components/account/BinanceTutorial";
-import GiffgaffTutorial from "@/components/account/GiffgaffTutorial";
-import GiffgaffActivationTutorial from "@/components/account/GiffgaffActivationTutorial";
-import HahaSimTutorial from "@/components/account/HahaSimTutorial";
-import OneNzTutorial, { type OneNzSection } from "@/components/account/OneNzTutorial";
-import ChatGptAccountGuideTutorial, { type ChatGptTutorialSection } from "@/components/account/ChatGptAccountGuideTutorial";
-import GeminiTutorial from "@/components/account/GeminiTutorial";
-import AppleIdTutorial, { appleChapters } from "@/components/account/AppleIdTutorial";
-import GoogleRegionTutorial from "@/components/account/GoogleRegionTutorial";
-import GoogleQrSmsTutorial from "@/components/account/GoogleQrSmsTutorial";
-import GoogleAppealTutorial from "@/components/account/GoogleAppealTutorial";
-import FacebookTutorial from "@/components/account/FacebookTutorial";
-import TwitterTutorial, { type TwitterSection } from "@/components/account/TwitterTutorial";
-import RakutenMobileTutorial from "@/components/account/RakutenMobileTutorial";
+import type { OneNzSection } from "@/components/account/OneNzTutorial";
+import type { ChatGptTutorialSection } from "@/components/account/ChatGptAccountGuideTutorial";
+import type { TwitterSection } from "@/components/account/TwitterTutorial";
+
+const tutorialLoading = () => (
+  <div className="space-y-3 rounded-2xl border border-orange-100 bg-white/80 p-6">
+    <div className="h-6 w-48 animate-pulse rounded bg-orange-100/70" />
+    <div className="h-24 w-full animate-pulse rounded-xl bg-orange-50/70" />
+    <div className="h-24 w-full animate-pulse rounded-xl bg-orange-50/70" />
+  </div>
+);
+
+const BinanceTutorial = dynamic(() => import("@/components/account/BinanceTutorial"), { loading: tutorialLoading });
+const GiffgaffTutorial = dynamic(() => import("@/components/account/GiffgaffTutorial"), { loading: tutorialLoading });
+const GiffgaffActivationTutorial = dynamic(() => import("@/components/account/GiffgaffActivationTutorial"), { loading: tutorialLoading });
+const HahaSimTutorial = dynamic(() => import("@/components/account/HahaSimTutorial"), { loading: tutorialLoading });
+const OneNzTutorial = dynamic(() => import("@/components/account/OneNzTutorial"), { loading: tutorialLoading });
+const ChatGptAccountGuideTutorial = dynamic(() => import("@/components/account/ChatGptAccountGuideTutorial"), { loading: tutorialLoading });
+const GeminiTutorial = dynamic(() => import("@/components/account/GeminiTutorial"), { loading: tutorialLoading });
+const AppleIdTutorial = dynamic(() => import("@/components/account/AppleIdTutorial"), { loading: tutorialLoading });
+const GoogleRegionTutorial = dynamic(() => import("@/components/account/GoogleRegionTutorial"), { loading: tutorialLoading });
+const GoogleQrSmsTutorial = dynamic(() => import("@/components/account/GoogleQrSmsTutorial"), { loading: tutorialLoading });
+const GoogleAppealTutorial = dynamic(() => import("@/components/account/GoogleAppealTutorial"), { loading: tutorialLoading });
+const FacebookTutorial = dynamic(() => import("@/components/account/FacebookTutorial"), { loading: tutorialLoading });
+const TwitterTutorial = dynamic(() => import("@/components/account/TwitterTutorial"), { loading: tutorialLoading });
+const RakutenMobileTutorial = dynamic(() => import("@/components/account/RakutenMobileTutorial"), { loading: tutorialLoading });
+
+const appleChapters = [
+  ["apple-product", "商品说明"],
+  ["apple-id-formats", "交付格式"],
+  ["apple-store-login", "App Store 登录"],
+  ["apple-account-recovery", "账号恢复"],
+  ["apple-account-settings", "修改资料"],
+  ["apple-faq", "常见问题"],
+] as const;
 import {
   AppleWireframeIcon,
   BinanceWireframeIcon,

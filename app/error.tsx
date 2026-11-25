@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 
 const CHUNK_RELOAD_GUARD_KEY = "jianlian_chunk_reload_ts";
@@ -35,7 +36,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
           window.location.reload();
         }
       } catch {
-        window.location.reload();
+        // Storage unavailable: avoid unconditional infinite reload loop; let user click reload.
       }
     }
   }, [error]);
@@ -58,7 +59,10 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
         <h2 className="mt-3 text-lg font-semibold text-slate-950">当前模块加载失败</h2>
         <p className="mt-2 text-sm text-slate-500">请重试当前操作。已填写内容会尽可能保留。</p>
         {error.digest ? <p className="mt-2 text-xs text-slate-400">参考编号：{error.digest.slice(0, 12)}</p> : null}
-        <button type="button" onClick={handleReload} className="mt-5 h-10 rounded-lg bg-orange-600 px-4 text-sm font-medium text-white hover:bg-orange-700">重新加载</button>
+        <div className="mt-5 flex items-center justify-center gap-3">
+          <button type="button" onClick={handleReload} className="h-10 rounded-lg bg-orange-600 px-4 text-sm font-medium text-white hover:bg-orange-700">重新加载</button>
+          <Link href="/" className="inline-flex h-10 items-center rounded-lg border border-orange-200 px-4 text-sm font-medium text-orange-700 hover:bg-orange-50">返回首页</Link>
+        </div>
       </div>
     </div>
   );

@@ -51,7 +51,7 @@ export default function AccountRefundsPage() {
 
   return (
     <PublicLayout>
-      <main className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-6xl flex-col gap-4 px-6 py-6">
+      <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-6xl flex-col gap-4 px-6 py-6">
         <div className="flex items-center justify-between gap-3">
           <div>
             <Link href="/account/orders" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-orange-600">
@@ -110,7 +110,7 @@ export default function AccountRefundsPage() {
             </div>
           )}
         </section>
-      </main>
+      </div>
     </PublicLayout>
   );
 }

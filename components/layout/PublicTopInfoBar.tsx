@@ -14,20 +14,14 @@ import {
 import type { User } from "@supabase/supabase-js";
 
 import { accountNavigation } from "@/components/account/account-navigation";
+import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
 import { Button } from "@/components/ui/button";
-import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  getCurrentProfile,
-  getSupabaseBrowserClient,
-  hasSupabaseConfig,
-  type UserProfile,
-} from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 
@@ -35,47 +29,6 @@ interface PublicTopInfoBarProps {
   announcementText?: string;
   mobileNavigationUntilLg?: boolean;
 }
-
-type CachedAuthState = {
-  user: User | null;
-  profile: UserProfile | null;
-  ready: boolean;
-};
-
-const AUTH_CACHE_STORAGE_KEY = "jianlian_topbar_auth_cache_v1";
-
-function loadPersistedAuthCache(): { user: User | null; profile: UserProfile | null } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(AUTH_CACHE_STORAGE_KEY) || window.sessionStorage.getItem(AUTH_CACHE_STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function persistAuthCache(user: User | null, profile: UserProfile | null) {
-  if (typeof window === "undefined") return;
-  try {
-    if (!user) {
-      window.sessionStorage.removeItem(AUTH_CACHE_STORAGE_KEY);
-      window.localStorage.removeItem(AUTH_CACHE_STORAGE_KEY);
-    } else {
-      const data = JSON.stringify({ user, profile });
-      window.sessionStorage.setItem(AUTH_CACHE_STORAGE_KEY, data);
-      window.localStorage.setItem(AUTH_CACHE_STORAGE_KEY, data);
-    }
-  } catch {
-    /* Safe ignore */
-  }
-}
-
-let cachedAuthState: CachedAuthState = {
-  user: null,
-  profile: null,
-  ready: false,
-};
 
 const ANNOUNCEMENT_DURATION_MS = 35000;
 const ANNOUNCEMENT_START_KEY = "jianlian_announcement_started_at";
@@ -143,120 +96,18 @@ export default function PublicTopInfoBar({
   const router = useRouter();
   const pathname = usePathname();
   const { isMobile } = useMobileStorefront();
-  const [user, setUser] = useState<User | null>(() => {
-    if (cachedAuthState.user) return cachedAuthState.user;
-    const persisted = loadPersistedAuthCache();
-    return persisted?.user ?? null;
-  });
-  const [profile, setProfile] = useState<UserProfile | null>(() => {
-    if (cachedAuthState.profile) return cachedAuthState.profile;
-    const persisted = loadPersistedAuthCache();
-    return persisted?.profile ?? null;
-  });
-  const [authReady, setAuthReady] = useState(() => {
-    if (cachedAuthState.ready) return true;
-    const persisted = loadPersistedAuthCache();
-    return Boolean(persisted);
-  });
+  const { user, profile, authReady, balance, signOut } = usePublicAuthProfile();
   const [announcementDelay, setAnnouncementDelay] = useState(0);
-
-  const updateAuthState = (
-    nextUser: User | null,
-    nextProfile: UserProfile | null,
-    nextReady = true
-  ) => {
-    cachedAuthState = {
-      user: nextUser,
-      profile: nextProfile,
-      ready: nextReady,
-    };
-    persistAuthCache(nextUser, nextProfile);
-    setUser(nextUser);
-    setProfile(nextProfile);
-    setAuthReady(nextReady);
-  };
 
   useEffect(() => {
     setAnnouncementDelay(getAnnouncementAnimationDelay());
   }, []);
 
-  useEffect(() => {
-    if (!hasSupabaseConfig()) {
-      updateAuthState(null, null, true);
-      return;
-    }
-
-    const supabase = getSupabaseBrowserClient();
-    let mounted = true;
-
-    const loadSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!mounted) return;
-
-      if (session?.user) {
-        const nextProfile = await getCurrentProfile().catch(() => cachedAuthState.profile);
-        updateAuthState(session.user, nextProfile, true);
-      } else {
-        updateAuthState(null, null, true);
-      }
-    };
-
-    loadSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) {
-        updateAuthState(null, null, true);
-      } else {
-        getCurrentProfile()
-          .then((nextProfile) =>
-            updateAuthState(session.user, nextProfile, true)
-          )
-          .catch(() => updateAuthState(session.user, cachedAuthState.profile, true));
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const refreshBalance = () => {
-      const currentUser = cachedAuthState.user;
-      if (!currentUser) return;
-      void getCurrentProfile()
-        .then((nextProfile) => {
-          if (active && cachedAuthState.user?.id === currentUser.id) {
-            updateAuthState(currentUser, nextProfile, true);
-          }
-        })
-        .catch(() => {
-          // Balance refresh is best-effort and must not disturb the payment result.
-        });
-    };
-    window.addEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
-    return () => {
-      active = false;
-      window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
-    };
-  }, []);
-
   const handleSignOut = async () => {
-    const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut();
-    updateAuthState(null, null, true);
+    await signOut();
     router.push("/");
     router.refresh();
   };
-
-  const balance = profile?.balance ?? 0;
 
   return (
     <div
@@ -274,7 +125,7 @@ export default function PublicTopInfoBar({
         isMobile && "!flex !py-1.5",
         !isMobile && "sm:h-[62px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 sm:py-0 xl:grid-cols-[minmax(0,1fr)_142px_150px]"
       )}>
-        {announcementText && (
+        {announcementText ? (
           <div className={cn("relative z-10 col-span-2 min-w-0 flex-1 overflow-hidden", !isMobile && "sm:col-span-1")}>
             <div className="flex h-8 items-center gap-2 rounded-xl border border-orange-100 bg-white px-2.5 shadow-sm shadow-orange-100/60 sm:h-9 sm:px-3">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-primary">
@@ -302,6 +153,8 @@ export default function PublicTopInfoBar({
               </div>
             </div>
           </div>
+        ) : (
+          <div className="hidden sm:block" aria-hidden="true" />
         )}
 
         <div className={cn("hidden h-8 min-w-0 items-center justify-start gap-1.5 justify-self-start rounded-xl border border-orange-100 bg-white px-2.5 shadow-sm shadow-orange-100/60 sm:flex sm:h-9 sm:min-w-[132px] sm:justify-center sm:justify-self-center sm:px-3 xl:w-[142px]", isMobile && "!hidden")}>
@@ -322,9 +175,9 @@ export default function PublicTopInfoBar({
 
         <div className={cn("hidden h-8 min-w-0 items-center justify-end gap-1.5 justify-self-end sm:flex sm:h-9 sm:w-[150px]", isMobile && "!hidden")}>
           {!authReady ? (
-            <div className="flex h-8 items-center gap-2 sm:h-9" aria-hidden="true">
-              <div className="h-8 w-16 animate-pulse rounded-xl bg-orange-100/70 sm:h-9 sm:w-20" />
-              <div className="h-8 w-16 animate-pulse rounded-xl bg-orange-100/70 sm:h-9 sm:w-20" />
+            <div className="flex h-8 w-full items-center justify-end gap-1.5 sm:h-9" aria-hidden="true">
+              <div className="h-8 w-[68px] animate-pulse rounded-xl bg-orange-100/70 sm:h-9 sm:w-[70px]" />
+              <div className="h-8 w-[68px] animate-pulse rounded-xl bg-orange-100/70 sm:h-9 sm:w-[70px]" />
             </div>
           ) : user ? (
             <>

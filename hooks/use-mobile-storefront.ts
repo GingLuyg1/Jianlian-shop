@@ -118,7 +118,6 @@ function initClientState() {
     showToggle,
     compactViewport,
   };
-  syncDocumentAttribute(previewWidth);
 
   const handleResize = () => {
     const nextCompact = window.innerWidth < 1024;

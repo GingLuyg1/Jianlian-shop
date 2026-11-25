@@ -8,7 +8,6 @@ import { toast } from "sonner";
 
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
-import PublicLayout from "@/components/layout/PublicLayout";
 import { OrderRefundPanel } from "@/components/refunds/OrderRefundPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,6 +70,11 @@ export default function AccountOrderDetailPage() {
     setError(null);
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`, { cache: "no-store" });
+      if (response.status === 401) {
+        const redirectTarget = encodeURIComponent(`/account/orders/${encodeURIComponent(orderNo)}`);
+        router.replace(`/login?redirect=${redirectTarget}`);
+        return;
+      }
       const data = (await response.json().catch(() => ({}))) as OrderDetailResponse;
       if (!response.ok || !data.order) {
         throw new Error(data.error || "订单加载失败");
@@ -131,8 +135,7 @@ export default function AccountOrderDetailPage() {
   }
 
   return (
-    <PublicLayout contentClassName="bg-[#fbf7f1] p-0">
-      <main className="mx-auto flex h-[calc(100vh-78px)] max-w-7xl flex-col gap-4 overflow-hidden px-5 py-4">
+      <div className="mx-auto flex h-auto max-w-7xl flex-col gap-4 overflow-visible px-2 py-2 sm:px-5 sm:py-4 xl:h-[calc(100dvh-78px)] xl:overflow-hidden">
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" className="gap-2" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
@@ -160,14 +163,14 @@ export default function AccountOrderDetailPage() {
           <Card className="flex min-h-[360px] items-center justify-center border-orange-100 bg-white">
             <div className="space-y-3 text-center">
               <div className="text-base font-semibold text-slate-900">订单不存在</div>
-              <Link href="/account/orders">
-                <Button>查看我的订单</Button>
-              </Link>
+              <Button asChild>
+                <Link href="/account/orders">查看我的订单</Link>
+              </Button>
             </div>
           </Card>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="min-h-0 overflow-y-auto pr-1">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-visible xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden">
+            <section className="min-h-0 xl:overflow-y-auto xl:pr-1">
               <div className="space-y-4">
                 <Card className="border-orange-100 bg-white">
                   <CardHeader className="pb-3">
@@ -260,12 +263,12 @@ export default function AccountOrderDetailPage() {
                       {paymentNotice}
                     </div>
                   ) : null}
-                  <Link href="/account/orders" className="block">
-                    <Button variant="outline" className="w-full">查看我的订单</Button>
-                  </Link>
-                  <Link href="/products/sim-cards" className="block">
-                    <Button variant="outline" className="w-full">返回商城</Button>
-                  </Link>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/account/orders">查看我的订单</Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/products/digital-accounts">返回商城</Link>
+                  </Button>
                   {canCancel ? (
                     <Button variant="destructive" className="w-full" onClick={cancelOrder} disabled={canceling}>
                       {canceling ? "取消中..." : "取消订单"}
@@ -299,8 +302,7 @@ export default function AccountOrderDetailPage() {
             </aside>
           </div>
         )}
-      </main>
-    </PublicLayout>
+      </div>
   );
 }
 

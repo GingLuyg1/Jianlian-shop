@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import {
   getOrCreateProfile,
   userToProfile,
@@ -18,6 +18,14 @@ type SupabaseConfigStatus = {
 };
 
 let browserClient: SupabaseClient | null = null;
+let inFlightProfilePromise: Promise<UserProfile | null> | null = null;
+let cachedProfileEntry: { userId: string; profile: UserProfile | null; fetchedAt: number } | null = null;
+const PROFILE_CACHE_TTL_MS = 8_000;
+
+export function invalidateCurrentProfileCache() {
+  cachedProfileEntry = null;
+  inFlightProfilePromise = null;
+}
 
 export function getSupabaseConfigStatus(): SupabaseConfigStatus {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -75,16 +83,51 @@ export function getSupabaseBrowserClient() {
   return browserClient;
 }
 
-export async function getCurrentProfile() {
-  const supabase = getSupabaseBrowserClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    return null;
+export async function getCurrentProfile(force = false, knownUser?: User | null) {
+  const now = Date.now();
+  if (
+    !force &&
+    cachedProfileEntry &&
+    now - cachedProfileEntry.fetchedAt < PROFILE_CACHE_TTL_MS &&
+    (!knownUser || cachedProfileEntry.userId === knownUser.id)
+  ) {
+    return cachedProfileEntry.profile;
   }
 
-  return getOrCreateProfile(supabase, user);
+  if (!force && inFlightProfilePromise) {
+    return inFlightProfilePromise;
+  }
+
+  const promise = (async () => {
+    const supabase = getSupabaseBrowserClient();
+    let user = knownUser ?? null;
+    if (!user) {
+      const {
+        data: { user: fetchedUser },
+        error,
+      } = await supabase.auth.getUser();
+      if (error || !fetchedUser) {
+        cachedProfileEntry = null;
+        return null;
+      }
+      user = fetchedUser;
+    }
+
+    const profile = await getOrCreateProfile(supabase, user);
+    cachedProfileEntry = {
+      userId: user.id,
+      profile,
+      fetchedAt: Date.now(),
+    };
+    return profile;
+  })();
+
+  inFlightProfilePromise = promise;
+  try {
+    return await promise;
+  } finally {
+    if (inFlightProfilePromise === promise) {
+      inFlightProfilePromise = null;
+    }
+  }
 }

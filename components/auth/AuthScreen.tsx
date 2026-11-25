@@ -33,6 +33,7 @@ import {
   validateAuthPassword,
 } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
+import { createSafeUuid, safeLocalStorageGet, safeLocalStorageSet } from "@/lib/browser/safe-storage";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import AnimatedCharacters from "@/components/auth/AnimatedCharacters";
@@ -113,6 +114,8 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const [registration, setRegistration] = useState<PendingSignup | null>(null);
   const [inlinePendingSignup, setInlinePendingSignup] = useState<PendingSignup | null>(null);
   const pendingDesiredPasswordRef = useRef<string>("");
+  const submitLockRef = useRef(false);
+  const otpLockRef = useRef(false);
 
   // 卡通角色动效状态
   const [isEmailFocused, setIsEmailFocused] = useState(false);
@@ -325,6 +328,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   }, [otpCountdown]);
 
   const handleSendRegisterOtp = async () => {
+    if (otpLockRef.current || otpSending || otpCountdown > 0) return;
     const normalizedEmail = email.trim().toLowerCase();
     if (!isEmailFormatValid(normalizedEmail)) {
       setError("请输入正确的邮箱地址后再获取验证码。");
@@ -335,6 +339,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       setError("登录服务暂时不可用，请稍后重试。");
       return;
     }
+    otpLockRef.current = true;
     setError("");
     setMessage("");
     setOtpSending(true);
@@ -430,6 +435,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     } catch (sendException) {
       setError(getSafeNetworkAuthMessage(sendException));
     } finally {
+      otpLockRef.current = false;
       setOtpSending(false);
     }
   };
@@ -464,6 +470,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   ) {
     setError("");
     setMessage("");
+    submitLockRef.current = true;
     setLoading(true);
     const supabase = getSupabaseBrowserClient();
     try {
@@ -538,14 +545,16 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
       setError("注册验证暂时不可用，请稍后重试。");
     } finally {
+      submitLockRef.current = false;
       setLoading(false);
     }
   }
 
   async function resendRegistrationCode() {
-    if (loading || !registration) return;
+    if (submitLockRef.current || loading || !registration) return;
     setError("");
     setMessage("");
+    submitLockRef.current = true;
     setLoading(true);
     try {
       const { error: resendError } = await getSupabaseBrowserClient().auth.resend({
@@ -565,6 +574,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     } catch {
       setError("暂时无法重发验证码，请稍后重试。");
     } finally {
+      submitLockRef.current = false;
       setLoading(false);
     }
   }
@@ -586,9 +596,9 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
 
     async function recordPromotionVisit() {
       const visitorKey =
-        window.localStorage.getItem("jianlian_visitor_key") ||
-        window.crypto.randomUUID();
-      window.localStorage.setItem("jianlian_visitor_key", visitorKey);
+        safeLocalStorageGet("jianlian_visitor_key") ||
+        createSafeUuid();
+      safeLocalStorageSet("jianlian_visitor_key", visitorKey);
 
       try {
         const { error } = await getSupabaseBrowserClient().rpc(
@@ -640,6 +650,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitLockRef.current || loading) return;
     setError("");
     setMessage("");
 
@@ -671,6 +682,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       }
     }
 
+    submitLockRef.current = true;
     setLoading(true);
 
     try {
@@ -804,6 +816,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       console.warn("[Supabase Auth] Network or runtime exception");
       setError(getSafeNetworkAuthMessage(authException));
     } finally {
+      submitLockRef.current = false;
       setLoading(false);
     }
   };
@@ -893,7 +906,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
               <div className="rounded-[26px] border border-orange-50 bg-white/90 p-6 sm:p-7">
                 <div className="mb-6 flex items-center gap-3">
                   <img
-                    src="/assets/jianlian-brand-logo.png"
+                    src="/assets/jianlian-brand-logo-96.webp"
                     alt="Jianlian"
                     width={44}
                     height={44}
@@ -1009,7 +1022,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                               setIsTyping(false);
                             }}
                             placeholder="请输入邮箱"
-                            className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
+                            className="flex-1 min-w-0 bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
                             autoComplete="email"
                             required
                           />
@@ -1038,7 +1051,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                                   setEmailOtp(event.target.value.trim())
                                 }
                                 placeholder="请输入邮箱收到的验证码"
-                                className="flex-1 min-w-0 bg-transparent font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
+                                className="flex-1 min-w-0 bg-transparent font-mono text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
                                 maxLength={8}
                                 tabIndex={isRegister ? 0 : -1}
                               />
@@ -1081,7 +1094,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                               setIsTyping(false);
                             }}
                             placeholder="请输入密码"
-                            className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
+                            className="flex-1 min-w-0 bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
                             autoComplete={
                               isRegister ? "new-password" : "current-password"
                             }
@@ -1143,7 +1156,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                                   setInviteCode(event.target.value)
                                 }
                                 placeholder="请输入邀请码"
-                                className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
+                                className="flex-1 min-w-0 bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
                               />
                             </div>
                           </div>

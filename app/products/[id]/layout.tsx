@@ -24,21 +24,30 @@ function isIndexableProduct(status: string) {
   return status === "active" || status === "sold_out";
 }
 
+function safeDecodeSegment(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export async function generateMetadata(props: ProductRouteContext): Promise<Metadata> {
   const params = await props.params;
-  const product = await getSeoProduct(params.id).catch(() => null);
+  const decodedId = safeDecodeSegment(params.id);
+  const product = await getSeoProduct(decodedId).catch(() => null);
   if (!product || !isIndexableProduct(product.status)) {
     return buildPageMetadata({
-      title: `商品不存在 | ${SITE_NAME}`,
+      title: "商品不存在",
       description: "商品不存在或已下架。",
-      path: `/products/${params.id}`,
+      path: `/products/${encodeURIComponent(decodedId)}`,
       noIndex: true,
     });
   }
 
-  const title = `${product.name}${product.status === "sold_out" ? "（已售罄）" : ""} - ${SITE_NAME}`;
+  const title = `${product.name}${product.status === "sold_out" ? "（已售罄）" : ""}`;
   const description =
-    product.short_description || product.description || `${product.name} - ${SITE_NAME} 数字商品服务`;
+    product.short_description || product.description || `${product.name} | ${SITE_NAME} 数字商品服务`;
 
   return buildPageMetadata({
     title,
@@ -51,13 +60,14 @@ export async function generateMetadata(props: ProductRouteContext): Promise<Meta
 
 export default async function ProductDetailLayout(props: ProductRouteProps) {
   const params = await props.params;
+  const decodedId = safeDecodeSegment(params.id);
 
   const {
     children
   } = props;
 
   const [product, categories] = await Promise.all([
-    getSeoProduct(params.id).catch(() => null),
+    getSeoProduct(decodedId).catch(() => null),
     listSeoCategories().catch(() => []),
   ]);
   if (!product || !isIndexableProduct(product.status)) notFound();

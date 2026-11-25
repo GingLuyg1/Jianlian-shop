@@ -10,26 +10,32 @@ import {
   useState,
   Suspense,
 } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { resolveCheckoutCategory, resolveRechargeProductFamily, safeProductReturnTo } from "@/lib/products/checkout-navigation";
 import { getExtendedDeliveryLabel, getPublicStockDisplay, isPreorderDeliveryMode } from "@/lib/products/delivery-and-stock";
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
 import { resolveProductImageSrc } from "@/components/products/product-ui";
+import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
+import { createSafeUuid, safeSessionStorageGet, safeSessionStorageRemove, safeSessionStorageSet } from "@/lib/browser/safe-storage";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
+import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
-import AirMobileProductDetails from "@/components/products/details/AirMobileProductDetails";
-import EncMobileProductDetails from "@/components/products/details/EncMobileProductDetails";
-import EuropeanSimProductDetails from "@/components/products/details/EuropeanSimProductDetails";
-import OrangeSimProductDetails from "@/components/products/details/OrangeSimProductDetails";
-import VodafoneSimProductDetails from "@/components/products/details/VodafoneSimProductDetails";
-import MovistarSimProductDetails from "@/components/products/details/MovistarSimProductDetails";
-import GiffgaffSimProductDetails from "@/components/products/details/GiffgaffSimProductDetails";
-import HahaSimProductDetails from "@/components/products/details/HahaSimProductDetails";
-import Lucky2ProductDetails from "@/components/products/details/Lucky2ProductDetails";
-import OneNzProductDetails from "@/components/products/details/OneNzProductDetails";
-import RakutenMobileProductDetails from "@/components/products/details/RakutenMobileProductDetails";
-import UltraMobileProductDetails from "@/components/products/details/UltraMobileProductDetails";
-import TMobileProductDetails from "@/components/products/details/TMobileProductDetails";
+
+const AirMobileProductDetails = dynamic(() => import("@/components/products/details/AirMobileProductDetails"));
+const EncMobileProductDetails = dynamic(() => import("@/components/products/details/EncMobileProductDetails"));
+const EuropeanSimProductDetails = dynamic(() => import("@/components/products/details/EuropeanSimProductDetails"));
+const OrangeSimProductDetails = dynamic(() => import("@/components/products/details/OrangeSimProductDetails"));
+const VodafoneSimProductDetails = dynamic(() => import("@/components/products/details/VodafoneSimProductDetails"));
+const MovistarSimProductDetails = dynamic(() => import("@/components/products/details/MovistarSimProductDetails"));
+const GiffgaffSimProductDetails = dynamic(() => import("@/components/products/details/GiffgaffSimProductDetails"));
+const HahaSimProductDetails = dynamic(() => import("@/components/products/details/HahaSimProductDetails"));
+const Lucky2ProductDetails = dynamic(() => import("@/components/products/details/Lucky2ProductDetails"));
+const OneNzProductDetails = dynamic(() => import("@/components/products/details/OneNzProductDetails"));
+const RakutenMobileProductDetails = dynamic(() => import("@/components/products/details/RakutenMobileProductDetails"));
+const UltraMobileProductDetails = dynamic(() => import("@/components/products/details/UltraMobileProductDetails"));
+const TMobileProductDetails = dynamic(() => import("@/components/products/details/TMobileProductDetails"));
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -375,10 +381,12 @@ function CheckoutPageContent() {
   const [legalDocuments, setLegalDocuments] = useState<LegalDocument[]>([]);
   const [legalLoading, setLegalLoading] = useState(true);
   const [legalError, setLegalError] = useState("");
+  const { user: authUser, authReady: publicAuthReady, balance: publicAuthBalance } = usePublicAuthProfile();
   const [selectedSkuId, setSelectedSkuId] = useState("");
-  const [productRow, setProductRow] = useState<PublicProductRow | null>(() => peekPublicProductPreview(productId));
+  const [productRow, setProductRow] = useState<PublicProductRow | null>(null);
   const [productSkus, setProductSkus] = useState<PublicProductSkuRow[]>([]);
   const [productLoading, setProductLoading] = useState(true);
+  const [storedReturnTo, setStoredReturnTo] = useState<string | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
   const [balanceStatus, setBalanceStatus] = useState<BalanceLoadStatus>("loading");
@@ -390,7 +398,10 @@ function CheckoutPageContent() {
   const [amountLimitDialogOpen, setAmountLimitDialogOpen] = useState(false);
   const paymentDropdownRef = useRef<HTMLDivElement | null>(null);
   const clientRequestIdRef = useRef("");
+  const lastConfigFingerprintRef = useRef("");
   const balanceRequestVersionRef = useRef(0);
+  const lastBalanceFetchAtRef = useRef(0);
+  const navigatingOutRef = useRef(false);
   const submissionGuardRef = useRef(createCheckoutSubmissionGuard());
 
   const checkoutSessionKey = useMemo(
@@ -398,7 +409,37 @@ function CheckoutPageContent() {
     [productId]
   );
 
-  const loadAccountBalance = useCallback(async () => {
+  useEffect(() => {
+    setStoredReturnTo(safeProductReturnTo(safeSessionStorageGet("checkout_return_to")));
+    const cached = peekPublicProductPreview(productId);
+    if (cached) setProductRow((current) => current ?? cached);
+  }, [productId]);
+
+  useEffect(() => {
+    const onPageShow = () => {
+      if (navigatingOutRef.current) {
+        navigatingOutRef.current = false;
+        submissionGuardRef.current.finish();
+        setSubmitLoading(false);
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  const loadAccountBalance = useCallback(async (force = false) => {
+    if (publicAuthReady && !authUser) {
+      setAvailableBalance(null);
+      setBalanceStatus("error");
+      setBalanceRequiresLogin(true);
+      setBalanceError("请先登录后查看账户余额");
+      return;
+    }
+    const now = Date.now();
+    if (!force && now - lastBalanceFetchAtRef.current < 15_000 && availableBalance !== null) {
+      return;
+    }
+    lastBalanceFetchAtRef.current = now;
     const requestVersion = balanceRequestVersionRef.current + 1;
     balanceRequestVersionRef.current = requestVersion;
     setBalanceStatus("loading");
@@ -406,7 +447,7 @@ function CheckoutPageContent() {
     setBalanceRequiresLogin(false);
 
     try {
-      const response = await fetch("/api/account/assets", { cache: "no-store" });
+      const response = await fetchWithTimeout("/api/account/assets?lite=1", { cache: "no-store" });
       const payload = await response.json().catch(() => null) as unknown;
       if (requestVersion !== balanceRequestVersionRef.current) return;
       if (!response.ok) {
@@ -440,7 +481,7 @@ function CheckoutPageContent() {
       setBalanceRequiresLogin(false);
       setBalanceError("账户余额读取失败，请重新加载");
     }
-  }, []);
+  }, [authUser, availableBalance, publicAuthReady]);
 
   useEffect(() => {
     if (!paymentDropdownOpen) return;
@@ -471,7 +512,7 @@ function CheckoutPageContent() {
     clientRequestIdRef.current = createCheckoutClientRequestId();
     setPendingBalanceOrder(null);
     try {
-      const raw = window.sessionStorage.getItem(checkoutSessionKey);
+      const raw = safeSessionStorageGet(checkoutSessionKey);
       const stored = raw ? parseRetainedCheckoutOrder(JSON.parse(raw)) : null;
       if (!stored) return;
       clientRequestIdRef.current = stored.requestId;
@@ -482,12 +523,12 @@ function CheckoutPageContent() {
 
       void (async () => {
         try {
-          const response = await fetch(`/api/orders/${encodeURIComponent(stored.orderNo)}`, { cache: "no-store" });
+          const response = await fetchWithTimeout(`/api/orders/${encodeURIComponent(stored.orderNo)}`, { cache: "no-store" });
           const payload = await response.json().catch(() => null) as unknown;
           if (!active || !response.ok) return;
           const retained = classifyRetainedCheckoutOrder(payload, stored.orderNo);
           if (retained.kind === "terminal") {
-            window.sessionStorage.removeItem(checkoutSessionKey);
+            safeSessionStorageRemove(checkoutSessionKey);
             setPendingBalanceOrder(null);
             clientRequestIdRef.current = createCheckoutClientRequestId();
             return;
@@ -496,14 +537,14 @@ function CheckoutPageContent() {
           const restoredOrder = { ...stored, customerEmail: retained.customerEmail ?? stored.customerEmail };
           if (restoredOrder.customerEmail) setEmail(restoredOrder.customerEmail);
           setPendingBalanceOrder(restoredOrder);
-          window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(restoredOrder));
+          safeSessionStorageSet(checkoutSessionKey, JSON.stringify(restoredOrder));
         } catch {
           // Keep the retained order locked to its original request identity. A failed
           // read must not create a replacement order or overwrite its contact data.
         }
       })();
     } catch {
-      window.sessionStorage.removeItem(checkoutSessionKey);
+      safeSessionStorageRemove(checkoutSessionKey);
     }
 
     return () => {
@@ -512,16 +553,29 @@ function CheckoutPageContent() {
   }, [checkoutSessionKey]);
 
   useEffect(() => {
-    void loadAccountBalance();
-    const refreshBalance = () => void loadAccountBalance();
-    window.addEventListener("focus", refreshBalance);
-    window.addEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
+    if (!publicAuthReady) return;
+    if (!authUser) {
+      setAvailableBalance(null);
+      setBalanceStatus("error");
+      setBalanceRequiresLogin(true);
+      setBalanceError("请先登录后查看账户余额");
+      return;
+    }
+    if (authUser.email) {
+      setEmail((current) => (current.trim() ? current : authUser.email!));
+    }
+    setAvailableBalance((prev) => (prev === null ? publicAuthBalance : prev));
+    void loadAccountBalance(true);
+    const refreshBalanceOnFocus = () => void loadAccountBalance(false);
+    const refreshBalanceForce = () => void loadAccountBalance(true);
+    window.addEventListener("focus", refreshBalanceOnFocus);
+    window.addEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalanceForce);
     return () => {
-      window.removeEventListener("focus", refreshBalance);
-      window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
+      window.removeEventListener("focus", refreshBalanceOnFocus);
+      window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalanceForce);
       balanceRequestVersionRef.current += 1;
     };
-  }, [loadAccountBalance]);
+  }, [authUser, loadAccountBalance, publicAuthBalance, publicAuthReady]);
 
   useEffect(() => {
     let active = true;
@@ -595,11 +649,9 @@ function CheckoutPageContent() {
       setLegalLoading(true);
       setLegalError("");
       try {
-        const response = await fetch("/api/legal/current", { cache: "no-store" });
-        const payload = await response.json().catch(() => null) as { documents?: LegalDocument[]; error?: string } | null;
-        if (!response.ok) throw new Error(payload?.error || "协议读取失败，请稍后重试");
+        const docs = await fetchCurrentLegalDocuments();
         if (!active) return;
-        setLegalDocuments(Array.isArray(payload?.documents) ? payload!.documents! : []);
+        setLegalDocuments(docs as LegalDocument[]);
       } catch (loadError) {
         if (!active) return;
         setLegalError(getErrorText(loadError, "协议读取失败，请稍后重试"));
@@ -647,7 +699,7 @@ function CheckoutPageContent() {
 
   useEffect(() => {
     if (typeof document === "undefined" || !product?.name) return;
-    document.title = `${product.name} - Jianlian Shop`;
+    document.title = `${product.name} | Jianlian Shop`;
   }, [product?.name]);
 
   const databaseSkuOptions: SkuOption[] = productSkus.map((sku) => ({
@@ -684,6 +736,13 @@ function CheckoutPageContent() {
     : selectedSku?.isDatabaseSku
       ? Number(selectedSku.stock ?? 0)
       : Number(product?.stock ?? 0);
+
+  useEffect(() => {
+    setQuantity((current) => {
+      const max = Math.max(effectiveStock || 1, 1);
+      return Math.max(1, Math.min(max, current));
+    });
+  }, [effectiveStock]);
   const requiredAgreementDocs = REQUIRED_AGREEMENT_TYPES.map((type) => legalDocuments.find((doc) => doc.document_type === type));
   const agreementsReady = requiredAgreementDocs.every(Boolean);
   const agreementPayload = requiredAgreementDocs.filter(Boolean).map((doc) => ({ document_type: doc!.document_type, document_version_id: doc!.id, content_hash: doc!.content_hash }));
@@ -881,13 +940,15 @@ function CheckoutPageContent() {
     setSubmitLoading(true);
 
     try {
-      if (!clientRequestIdRef.current) {
-        clientRequestIdRef.current =
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const configFingerprint = `${productRow.id}:${selectedDatabaseSkuId ?? ""}:${quantity}:${paymentMethod}`;
+      if (!pendingBalanceOrder && lastConfigFingerprintRef.current && lastConfigFingerprintRef.current !== configFingerprint) {
+        clientRequestIdRef.current = createCheckoutClientRequestId();
       }
-      window.sessionStorage.setItem(
+      lastConfigFingerprintRef.current = configFingerprint;
+      if (!clientRequestIdRef.current) {
+        clientRequestIdRef.current = createSafeUuid();
+      }
+      safeSessionStorageSet(
         checkoutSessionKey,
         JSON.stringify({
           requestId: clientRequestIdRef.current,
@@ -897,7 +958,7 @@ function CheckoutPageContent() {
         })
       );
 
-      const response = await fetch("/api/orders", {
+      const response = await fetchWithTimeout("/api/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -949,7 +1010,9 @@ function CheckoutPageContent() {
       if (!response.ok) {
         const message = result?.error ?? "订单创建失败，请稍后重试";
         if (response.status === 401) {
-          router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`);
+          const fullReturn = typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : `/checkout?product=${productId}`;
+          navigatingOutRef.current = true;
+          router.push(`/login?redirect=${encodeURIComponent(fullReturn)}`);
           return;
         }
         if (responseClassification.kind === "balance_insufficient_existing_order") {
@@ -964,9 +1027,9 @@ function CheckoutPageContent() {
           setPendingBalanceOrder(existingOrder);
           setPaymentDropdownOpen(false);
           setPaymentMethod("balance");
-          window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(existingOrder));
+          safeSessionStorageSet(checkoutSessionKey, JSON.stringify(existingOrder));
           setBalanceDialogOpen(true);
-          void loadAccountBalance();
+          void loadAccountBalance(true);
           return;
         }
         if (responseClassification.kind === "existing_order_payment_error" && paymentMethod === "balance") {
@@ -981,15 +1044,16 @@ function CheckoutPageContent() {
           setPendingBalanceOrder(existingOrder);
           setPaymentDropdownOpen(false);
           setPaymentMethod("balance");
-          window.sessionStorage.setItem(checkoutSessionKey, JSON.stringify(existingOrder));
+          safeSessionStorageSet(checkoutSessionKey, JSON.stringify(existingOrder));
           toast.error(message);
           return;
         }
         // Once the API confirms an order number, the idempotent order exists.
         // Continue with that order instead of inviting a second submission.
         if (orderNo) {
+          navigatingOutRef.current = true;
           router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
-          window.sessionStorage.removeItem(checkoutSessionKey);
+          safeSessionStorageRemove(checkoutSessionKey);
           setPendingBalanceOrder(null);
           return;
         }
@@ -998,8 +1062,9 @@ function CheckoutPageContent() {
 
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
 
-      window.sessionStorage.removeItem(checkoutSessionKey);
+      safeSessionStorageRemove(checkoutSessionKey);
       setPendingBalanceOrder(null);
+      navigatingOutRef.current = true;
       if (result?.paymentSession?.submitForm
         && submitPaymentForm(result.paymentSession.submitForm)) return;
       if (
@@ -1011,14 +1076,17 @@ function CheckoutPageContent() {
       }
       router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
     } catch (submitError) {
+      navigatingOutRef.current = false;
       const submitMessage =
         submitError instanceof Error && submitError.message.trim()
           ? submitError.message.trim()
           : getErrorText(submitError, "订单创建失败，请稍后重试");
       toast.error(submitMessage);
     } finally {
-      submissionGuardRef.current.finish();
-      setSubmitLoading(false);
+      if (!navigatingOutRef.current) {
+        submissionGuardRef.current.finish();
+        setSubmitLoading(false);
+      }
     }
   };
 
@@ -1031,7 +1099,7 @@ function CheckoutPageContent() {
           priceLabel={priceLabel}
           closeHref={
             safeProductReturnTo(searchParams.get("returnTo")) ??
-            (typeof window !== "undefined" ? safeProductReturnTo(sessionStorage.getItem("checkout_return_to")) : null) ??
+            storedReturnTo ??
             getProductListHref(product)
           }
         />
@@ -1074,14 +1142,14 @@ function CheckoutPageContent() {
                         ? "请输入接收物流通知的邮箱"
                         : "请输入接收卡密的邮箱"
                     }
-                    className="h-9 bg-slate-50 text-xs sm:text-sm"
+                    className="h-9 bg-slate-50 text-base md:text-sm"
                     disabled={orderConfigurationLocked}
                   />
                 </div>
 
                 <div className="shrink-0">
                   <label htmlFor="checkout-coupon" className="mb-1 block text-xs font-medium">优惠券</label>
-                  <Input id="checkout-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} maxLength={40} autoComplete="off" placeholder="请输入优惠券" className="h-9 bg-slate-50 text-xs sm:text-sm" />
+                  <Input id="checkout-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} maxLength={40} autoComplete="off" placeholder="请输入优惠券" className="h-9 bg-slate-50 text-base md:text-sm" />
                 </div>
 
                 <div className="shrink-0">
@@ -1092,12 +1160,12 @@ function CheckoutPageContent() {
                     value={customerNote}
                     onChange={(event) => setCustomerNote(event.target.value)}
                     placeholder={settings.default_order_note_hint}
-                    className="h-9 bg-slate-50 text-xs sm:text-sm"
+                    className="h-9 bg-slate-50 text-base md:text-sm"
                   />
                 </div>
 
               {isShippingProduct ? (
-                <div className="grid shrink-0 grid-cols-2 gap-2">
+                <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-xs font-medium">
                       <span className="text-red-500">*</span>收件人姓名
@@ -1106,7 +1174,7 @@ function CheckoutPageContent() {
                       value={customerName}
                       onChange={(event) => setCustomerName(event.target.value)}
                       placeholder="收件人姓名"
-                      className="h-9 w-full bg-slate-50 px-2.5 text-xs sm:text-sm"
+                      className="h-9 w-full bg-slate-50 px-2.5 text-base md:text-sm"
                     />
                   </div>
                   <div>
@@ -1119,10 +1187,10 @@ function CheckoutPageContent() {
                       placeholder="联系电话"
                       inputMode="tel"
                       autoComplete="tel"
-                      className="h-9 w-full bg-slate-50 px-2.5 text-xs sm:text-sm"
+                      className="h-9 w-full bg-slate-50 px-2.5 text-base md:text-sm"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <label className="mb-1 block text-xs font-medium">
                       <span className="text-red-500">*</span>详细地址
                     </label>
@@ -1134,7 +1202,7 @@ function CheckoutPageContent() {
                         setShippingRegion(nextAddress);
                       }}
                       placeholder="请输入省市区街道门牌等详细收货地址"
-                      className="h-9 w-full bg-slate-50 text-xs sm:text-sm"
+                      className="h-9 w-full bg-slate-50 text-base md:text-sm"
                     />
                   </div>
                 </div>
@@ -2477,7 +2545,7 @@ function GptPremadeAccountDetails({ product }: { product: Product }) {
           <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5">
             <div className="font-bold text-slate-900">Q: 为什么有时打开页面提示 "Access denied" (403)？</div>
             <div className="mt-1 text-slate-600">
-              这是 OpenAI 云盾风控系统对您当前代理节点 IP 的临时拦截，与账号本身无关。请切换至纯净优质的海外住宅代理节点，或开启浏览器无痕窗口重新刷新即可正常访问。
+              这是 OpenAI 安全防护系统对您当前网络出口 IP 的临时拦截，与账号本身无关。请切换至纯净稳定的海外网络环境，或开启浏览器无痕窗口重新刷新即可正常访问。
             </div>
           </div>
           <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5">
@@ -3459,6 +3527,8 @@ function ProductArtwork({ product }: { product: Product }) {
       <img
         src={imageSrc}
         alt={product.name}
+        fetchPriority="high"
+        decoding="async"
         className="h-full w-full rounded-2xl object-cover"
       />
     );

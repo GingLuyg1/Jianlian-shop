@@ -1,26 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, CreditCard, LogIn, LogOut, UserPlus } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
 import { accountNavigation } from "@/components/account/account-navigation";
+import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
 import { Button } from "@/components/ui/button";
-import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  getCurrentProfile,
-  getSupabaseBrowserClient,
-  hasSupabaseConfig,
-  type UserProfile,
-} from "@/lib/supabase/client";
 
 function getDisplayName(user: User | null) {
   if (!user?.email) return "我的账号";
@@ -33,85 +26,10 @@ function getDisplayName(user: User | null) {
 export default function MobileTopBarAuth() {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-
-  useEffect(() => {
-    if (!hasSupabaseConfig()) {
-      setAuthReady(true);
-      return;
-    }
-
-    const supabase = getSupabaseBrowserClient();
-    let mounted = true;
-
-    const loadSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!mounted) return;
-
-      if (session?.user) {
-        const nextProfile = await getCurrentProfile().catch(() => null);
-        setUser(session.user);
-        setProfile(nextProfile);
-      } else {
-        setUser(null);
-        setProfile(null);
-      }
-      setAuthReady(true);
-    };
-
-    void loadSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) {
-        setUser(null);
-        setProfile(null);
-        setAuthReady(true);
-      } else {
-        setUser(session.user);
-        getCurrentProfile()
-          .then((nextProfile) => {
-            setProfile(nextProfile);
-            setAuthReady(true);
-          })
-          .catch(() => setAuthReady(true));
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const refreshBalance = () => {
-      if (!user) return;
-      void getCurrentProfile()
-        .then((nextProfile) => {
-          if (active) setProfile(nextProfile);
-        })
-        .catch(() => {});
-    };
-    window.addEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
-    return () => {
-      active = false;
-      window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalance);
-    };
-  }, [user]);
+  const { user, authReady, balance, signOut } = usePublicAuthProfile();
 
   const handleSignOut = async () => {
-    const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
+    await signOut();
     router.push("/");
     router.refresh();
   };
@@ -123,8 +41,6 @@ export default function MobileTopBarAuth() {
       </div>
     );
   }
-
-  const balance = profile?.balance ?? 0;
 
   if (user) {
     return (

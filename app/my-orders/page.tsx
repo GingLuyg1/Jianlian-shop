@@ -1,5 +1,5 @@
-import MyOrdersPage from "@/app/account/orders/page";
+import { redirect } from "next/navigation";
 
 export default function LegacyMyOrdersPage() {
-  return <MyOrdersPage />;
+  redirect("/account/orders");
 }

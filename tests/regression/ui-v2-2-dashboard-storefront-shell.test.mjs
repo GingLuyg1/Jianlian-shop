@@ -64,8 +64,8 @@ test("Checkout purchase panel is compact and keeps the order contract intact", (
 
   assert.match(checkout, /--checkout-purchase-width:clamp\(327px,calc\(24vw-13px\),359px\)/);
   assert.match(checkout, /lg:grid-cols-\[minmax\(0,1fr\)_var\(--checkout-purchase-width\)\]/);
-  assert.match(checkout, /py-4/);
-  assert.match(checkout, /lg:h-\[calc\(100dvh-62px\)\]/);
+  assert.match(checkout, /py-(?:3|4)/);
+  assert.match(checkout, /lg:h-\[calc\(100dvh-(?:62|82)px\)\]/);
   assert.doesNotMatch(checkout, /xl:grid-cols-\[minmax\(0,1fr\)_430px\]/);
   assert.doesNotMatch(checkout, />商品购买</);
   assert.doesNotMatch(checkout, />商品使用教程</);
@@ -80,7 +80,7 @@ test("Checkout purchase panel is compact and keeps the order contract intact", (
   assert.ok(noteIndex < paymentIndex);
   assert.ok(paymentIndex < agreementIndex);
 
-  assert.match(checkout, /fetch\("\/api\/orders"/);
+  assert.match(checkout, /(?:fetch|fetchWithTimeout)\("\/api\/orders"/);
   assert.match(checkout, /client_request_id:/);
   assert.match(checkout, /customer_note: \[/);
   assert.match(checkout, /\r?\n\s*customerNote,\r?\n/);

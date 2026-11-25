@@ -16,7 +16,7 @@ const paidRechargeStatuses = new Set(["paid", "succeeded"]);
 const spendOrderStatuses = new Set(["paid", "processing", "delivered", "completed"]);
 const unfinishedOrderStatuses = new Set(["pending_payment", "paid", "processing", "delivered"]);
 
-export async function GET() {
+export async function GET(request?: Request) {
   if (!hasSupabaseServerConfig()) {
     return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 503 });
   }
@@ -28,6 +28,19 @@ export async function GET() {
   }
 
   const user = authData.user;
+  const liteMode = request ? new URL(request.url).searchParams.get("lite") === "1" : false;
+  if (liteMode) {
+    const profileResult = await loadProfile(supabase, user.id, user.email ?? null, user.created_at ?? null);
+    return NextResponse.json({
+      profile: profileResult.profile,
+      summary: {
+        availableBalance: getAccountAssetsAvailableBalance(profileResult.profile),
+      },
+      diagnostics: {
+        profileError: profileResult.error,
+      },
+    });
+  }
   const diagnostics: Record<string, string | boolean | null> = {
     profileError: null,
     orderError: null,

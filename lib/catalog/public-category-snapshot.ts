@@ -40,15 +40,13 @@ function persistSnapshot(rows: PublicCategory[]) {
   }
 }
 
-// 优先从 sessionStorage 恢复快照，消除退出商品详情页返回列表时侧边栏“资源中心”闪烁骨架屏
-const initialPersisted = loadPersistedSnapshot();
-const initialSnapshot: PublicCategorySnapshot =
-  initialPersisted && initialPersisted.rows.length > 0
-    ? { status: "ready", rows: initialPersisted.rows }
-    : { status: "idle", rows: null };
+// Always keep SSR / initial client snapshot static to eliminate React Hydration Mismatch;
+// persisted sessionStorage snapshot is hydrated inside useEffect after mount.
+const SERVER_SNAPSHOT: PublicCategorySnapshot = Object.freeze({ status: "idle", rows: null });
 
-let snapshot = initialSnapshot;
-let fetchedAt = initialPersisted ? initialPersisted.savedAt : 0;
+let snapshot: PublicCategorySnapshot = SERVER_SNAPSHOT;
+let fetchedAt = 0;
+let hydratedFromStorage = false;
 let pending: Promise<PublicCategory[]> | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
@@ -139,8 +137,18 @@ function onVisible() {
 }
 
 export function usePublicCategorySnapshot() {
-  const current = useSyncExternalStore(subscribe, () => snapshot, () => initialSnapshot);
+  const current = useSyncExternalStore(subscribe, () => snapshot, () => SERVER_SNAPSHOT);
   useEffect(() => {
+    if (!hydratedFromStorage) {
+      hydratedFromStorage = true;
+      if (snapshot.status === "idle") {
+        const persisted = loadPersistedSnapshot();
+        if (persisted && persisted.rows.length > 0) {
+          fetchedAt = persisted.savedAt;
+          publish({ status: "ready", rows: persisted.rows });
+        }
+      }
+    }
     void refreshPublicCategories().catch(() => undefined);
   }, []);
   return current;

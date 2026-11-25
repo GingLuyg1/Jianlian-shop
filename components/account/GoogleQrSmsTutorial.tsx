@@ -31,10 +31,20 @@ export default function GoogleQrSmsTutorial() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCode(label);
-    toast.success(`已复制 ${label}`);
-    setTimeout(() => setCopiedCode(null), 2000);
+    if (!navigator.clipboard?.writeText) {
+      toast.error("当前环境不支持一键复制，请手动复制");
+      return;
+    }
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopiedCode(label);
+        toast.success(`已复制 ${label}`);
+        setTimeout(() => setCopiedCode(null), 2000);
+      })
+      .catch(() => {
+        toast.error("复制失败，请手动复制");
+      });
   };
 
   return (

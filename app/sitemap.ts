@@ -13,10 +13,11 @@ const staticRoutes: Array<{
   { path: "/products/digital-accounts", changeFrequency: "daily", priority: 0.9 },
   { path: "/products/ai-membership", changeFrequency: "daily", priority: 0.9 },
   { path: "/products/gift-cards", changeFrequency: "daily", priority: 0.85 },
-  { path: "/products/sim-cards", changeFrequency: "weekly", priority: 0.85 },
+  { path: "/products/sim-cards", changeFrequency: "weekly", priority: 0.8 },
   { path: "/products/account-recharge", changeFrequency: "weekly", priority: 0.75 },
   { path: "/tutorials", changeFrequency: "weekly", priority: 0.8 },
-  { path: "/faq", changeFrequency: "weekly", priority: 0.7 },
+  { path: "/terms", changeFrequency: "weekly", priority: 0.4 },
+  { path: "/privacy", changeFrequency: "weekly", priority: 0.4 },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -25,14 +26,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     listSeoCategories().catch(() => []),
   ]);
 
-  // 仅包含有效且父级未停用的分类（若分类表可用）
+  // Walk full ancestor chain so disabled root/parent hides 2nd & 3rd level descendants.
   const activeCategoryIds = new Set<string>();
   if (categories.length > 0) {
     const byId = new Map(categories.map((c) => [c.id, c]));
     for (const c of categories) {
-      if (c.is_active === false) continue;
-      if (c.parent_id && !byId.has(c.parent_id)) continue;
-      activeCategoryIds.add(c.id);
+      let cursor: typeof c | undefined = c;
+      const seen = new Set<string>();
+      let ok = true;
+      while (cursor && !seen.has(cursor.id)) {
+        seen.add(cursor.id);
+        if (cursor.is_active === false) {
+          ok = false;
+          break;
+        }
+        if (cursor.parent_id) {
+          cursor = byId.get(cursor.parent_id);
+          if (!cursor) {
+            ok = false;
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      if (ok) activeCategoryIds.add(c.id);
     }
   }
 

@@ -60,7 +60,7 @@ const appealSteps = [
 ];
 
 const submitPrecautions = [
-  "模板中「身在中国的美国用户（As a United States user located in China）」等描述，请根据自己的真实使用情况微调，内容真实、简短更容易通过审核。",
+  "模板中的网络环境与地区变更说明，请根据自己的真实使用情况微调，内容真实、简短更容易通过审核。",
   "申诉理由请使用英文填写，直接复制下方英文模板修改后粘贴即可。",
   "只提交一次，切勿在短时间内反复重复提交，否则容易被系统直接忽略或加重风控。",
   "审核结果会发送到你填写的联系邮箱，等待期间请同时检查收件箱与垃圾邮件文件夹。",
@@ -86,7 +86,7 @@ function buildEnglishTemplate(accountEmail: string) {
   const email = accountEmail.trim() || "xxxx@gmail.com";
   return `Greetings,
 
-I am writing to inform you that my account is registered under the email address ${email}. As a United States user located in China, I find it necessary to employ a VPN proxy in order to access Google products. Regrettably, due to the instability and frequent toggling of the VPN, my account has been flagged and subsequently suspended. This account holds significant importance for me, and I sincerely hope that you could provide assistance in resolving this matter. Your help in this regard would be greatly appreciated.
+I am writing to inform you that my account is registered under the email address ${email}. Due to frequent network switching and an unstable shared IP connection while accessing Google products during travel, my account appears to have been flagged and suspended by mistake. This account holds significant importance for me, and I sincerely hope that you could review and help restore access. Your assistance in this matter would be greatly appreciated.
 
 Thank you very much.`;
 }
@@ -133,7 +133,7 @@ export default function GoogleAppealTutorial({
               Google 账号登录提示「账号已停用」怎么申诉？
             </h2>
             <p className="text-xs sm:text-sm leading-relaxed text-slate-600">
-              谷歌账号登录时提示<strong>「账号已停用」</strong>，最常见原因之一是代理节点（VPN）不稳定或频繁切换国家/地区，导致被 Google 安全系统判定为异常活动。遇到此情况可按以下 5 步提交官方申诉，并直接使用下方的<strong>英文申诉模板（支持一键复制）</strong>。
+              谷歌账号登录时提示<strong>「账号已停用」</strong>，最常见原因之一是网络环境不稳定或频繁切换国家/地区，导致被 Google 安全系统判定为异常活动。遇到此情况可按以下 5 步提交官方申诉，并直接使用下方的<strong>英文申诉模板（支持一键复制）</strong>。
             </p>
           </div>
         </div>
@@ -257,7 +257,7 @@ export default function GoogleAppealTutorial({
           {/* 中文释义 */}
           <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 p-4 text-xs sm:text-sm leading-relaxed text-slate-600">
             <span className="font-bold text-slate-800">中文意思：</span>
-            您好，我的账号是 <code className="rounded bg-white px-1.5 py-0.5 text-primary border border-orange-100">{resolvedEmail}</code>。我是身在中国的美国用户，需要使用 VPN 代理才能访问 Google 产品。由于 VPN 不稳定、频繁切换，我的账号被标记并停用了。这个账号对我非常重要，诚恳希望您能帮我解决这个问题，非常感谢您的帮助。
+            您好，我的账号是 <code className="rounded bg-white px-1.5 py-0.5 text-primary border border-orange-100">{resolvedEmail}</code>。因出行期间访问 Google 服务时网络环境不稳定、共享 IP 频繁切换，导致账号可能被系统误判停用。这个账号对我非常重要，诚恳希望您能协助复核并恢复访问，非常感谢您的帮助。
           </div>
         </div>
       </section>

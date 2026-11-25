@@ -47,6 +47,8 @@ import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import channelGridStyles from "./RechargeChannelGrid.module.css";
 import { usePaymentCardTilt } from "@/hooks/use-payment-card-tilt";
+import { createSafeUuid } from "@/lib/browser/safe-storage";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 
 type RechargeListError = {
   message: string;
@@ -250,19 +252,23 @@ export default function AccountRechargeContent() {
     clientRequestIdRef.current = null;
   };
 
+  const createRechargeLockRef = useRef(false);
+
   const createRecharge = async () => {
+    if (createRechargeLockRef.current || isSubmitting) return;
     if (!selectedChannel || (!summary && !isUsdtCnyRecharge)) return;
     if (channelOverLimit) {
       setAmountLimitDialogOpen(true);
       return;
     }
     if (!canSubmit) return;
+    createRechargeLockRef.current = true;
     setIsSubmitting(true);
     setSubmitMessage(null);
 
     try {
       clientRequestIdRef.current ||= createClientRequestId();
-      const response = await fetch("/api/recharges", {
+      const response = await fetchWithTimeout("/api/recharges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -274,6 +280,12 @@ export default function AccountRechargeContent() {
           client_request_id: clientRequestIdRef.current,
         }),
       });
+      if (response.status === 401) {
+        toast.error("登录状态已失效，请重新登录后再充值");
+        const nextUrl = typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : "/products/account-recharge";
+        router.replace(`/login?redirect=${encodeURIComponent(nextUrl)}`);
+        return;
+      }
       const result = (await response.json().catch(() => null)) as
         | { error?: string; rechargeNo?: string; paymentType?: string; paymentUrl?: string; submitForm?: PaymentSubmitForm }
         | null;
@@ -294,6 +306,7 @@ export default function AccountRechargeContent() {
     } catch (error) {
       toast.error(getClientErrorMessage(error));
     } finally {
+      createRechargeLockRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -505,8 +518,7 @@ function SummaryItem({ icon: Icon, label, value }: { icon: LucideIcon; label: st
 }
 
 function createClientRequestId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return createSafeUuid();
 }
 
 function RecordLine({ label, value }: { label: string; value: string }) {
@@ -587,8 +599,10 @@ function RechargeProofForm({ record, onSubmitted }: { record: RechargeRecord; on
   const [paymentTime, setPaymentTime] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const proofLockRef = useRef(false);
   async function submit() {
-    if (submitting) return;
+    if (proofLockRef.current || submitting) return;
+    proofLockRef.current = true;
     setSubmitting(true);
     try {
       const form = new FormData();
@@ -598,12 +612,12 @@ function RechargeProofForm({ record, onSubmitted }: { record: RechargeRecord; on
       form.set("paymentTime", paymentTime);
       form.set("userNote", note);
       files.forEach((file) => form.append("files", file));
-      const response = await fetch(`/api/recharges/${encodeURIComponent(record.rechargeNo)}/proof`, { method: "POST", body: form });
+      const response = await fetchWithTimeout(`/api/recharges/${encodeURIComponent(record.rechargeNo)}/proof`, { method: "POST", body: form });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || "凭证提交失败，请稍后重试。");
       setOpen(false); setFiles([]); setReference(""); setPayer(""); setPaymentTime(""); setNote(""); onSubmitted();
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "凭证提交失败，请稍后重试。"); }
-    finally { setSubmitting(false); }
+    finally { proofLockRef.current = false; setSubmitting(false); }
   }
   return <div className="mt-3 border-t pt-3">{!open ? <Button size="sm" variant="outline" onClick={() => setOpen(true)}>{record.status === "submitted" ? "补充支付凭证" : "提交支付凭证"}</Button> : <div className="space-y-2 rounded-lg border bg-white p-3"><div className="text-xs text-slate-500">付款金额：{formatPaymentAmount(record.payableAmount, record.currency)}</div><Input value={reference} maxLength={160} onChange={(e) => setReference(e.target.value)} placeholder="交易流水号" /><Input value={payer} maxLength={120} onChange={(e) => setPayer(e.target.value)} placeholder="付款账号摘要（请勿填写完整敏感信息）" /><Input type="datetime-local" value={paymentTime} onChange={(e) => setPaymentTime(e.target.value)} /><Input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="用户备注（可选）" /><Input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 3))} /><p className="text-xs text-slate-500">支持 JPG、PNG、WEBP、PDF，单个最大 5MB，最多 3 个。</p><div className="flex gap-2"><Button size="sm" disabled={submitting} onClick={() => void submit()}>{submitting ? "提交中..." : "提交审核"}</Button><Button size="sm" variant="outline" disabled={submitting} onClick={() => setOpen(false)}>取消</Button></div></div>}</div>;
 }

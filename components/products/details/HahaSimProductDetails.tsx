@@ -171,7 +171,7 @@ export default function HahaSimProductDetails({ product }: HahaSimProductDetails
           </div>
 
           <Link
-            href="/tutorials/haha-sim"
+            href="/tutorials?topic=haha-sim"
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-amber-800 shadow-xl shadow-amber-950/20 transition-all hover:scale-[1.03] hover:bg-amber-50 active:scale-[0.98] shrink-0"
           >
             <span>直达官方使用教程</span>

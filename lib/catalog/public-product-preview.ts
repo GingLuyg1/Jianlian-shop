@@ -65,15 +65,18 @@ export function peekPublicProductPreview(id: string, now = Date.now()): PublicPr
   if (entry && now - entry.savedAt < TTL) {
     return entry.product;
   }
+  if (entry) entries.delete(id);
+  return null;
+}
 
-  // 内存中没有或过期时，尝试从 sessionStorage 快速恢复
+export function peekPublicProductPreviewFromStorage(id: string, now = Date.now()): PublicProductRow | null {
+  const inMemory = peekPublicProductPreview(id, now);
+  if (inMemory) return inMemory;
   const stored = safeSessionGet(id);
   if (stored && now - stored.savedAt < TTL) {
     entries.set(id, stored);
     return stored.product;
   }
-
-  if (entry) entries.delete(id);
   return null;
 }
 

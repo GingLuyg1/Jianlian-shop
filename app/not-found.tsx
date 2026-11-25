@@ -1,9 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertCircle, Home, PackageSearch } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "页面不存在",
+  description: "你访问的页面可能已移动、删除，或商品当前不可展示。",
+  path: "/404",
+  noIndex: true,
+});
 
 export default function NotFound() {
   return (

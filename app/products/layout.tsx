@@ -4,8 +4,8 @@ import { buildPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "商品分类",
-  description: "浏览 Jianlian Shop 的数字账号、AI 会员、礼品卡和国际 SIM 卡等优质数字商品。",
-  path: "/products/digital-accounts",
+  description: "浏览 Jianlian Shop 的 AI 会员、精选数字账号与全球礼品卡等优质数字商品。",
+  path: "./",
 });
 
 export default function ProductsLayout({

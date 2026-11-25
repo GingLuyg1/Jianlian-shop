@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
+import { useIsomorphicLayoutEffect } from "@/hooks/use-isomorphic-layout-effect";
 
 import { centeredScrollTop, wheelVisual, WHEEL_CONFIG } from "@/lib/motion/progressive-wheel";
 
@@ -17,7 +18,7 @@ export function useProgressiveWheelMotion({ activeId, contentKey, resetKey, minS
   const scheduleRef = useRef<() => void>(() => undefined);
   const previousResetKey = useRef(resetKey);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     if (previousResetKey.current !== resetKey) {

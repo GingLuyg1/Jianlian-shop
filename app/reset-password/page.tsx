@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,7 @@ export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -45,7 +46,7 @@ export default function ResetPasswordPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || submitLockRef.current) return;
 
     setError("");
     const passwordError = validateAuthPassword(password);
@@ -58,23 +59,30 @@ export default function ResetPasswordPage() {
       return;
     }
 
+    submitLockRef.current = true;
     setSubmitting(true);
-    const { error: updateError } = await getSupabaseBrowserClient().auth.updateUser({
-      password,
-    });
-    if (updateError) {
+    try {
+      const { error: updateError } = await getSupabaseBrowserClient().auth.updateUser({
+        password,
+      });
+      if (updateError) {
+        setPassword("");
+        setConfirmPassword("");
+        setError("重置链接已失效或密码更新失败，请重新发送重置邮件。");
+        return;
+      }
+
+      toast.success("密码已重置，请重新登录。");
       setPassword("");
       setConfirmPassword("");
-      setError("重置链接已失效或密码更新失败，请重新发送重置邮件。");
+      await getSupabaseBrowserClient().auth.signOut({ scope: "global" }).catch(() => undefined);
+      router.replace("/login");
+    } catch {
+      setError("网络异常，密码重置失败，请稍后重试。");
+    } finally {
+      submitLockRef.current = false;
       setSubmitting(false);
-      return;
     }
-
-    toast.success("密码已重置，请重新登录。");
-    setPassword("");
-    setConfirmPassword("");
-    await getSupabaseBrowserClient().auth.signOut({ scope: "global" });
-    router.replace("/login");
   }
 
   return (

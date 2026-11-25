@@ -63,7 +63,7 @@ export default function GiffgaffActivationTutorial() {
       <Section title="四、发短信、打电话格式"><p>国际号码通常使用「+国家代码 + 号码」。例如英国号码可写为 <code className="rounded bg-slate-100 px-1.5">+44…</code>；实际短信和通话资费按漫游地区计费。</p><p>拨号键长按 0 通常可输入「+」。若通话提示受到限制，可检查网络选择、漫游状态和国际拨号格式。</p></Section>
       <Section title="五、查询本机号码"><p>可在 <External href={links.account}>Giffgaff 官网</External> 或 App 查询号码、余额和套餐。部分教程介绍将短信 <code className="rounded bg-slate-100 px-1.5">number</code> 发往 <code className="rounded bg-slate-100 px-1.5">2020</code> 查询本机号码，操作前请确认短信费用。</p><p>查询后将号码保存到手机联系人，避免在切换 SIM 时混淆。</p></Section>
       <Section title="六、更改邮箱、密码"><p>更改邮箱可进入 <External href={links.email}>官方邮箱设置</External>；密码请在官方账户安全设置中修改或使用找回流程。</p><p>修改资料时不要复用其他网站密码，也不要把验证码发给他人。</p></Section>
-      <Section title="七、收不到短信"><p>先确认有信号，能收到官方短信表示号码可以正常使用，例如登录官网时收到验证码短信。</p><p>如果只有注册平台收不到短信，常见原因是代理 IP 或 VPN 质量问题，请更换更干净的网络后重试；仍有问题时联系平台客服或 Giffgaff 官方支持。</p></Section>
+      <Section title="七、收不到短信"><p>先确认有信号，能收到官方短信表示号码可以正常使用，例如登录官网时收到验证码短信。</p><p>如果只有注册平台收不到短信，常见原因是当前网络环境或共享出口 IP 质量问题，请更换更干净的网络后重试；仍有问题时联系平台客服或 Giffgaff 官方支持。</p></Section>
     </div>
 
     <Section title="八、更换号码"><p>如需随机更换号码，可查看 <External href={links.number}>官方更换号码页面</External>。操作前确认页面的次数、时段与生效规则。</p></Section>

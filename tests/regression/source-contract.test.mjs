@@ -134,7 +134,7 @@ test("order creation stays behind the hardened RPC and does not require direct o
   const migration = file("supabase/migrations/20260714_order_creation_rls_rpc_hardening.sql");
   const verification = file("docs/order-creation-rls-rpc-verification.sql");
 
-  assert.match(checkout, /fetch\("\/api\/orders"/);
+  assert.match(checkout, /(?:fetch|fetchWithTimeout)\("\/api\/orders"/);
   assert.doesNotMatch(checkout, /\.from\(["']orders["']\)/);
   assert.match(route, /supabase\.rpc\("create_order_with_item", orderPayload\)/);
   assert.doesNotMatch(route, /\.from\("orders"\)\s*\.insert\(/);
@@ -515,8 +515,10 @@ test("BEP20 valid overpayment uses one service-role atomic settlement and existi
   assert.match(paymentPage, /session\.overpaymentCredit\.overpaidUsdt/);
   assert.match(paymentPage, /session\.overpaymentCredit\.creditedCny/);
   assert.match(paymentPage, /notifyAccountBalanceUpdated\(\)/);
-  assert.match(topBar, /ACCOUNT_BALANCE_UPDATED_EVENT/);
-  assert.match(topBar, /getCurrentProfile\(\)/);
+  const authProvider = file("components/auth/AuthProfileProvider.tsx");
+  assert.match(authProvider, /ACCOUNT_BALANCE_UPDATED_EVENT/);
+  assert.match(authProvider, /getCurrentProfile\(/);
+  assert.match(topBar, /usePublicAuthProfile\(\)/);
   assert.match(balanceEvents, /window\.dispatchEvent\(new Event\(ACCOUNT_BALANCE_UPDATED_EVENT\)\)/);
   assert.match(orderSummary, /session\?\.overpaymentCredit/);
   assert.match(adminRoute, /settlement_source/);
@@ -1770,8 +1772,10 @@ test("legal checkout requires versioned agreements and server-side recording", (
   assert.match(migration, /order_evidence_events/);
   assert.match(migration, /content_hash/);
   assert.match(migration, /deny direct agreement writes/i);
+  const legalClientCache = file("lib/legal/client-legal-cache.ts");
   assert.match(checkout, /useState\(false\)/);
-  assert.match(checkout, /\/api\/legal\/current/);
+  assert.match(checkout, /fetchCurrentLegalDocuments\(\)/);
+  assert.match(legalClientCache, /\/api\/legal\/current/);
   assert.match(checkout, /agreement_version_ids/);
   assert.match(orders, /verifyCheckoutAgreements/);
   assert.match(orders, /recordOrderAgreementAcceptances/);
@@ -1883,8 +1887,8 @@ test("BEP20 order details render a compact payment summary without creating sess
   assert.match(orderDetail, /<Bep20OrderPaymentSummary order=\{order\} onUpdated=\{loadOrder\} \/>/);
   assert.match(summary, /String\(order\.payment_method \?\? ""\)\.toLowerCase\(\) === "usdt_bep20"/);
 
-  assert.match(summary, /fetch\(`\/api\/payments\/bep20\/session\?order=\$\{encodeURIComponent\(order\.order_no\)\}`,\s*\{ cache: "no-store" \}\)/);
-  assert.match(summary, /fetch\("\/api\/payments\/bep20\/session",\s*\{[\s\S]*?method: "POST"/);
+  assert.match(summary, /(?:fetch|fetchWithTimeout)\(`\/api\/payments\/bep20\/session\?order=\$\{encodeURIComponent\(order\.order_no\)\}`,\s*\{ cache: "no-store" \}\)/);
+  assert.match(summary, /(?:fetch|fetchWithTimeout)\("\/api\/payments\/bep20\/session",\s*\{[\s\S]*?method: "POST"/);
   assert.match(summary, /AlertDialog/);
   assert.match(summary, /确认重新生成支付单？/);
   assert.match(summary, /重新生成后将创建新的 15 分钟支付会话/);
@@ -2261,7 +2265,7 @@ test("order API keeps an RPC-created order successful when agreement evidence is
   assert.match(checkout, /if \(!clientRequestIdRef\.current\)/);
   assert.match(checkout, /client_request_id: clientRequestIdRef\.current/);
   assert.doesNotMatch(checkout, /clientRequestIdRef\.current\s*=\s*["']{2}\s*;/);
-  assert.match(checkout, /if \(orderNo\) \{\s*router\.push\(`\/payment\?order=/);
+  assert.match(checkout, /if \(orderNo\) \{[\s\S]{0,80}router\.push\(`\/payment\?order=/);
   assert.match(checkout, /if \(!productRow \|\| submitLoading \|\| submissionGuardRef\.current\.isActive\(\)\) return/);
   assert.match(checkout, /balanceSubmissionBlockReason !== "BALANCE_INSUFFICIENT"/);
   assert.match(checkout, /setBalanceDialogOpen\(true\)/);
@@ -2393,8 +2397,8 @@ test("checkout reads CNY balance and keeps insufficient-balance retries on the o
   const checkout = file("app/checkout/page.tsx");
   const flow = file("lib/checkout/balance-flow.mjs");
 
-  assert.match(checkout, /fetch\("\/api\/account\/assets", \{ cache: "no-store" \}\)/);
-  assert.match(checkout, /window\.addEventListener\("focus", refreshBalance\)/);
+  assert.match(checkout, /(?:fetch|fetchWithTimeout)\("\/api\/account\/assets(?:\?lite=1)?", \{ cache: "no-store" \}\)/);
+  assert.match(checkout, /window\.addEventListener\("focus", (?:refreshBalance|refreshBalanceOnFocus)\)/);
   assert.match(checkout, /ACCOUNT_BALANCE_UPDATED_EVENT/);
   assert.match(checkout, /balanceSubmissionBlockReason/);
   assert.match(checkout, /balanceSubmissionBlockReason !== "BALANCE_INSUFFICIENT"/);
@@ -2404,13 +2408,13 @@ test("checkout reads CNY balance and keeps insufficient-balance retries on the o
   assert.match(checkout, /\/products\/account-recharge\?returnTo=/);
   assert.match(checkout, /balance_insufficient_existing_order/);
   assert.match(checkout, /existing_order_payment_error/);
-  assert.match(checkout, /window\.sessionStorage\.setItem\(checkoutSessionKey/);
+  assert.match(checkout, /(?:window\.sessionStorage\.setItem|safeSessionStorageSet)\(checkoutSessionKey/);
   assert.match(checkout, /clientRequestIdRef\.current = requestId/);
   assert.match(checkout, /继续支付原订单/);
-  assert.match(checkout, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(stored\.orderNo\)\}`/);
+  assert.match(checkout, /(?:fetch|fetchWithTimeout)\(`\/api\/orders\/\$\{encodeURIComponent\(stored\.orderNo\)\}`/);
   assert.match(checkout, /classifyRetainedCheckoutOrder\(payload, stored\.orderNo\)/);
   assert.match(checkout, /retained\.kind === "terminal"/);
-  assert.match(checkout, /window\.sessionStorage\.removeItem\(checkoutSessionKey\)/);
+  assert.match(checkout, /(?:window\.sessionStorage\.removeItem|safeSessionStorageRemove)\(checkoutSessionKey\)/);
   assert.match(checkout, /setPendingBalanceOrder\(null\)/);
   assert.match(checkout, /clientRequestIdRef\.current = createCheckoutClientRequestId\(\)/);
   assert.match(checkout, /setEmail\(restoredOrder\.customerEmail\)/);

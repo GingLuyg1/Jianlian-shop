@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AlertCircle, FileLock2, LogOut } from "lucide-react";
@@ -8,7 +8,9 @@ import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
+import { useIsomorphicLayoutEffect } from "@/hooks/use-isomorphic-layout-effect";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import { Button } from "@/components/ui/button";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -32,6 +34,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   const [resendSeconds, setResendSeconds] = useState(0);
   const redirectPath = useMemo(() => pathname || "/account", [pathname]);
   const contentRef = useRef<HTMLDivElement>(null);
+  const resendLockRef = useRef(false);
 
   useEffect(() => {
     const desktopQuery = window.matchMedia("(min-width: 768px)");
@@ -58,45 +61,56 @@ export default function AccountShell({ children }: { children: ReactNode }) {
     let active = true;
 
     async function checkSession() {
-      const urlText = `${window.location.search}${window.location.hash}`;
-      if (urlText.includes("error") || urlText.includes("error_code")) {
-        toast.error("邮箱确认失败或链接已失效，请重新发送验证邮件。");
-        window.history.replaceState(null, "", window.location.pathname);
-      }
+      try {
+        const urlText = `${window.location.search}${window.location.hash}`;
+        if (urlText.includes("error") || urlText.includes("error_code")) {
+          toast.error("邮箱确认失败或链接已失效，请重新发送验证邮件。");
+          window.history.replaceState(null, "", window.location.pathname);
+        }
 
-      if (!hasSupabaseConfig()) {
-        if (isOrdersPage) { setOrdersLoginRequired(true); setChecking(false); return; }
-        router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
-        return;
-      }
+        if (!hasSupabaseConfig()) {
+          if (isOrdersPage) { setOrdersLoginRequired(true); setChecking(false); return; }
+          router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+          return;
+        }
 
-      const supabase = getSupabaseBrowserClient();
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session?.user && active) {
-        setEmail(sessionData.session.user.email ?? "");
+        const supabase = getSupabaseBrowserClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.user && active) {
+          setEmail(sessionData.session.user.email ?? "");
+          setOrdersLoginRequired(false);
+          setEmailVerified(Boolean(sessionData.session.user.email_confirmed_at));
+          setChecking(false);
+        }
+
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
+
+        if (!active) return;
+
+        if (error || !user) {
+          if (isOrdersPage) { setOrdersLoginRequired(true); setChecking(false); return; }
+          toast.error("登录状态已失效，请重新登录。");
+          router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+          return;
+        }
+
+        setEmail(user.email ?? "");
         setOrdersLoginRequired(false);
-        setEmailVerified(Boolean(sessionData.session.user.email_confirmed_at));
+        setEmailVerified(Boolean(user.email_confirmed_at));
         setChecking(false);
+      } catch {
+        if (!active) return;
+        if (isOrdersPage) {
+          setOrdersLoginRequired(true);
+          setChecking(false);
+        } else {
+          setChecking(false);
+          router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+        }
       }
-
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-
-      if (!active) return;
-
-      if (error || !user) {
-        if (isOrdersPage) { setOrdersLoginRequired(true); setChecking(false); return; }
-        toast.error("登录状态已失效，请重新登录。");
-        router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
-        return;
-      }
-
-      setEmail(user.email ?? "");
-      setOrdersLoginRequired(false);
-      setEmailVerified(Boolean(user.email_confirmed_at));
-      setChecking(false);
     }
 
     checkSession();
@@ -141,9 +155,10 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   }
 
   async function resendVerification() {
-    if (!email || resendSeconds > 0) return;
+    if (!email || resendSeconds > 0 || resendLockRef.current) return;
+    resendLockRef.current = true;
     try {
-      const response = await fetch("/api/auth/resend-verification", {
+      const response = await fetchWithTimeout("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -153,6 +168,8 @@ export default function AccountShell({ children }: { children: ReactNode }) {
       toast.success(payload?.alreadyVerified ? "邮箱已经完成验证。" : "验证邮件已发送，请检查邮箱。");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "验证邮件发送失败，请稍后重试。");
+    } finally {
+      resendLockRef.current = false;
     }
   }
 
@@ -269,7 +286,7 @@ function AccountNav({ compact, pathname }: { compact?: boolean; pathname: string
   const [loadingHref, setLoadingHref] = useState<string>("");
   const [pulseHref, setPulseHref] = useState<string>("");
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const list = listRef.current;
     const indicator = indicatorRef.current;
     if (!list || !indicator) return;

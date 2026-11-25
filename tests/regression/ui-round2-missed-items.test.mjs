@@ -44,7 +44,7 @@ test("checkout preserves shipping_address API contract while spanning full row f
   assert.doesNotMatch(checkout, /placeholder="例如：广东省 深圳市 南山区"/);
   assert.doesNotMatch(checkout, /slice\(0,\s*24\)/);
   assert.match(checkout, /shippingRegion\.trim\(\) === shippingAddress\.trim\(\)/);
-  assert.match(checkout, /<div className="sm:col-span-2">\s*<label className="mb-1\.5 block text-xs font-medium">\s*<span className="text-red-500">\*<\/span>详细地址/);
+  assert.match(checkout, /<div className="sm:col-span-2">\s*<label className="mb-(?:1|1\.5) block text-xs font-medium">\s*<span className="text-red-500">\*<\/span>详细地址/);
   assert.match(checkout, /placeholder="请输入省市区街道门牌等详细收货地址"/);
 });
 

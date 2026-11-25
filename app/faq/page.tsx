@@ -141,7 +141,7 @@ export default function FAQPage() {
         return;
       }
       if (!response.ok) return;
-      const payload = (await response.json()) as { tickets?: TicketItem[] };
+      const payload = (await response.json().catch(() => ({}))) as { tickets?: TicketItem[] };
       setIsAuthenticated(true);
       setTickets(Array.isArray(payload.tickets) ? payload.tickets : []);
     } catch {}
@@ -154,17 +154,40 @@ export default function FAQPage() {
 
   // 读取 Supabase 用户邮箱
   useEffect(() => {
+    let active = true;
     const supabase = getSupabaseBrowserClient();
-    supabase.auth.getSession().then(({ data }) => {
-      const user = data.session?.user;
-      setIsAuthenticated(Boolean(user));
-      const email = user?.email;
-      if (email) {
-        setUserEmail(email);
-        setFormData((prev) => ({ ...prev, email }));
-      }
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        const user = data.session?.user;
+        setIsAuthenticated(Boolean(user));
+        const email = user?.email;
+        if (email) {
+          setUserEmail(email);
+          setFormData((prev) => ({ ...prev, email }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, []);
+
+  // 大图预览支持 Esc 关闭与背景滚动锁定
+  useEffect(() => {
+    if (!previewImage) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewImage(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [previewImage]);
 
   // 当前选中工单
   const currentTicket = useMemo(() => {
@@ -397,8 +420,18 @@ export default function FAQPage() {
 
   // 复制工单号
   const handleCopyId = (id: string) => {
-    navigator.clipboard?.writeText(id);
-    toast.success(`已复制工单号：${id}`);
+    if (!navigator.clipboard?.writeText) {
+      toast.error("当前环境不支持一键复制，请手动复制工单号");
+      return;
+    }
+    navigator.clipboard
+      .writeText(id)
+      .then(() => {
+        toast.success(`已复制工单号：${id}`);
+      })
+      .catch(() => {
+        toast.error("复制失败，请手动复制工单号");
+      });
   };
 
   return (

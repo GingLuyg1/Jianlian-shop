@@ -31,6 +31,7 @@ import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import { isRechargePastDue } from "@/lib/payments/recharge-expiry.mjs";
 import { rechargeStatusLabel, type RechargeRecord } from "@/lib/payments/recharge-utils";
 import { openPublicSupport } from "@/lib/support/open-public-support";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/i18n/money";
 
@@ -147,7 +148,9 @@ function getBep20SessionStatusText(session: Bep20ChainSession) {
 
 function secondsLeft(expiresAt?: string | null) {
   if (!expiresAt) return 0;
-  return Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  const target = new Date(expiresAt).getTime();
+  if (!Number.isFinite(target)) return 0;
+  return Math.max(0, Math.floor((target - Date.now()) / 1000));
 }
 
 const QR_VERSION_3_SIZE = 29;
@@ -408,33 +411,16 @@ function localQrCells(value: string) {
 }
 
 function LocalAddressQr({ value }: { value: string }) {
-  const cells = useMemo(() => localQrCells(value), [value]);
-  const quiet = 4;
-  const moduleSize = 6;
-  const size = cells.length + quiet * 2;
+  const safeValue = String(value ?? "").trim();
+  if (!safeValue) return null;
   return (
-    <svg
-      viewBox={`0 0 ${size * moduleSize} ${size * moduleSize}`}
+    <div
       role="img"
       aria-label="USDT-BEP20 收款地址本地二维码"
-      className="mx-auto h-[180px] w-[180px] rounded-lg bg-white"
+      className="mx-auto flex h-[180px] w-[180px] items-center justify-center rounded-lg bg-white p-2"
     >
-      <rect width={size * moduleSize} height={size * moduleSize} fill="#fff" />
-      {cells.map((row, y) =>
-        row.map((active, x) =>
-          active ? (
-            <rect
-              key={`${x}-${y}`}
-              x={(x + quiet) * moduleSize}
-              y={(y + quiet) * moduleSize}
-              width={moduleSize}
-              height={moduleSize}
-              fill="#111827"
-            />
-          ) : null
-        )
-      )}
-    </svg>
+      <QRCodeSVG value={safeValue} size={164} level="M" bgColor="#ffffff" fgColor="#111827" />
+    </div>
   );
 }
 
@@ -477,6 +463,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   const pollStartedAt = useRef(0);
   const pollInFlight = useRef(false);
   const statusRef = useRef("");
+  const verifyRechargeInFlight = useRef(false);
   const balanceNotificationRechargeRef = useRef("");
 
   const loadRecharge = useCallback(async (options: { silent?: boolean } = {}) => {
@@ -573,12 +560,13 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
   }
 
   async function verifyRechargeTxHash() {
-    if (!txHashValid || verifying || !canSubmitRechargeTxHash) return;
+    if (!txHashValid || verifying || verifyRechargeInFlight.current || !canSubmitRechargeTxHash) return;
+    verifyRechargeInFlight.current = true;
     setVerifying(true);
     setError("");
     setVerifyMessage("");
     try {
-      const response = await fetch(`/api/recharges/${encodeURIComponent(rechargeNo)}/bep20/verify`, {
+      const response = await fetchWithTimeout(`/api/recharges/${encodeURIComponent(rechargeNo)}/bep20/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash: txHash.trim() }),
@@ -586,12 +574,17 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
       const payload = (await response.json().catch(() => null)) as
         | { error?: string; actualReceivedUsdt?: string; creditedCnyAmount?: string }
         | null;
+      if (response.status === 401) {
+        router.push(`/login?redirect=${encodeURIComponent(`/payment?recharge=${rechargeNo}`)}`);
+        return;
+      }
       if (!response.ok) throw new Error(payload?.error ?? "链上交易核验失败");
       setVerifyMessage("TxHash 已提交核验，请勿重复付款。页面会继续自动刷新充值状态。");
       await loadRecharge({ silent: true });
     } catch (verifyError) {
       toast.error(getOrderErrorMessage(verifyError, "链上交易核验失败"));
     } finally {
+      verifyRechargeInFlight.current = false;
       setVerifying(false);
     }
   }
@@ -695,7 +688,7 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                       value={txHash}
                       onChange={(event) => setTxHash(event.target.value)}
                       placeholder="0x 开头的 32 字节交易哈希"
-                      className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-sm outline-none focus:border-primary"
+                      className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary"
                     />
                     {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
                     {verifyMessage ? <div className="text-sm text-emerald-700">{verifyMessage}</div> : null}
@@ -768,7 +761,11 @@ function LiuhaoyiRechargePaymentPanel({
   }, []);
 
   useEffect(() => {
-    if (createStarted.current || completed || expired) {
+    if (completed || expired) {
+      setLoading(false);
+      return;
+    }
+    if (createStarted.current && session) {
       setLoading(false);
       return;
     }
@@ -776,7 +773,7 @@ function LiuhaoyiRechargePaymentPanel({
     let active = true;
     void (async () => {
       try {
-        const response = await fetch("/api/payments/create", {
+        const response = await fetchWithTimeout("/api/payments/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ businessType: "recharge", businessNo: recharge.rechargeNo, channel }),
@@ -797,22 +794,46 @@ function LiuhaoyiRechargePaymentPanel({
         if (active) setLoading(false);
       }
     })();
-    return () => { active = false; };
-  }, [channel, completed, expired, recharge.rechargeNo]);
+    return () => {
+      active = false;
+      if (!session) createStarted.current = false;
+    };
+  }, [channel, completed, expired, recharge.rechargeNo, session]);
 
   useEffect(() => {
     if (!session?.sessionNo || completed || expired) return;
     let stopped = false;
-    const timer = window.setInterval(() => {
-      void (async () => {
-        const response = await fetch(`/api/payments/status/${encodeURIComponent(session.sessionNo)}`, { cache: "no-store" });
+    let inFlight = false;
+    let timer: number | null = null;
+    const schedule = () => {
+      if (stopped) return;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => void poll(), document.hidden ? 15000 : 4000);
+    };
+    const poll = async () => {
+      if (stopped || inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetchWithTimeout(`/api/payments/status/${encodeURIComponent(session.sessionNo)}`, { cache: "no-store" });
         const payload = await response.json().catch(() => null) as PaymentStatus | null;
         if (stopped || !response.ok || !payload) return;
         setSessionStatus(payload.status);
-        if (payload.status === "paid") await onRechargeChanged();
-      })();
-    }, 4000);
-    return () => { stopped = true; window.clearInterval(timer); };
+        if (payload.status === "paid") {
+          await onRechargeChanged();
+          return;
+        }
+      } catch {
+        // Network error on a single poll must not throw unhandled rejection.
+      } finally {
+        inFlight = false;
+      }
+      schedule();
+    };
+    schedule();
+    return () => {
+      stopped = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [completed, expired, onRechargeChanged, session?.sessionNo]);
 
   if (completed) {
@@ -1018,14 +1039,18 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
     [channels, selectedChannel]
   );
 
+  const createSessionInFlight = useRef(false);
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
+
   async function createSession(channelCode = selectedChannel) {
-    if (!order || !channelCode || creatingSession) return;
+    if (!order || !channelCode || creatingSession || createSessionInFlight.current) return;
+    createSessionInFlight.current = true;
     setCreatingSession(true);
     setError("");
     setSession(null);
     setPaymentStatus(null);
     try {
-      const response = await fetch("/api/payments/create", {
+      const response = await fetchWithTimeout("/api/payments/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1034,6 +1059,10 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
           channel: channelCode,
         }),
       });
+      if (response.status === 401) {
+        router.push(`/login?redirect=${encodeURIComponent(`/payment?order=${order.order_no}`)}`);
+        return;
+      }
       const result = (await response.json().catch(() => null)) as (PaymentSession & { error?: string }) | null;
       if (!response.ok) throw new Error(result?.error ?? "支付会话创建失败");
       setSession(result);
@@ -1041,6 +1070,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
       externalSessionStarted.current = "";
       toast.error(getOrderErrorMessage(sessionError, "支付会话创建失败"));
     } finally {
+      createSessionInFlight.current = false;
       setCreatingSession(false);
     }
   }
@@ -1123,7 +1153,11 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
   }, [loadOrder, order?.order_no, txHash]);
 
   async function queryStatus(sessionNo: string) {
-    const response = await fetch(`/api/payments/status/${encodeURIComponent(sessionNo)}`, { cache: "no-store" });
+    const response = await fetchWithTimeout(`/api/payments/status/${encodeURIComponent(sessionNo)}`, { cache: "no-store" });
+    if (response.status === 401 && order?.order_no) {
+      router.push(`/login?redirect=${encodeURIComponent(`/payment?order=${order.order_no}`)}`);
+      return null;
+    }
     const result = (await response.json().catch(() => null)) as (PaymentStatus & { error?: string }) | null;
     if (!response.ok) throw new Error(result?.error ?? "支付状态查询失败");
     setPaymentStatus(result);
@@ -1133,23 +1167,38 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
     return result;
   }
 
+  async function handleManualRefreshStatus(sessionNo: string) {
+    if (refreshingStatus) return;
+    setRefreshingStatus(true);
+    try {
+      await queryStatus(sessionNo);
+    } catch (refreshError) {
+      toast.error(getOrderErrorMessage(refreshError, "支付状态查询失败，请稍后重试"));
+    } finally {
+      setRefreshingStatus(false);
+    }
+  }
+
   useEffect(() => {
     if (!session?.sessionNo) return;
     if (pollTimer.current) window.clearTimeout(pollTimer.current);
 
     let stopped = false;
     const tick = async () => {
-      if (stopped || document.hidden) {
+      if (stopped) return;
+      if (document.hidden) {
         pollTimer.current = window.setTimeout(tick, 8000);
         return;
       }
 
       try {
         const status = await queryStatus(session.sessionNo);
+        if (stopped) return;
         if (["paid", "failed", "expired", "closed"].includes(String(status?.status))) return;
       } catch {
         // 单次状态查询失败不打断收银台，下一轮继续。
       }
+      if (stopped) return;
       pollTimer.current = window.setTimeout(tick, 5000);
     };
 
@@ -1424,9 +1473,13 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                       </div>
                     ) : null}
 
-                    <Button variant="outline" onClick={() => session.sessionNo && queryStatus(session.sessionNo)}>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      刷新支付状态
+                    <Button
+                      variant="outline"
+                      disabled={refreshingStatus}
+                      onClick={() => session.sessionNo && void handleManualRefreshStatus(session.sessionNo)}
+                    >
+                      <RefreshCw className={cn("mr-2 h-4 w-4", refreshingStatus && "animate-spin")} />
+                      {refreshingStatus ? "刷新中..." : "刷新支付状态"}
                     </Button>
                   </div>
                 ) : selectedChannelInfo?.configured === false ? (
@@ -1529,7 +1582,7 @@ function Bep20PaymentPanel({
             type="button"
             size="sm"
             variant="outline"
-            {...({ popovertarget: "support-popover" } as Record<string, string>)}
+            onClick={openPublicSupport}
           >
             <Headphones className="mr-2 h-4 w-4" />
             联系在线客服
@@ -1549,7 +1602,6 @@ function Bep20PaymentPanel({
     );
   }
 
-  const canSubmitTxHash = session.paymentAction === "continue_active_payment";
   const isReviewPending = session.status === "manual_review";
   const isRejected = session.paymentAction === "rejected";
   const isRenewable = session.paymentAction === "renew_payment_session";
@@ -1561,13 +1613,16 @@ function Bep20PaymentPanel({
     orderStatus,
     paymentStatus,
   });
+  const countdownExpired = Boolean(timingVisibility.showCountdown && remainingSeconds <= 0);
+  const canSubmitTxHash = session.paymentAction === "continue_active_payment" && !countdownExpired;
   const showTransferInstructions = !timingVisibility.terminal
     && !timingVisibility.manualReview
     && !isRejected
-    && !isRenewable;
+    && !isRenewable
+    && !countdownExpired;
   const terminalNotice = normalizedOrderStatus === "cancelled"
     ? "订单已取消，不能继续付款。"
-    : normalizedOrderStatus === "expired" || session.status === "expired" || session.paymentAction === "closed"
+    : normalizedOrderStatus === "expired" || session.status === "expired" || session.paymentAction === "closed" || countdownExpired
       ? "本订单的链上支付会话已过期，请勿继续转账。如您已完成转账，请联系在线客服并提供订单号和 TxHash，由客服人工核验。"
       : normalizedOrderStatus === "failed" || session.status === "payment_failed"
         ? "支付处理失败，请联系客服核查。"
@@ -1590,12 +1645,12 @@ function Bep20PaymentPanel({
       ) : terminalNotice ? (
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
           <div>{terminalNotice}</div>
-          {normalizedOrderStatus === "expired" || session.status === "expired" || session.paymentAction === "closed" ? (
+          {normalizedOrderStatus === "expired" || session.status === "expired" || session.paymentAction === "closed" || countdownExpired ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
-              {...({ popovertarget: "support-popover" } as Record<string, string>)}
+              onClick={openPublicSupport}
             >
               <Headphones className="mr-2 h-4 w-4" />
               联系在线客服
@@ -1650,7 +1705,7 @@ function Bep20PaymentPanel({
           value={txHash}
           onChange={(event) => onTxHashChange(event.target.value)}
           placeholder="0x 开头的 32 字节交易哈希"
-          className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-sm outline-none focus:border-primary"
+          className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary"
         />
         {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
       </div> : null}

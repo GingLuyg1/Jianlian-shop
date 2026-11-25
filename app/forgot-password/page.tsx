@@ -84,7 +84,18 @@ export default function ForgotPasswordPage() {
                 className="space-y-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700"
               >
                 <p>{SUCCESS_MESSAGE}</p>
-                {cooldown > 0 ? <p>{cooldown} 秒后可重新发送。</p> : null}
+                {cooldown > 0 ? (
+                  <p>{cooldown} 秒后可重新发送。</p>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSent(false)}
+                  >
+                    重新发送重置邮件
+                  </Button>
+                )}
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">

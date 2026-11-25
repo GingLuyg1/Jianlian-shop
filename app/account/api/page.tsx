@@ -47,6 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSlidingIndicator } from "@/components/ui/use-sliding-indicator";
 import { cn } from "@/lib/utils";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/browser/safe-storage";
 
 const tabs = [
   { value: "overview", label: "概览" },
@@ -159,14 +160,14 @@ export default function AccountApiPage() {
     const appIdKey = `jianlian_mch_app_id_${userEmail}`;
     const ipKey = `jianlian_mch_whitelist_${userEmail}`;
 
-    const savedStatus = window.localStorage.getItem(statusKey);
-    const savedKey = window.localStorage.getItem(keyKey);
-    const savedAppId = window.localStorage.getItem(appIdKey);
-    const savedIps = window.localStorage.getItem(ipKey);
+    const savedStatus = safeLocalStorageGet(statusKey);
+    const savedKey = safeLocalStorageGet(keyKey);
+    const savedAppId = safeLocalStorageGet(appIdKey);
+    const savedIps = safeLocalStorageGet(ipKey);
 
     let adminRecord: ApiApplicationRecord | undefined;
     try {
-      const raw = window.localStorage.getItem("jianlian_admin_api_applications");
+      const raw = safeLocalStorageGet("jianlian_admin_api_applications");
       const list: ApiApplicationRecord[] = raw ? JSON.parse(raw) : [];
       adminRecord = list.find((item) => item && item.email === userEmail);
     } catch {}
@@ -241,8 +242,8 @@ export default function AccountApiPage() {
   // 读取真实用户账户余额与真实 API 订单/调用记录
   useEffect(() => {
     let active = true;
-    fetch("/api/account/assets", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
+    fetch("/api/account/assets?lite=1", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json().catch(() => null) : null))
       .then((payload) => {
         if (!active || !payload) return;
         const rawBal = payload?.summary?.availableBalance ?? payload?.profile?.balance ?? payload?.balance;
@@ -257,7 +258,7 @@ export default function AccountApiPage() {
     if (typeof window !== "undefined") {
       try {
         const userEmail = email || "developer@example.com";
-        const rawLogs = window.localStorage.getItem(`jianlian_api_call_logs_${userEmail}`);
+        const rawLogs = safeLocalStorageGet(`jianlian_api_call_logs_${userEmail}`);
         if (rawLogs) {
           const parsed = JSON.parse(rawLogs);
           if (Array.isArray(parsed)) setCallLogs(parsed);
@@ -270,7 +271,7 @@ export default function AccountApiPage() {
     }
 
     fetch("/api/orders?page=1&pageSize=50", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? res.json().catch(() => null) : null))
       .then((payload) => {
         if (!active || !payload) return;
         const rows = Array.isArray(payload?.orders) ? payload.orders : [];
@@ -363,12 +364,12 @@ export default function AccountApiPage() {
 
     setTimeout(() => {
       if (typeof window !== "undefined") {
-        window.localStorage.setItem(statusKey, "pending");
+        safeLocalStorageSet(statusKey, "pending");
         try {
-          const raw = window.localStorage.getItem("jianlian_admin_api_applications");
+          const raw = safeLocalStorageGet("jianlian_admin_api_applications");
           const list: ApiApplicationRecord[] = raw ? JSON.parse(raw).filter((item: ApiApplicationRecord) => item && item.email !== userEmail) : [];
           list.unshift(newRecord);
-          window.localStorage.setItem("jianlian_admin_api_applications", JSON.stringify(list));
+          safeLocalStorageSet("jianlian_admin_api_applications", JSON.stringify(list));
           window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
         } catch {}
       }
@@ -380,28 +381,28 @@ export default function AccountApiPage() {
 
   const handleCopyKey = () => {
     if (!apiKey) return;
-    navigator.clipboard.writeText(apiKey).then(() => {
+    navigator.clipboard?.writeText(apiKey).then(() => {
       setCopiedKey(true);
       toast.success("商户密钥 (AppSecret) 已复制");
       setTimeout(() => setCopiedKey(false), 2000);
-    });
+    }).catch(() => toast.error("复制失败，请手动复制"));
   };
 
   const handleCopyAppId = () => {
     if (!appId) return;
-    navigator.clipboard.writeText(appId).then(() => {
+    navigator.clipboard?.writeText(appId).then(() => {
       setCopiedAppId(true);
       toast.success("商户 ID (AppID) 已复制");
       setTimeout(() => setCopiedAppId(false), 2000);
-    });
+    }).catch(() => toast.error("复制失败，请手动复制"));
   };
 
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText(baseUrl).then(() => {
+    navigator.clipboard?.writeText(baseUrl).then(() => {
       setCopiedUrl(true);
       toast.success("接口地址已复制到剪贴板");
       setTimeout(() => setCopiedUrl(false), 2000);
-    });
+    }).catch(() => toast.error("复制失败，请手动复制"));
   };
 
   const handleResetKey = () => {
@@ -410,7 +411,7 @@ export default function AccountApiPage() {
     if (typeof window !== "undefined") {
       const userEmail = email || "developer@example.com";
       const storageKey = `jianlian_developer_key_${userEmail}`;
-      window.localStorage.setItem(storageKey, fresh);
+      safeLocalStorageSet(storageKey, fresh);
     }
     toast.success("商户密钥已重置并立即生效");
   };

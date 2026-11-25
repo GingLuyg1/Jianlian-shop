@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 
 import { SettingsProvider, usePublicSettings } from "@/components/settings/SettingsProvider";
+import { AuthProfileProvider } from "@/components/auth/AuthProfileProvider";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import MobileMenu from "./MobileMenu";
 import MobileTopBarAuth from "./MobileTopBarAuth";
@@ -40,13 +41,15 @@ export default function PublicLayout({
     ?? cn("p-4 md:p-6 max-w-7xl mx-auto", mobileNavigationUntilLg ? "lg:mt-0" : "md:mt-0");
   return (
     <SettingsProvider>
-      <PublicLayoutContent
-        contentClassName={resolvedContentClassName}
-        viewportLocked={viewportLocked}
-        mobileNavigationUntilLg={mobileNavigationUntilLg}
-      >
-        {children}
-      </PublicLayoutContent>
+      <AuthProfileProvider>
+        <PublicLayoutContent
+          contentClassName={resolvedContentClassName}
+          viewportLocked={viewportLocked}
+          mobileNavigationUntilLg={mobileNavigationUntilLg}
+        >
+          {children}
+        </PublicLayoutContent>
+      </AuthProfileProvider>
     </SettingsProvider>
   );
 }
@@ -56,16 +59,25 @@ export default function PublicLayout({
 const SUPPORT_TELEGRAM_URL = "https://t.me/Ezeasl";
 const SUPPORT_EMAIL = "Yac0000189@gmail.com";
 const SUPPORT_HOURS = "12:00 - 24:00 (GMT+8)";
+const FALLBACK_COPYRIGHT_YEAR = 2026;
 
-function PublicLayoutContent({ children, contentClassName, viewportLocked = false, mobileNavigationUntilLg = false }: PublicLayoutProps) {
-  const [supportOpen, setSupportOpen] = useState(false);
+function MobileSupportFab({
+  isMobile,
+  mobilePreview,
+  previewWidth,
+  mobileNavigationUntilLg,
+  onSupportOpen,
+}: {
+  isMobile: boolean;
+  mobilePreview: boolean;
+  previewWidth: number | null;
+  mobileNavigationUntilLg: boolean;
+  onSupportOpen: () => void;
+}) {
   const [isScrolling, setIsScrolling] = useState(false);
-  const supportTrigger = useRef<HTMLElement | null>(null);
-  const openSupport = useCallback(() => {
-    supportTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setSupportOpen(true);
-  }, []);
+
   useEffect(() => {
+    if (!isMobile) return;
     let scrollTimer: number | null = null;
     const handleScroll = () => {
       setIsScrolling(true);
@@ -79,6 +91,43 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       window.removeEventListener("scroll", handleScroll);
       if (scrollTimer) window.clearTimeout(scrollTimer);
     };
+  }, [isMobile]);
+
+  return (
+    <button
+      type="button"
+      onClick={onSupportOpen}
+      data-testid="floating-support-btn"
+      style={
+        mobilePreview && previewWidth
+          ? { right: `calc(50% - ${previewWidth / 2}px + 16px)`, bottom: "24px" }
+          : { right: "16px", bottom: "24px" }
+      }
+      className={cn(
+        "fixed z-40 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-orange-500/30 transition-all duration-200 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        isScrolling ? "translate-x-6 opacity-55" : "translate-x-0 opacity-100",
+        mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
+        isMobile && "!flex",
+      )}
+      aria-label="在线客服"
+      title="在线客服"
+    >
+      <Headphones className="h-5 w-5" />
+    </button>
+  );
+}
+
+function PublicLayoutContent({ children, contentClassName, viewportLocked = false, mobileNavigationUntilLg = false }: PublicLayoutProps) {
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [copyrightYear, setCopyrightYear] = useState(FALLBACK_COPYRIGHT_YEAR);
+  const supportTrigger = useRef<HTMLElement | null>(null);
+  const openSupport = useCallback(() => {
+    supportTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSupportOpen(true);
+  }, []);
+  useEffect(() => {
+    const nowYear = new Date().getFullYear();
+    if (nowYear > FALLBACK_COPYRIGHT_YEAR) setCopyrightYear(nowYear);
   }, []);
   useEffect(() => {
     if (!hasSupabaseConfig()) return;
@@ -92,13 +141,26 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
     });
     return () => data.subscription.unsubscribe();
   }, []);
-  useEffect(() => schedulePublicRechargeChannelsPrefetch(), []);
-  useEffect(() => { ensureAccountRecordPreload(); }, []);
+  const pathname = usePathname();
+  useEffect(() => {
+    if (
+      pathname.startsWith("/products/account-recharge") ||
+      pathname.startsWith("/checkout") ||
+      pathname.startsWith("/payment") ||
+      pathname.startsWith("/account")
+    ) {
+      return schedulePublicRechargeChannelsPrefetch();
+    }
+  }, [pathname]);
+  useEffect(() => {
+    if (pathname.startsWith("/account") || pathname.startsWith("/checkout") || pathname.startsWith("/payment")) {
+      ensureAccountRecordPreload();
+    }
+  }, [pathname]);
   useEffect(() => {
     window.addEventListener(OPEN_PUBLIC_SUPPORT_EVENT, openSupport);
     return () => window.removeEventListener(OPEN_PUBLIC_SUPPORT_EVENT, openSupport);
   }, [openSupport]);
-  const pathname = usePathname();
   const router = useRouter();
   useEffect(() => {
     const pending = getCatalogRoutePending();
@@ -128,7 +190,11 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
     homeAnnouncement?.content.trim() ||
     settings.top_announcement.trim();
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
-  const hideMobileSupportFab = pathname.startsWith("/tutorials");
+  const hideMobileSupportFab =
+    pathname.startsWith("/tutorials") ||
+    pathname.startsWith("/checkout") ||
+    pathname.startsWith("/payment") ||
+    pathname.startsWith("/products/account-recharge");
 
   return (
     <div
@@ -136,7 +202,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       data-mobile-active={isMobile ? "true" : undefined}
       style={{ maxWidth: previewWidth ? `${previewWidth}px` : undefined }}
       className={cn(
-        viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen !overflow-visible" : "min-h-screen overflow-x-hidden",
+        viewportLocked && !isMobile ? "h-dvh overflow-hidden" : isMobile ? "min-h-screen overflow-x-clip" : "min-h-screen overflow-x-hidden",
         "bg-background [--storefront-content-padding-x:16px] [--storefront-main-offset:0px] [--storefront-sidebar-width:160px] lg:[--storefront-main-offset:252px] lg:[--storefront-sidebar-width:232px]",
         !mobileNavigationUntilLg && !isMobile && "md:[--storefront-main-offset:252px] md:[--storefront-sidebar-width:232px]",
         isMobile && "[--storefront-content-padding-x:12px] lg:[--storefront-main-offset:0px]",
@@ -162,7 +228,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
           <MobileMenu onSupportOpen={openSupport} mobileNavigationUntilLg={mobileNavigationUntilLg} />
           <Link href="/" className="flex shrink-0 items-center gap-1.5">
             <img
-              src="/assets/jianlian-brand-logo.png"
+              src="/assets/jianlian-brand-logo-96.webp"
               alt="Jianlian"
               width={26}
               height={26}
@@ -228,7 +294,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         >
           <div className="flex w-full flex-wrap items-center justify-between gap-2 px-1">
             <span className="truncate">
-              © {new Date().getFullYear()} {settings.site_name || "Jianlian"} · 7×24h 自动发货与售后质保
+              © {copyrightYear} {settings.site_name || "Jianlian"} · 7×24h 自动发货与售后质保
             </span>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <Link href="/account/orders" className="transition-colors hover:text-primary">
@@ -328,28 +394,15 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
         </div>
       ) : null}
 
-      {/* Floating customer service FAB for mobile: 右下角轻量圆形图标，教程页隐藏，滚动时向右侧缩进半隐藏 */}
+      {/* Floating customer service FAB for mobile: 右下角轻量圆形图标，结算/支付/充值/教程页隐藏，滚动时向右侧缩进半隐藏 */}
       {!hideMobileSupportFab ? (
-        <button
-          type="button"
-          onClick={openSupport}
-          data-testid="floating-support-btn"
-          style={
-            mobilePreview && previewWidth
-              ? { right: `calc(50% - ${previewWidth / 2}px + 16px)`, bottom: "24px" }
-              : { right: "16px", bottom: "24px" }
-          }
-          className={cn(
-            "fixed z-40 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-orange-500/30 transition-all duration-200 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-            isScrolling ? "translate-x-6 opacity-55" : "translate-x-0 opacity-100",
-            mobileNavigationUntilLg ? "lg:hidden" : "md:hidden",
-            isMobile && "!flex",
-          )}
-          aria-label="在线客服"
-          title="在线客服"
-        >
-          <Headphones className="h-5 w-5" />
-        </button>
+        <MobileSupportFab
+          isMobile={isMobile}
+          mobilePreview={mobilePreview}
+          previewWidth={previewWidth}
+          mobileNavigationUntilLg={mobileNavigationUntilLg}
+          onSupportOpen={openSupport}
+        />
       ) : null}
 
       <Dialog open={supportOpen} onOpenChange={setSupportOpen}>

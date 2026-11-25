@@ -76,8 +76,8 @@ const highlights = [
 
 const heroSlides = [
   {
-    title: "全球数字商品与通信服务商城",
-    desc: "提供数字账号、AI 会员充值、礼品卡、国际 SIM 卡等商品。下单前请核对商品说明，拿到账户和卡密后请第一时间检查。",
+    title: "轻松连接全球数字生活",
+    desc: "提供 AI 会员、精选数字账号与全球礼品卡等优质数字服务。下单前请核对商品说明，收到账户和卡密后请第一时间检查。",
     visual: "globe",
   },
   {
@@ -87,7 +87,10 @@ const heroSlides = [
   },
 ];
 
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
 function HeroCarousel() {
+  const { isMobile } = useMobileStorefront();
   const [activeIndex, setActiveIndex] = useState(0);
   const [isMoving, setIsMoving] = useState(false);
   const nextIndex = (activeIndex + 1) % heroSlides.length;
@@ -95,15 +98,19 @@ function HeroCarousel() {
   const visibleIndex = isMoving ? nextIndex : activeIndex;
 
   useEffect(() => {
+    let moveTimer: number | null = null;
     const timer = window.setInterval(() => {
       setIsMoving(true);
-      window.setTimeout(() => {
+      moveTimer = window.setTimeout(() => {
         setActiveIndex((current) => (current + 1) % heroSlides.length);
         setIsMoving(false);
       }, 720);
     }, 4200);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      if (moveTimer !== null) window.clearTimeout(moveTimer);
+    };
   }, []);
 
   const mascotAnchorClassName =
@@ -113,25 +120,23 @@ function HeroCarousel() {
 
   return (
     <div data-testid="hero-carousel-outer" className="relative z-30 overflow-visible">
-      {/* 1. 后景虚层（尾巴 + GPT 下半截长裙摆与龙尾）：z-[12] 位于 Hero 卡片背景之上、文字之下 */}
-      <div
-        aria-hidden="true"
-        data-testid="hero-mascots-back"
-        className={cn(mascotAnchorClassName, "z-[12] opacity-35 blur-[2px] saturate-90")}
-      >
-        <img
-          src="/mascots/gemini-back.png"
-          alt=""
-          draggable={false}
-          className={mascotImgClassName}
-        />
-        <img
-          src="/mascots/chatgpt-back.png"
-          alt=""
-          draggable={false}
-          className={mascotImgClassName}
-        />
-      </div>
+      {/* 1. 后景虚层（仅桌面端展示，移动端取消吉祥物展示且不触发图片下载） */}
+      {!isMobile ? (
+        <div
+          aria-hidden="true"
+          data-testid="hero-mascots-back"
+          className={cn(mascotAnchorClassName, "z-[12] opacity-35 blur-[2px] saturate-90")}
+        >
+          <picture>
+            <source media="(min-width: 1024px)" srcSet="/mascots/gemini-back.webp" type="image/webp" />
+            <img src={TRANSPARENT_PIXEL} alt="" width={193} height={260} draggable={false} decoding="async" className={mascotImgClassName} />
+          </picture>
+          <picture>
+            <source media="(min-width: 1024px)" srcSet="/mascots/chatgpt-back.webp" type="image/webp" />
+            <img src={TRANSPARENT_PIXEL} alt="" width={186} height={260} draggable={false} decoding="async" className={mascotImgClassName} />
+          </picture>
+        </div>
+      ) : null}
 
       {/* 2. 内层轮播轨道容器（圆角和轮播溢出裁剪只放在内层） */}
       <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm h-[200px] xl:h-[220px] 2xl:h-[270px]">
@@ -191,31 +196,29 @@ function HeroCarousel() {
         </div>
       </section>
 
-      {/* 3. 上边框物理接触暗影（z-20） */}
-      <div
-        aria-hidden="true"
-        className="hidden lg:block pointer-events-none select-none absolute top-0 left-[21.5%] -translate-x-1/2 -translate-y-1/2 z-20 h-2 w-28 bg-[#4a2e3e]/12 blur-[4px] rounded-full"
-      />
-
-      {/* 4. 前景实层（上半身 + 龙尾上方拱起段 + 垂落双腿与鞋子，z-40 置于最顶层覆盖公告区） */}
-      <div
-        aria-hidden="true"
-        data-testid="hero-mascots-front"
-        className={cn(mascotAnchorClassName, "z-40 drop-shadow-[2px_5px_7px_rgba(65,38,58,0.18)]")}
-      >
-        <img
-          src="/mascots/gemini-front.png"
-          alt="Gemini 吉祥物"
-          draggable={false}
-          className={mascotImgClassName}
-        />
-        <img
-          src="/mascots/chatgpt-front.png"
-          alt="ChatGPT 吉祥物"
-          draggable={false}
-          className={mascotImgClassName}
-        />
-      </div>
+      {/* 3. 上边框物理接触暗影（z-20）与前景实层（仅桌面端渲染，手机端取消展示） */}
+      {!isMobile ? (
+        <>
+          <div
+            aria-hidden="true"
+            className="hidden lg:block pointer-events-none select-none absolute top-0 left-[21.5%] -translate-x-1/2 -translate-y-1/2 z-20 h-2 w-28 bg-[#4a2e3e]/12 blur-[4px] rounded-full"
+          />
+          <div
+            aria-hidden="true"
+            data-testid="hero-mascots-front"
+            className={cn(mascotAnchorClassName, "z-40 drop-shadow-[2px_5px_7px_rgba(65,38,58,0.18)]")}
+          >
+            <picture>
+              <source media="(min-width: 1024px)" srcSet="/mascots/gemini-front.webp" type="image/webp" />
+              <img src={TRANSPARENT_PIXEL} alt="Gemini 吉祥物" width={193} height={260} draggable={false} decoding="async" className={mascotImgClassName} />
+            </picture>
+            <picture>
+              <source media="(min-width: 1024px)" srcSet="/mascots/chatgpt-front.webp" type="image/webp" />
+              <img src={TRANSPARENT_PIXEL} alt="ChatGPT 吉祥物" width={186} height={260} draggable={false} decoding="async" className={mascotImgClassName} />
+            </picture>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

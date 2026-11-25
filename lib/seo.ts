@@ -1,14 +1,16 @@
 import "server-only";
 
+import { cache } from "react";
 import type { Metadata } from "next";
 
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { isPreorderDeliveryMode } from "@/lib/products/delivery-and-stock";
 
 export const SITE_URL = "https://www.jianlian.shop";
 export const SITE_NAME = "Jianlian Shop";
 export const SITE_DESCRIPTION =
   "轻松连接全球数字生活。Jianlian Shop 为您提供 AI 会员、精选数字账号与全球礼品卡服务，让每一次数字探索都简单、即时。";
-export const DEFAULT_OG_IMAGE = "/assets/jianlian-brand-logo.png";
+export const DEFAULT_OG_IMAGE = "/assets/og-cover.png";
 
 export type SeoProduct = {
   id: string;
@@ -20,9 +22,14 @@ export type SeoProduct = {
   price: number;
   original_price: number | null;
   stock: number;
+  has_skus?: boolean | null;
+  delivery_type?: string | null;
+  metadata?: Record<string, unknown> | null;
   status: string;
   updated_at: string | null;
   category_id: string | null;
+  effective_stock?: number;
+  is_preorder?: boolean;
 };
 
 export type SeoCategory = {
@@ -53,14 +60,15 @@ export function buildPageMetadata(input: {
   const rawDescription = (input.description?.trim() || SITE_DESCRIPTION)
     .replace(/\s+/g, " ")
     .slice(0, 160);
-  const url = absoluteUrl(input.path || "/");
+  const url = input.path === "./" ? "./" : absoluteUrl(input.path || "/");
+  const isDefaultOg = !input.image || input.image.trim() === DEFAULT_OG_IMAGE;
   const image = absoluteUrl(input.image || DEFAULT_OG_IMAGE);
   const formattedTitle =
     input.title.includes(SITE_NAME) ? input.title : `${input.title} | ${SITE_NAME}`;
 
   return {
     metadataBase: new URL(SITE_URL),
-    title: formattedTitle,
+    title: { absolute: formattedTitle },
     description: rawDescription,
     alternates: { canonical: url },
     robots: input.noIndex
@@ -71,12 +79,16 @@ export function buildPageMetadata(input: {
       locale: "zh_CN",
       title: formattedTitle,
       description: rawDescription,
-      url,
+      url: url === "./" ? SITE_URL : url,
       siteName: SITE_NAME,
-      images: [{ url: image, alt: formattedTitle }],
+      images: [
+        isDefaultOg
+          ? { url: image, width: 1200, height: 630, alt: formattedTitle }
+          : { url: image, alt: formattedTitle },
+      ],
     },
     twitter: {
-      card: "summary_large_image",
+      card: isDefaultOg ? "summary_large_image" : "summary",
       title: formattedTitle,
       description: rawDescription,
       images: [image],
@@ -84,23 +96,80 @@ export function buildPageMetadata(input: {
   };
 }
 
-export async function getSeoProduct(identifier: string): Promise<SeoProduct | null> {
+export const getSeoProduct = cache(async function getSeoProductImpl(identifier: string): Promise<SeoProduct | null> {
   if (!hasSupabaseServerConfig()) return null;
+  let cleanId = identifier;
+  try {
+    cleanId = decodeURIComponent(identifier);
+  } catch {
+    cleanId = identifier;
+  }
   const supabase = getSupabaseServerClient();
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      identifier
+      cleanId
     );
   const query = supabase
     .from("products")
-    .select("id,name,slug,short_description,description,image_url,price,original_price,stock,status,updated_at,category_id")
+    .select("id,name,slug,short_description,description,image_url,price,original_price,stock,has_skus,delivery_type,metadata,status,updated_at,category_id")
     .limit(1);
   const { data, error } = isUuid
-    ? await query.eq("id", identifier).maybeSingle()
-    : await query.eq("slug", identifier).maybeSingle();
+    ? await query.eq("id", cleanId).maybeSingle()
+    : await query.eq("slug", cleanId).maybeSingle();
   if (error || !data) return null;
-  return data as SeoProduct;
-}
+
+  const product = data as SeoProduct;
+  const [categories, skuResult] = await Promise.all([
+    listSeoCategories().catch(() => []),
+    product.has_skus
+      ? supabase
+          .from("product_skus")
+          .select("status,stock,delivery_type,metadata")
+          .eq("product_id", product.id)
+          .eq("status", "active")
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+
+  if (product.category_id && categories.length > 0) {
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    let cursor = byId.get(product.category_id) ?? null;
+    const visited = new Set<string>();
+    let validChain = Boolean(cursor);
+    while (cursor && !visited.has(cursor.id)) {
+      visited.add(cursor.id);
+      if (cursor.is_active === false) {
+        validChain = false;
+        break;
+      }
+      if (cursor.parent_id) {
+        cursor = byId.get(cursor.parent_id) ?? null;
+        if (!cursor) {
+          validChain = false;
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+    if (!validChain) return null;
+  }
+
+  let effectiveStock = Number(product.stock ?? 0);
+  let isPreorder = isPreorderDeliveryMode(product.delivery_type, product.metadata);
+  if (product.has_skus && Array.isArray(skuResult.data) && skuResult.data.length > 0) {
+    const activeSkus = skuResult.data as Array<{ stock?: number | null; delivery_type?: string | null; metadata?: unknown }>;
+    effectiveStock = activeSkus.reduce((sum, row) => sum + Math.max(0, Number(row.stock ?? 0)), 0);
+    if (activeSkus.some((row) => isPreorderDeliveryMode(row.delivery_type, row.metadata))) {
+      isPreorder = true;
+    }
+  }
+
+  return {
+    ...product,
+    effective_stock: effectiveStock,
+    is_preorder: isPreorder,
+  };
+});
 
 export type SeoProductSitemapEntry = {
   id: string;
@@ -174,10 +243,16 @@ export async function listSeoCategories() {
 }
 
 export function productJsonLd(product: SeoProduct, categoryPath = "") {
+  const stockCount = Number(product.effective_stock ?? product.stock ?? 0);
+  const isPreorder = Boolean(product.is_preorder || isPreorderDeliveryMode(product.delivery_type, product.metadata));
   const availability =
-    product.status !== "active" || Number(product.stock ?? 0) <= 0
+    product.status !== "active"
       ? "https://schema.org/OutOfStock"
-      : "https://schema.org/InStock";
+      : isPreorder
+        ? "https://schema.org/PreOrder"
+        : stockCount <= 0
+          ? "https://schema.org/OutOfStock"
+          : "https://schema.org/InStock";
   const path = `/products/${product.slug || product.id}`;
   const nextYear = new Date();
   nextYear.setFullYear(nextYear.getFullYear() + 1);

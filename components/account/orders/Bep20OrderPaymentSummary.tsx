@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Clipboard, ExternalLink, Headphones, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Bep20UnderpaymentWalletCreditNotice } from "@/components/account/orders/Bep20UnderpaymentWalletCreditNotice";
+import { openPublicSupport } from "@/lib/support/open-public-support";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -182,8 +184,12 @@ export function Bep20OrderPaymentSummary({
   const [nowTick, setNowTick] = useState(0);
   const [renewConfirmOpen, setRenewConfirmOpen] = useState(false);
 
+  const loadInFlightRef = useRef(false);
+  const verifyInFlightRef = useRef(false);
+
   const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
-  const remainingSeconds = secondsLeft(session?.expiresAt) + nowTick * 0;
+  const rawRemaining = secondsLeft(session?.expiresAt) + nowTick * 0;
+  const remainingSeconds = Number.isFinite(rawRemaining) ? rawRemaining : 0;
   const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
   const submittedTxHashValid = /^0x[0-9a-fA-F]{64}$/.test(session?.submittedTxHash ?? "");
   const orderStatus = normalizeOrderStatus(order.status);
@@ -198,17 +204,6 @@ export function Bep20OrderPaymentSummary({
     ? { label: "已支付", className: "border-emerald-200 bg-emerald-50 text-emerald-700" }
     : statusCopy(session);
   const orderClosed = ["cancelled", "expired", "failed"].includes(orderStatus);
-  const sessionAllowsTxHash = Boolean(
-    session && session.paymentAction === "continue_active_payment"
-  );
-  const canSubmitTxHash = !paymentCompleted && !orderClosed && sessionAllowsTxHash;
-  const canShowTxInput = canSubmitTxHash;
-  const canRenew = orderStatus !== "expired"
-    && !paymentCompleted
-    && !orderClosed
-    && Boolean(session?.canRenewPaymentSession);
-  const isExpired = orderStatus === "expired" || session?.status === "expired" || session?.paymentAction === "closed";
-  const notice = useMemo(() => noticeForSession(session, order), [order, session]);
   const timingVisibility = getBep20TimingVisibility({
     chainStatus: session?.status,
     paymentAction: session?.paymentAction,
@@ -216,21 +211,34 @@ export function Bep20OrderPaymentSummary({
     orderStatus,
     paymentStatus,
   });
+  const countdownExpired = Boolean(timingVisibility.showCountdown && remainingSeconds <= 0);
+  const sessionAllowsTxHash = Boolean(
+    session && session.paymentAction === "continue_active_payment" && !countdownExpired
+  );
+  const canSubmitTxHash = !paymentCompleted && !orderClosed && sessionAllowsTxHash;
+  const canShowTxInput = canSubmitTxHash;
+  const canRenew = orderStatus !== "expired"
+    && !paymentCompleted
+    && !orderClosed
+    && Boolean(session?.canRenewPaymentSession);
+  const isExpired = orderStatus === "expired" || session?.status === "expired" || session?.paymentAction === "closed" || countdownExpired;
+  const notice = useMemo(() => noticeForSession(session, order), [order, session]);
 
   const loadSession = useCallback(
     async (options: { create?: boolean } = {}) => {
-      if (!isBep20Order || loading || creating) return false;
+      if (!isBep20Order || loadInFlightRef.current || loading || creating) return false;
+      loadInFlightRef.current = true;
       if (options.create) setCreating(true);
       else setLoading(true);
       setError("");
       try {
         const response = options.create
-          ? await fetch("/api/payments/bep20/session", {
+          ? await fetchWithTimeout("/api/payments/bep20/session", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ order: order.order_no }),
             })
-          : await fetch(`/api/payments/bep20/session?order=${encodeURIComponent(order.order_no)}`, { cache: "no-store" });
+          : await fetchWithTimeout(`/api/payments/bep20/session?order=${encodeURIComponent(order.order_no)}`, { cache: "no-store" });
         const result = (await response.json().catch(() => null)) as (Bep20Session & ApiError) | null;
         if (!response.ok) throw new Error(result?.error ?? "支付信息读取失败");
         setSession(result);
@@ -242,6 +250,7 @@ export function Bep20OrderPaymentSummary({
         else setError(message);
         return false;
       } finally {
+        loadInFlightRef.current = false;
         setLoading(false);
         setCreating(false);
       }
@@ -270,11 +279,12 @@ export function Bep20OrderPaymentSummary({
   }, []);
 
   async function verifyTxHash() {
-    if (!session || verifying || !canSubmitTxHash) return;
+    if (!session || verifying || verifyInFlightRef.current || !canSubmitTxHash) return;
+    verifyInFlightRef.current = true;
     setVerifying(true);
     setError("");
     try {
-      const response = await fetch("/api/payments/bep20/verify", {
+      const response = await fetchWithTimeout("/api/payments/bep20/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -290,6 +300,7 @@ export function Bep20OrderPaymentSummary({
     } catch (verifyError) {
       toast.error(getOrderErrorMessage(verifyError, "链上交易校验失败，请稍后重试"));
     } finally {
+      verifyInFlightRef.current = false;
       setVerifying(false);
     }
   }
@@ -360,7 +371,7 @@ export function Bep20OrderPaymentSummary({
             onChange={(event) => setTxHash(event.target.value)}
             disabled={!canSubmitTxHash || verifying}
             placeholder="0x 开头的 32 字节交易哈希"
-            className="h-10 w-full rounded-lg border border-border bg-white px-3 font-mono text-sm outline-none focus:border-primary disabled:bg-slate-50"
+            className="h-10 w-full rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary disabled:bg-slate-50"
           />
           {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
         </div>
@@ -401,7 +412,7 @@ export function Bep20OrderPaymentSummary({
             type="button"
             size="sm"
             variant="outline"
-            {...({ popovertarget: "support-popover" } as Record<string, string>)}
+            onClick={openPublicSupport}
           >
             <Headphones className="mr-2 h-4 w-4" />
             联系在线客服

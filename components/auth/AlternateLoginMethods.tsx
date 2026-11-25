@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { hasSupabaseConfig } from "@/lib/supabase/client";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 
 type Props = {
   mode: "login" | "register";
@@ -22,6 +23,12 @@ export default function AlternateLoginMethods({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    const onPageShow = () => setBusy(false);
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   if (!googleEnabled) return null;
 
   async function googleLogin() {
@@ -37,12 +44,12 @@ export default function AlternateLoginMethods({
     }
     setBusy(true);
     try {
-      const response = await fetch("/api/auth/google", {
+      const response = await fetchWithTimeout("/api/auth/google", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode, next: redirectTo, invite: isRegister ? inviteCode : "", acceptedTerms }),
       });
-      const result = await response.json();
-      if (!response.ok || typeof result.url !== "string") throw new Error("GOOGLE_START_FAILED");
+      const result = (await response.json().catch(() => null)) as { url?: unknown } | null;
+      if (!response.ok || typeof result?.url !== "string") throw new Error("GOOGLE_START_FAILED");
       window.location.assign(result.url);
       // Supabase redirects the browser to Google; completion happens in /auth/callback.
     } catch {

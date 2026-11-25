@@ -200,7 +200,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
         side="left"
         style={{
           width: `${totalWidth}px`,
-          maxWidth: isExpanded ? "98vw" : "75vw",
+          maxWidth: isExpanded ? "86vw" : "75vw",
         }}
         className={cn(
           "flex h-full !max-w-none flex-row gap-0 p-0 transition-[width] duration-200 ease-out"
@@ -218,8 +218,10 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
           <div className={cn("box-border flex shrink-0 items-center border-b border-border pr-8", isProMax ? "h-[74px] min-h-[74px] max-h-[74px] px-3.5" : "h-[58px] min-h-[58px] max-h-[58px] px-2")}>
             <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
               <img
-                src="/assets/jianlian-brand-logo.png"
+                src="/assets/jianlian-brand-logo-96.webp"
                 alt="Jianlian"
+                width={40}
+                height={40}
                 className={cn("shrink-0 rounded-lg object-cover", isProMax ? "h-10 w-10" : "h-[22px] w-[22px]")}
               />
               <div className="min-w-0">
@@ -233,7 +235,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
             </div>
           </div>
 
-          <nav className={cn("flex-1 overflow-y-auto", isProMax ? "px-3 py-3" : "px-1.5 py-1.5")}>
+          <nav className={cn("flex-1 overflow-y-auto overscroll-contain", isProMax ? "px-3 py-3" : "px-1.5 py-1.5")}>
             {navigationGroups.map((group) => group.items.length > 0 ? (
             <section key={group.title || "home"} aria-label={group.title || "首页"}>
             {group.title ? <h2 className={cn("mb-1 mt-2 px-1.5 font-semibold text-muted-foreground", isProMax ? "text-[13px]" : "text-[9.5px]")}>{group.title}</h2> : null}
@@ -334,7 +336,7 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                 </div>
               </div>
             </div>
-            <div className={cn("flex-1 overflow-y-auto", isProMax ? "px-3 py-3" : "px-1.5 py-1.5")}>
+            <div className={cn("flex-1 overflow-y-auto overscroll-contain", isProMax ? "px-3 py-3" : "px-1.5 py-1.5")}>
               <ul className={cn(isProMax ? "space-y-1.5" : "space-y-0.5")}>
                 {expandedSecondaries.map((sub) => {
                   const queryKey = expandedPrimaryHref === "/products/sim-cards" ? "country" : "category";

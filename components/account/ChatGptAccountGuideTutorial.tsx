@@ -724,7 +724,7 @@ Request: Please verify whether this deactivation was caused by an automated fals
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-emerald-600 font-bold">•</span>
-                  <span><strong>IP 或节点频繁漂移：</strong>代理节点不稳定或共享数据中心 IP 被连带风控限制。</span>
+                  <span><strong>IP 或网络环境频繁漂移：</strong>网络环境不稳定或共享数据中心 IP 被连带风控限制。</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-emerald-600 font-bold">•</span>

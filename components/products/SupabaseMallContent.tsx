@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, type RefObject, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useIsomorphicLayoutEffect } from "@/hooks/use-isomorphic-layout-effect";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { checkoutHref } from "@/lib/products/checkout-navigation";
 import { getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
@@ -306,39 +307,8 @@ function SupabaseMallContentInner({
     ? (secondaryCategories.length > 0 ? secondaryCategories : allMobileSecondaryCategories)
     : secondaryCategories;
 
-  // Background prefetch all sibling secondary categories via a 2-worker queue so clicking any country/category is 0ms instant
-  useEffect(() => {
-    if (!secondaryCategories || secondaryCategories.length === 0) return;
-    let cancelled = false;
-    const queue = [...secondaryCategories];
-    const runWorker = async () => {
-      while (!cancelled && queue.length > 0) {
-        const cat = queue.shift();
-        if (!cat) break;
-        const primaryId = cat.level === 1 ? cat.id : cat.parent_id ?? "";
-        const secondaryId = cat.level === 2 ? cat.id : "";
-        if (primaryId) {
-          await prefetchPublicProductPage({
-            primaryCategoryId: primaryId,
-            secondaryCategoryId: secondaryId,
-            keyword: "",
-            page: 1,
-            pageSize: CATALOG_PAGE_SIZE,
-          });
-        }
-      }
-    };
-    if (typeof window !== "undefined") {
-      const timer = window.setTimeout(() => {
-        void runWorker();
-        void runWorker();
-      }, 80);
-      return () => {
-        cancelled = true;
-        window.clearTimeout(timer);
-      };
-    }
-  }, [secondaryCategories]);
+  // Avoid firing 14+ simultaneous category prefetches on mount; hover/focus
+  // intent prefetch handles instant switching without saturating bandwidth.
 
   const isLoadingSecondaryCategories = !categorySnapshot.rows && categorySnapshot.status !== "error";
   const pendingSecondaryCategories = useMemo(() => {
@@ -895,7 +865,7 @@ function CategoryPanel({
     return () => window.clearTimeout(maxTimer);
   }, [clickedCategoryId, isLoadingProducts, selectedCategoryId]);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     // Immediately reflect the clicked secondary category so selection feedback is 0ms instant
     if (!error && selectedCategoryId) setVisualSelectionId(selectedCategoryId);
     else setVisualSelectionId((current) => categories.some((category) => category.id === current) ? current : "");
@@ -1295,7 +1265,7 @@ function ProductPanel({
                 }}
                 placeholder="搜索商品、SKU、规格或分类"
                 className={cn(
-                  "rounded-lg border-[#ead9cc] bg-[#fffaf6] text-xs text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25 sm:text-sm",
+                  "rounded-lg border-[#ead9cc] bg-[#fffaf6] text-base text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25 md:text-sm",
                   isMobile ? "h-[34px] pl-9" : "h-10 pl-10 sm:pl-11"
                 )}
               />
@@ -1345,6 +1315,7 @@ function ProductPanel({
                       disabled={false}
                       selected={selectedProductId === product.id}
                       isMobile={isMobile}
+                      priority={index < 8}
                       onSelect={() => {
                         setSelectedProductId(product.id);
                         centerItem(product.id);
@@ -1363,23 +1334,34 @@ function ProductPanel({
 }
 
 let activeNavigationTimer: number | null = null;
+let navCancelListenersAttached = false;
+
+function clearActiveNavigationTimer() {
+  if (activeNavigationTimer !== null && typeof window !== "undefined") {
+    window.clearTimeout(activeNavigationTimer);
+    activeNavigationTimer = null;
+  }
+}
 
 function safeNavigate(router: any, href: string, categoryId?: string) {
   if (typeof window === "undefined") return;
+  if (!navCancelListenersAttached) {
+    navCancelListenersAttached = true;
+    window.addEventListener("popstate", clearActiveNavigationTimer);
+    window.addEventListener("pagehide", clearActiveNavigationTimer);
+  }
   window.dispatchEvent(new CustomEvent("jianlian:start-top-loading"));
   window.dispatchEvent(
     new CustomEvent("jianlian:product-navigation-start", {
       detail: { categoryId: categoryId || "" },
     })
   );
-  if (activeNavigationTimer) {
-    window.clearTimeout(activeNavigationTimer);
-    activeNavigationTimer = null;
-  }
+  clearActiveNavigationTimer();
+  const originHref = window.location.href;
   const targetPath = href.split("?")[0];
   activeNavigationTimer = window.setTimeout(() => {
     activeNavigationTimer = null;
-    if (window.location.pathname !== targetPath) {
+    if (window.location.href === originHref && window.location.pathname !== targetPath) {
       window.location.assign(href);
     }
   }, 2400);
@@ -1387,10 +1369,7 @@ function safeNavigate(router: any, href: string, categoryId?: string) {
   try {
     router.push(href);
   } catch {
-    if (activeNavigationTimer) {
-      window.clearTimeout(activeNavigationTimer);
-      activeNavigationTimer = null;
-    }
+    clearActiveNavigationTimer();
     window.location.assign(href);
   }
 }
@@ -1446,18 +1425,19 @@ function ProductRow({ currencySymbol, product, showStock }: { currencySymbol: st
   );
 }
 
-function CatalogProductIcon({ product, category, isMobile }: { product: Product; category: DisplayCategory | null; isMobile?: boolean }) {
+function CatalogProductIcon({ product, category, isMobile, priority = false }: { product: Product; category: DisplayCategory | null; isMobile?: boolean; priority?: boolean }) {
   const [failed, setFailed] = useState<string[]>([]);
   const ownImage = resolveProductImageSrc(product.imageUrl?.trim());
   const source = [ownImage, category?.displayImage].find(value => value && !failed.includes(value));
   const Icon = category?.displayIcon ? iconMap[category.displayIcon] : KeyRound;
   const sizeClass = isMobile ? "h-9 w-9 shrink-0 rounded-lg" : "h-12 w-12 shrink-0 rounded-xl";
+  const pxSize = isMobile ? 36 : 48;
   const iconSizeClass = isMobile ? "h-4.5 w-4.5 text-primary" : "h-6 w-6 text-primary";
-  return source ? <img data-selection-icon src={source} alt={product.name} className={cn(sizeClass, "bg-white object-cover")} onError={() => setFailed(values => [...values, source])} />
+  return source ? <img data-selection-icon src={source} alt={product.name} width={pxSize} height={pxSize} loading={priority ? "eager" : "lazy"} decoding="async" className={cn(sizeClass, "bg-white object-cover")} onError={() => setFailed(values => [...values, source])} />
     : <span data-selection-icon className={cn("flex items-center justify-center bg-primary/10", sizeClass)}><Icon className={iconSizeClass} aria-label={category?.name || "商品"} /></span>;
 }
 
-function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, isMobile = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; onSelect: () => void }) {
+function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, isMobile = false, priority = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; priority?: boolean; onSelect: () => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
   const rawSales = Number(product.metadata?.salesCount ?? 0);
@@ -1503,7 +1483,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
         )}
       >
         <div className="flex min-w-0 items-center gap-2.5">
-          <CatalogProductIcon product={product} category={category} isMobile={isMobile} />
+          <CatalogProductIcon product={product} category={category} isMobile={isMobile} priority={priority} />
           <div className="min-w-0 flex-1 text-left">
             <div
               data-selection-title
@@ -1554,7 +1534,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
       className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-3 sm:gap-5">
-        <CatalogProductIcon product={product} category={category} />
+        <CatalogProductIcon product={product} category={category} priority={priority} />
         <div className="min-w-0 flex-1 text-left">
           <div data-selection-title className="line-clamp-1 text-sm font-semibold text-slate-700 sm:text-base">
             {product.name}

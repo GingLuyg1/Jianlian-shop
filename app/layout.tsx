@@ -29,9 +29,12 @@ export const metadata: Metadata = {
   },
   applicationName: SITE_NAME,
   icons: {
-    icon: "/assets/jianlian-brand-logo.png",
-    shortcut: "/assets/jianlian-brand-logo.png",
-    apple: "/assets/jianlian-brand-logo.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/assets/jianlian-brand-logo-96.webp", type: "image/webp" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
 };
 

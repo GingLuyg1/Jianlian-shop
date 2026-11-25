@@ -1,6 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { useIsomorphicLayoutEffect } from "@/hooks/use-isomorphic-layout-effect";
 import { getCatalogRoutePending, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
 import styles from "./SidebarSlidingList.module.css";
 
@@ -37,7 +38,7 @@ export default function SidebarSlidingList({ activeKey, layoutKey, children }: {
       else delete item.dataset.sidebarCurrent;
     });
   }
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const list = listRef.current;
     const indicator = indicatorRef.current;
     if (!list || !indicator) return;

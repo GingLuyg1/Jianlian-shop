@@ -312,7 +312,7 @@ export default function FacebookTutorial() {
         <ul className="space-y-2.5 text-xs sm:text-sm text-amber-900/90 leading-relaxed">
           <li className="flex items-start gap-2">
             <span className="font-bold text-amber-700 shrink-0">① 固定网络与纯净 IP：</span>
-            <span>切勿频繁切换代理节点国家或城市，推荐使用稳定的住宅原生 IP。频繁异地漂移最容易触发 FB 安全风控。</span>
+            <span>切勿频繁切换网络地区或城市，推荐使用稳定的住宅原生 IP。频繁异地漂移最容易触发 FB 安全风控。</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="font-bold text-amber-700 shrink-0">② 前 48 小时静置冷启动：</span>

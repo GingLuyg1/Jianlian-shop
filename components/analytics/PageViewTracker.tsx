@@ -2,6 +2,13 @@
 
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import {
+  createSafeUuid,
+  safeLocalStorageGet,
+  safeLocalStorageSet,
+  safeSessionStorageGet,
+  safeSessionStorageSet,
+} from "@/lib/browser/safe-storage";
 
 const VISITOR_KEY = "jianlian_analytics_visitor";
 const SESSION_KEY = "jianlian_analytics_session";
@@ -12,30 +19,21 @@ const EXCLUDED_PREFIXES = ["/admin", "/api", "/_next", "/assets", "/favicon", "/
 const EXCLUDED_EXTENSIONS = /\.(?:css|js|map|png|jpe?g|gif|svg|webp|ico|txt|xml|json)$/i;
 
 function getOrCreateStorageValue(key: string) {
-  const existing = window.localStorage.getItem(key);
+  const existing = safeLocalStorageGet(key);
   if (existing) return existing;
-  const next =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  window.localStorage.setItem(key, next);
+  const next = createSafeUuid();
+  safeLocalStorageSet(key, next);
   return next;
-}
-
-function createRandomId() {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function getOrCreateSessionKey() {
   const now = Date.now();
-  const raw = window.localStorage.getItem(SESSION_KEY);
+  const raw = safeLocalStorageGet(SESSION_KEY);
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as { id?: string; lastSeen?: number };
       if (parsed.id && parsed.lastSeen && now - parsed.lastSeen < SESSION_TTL_MS) {
-        window.localStorage.setItem(SESSION_KEY, JSON.stringify({ id: parsed.id, lastSeen: now }));
+        safeLocalStorageSet(SESSION_KEY, JSON.stringify({ id: parsed.id, lastSeen: now }));
         return parsed.id;
       }
     } catch {
@@ -43,8 +41,8 @@ function getOrCreateSessionKey() {
     }
   }
 
-  const next = createRandomId();
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify({ id: next, lastSeen: now }));
+  const next = createSafeUuid();
+  safeLocalStorageSet(SESSION_KEY, JSON.stringify({ id: next, lastSeen: now }));
   return next;
 }
 
@@ -61,8 +59,8 @@ export default function PageViewTracker() {
     const query = searchParams.toString();
     const path = `${pathname}${query ? `?${query}` : ""}`;
     const eventKey = `${path}:${Math.floor(Date.now() / DEDUPE_BUCKET_MS)}`;
-    if (window.sessionStorage.getItem(LAST_EVENT_KEY) === eventKey) return;
-    window.sessionStorage.setItem(LAST_EVENT_KEY, eventKey);
+    if (safeSessionStorageGet(LAST_EVENT_KEY) === eventKey) return;
+    safeSessionStorageSet(LAST_EVENT_KEY, eventKey);
 
     window
       .fetch("/api/analytics/page-view", {

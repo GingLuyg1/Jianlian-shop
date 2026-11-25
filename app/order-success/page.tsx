@@ -76,7 +76,7 @@ function OrderSuccessPageContent() {
     setError("");
 
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`);
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`, { cache: "no-store" });
       const result = (await response.json().catch(() => null)) as
         | { order?: OrderRecord; error?: string }
         | null;
@@ -126,7 +126,7 @@ function OrderSuccessPageContent() {
 
             <h1 className="mb-3 text-xl font-bold text-foreground">订单创建成功</h1>
             <p className="mb-6 text-sm leading-6 text-muted-foreground">
-              订单已创建，当前暂未接入真实支付。请在我的订单中继续查看处理状态。
+              订单已创建，请在「我的订单」中继续查看支付与发货进度。
             </p>
 
             {loading ? (

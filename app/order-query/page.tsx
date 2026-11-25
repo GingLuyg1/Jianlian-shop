@@ -1,12 +1,14 @@
 ﻿"use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ClipboardList, RefreshCw, Search, ShieldCheck } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 
 type PublicOrder = {
   orderNo: string;
@@ -46,23 +48,42 @@ function statusLabel(value: string) {
 }
 
 export default function OrderQueryPage() {
+  return (
+    <Suspense fallback={<div className="px-5 py-8 text-center text-sm text-muted-foreground">订单查询加载中...</div>}>
+      <OrderQueryContent />
+    </Suspense>
+  );
+}
+
+function OrderQueryContent() {
+  const searchParams = useSearchParams();
   const [orderNo, setOrderNo] = useState("");
   const [queryToken, setQueryToken] = useState("");
   const [order, setOrder] = useState<PublicOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const submitLockRef = useRef(false);
+
+  useEffect(() => {
+    const initialOrderNo = (searchParams.get("orderNo") || searchParams.get("order_no") || searchParams.get("order") || "").trim();
+    if (initialOrderNo) {
+      setOrderNo((prev) => prev || initialOrderNo);
+    }
+  }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (loading || submitLockRef.current) return;
     setError("");
     setOrder(null);
     if (!orderNo.trim() || !queryToken.trim()) {
       setError("请输入订单号和查询凭证。");
       return;
     }
+    submitLockRef.current = true;
     setLoading(true);
     try {
-      const response = await fetch("/api/order-query", {
+      const response = await fetchWithTimeout("/api/order-query", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ orderNo: orderNo.trim(), queryToken: queryToken.trim() }),
@@ -75,13 +96,14 @@ export default function OrderQueryPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "订单查询失败，请稍后重试");
     } finally {
+      submitLockRef.current = false;
       setLoading(false);
     }
   }
 
   return (
     <PublicLayout contentClassName="bg-[#fbf7f1] p-0">
-      <main className="mx-auto min-h-[calc(100vh-78px)] max-w-5xl px-5 py-8">
+      <div className="mx-auto min-h-[calc(100vh-78px)] max-w-5xl px-5 py-8">
         <div className="mb-5">
           <h1 className="text-2xl font-bold text-slate-950">订单查询</h1>
           <p className="mt-2 text-sm text-slate-500">未登录查询必须同时提供订单号和安全查询凭证。仅凭订单号无法查看订单。</p>
@@ -172,7 +194,7 @@ export default function OrderQueryPage() {
             )}
           </section>
         </div>
-      </main>
+      </div>
     </PublicLayout>
   );
 }

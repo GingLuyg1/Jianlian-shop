@@ -218,7 +218,7 @@ export default function AccountSecurityPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: userEmail, purpose: "current_email_verify" }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "发送验证码失败");
       toast.success(data.message || "验证码已发送至当前邮箱，请查收");
       setCurrentCodeCountdown(60);
@@ -250,7 +250,7 @@ export default function AccountSecurityPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: newMail, purpose: "new_email_verify" }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "发送新邮箱验证码失败");
       toast.success(data.message || "验证码已发送至新邮箱，请查收");
       setNewCodeCountdown(60);
@@ -287,7 +287,7 @@ export default function AccountSecurityPage() {
           newCode: emailForm.newCode.trim(),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "更换邮箱失败");
 
       toast.success("邮箱更换成功！已绑定新邮箱：" + data.email);
@@ -313,7 +313,7 @@ export default function AccountSecurityPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: userEmail, purpose: "password_reset" }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "发送重置密码验证码失败");
       toast.success(data.message || "改密验证码已发送至您的注册邮箱");
       setEmailPwdCountdown(60);
@@ -352,7 +352,7 @@ export default function AccountSecurityPage() {
           confirmPassword: emailPwdForm.confirmPassword,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "修改密码失败");
 
       toast.success("密码修改成功！请使用新密码重新登录");
